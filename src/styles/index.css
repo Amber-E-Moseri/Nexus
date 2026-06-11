@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+:root {
+  /* Brand */
+  --workspace-rail:     #C2185B;
+  --workspace-rail-dark:#880E4F;
+  --accent:             #E91E8C;
+  --accent-hover:       #C4177A;
+  --accent-light:       #FCE4F3;
+  --accent-dark:        #880E54;
+  --accent-muted:       rgba(233,30,140,0.12);
+
+  /* Sidebar */
+  --sidebar-bg:        #191B28;
+  --sidebar-border:    rgba(255,255,255,0.06);
+  --sidebar-text:      #9B9BB8;
+  --sidebar-active:    #FFFFFF;
+  --sidebar-hover:     rgba(255,255,255,0.07);
+  --sidebar-section:   rgba(255,255,255,0.03);
+
+  /* Surfaces */
+  --surface:           #FFFFFF;
+  --surface-secondary: #F2F3F6;
+  --surface-hover:     #EDEEF4;
+  --surface-tertiary:  #E9EBF0;
+  --workspace-panel:   #FFFFFF;
+  --topbar-bg:         rgba(255,255,255,0.9);
+
+  /* Borders & elevation */
+  --border:            rgba(0,0,0,0.08);
+  --border-strong:     rgba(0,0,0,0.12);
+  --topbar-border:     rgba(0,0,0,0.06);
+  --card-shadow:       0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04);
+
+  /* Text */
+  --text-primary:      #14142B;
+  --text-secondary:    #4E4B6A;
+  --text-tertiary:     #9B9BB8;
+  --text-placeholder:  #B8B6D6;
+
+  /* Status colours */
+  --status-backlog-bg:   rgba(107,104,148,0.12); --status-backlog-text:   #5F5B8A;
+  --status-progress-bg:  rgba(37,99,235,0.12);   --status-progress-text:  #2563EB;
+  --status-review-bg:    rgba(217,119,6,0.12);   --status-review-text:    #D97706;
+  --status-done-bg:      rgba(22,163,74,0.12);   --status-done-text:      #16A34A;
+  --status-blocked-bg:   rgba(220,38,38,0.12);   --status-blocked-text:   #DC2626;
+
+  /* Priority colours */
+  --prio-urgent-bg:    rgba(220,38,38,0.12); --prio-urgent-text:    #DC2626;
+  --prio-high-bg:      rgba(217,119,6,0.12); --prio-high-text:      #D97706;
+  --prio-medium-bg:    rgba(37,99,235,0.12); --prio-medium-text:    #2563EB;
+  --prio-low-bg:       rgba(107,104,148,0.12); --prio-low-text:     #5F5B8A;
+
+  /* Dept colours */
+  --dept-admin:        #185FA5;
+  --dept-pfcc:         #1A6B35;
+  --dept-media:        #9B5500;
+  --dept-ors:          #A82828;
+  --dept-pastors:      #534AB7;
+
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--surface-secondary);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { min-height: 100%; }
+body { margin: 0; background: var(--surface-secondary); color: var(--text-primary); }
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font: inherit; }
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid transparent;
+  box-shadow: var(--card-shadow);
+  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.btn-ghost:hover {
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+.transition-sidebar { transition: width 200ms ease; }

@@ -1,0 +1,85 @@
+import { supabase } from './supabase'
+
+export const TRIGGER_LABELS = {
+  task_status_changed: 'Task status changes',
+  task_created: 'Task is created',
+  task_overdue: 'Task becomes overdue',
+  sprint_status_changed: 'Sprint status changes',
+  meeting_created: 'Meeting is logged',
+  api_task_received: 'Task received via API',
+  manual: 'Manually triggered',
+}
+
+export const ACTION_LABELS = {
+  notify_user: 'Notify a user',
+  create_task: 'Create a task',
+  update_task_status: 'Update task status',
+  send_email: 'Send an email',
+  post_webhook: 'Post to webhook URL',
+}
+
+export async function getDeptAutomations(departmentId) {
+  const { data, error } = await supabase
+    .from('automations')
+    .select('*')
+    .eq('department_id', departmentId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createAutomation(automationData) {
+  const { data, error } = await supabase.from('automations').insert(automationData).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateAutomation(id, updates) {
+  const { data, error } = await supabase
+    .from('automations')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function toggleAutomation(id, enabled) {
+  return updateAutomation(id, { enabled })
+}
+
+export async function deleteAutomation(id) {
+  const { error } = await supabase.from('automations').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function getAutomationRuns(automationId, limit = 20) {
+  const { data, error } = await supabase
+    .from('automation_runs')
+    .select('id, status, error, duration_ms, ran_at, actions_taken')
+    .eq('automation_id', automationId)
+    .order('ran_at', { ascending: false })
+    .limit(limit)
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getRecentAutomationRuns(automationIds, limit = 50) {
+  if (!automationIds?.length) {
+    return []
+  }
+
+  const { data, error } = await supabase
+    .from('automation_runs')
+    .select('id, automation_id, status, error, duration_ms, ran_at, actions_taken, trigger_payload, automation:automations(name, trigger_type)')
+    .in('automation_id', automationIds)
+    .order('ran_at', { ascending: false })
+    .limit(limit)
+
+  if (error) throw error
+  return data ?? []
+}
