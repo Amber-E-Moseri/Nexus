@@ -1078,16 +1078,14 @@ export default function Sidebar() {
           label="Meetings"
           onClick={() => go('/meetings')}
         />
-        {false ? (
-          <SidebarItem
-            active={isPathActive(location.pathname, '/meetings/expected-attendees')}
-            label="Attendee Roster"
-            glyph={
-              <span style={{ width: 20, flex: '0 0 20px', textAlign: 'center', fontSize: 13, opacity: 0.7 }}>☑</span>
-            }
-            onClick={() => go('/meetings/expected-attendees')}
-          />
-        ) : null}
+        <SidebarItem
+          active={isPathActive(location.pathname, '/meetings/expected-attendees')}
+          label="Attendee Roster"
+          glyph={
+            <span style={{ width: 20, flex: '0 0 20px', textAlign: 'center', fontSize: 13, opacity: 0.7 }}>☑</span>
+          }
+          onClick={() => go('/meetings/expected-attendees')}
+        />
         {(showAdminPlatform || role === 'pastor') ? (
           <SidebarItem
             active={isPathActive(location.pathname, '/meetings/attendance-trends')}
