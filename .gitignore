@@ -4,6 +4,11 @@ dist
 .DS_Store
 node_modules/
 dist/
+apps/meeting-os/dist/
+apps/meeting-os/node_modules/
+apps/meeting-os/ors-report-suite-main.zip
 .env
 .env.local
 .supabase/
+supabase/supabase/
+**/.temp/

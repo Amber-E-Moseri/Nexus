@@ -26,9 +26,11 @@ export default function AutomationCard({ automation, onToggle, onEdit, onDelete 
         <button
           type="button"
           onClick={() => onToggle(automation)}
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            automation.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
-          }`}
+          className="rounded-full px-3 py-1 text-xs font-semibold"
+          style={automation.enabled
+            ? { background: 'var(--status-done-bg)', color: 'var(--status-done-text)' }
+            : { background: 'var(--status-backlog-bg)', color: 'var(--status-backlog-text)' }
+          }
         >
           {automation.enabled ? 'Enabled' : 'Disabled'}
         </button>

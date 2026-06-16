@@ -1,20 +1,9 @@
+import { memo } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { formatDueDate } from '../../lib/dateUtils'
+import { PRIORITY_STYLES } from '../../lib/priorities'
 import { isTaskCompleted } from '../../lib/taskStatuses'
-
-const PRIORITY_STYLES = {
-  urgent: { bg: '#FDECEC', text: '#A32D2D' },
-  high: { bg: '#FEF3E2', text: '#9B5500' },
-  medium: { bg: '#E6F0FB', text: '#185FA5' },
-  low: { bg: '#F1F0F8', text: '#6B6894' },
-}
-
-const SOURCE_LABELS = {
-  meeting: 'Meeting',
-  automation: 'Auto',
-  admin_processor: 'Admin',
-  zoom: 'Zoom',
-}
 
 function Initials({ name }) {
   const initials = (name ?? '')
@@ -26,13 +15,13 @@ function Initials({ name }) {
   return (
     <div
       style={{
-        width: 20,
-        height: 20,
+        width: 22,
+        height: 22,
         borderRadius: '50%',
-        background: 'var(--accent-light)',
-        color: 'var(--accent)',
+        background: 'var(--accent)',
+        color: '#FFFFFF',
         fontSize: 9,
-        fontWeight: 600,
+        fontWeight: 700,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -44,19 +33,52 @@ function Initials({ name }) {
   )
 }
 
-export default function TaskCard({ task, onClick, isDragging = false }) {
+function OverflowBadge({ count }) {
+  return (
+    <div
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: '50%',
+        background: '#EDE8F8',
+        color: '#4C2A92',
+        fontSize: 9,
+        fontWeight: 700,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
+      +{count}
+    </div>
+  )
+}
+
+function TaskCard({ task, onClick, isDragging = false }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSortDragging } =
     useSortable({ id: task.id })
 
-  const isOverdue =
-    task.due_date && new Date(task.due_date) < new Date() && !isTaskCompleted(task)
-
+  const due = formatDueDate(task.due_date)
   const priority = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium
   const doneCount = task.subtasks?.filter((subtask) => isTaskCompleted(subtask)).length ?? 0
   const totalSubtasks = task.subtasks?.length ?? 0
   const commentCount = task.comments?.[0]?.count ?? 0
-  const fileCount = task.files?.[0]?.count ?? 0
-  const dependencyCount = task.dependencies?.[0]?.count ?? 0
+  const assignees = Array.isArray(task.assignees)
+    ? task.assignees.filter(Boolean)
+    : task.assignee
+      ? [task.assignee]
+      : []
+  const visibleAssignees = assignees.slice(0, 3)
+  const overflowAssigneeCount = Math.max(0, assignees.length - visibleAssignees.length)
+  const scopeLabel = (task.department?.name ?? task.space_name ?? task.list?.folder?.name ?? task.list?.name ?? 'Task').toUpperCase()
+  const dueColor = due.status === 'overdue'
+    ? 'var(--coral-dark)'
+    : due.status === 'today'
+      ? 'var(--accent)'
+      : due.status === 'soon'
+        ? 'var(--amber)'
+        : 'var(--text-tertiary)'
 
   return (
     <div
@@ -68,41 +90,44 @@ export default function TaskCard({ task, onClick, isDragging = false }) {
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isSortDragging ? 0.4 : 1,
-        background: 'var(--surface)',
-        border: '0.5px solid var(--border)',
-        borderRadius: 10,
-        padding: '10px 12px',
+        background: '#FFFFFF',
+        border: '1px solid #E8E0D2',
+        borderRadius: 14,
+        padding: '12px 14px',
         cursor: isDragging ? 'grabbing' : 'pointer',
         userSelect: 'none',
         boxShadow: isDragging
-          ? '0 8px 24px rgba(20,20,43,0.14)'
-          : '0 1px 3px rgba(20,20,43,0.04)',
+          ? '0 8px 28px rgba(28,22,16,0.10)'
+          : '0 2px 8px rgba(28,22,16,0.06)',
       }}
     >
-      {task.source && task.source !== 'manual' && (
-        <div style={{ marginBottom: 6 }}>
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 500,
-              padding: '1px 6px',
-              borderRadius: 20,
-              background: '#F1F0F8',
-              color: '#6B6894',
-            }}
-          >
-            {SOURCE_LABELS[task.source] ?? task.source}
-          </span>
-        </div>
-      )}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
+          {scopeLabel}
+        </span>
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            padding: '3px 8px',
+            borderRadius: 999,
+            background: priority.bg,
+            color: priority.text,
+            textTransform: 'capitalize',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {task.priority}
+        </span>
+      </div>
 
       <p
         style={{
-          fontSize: 13,
-          fontWeight: 500,
+          fontSize: 14,
+          fontWeight: 600,
           color: 'var(--text-primary)',
-          marginBottom: 8,
-          lineHeight: 1.45,
+          marginBottom: 12,
+          lineHeight: 1.5,
           textDecoration: isTaskCompleted(task) ? 'line-through' : 'none',
           opacity: isTaskCompleted(task) ? 0.6 : 1,
         }}
@@ -111,87 +136,47 @@ export default function TaskCard({ task, onClick, isDragging = false }) {
       </p>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 500,
-            padding: '2px 7px',
-            borderRadius: 20,
-            background: priority.bg,
-            color: priority.text,
-          }}
-        >
-          {task.priority}
+        {visibleAssignees.length > 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {visibleAssignees.map((assignee, index) => (
+              <div key={assignee.id ?? `${assignee.name}-${index}`} style={{ marginLeft: index === 0 ? 0 : -6 }}>
+                <Initials name={assignee.name} />
+              </div>
+            ))}
+            {overflowAssigneeCount > 0 ? (
+              <div style={{ marginLeft: -6 }}>
+                <OverflowBadge count={overflowAssigneeCount} />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span aria-hidden="true">□</span>
+          {doneCount}/{totalSubtasks}
         </span>
 
-        {totalSubtasks > 0 && (
-          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-            ⊞ {doneCount}/{totalSubtasks}
-          </span>
-        )}
-
-        {commentCount > 0 && (
-          <span
-            style={{
-              fontSize: 11,
-              color: 'var(--text-tertiary)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-            }}
-          >
-            💬 {commentCount}
-          </span>
-        )}
-
-        {fileCount > 0 && (
-          <span
-            style={{
-              fontSize: 11,
-              color: 'var(--text-tertiary)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-            }}
-          >
-            📎 {fileCount}
-          </span>
-        )}
-
-        {dependencyCount > 0 && (
-          <span
-            style={{
-              fontSize: 11,
-              color: 'var(--text-tertiary)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-            }}
-          >
-            ⛓ {dependencyCount}
-          </span>
-        )}
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span aria-hidden="true">💬</span>
+          {commentCount}
+        </span>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-          {task.due_date && (
+          {task.due_date ? (
             <span
               style={{
-              fontSize: 11,
-              color: isOverdue ? '#A32D2D' : 'var(--text-tertiary)',
-              fontWeight: isOverdue ? 500 : 400,
-            }}
-          >
-              {isOverdue ? '⚠ ' : ''}
-              {new Date(task.due_date).toLocaleDateString('en-CA', {
-                month: 'short',
-                day: 'numeric',
-              })}
+                fontSize: 11,
+                color: dueColor,
+                fontWeight: due.status === 'normal' ? 400 : 500,
+              }}
+            >
+              {due.label}
             </span>
-          )}
-
-          {task.assignee && <Initials name={task.assignee.name} />}
+          ) : null}
         </div>
       </div>
     </div>
   )
 }
+
+export default memo(TaskCard)

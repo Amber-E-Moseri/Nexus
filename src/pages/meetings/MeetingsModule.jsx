@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import MeetingModal from '../../modules/meetings/MeetingModal'
 import MeetingsList from '../../modules/meetings/MeetingsList'
 import { MeetingsProvider } from '../../modules/meetings/MeetingsContext'
+import MeetingReportTab from '../../modules/meetings/MeetingReportTab'
+import ExpectedAttendeesPage from './ExpectedAttendeesPage'
 
 function MeetingsContent({ canManage, onAddMeeting }) {
   return <MeetingsList canManage={canManage} onAddMeeting={onAddMeeting} />
@@ -167,8 +170,77 @@ function MeetingsModuleFallback() {
   )
 }
 
+const TABS = [
+  { key: 'meetings', label: 'Meetings' },
+  { key: 'report', label: 'Report' },
+  { key: 'roster', label: '⚙ Roster' },
+]
+
+function TabBar({ active, onChange }) {
+  return (
+    <div style={{ display: 'flex', gap: 2, padding: '0 24px', borderBottom: '0.5px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
+      {TABS.map((tab) => (
+        <button
+          key={tab.key}
+          type="button"
+          onClick={() => onChange(tab.key)}
+          style={{
+            border: 'none',
+            background: 'none',
+            padding: '10px 14px',
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+            color: active === tab.key ? '#4C2A92' : '#9E9488',
+            borderBottom: active === tab.key ? '2px solid #4C2A92' : '2px solid transparent',
+            marginBottom: -1,
+            transition: 'color .12s',
+          }}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function MeetingsModule() {
   const meetingOsUrl = import.meta.env.VITE_MEETING_OS_URL
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [activeTab, setActiveTab] = useState(() => {
+    if (searchParams.get('report')) return 'report'
+    if (searchParams.get('tab') === 'roster') return 'roster'
+    return 'meetings'
+  })
+
+  useEffect(() => {
+    if (searchParams.get('report')) {
+      setActiveTab('report')
+      return
+    }
+    if (searchParams.get('tab') === 'roster') {
+      setActiveTab('roster')
+      return
+    }
+    setActiveTab('meetings')
+  }, [searchParams])
+
+  function handleTabChange(nextTab) {
+    setActiveTab(nextTab)
+    const nextParams = new URLSearchParams(searchParams)
+
+    if (nextTab === 'roster') {
+      nextParams.delete('report')
+      nextParams.set('tab', 'roster')
+    } else if (nextTab === 'report') {
+      nextParams.delete('tab')
+    } else {
+      nextParams.delete('tab')
+      nextParams.delete('report')
+    }
+
+    setSearchParams(nextParams)
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
@@ -177,13 +249,13 @@ export default function MeetingsModule() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '12px 24px',
+          padding: '12px 24px 0',
           borderBottom: '0.5px solid var(--border)',
           background: 'var(--surface)',
           flexShrink: 0,
         }}
       >
-        <div>
+        <div style={{ paddingBottom: 10 }}>
           <h1 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', margin: 0 }}>
             Meetings
           </h1>
@@ -191,7 +263,7 @@ export default function MeetingsModule() {
             Powered by Meeting OS
           </p>
         </div>
-        {meetingOsUrl ? (
+        {meetingOsUrl && activeTab === 'meetings' ? (
           <a
             href={meetingOsUrl}
             target="_blank"
@@ -203,6 +275,7 @@ export default function MeetingsModule() {
               padding: '5px 10px',
               border: '0.5px solid var(--border)',
               borderRadius: 8,
+              marginBottom: 10,
             }}
           >
             Open in new tab ↗
@@ -210,7 +283,17 @@ export default function MeetingsModule() {
         ) : null}
       </div>
 
-      {meetingOsUrl ? (
+      <TabBar active={activeTab} onChange={handleTabChange} />
+
+      {activeTab === 'report' ? (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', background: '#FBF8F2' }}>
+          <MeetingReportTab />
+        </div>
+      ) : activeTab === 'roster' ? (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', background: '#FBF8F2' }}>
+          <ExpectedAttendeesPage />
+        </div>
+      ) : meetingOsUrl ? (
         <iframe
           src={meetingOsUrl}
           style={{ flex: 1, width: '100%', border: 'none', background: 'var(--surface-secondary)' }}

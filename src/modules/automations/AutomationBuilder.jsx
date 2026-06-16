@@ -12,19 +12,58 @@ const CONDITION_OPERATORS = ['equals', 'not equals', 'is empty', 'is not empty']
 const SPRINT_STATUSES = ['planning', 'active', 'completed', 'review', 'archived']
 
 function createEmptyCondition() {
-  return { field: 'task.status', operator: 'equals', value: '' }
+  return { id: crypto.randomUUID(), field: 'task.status', operator: 'equals', value: '' }
 }
 
 function createEmptyAction() {
-  return { type: 'notify_user', config: { user_id: '', message: '' } }
+  return { id: crypto.randomUUID(), type: 'notify_user', config: { user_id: '', message: '' } }
 }
 
 function normalizeConditions(value) {
-  return Array.isArray(value) ? value : []
+  return Array.isArray(value)
+    ? value.map((condition) => ({ id: crypto.randomUUID(), ...condition }))
+    : []
 }
 
 function normalizeActions(value) {
-  return Array.isArray(value) && value.length > 0 ? value : [createEmptyAction()]
+  return Array.isArray(value) && value.length > 0
+    ? value.map((action) => ({ id: crypto.randomUUID(), ...action }))
+    : [createEmptyAction()]
+}
+
+function validateWebhookUrl(url) {
+  if (!url?.trim()) {
+    return { valid: false, error: 'Webhook URL is required' }
+  }
+
+  let parsedUrl
+
+  try {
+    parsedUrl = new URL(url)
+  } catch {
+    return { valid: false, error: 'Webhook URL must be a valid URL' }
+  }
+
+  if (parsedUrl.protocol !== 'https:') {
+    return { valid: false, error: 'Webhook URLs must use https://' }
+  }
+
+  const hostname = parsedUrl.hostname.toLowerCase()
+
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
+    return { valid: false, error: 'Webhook URL cannot target localhost' }
+  }
+
+  if (
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)
+    || /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)
+    || /^169\.254\.\d{1,3}\.\d{1,3}$/.test(hostname)
+    || /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname)
+  ) {
+    return { valid: false, error: 'Webhook URL cannot target a private network address' }
+  }
+
+  return { valid: true, error: null }
 }
 
 function normalizeTriggerConfig(triggerType, currentConfig = {}) {
@@ -48,22 +87,27 @@ function normalizeTriggerConfig(triggerType, currentConfig = {}) {
 
 export default function AutomationBuilder({
   automation = null,
+  initialValues = null,
   departmentId,
   users,
   departments,
   onSaved,
   onClose,
 }) {
+  const seed = automation ?? initialValues ?? null
   const { profile } = useAuth()
-  const [name, setName] = useState(automation?.name ?? '')
-  const [description, setDescription] = useState(automation?.description ?? '')
-  const [enabled, setEnabled] = useState(automation?.enabled ?? true)
-  const [triggerType, setTriggerType] = useState(automation?.trigger_type ?? 'manual')
-  const [triggerConfig, setTriggerConfig] = useState(
-    normalizeTriggerConfig(automation?.trigger_type ?? 'manual', automation?.trigger_config ?? {}),
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState(
+    seed?.department_id ?? departmentId ?? departments[0]?.id ?? '',
   )
-  const [conditions, setConditions] = useState(normalizeConditions(automation?.conditions))
-  const [actions, setActions] = useState(normalizeActions(automation?.actions))
+  const [name, setName] = useState(seed?.name ?? '')
+  const [description, setDescription] = useState(seed?.description ?? '')
+  const [enabled, setEnabled] = useState(seed?.enabled ?? true)
+  const [triggerType, setTriggerType] = useState(seed?.trigger_type ?? 'manual')
+  const [triggerConfig, setTriggerConfig] = useState(
+    normalizeTriggerConfig(seed?.trigger_type ?? 'manual', seed?.trigger_config ?? {}),
+  )
+  const [conditions, setConditions] = useState(normalizeConditions(seed?.conditions))
+  const [actions, setActions] = useState(normalizeActions(seed?.actions))
   const [taskStatuses, setTaskStatuses] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -74,8 +118,17 @@ export default function AutomationBuilder({
   )
 
   useEffect(() => {
-    listTaskStatuses({ departmentId }).then(setTaskStatuses).catch(() => setTaskStatuses([]))
-  }, [departmentId])
+    setSelectedDepartmentId(seed?.department_id ?? departmentId ?? departments[0]?.id ?? '')
+  }, [seed?.department_id, departmentId, departments])
+
+  useEffect(() => {
+    if (!selectedDepartmentId) {
+      setTaskStatuses([])
+      return
+    }
+
+    listTaskStatuses({ departmentId: selectedDepartmentId }).then(setTaskStatuses).catch(() => setTaskStatuses([]))
+  }, [selectedDepartmentId])
 
   function handleTriggerTypeChange(nextType) {
     setTriggerType(nextType)
@@ -100,6 +153,21 @@ export default function AutomationBuilder({
       return
     }
 
+    if (!selectedDepartmentId) {
+      setError('Select a space for this automation.')
+      return
+    }
+
+    for (const action of actions) {
+      if (action.type === 'post_webhook') {
+        const validation = validateWebhookUrl(action.config?.url)
+        if (!validation.valid) {
+          setError(validation.error)
+          return
+        }
+      }
+    }
+
     if (actions.length === 0) {
       setError('Add at least one action.')
       return
@@ -111,7 +179,7 @@ export default function AutomationBuilder({
     const payload = {
       name: name.trim(),
       description: description.trim() || null,
-      department_id: departmentId,
+      department_id: selectedDepartmentId,
       trigger_type: triggerType,
       trigger_config: triggerConfig,
       conditions,
@@ -146,12 +214,12 @@ export default function AutomationBuilder({
             <Dialog.Title className="text-sm font-semibold text-[var(--text-primary)]">
               {automation ? 'Edit automation' : 'New automation'}
             </Dialog.Title>
-            <Dialog.Close className="rounded-lg px-2 py-1 text-[var(--text-tertiary)]">×</Dialog.Close>
+            <Dialog.Close aria-label="Close dialog" className="rounded-lg px-2 py-1 text-[var(--text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"><span aria-hidden="true">×</span></Dialog.Close>
           </div>
 
           <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
             {error ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+              <div className="rounded-xl border px-3 py-2 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>{error}</div>
             ) : null}
 
             <section className="space-y-3">
@@ -171,6 +239,17 @@ export default function AutomationBuilder({
                 className={INPUT_CLASS}
                 placeholder="Birthday sheet intake"
               />
+              <select
+                value={selectedDepartmentId}
+                onChange={(event) => setSelectedDepartmentId(event.target.value)}
+                className={INPUT_CLASS}
+                disabled={Boolean(departmentId && departments.length <= 1)}
+              >
+                <option value="">Select space</option>
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>{department.name}</option>
+                ))}
+              </select>
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
@@ -259,7 +338,7 @@ export default function AutomationBuilder({
               ) : null}
 
               {conditions.map((condition, index) => (
-                <div key={`${condition.field}-${index}`} className="grid gap-3 rounded-xl border border-[var(--border)] p-3 md:grid-cols-[1.3fr_1fr_1fr_auto]">
+                <div key={condition.id} className="grid gap-3 rounded-xl border border-[var(--border)] p-3 md:grid-cols-[1.3fr_1fr_1fr_auto]">
                   <select value={condition.field} onChange={(event) => updateCondition(index, 'field', event.target.value)} className={INPUT_CLASS}>
                     {CONDITION_FIELDS.map((field) => <option key={field} value={field}>{field}</option>)}
                   </select>
@@ -301,7 +380,7 @@ export default function AutomationBuilder({
               </div>
 
               {actions.map((action, index) => (
-                <div key={`${action.type}-${index}`} className="space-y-3 rounded-xl border border-[var(--border)] p-3">
+                <div key={action.id} className="space-y-3 rounded-xl border border-[var(--border)] p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium text-[var(--text-primary)]">
                       {ACTION_LABELS[action.type] ?? action.type}
@@ -321,6 +400,7 @@ export default function AutomationBuilder({
                     value={action.type}
                     onChange={(event) =>
                       updateAction(index, () => ({
+                        id: action.id,
                         type: event.target.value,
                         config: {},
                       }))
@@ -463,7 +543,7 @@ export default function AutomationBuilder({
             </Dialog.Close>
             <button
               type="button"
-              disabled={saving || !departmentId}
+              disabled={saving || !selectedDepartmentId}
               onClick={handleSave}
               className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >

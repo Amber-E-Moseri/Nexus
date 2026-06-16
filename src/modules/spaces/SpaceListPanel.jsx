@@ -3,11 +3,15 @@ import { useAuth } from '../../hooks/useAuth'
 import { archiveList, createList, updateList } from '../../lib/spaces'
 
 export default function SpaceListPanel({ spaceId, lists, onListCreated, onListUpdated, onListSelected, selectedListId }) {
-  const { profile } = useAuth()
+  const { profile, effectiveRole } = useAuth()
   const [name, setName] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [editingName, setEditingName] = useState('')
   const [saving, setSaving] = useState(false)
+
+  function canEditListSettings(list) {
+    return effectiveRole === 'super_admin' || effectiveRole === 'dept_lead' || list.created_by === profile?.id
+  }
 
   async function handleCreate(event) {
     event.preventDefault()
@@ -65,6 +69,15 @@ export default function SpaceListPanel({ spaceId, lists, onListCreated, onListUp
                   <button type="button" onClick={() => setEditingId(null)} className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-secondary)]">
                     Cancel
                   </button>
+                  {list.name !== 'General' ? (
+                    <button
+                      type="button"
+                      onClick={() => handleArchive(list.id)}
+                      className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-secondary)]"
+                    >
+                      Archive
+                    </button>
+                  ) : null}
                 </>
               ) : (
                 <>
@@ -79,23 +92,18 @@ export default function SpaceListPanel({ spaceId, lists, onListCreated, onListUp
                     {list.name}
                   </button>
                   <span className="text-xs text-[var(--text-tertiary)]">#{list.sort_order}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingId(list.id)
-                      setEditingName(list.name)
-                    }}
-                    className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-secondary)]"
-                  >
-                    Rename
-                  </button>
-                  {list.name !== 'General' ? (
+                  {canEditListSettings(list) ? (
                     <button
                       type="button"
-                      onClick={() => handleArchive(list.id)}
+                      onClick={() => {
+                        setEditingId(list.id)
+                        setEditingName(list.name)
+                      }}
                       className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-secondary)]"
+                      aria-label={`Edit settings for ${list.name}`}
+                      title="List settings"
                     >
-                      Archive
+                      ⚙️
                     </button>
                   ) : null}
                 </>

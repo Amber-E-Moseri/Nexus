@@ -22,7 +22,7 @@ export function NotificationsProvider({ children }) {
 
     try {
       setLoading(true)
-      const [notifs, count] = await Promise.all([getNotifications(), getUnreadCount()])
+      const [notifs, count] = await Promise.all([getNotifications(user.id), getUnreadCount(user.id)])
       setNotifications(notifs)
       setUnreadCount(count)
     } catch (err) {
@@ -68,10 +68,10 @@ export function NotificationsProvider({ children }) {
   }, [])
 
   const handleMarkAllAsRead = useCallback(async () => {
-    await markAllAsRead()
+    await markAllAsRead(user.id)
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
     setUnreadCount(0)
-  }, [])
+  }, [user])
 
   return (
     <NotificationsContext.Provider

@@ -1,16 +1,14 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { getDeptMembers } from '../../lib/tasks'
+import { useDeptMembers } from '../../hooks/useDeptMembers'
 import { useMeetings } from './MeetingsContext'
 
 const MEETING_TYPES = [
   { value: 'general', label: 'General' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'pfcc', label: 'PFCC' },
+  { value: 'team', label: 'Team' },
   { value: 'media', label: 'Media' },
-  { value: 'ors', label: 'ORS' },
-  { value: 'pastors', label: 'Pastors' },
+  { value: 'department', label: 'Department' },
 ]
 
 function toLocalDateTime(value) {
@@ -23,7 +21,7 @@ function toLocalDateTime(value) {
 export default function MeetingModal({ departmentId, onClose }) {
   const { profile } = useAuth()
   const { addMeeting } = useMeetings()
-  const [members, setMembers] = useState([])
+  const members = useDeptMembers(departmentId)
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(() => toLocalDateTime(new Date().toISOString()))
   const [meetingType, setMeetingType] = useState('general')
@@ -35,11 +33,6 @@ export default function MeetingModal({ departmentId, onClose }) {
   const [attendeeIds, setAttendeeIds] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-
-  useEffect(() => {
-    if (!departmentId) return
-    getDeptMembers(departmentId).then(setMembers).catch(() => {})
-  }, [departmentId])
 
   const attendanceLabel = useMemo(() => {
     if (attendeeIds.length === 0) return 'No attendees selected'
@@ -137,7 +130,7 @@ export default function MeetingModal({ departmentId, onClose }) {
 
           <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
             {error ? (
-              <div style={{ marginBottom: 14, borderRadius: 10, background: '#fff2f2', padding: '10px 12px', fontSize: 12, color: '#a32d2d' }}>
+              <div style={{ marginBottom: 14, borderRadius: 10, background: 'var(--coral-light)', padding: '10px 12px', fontSize: 12, color: 'var(--coral-dark)' }}>
                 {error}
               </div>
             ) : null}
@@ -145,7 +138,7 @@ export default function MeetingModal({ departmentId, onClose }) {
             <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'minmax(0, 1.5fr) minmax(220px, 1fr) minmax(180px, 1fr)' }}>
               <div>
                 <label style={labelStyle}>Title *</label>
-                <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Weekly ORS Sync" style={inputStyle} />
+                <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Weekly Team Sync" style={inputStyle} />
               </div>
               <div>
                 <label style={labelStyle}>Date *</label>

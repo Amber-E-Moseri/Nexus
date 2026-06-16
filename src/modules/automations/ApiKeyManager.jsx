@@ -17,11 +17,11 @@ function formatDateTime(value) {
 }
 
 function getKeyStatus(key) {
-  if (key.revoked) return { label: 'Revoked', className: 'bg-red-50 text-red-700' }
+  if (key.revoked) return { label: 'Revoked', style: { background: 'var(--status-blocked-bg)', color: 'var(--status-blocked-text)' } }
   if (key.expires_at && new Date(key.expires_at).getTime() < Date.now()) {
-    return { label: 'Expired', className: 'bg-amber-50 text-amber-700' }
+    return { label: 'Expired', style: { background: 'var(--status-review-bg)', color: 'var(--status-review-text)' } }
   }
-  return { label: 'Active', className: 'bg-emerald-50 text-emerald-700' }
+  return { label: 'Active', style: { background: 'var(--status-done-bg)', color: 'var(--status-done-text)' } }
 }
 
 export default function ApiKeyManager({
@@ -121,7 +121,7 @@ export default function ApiKeyManager({
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+        <div className="rounded-xl border px-3 py-2 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>{error}</div>
       ) : null}
 
       <div className="overflow-x-auto">
@@ -148,7 +148,7 @@ export default function ApiKeyManager({
                   <td className="px-3 py-3 text-[var(--text-secondary)]">{formatDateTime(key.last_used_at)}</td>
                   <td className="px-3 py-3 text-[var(--text-secondary)]">{formatDateTime(key.expires_at)}</td>
                   <td className="px-3 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${status.className}`}>
+                    <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={status.style}>
                       {status.label}
                     </span>
                   </td>
@@ -235,7 +235,7 @@ export default function ApiKeyManager({
             <div className="space-y-4 px-5 py-5">
               {generatedKey ? (
                 <div className="space-y-3">
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  <div className="rounded-xl border px-3 py-2 text-sm" style={{ borderColor: 'var(--amber)', background: 'var(--amber-light)', color: 'var(--amber-hover)' }}>
                     This key will only be shown once. Copy it now.
                   </div>
                   <div className="rounded-2xl bg-[#111827] px-4 py-4 text-sm text-slate-100">

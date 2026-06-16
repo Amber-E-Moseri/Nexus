@@ -10,15 +10,62 @@ import {
 } from '../../lib/people/api'
 import { selectDepartmentUsers, selectPastorMembers } from '../../lib/people/selectors'
 
+function getInitials(name = '') {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('') || '?'
+}
+
+function PastorGlyph({ user, department }) {
+  return (
+    <div
+      className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white"
+      style={{ background: department?.color ? `#${department.color}` : '#563199' }}
+    >
+      {getInitials(user?.name)}
+    </div>
+  )
+}
+
+function MemberRow({ member, department, canManageAssignments, saving, onRemove }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-[14px] border border-[var(--border)] bg-white px-3 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <div
+          className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+          style={{ background: department?.color ? `#${department.color}` : '#6B46C1' }}
+        >
+          {getInitials(member?.name)}
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-[var(--text-primary)]">{member?.name ?? 'Unknown member'}</div>
+        </div>
+      </div>
+
+      {canManageAssignments ? (
+        <button
+          type="button"
+          disabled={saving}
+          onClick={onRemove}
+          className="rounded-lg px-2 py-1 text-sm text-[#C9A889] transition hover:bg-[var(--surface-secondary)] disabled:opacity-60"
+          aria-label={`Remove ${member?.name ?? 'member'}`}
+        >
+          ×
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 export default function PastoralAssignmentsPage() {
   const { profile, role } = useAuth()
   const [users, setUsers] = useState([])
   const [departments, setDepartments] = useState([])
   const [assignments, setAssignments] = useState([])
-  const [draft, setDraft] = useState({
-    pastorId: '',
-    memberId: '',
-  })
+  const [draftMemberByPastor, setDraftMemberByPastor] = useState({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -63,9 +110,6 @@ export default function PastoralAssignmentsPage() {
     [departments],
   )
 
-  const pastors = scopedUsers.filter((user) => user.role === 'pastor')
-  const members = scopedUsers.filter((user) => user.role === 'member')
-
   const visibleAssignments = useMemo(() => {
     if (role === 'pastor') {
       return assignments.filter((assignment) => assignment.pastor_id === profile?.id)
@@ -81,164 +125,172 @@ export default function PastoralAssignmentsPage() {
 
   const canManageAssignments = role === 'super_admin' || role === 'dept_lead'
 
+  const pastors = useMemo(
+    () => scopedUsers.filter((user) => user.role === 'pastor').sort((left, right) => left.name.localeCompare(right.name)),
+    [scopedUsers],
+  )
+
+  const members = useMemo(
+    () => scopedUsers.filter((user) => user.role === 'member').sort((left, right) => left.name.localeCompare(right.name)),
+    [scopedUsers],
+  )
+
+  const membersByPastor = useMemo(() => {
+    const map = new Map()
+
+    for (const pastor of pastors) {
+      map.set(pastor.id, [])
+    }
+
+    for (const assignment of visibleAssignments) {
+      const member = userById.get(assignment.member_id)
+      if (!member) continue
+      const current = map.get(assignment.pastor_id) ?? []
+      current.push(member)
+      map.set(assignment.pastor_id, current)
+    }
+
+    for (const [pastorId, assignedMembers] of map.entries()) {
+      assignedMembers.sort((left, right) => left.name.localeCompare(right.name))
+      map.set(pastorId, assignedMembers)
+    }
+
+    return map
+  }, [pastors, userById, visibleAssignments])
+
+  const assignedMemberIds = useMemo(
+    () => new Set(visibleAssignments.map((assignment) => assignment.member_id)),
+    [visibleAssignments],
+  )
+
+  async function handleAssign(pastorId) {
+    const memberId = draftMemberByPastor[pastorId]
+    if (!memberId) return
+
+    setSaving(true)
+    setError('')
+    try {
+      await assignPastorMember(pastorId, memberId)
+      setDraftMemberByPastor((current) => ({ ...current, [pastorId]: '' }))
+      await loadData()
+    } catch (nextError) {
+      setError(nextError.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <PeopleLayout
-      title="Pastoral Assignments"
-      description="Assign, remove, and transfer member-to-pastor relationships without altering pastoral dashboard permissions."
+      title="People"
+      description="Manage members, roles and lifecycle across the organization."
     >
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      {error ? (
+        <div className="rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>
           {error}
         </div>
-      )}
+      ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1fr]">
-        <section className="space-y-4 rounded-2xl border border-[var(--border)] bg-white p-5">
-          <h2 className="text-base font-semibold text-[var(--text-primary)]">Assign member</h2>
-          <p className="text-sm text-[var(--text-secondary)]">
-            Each member may have only one assigned pastor. Transfers replace the previous assignment.
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-[28px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">Pastoral</h2>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            Pastors and the members under their shepherding care.
           </p>
+        </div>
 
-          <div className="grid gap-3">
-            <select
-              value={draft.pastorId}
-              disabled={!canManageAssignments}
-              onChange={(event) => setDraft((current) => ({ ...current, pastorId: event.target.value, memberId: '' }))}
-              className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] disabled:bg-[var(--surface-secondary)]"
-            >
-              <option value="">Select pastor</option>
-              {pastors.map((pastor) => (
-                <option key={pastor.id} value={pastor.id}>
-                  {pastor.name}
-                </option>
-              ))}
-            </select>
+        <div className="grid gap-4 xl:grid-cols-2">
+          {pastors.map((pastor) => {
+            const department = departmentById.get(pastor.department_id)
+            const assignedMembers = membersByPastor.get(pastor.id) ?? []
+            const availableMembers = members.filter((member) => {
+              if (member.department_id !== pastor.department_id) return false
+              return !assignedMemberIds.has(member.id) || assignedMembers.some((assigned) => assigned.id === member.id)
+            })
 
-            <select
-              value={draft.memberId}
-              disabled={!canManageAssignments || !draft.pastorId}
-              onChange={(event) => setDraft((current) => ({ ...current, memberId: event.target.value }))}
-              className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] disabled:bg-[var(--surface-secondary)]"
-            >
-              <option value="">Select member</option>
-              {members
-                .filter((member) => member.department_id === userById.get(draft.pastorId)?.department_id)
-                .map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name}
-                  </option>
-                ))}
-            </select>
+            return (
+              <div key={pastor.id} className="rounded-[22px] border border-[var(--border)] bg-white p-4 shadow-[var(--card-shadow)]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <PastorGlyph user={pastor} department={department} />
+                    <div>
+                      <div className="text-lg font-semibold text-[var(--text-primary)]">{pastor.name}</div>
+                      <div className="text-sm text-[var(--text-secondary)]">
+                        Pastor · {department?.name ?? 'Unassigned'}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-[#EFE7FF] px-3 py-1 text-xs font-semibold text-[#6B3FD4]">
+                    {assignedMembers.length} member{assignedMembers.length === 1 ? '' : 's'}
+                  </span>
+                </div>
 
-            <button
-              type="button"
-              disabled={!canManageAssignments || saving || !draft.pastorId || !draft.memberId}
-              onClick={async () => {
-                setSaving(true)
-                setError('')
-                try {
-                  await assignPastorMember(draft.pastorId, draft.memberId)
-                  setDraft({ pastorId: '', memberId: '' })
-                  await loadData()
-                } catch (nextError) {
-                  setError(nextError.message)
-                } finally {
-                  setSaving(false)
-                }
-              }}
-              className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Assign Member
-            </button>
-          </div>
-        </section>
+                <div className="mt-4 space-y-2">
+                  {assignedMembers.map((member) => (
+                    <MemberRow
+                      key={member.id}
+                      member={member}
+                      department={department}
+                      canManageAssignments={canManageAssignments}
+                      saving={saving}
+                      onRemove={async () => {
+                        setSaving(true)
+                        setError('')
+                        try {
+                          await removePastorMember(member.id)
+                          await loadData()
+                        } catch (nextError) {
+                          setError(nextError.message)
+                        } finally {
+                          setSaving(false)
+                        }
+                      }}
+                    />
+                  ))}
 
-        <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
-          <div className="mb-4">
-            <h2 className="text-base font-semibold text-[var(--text-primary)]">Current assignments</h2>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              Pastors keep many members; members keep a single shepherd assignment.
-            </p>
-          </div>
+                  {canManageAssignments ? (
+                    <div className="rounded-[14px] border border-dashed border-[var(--border)] bg-white px-3 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={draftMemberByPastor[pastor.id] ?? ''}
+                          onChange={(event) =>
+                            setDraftMemberByPastor((current) => ({
+                              ...current,
+                              [pastor.id]: event.target.value,
+                            }))
+                          }
+                          className="min-w-[220px] flex-1 rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                        >
+                          <option value="">Assign member</option>
+                          {availableMembers.map((member) => (
+                            <option key={member.id} value={member.id}>
+                              {member.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={saving || !draftMemberByPastor[pastor.id]}
+                          onClick={() => handleAssign(pastor.id)}
+                          className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] disabled:opacity-60"
+                        >
+                          + Assign member
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )
+          })}
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="text-[var(--text-secondary)]">
-                <tr className="border-b border-[var(--border)]">
-                  <th className="px-3 py-3 font-medium">Pastor</th>
-                  <th className="px-3 py-3 font-medium">Member</th>
-                  <th className="px-3 py-3 font-medium">Department</th>
-                  <th className="px-3 py-3 font-medium">Assigned</th>
-                  <th className="px-3 py-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleAssignments.map((assignment) => {
-                  const pastor = userById.get(assignment.pastor_id)
-                  const member = userById.get(assignment.member_id)
-                  return (
-                    <tr key={`${assignment.pastor_id}-${assignment.member_id}`} className="border-b border-[var(--border)]/60">
-                      <td className="px-3 py-3 text-[var(--text-primary)]">{pastor?.name ?? 'Unknown pastor'}</td>
-                      <td className="px-3 py-3 text-[var(--text-primary)]">{member?.name ?? 'Unknown member'}</td>
-                      <td className="px-3 py-3 text-[var(--text-secondary)]">
-                        {departmentById.get(member?.department_id)?.name ?? '—'}
-                      </td>
-                      <td className="px-3 py-3 text-[var(--text-secondary)]">
-                        {new Date(assignment.created_at).toLocaleDateString('en-CA')}
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={!canManageAssignments || saving}
-                            onClick={async () => {
-                              setSaving(true)
-                              setError('')
-                              try {
-                                await removePastorMember(assignment.member_id)
-                                await loadData()
-                              } catch (nextError) {
-                                setError(nextError.message)
-                              } finally {
-                                setSaving(false)
-                              }
-                            }}
-                            className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] disabled:opacity-50"
-                          >
-                            Remove Member
-                          </button>
-                          {canManageAssignments && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setDraft({
-                                  pastorId: assignment.pastor_id,
-                                  memberId: assignment.member_id,
-                                })
-                              }
-                              className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)]"
-                            >
-                              Transfer Member
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-
-                {!loading && visibleAssignments.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-10 text-center text-[var(--text-secondary)]">
-                      No pastoral assignments are currently visible in your scope.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
+          {!loading && pastors.length === 0 ? (
+            <div className="rounded-[22px] border border-[var(--border)] bg-white p-8 text-center text-sm text-[var(--text-secondary)] shadow-[var(--card-shadow)]">
+              No pastors are visible in your current scope.
+            </div>
+          ) : null}
+        </div>
+      </section>
     </PeopleLayout>
   )
 }

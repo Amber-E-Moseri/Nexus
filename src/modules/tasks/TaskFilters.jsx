@@ -1,27 +1,43 @@
-const PRIORITIES = [
-  { value: 'urgent', label: 'Urgent' },
-  { value: 'high',   label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low',    label: 'Low' },
-]
+import { PRIORITIES } from '../../lib/constants'
 
 const DUE_RANGES = [
-  { value: 'overdue',   label: 'Overdue' },
-  { value: 'today',     label: 'Due today' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'today', label: 'Due today' },
   { value: 'this_week', label: 'This week' },
 ]
 
+const TASK_TYPES = [
+  { value: 'space', label: 'Space' },
+  { value: 'sprint', label: 'Sprint' },
+  { value: 'personal', label: 'Personal' },
+]
+
+const SOURCE_LABELS = {
+  manual: 'Manual',
+  meeting: 'Meeting',
+  automation: 'Automation',
+  admin_processor: 'Admin',
+  zoom: 'Zoom',
+}
+
 const PILL_BASE = {
-  display: 'inline-flex', alignItems: 'center', gap: 5,
-  padding: '3px 10px', borderRadius: 20,
-  fontSize: 12, fontWeight: 500, cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  padding: '5px 10px',
+  borderRadius: 20,
+  fontSize: 12,
+  fontWeight: 500,
+  cursor: 'pointer',
   border: '1px solid var(--border)',
-  background: 'white', color: 'var(--text-secondary)',
+  background: 'white',
+  color: 'var(--text-secondary)',
   transition: 'all 0.15s',
 }
 
 const PILL_ACTIVE = {
-  background: 'var(--accent-light)', color: 'var(--accent)',
+  background: 'var(--accent-light)',
+  color: 'var(--accent)',
   borderColor: 'var(--accent)',
 }
 
@@ -34,19 +50,42 @@ function FilterPill({ label, active, onRemove, onClick }) {
       tabIndex={0}
     >
       {label}
-      {active && (
+      {active ? (
         <span
           style={{ fontSize: 13, lineHeight: 1, opacity: 0.7 }}
-          onClick={(e) => { e.stopPropagation(); onRemove() }}
+          onClick={(event) => {
+            event.stopPropagation()
+            onRemove()
+          }}
         >
           ×
         </span>
-      )}
+      ) : null}
     </span>
   )
 }
 
-export default function TaskFilters({ filters, setFilters, clearFilters, hasActiveFilters, members = [], statuses = [] }) {
+function SectionTitle({ children }) {
+  return (
+    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+      {children}
+    </div>
+  )
+}
+
+export default function TaskFilters({ filters, setFilters, clearFilters, hasActiveFilters, members = [], statuses = [], tasks = [] }) {
+  const availableSources = Array.from(new Set(tasks.map((task) => task.source ?? 'manual')))
+  const availableTypes = Array.from(new Set(tasks.map((task) => task.task_type).filter(Boolean)))
+  const assigneeOptions = members.length > 0
+    ? members
+    : Array.from(
+      new Map(
+        tasks
+          .filter((task) => task.assignee?.id)
+          .map((task) => [task.assignee.id, { id: task.assignee.id, name: task.assignee.name }]),
+      ).values(),
+    )
+
   function toggleMulti(key, value) {
     setFilters((prev) => {
       const arr = prev[key]
@@ -61,97 +100,158 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
     setFilters((prev) => ({ ...prev, dueDateRange: prev.dueDateRange === value ? null : value }))
   }
 
-  function toggleShowDone() {
-    setFilters((prev) => ({ ...prev, showDone: !prev.showDone }))
+  function toggleBoolean(key) {
+    setFilters((prev) => ({ ...prev, [key]: !prev[key] }))
   }
 
   return (
-    <div
-      style={{
-        display: 'flex', alignItems: 'center', flexWrap: 'wrap',
-        gap: 6, padding: '8px 0',
-      }}
-    >
-      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginRight: 2, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-        Filter
-      </span>
+    <div style={{ display: 'grid', gap: 14 }}>
+      <div style={{ display: 'grid', gap: 10 }}>
+        <SectionTitle>Status</SectionTitle>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {statuses.map((status) => (
+            <FilterPill
+              key={status.id}
+              label={status.name}
+              active={filters.status.includes(status.id)}
+              onClick={() => toggleMulti('status', status.id)}
+              onRemove={() => toggleMulti('status', status.id)}
+            />
+          ))}
+        </div>
+      </div>
 
-      {statuses.map((status) => (
-        <FilterPill
-          key={status.id}
-          label={status.name}
-          active={filters.status.includes(status.id)}
-          onClick={() => toggleMulti('status', status.id)}
-          onRemove={() => toggleMulti('status', status.id)}
-        />
-      ))}
+      <div style={{ display: 'grid', gap: 10 }}>
+        <SectionTitle>Due Date</SectionTitle>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {DUE_RANGES.map((range) => (
+            <FilterPill
+              key={range.value}
+              label={range.label}
+              active={filters.dueDateRange === range.value}
+              onClick={() => toggleDueRange(range.value)}
+              onRemove={() => toggleDueRange(range.value)}
+            />
+          ))}
+        </div>
+      </div>
 
-      <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 2px' }} />
+      <div style={{ display: 'grid', gap: 10 }}>
+        <SectionTitle>Priority</SectionTitle>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {PRIORITIES.map((priority) => (
+            <FilterPill
+              key={priority.value}
+              label={priority.label}
+              active={filters.priority.includes(priority.value)}
+              onClick={() => toggleMulti('priority', priority.value)}
+              onRemove={() => toggleMulti('priority', priority.value)}
+            />
+          ))}
+        </div>
+      </div>
 
-      {PRIORITIES.map((p) => (
-        <FilterPill
-          key={p.value}
-          label={p.label}
-          active={filters.priority.includes(p.value)}
-          onClick={() => toggleMulti('priority', p.value)}
-          onRemove={() => toggleMulti('priority', p.value)}
-        />
-      ))}
-
-      <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 2px' }} />
-
-      {DUE_RANGES.map((d) => (
-        <FilterPill
-          key={d.value}
-          label={d.label}
-          active={filters.dueDateRange === d.value}
-          onClick={() => toggleDueRange(d.value)}
-          onRemove={() => toggleDueRange(d.value)}
-        />
-      ))}
-
-      <FilterPill
-        label="Show done"
-        active={filters.showDone}
-        onClick={toggleShowDone}
-        onRemove={toggleShowDone}
-      />
-
-      {members.length > 0 && (
-        <>
-          <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 2px' }} />
+      {assigneeOptions.length > 0 ? (
+        <div style={{ display: 'grid', gap: 10 }}>
+          <SectionTitle>Assignee</SectionTitle>
           <select
             value={filters.assigneeId ?? ''}
-            onChange={(e) =>
-              setFilters((prev) => ({ ...prev, assigneeId: e.target.value || null }))
-            }
+            onChange={(event) => setFilters((prev) => ({ ...prev, assigneeId: event.target.value || null }))}
             style={{
-              ...PILL_BASE,
-              ...(filters.assigneeId ? PILL_ACTIVE : {}),
-              appearance: 'none', paddingRight: 10,
+              width: '100%',
+              fontSize: 13,
+              padding: '8px 10px',
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              background: filters.assigneeId ? 'var(--accent-light)' : 'white',
+              color: filters.assigneeId ? 'var(--accent)' : 'var(--text-primary)',
             }}
           >
-            <option value="">Assignee</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
+            <option value="">Any assignee</option>
+            {assigneeOptions.map((member) => (
+              <option key={member.id} value={member.id}>{member.name}</option>
             ))}
           </select>
-        </>
-      )}
+        </div>
+      ) : null}
 
-      {hasActiveFilters() && (
-        <button
-          type="button"
-          onClick={clearFilters}
-          style={{
-            marginLeft: 4, fontSize: 12, color: 'var(--text-tertiary)',
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: '3px 6px', borderRadius: 6,
-          }}
-        >
-          Clear all
-        </button>
-      )}
+      {availableTypes.length > 0 ? (
+        <div style={{ display: 'grid', gap: 10 }}>
+          <SectionTitle>Task Type</SectionTitle>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {TASK_TYPES.filter((option) => availableTypes.includes(option.value)).map((option) => (
+              <FilterPill
+                key={option.value}
+                label={option.label}
+                active={filters.taskType.includes(option.value)}
+                onClick={() => toggleMulti('taskType', option.value)}
+                onRemove={() => toggleMulti('taskType', option.value)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {availableSources.length > 0 ? (
+        <div style={{ display: 'grid', gap: 10 }}>
+          <SectionTitle>Source</SectionTitle>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {availableSources.map((source) => (
+              <FilterPill
+                key={source}
+                label={SOURCE_LABELS[source] ?? source}
+                active={filters.source.includes(source)}
+                onClick={() => toggleMulti('source', source)}
+                onRemove={() => toggleMulti('source', source)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div style={{ display: 'grid', gap: 10 }}>
+        <SectionTitle>More</SectionTitle>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <FilterPill
+            label="Include completed"
+            active={filters.showDone}
+            onClick={() => toggleBoolean('showDone')}
+            onRemove={() => toggleBoolean('showDone')}
+          />
+          <FilterPill
+            label="Has comments"
+            active={filters.hasComments}
+            onClick={() => toggleBoolean('hasComments')}
+            onRemove={() => toggleBoolean('hasComments')}
+          />
+          <FilterPill
+            label="Has dependencies"
+            active={filters.hasDependencies}
+            onClick={() => toggleBoolean('hasDependencies')}
+            onRemove={() => toggleBoolean('hasDependencies')}
+          />
+        </div>
+      </div>
+
+      {hasActiveFilters() ? (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={clearFilters}
+            style={{
+              fontSize: 12,
+              color: 'var(--text-tertiary)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px 6px',
+              borderRadius: 6,
+            }}
+          >
+            Clear all
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }

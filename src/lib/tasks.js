@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { recordActivity } from './activityFeed'
 import {
   STATUS_CATEGORIES,
   getCategoryStatusId,
@@ -14,9 +15,34 @@ const TASK_STATUS_SELECT = `
   )
 `
 
+const TASK_LIST_SELECT = `
+  list:lists(
+    id,
+    name,
+    folder:folders(
+      id,
+      name
+    )
+  )
+`
+
 const SUBTASK_SELECT = `
   id, title, status, status_id, priority, due_date, task_type, sprint_id,
   ${TASK_STATUS_SELECT}
+`
+
+const TASK_COMMENT_SELECT = `
+  id,
+  body,
+  created_at,
+  assigned_to,
+  assigned_at,
+  resolved_by,
+  resolved_at,
+  mentions,
+  author:users!author_id(id, name, avatar_url),
+  assigned_user:users!assigned_to(id, name, avatar_url, role),
+  resolved_user:users!resolved_by(id, name, avatar_url)
 `
 
 function normalizeTaskResult(task) {
@@ -43,6 +69,14 @@ function buildTaskPayload(taskData = {}) {
     delete payload.statusName
   }
 
+  if ('department' in payload) {
+    delete payload.department
+  }
+
+  if ('list' in payload) {
+    delete payload.list
+  }
+
   return payload
 }
 
@@ -62,6 +96,8 @@ export async function getDeptTasks(departmentId) {
     .select(`
       *,
       ${TASK_STATUS_SELECT},
+      ${TASK_LIST_SELECT},
+      department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
       subtasks:tasks!parent_task_id(${SUBTASK_SELECT}),
       comments:task_comments(count),
@@ -83,6 +119,8 @@ export async function getSprintTasks(sprintId) {
     .select(`
       *,
       ${TASK_STATUS_SELECT},
+      ${TASK_LIST_SELECT},
+      department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
       subtasks:tasks!parent_task_id(${SUBTASK_SELECT}),
       comments:task_comments(count),
@@ -101,7 +139,7 @@ export async function getSprintTasks(sprintId) {
 export async function getPersonalTasks(userId) {
   const { data, error } = await supabase
     .from('tasks')
-    .select(`*, ${TASK_STATUS_SELECT}, subtasks:tasks!parent_task_id(${SUBTASK_SELECT})`)
+    .select(`*, ${TASK_STATUS_SELECT}, ${TASK_LIST_SELECT}, department:departments(id, name, color), subtasks:tasks!parent_task_id(${SUBTASK_SELECT})`)
     .eq('assignee_id', userId)
     .eq('is_personal', true)
     .is('parent_task_id', null)
@@ -113,47 +151,44 @@ export async function getPersonalTasks(userId) {
 
 export async function getMyTasks(userId) {
   const { data, error } = await supabase
-    .from('tasks')
+    .from('actionable_tasks')
     .select(`
       *,
       ${TASK_STATUS_SELECT},
+      ${TASK_LIST_SELECT},
       department:departments(id, name, color),
       subtasks:tasks!parent_task_id(${SUBTASK_SELECT})
     `)
     .eq('assignee_id', userId)
-    .eq('is_personal', false)
-    .is('parent_task_id', null)
     .order('due_date', { ascending: true, nullsFirst: false })
+    .limit(200)
 
   if (error) throw error
-  return normalizeTaskResultList(data).filter(isTaskActionable)
+  return normalizeTaskResultList(data)
 }
 
 export async function getFlockTasks(pastorId) {
-  const { data: members, error: membersError } = await supabase
-    .from('pastor_members')
-    .select('member_id')
-    .eq('pastor_id', pastorId)
-
-  if (membersError) throw membersError
-  const memberIds = (members ?? []).map((member) => member.member_id)
-  if (memberIds.length === 0) return []
-
   const { data, error } = await supabase
-    .from('tasks')
+    .from('pastor_members')
     .select(`
-      *,
-      ${TASK_STATUS_SELECT},
-      assignee:users!assignee_id(id, name, avatar_url),
-      department:departments(id, name, color)
+      member:users!member_id(
+        tasks:actionable_tasks!assignee_id(
+          *,
+          ${TASK_STATUS_SELECT},
+          ${TASK_LIST_SELECT},
+          assignee:users!assignee_id(id, name, avatar_url),
+          department:departments(id, name, color)
+        )
+      )
     `)
-    .in('assignee_id', memberIds)
-    .eq('is_personal', false)
-    .is('parent_task_id', null)
-    .order('due_date', { ascending: true, nullsFirst: false })
+    .eq('pastor_id', pastorId)
+    .order('due_date', { ascending: true, nullsFirst: false, foreignTable: 'member.tasks' })
+    .limit(200, { foreignTable: 'member.tasks' })
 
   if (error) throw error
-  return normalizeTaskResultList(data).filter(isTaskActionable)
+
+  const tasks = (data ?? []).flatMap((assignment) => assignment.member?.tasks ?? [])
+  return normalizeTaskResultList(tasks)
 }
 
 export async function getTaskById(taskId) {
@@ -162,6 +197,7 @@ export async function getTaskById(taskId) {
     .select(`
       *,
       ${TASK_STATUS_SELECT},
+      ${TASK_LIST_SELECT},
       assignee:users!assignee_id(id, name, avatar_url),
       subtasks:tasks!parent_task_id(${SUBTASK_SELECT}),
       department:departments(id, name, color)
@@ -175,6 +211,15 @@ export async function getTaskById(taskId) {
 
 export async function createTask(taskData) {
   const payload = buildTaskPayload(taskData)
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError) throw authError
+  if (!user) throw new Error('You must be signed in to create a task.')
+
+  payload.created_by = payload.created_by ?? user.id
 
   if (!payload.status_id) {
     payload.status_id = await getCategoryStatusId({
@@ -191,6 +236,8 @@ export async function createTask(taskData) {
     .select(`
       *,
       ${TASK_STATUS_SELECT},
+      ${TASK_LIST_SELECT},
+      department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
       subtasks:tasks!parent_task_id(${SUBTASK_SELECT})
     `)
@@ -200,7 +247,25 @@ export async function createTask(taskData) {
   return normalizeTaskResult(data)
 }
 
-export async function updateTask(taskId, updates) {
+export async function updateTask(taskId, updates, actorId = null) {
+  const { data: existingTask, error: existingTaskError } = await supabase
+    .from('tasks')
+    .select(`
+      id,
+      title,
+      assignee_id,
+      created_by,
+      due_date,
+      status,
+      department_id,
+      sprint_id,
+      ${TASK_STATUS_SELECT}
+    `)
+    .eq('id', taskId)
+    .single()
+
+  if (existingTaskError) throw existingTaskError
+
   const patch = buildTaskPayload(updates)
   applyCompletionMetadata(patch, updates.statusCategory, updates.completed_at)
 
@@ -211,13 +276,59 @@ export async function updateTask(taskId, updates) {
     .select(`
       *,
       ${TASK_STATUS_SELECT},
+      ${TASK_LIST_SELECT},
+      department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
       subtasks:tasks!parent_task_id(${SUBTASK_SELECT})
     `)
     .single()
 
   if (error) throw error
-  return normalizeTaskResult(data)
+  const normalized = normalizeTaskResult(data)
+
+  if (actorId) {
+    const nextAssigneeId = 'assignee_id' in updates ? updates.assignee_id ?? null : normalized.assignee_id ?? null
+    if (nextAssigneeId && nextAssigneeId !== existingTask.assignee_id) {
+      void recordActivity('task_assigned', {
+        task_id: normalized.id,
+        assignee_id: nextAssigneeId,
+        actor_id: actorId,
+        task_title: normalized.title,
+        department_id: normalized.department_id,
+        sprint_id: normalized.sprint_id ?? null,
+      })
+    }
+
+    const oldStatus = existingTask.status_definition?.name ?? existingTask.status
+    const newStatus = normalized.status_definition?.name ?? normalized.status
+    if (oldStatus !== newStatus) {
+      void recordActivity('task_status_changed', {
+        task_id: normalized.id,
+        assignee_id: normalized.assignee_id ?? null,
+        actor_id: actorId,
+        task_title: normalized.title,
+        old_status: oldStatus,
+        new_status: newStatus,
+        department_id: normalized.department_id,
+      })
+    }
+
+    const oldDue = existingTask.due_date ?? null
+    const newDue = normalized.due_date ?? null
+    if (oldDue !== newDue) {
+      void recordActivity('task_due_changed', {
+        task_id: normalized.id,
+        assignee_id: normalized.assignee_id ?? null,
+        actor_id: actorId,
+        task_title: normalized.title,
+        old_due: oldDue,
+        new_due: newDue,
+        department_id: normalized.department_id,
+      })
+    }
+  }
+
+  return normalized
 }
 
 export async function deleteTask(taskId) {
@@ -273,10 +384,7 @@ export async function getFlockMembers(pastorId) {
 export async function getTaskComments(taskId) {
   const { data, error } = await supabase
     .from('task_comments')
-    .select(`
-      id, body, created_at,
-      author:users!author_id(id, name, avatar_url)
-    `)
+    .select(TASK_COMMENT_SELECT)
     .eq('task_id', taskId)
     .order('created_at', { ascending: true })
 
@@ -284,17 +392,31 @@ export async function getTaskComments(taskId) {
   return data ?? []
 }
 
-export async function createComment(taskId, body, authorId) {
+export async function createComment(taskId, body, authorId, actorId = null) {
   const { data, error } = await supabase
     .from('task_comments')
     .insert({ task_id: taskId, body: body.trim(), author_id: authorId })
-    .select(`
-      id, body, created_at,
-      author:users!author_id(id, name, avatar_url)
-    `)
+    .select(TASK_COMMENT_SELECT)
     .single()
 
   if (error) throw error
+
+  const { data: taskInfo } = await supabase
+    .from('tasks')
+    .select('id, title, assignee_id')
+    .eq('id', taskId)
+    .maybeSingle()
+
+  void recordActivity('comment_added', {
+    task_id: taskId,
+    comment_id: data.id,
+    author_id: authorId,
+    actor_id: actorId ?? authorId,
+    task_title: taskInfo?.title ?? null,
+    body_preview: body.trim().slice(0, 100),
+    assignee_id: taskInfo?.assignee_id ?? null,
+  })
+
   return data
 }
 
@@ -369,7 +491,7 @@ export async function getTaskBlockers(taskId) {
   return normalizeTaskResultList(data)
 }
 
-export async function addDependency(taskId, dependsOnId, type = 'blocking', createdBy) {
+export async function addDependency(taskId, dependsOnId, type = 'blocking', createdBy, actorId = null) {
   const { data, error } = await supabase
     .from('task_dependencies')
     .insert({ task_id: taskId, depends_on_id: dependsOnId, type, created_by: createdBy })
@@ -377,6 +499,15 @@ export async function addDependency(taskId, dependsOnId, type = 'blocking', crea
     .single()
 
   if (error) throw error
+
+  void recordActivity('dependency_added', {
+    task_id: taskId,
+    depends_on_id: dependsOnId,
+    actor_id: actorId ?? createdBy ?? null,
+    task_title: null,
+    depends_on_title: null,
+  })
+
   return data
 }
 

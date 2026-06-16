@@ -1,112 +1,313 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 :root {
-  /* Brand */
-  --workspace-rail:     #C2185B;
-  --workspace-rail-dark:#880E4F;
-  --accent:             #E91E8C;
-  --accent-hover:       #C4177A;
-  --accent-light:       #FCE4F3;
-  --accent-dark:        #880E54;
-  --accent-muted:       rgba(233,30,140,0.12);
+  /* ── Brand ─────────────────────────────────────────── */
+  /* Core brand accents for buttons, active states, highlights, logos, and shared UI emphasis across the shell and feature modules */
+  --accent:             #4C2A92;   /* primary navy purple */
+  --accent-hover:       #3A1F75;
+  --accent-light:       #EDE8F8;   /* ghost / tinted hover */
+  --accent-dark:        #3A1F75;
+  --accent-muted:       rgba(76,42,146,0.09);
+  --accent-bar:         #6B4BBE;   /* light variant for bars */
 
-  /* Sidebar */
-  --sidebar-bg:        #191B28;
-  --sidebar-border:    rgba(255,255,255,0.06);
-  --sidebar-text:      #9B9BB8;
-  --sidebar-active:    #FFFFFF;
-  --sidebar-hover:     rgba(255,255,255,0.07);
-  --sidebar-section:   rgba(255,255,255,0.03);
+  --amber:              #E8A020;   /* warm gold — CTAs, logo */
+  --amber-hover:        #C47E0A;
+  --amber-light:        #FDF0D5;
 
-  /* Surfaces */
-  --surface:           #FFFFFF;
-  --surface-secondary: #F2F3F6;
-  --surface-hover:     #EDEEF4;
-  --surface-tertiary:  #E9EBF0;
-  --workspace-panel:   #FFFFFF;
-  --topbar-bg:         rgba(255,255,255,0.9);
+  --coral:              #F06449;   /* attention / counts */
+  --coral-dark:         #C94830;
+  --coral-light:        #FEF0ED;
 
-  /* Borders & elevation */
-  --border:            rgba(0,0,0,0.08);
-  --border-strong:     rgba(0,0,0,0.12);
-  --topbar-border:     rgba(0,0,0,0.06);
-  --card-shadow:       0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04);
+  --sage:               #2D8653;   /* success / healthy */
+  --sage-light:         #EBF7F1;
+  --sage-border:        #A7D9BE;
 
-  /* Text */
-  --text-primary:      #14142B;
-  --text-secondary:    #4E4B6A;
-  --text-tertiary:     #9B9BB8;
-  --text-placeholder:  #B8B6D6;
+  /* kept for backwards-compat in rail references */
+  --workspace-rail:     #4C2A92;
+  --workspace-rail-dark:#3A1F75;
 
-  /* Status colours */
-  --status-backlog-bg:   rgba(107,104,148,0.12); --status-backlog-text:   #5F5B8A;
-  --status-progress-bg:  rgba(37,99,235,0.12);   --status-progress-text:  #2563EB;
-  --status-review-bg:    rgba(217,119,6,0.12);   --status-review-text:    #D97706;
-  --status-done-bg:      rgba(22,163,74,0.12);   --status-done-text:      #16A34A;
-  --status-blocked-bg:   rgba(220,38,38,0.12);   --status-blocked-text:   #DC2626;
+  /* ── Surfaces ───────────────────────────────────────── */
+  /* Base backgrounds for pages, cards, panels, tables, and top-level workspace shells including Dashboard, Settings, Spaces, and Meetings */
+  --surface:            #FFFFFF;
+  --surface-secondary:  #F9F7F3;   /* table headers, sub-tiles */
+  --surface-hover:      #F2EEE6;   /* very faint row hover */
+  --surface-tertiary:   #F2EEE6;
+  --workspace-panel:    #FBF8F2;   /* sidebar */
+  --topbar-bg:          #FFFFFF;
 
-  /* Priority colours */
-  --prio-urgent-bg:    rgba(220,38,38,0.12); --prio-urgent-text:    #DC2626;
-  --prio-high-bg:      rgba(217,119,6,0.12); --prio-high-text:      #D97706;
-  --prio-medium-bg:    rgba(37,99,235,0.12); --prio-medium-text:    #2563EB;
-  --prio-low-bg:       rgba(107,104,148,0.12); --prio-low-text:     #5F5B8A;
+  /* ── Borders & elevation ───────────────────────────── */
+  /* Border, divider, and shadow tokens used by cards, modals, top bars, sidebars, tables, and interactive containers throughout the app */
+  --border:             #E9E4D8;
+  --border-strong:      rgba(28,22,16,.12);
+  --border-light:       #F2EEE6;   /* internal dividers */
+  --sidebar-border:     #EDE8DC;
+  --topbar-border:      #E9E4D8;
+  --card-shadow:        0 1px 3px rgba(28,22,16,.05);
+  --shadow:             0 2px 10px rgba(28,22,16,.07);
+  --shadow-lg:          0 8px 28px rgba(28,22,16,.10);
 
-  /* Dept colours */
-  --dept-admin:        #185FA5;
-  --dept-pfcc:         #1A6B35;
-  --dept-media:        #9B5500;
-  --dept-ors:          #A82828;
-  --dept-pastors:      #534AB7;
+  /* ── Sidebar ────────────────────────────────────────── */
+  /* Navigation-specific colors and sizing for the left application sidebar, section labels, hover states, and fixed shell layout width */
+  --sidebar-bg:         #FBF8F2;
+  --sidebar-text:       #7A6F5E;
+  --sidebar-active:     #4C2A92;
+  --sidebar-hover:      #F2EEE6;
+  --sidebar-section:    #EDE8F8;
+  --sidebar-w:          218px;
 
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 14px;
+  /* ── Text ───────────────────────────────────────────── */
+  /* Shared typography colors for headings, body copy, helper text, muted labels, placeholders, badges, and metadata in all modules */
+  --text-primary:       #1C1610;   /* warm near-black */
+  --text-secondary:     #7A6F5E;   /* medium warm */
+  --text-tertiary:      #B0A696;   /* light warm */
+  --text-placeholder:   #C9C0B0;
+
+  /* ── Status ─────────────────────────────────────────── */
+  /* Semantic task and workflow state colors consumed by badges, kanban cards, sprint views, invitations, and lifecycle indicators */
+  --status-backlog-bg:  #F9F7F3;   --status-backlog-text:  #7A6F5E;
+  --status-progress-bg: #EFF6FF;   --status-progress-text: #1E40AF;
+  --status-review-bg:   #FDF0D5;   --status-review-text:   #C47E0A;
+  --status-done-bg:     #EBF7F1;   --status-done-text:     #2D8653;
+  --status-blocked-bg:  #FEF0ED;   --status-blocked-text:  #C94830;
+
+  /* ── Priority ───────────────────────────────────────── */
+  /* Priority badge colors used on task cards, task detail forms, filters, and other planning surfaces that represent urgency */
+  --prio-urgent-bg:  #FEF0ED;   --prio-urgent-text:  #C94830;
+  --prio-high-bg:    #FDF0D5;   --prio-high-text:    #C47E0A;
+  --prio-medium-bg:  #EFF6FF;   --prio-medium-text:  #1E40AF;
+  --prio-low-bg:     #F9F7F3;   --prio-low-text:     #7A6F5E;
+
+  /* ── Dept colours ───────────────────────────────────── */
+  /* Department identity colors used in department chips, space glyphs, calendars, summaries, and cross-module visual grouping */
+  --dept-admin:   #4C2A92;
+  --dept-pfcc:    #2D8653;
+  --dept-media:   #C47E0A;
+  --dept-ors:     #C94830;
+  --dept-pastors: #6B4BBE;
+
+  /* ── Info semantic ──────────────────────────────────── */
+  --info:            #1E40AF;
+  --info-bg:         #EFF6FF;
+  --info-bd:         #BFDBFE;
+
+  /* ── FS design-system token aliases ────────────────── */
+  /* These let any FS-kit code drop straight into the app */
+  --fs-navy:         #4C2A92;   --fs-navy-d:      #3A1F75;   --fs-navy-l:    #6B4BBE;   --fs-navy-ghost: #EDE8F8;
+  --fs-amber:        #E8A020;   --fs-amber-d:     #C47E0A;   --fs-amber-l:   #FDF0D5;
+  --fs-coral:        #F06449;   --fs-coral-d:     #C94830;   --fs-coral-l:   #FEF0ED;
+  --fs-sage:         #2D8653;   --fs-sage-l:      #EBF7F1;   --fs-sage-bd:   #A7D9BE;
+  --fs-bg:           #F7F5F0;   --fs-sidebar-bg:  #FBF8F2;   --fs-sidebar-bd:#EDE8DC;
+  --fs-surface:      #FFFFFF;   --fs-surface-alt: #F9F7F3;
+  --fs-border:       #E9E4D8;   --fs-border-l:    #F2EEE6;
+  --fs-text:         #1C1610;   --fs-muted:       #7A6F5E;   --fs-xmuted:    #B0A696;
+  --fs-success:      #2D8653;   --fs-success-bg:  #EBF7F1;   --fs-success-bd:#A7D9BE;
+  --fs-danger:       #C94830;   --fs-danger-bg:   #FEF0ED;   --fs-danger-bd: #F9C4B8;
+  --fs-warn:         #C47E0A;   --fs-warn-bg:     #FDF0D5;   --fs-warn-bd:   #F5CE7A;
+  --fs-info:         #1E40AF;   --fs-info-bg:     #EFF6FF;   --fs-info-bd:   #BFDBFE;
+  --fs-sh-xs:        0 1px 3px rgba(28,22,16,.05);
+  --fs-sh:           0 2px 10px rgba(28,22,16,.07);
+  --fs-sh-lg:        0 8px 28px rgba(28,22,16,.10);
+  --fs-sidebar-w:    218px;   --fs-topbar-h: 52px;
+  --fs-font-body:    'DM Sans', system-ui, sans-serif;
+  --fs-font-mono:    'DM Mono', ui-monospace, monospace;
+  --fs-r-xs: 4px;   --fs-r-sm: 6px;   --fs-r: 10px;   --fs-r-lg: 14px;   --fs-r-xl: 20px;   --fs-r-pill: 999px;
+  --fs-fs-kpi: 27px;   --fs-fs-page: 21px;   --fs-fs-h2: 14.5px;
+  --fs-fs-body: 13.5px;   --fs-fs-meta: 12px;   --fs-fs-micro: 10.5px;   --fs-fs-mono: 11.5px;
+
+  /* ── Type ────────────────────────────────────────────────────── */
+  font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13.5px;
+  line-height: 1.55;
   color: var(--text-primary);
-  background: var(--surface-secondary);
+  background: #F7F5F0;
 }
 
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; }
-body { margin: 0; background: var(--surface-secondary); color: var(--text-primary); }
+body { margin: 0; background: #F7F5F0; color: var(--text-primary); }
 a { color: inherit; text-decoration: none; }
 button, input, select, textarea { font: inherit; }
 
+/* ── Focus ring ──────────────────────────────────────────────── */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(76,42,146,.09);
+  border-color: var(--accent) !important;
 }
 
+/* ── Monospace utility ───────────────────────────────────────── */
+.fs-mono {
+  font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+}
+
+/* ── Button primitives ───────────────────────────────────────── */
 .btn-primary {
   background: var(--accent);
   color: #fff;
-  border: 1px solid transparent;
-  box-shadow: var(--card-shadow);
-  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+  border: 1px solid var(--accent);
+  transition: background .13s, border-color .13s;
 }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 
-.btn-primary:hover {
-  background: var(--accent-hover);
+.btn-amber {
+  background: var(--amber);
+  color: #fff;
+  border: 1px solid var(--amber);
+  transition: background .13s, border-color .13s;
 }
+.btn-amber:hover { background: var(--amber-hover); border-color: var(--amber-hover); }
 
 .btn-ghost {
-  background: transparent;
-  color: var(--text-secondary);
+  background: var(--surface);
+  color: var(--text-primary);
   border: 1px solid var(--border);
-  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+  transition: background .13s, border-color .13s, color .13s;
 }
-
 .btn-ghost:hover {
   background: var(--surface-secondary);
-  color: var(--text-primary);
-  border-color: var(--border-strong);
+  border-color: var(--accent-bar);
 }
 
+/* ── Scrollbar ───────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
 
+/* ── Sidebar enter animation ─────────────────────────────────── */
 .transition-sidebar { transition: width 200ms ease; }
+
+/* ── Fade-up entry animation ─────────────────────────────────── */
+@keyframes fs-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fs-fade-up { animation: fs-up .4s ease both; }
+
+/* ── Base typography (FS spec) ───────────────────────────────── */
+h1, h2, h3, h4 {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: var(--text-primary);
+  line-height: 1.2;
+  letter-spacing: -.005em;
+}
+h1 { font-size: 21px; font-weight: 800; }
+h2 { font-size: 17px; font-weight: 700; }
+h3 { font-size: 14.5px; font-weight: 700; }
+h4 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary); }
+code, kbd { font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+
+/* ── Status dot indicators ───────────────────────────────────── */
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: middle; }
+.dot-g { background: var(--sage); }
+.dot-a { background: var(--amber); }
+.dot-r { background: var(--coral); }
+
+/* ── Badge / status pill ─────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+  white-space: nowrap; border: 1px solid transparent;
+}
+.b-ok   { background: var(--sage-light);        color: var(--sage);          border-color: var(--sage-border); }
+.b-bad  { background: var(--coral-light);       color: var(--coral-dark);    border-color: #F9C4B8; }
+.b-warn { background: var(--amber-light);       color: var(--amber-hover);   border-color: #F5CE7A; }
+.b-info { background: var(--info-bg);           color: var(--info);          border-color: var(--info-bd); }
+.b-mute { background: var(--surface-secondary); color: var(--text-secondary); border-color: var(--border); }
+
+/* ── Card count chips ────────────────────────────────────────── */
+.cnt-n { background: var(--accent-light); color: var(--accent); }
+.cnt-w { background: var(--amber-light);  color: var(--amber-hover); }
+.cnt-c { background: var(--coral-light);  color: var(--coral-dark); }
+
+/* ── Extended button semantic variants ──────────────────────── */
+.btn-ok {
+  background: var(--sage-light); color: var(--sage);
+  border: 1px solid var(--sage-border);
+  transition: background .13s, border-color .13s;
+}
+.btn-ok:hover:not(:disabled) { filter: brightness(.96); }
+.btn-bad,
+.btn-danger {
+  background: var(--coral-light); color: var(--coral-dark);
+  border: 1px solid #F9C4B8;
+  transition: background .13s, border-color .13s;
+}
+.btn-bad:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) { filter: brightness(.96); }
+.btn-warn {
+  background: var(--amber-light); color: var(--amber-hover);
+  border: 1px solid #F5CE7A;
+  transition: background .13s, border-color .13s;
+}
+.btn-warn:hover:not(:disabled) { filter: brightness(.96); }
+.btn-sm { padding: 5px 10px !important; font-size: 12px !important; }
+.btn-xs { padding: 3px 8px !important;  font-size: 11px !important; }
+:is(.btn-primary, .btn-amber, .btn-ghost, .btn-ok, .btn-bad, .btn-danger, .btn-warn):disabled {
+  opacity: .4; cursor: not-allowed;
+}
+
+/* ── FS table primitive ──────────────────────────────────────── */
+.fs-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.fs-table thead tr { background: var(--surface-secondary); }
+.fs-table th {
+  padding: 8px 14px; text-align: left;
+  font-size: 10.5px; font-weight: 700; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: .05em;
+  white-space: nowrap; border-bottom: 1px solid var(--border);
+}
+.fs-table td { padding: 0 14px; height: 38px; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
+.fs-table tbody tr:last-child td { border-bottom: none; }
+.fs-table tbody tr { transition: background .1s; }
+.fs-table tbody tr:hover td { background: var(--surface-secondary); }
+.fs-mono-cell { font-family: 'DM Mono', ui-monospace, monospace; font-size: 11.5px; color: var(--text-secondary); }
+
+/* ── FS tab bar ──────────────────────────────────────────────── */
+.fs-tab-bar { display: flex; gap: 1px; border-bottom: 1px solid var(--border); }
+.fs-tab-btn {
+  padding: 9px 13px; border: none; background: none; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 500; color: var(--text-secondary);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .13s;
+}
+.fs-tab-btn:hover { color: var(--accent); }
+.fs-tab-btn.active { color: var(--accent); font-weight: 700; border-bottom-color: var(--accent); }
+
+/* ── Filter chip ─────────────────────────────────────────────── */
+.fchip {
+  padding: 5px 10px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 11.5px; font-weight: 600; color: var(--text-secondary);
+  cursor: pointer; transition: all .13s;
+}
+.fchip:hover { border-color: var(--accent-bar); color: var(--accent); }
+.fchip.on { background: var(--accent-light); color: var(--accent); border-color: var(--accent-light); }
+
+/* ── Quick card (FS hover spec: amber border + icon flip) ────── */
+.fs-quick-card {
+  padding: 16px; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); text-decoration: none; color: var(--text-primary);
+  display: flex; flex-direction: column; gap: 10px;
+  transition: box-shadow .16s, transform .16s, border-color .16s;
+  box-shadow: var(--card-shadow);
+}
+.fs-quick-card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+  border-color: var(--amber);
+}
+.fs-quick-card .qc-icon {
+  width: 34px; height: 34px; border-radius: 8px;
+  background: var(--accent-light); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; transition: background .16s, color .16s;
+}
+.fs-quick-card:hover .qc-icon { background: var(--accent); color: var(--amber); }
+.qc-name { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.qc-desc { font-size: 11.5px; color: var(--text-secondary); line-height: 1.4; }

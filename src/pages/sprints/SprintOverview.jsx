@@ -2,15 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Badge from '../../components/ui/Badge'
 import { useAuth } from '../../hooks/useAuth'
-import { getMonthEvents } from '../../lib/calendar'
+import { deleteCalendarEvent } from '../../lib/calendar'
 import { advanceSprintStatus, duplicateSprint, getSprintDetail, getSprintTasks, updateSprint } from '../../lib/sprints'
 import { supabase } from '../../lib/supabase'
 import { isTaskCompleted } from '../../lib/taskStatuses'
-import MiniCalendar from '../../modules/calendar/MiniCalendar'
+import CalendarView from '../../modules/calendar/CalendarView'
+import EventModal from '../../modules/calendar/EventModal'
 import SprintMemberPanel from '../../modules/sprints/SprintMemberPanel'
-import SprintReviewForm from '../../modules/sprints/SprintReviewForm'
 import SprintTaskBoard from '../../modules/sprints/SprintTaskBoard'
 import SprintTeamPanel from '../../modules/sprints/SprintTeamPanel'
+import SprintReview from './SprintReview'
 
 const TABS = ['Overview', 'Tasks', 'Calendar', 'Teams', 'Members', 'Review']
 const NEXT_ACTION = {
@@ -52,6 +53,12 @@ export default function SprintOverview() {
   const [goalDraft, setGoalDraft] = useState('')
   const [descriptionDraft, setDescriptionDraft] = useState('')
   const [recentActivity, setRecentActivity] = useState(null)
+  const [calendarLoading, setCalendarLoading] = useState(true)
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth())
+  const [showEventModal, setShowEventModal] = useState(false)
+  const [selectedCalendarEvent, setSelectedCalendarEvent] = useState(null)
+  const [calendarDefaultDate, setCalendarDefaultDate] = useState(null)
 
   async function loadDetail() {
     setLoading(true)
@@ -71,10 +78,18 @@ export default function SprintOverview() {
   }, [sprintId])
 
   useEffect(() => {
-    const now = new Date()
-    getMonthEvents(now.getFullYear(), now.getMonth())
-      .then((items) => setCalendarEvents(items.filter((event) => !event.sprint_id || event.sprint_id === sprintId)))
+    setCalendarLoading(true)
+    supabase
+      .from('calendar_events')
+      .select('*')
+      .eq('sprint_id', sprintId)
+      .order('start_date', { ascending: true })
+      .then(({ data, error }) => {
+        if (error) throw error
+        setCalendarEvents(data ?? [])
+      })
       .catch(() => setCalendarEvents([]))
+      .finally(() => setCalendarLoading(false))
   }, [sprintId])
 
   useEffect(() => {
@@ -105,6 +120,23 @@ export default function SprintOverview() {
     const done = tasks.filter((task) => isTaskCompleted(task)).length
     return Math.round((done / tasks.length) * 100)
   }, [tasks])
+  const reviewCompleted = Boolean(detail?.review?.reviewed_at ?? detail?.review?.completed_at)
+
+  async function reloadCalendar() {
+    setCalendarLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('calendar_events')
+        .select('*')
+        .eq('sprint_id', sprintId)
+        .order('start_date', { ascending: true })
+
+      if (error) throw error
+      setCalendarEvents(data ?? [])
+    } finally {
+      setCalendarLoading(false)
+    }
+  }
 
   async function handleAdvance() {
     const action = NEXT_ACTION[detail.sprint.status]
@@ -159,7 +191,7 @@ export default function SprintOverview() {
 
           <div className="flex flex-wrap gap-2">
             {NEXT_ACTION[detail.sprint.status] && canManage && !isArchived ? (
-              <button type="button" onClick={handleAdvance} className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white">
+              <button type="button" onClick={handleAdvance} disabled={detail.sprint.status === 'review' && !reviewCompleted} title={detail.sprint.status === 'review' && !reviewCompleted ? 'Complete the sprint review before archiving' : ''} className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">
                 {NEXT_ACTION[detail.sprint.status].label}
               </button>
             ) : null}
@@ -172,26 +204,33 @@ export default function SprintOverview() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {visibleTabs.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-            className="rounded-full border px-3 py-1.5 text-sm"
-            style={{
-              borderColor: activeTab === tab ? 'var(--accent)' : 'var(--border)',
-              background: activeTab === tab ? 'var(--accent-light)' : 'white',
-              color: activeTab === tab ? 'var(--accent)' : 'var(--text-secondary)',
-            }}
-          >
-            {tab}
-          </button>
-        ))}
+      <div role="tablist" className="flex flex-wrap gap-2">
+        {visibleTabs.map((tab) => {
+          const tabId = tab.toLowerCase().replace(/\s+/g, '-')
+          return (
+            <button
+              key={tab}
+              id={`tab-${tabId}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab}
+              aria-controls={`tabpanel-${tabId}`}
+              onClick={() => setActiveTab(tab)}
+              className="rounded-full border px-3 py-1.5 text-sm"
+              style={{
+                borderColor: activeTab === tab ? 'var(--accent)' : 'var(--border)',
+                background: activeTab === tab ? 'var(--accent-light)' : 'white',
+                color: activeTab === tab ? 'var(--accent)' : 'var(--text-secondary)',
+              }}
+            >
+              {tab}
+            </button>
+          )
+        })}
       </div>
 
       {activeTab === 'Overview' ? (
-        <div className="space-y-5">
+        <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0} className="space-y-5">
           <section className="grid gap-4 md:grid-cols-3">
             <Stat label="Members" value={detail.members.length} />
             <Stat label="Tasks" value={tasks.length} />
@@ -264,57 +303,120 @@ export default function SprintOverview() {
       ) : null}
 
       {activeTab === 'Tasks' ? (
-        <div className="rounded-[24px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)]">
+        <div role="tabpanel" id="tabpanel-tasks" aria-labelledby="tab-tasks" tabIndex={0} className="rounded-[24px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)]">
           <SprintTaskBoard sprintId={detail.sprint.id} canEdit={Boolean(canManage && !isArchived)} />
         </div>
       ) : null}
 
       {activeTab === 'Calendar' ? (
-        <MiniCalendar
-          year={new Date().getFullYear()}
-          month={new Date().getMonth()}
-          events={calendarEvents}
-          title="Sprint Calendar"
-        />
+        <div role="tabpanel" id="tabpanel-calendar" aria-labelledby="tab-calendar" tabIndex={0}>
+          <CalendarView
+            events={calendarEvents}
+            loading={calendarLoading}
+            year={calendarYear}
+            month={calendarMonth}
+            onEventClick={setSelectedCalendarEvent}
+            onDayClick={(day) => {
+              if (!canManage || isArchived) return
+              setCalendarDefaultDate(day)
+              setShowEventModal(true)
+            }}
+            onAddEvent={canManage && !isArchived ? () => setShowEventModal(true) : undefined}
+            onEditEvent={(event) => {
+              setSelectedCalendarEvent(event)
+              setShowEventModal(true)
+            }}
+            onDeleteEvent={async (event) => {
+              await deleteCalendarEvent(event.id)
+              setSelectedCalendarEvent(null)
+              await reloadCalendar()
+            }}
+            onPrevMonth={() => {
+              if (calendarMonth === 0) {
+                setCalendarMonth(11)
+                setCalendarYear((value) => value - 1)
+              } else {
+                setCalendarMonth((value) => value - 1)
+              }
+            }}
+            onNextMonth={() => {
+              if (calendarMonth === 11) {
+                setCalendarMonth(0)
+                setCalendarYear((value) => value + 1)
+              } else {
+                setCalendarMonth((value) => value + 1)
+              }
+            }}
+            onToday={() => {
+              const now = new Date()
+              setCalendarYear(now.getFullYear())
+              setCalendarMonth(now.getMonth())
+            }}
+            readOnly={!canManage || isArchived}
+          />
+        </div>
       ) : null}
 
       {activeTab === 'Teams' ? (
-        <SprintTeamPanel
-          sprintId={detail.sprint.id}
-          teams={detail.teams}
-          members={detail.members}
-          canEdit={Boolean(canManage)}
-          isArchived={Boolean(isArchived)}
-          onChanged={loadDetail}
-        />
+        <div role="tabpanel" id="tabpanel-teams" aria-labelledby="tab-teams" tabIndex={0}>
+          <SprintTeamPanel
+            sprintId={detail.sprint.id}
+            teams={detail.teams}
+            members={detail.members}
+            canEdit={Boolean(canManage)}
+            isArchived={Boolean(isArchived)}
+            onChanged={loadDetail}
+          />
+        </div>
       ) : null}
 
       {activeTab === 'Members' ? (
-        <SprintMemberPanel
-          sprintId={detail.sprint.id}
-          sprintName={detail.sprint.name}
-          members={detail.members}
-          teams={detail.teams}
-          canEdit={Boolean(canManage)}
-          isArchived={Boolean(isArchived)}
-          onChanged={loadDetail}
-        />
+        <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}>
+          <SprintMemberPanel
+            sprintId={detail.sprint.id}
+            sprintName={detail.sprint.name}
+            members={detail.members}
+            teams={detail.teams}
+            canEdit={Boolean(canManage)}
+            isArchived={Boolean(isArchived)}
+            onChanged={loadDetail}
+          />
+        </div>
       ) : null}
 
       {activeTab === 'Review' ? (
-        <SprintReviewForm
-          sprint={detail.sprint}
-          review={detail.review}
-          canManage={Boolean(canManage)}
-          onSaved={loadDetail}
-          onArchived={loadDetail}
-        />
+        <div role="tabpanel" id="tabpanel-review" aria-labelledby="tab-review" tabIndex={0}>
+          <SprintReview
+            sprint={detail.sprint}
+            canManage={Boolean(canManage)}
+            onSaved={loadDetail}
+          />
+        </div>
       ) : null}
 
       {detail.sprint.status === 'archived' ? (
         <div className="text-sm text-[var(--text-secondary)]">
           Sprint archived. <Link to="/sprints" className="text-[var(--accent)]">Back to all sprints</Link>
         </div>
+      ) : null}
+      {showEventModal ? (
+        <EventModal
+          event={selectedCalendarEvent}
+          defaultDate={calendarDefaultDate}
+          initialSprintId={sprintId}
+          canEditOverride={Boolean(canManage && !isArchived)}
+          onSaved={async () => {
+            setShowEventModal(false)
+            setSelectedCalendarEvent(null)
+            setCalendarDefaultDate(null)
+            await reloadCalendar()
+          }}
+          onClose={() => {
+            setShowEventModal(false)
+            setSelectedCalendarEvent(null)
+            setCalendarDefaultDate(null)
+          }}
+        />
       ) : null}
     </div>
   )

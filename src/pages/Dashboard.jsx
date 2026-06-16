@@ -1,378 +1,615 @@
-import { Activity, ArrowUpRight, CalendarDays, Sparkles, Users2 } from 'lucide-react'
+import { CSS } from '@dnd-kit/utilities'
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { endOfWeek, isBefore, isEqual, parseISO, startOfDay } from 'date-fns'
 import { useEffect, useMemo, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
-import Badge from '../components/ui/Badge'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationsContext'
 import { useAuth } from '../hooks/useAuth'
-import { getUpcomingEvents } from '../lib/calendar'
-import { listInvitations, listPastorMembers, listUsers } from '../lib/people/api'
-import { selectUserLifecycleStats } from '../lib/people/selectors'
-import { getMySpaces } from '../lib/spaces'
-import { getMySprints } from '../lib/sprints'
 import { supabase } from '../lib/supabase'
+import { getMyTasks } from '../lib/tasks'
+import { isTaskCompleted } from '../lib/taskStatuses'
+import CompletionRateWidget from '../modules/dashboard/CompletionRateWidget'
+import MemberActivityWidget from '../modules/dashboard/MemberActivityWidget'
+import OverdueByMemberWidget from '../modules/dashboard/OverdueByMemberWidget'
+import SprintProgressWidget from '../modules/dashboard/SprintProgressWidget'
+import UpcomingEventsWidget from '../modules/dashboard/UpcomingEventsWidget'
 
 function greetingForHour() {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 18) return 'Good afternoon'
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
   return 'Good evening'
 }
 
-function buildQuickActions(role, deptSlug, sprintCount) {
-  const spacesLink = { label: 'My spaces', to: '/spaces' }
-  const sprintLink = sprintCount > 0 ? { label: role === 'super_admin' ? 'All sprints' : role === 'pastor' ? 'View sprints' : 'My sprints', to: '/sprints' } : null
+// ─── Inline widgets ───────────────────────────────────────────────────────────
 
-  if (role === 'pastor') {
-    return [
-      { label: 'View my flock', to: '/flock' },
-      ...(sprintLink ? [sprintLink] : []),
-      { label: 'Review meetings', to: '/meetings' },
-      spacesLink,
-    ]
-  }
-  if (role === 'member') {
-    return [
-      { label: 'Open my tasks', to: '/my-tasks' },
-      ...(sprintLink ? [sprintLink] : []),
-      spacesLink,
-      { label: 'Review meetings', to: '/meetings' },
-    ]
-  }
-  if (role === 'dept_lead') {
-    return [
-      spacesLink,
-      { label: 'My sprints', to: '/sprints' },
-      { label: 'Manage invitations', to: '/people/invitations' },
-      { label: 'Open automations', to: '/automations' },
-    ]
-  }
+function MyTasksSummaryWidget({ userId }) {
+  const navigate = useNavigate()
+  const [counts, setCounts] = useState({ today: null, overdue: null, thisWeek: null })
 
-  return [
-    { label: 'All sprints', to: '/sprints' },
-    { label: 'People workspace', to: '/people/users' },
-    { label: 'Manage invitations', to: '/people/invitations' },
-    { label: 'Open automations', to: '/automations' },
+  useEffect(() => {
+    if (!userId) return
+    let active = true
+
+    getMyTasks(userId)
+      .then((tasks) => {
+        if (!active) return
+        const today = startOfDay(new Date())
+        const weekEnd = startOfDay(endOfWeek(today, { weekStartsOn: 1 }))
+        let todayCount = 0
+        let overdueCount = 0
+        let thisWeekCount = 0
+
+        for (const task of tasks) {
+          if (isTaskCompleted(task)) continue
+          const due = task.due_date ? startOfDay(parseISO(`${task.due_date}T00:00:00`)) : null
+          if (!due) continue
+          if (isEqual(due, today)) todayCount++
+          else if (isBefore(due, today)) overdueCount++
+          else if (!isBefore(weekEnd, due)) thisWeekCount++
+        }
+
+        setCounts({ today: todayCount, overdue: overdueCount, thisWeek: thisWeekCount })
+      })
+      .catch(() => {})
+
+    return () => { active = false }
+  }, [userId])
+
+  const stats = [
+    { label: 'Today', value: counts.today, color: '#4C2A92' },
+    { label: 'Overdue', value: counts.overdue, color: '#C94830' },
+    { label: 'This Week', value: counts.thisWeek, color: '#2D8653' },
   ]
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+      {stats.map((stat) => (
+        <button
+          key={stat.label}
+          type="button"
+          onClick={() => navigate('/my-tasks')}
+          style={{
+            background: '#FAFAF7',
+            border: '1px solid #EDE8DC',
+            borderRadius: 12,
+            padding: '14px 8px',
+            cursor: 'pointer',
+            textAlign: 'center',
+            transition: 'border-color .12s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92' }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#EDE8DC' }}
+        >
+          <div style={{ fontSize: 28, fontWeight: 900, color: stat.color, lineHeight: 1 }}>
+            {stat.value ?? '—'}
+          </div>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9E9488', marginTop: 5, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+            {stat.label}
+          </div>
+        </button>
+      ))}
+    </div>
+  )
 }
 
-function StatCard({ label, value, accent, tint, to }) {
-  const content = (
+function QuickActionsWidget({ role }) {
+  const navigate = useNavigate()
+
+  if (role !== 'super_admin' && role !== 'dept_lead') {
+    return (
+      <div style={{ fontSize: 13, color: '#B0A696', padding: '8px 0' }}>
+        Quick actions are available to admins and leads.
+      </div>
+    )
+  }
+
+  const actions = [
+    { label: '+ New Task', path: '/my-tasks?new=true' },
+    { label: '+ New Event', path: '/calendar?new=true' },
+    { label: '+ New Sprint', path: '/sprints?new=true' },
+  ]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {actions.map((action) => (
+        <button
+          key={action.label}
+          type="button"
+          onClick={() => navigate(action.path)}
+          style={{
+            background: '#F9F7F3',
+            border: '1px solid #EDE8DC',
+            borderRadius: 10,
+            padding: '10px 14px',
+            textAlign: 'left',
+            fontSize: 13,
+            fontWeight: 600,
+            color: '#4C2A92',
+            cursor: 'pointer',
+            transition: 'background .12s, border-color .12s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = '#EDE8F8'; e.currentTarget.style.borderColor = '#9B78E8' }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = '#F9F7F3'; e.currentTarget.style.borderColor = '#EDE8DC' }}
+        >
+          {action.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ─── Widget registry ──────────────────────────────────────────────────────────
+
+const WIDGET_META = {
+  upcoming_events:   { title: 'Upcoming Events',           Component: UpcomingEventsWidget },
+  sprint_progress:   { title: 'Sprint Progress',           Component: SprintProgressWidget },
+  overdue_by_member: { title: 'Overdue Tasks by Member',   Component: OverdueByMemberWidget },
+  member_activity:   { title: 'Member Activity',           Component: MemberActivityWidget },
+  completion_rate:   { title: 'Completion Rate This Week', Component: CompletionRateWidget },
+  my_tasks_summary:  { title: 'My Tasks Summary',          Component: MyTasksSummaryWidget },
+  quick_actions:     { title: 'Quick Actions',             Component: QuickActionsWidget },
+}
+
+const ALL_WIDGET_KEYS = Object.keys(WIDGET_META)
+
+const FALLBACK_PREFS = ALL_WIDGET_KEYS.map((key, i) => ({
+  widget_key: key,
+  visible: true,
+  sort_order: i + 1,
+}))
+
+function mergeWithAllKeys(rows) {
+  const map = new Map(rows.map((r) => [r.widget_key, r]))
+  const maxOrder = rows.length > 0 ? Math.max(...rows.map((r) => r.sort_order ?? 0)) : 0
+  return ALL_WIDGET_KEYS.map((key, i) =>
+    map.has(key) ? map.get(key) : { widget_key: key, visible: false, sort_order: maxOrder + i + 1 },
+  )
+}
+
+// ─── Widget card ──────────────────────────────────────────────────────────────
+
+function WidgetCard({ widgetKey, role, userId, departmentId, onUnpin }) {
+  const meta = WIDGET_META[widgetKey]
+  if (!meta) return null
+  const { title, Component } = meta
+
+  return (
     <div
-      className="rounded-[22px] p-5"
       style={{
-        background: tint ?? 'var(--surface)',
-        boxShadow: 'var(--card-shadow)',
-        border: '1px solid var(--border)',
-        borderTop: '3px solid var(--accent)',
+        background: 'white',
+        border: '1px solid #E9E4D8',
+        borderRadius: 20,
+        boxShadow: '0 1px 4px rgba(28,22,16,.05)',
+        padding: '18px 20px',
       }}
     >
-      <div className="text-sm text-[var(--text-secondary)]">{label}</div>
-      <div className="mt-4 flex items-end justify-between gap-3">
-        <div className="text-3xl font-semibold tracking-[-0.03em] text-[var(--text-primary)]">{value}</div>
-        <div className={`rounded-full px-2.5 py-1 text-xs font-semibold ${accent}`}>Live</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: '#1C1610' }}>{title}</span>
+        <button
+          type="button"
+          onClick={() => onUnpin(widgetKey)}
+          title={`Unpin ${title}`}
+          aria-label={`Unpin ${title}`}
+          style={{
+            border: 'none',
+            background: 'none',
+            cursor: 'pointer',
+            fontSize: 14,
+            color: '#C8BFB2',
+            padding: '2px 4px',
+            lineHeight: 1,
+            borderRadius: 6,
+            transition: 'color .12s, background .12s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#C94830'; e.currentTarget.style.background = '#FEF0ED' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#C8BFB2'; e.currentTarget.style.background = 'none' }}
+        >
+          ✕
+        </button>
       </div>
+      <Component role={role} userId={userId} departmentId={departmentId} />
     </div>
-  )
-
-  if (!to) return content
-
-  return (
-    <NavLink to={to} className="block">
-      {content}
-    </NavLink>
   )
 }
 
-function EmptyState({ icon, title, subtitle }) {
+// ─── Customize panel ──────────────────────────────────────────────────────────
+
+function SortableWidgetRow({ item, onToggle }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.widget_key,
+  })
+  const title = WIDGET_META[item.widget_key]?.title ?? item.widget_key
+
   return (
-    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>
-      <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>
-        {title}
-      </div>
-      <div>{subtitle}</div>
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.65 : 1,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '10px 12px',
+        background: '#FAFAF7',
+        border: '1px solid #EDE8DC',
+        borderRadius: 10,
+      }}
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label={`Reorder ${title}`}
+        style={{
+          border: 'none',
+          background: 'none',
+          cursor: 'grab',
+          color: '#C8BFB2',
+          fontSize: 15,
+          padding: '0 2px',
+          lineHeight: 1,
+          flexShrink: 0,
+        }}
+      >
+        ⋮⋮
+      </button>
+
+      <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#1C1610' }}>{title}</span>
+
+      <button
+        type="button"
+        role="switch"
+        aria-checked={item.visible}
+        onClick={() => onToggle(item.widget_key)}
+        style={{
+          width: 36,
+          height: 20,
+          borderRadius: 10,
+          border: 'none',
+          background: item.visible ? '#4C2A92' : '#D1CBC0',
+          cursor: 'pointer',
+          position: 'relative',
+          flexShrink: 0,
+          padding: 0,
+          transition: 'background .15s',
+        }}
+      >
+        <span
+          style={{
+            display: 'block',
+            width: 14,
+            height: 14,
+            borderRadius: '50%',
+            background: 'white',
+            position: 'absolute',
+            top: 3,
+            left: item.visible ? 19 : 3,
+            transition: 'left .15s',
+            boxShadow: '0 1px 3px rgba(0,0,0,.2)',
+          }}
+        />
+      </button>
     </div>
   )
 }
+
+function CustomizePanel({ prefs, onClose, onSave, onReset }) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const [draft, setDraft] = useState(() => [...prefs].sort((a, b) => a.sort_order - b.sort_order))
+  const [saving, setSaving] = useState(false)
+
+  function handleToggle(key) {
+    setDraft((current) =>
+      current.map((item) => (item.widget_key === key ? { ...item, visible: !item.visible } : item)),
+    )
+  }
+
+  function handleDragEnd(event) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = draft.findIndex((item) => item.widget_key === active.id)
+    const newIndex = draft.findIndex((item) => item.widget_key === over.id)
+    if (oldIndex < 0 || newIndex < 0) return
+    setDraft((current) => arrayMove(current, oldIndex, newIndex))
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const resequenced = draft.map((item, i) => ({ ...item, sort_order: i + 1 }))
+      await onSave(resequenced)
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(14,14,30,.25)', zIndex: 40 }}
+      />
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: 320,
+          background: 'white',
+          boxShadow: '-4px 0 24px rgba(28,22,16,.10)',
+          zIndex: 50,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', borderBottom: '1px solid #EDE8DC' }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: '#1C1610' }}>Customize Dashboard</span>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ border: 'none', background: 'none', fontSize: 18, color: '#B0A696', cursor: 'pointer' }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <p style={{ margin: '10px 20px 4px', fontSize: 12, color: '#9E9488' }}>
+          Toggle widgets on/off and drag to reorder.
+        </p>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 20px 16px' }}>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={draft.map((item) => item.widget_key)} strategy={verticalListSortingStrategy}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {draft.map((item) => (
+                  <SortableWidgetRow key={item.widget_key} item={item} onToggle={handleToggle} />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
+
+        <div style={{ padding: '14px 20px', borderTop: '1px solid #EDE8DC', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              width: '100%',
+              background: '#4C2A92',
+              color: 'white',
+              border: 'none',
+              borderRadius: 10,
+              padding: '10px 16px',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: saving ? 'not-allowed' : 'pointer',
+              opacity: saving ? 0.65 : 1,
+            }}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={onReset}
+            style={{
+              width: '100%',
+              background: 'white',
+              color: '#6B6560',
+              border: '1px solid #EDE8DC',
+              borderRadius: 10,
+              padding: '10px 16px',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Reset to defaults
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const { profile, role } = useAuth()
   const { unreadCount } = useNotifications()
   const location = useLocation()
-  const [deptSlug, setDeptSlug] = useState(null)
-  const [lifecycleStats, setLifecycleStats] = useState(null)
-  const [mySprintCount, setMySprintCount] = useState(null)
-  const [spaceCount, setSpaceCount] = useState(null)
-  const [meetingsThisWeek, setMeetingsThisWeek] = useState(null)
-  const [upcomingEvents, setUpcomingEvents] = useState(null)
-  const [recentActivity, setRecentActivity] = useState(null)
+  const [prefs, setPrefs] = useState([])
+  const [loadingPrefs, setLoadingPrefs] = useState(true)
+  const [showCustomize, setShowCustomize] = useState(false)
 
   useEffect(() => {
-    if (!profile?.department_id) return
+    if (!profile?.id || !role) return
+    let active = true
 
-    supabase
-      .from('departments')
-      .select('name')
-      .eq('id', profile.department_id)
-      .single()
-      .then(({ data }) => {
-        if (data?.name) setDeptSlug(data.name.toLowerCase())
-      })
-  }, [profile?.department_id])
+    async function loadPrefs() {
+      setLoadingPrefs(true)
+      try {
+        const { data: userPrefs } = await supabase
+          .from('dashboard_preferences')
+          .select('widget_key, visible, sort_order')
+          .eq('user_id', profile.id)
+          .order('sort_order')
 
-  useEffect(() => {
-    if (!profile?.id) {
-      setMySprintCount(null)
-      return
+        if (!active) return
+
+        if (userPrefs && userPrefs.length > 0) {
+          setPrefs(mergeWithAllKeys(userPrefs))
+          return
+        }
+
+        const { data: roleDefaults } = await supabase
+          .from('dashboard_role_defaults')
+          .select('widget_key, visible, sort_order')
+          .eq('role', role)
+          .order('sort_order')
+
+        if (!active) return
+
+        setPrefs(mergeWithAllKeys(roleDefaults && roleDefaults.length > 0 ? roleDefaults : []))
+      } catch {
+        if (active) setPrefs(FALLBACK_PREFS)
+      } finally {
+        if (active) setLoadingPrefs(false)
+      }
     }
 
-    getMySprints()
-      .then((sprints) => {
-        setMySprintCount(sprints.filter((sprint) => sprint.status === 'active').length)
-      })
-      .catch(() => setMySprintCount(null))
-  }, [profile?.id])
+    loadPrefs()
+    return () => { active = false }
+  }, [profile?.id, role])
 
-  useEffect(() => {
-    if (!profile?.id || !role) {
-      setSpaceCount(null)
-      return
-    }
-
-    getMySpaces(profile.id, role, profile.department_id)
-      .then((spaces) => setSpaceCount(spaces.filter((space) => space.status === 'active').length))
-      .catch(() => setSpaceCount(null))
-  }, [profile?.department_id, profile?.id, role])
-
-  useEffect(() => {
-    getUpcomingEvents(5).then(setUpcomingEvents).catch(() => setUpcomingEvents([]))
-  }, [])
-
-  useEffect(() => {
-    const start = new Date()
-    start.setHours(0, 0, 0, 0)
-    const end = new Date(start)
-    end.setDate(end.getDate() + 7)
-
-    supabase
-      .from('meetings')
-      .select('id', { count: 'exact', head: true })
-      .gte('date', start.toISOString())
-      .lt('date', end.toISOString())
-      .then(({ count, error }) => setMeetingsThisWeek(error ? null : (count ?? 0)))
-      .catch(() => setMeetingsThisWeek(null))
-  }, [])
-
-  useEffect(() => {
-    supabase
-      .from('activity_log')
-      .select('id, action, created_at')
-      .order('created_at', { ascending: false })
-      .limit(5)
-      .then(({ data, error }) => setRecentActivity(error ? [] : (data ?? [])))
-      .catch(() => setRecentActivity([]))
-  }, [])
-
-  useEffect(() => {
-    if (!profile?.id || role === 'member') {
-      setLifecycleStats(null)
-      return
-    }
-
-    Promise.all([listUsers(), listInvitations(), listPastorMembers()])
-      .then(([users, invitations, pastorMembers]) => {
-        setLifecycleStats(
-          selectUserLifecycleStats({
-            users,
-            invitations,
-            pastorMembers,
-            role,
-            profile,
-          }),
-        )
-      })
-      .catch(() => {
-        setLifecycleStats(null)
-      })
-  }, [profile, role])
-
-  const quickActions = buildQuickActions(role, deptSlug, mySprintCount ?? 0)
-  const overviewStats = useMemo(
-    () => [
-      { label: 'Active spaces', value: spaceCount ?? '—', accent: 'bg-blue-100 text-blue-700', tint: 'rgba(59,130,246,0.08)', to: '/spaces' },
-      { label: 'Meetings this week', value: meetingsThisWeek ?? '—', accent: 'bg-teal-100 text-teal-700', tint: 'rgba(20,184,166,0.08)' },
-      { label: 'Active Sprints', value: mySprintCount ?? '—', accent: 'bg-orange-100 text-orange-700', tint: 'rgba(249,115,22,0.08)', to: '/sprints' },
-      { label: 'Upcoming Events', value: upcomingEvents ? upcomingEvents.length : '—', accent: 'bg-violet-100 text-violet-700', tint: 'rgba(168,85,247,0.08)', to: '/calendar' },
-    ],
-    [meetingsThisWeek, mySprintCount, spaceCount, upcomingEvents],
+  const visibleWidgets = useMemo(
+    () => [...prefs].filter((p) => p.visible).sort((a, b) => a.sort_order - b.sort_order),
+    [prefs],
   )
 
+  async function handleUnpin(widgetKey) {
+    setPrefs((current) =>
+      current.map((p) => (p.widget_key === widgetKey ? { ...p, visible: false } : p)),
+    )
+    if (!profile?.id) return
+    const existing = prefs.find((p) => p.widget_key === widgetKey)
+    await supabase.from('dashboard_preferences').upsert(
+      { user_id: profile.id, widget_key: widgetKey, visible: false, sort_order: existing?.sort_order ?? 999 },
+      { onConflict: 'user_id,widget_key' },
+    )
+  }
+
+  async function handleSavePrefs(nextPrefs) {
+    setPrefs(nextPrefs)
+    if (!profile?.id) return
+    const rows = nextPrefs.map((p) => ({
+      user_id: profile.id,
+      widget_key: p.widget_key,
+      visible: p.visible,
+      sort_order: p.sort_order,
+    }))
+    await supabase.from('dashboard_preferences').upsert(rows, { onConflict: 'user_id,widget_key' })
+  }
+
+  async function handleReset() {
+    if (!profile?.id) return
+    await supabase.from('dashboard_preferences').delete().eq('user_id', profile.id)
+    const { data: roleDefaults } = await supabase
+      .from('dashboard_role_defaults')
+      .select('widget_key, visible, sort_order')
+      .eq('role', role)
+      .order('sort_order')
+    setPrefs(mergeWithAllKeys(roleDefaults ?? []))
+    setShowCustomize(false)
+  }
+
+  if (loadingPrefs) {
+    return (
+      <div className="space-y-4 pb-20">
+        <div className="h-16 animate-pulse rounded-[14px] bg-[var(--surface-secondary)]" />
+        <div className="grid gap-4 lg:grid-cols-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-48 animate-pulse rounded-[20px] bg-[var(--surface-secondary)]" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-5">
+    <>
       {location.state?.authError ? (
-        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div
+          className="mb-4 rounded-2xl border px-4 py-3 text-sm"
+          style={{ borderColor: 'var(--amber)', background: 'var(--amber-light)', color: 'var(--amber-hover)' }}
+        >
           {location.state.authError}
         </div>
       ) : null}
 
-      <section className="rounded-[26px] border border-[var(--border)] bg-white p-6 shadow-[var(--card-shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
-              <Sparkles size={12} />
-              Workspace Overview
-            </div>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[var(--text-primary)]">
-              {greetingForHour()}, {profile?.name ?? 'there'}
+      <div className="space-y-5 pb-20">
+        <section className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 style={{ fontSize: 21, fontWeight: 900, color: '#1C1610', margin: 0, letterSpacing: '-0.02em' }}>
+              {greetingForHour()}, {profile?.name?.split(' ')[0] ?? 'there'}
             </h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--text-secondary)]">
-              Keep ministry execution visible across departments, meetings, shepherding, and follow-through.
+            <p style={{ marginTop: 4, fontSize: 12.5, color: '#9E9488', margin: 0 }}>
+              {new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })}
+              {unreadCount > 0 ? ` · ${unreadCount} unread` : ''}
             </p>
           </div>
-
-          <div className="flex items-center gap-3">
-            <div
-              className="rounded-2xl border border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-3 text-right"
-              style={{ boxShadow: 'var(--card-shadow)' }}
-            >
-              <div className="text-xs font-medium uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-                Today
-              </div>
-              <div className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
-                {new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })}
-              </div>
-              {unreadCount > 0 ? (
-                <div className="mt-2 text-xs text-[var(--accent)]">{unreadCount} unread notifications</div>
-              ) : null}
-            </div>
-            <div className="rounded-2xl bg-[linear-gradient(135deg,_#f03f86,_#7b68ee)] px-4 py-3 text-sm font-semibold text-white shadow-[0_16px_34px_rgba(123,104,238,0.24)]">
-              {role?.replace('_', ' ')}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {overviewStats.map((item) => (
-          <StatCard key={item.label} label={item.label} value={item.value} accent={item.accent} tint={item.tint} to={item.to} />
-        ))}
-      </section>
-
-      {role !== 'member' ? (
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            label="Active Members"
-            value={lifecycleStats?.activeUsers ?? '—'}
-            accent="bg-orange-100 text-orange-700"
-            tint="rgba(249,115,22,0.08)"
-          />
-          <StatCard
-            label="Pending Invitations"
-            value={lifecycleStats?.pendingInvitations ?? '—'}
-            accent="bg-violet-100 text-violet-700"
-            tint="rgba(168,85,247,0.08)"
-          />
-          <StatCard
-            label="Recently Activated Users"
-            value={lifecycleStats?.recentlyActivated ?? '—'}
-            accent="bg-blue-100 text-blue-700"
-            tint="rgba(59,130,246,0.08)"
-          />
-          <StatCard
-            label="Users Needing Attention"
-            value={lifecycleStats?.usersNeedingAttention ?? '—'}
-            accent="bg-amber-100 text-amber-700"
-            tint="rgba(249,115,22,0.08)"
-          />
+          <button
+            type="button"
+            onClick={() => setShowCustomize(true)}
+            style={{
+              background: 'white',
+              border: '1px solid #EDE8DC',
+              borderRadius: 10,
+              padding: '8px 14px',
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: '#4C2A92',
+              cursor: 'pointer',
+              transition: 'border-color .12s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#EDE8DC' }}
+          >
+            Customize Dashboard
+          </button>
         </section>
+
+        {visibleWidgets.length === 0 ? (
+          <div
+            style={{
+              padding: '48px 16px',
+              textAlign: 'center',
+              color: '#B0A696',
+              fontSize: 13,
+              border: '1px dashed #D9D3C7',
+              borderRadius: 20,
+              background: '#FAFAF7',
+            }}
+          >
+            No widgets pinned.{' '}
+            <button
+              type="button"
+              onClick={() => setShowCustomize(true)}
+              style={{ color: '#4C2A92', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: 0 }}
+            >
+              Customize Dashboard
+            </button>{' '}
+            to add some.
+          </div>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {visibleWidgets.map((pref) => (
+              <WidgetCard
+                key={pref.widget_key}
+                widgetKey={pref.widget_key}
+                role={role}
+                userId={profile?.id}
+                departmentId={profile?.department_id}
+                onUnpin={handleUnpin}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {showCustomize ? (
+        <CustomizePanel
+          prefs={prefs}
+          onClose={() => setShowCustomize(false)}
+          onSave={handleSavePrefs}
+          onReset={handleReset}
+        />
       ) : null}
-
-      <section className="grid gap-5 xl:grid-cols-[1.5fr_1.5fr_1.2fr]">
-        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]">
-              <Activity size={18} className="text-[var(--accent)]" />
-              Recent Activity
-            </div>
-            <button type="button" className="text-sm text-[var(--text-tertiary)]">•••</button>
-          </div>
-          {recentActivity === null ? (
-            <div style={{ padding: '1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>
-              Loading...
-            </div>
-          ) : recentActivity.length > 0 ? (
-            <div className="space-y-3">
-              {recentActivity.map((entry) => (
-                <div key={entry.id} className="rounded-2xl bg-[var(--surface-tertiary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
-                  <div className="font-medium text-[var(--text-primary)]">{entry.action.replaceAll('_', ' ')}</div>
-                  <div className="mt-1 text-xs text-[var(--text-tertiary)]">
-                    {new Date(entry.created_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState icon="📊" title="No recent activity" subtitle="Activity will appear here as the team works" />
-          )}
-        </div>
-
-        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <div className="mb-4 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]">
-              <CalendarDays size={18} className="text-[#f03f86]" />
-              Calendar
-            </div>
-            <NavLink to="/calendar" className="text-sm text-[var(--accent)]">
-              View full calendar →
-            </NavLink>
-          </div>
-          <div className="space-y-3">
-            {upcomingEvents === null ? (
-              <div style={{ padding: '1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>
-                Loading...
-              </div>
-            ) : null}
-            {(upcomingEvents ?? []).slice(0, 3).map((event) => (
-              <div key={event.id} className="rounded-2xl bg-[var(--surface-tertiary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-medium text-[var(--text-primary)]">{event.title}</span>
-                  <Badge tone={event.event_type === 'deadline' ? 'blocked' : event.event_type === 'prayer' ? 'review' : event.event_type === 'training' ? 'active' : 'completed'}>
-                    {event.event_type}
-                  </Badge>
-                </div>
-                <div className="mt-1 text-xs text-[var(--text-tertiary)]">
-                  {new Date(event.start_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}
-                  {event.location ? ` · ${event.location}` : ''}
-                </div>
-              </div>
-            ))}
-            {upcomingEvents && upcomingEvents.length === 0 ? (
-              <div className="rounded-2xl bg-[var(--surface-tertiary)] px-4 py-6 text-sm text-[var(--text-tertiary)]">
-                No upcoming ministry events.
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <div className="mb-4 flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]">
-            <Users2 size={18} className="text-[#ff8a00]" />
-            Quick Actions
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {quickActions.map((action) => (
-              <NavLink
-                key={action.to}
-                to={action.to}
-                className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-2.5 text-sm text-[var(--text-secondary)] transition hover:border-[var(--border-strong)] hover:bg-white hover:text-[var(--text-primary)]"
-              >
-                <span>{action.label}</span>
-                <ArrowUpRight size={15} className="text-[var(--text-tertiary)]" />
-              </NavLink>
-            ))}
-          </div>
-        </div>
-      </section>
-    </div>
+    </>
   )
 }

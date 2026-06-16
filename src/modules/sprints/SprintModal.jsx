@@ -116,7 +116,7 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
 
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
             {error ? (
-              <div style={{ marginBottom: 14, padding: '8px 12px', borderRadius: 8, background: '#FDECEC', color: '#A32D2D', fontSize: 13 }}>
+              <div style={{ marginBottom: 14, padding: '8px 12px', borderRadius: 8, background: 'var(--coral-light)', color: 'var(--coral-dark)', fontSize: 13 }}>
                 {error}
               </div>
             ) : null}

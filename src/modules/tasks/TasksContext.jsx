@@ -39,13 +39,18 @@ export function TasksProvider({ departmentId, sprintId, children }) {
   }, [loadTasks])
 
   const moveTask = useCallback(
-    async (taskId, newStatusId) => {
-      const targetStatus = statuses.find((status) => status.id === newStatusId) ?? null
+    async (taskId, nextStatus) => {
+      const newStatusId = typeof nextStatus === 'string' ? nextStatus : nextStatus?.id ?? null
+      if (!newStatusId) return
+      const targetStatus = (typeof nextStatus === 'object' && nextStatus)
+        ? nextStatus
+        : statuses.find((status) => status.id === newStatusId) ?? null
       setTasks((prev) =>
         prev.map((task) =>
           task.id === taskId
             ? {
                 ...task,
+                status: targetStatus?.legacy_key ?? task.status,
                 status_id: newStatusId,
                 status_definition: targetStatus,
                 status_name: targetStatus?.name ?? task.status_name,
@@ -57,6 +62,7 @@ export function TasksProvider({ departmentId, sprintId, children }) {
       )
       try {
         await updateTask(taskId, {
+          status: targetStatus?.legacy_key ?? undefined,
           statusId: newStatusId,
           statusCategory: targetStatus?.category,
         })
@@ -71,16 +77,55 @@ export function TasksProvider({ departmentId, sprintId, children }) {
     async (taskData) => {
       const resolvedStatus = statuses.find((status) => status.id === taskData.statusId)
         ?? selectDefaultStatus(statuses)
-      const newTask = await createTask({
+      const payload = {
         ...taskData,
         statusId: taskData.statusId ?? resolvedStatus?.id,
         statusCategory: resolvedStatus?.category,
-        department_id: sprintId ? null : departmentId,
+        department_id: 'department_id' in taskData ? taskData.department_id : sprintId ? null : departmentId,
         sprint_id: sprintId ?? null,
         task_type: taskData.is_personal ? 'personal' : sprintId ? 'sprint' : 'space',
-      })
-      setTasks((prev) => [newTask, ...prev])
-      return newTask
+      }
+      const tempId = `temp-${crypto.randomUUID()}`
+      const optimisticTask = {
+        id: tempId,
+        title: payload.title,
+        description: payload.description ?? null,
+        status: payload.status ?? resolvedStatus?.legacy_key ?? 'backlog',
+        status_id: payload.statusId ?? null,
+        status_definition: resolvedStatus ?? null,
+        status_name: resolvedStatus?.name ?? null,
+        status_color: resolvedStatus?.color ?? null,
+        status_category: resolvedStatus?.category ?? null,
+        priority: payload.priority ?? 'medium',
+        assignee_id: payload.assignee_id ?? null,
+        assignee: null,
+        due_date: payload.due_date ?? null,
+        department_id: payload.department_id ?? null,
+        department: taskData.department ?? null,
+        sprint_id: payload.sprint_id ?? null,
+        list_id: payload.list_id ?? null,
+        list: taskData.list ?? null,
+        is_personal: Boolean(payload.is_personal),
+        source: payload.source ?? 'manual',
+        task_type: payload.task_type,
+        created_by: payload.created_by ?? null,
+        created_at: new Date().toISOString(),
+        subtasks: [],
+        comments: [{ count: 0 }],
+        files: [{ count: 0 }],
+        dependencies: [{ count: 0 }],
+      }
+
+      setTasks((prev) => [...prev, optimisticTask])
+
+      try {
+        const newTask = await createTask(payload)
+        setTasks((prev) => prev.map((task) => (task.id === tempId ? newTask : task)))
+        return newTask
+      } catch (error) {
+        setTasks((prev) => prev.filter((task) => task.id !== tempId))
+        throw error
+      }
     },
     [departmentId, sprintId, statuses],
   )

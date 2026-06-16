@@ -46,7 +46,15 @@ function toTimeInput(date) {
   return `${hh}:${mm}`
 }
 
-export default function EventModal({ event = null, defaultDate = null, onSaved, onClose }) {
+export default function EventModal({
+  event = null,
+  defaultDate = null,
+  initialSpaceId = null,
+  initialSprintId = null,
+  canEditOverride = null,
+  onSaved,
+  onClose,
+}) {
   const { profile, role } = useAuth()
   const [departments, setDepartments] = useState([])
   const [sprints, setSprints] = useState([])
@@ -59,14 +67,14 @@ export default function EventModal({ event = null, defaultDate = null, onSaved, 
   const [location, setLocation] = useState(event?.location ?? '')
   const [zoomJoinUrl, setZoomJoinUrl] = useState(event?.zoom_join_url ?? '')
   const [description, setDescription] = useState(event?.description ?? '')
-  const [spaceId, setSpaceId] = useState(event?.space_id ?? '')
-  const [sprintId, setSprintId] = useState(event?.sprint_id ?? '')
+  const [spaceId, setSpaceId] = useState(event?.space_id ?? initialSpaceId ?? '')
+  const [sprintId, setSprintId] = useState(event?.sprint_id ?? initialSprintId ?? '')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState('')
   const titleRef = useRef(null)
 
-  const canEdit = ['super_admin', 'dept_lead'].includes(role)
+  const canEdit = canEditOverride ?? ['super_admin', 'dept_lead'].includes(role)
 
   useEffect(() => {
     titleRef.current?.focus()
@@ -168,7 +176,7 @@ export default function EventModal({ event = null, defaultDate = null, onSaved, 
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-            {error ? <div style={{ marginBottom: 14, padding: '8px 12px', borderRadius: 8, background: '#FDECEC', color: '#A32D2D', fontSize: 13 }}>{error}</div> : null}
+            {error ? <div style={{ marginBottom: 14, padding: '8px 12px', borderRadius: 8, background: 'var(--coral-light)', color: 'var(--coral-dark)', fontSize: 13 }}>{error}</div> : null}
 
             <div style={{ marginBottom: 14 }}>
               <label style={labelStyle}>Title *</label>

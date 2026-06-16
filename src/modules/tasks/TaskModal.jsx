@@ -1,9 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { useDeptMembers } from '../../hooks/useDeptMembers'
+import { PRIORITIES } from '../../lib/constants'
 import { createNotification } from '../../lib/notifications'
 import { getSprintMembers } from '../../lib/sprints'
-import { createTask, deleteTask, getDeptMembers, updateTask } from '../../lib/tasks'
+import { normalizeTaskFieldSettings } from '../../lib/taskFieldSettings'
+import { createTask, deleteTask, updateTask } from '../../lib/tasks'
 import {
   getTaskStatusId,
   listTaskStatuses,
@@ -14,13 +17,6 @@ import TaskDependencies from './TaskDependencies'
 import TaskFiles from './TaskFiles'
 import SubtaskList from './SubtaskList'
 import { TasksContext } from './TasksContext'
-
-const PRIORITIES = [
-  { value: 'urgent', label: 'Urgent' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-]
 
 const inputStyle = {
   width: '100%',
@@ -63,11 +59,15 @@ function TaskModalTabs({ taskId, departmentId, sprintId }) {
         border: '1px solid var(--border)',
       }}
     >
-      <div style={{ display: 'flex', gap: 2, marginBottom: 14, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
+      <div role="tablist" style={{ display: 'flex', gap: 2, marginBottom: 14, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            id={`tab-${tab.id}`}
             type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            aria-controls={`tabpanel-${tab.id}`}
             onClick={() => setActiveTab(tab.id)}
             style={{
               fontSize: 12,
@@ -87,10 +87,20 @@ function TaskModalTabs({ taskId, departmentId, sprintId }) {
         ))}
       </div>
 
-      {activeTab === 'comments' ? <TaskComments taskId={taskId} /> : null}
-      {activeTab === 'files' ? <TaskFiles taskId={taskId} /> : null}
+      {activeTab === 'comments' ? (
+        <div role="tabpanel" id="tabpanel-comments" aria-labelledby="tab-comments" tabIndex={0}>
+          <TaskComments taskId={taskId} />
+        </div>
+      ) : null}
+      {activeTab === 'files' ? (
+        <div role="tabpanel" id="tabpanel-files" aria-labelledby="tab-files" tabIndex={0}>
+          <TaskFiles taskId={taskId} />
+        </div>
+      ) : null}
       {activeTab === 'dependencies' ? (
-        <TaskDependencies taskId={taskId} departmentId={departmentId} sprintId={sprintId} />
+        <div role="tabpanel" id="tabpanel-dependencies" aria-labelledby="tab-dependencies" tabIndex={0}>
+          <TaskDependencies taskId={taskId} departmentId={departmentId} sprintId={sprintId} />
+        </div>
       ) : null}
     </div>
   )
@@ -100,6 +110,8 @@ export default function TaskModal({
   mode = 'create',
   task = null,
   defaultStatus = '',
+  defaultDueDate = '',
+  fieldSettings = null,
   departmentId,
   sprintId,
   listId,
@@ -111,6 +123,7 @@ export default function TaskModal({
   const { profile } = useAuth()
   const ctx = useContext(TasksContext)
   const contextStatuses = ctx?.statuses ?? []
+  const visibleFields = normalizeTaskFieldSettings(fieldSettings)
 
   const [title, setTitle] = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
@@ -118,10 +131,11 @@ export default function TaskModal({
   const [statusId, setStatusId] = useState(getTaskStatusId(task) ?? defaultStatus ?? '')
   const [priority, setPriority] = useState(task?.priority ?? 'medium')
   const [assigneeId, setAssigneeId] = useState(task?.assignee_id ?? '')
-  const [dueDate, setDueDate] = useState(task?.due_date ?? '')
+  const [dueDate, setDueDate] = useState(task?.due_date ?? defaultDueDate ?? '')
   const [personal, setPersonal] = useState(task?.is_personal ?? isPersonal)
   const [subtasks, setSubtasks] = useState(task?.subtasks ?? [])
-  const [members, setMembers] = useState([])
+  const deptMembers = useDeptMembers(departmentId)
+  const [members, setMembers] = useState(sprintId ? [] : deptMembers)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState(null)
@@ -130,11 +144,20 @@ export default function TaskModal({
 
   useEffect(() => {
     if (sprintId) {
-      getSprintMembers(sprintId).then(setMembers).catch(() => {})
-    } else if (departmentId) {
-      getDeptMembers(departmentId).then(setMembers).catch(() => {})
+      getSprintMembers(sprintId)
+        .then(setMembers)
+        .catch((error) => {
+          console.error('Failed to load sprint members', error)
+          setMembers([])
+        })
     }
-  }, [departmentId, sprintId])
+  }, [sprintId])
+
+  useEffect(() => {
+    if (!sprintId) {
+      setMembers(deptMembers)
+    }
+  }, [deptMembers, sprintId])
 
   useEffect(() => {
     if (contextStatuses.length > 0) {
@@ -154,6 +177,12 @@ export default function TaskModal({
   useEffect(() => {
     titleRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    if (mode === 'create' && !task) {
+      setDueDate(defaultDueDate ?? '')
+    }
+  }, [defaultDueDate, mode, task])
 
   async function handleSave() {
     if (!title.trim()) {
@@ -307,8 +336,8 @@ export default function TaskModal({
                   marginBottom: 14,
                   padding: '8px 12px',
                   borderRadius: 8,
-                  background: '#FDECEC',
-                  color: '#A32D2D',
+                  background: 'var(--coral-light)',
+                  color: 'var(--coral-dark)',
                   fontSize: 13,
                 }}
               >

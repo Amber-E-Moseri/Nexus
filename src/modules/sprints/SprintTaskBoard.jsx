@@ -23,7 +23,7 @@ function SprintTasksInner({ sprintId, canEdit }) {
   }
 
   if (error) {
-    return <div className="p-6 text-sm text-[#A32D2D]">Failed to load sprint tasks: {error}</div>
+    return <div className="p-6 text-sm text-[var(--coral-dark)]">Failed to load sprint tasks: {error}</div>
   }
 
   return (
@@ -71,6 +71,7 @@ function SprintTasksInner({ sprintId, canEdit }) {
           hasActiveFilters={hasActiveFilters}
           members={members}
           statuses={statuses}
+          tasks={tasks}
         />
       </div>
 

@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 type SendMode = 'send' | 'resend'
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
@@ -31,6 +31,14 @@ function resolveFrontendUrl(): string {
   return configured.replace(/\/$/, '')
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+}
+
 function invitationEmailHtml({
   recipientName,
   departmentName,
@@ -46,6 +54,8 @@ function invitationEmailHtml({
   expiresAt: string
   inviteMessage?: string | null
 }) {
+  const safeInviteMessage = inviteMessage ? escapeHtml(inviteMessage) : null
+
   return `
     <div style="font-family: Arial, sans-serif; background: #f6f4ff; padding: 32px; color: #14142b;">
       <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 20px; padding: 32px; border: 1px solid #e8e7f2;">
@@ -59,8 +69,8 @@ function invitationEmailHtml({
           <strong>${departmentName}</strong> department.
         </p>
         ${
-          inviteMessage
-            ? `<p style="margin: 0 0 16px; font-size: 15px; line-height: 1.7;">${inviteMessage}</p>`
+          safeInviteMessage
+            ? `<p style="margin: 0 0 16px; font-size: 15px; line-height: 1.7;">${safeInviteMessage}</p>`
             : ''
         }
         <p style="margin: 0 0 24px; font-size: 15px; line-height: 1.7;">

@@ -78,12 +78,11 @@ export default function ZoomSettings() {
           </p>
         </div>
         <span
-          className={[
-            'rounded-full px-3 py-1 text-xs font-semibold',
-            enabled
-              ? 'bg-emerald-100 text-emerald-700'
-              : 'bg-slate-100 text-slate-600',
-          ].join(' ')}
+          className="rounded-full px-3 py-1 text-xs font-semibold"
+          style={enabled
+            ? { background: 'var(--status-done-bg)', color: 'var(--status-done-text)' }
+            : { background: 'var(--status-backlog-bg)', color: 'var(--status-backlog-text)' }
+          }
         >
           {enabled ? 'Connected' : 'Not connected'}
         </span>

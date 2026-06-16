@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { formatDueDate } from '../../lib/dateUtils'
 import { createTask, deleteTask, getPersonalTasks, updateTask } from '../../lib/tasks'
 import {
   STATUS_CATEGORIES,
@@ -9,13 +10,7 @@ import {
   isTaskCompleted,
 } from '../../lib/taskStatuses'
 import TaskModal from './TaskModal'
-
-const PRIORITY_STYLES = {
-  urgent: { bg: '#FDECEC', text: '#A32D2D' },
-  high:   { bg: '#FEF3E2', text: '#9B5500' },
-  medium: { bg: '#E6F0FB', text: '#185FA5' },
-  low:    { bg: '#F1F0F8', text: '#6B6894' },
-}
+import { PRIORITY_STYLES } from '../../lib/priorities'
 
 export default function PersonalTaskList() {
   const { profile } = useAuth()
@@ -84,6 +79,14 @@ export default function PersonalTaskList() {
         {tasks.map((task) => {
           const priority = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium
           const statusColor = getTaskStatusColor(task)
+          const due = formatDueDate(task.due_date)
+          const dueColor = due.status === 'overdue'
+            ? 'var(--coral-dark)'
+            : due.status === 'today'
+              ? 'var(--accent)'
+              : due.status === 'soon'
+                ? 'var(--amber)'
+                : 'var(--text-tertiary)'
 
           return (
             <div
@@ -127,8 +130,8 @@ export default function PersonalTaskList() {
               </span>
 
               {task.due_date && (
-                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0 }}>
-                  {new Date(task.due_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}
+                <span style={{ fontSize: 11, color: dueColor, fontWeight: due.status === 'normal' ? 400 : 500, flexShrink: 0 }}>
+                  {due.label}
                 </span>
               )}
 

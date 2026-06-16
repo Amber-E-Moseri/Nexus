@@ -10,7 +10,7 @@ export default function Avatar({ name = 'User', src }) {
   }
 
   return (
-    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-(--accent-light) text-sm font-semibold text-(--accent)">
+    <div className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold" style={{ background: 'var(--accent)', color: 'var(--amber)' }}>
       {initials || 'U'}
     </div>
   )

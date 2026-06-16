@@ -1,29 +1,21 @@
 import { useMemo, useState } from 'react'
-import { getTaskStatusColor, getTaskStatusLabel, isTaskCompleted } from '../../lib/taskStatuses'
-
-const PRIORITY_STYLES = {
-  urgent: { bg: '#FDECEC', text: '#A32D2D' },
-  high:   { bg: '#FEF3E2', text: '#9B5500' },
-  medium: { bg: '#E6F0FB', text: '#185FA5' },
-  low:    { bg: '#F1F0F8', text: '#6B6894' },
-}
-
-const SOURCE_LABELS = {
-  manual:          '-',
-  meeting:         'Meeting',
-  automation:      'Auto',
-  admin_processor: 'Admin',
-  zoom:            'Zoom',
-}
+import { formatDueDate } from '../../lib/dateUtils'
+import { isTaskCompleted } from '../../lib/taskStatuses'
+import { PRIORITY_STYLES } from '../../lib/priorities'
+import InlineTaskComposer from './InlineTaskComposer'
 
 function Badge({ bg, text, children }) {
   return (
     <span
       style={{
-        display: 'inline-flex', alignItems: 'center',
-        padding: '2px 8px', borderRadius: 20,
-        fontSize: 11, fontWeight: 500,
-        background: bg, color: text,
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '2px 8px',
+        borderRadius: 20,
+        fontSize: 11,
+        fontWeight: 500,
+        background: bg,
+        color: text,
         whiteSpace: 'nowrap',
       }}
     >
@@ -32,24 +24,27 @@ function Badge({ bg, text, children }) {
   )
 }
 
-function SortIcon({ dir }) {
-  if (!dir) return <span style={{ color: 'var(--text-tertiary)', fontSize: 10 }}>⇅</span>
-  return <span style={{ color: 'var(--accent)', fontSize: 10 }}>{dir === 'asc' ? '↑' : '↓'}</span>
-}
-
 function Initials({ name }) {
   const initials = (name ?? '')
     .split(' ')
     .slice(0, 2)
-    .map((n) => n[0]?.toUpperCase() ?? '')
+    .map((part) => part[0]?.toUpperCase() ?? '')
     .join('')
+
   return (
     <span
       style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        width: 22, height: 22, borderRadius: '50%',
-        background: 'var(--accent-light)', color: 'var(--accent)',
-        fontSize: 9, fontWeight: 600, flexShrink: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 22,
+        height: 22,
+        borderRadius: '50%',
+        background: 'var(--accent-light)',
+        color: 'var(--accent)',
+        fontSize: 9,
+        fontWeight: 600,
+        flexShrink: 0,
       }}
     >
       {initials || '?'}
@@ -57,220 +52,170 @@ function Initials({ name }) {
   )
 }
 
-const COLUMNS = [
-  { key: 'title',    label: 'Title',    width: '40%' },
-  { key: 'assignee', label: 'Assignee', width: '15%', sortKey: null },
-  { key: 'priority', label: 'Priority', width: '12%' },
-  { key: 'due_date', label: 'Due',      width: '13%' },
-  { key: 'status',   label: 'Status',   width: '13%' },
-  { key: 'source',   label: 'Source',   width: '7%',  sortKey: null },
-]
+function taskMatchesStatus(task, status) {
+  return task.status_id === status.id || (!task.status_id && task.status === status.legacy_key)
+}
 
-export default function TaskListView({ tasks, onTaskClick, onAddTask }) {
-  const [sortKey, setSortKey] = useState('created_at')
-  const [sortDir, setSortDir] = useState('desc')
+export default function TaskListView({
+  tasks,
+  statuses = [],
+  onTaskClick,
+  canAddTask = false,
+  departments = [],
+  defaultDepartmentId = '',
+  onCreateTask,
+}) {
+  const [composerStatusId, setComposerStatusId] = useState(null)
 
-  function handleSort(key) {
-    if (!key) return
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortKey(key)
-      setSortDir('asc')
-    }
-  }
+  const sorted = useMemo(
+    () => [...tasks].sort((a, b) => new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0)),
+    [tasks],
+  )
 
-  const sorted = useMemo(() => {
-    return [...tasks].sort((a, b) => {
-      let av = a[sortKey] ?? ''
-      let bv = b[sortKey] ?? ''
-
-      if (sortKey === 'due_date') {
-        av = av ? new Date(av).getTime() : Infinity
-        bv = bv ? new Date(bv).getTime() : Infinity
-      } else if (sortKey === 'status') {
-        av = getTaskStatusLabel(a).toLowerCase()
-        bv = getTaskStatusLabel(b).toLowerCase()
-      } else if (sortKey === 'priority') {
-        const order = { urgent: 0, high: 1, medium: 2, low: 3 }
-        av = order[av] ?? 9
-        bv = order[bv] ?? 9
-      } else {
-        av = String(av).toLowerCase()
-        bv = String(bv).toLowerCase()
-      }
-
-      if (av < bv) return sortDir === 'asc' ? -1 : 1
-      if (av > bv) return sortDir === 'asc' ? 1 : -1
-      return 0
+  const grouped = useMemo(() => {
+    const matchedIds = new Set()
+    const groups = statuses.map((status) => {
+      const items = sorted.filter((task) => taskMatchesStatus(task, status))
+      items.forEach((task) => matchedIds.add(task.id))
+      return { status, items }
     })
-  }, [tasks, sortKey, sortDir])
+
+    const ungrouped = sorted.filter((task) => !matchedIds.has(task.id))
+    if (ungrouped.length > 0) {
+      groups.push({
+        status: { id: 'ungrouped', name: 'Other', color: '#7A7D86', legacy_key: 'other' },
+        items: ungrouped,
+      })
+    }
+
+    return groups
+  }, [sorted, statuses])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        <table
-          style={{
-            width: '100%', borderCollapse: 'collapse',
-            tableLayout: 'fixed', fontSize: 13,
-          }}
-        >
-          <thead>
-            <tr style={{ background: 'var(--surface-secondary)' }}>
-              {COLUMNS.map((col) => {
-                const sk = col.sortKey !== null ? (col.sortKey ?? col.key) : null
-                return (
-                  <th
-                    key={col.key}
-                    style={{
-                      width: col.width, padding: '8px 12px',
-                      textAlign: 'left', fontSize: 11,
-                      fontWeight: 600, color: 'var(--text-tertiary)',
-                      textTransform: 'uppercase', letterSpacing: '0.08em',
-                      borderBottom: '1px solid var(--border)',
-                      cursor: sk ? 'pointer' : 'default',
-                      userSelect: 'none',
-                      whiteSpace: 'nowrap',
-                    }}
-                    onClick={() => handleSort(sk)}
-                  >
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      {col.label}
-                      {sk && <SortIcon dir={sortKey === sk ? sortDir : null} />}
-                    </span>
-                  </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((task) => {
-              const isOverdue =
-                task.due_date && new Date(task.due_date) < new Date() && !isTaskCompleted(task)
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {grouped.map(({ status, items }) => (
+        <section key={status.id} style={{ border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden', background: '#FFFFFF' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 16px', borderBottom: '1px solid var(--border)', background: '#FCFAF6' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: status.color }} />
+            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>
+              {status.name}
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-tertiary)' }}>{items.length}</span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {items.map((task) => {
+              const due = formatDueDate(task.due_date)
+              const dueColor = due.status === 'overdue'
+                ? 'var(--coral-dark)'
+                : due.status === 'today'
+                  ? 'var(--accent)'
+                  : due.status === 'soon'
+                    ? 'var(--amber)'
+                    : 'var(--text-secondary)'
 
               return (
-                <tr
+                <button
                   key={task.id}
                   onClick={() => onTaskClick(task)}
-                  style={{ cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-secondary)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                  type="button"
+                  style={{
+                    cursor: 'pointer',
+                    border: 'none',
+                    borderBottom: '1px solid var(--border)',
+                    background: '#FFFFFF',
+                    padding: '14px 16px',
+                    textAlign: 'left',
+                  }}
+                  onMouseEnter={(event) => { event.currentTarget.style.background = 'var(--surface-secondary)' }}
+                  onMouseLeave={(event) => { event.currentTarget.style.background = '#FFFFFF' }}
                 >
-                  {/* Title */}
-                  <td style={{ padding: '10px 12px', overflow: 'hidden' }}>
-                    <span
-                      style={{
-                        display: 'block', overflow: 'hidden', textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap', color: 'var(--text-primary)', fontWeight: 500,
-                        textDecoration: isTaskCompleted(task) ? 'line-through' : 'none',
-                        opacity: isTaskCompleted(task) ? 0.55 : 1,
-                      }}
-                      title={task.title}
-                    >
-                      {task.title}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
+                      {(task.department?.name ?? 'Task').toUpperCase()}
                     </span>
-                  </td>
-
-                  {/* Assignee */}
-                  <td style={{ padding: '10px 12px' }}>
-                    {task.assignee ? (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Initials name={task.assignee.name} />
-                        <span
-                          style={{
-                            overflow: 'hidden', textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: 12,
-                          }}
-                        >
-                          {task.assignee.name}
-                        </span>
-                      </span>
-                    ) : (
-                      <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>—</span>
-                    )}
-                  </td>
-
-                  {/* Priority */}
-                  <td style={{ padding: '10px 12px' }}>
                     <Badge {...(PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium)}>
                       {task.priority}
                     </Badge>
-                  </td>
+                  </div>
 
-                  {/* Due date */}
-                  <td style={{ padding: '10px 12px' }}>
-                    {task.due_date ? (
-                      <span
-                        style={{
-                          fontSize: 12,
-                          color: isOverdue ? '#A32D2D' : 'var(--text-secondary)',
-                          fontWeight: isOverdue ? 500 : 400,
-                        }}
-                      >
-                        {isOverdue ? '⚠ ' : ''}
-                        {new Date(task.due_date).toLocaleDateString('en-CA', {
-                          month: 'short', day: 'numeric',
-                        })}
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                      textDecoration: isTaskCompleted(task) ? 'line-through' : 'none',
+                      opacity: isTaskCompleted(task) ? 0.55 : 1,
+                    }}
+                  >
+                    {task.title}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
+                    {task.assignee ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <Initials name={task.assignee.name} />
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{task.assignee.name}</span>
                       </span>
-                    ) : (
-                      <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>—</span>
-                    )}
-                  </td>
-
-                  {/* Status */}
-                  <td style={{ padding: '10px 12px' }}>
-                    <Badge bg={`${getTaskStatusColor(task)}22`} text={getTaskStatusColor(task)}>
-                      {getTaskStatusLabel(task)}
-                    </Badge>
-                  </td>
-
-                  {/* Source */}
-                  <td style={{ padding: '10px 12px' }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                      {SOURCE_LABELS[task.source] ?? task.source}
+                    ) : null}
+                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>□ {task.subtasks?.filter((subtask) => isTaskCompleted(subtask)).length ?? 0}/{task.subtasks?.length ?? 0}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>💬 {task.comments?.[0]?.count ?? 0}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 12, color: task.due_date ? dueColor : 'var(--text-tertiary)', fontWeight: due.status === 'normal' ? 400 : 500 }}>
+                      {task.due_date ? due.label : 'No due date'}
                     </span>
-                  </td>
-                </tr>
+                  </div>
+                </button>
               )
             })}
 
-            {sorted.length === 0 && (
-              <tr>
-                <td
-                  colSpan={COLUMNS.length}
-                  style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}
+            {canAddTask ? (
+              composerStatusId === status.id ? (
+                <div style={{ padding: 16, borderTop: items.length > 0 ? '1px solid var(--border)' : 'none' }}>
+                  <InlineTaskComposer
+                    key={status.id}
+                    compact
+                    departments={departments}
+                    defaultDepartmentId={defaultDepartmentId}
+                    onCancel={() => setComposerStatusId(null)}
+                    onSubmit={async (draft) => {
+                      await onCreateTask?.({
+                        ...draft,
+                        statusId: status.id,
+                      })
+                      setComposerStatusId(null)
+                    }}
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setComposerStatusId(status.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '12px 16px',
+                    fontSize: 13,
+                    color: 'var(--text-tertiary)',
+                    background: 'transparent',
+                    border: 'none',
+                    borderTop: items.length > 0 ? '1px solid var(--border)' : 'none',
+                    cursor: 'pointer',
+                    width: '100%',
+                  }}
                 >
-                  No tasks match the current filters.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                  + Add task
+                </button>
+              )
+            ) : null}
+          </div>
+        </section>
+      ))}
 
-      {/* Add row */}
-      {onAddTask ? (
-        <button
-          type="button"
-          onClick={onAddTask}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '10px 12px', fontSize: 13,
-            color: 'var(--text-tertiary)', background: 'transparent',
-            border: 'none', borderTop: '1px solid var(--border)',
-            cursor: 'pointer', width: '100%', transition: 'all 0.15s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--surface-secondary)'
-            e.currentTarget.style.color = 'var(--accent)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent'
-            e.currentTarget.style.color = 'var(--text-tertiary)'
-          }}
-        >
-          + New task
-        </button>
+      {grouped.every((group) => group.items.length === 0) ? (
+        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+          No tasks match the current filters.
+        </div>
       ) : null}
     </div>
   )

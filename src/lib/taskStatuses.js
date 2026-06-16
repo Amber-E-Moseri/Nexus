@@ -135,6 +135,17 @@ function applyStatusContextFilter(query, departmentId) {
 }
 
 export async function listTaskStatuses({ departmentId = null, includeInactive = false } = {}) {
+  if (departmentId) {
+    const { data, error } = await supabase.rpc('get_space_statuses', {
+      p_department_id: departmentId,
+    })
+
+    if (error) throw error
+
+    const statuses = (data ?? []).map((status) => normalizeTaskStatusDefinition(status))
+    return includeInactive ? statuses : statuses.filter((status) => status.active !== false)
+  }
+
   let query = supabase.from('task_status_definitions').select('*').order('sort_order').order('name')
   query = applyStatusContextFilter(query, departmentId)
 

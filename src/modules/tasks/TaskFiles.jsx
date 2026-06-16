@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { attachFileLink, getTaskFiles, removeTaskFile } from '../../lib/tasks'
+import { safeHref } from '../../lib/urlUtils'
 
 function fileIcon(url) {
   if (!url) return '📎'
@@ -20,6 +21,8 @@ export default function TaskFiles({ taskId }) {
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
   const [saving, setSaving] = useState(false)
+  const [attachError, setAttachError] = useState(null)
+  const [removeError, setRemoveError] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -39,6 +42,7 @@ export default function TaskFiles({ taskId }) {
 
   async function handleAttach() {
     if (!name.trim() || !url.trim()) return
+    setAttachError(null)
     setSaving(true)
     try {
       const file = await attachFileLink(taskId, name, url, profile.id)
@@ -46,14 +50,22 @@ export default function TaskFiles({ taskId }) {
       setName('')
       setUrl('')
       setAdding(false)
+    } catch (error) {
+      setAttachError(error.message)
     } finally {
       setSaving(false)
     }
   }
 
   async function handleRemove(fileId) {
-    await removeTaskFile(fileId)
-    setFiles((prev) => prev.filter((file) => file.id !== fileId))
+    setRemoveError(null)
+
+    try {
+      await removeTaskFile(fileId)
+      setFiles((prev) => prev.filter((file) => file.id !== fileId))
+    } catch {
+      setRemoveError('Could not remove file. Try again.')
+    }
   }
 
   return (
@@ -85,7 +97,7 @@ export default function TaskFiles({ taskId }) {
                 >
                   <span style={{ fontSize: 14 }}>{fileIcon(file.url)}</span>
                   <a
-                    href={file.url}
+                    href={safeHref(file.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
@@ -111,6 +123,10 @@ export default function TaskFiles({ taskId }) {
             </div>
           )}
 
+          {removeError ? (
+            <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--coral-dark)' }}>{removeError}</div>
+          ) : null}
+
           {adding ? (
             <div
               style={{
@@ -123,7 +139,10 @@ export default function TaskFiles({ taskId }) {
                 type="text"
                 placeholder="Label (e.g. Meeting Minutes)"
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) => {
+                  setAttachError(null)
+                  setName(event.target.value)
+                }}
                 style={{
                   width: '100%', marginBottom: 6, fontSize: 12, padding: '6px 8px',
                   border: '1px solid var(--border)', borderRadius: 6,
@@ -134,7 +153,10 @@ export default function TaskFiles({ taskId }) {
                 type="url"
                 placeholder="https://docs.google.com/..."
                 value={url}
-                onChange={(event) => setUrl(event.target.value)}
+                onChange={(event) => {
+                  setAttachError(null)
+                  setUrl(event.target.value)
+                }}
                 style={{
                   width: '100%', marginBottom: 8, fontSize: 12, padding: '6px 8px',
                   border: '1px solid var(--border)', borderRadius: 6,
@@ -167,6 +189,9 @@ export default function TaskFiles({ taskId }) {
                   {saving ? 'Attaching…' : 'Attach'}
                 </button>
               </div>
+              {attachError ? (
+                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--coral-dark)' }}>{attachError}</div>
+              ) : null}
             </div>
           ) : (
             <button

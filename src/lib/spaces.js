@@ -27,7 +27,7 @@ export async function getSpaceDetail(spaceId) {
     supabase.from('departments').select('*').eq('id', spaceId).single(),
     supabase
       .from('space_lists')
-      .select('id, name, description, sort_order, status')
+      .select('id, name, description, sort_order, status, created_by')
       .eq('space_id', spaceId)
       .eq('status', 'active')
       .order('sort_order'),

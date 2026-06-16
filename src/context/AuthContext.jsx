@@ -4,6 +4,12 @@ import { supabase } from '../lib/supabase'
 
 export const AuthContext = createContext(null)
 
+function getJwtRole(session) {
+  return session?.user?.app_metadata?.user_role
+    ?? session?.user?.user_metadata?.user_role
+    ?? null
+}
+
 async function fetchProfile(userId) {
   const { data, error } = await supabase
     .from('users')
@@ -21,6 +27,7 @@ async function fetchProfile(userId) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
+  const [jwtRole, setJwtRole] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const refreshProfile = async (userId = user?.id) => {
@@ -47,6 +54,7 @@ export function AuthProvider({ children }) {
       }
 
       setUser(session?.user ?? null)
+      setJwtRole(getJwtRole(session))
 
       if (session?.user) {
         try {
@@ -77,6 +85,7 @@ export function AuthProvider({ children }) {
       }
 
       setUser(session?.user ?? null)
+      setJwtRole(getJwtRole(session))
 
       if (session?.user) {
         setLoading(true)
@@ -112,11 +121,12 @@ export function AuthProvider({ children }) {
       user,
       profile,
       role: profile?.role ?? null,
+      effectiveRole: jwtRole ?? profile?.role ?? null,
       loading,
       signOut: () => supabase.auth.signOut(),
       refreshProfile,
     }),
-    [loading, profile, user],
+    [jwtRole, loading, profile, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

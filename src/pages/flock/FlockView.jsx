@@ -2,13 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { getFlockMembers, getFlockTasks } from '../../lib/tasks'
 import { isTaskCompleted, isTaskInProgress } from '../../lib/taskStatuses'
-
-const PRIORITY_STYLES = {
-  urgent: { bg: '#FDECEC', text: '#A32D2D' },
-  high:   { bg: '#FEF3E2', text: '#9B5500' },
-  medium: { bg: '#E6F0FB', text: '#185FA5' },
-  low:    { bg: '#F1F0F8', text: '#6B6894' },
-}
+import { PRIORITY_STYLES } from '../../lib/priorities'
 
 function memberStatusBadge(member, memberTasks) {
   const tasks = memberTasks[member.id] ?? []
@@ -16,12 +10,12 @@ function memberStatusBadge(member, memberTasks) {
   const hasOverdue = tasks.some(
     (t) => t.due_date && new Date(t.due_date) < now && !isTaskCompleted(t),
   )
-  if (hasOverdue) return { label: 'Has overdue', bg: '#FEF3E2', text: '#9B5500' }
+  if (hasOverdue) return { label: 'Has overdue', bg: 'var(--status-review-bg)', text: 'var(--status-review-text)' }
 
   const isActive = tasks.some((task) => isTaskInProgress(task))
-  if (isActive) return { label: 'Active', bg: '#E6F5EC', text: '#1A6B35' }
+  if (isActive) return { label: 'Active', bg: 'var(--status-done-bg)', text: 'var(--status-done-text)' }
 
-  return { label: 'Monitoring', bg: '#F1F0F8', text: '#6B6894' }
+  return { label: 'Monitoring', bg: 'var(--status-backlog-bg)', text: 'var(--status-backlog-text)' }
 }
 
 function Initials({ name, size = 32 }) {
@@ -170,7 +164,7 @@ export default function FlockView() {
                     {statusBadge.label}
                   </span>
                   {overdueCount > 0 && (
-                    <span style={{ fontSize: 10, color: '#A32D2D' }}>
+                    <span style={{ fontSize: 10, color: 'var(--coral-dark)' }}>
                       {overdueCount} overdue
                     </span>
                   )}
@@ -281,7 +275,7 @@ export default function FlockView() {
                             <span
                               style={{
                                 fontSize: 11, flexShrink: 0,
-                                color: isOverdue ? '#A32D2D' : 'var(--text-tertiary)',
+                                color: isOverdue ? 'var(--coral-dark)' : 'var(--text-tertiary)',
                                 fontWeight: isOverdue ? 500 : 400,
                               }}
                             >

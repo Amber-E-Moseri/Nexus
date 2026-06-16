@@ -1,21 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { useDeptMembers } from '../../hooks/useDeptMembers'
 import { createTasksFromActionItems } from '../../lib/meetings'
-import { getDeptMembers } from '../../lib/tasks'
 
 const emptyItem = { title: '', assigneeId: '', dueDate: '', description: '' }
 
 export default function ActionItemBridge({ meetingId, departmentId, onSaved, onCancel }) {
   const { profile } = useAuth()
   const [items, setItems] = useState([emptyItem])
-  const [members, setMembers] = useState([])
+  const members = useDeptMembers(departmentId)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-
-  useEffect(() => {
-    if (!departmentId) return
-    getDeptMembers(departmentId).then(setMembers).catch(() => {})
-  }, [departmentId])
 
   function addRow() {
     setItems((previous) => [...previous, emptyItem])
@@ -82,7 +77,7 @@ export default function ActionItemBridge({ meetingId, departmentId, onSaved, onC
             background: '#fff2f2',
             padding: '10px 12px',
             fontSize: 12,
-            color: '#a32d2d',
+            color: 'var(--coral-dark)',
           }}
         >
           {error}

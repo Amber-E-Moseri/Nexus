@@ -3,7 +3,7 @@ import { useAuth } from '../../hooks/useAuth'
 import LoadingSpinner from '../ui/LoadingSpinner'
 
 export default function ProtectedRoute({ children, roles }) {
-  const { loading, user, role } = useAuth()
+  const { loading, user, effectiveRole } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -18,7 +18,7 @@ export default function ProtectedRoute({ children, roles }) {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 
-  if (roles && !roles.includes(role)) {
+  if (roles && !roles.includes(effectiveRole)) {
     return (
       <Navigate
         to="/dashboard"

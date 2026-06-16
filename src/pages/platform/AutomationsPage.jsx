@@ -1,67 +1,132 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { deleteAutomation, getDeptAutomations, getRecentAutomationRuns, toggleAutomation } from '../../lib/automations'
+import { ACTION_LABELS, TRIGGER_LABELS, deleteAutomation, getRecentAutomationRuns, toggleAutomation } from '../../lib/automations'
+import { formatLastActive } from '../../lib/dateUtils'
 import { supabase } from '../../lib/supabase'
-import ApiKeyManager from '../../modules/automations/ApiKeyManager'
 import AutomationBuilder from '../../modules/automations/AutomationBuilder'
-import AutomationCard from '../../modules/automations/AutomationCard'
 
-const TABS = ['Automations', 'API Keys', 'Run Log']
+function getRunTone(status) {
+  if (status === 'success' || status === 'ok') {
+    return { bg: 'var(--status-done-bg)', text: 'var(--status-done-text)', label: 'Success' }
+  }
 
-const CODE_BLOCK_STYLE = {
-  background: '#1e1e2e',
-  borderRadius: 10,
-  padding: '16px 20px',
-  fontFamily: 'monospace',
-  fontSize: 12,
-  color: '#cdd6f4',
-  lineHeight: 1.7,
-  marginTop: 16,
+  if (status === 'partial') {
+    return { bg: 'var(--status-review-bg)', text: 'var(--status-review-text)', label: 'Partial' }
+  }
+
+  return { bg: 'var(--status-blocked-bg)', text: 'var(--status-blocked-text)', label: 'Error' }
 }
 
-export default function AutomationsPage() {
+function Toggle({ checked, onClick }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onClick}
+      className={[
+        'relative h-6 w-12 rounded-full transition',
+        checked ? 'bg-[#2E8B57]' : 'bg-[#D7D0C6]',
+      ].join(' ')}
+    >
+      <span
+        className={[
+          'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition',
+          checked ? 'left-6' : 'left-0.5',
+        ].join(' ')}
+      />
+    </button>
+  )
+}
+
+function RunBadge({ status }) {
+  const tone = getRunTone(status)
+
+  return (
+    <span
+      className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+      style={{ background: tone.bg, color: tone.text }}
+    >
+      {tone.label}
+    </span>
+  )
+}
+
+export default function AutomationsPage({ embedded = false, initialDepartmentId = null }) {
   const { profile, role } = useAuth()
-  const [activeTab, setActiveTab] = useState('Automations')
-  const [deptId, setDeptId] = useState(null)
+  const [deptId, setDeptId] = useState(initialDepartmentId ?? profile?.department_id ?? null)
   const [departments, setDepartments] = useState([])
   const [users, setUsers] = useState([])
   const [automations, setAutomations] = useState([])
+  const [runLog, setRunLog] = useState([])
   const [showBuilder, setShowBuilder] = useState(false)
   const [editingAutomation, setEditingAutomation] = useState(null)
-  const [latestKey, setLatestKey] = useState('')
-  const [runLog, setRunLog] = useState([])
-  const [expandedRunId, setExpandedRunId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? 'https://[project-ref].supabase.co'
-
   useEffect(() => {
-    if (profile?.department_id) {
-      setDeptId(profile.department_id)
-    }
-  }, [profile])
-
-  async function loadPageData(targetDeptId = deptId) {
-    if (!targetDeptId) {
-      setAutomations([])
-      setLoading(false)
+    if (initialDepartmentId) {
+      setDeptId(initialDepartmentId)
       return
     }
 
+    if (profile?.department_id) {
+      setDeptId(profile.department_id)
+    }
+  }, [initialDepartmentId, profile?.department_id])
+
+  async function loadPageData(targetDeptId = deptId) {
     setLoading(true)
     setError('')
+
     try {
-      const [nextAutomations, departmentsRes, usersRes] = await Promise.all([
-        getDeptAutomations(targetDeptId),
-        supabase.from('departments').select('id, name').order('name'),
-        supabase.from('users').select('id, name, department_id, status').order('name'),
+      const departmentsPromise = supabase.from('departments').select('id, name').order('name')
+      const usersPromise = supabase.from('users').select('id, name, department_id, status').order('name')
+
+      let automationsQuery = supabase
+        .from('automations')
+        .select('id, name, description, enabled, trigger_type, trigger_config, actions, conditions, fire_count, last_fired_at, created_at, created_by, department_id')
+        .order('created_at', { ascending: false })
+
+      if (role !== 'super_admin') {
+        if (!targetDeptId) {
+          setAutomations([])
+          setRunLog([])
+          setDepartments([])
+          setUsers([])
+          setLoading(false)
+          return
+        }
+
+        automationsQuery = automationsQuery.eq('department_id', targetDeptId)
+      }
+
+      const [automationsRes, departmentsRes, usersRes] = await Promise.all([
+        automationsQuery,
+        departmentsPromise,
+        usersPromise,
       ])
 
+      if (automationsRes.error) throw automationsRes.error
+      if (departmentsRes.error) throw departmentsRes.error
+      if (usersRes.error) throw usersRes.error
+
+      const nextDepartments = departmentsRes.data ?? []
+      const nextAutomations = (automationsRes.data ?? []).map((automation) => ({
+        ...automation,
+        department: nextDepartments.find((department) => department.id === automation.department_id) ?? null,
+      }))
+
+      setDepartments(nextDepartments)
       setAutomations(nextAutomations)
-      setRunLog(await getRecentAutomationRuns((nextAutomations ?? []).map((automation) => automation.id)))
-      setDepartments(departmentsRes.data ?? [])
-      setUsers((usersRes.data ?? []).filter((user) => role === 'super_admin' || user.department_id === targetDeptId))
+      setRunLog(await getRecentAutomationRuns(nextAutomations.map((automation) => automation.id)))
+      setUsers(
+        (usersRes.data ?? []).filter((user) => (
+          role === 'super_admin'
+            ? true
+            : user.department_id === (targetDeptId ?? profile?.department_id ?? null)
+        )),
+      )
     } catch (nextError) {
       setError(nextError.message)
     } finally {
@@ -71,195 +136,176 @@ export default function AutomationsPage() {
 
   useEffect(() => {
     loadPageData()
-  }, [deptId, role])
+  }, [deptId, role, profile?.department_id])
 
   const scopedDepartments = useMemo(() => {
     if (role === 'super_admin') return departments
-    return departments.filter((department) => department.id === deptId)
-  }, [departments, deptId, role])
+    return departments.filter((department) => department.id === (deptId ?? profile?.department_id ?? null))
+  }, [departments, deptId, profile?.department_id, role])
+
+  const activeCount = automations.filter((automation) => automation.enabled).length
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Automations</h1>
-          <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
-            Automation rules and API access for your department
-          </p>
-        </div>
-        {activeTab === 'Automations' ? (
+      {!embedded ? (
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold text-[var(--text-primary)]">Automations</h1>
+            <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
+              Trigger-and-action workflows across departments.
+            </p>
+          </div>
           <button
+            type="button"
             onClick={() => {
               setEditingAutomation(null)
               setShowBuilder(true)
             }}
             className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-hover)]"
           >
-            + New automation
+            + New Automation
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
+
+      {embedded ? (
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm text-[var(--text-secondary)]">
+            {activeCount} of {automations.length} rules active · trigger-and-action workflows across departments.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => {
+              setEditingAutomation(null)
+              setShowBuilder(true)
+            }}
+            className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-hover)]"
+          >
+            + New Automation
+          </button>
+        </div>
+      ) : null}
 
       {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        <div className="rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>
+          {error}
+        </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-            className={[
-              'rounded-full px-4 py-2 text-sm font-medium transition',
-              activeTab === tab
-                ? 'bg-[var(--accent)] text-white'
-                : 'bg-white text-[var(--text-secondary)] shadow-[var(--card-shadow)]',
-            ].join(' ')}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'Automations' ? (
-        <section className="space-y-4">
-          {!deptId ? (
-            <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-10 text-center text-sm text-[var(--text-secondary)]">
-              Assign a department to this account before configuring automations.
-            </div>
-          ) : null}
-
-          {!loading && deptId && automations.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-12 text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-light)]">
-                <span className="text-2xl">⚡</span>
+      {loading ? (
+        <div className="rounded-3xl border border-[var(--border)] bg-white p-6 text-sm text-[var(--text-secondary)] shadow-[var(--card-shadow)]">
+          Loading automations…
+        </div>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-[1fr_520px]">
+          <section className="space-y-4">
+            {!automations.length ? (
+              <div className="rounded-3xl border border-dashed border-[var(--border)] bg-white p-10 text-center">
+                <h3 className="text-base font-semibold text-[var(--text-primary)]">No automations yet</h3>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                  Start with a trigger and action rule for a space.
+                </p>
               </div>
-              <h3 className="mb-2 text-base font-semibold text-[var(--text-primary)]">No automations yet</h3>
-              <p className="text-sm text-[var(--text-secondary)]">
-                Start with a trigger, then add conditions and actions your department can review before Phase 7 execution.
-              </p>
-            </div>
-          ) : null}
+            ) : null}
 
-          {automations.map((automation) => (
-            <AutomationCard
-              key={automation.id}
-              automation={automation}
-              onEdit={(value) => {
-                setEditingAutomation(value)
-                setShowBuilder(true)
-              }}
-              onToggle={async (value) => {
-                try {
-                  await toggleAutomation(value.id, !value.enabled)
-                  await loadPageData()
-                } catch (nextError) {
-                  setError(nextError.message)
-                }
-              }}
-              onDelete={async (value) => {
-                if (!window.confirm(`Delete automation "${value.name}"?`)) return
-                try {
-                  await deleteAutomation(value.id)
-                  await loadPageData()
-                } catch (nextError) {
-                  setError(nextError.message)
-                }
-              }}
-            />
-          ))}
-        </section>
-      ) : null}
+            {automations.map((automation) => {
+              const latestRun = runLog.find((run) => run.automation_id === automation.id)
 
-      {activeTab === 'API Keys' ? (
-        <section className="space-y-4">
-          <ApiKeyManager
-            departmentId={deptId}
-            currentUserId={profile?.id}
-            canManage={role === 'super_admin' || role === 'dept_lead'}
-            onGeneratedKey={setLatestKey}
-          />
+              return (
+                <div key={automation.id} className="rounded-3xl border border-[var(--border)] bg-white p-4 shadow-[var(--card-shadow)]">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingAutomation(automation)
+                          setShowBuilder(true)
+                        }}
+                        className="text-left"
+                      >
+                        <div className="text-[1.05rem] font-semibold text-[var(--text-primary)]">{automation.name}</div>
+                      </button>
 
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
-            <div className="text-sm font-semibold text-[var(--text-primary)]">Usage example</div>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              Use the generated key in Apps Script, scheduled jobs, or lightweight connectors.
-            </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded-full bg-[var(--status-progress-bg)] px-2.5 py-1 font-semibold text-[var(--status-progress-text)]">
+                          When: {TRIGGER_LABELS[automation.trigger_type] ?? automation.trigger_type}
+                        </span>
+                        <span className="text-[var(--text-tertiary)]">→</span>
+                        <span className="rounded-full bg-[var(--status-review-bg)] px-2.5 py-1 font-semibold text-[var(--status-review-text)]">
+                          Then: {ACTION_LABELS[automation.actions?.[0]?.type] ?? automation.actions?.[0]?.type ?? 'Add action'}
+                        </span>
+                      </div>
 
-            <div style={CODE_BLOCK_STYLE}>
-              <div style={{ color: '#6c7086', marginBottom: 8 }}># Create a task via API</div>
-              <div><span style={{ color: '#89b4fa' }}>curl</span> -X POST \</div>
-              <div style={{ paddingLeft: 16 }}>{`"${supabaseUrl}/functions/v1/task-api/tasks" \\`}</div>
-              <div style={{ paddingLeft: 16 }}>{`-H "x-api-key: ${latestKey || 'blwk_your_key_here'}" \\`}</div>
-              <div style={{ paddingLeft: 16 }}>{`-H "Content-Type: application/json" \\`}</div>
-              <div style={{ paddingLeft: 16 }}>{`-d '{"title":"New task","priority":"medium","external_unique_key":"my-unique-id"}'`}</div>
-            </div>
+                      <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)]">
+                        <span>{automation.department?.name ?? 'Unassigned space'}</span>
+                        <span>{automation.fire_count ?? 0} runs</span>
+                        {latestRun ? (
+                          <>
+                            <RunBadge status={latestRun.status} />
+                            <span>{formatLastActive(latestRun.ran_at)}</span>
+                          </>
+                        ) : (
+                          <span>No runs yet</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <Toggle
+                        checked={automation.enabled}
+                        onClick={async () => {
+                          try {
+                            await toggleAutomation(automation.id, !automation.enabled)
+                            await loadPageData()
+                          } catch (nextError) {
+                            setError(nextError.message)
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </section>
-        </section>
-      ) : null}
 
-      {activeTab === 'Run Log' ? (
-        <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
-          {!runLog.length ? (
-            <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-secondary)] p-12 text-center">
-              <h3 className="text-base font-semibold text-[var(--text-primary)]">No automation runs yet</h3>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                Run history will appear here after the Phase 7 automation engine executes a rule.
-              </p>
+          <section className="rounded-3xl border border-[var(--border)] bg-white shadow-[var(--card-shadow)]">
+            <div className="border-b border-[var(--border)] px-5 py-4">
+              <h3 className="text-lg font-semibold text-[var(--text-primary)]">Recent Runs</h3>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {runLog.map((run) => (
-                <div key={run.id} className="rounded-2xl border border-[var(--border)]">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedRunId((value) => (value === run.id ? null : run.id))}
-                    className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left"
-                  >
-                    <div>
+
+            {!runLog.length ? (
+              <div className="px-5 py-6 text-sm text-[var(--text-secondary)]">No automation runs yet.</div>
+            ) : (
+              <div>
+                {runLog.slice(0, 8).map((run) => (
+                  <div key={run.id} className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-5 py-4 last:border-b-0">
+                    <div className="min-w-0">
                       <div className="text-sm font-semibold text-[var(--text-primary)]">
                         {run.automation?.name ?? 'Automation'}
                       </div>
-                      <div className="mt-1 text-xs text-[var(--text-tertiary)]">
-                        {run.automation?.trigger_type ?? 'manual'} · {new Date(run.ran_at).toLocaleString()}
+                      <div className="mt-1 text-sm text-[var(--text-secondary)]">
+                        {run.error || `${Array.isArray(run.actions_taken) ? run.actions_taken.length : 0} action items`}
+                      </div>
+                      <div className="mt-2 text-xs text-[var(--text-tertiary)]">
+                        {formatLastActive(run.ran_at)} · {run.duration_ms ?? 0}ms
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={[
-                          'rounded-full px-3 py-1 text-xs font-semibold',
-                          run.status === 'success'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : run.status === 'partial'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-red-100 text-red-700',
-                        ].join(' ')}
-                      >
-                        {run.status}
-                      </span>
-                      <span className="text-xs text-[var(--text-tertiary)]">{run.duration_ms ?? 0}ms</span>
-                      <span className="text-xs text-[var(--text-tertiary)]">
-                        {Array.isArray(run.actions_taken) ? run.actions_taken.length : 0} actions
-                      </span>
-                    </div>
-                  </button>
-                  {expandedRunId === run.id ? (
-                    <pre className="overflow-x-auto border-t border-[var(--border)] bg-[var(--surface-secondary)] px-4 py-3 text-xs text-[var(--text-secondary)]">
-                      {JSON.stringify(run.actions_taken, null, 2)}
-                    </pre>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      ) : null}
+
+                    <RunBadge status={run.status} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
       {showBuilder ? (
         <AutomationBuilder
           automation={editingAutomation}
-          departmentId={deptId}
+          departmentId={editingAutomation?.department_id ?? deptId}
           users={users}
           departments={scopedDepartments}
           onSaved={async () => {

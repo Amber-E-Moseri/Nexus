@@ -1,15 +1,14 @@
 import { useState } from 'react'
 import { getMeetingTasks } from '../../lib/meetings'
 import { getTaskStatusColor, isTaskCompleted } from '../../lib/taskStatuses'
+import { safeHref } from '../../lib/urlUtils'
 import ActionItemBridge from './ActionItemBridge'
 
 const TYPE_LABELS = {
   general: 'General',
-  admin: 'Admin',
-  pfcc: 'PFCC',
+  team: 'Team',
   media: 'Media',
-  ors: 'ORS',
-  pastors: 'Pastors',
+  department: 'Department',
 }
 
 export default function MeetingCard({ meeting, canManage = false, onTasksAdded }) {
@@ -100,7 +99,7 @@ export default function MeetingCard({ meeting, canManage = false, onTasksAdded }
         </div>
         {meeting.drive_url ? (
           <a
-            href={meeting.drive_url}
+            href={safeHref(meeting.drive_url)}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(event) => event.stopPropagation()}
@@ -134,7 +133,7 @@ export default function MeetingCard({ meeting, canManage = false, onTasksAdded }
               {meeting.creator?.name ? <span>Logged by {meeting.creator.name}</span> : null}
               {meeting.zoom_join_url ? (
                 <a
-                  href={meeting.zoom_join_url}
+                  href={safeHref(meeting.zoom_join_url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}
@@ -178,7 +177,7 @@ export default function MeetingCard({ meeting, canManage = false, onTasksAdded }
             </div>
 
             {tasksError ? (
-              <div style={{ fontSize: 12, color: '#a32d2d' }}>Failed to load action items: {tasksError}</div>
+              <div style={{ fontSize: 12, color: 'var(--coral-dark)' }}>Failed to load action items: {tasksError}</div>
             ) : tasks === null ? (
               <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Loading action items…</div>
             ) : tasks.length === 0 ? (

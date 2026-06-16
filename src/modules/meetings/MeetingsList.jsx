@@ -17,11 +17,11 @@ export default function MeetingsList({ onAddMeeting, onTasksAdded, canManage = f
     return (
       <div
         style={{
-          border: '1px solid #f3c2c2',
+          border: '1px solid var(--coral)',
           borderRadius: 12,
-          background: '#fff7f7',
+          background: 'var(--coral-light)',
           padding: '16px 18px',
-          color: '#a32d2d',
+          color: 'var(--coral-dark)',
           fontSize: 13,
         }}
       >

@@ -87,7 +87,7 @@ export default function TaskDependencies({ taskId, departmentId, sprintId }) {
                 style={{
                   fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4,
                   background: dep.type === 'blocking' ? '#FCEBEB' : '#E6F1FB',
-                  color: dep.type === 'blocking' ? '#A32D2D' : '#185FA5',
+                  color: dep.type === 'blocking' ? 'var(--coral-dark)' : 'var(--status-progress-text)',
                 }}
               >
                 {dep.type === 'blocking' ? 'blocked by' : 'waiting on'}

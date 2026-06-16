@@ -37,12 +37,12 @@ export default function Login() {
 
   return (
     <div className="relative flex min-h-screen items-start justify-center overflow-hidden bg-white px-6 pb-12 pt-24">
-      <div className="absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_15%_0%,_rgba(255,147,62,0.22),_transparent_30%),radial-gradient(circle_at_50%_0%,_rgba(240,63,134,0.24),_transparent_28%),radial-gradient(circle_at_82%_4%,_rgba(123,104,238,0.18),_transparent_32%),radial-gradient(circle_at_100%_0%,_rgba(104,188,255,0.2),_transparent_28%)]" />
+      <div className="absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_15%_0%,_rgba(232,160,32,0.15),_transparent_30%),radial-gradient(circle_at_50%_0%,_rgba(76,42,146,0.12),_transparent_28%),radial-gradient(circle_at_82%_4%,_rgba(107,75,190,0.10),_transparent_32%)]" />
 
       <div className="relative z-10 w-full max-w-[500px]">
         <div className="text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-[0_18px_40px_rgba(20,20,43,0.08)]">
-            <div className="h-8 w-8 rounded-[10px] bg-[linear-gradient(135deg,_#f03f86,_#7b68ee)]" />
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-[0_18px_40px_rgba(28,22,16,0.08)]">
+            <div className="flex h-8 w-8 items-center justify-center rounded-[10px] text-sm font-black" style={{ background: 'var(--accent)', color: 'var(--amber)' }}>B</div>
           </div>
           <h1 className="mt-6 text-[40px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
             Welcome back!
@@ -51,17 +51,17 @@ export default function Login() {
             Sign in to access BLW Canada OS.
           </p>
           {resetMessage ? (
-            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            <div className="mt-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--sage-border)', background: 'var(--sage-light)', color: 'var(--sage)' }}>
               {resetMessage}
             </div>
           ) : null}
         </div>
 
-        <div className="mt-8 rounded-[28px] border border-[var(--border)] bg-white p-6 shadow-[0_20px_48px_rgba(20,20,43,0.06)] sm:p-8">
+        <div className="mt-8 rounded-[20px] border border-[var(--border)] bg-white p-6 shadow-[0_8px_28px_rgba(28,22,16,0.10)] sm:p-8">
           <form className="space-y-4" onSubmit={handleSubmit}>
             <label className="block space-y-1.5">
               <span className="text-sm font-medium text-[var(--text-primary)]">Work email</span>
-              <div className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-white px-4 py-3.5 transition focus-within:border-[var(--accent)] focus-within:ring-4 focus-within:ring-[var(--accent-muted)]">
+              <div className="flex items-center gap-3 rounded-md border border-(--border) bg-white px-4 py-3 transition focus-within:border-(--accent) focus-within:shadow-[0_0_0_3px_rgba(76,42,146,.09)]">
                 <Mail size={18} className="text-[var(--text-tertiary)]" />
                 <input
                   type="email"
@@ -77,7 +77,7 @@ export default function Login() {
 
             <label className="block space-y-1.5">
               <span className="text-sm font-medium text-[var(--text-primary)]">Password</span>
-              <div className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-white px-4 py-3.5 transition focus-within:border-[var(--accent)] focus-within:ring-4 focus-within:ring-[var(--accent-muted)]">
+              <div className="flex items-center gap-3 rounded-md border border-(--border) bg-white px-4 py-3 transition focus-within:border-(--accent) focus-within:shadow-[0_0_0_3px_rgba(76,42,146,.09)]">
                 <LockKeyhole size={18} className="text-[var(--text-tertiary)]" />
                 <input
                   type="password"
@@ -92,7 +92,7 @@ export default function Login() {
             </label>
 
             {error && (
-              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>
                 {error}
               </div>
             )}
@@ -100,7 +100,8 @@ export default function Login() {
             <button
               type="submit"
               disabled={submitting}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#b9b9bc] py-3.5 text-sm font-semibold text-white transition enabled:bg-[linear-gradient(135deg,_#f03f86,_#7b68ee)] enabled:shadow-[0_16px_34px_rgba(123,104,238,0.24)] enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
+              className="flex w-full items-center justify-center gap-2 rounded-md py-3.5 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ background: submitting ? 'var(--text-tertiary)' : 'var(--accent)', boxShadow: submitting ? 'none' : '0 8px 24px rgba(76,42,146,0.22)' }}
             >
               <span>{submitting ? 'Logging in...' : 'Log In'}</span>
               {!submitting && <ArrowRight size={16} />}

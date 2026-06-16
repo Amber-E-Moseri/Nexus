@@ -83,7 +83,7 @@ export default function DepartmentsPage() {
       description="Review current membership counts and move users without losing historical work."
     >
       {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>
           {error}
         </div>
       )}

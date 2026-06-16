@@ -1,22 +1,33 @@
+import { memo } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import TaskCard from './TaskCard'
 
-export default function KanbanColumn({ status, tasks, onTaskClick, onAddTask, readOnly = false }) {
+function KanbanColumn({
+  status,
+  tasks,
+  onTaskClick,
+  onStartAddTask,
+  composer = null,
+  readOnly = false,
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: status.id })
 
   return (
     <div
       style={{
-        minWidth: 256, maxWidth: 280, flex: '0 0 256px',
+        minWidth: 270, maxWidth: 270, flex: '0 0 270px',
         display: 'flex', flexDirection: 'column', gap: 0,
+        border: '1px solid var(--border)',
+        borderRadius: 16,
+        background: '#FCFAF6',
+        padding: 10,
       }}
     >
-      {/* Column header */}
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: 7,
-          padding: '0 2px 10px',
+          padding: '2px 4px 10px',
         }}
       >
         <span
@@ -25,29 +36,40 @@ export default function KanbanColumn({ status, tasks, onTaskClick, onAddTask, re
             background: status.color, flexShrink: 0,
           }}
         />
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.02em' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
           {status.name}
         </span>
-        <span
-          style={{
-            marginLeft: 'auto', minWidth: 20, height: 18, borderRadius: 20,
-            background: 'var(--surface-secondary)',
-            fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '0 6px',
-          }}
-        >
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-tertiary)', marginLeft: 4 }}>
           {tasks.length}
         </span>
+        {!readOnly ? (
+          <button
+            type="button"
+            onClick={() => onStartAddTask(status)}
+            style={{
+              marginLeft: 'auto',
+              width: 22,
+              height: 22,
+              border: 'none',
+              background: 'transparent',
+              borderRadius: 6,
+              color: 'var(--text-tertiary)',
+              cursor: 'pointer',
+              fontSize: 16,
+              lineHeight: 1,
+            }}
+          >
+            +
+          </button>
+        ) : null}
       </div>
 
-      {/* Drop zone */}
       <div
         ref={setNodeRef}
         style={{
-          flex: 1, display: 'flex', flexDirection: 'column', gap: 6,
-          minHeight: 120, padding: 4,
-          borderRadius: 10,
+          flex: 1, display: 'flex', flexDirection: 'column', gap: 10,
+          minHeight: 420, padding: 2,
+          borderRadius: 12,
           background: isOver ? 'rgba(123,104,238,0.06)' : 'transparent',
           border: isOver ? '1.5px dashed rgba(123,104,238,0.3)' : '1.5px dashed transparent',
           transition: 'background 0.15s, border 0.15s',
@@ -60,35 +82,38 @@ export default function KanbanColumn({ status, tasks, onTaskClick, onAddTask, re
         </SortableContext>
       </div>
 
-      {/* Add task */}
-      {!readOnly && onAddTask ? (
-        <button
-          type="button"
-          onClick={() => onAddTask(status.id)}
-          style={{
-            width: '100%', marginTop: 6,
-            padding: '7px 0', fontSize: 12,
-            color: 'var(--text-tertiary)',
-            background: 'transparent',
-            border: '1px dashed var(--border)',
-            borderRadius: 8,
-            cursor: 'pointer',
-            transition: 'all 0.15s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = 'var(--accent)'
-            e.currentTarget.style.borderColor = 'var(--accent)'
-            e.currentTarget.style.background = 'var(--accent-light)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = 'var(--text-tertiary)'
-            e.currentTarget.style.borderColor = 'var(--border)'
-            e.currentTarget.style.background = 'transparent'
-          }}
-        >
-          + Add task
-        </button>
+      {!readOnly ? (
+        composer ?? (
+          <button
+            type="button"
+            onClick={() => onStartAddTask(status)}
+            style={{
+              width: '100%', marginTop: 8,
+              padding: '8px 0', fontSize: 12,
+              color: 'var(--text-tertiary)',
+              background: 'transparent',
+              border: '1px dashed var(--border)',
+              borderRadius: 10,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--accent)'
+              e.currentTarget.style.borderColor = 'var(--accent)'
+              e.currentTarget.style.background = 'var(--accent-light)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--text-tertiary)'
+              e.currentTarget.style.borderColor = 'var(--border)'
+              e.currentTarget.style.background = 'transparent'
+            }}
+          >
+            + Add task
+          </button>
+        )
       ) : null}
     </div>
   )
 }
+
+export default memo(KanbanColumn)

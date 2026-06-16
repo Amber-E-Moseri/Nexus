@@ -6,6 +6,10 @@ const EMPTY_FILTERS = {
   priority: [],
   assigneeId: null,
   dueDateRange: null, // 'overdue' | 'today' | 'this_week' | null
+  taskType: [],
+  source: [],
+  hasComments: false,
+  hasDependencies: false,
   showDone: false,
 }
 
@@ -23,6 +27,10 @@ export function useTaskFilters(tasks = []) {
       if (filters.status.length && !filters.status.includes(task.status_id)) return false
       if (filters.priority.length && !filters.priority.includes(task.priority)) return false
       if (filters.assigneeId && task.assignee_id !== filters.assigneeId) return false
+      if (filters.taskType.length && !filters.taskType.includes(task.task_type)) return false
+      if (filters.source.length && !filters.source.includes(task.source ?? 'manual')) return false
+      if (filters.hasComments && (task.comments?.[0]?.count ?? 0) < 1) return false
+      if (filters.hasDependencies && (task.dependencies?.[0]?.count ?? 0) < 1) return false
       if (!filters.showDone && isTaskCompleted(task)) return false
 
       if (filters.dueDateRange) {
@@ -56,6 +64,10 @@ export function useTaskFilters(tasks = []) {
       filters.priority.length > 0 ||
       filters.assigneeId !== null ||
       filters.dueDateRange !== null ||
+      filters.taskType.length > 0 ||
+      filters.source.length > 0 ||
+      filters.hasComments ||
+      filters.hasDependencies ||
       filters.showDone
     )
   }

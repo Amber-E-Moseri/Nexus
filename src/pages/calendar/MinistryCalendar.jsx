@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents } from '../../lib/calendar'
-import CalendarGrid from '../../modules/calendar/CalendarGrid'
-import CalendarEventCard from '../../modules/calendar/CalendarEventCard'
+import { hasPermission } from '../../lib/permissions'
+import CalendarView from '../../modules/calendar/CalendarView'
 import EventModal from '../../modules/calendar/EventModal'
 
 export default function MinistryCalendar() {
-  const { role } = useAuth()
+  const { effectiveRole, profile } = useAuth()
+  const location = useLocation()
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth())
   const [events, setEvents] = useState([])
@@ -16,8 +17,7 @@ export default function MinistryCalendar() {
   const [selectedEvent, setSelectedEvent] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [modalDefault, setModalDefault] = useState(null)
-
-  const canEdit = ['super_admin', 'dept_lead'].includes(role)
+  const [canEdit, setCanEdit] = useState(false)
 
   async function loadCalendar() {
     setLoading(true)
@@ -37,7 +37,19 @@ export default function MinistryCalendar() {
     loadCalendar()
   }, [year, month])
 
-  const nextThree = useMemo(() => upcoming.slice(0, 3), [upcoming])
+  useEffect(() => {
+    let active = true
+    if (['super_admin', 'dept_lead'].includes(effectiveRole)) {
+      setCanEdit(true)
+      return () => { active = false }
+    }
+
+    hasPermission(profile?.id, 'calendar:write')
+      .then((allowed) => { if (active) setCanEdit(allowed) })
+      .catch(() => { if (active) setCanEdit(false) })
+
+    return () => { active = false }
+  }, [effectiveRole, profile?.id])
 
   function closeModal() {
     setShowModal(false)
@@ -58,89 +70,56 @@ export default function MinistryCalendar() {
           <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">Ministry Calendar</h1>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">An org-wide view of programs, training, prayer, deadlines, and major ministry events.</p>
         </div>
-        {canEdit ? (
-          <button type="button" onClick={() => setShowModal(true)} className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white">
-            + Add event
-          </button>
-        ) : null}
       </div>
 
-      {loading ? (
-        <div className="rounded-[24px] border border-[var(--border)] bg-white p-8 text-sm text-[var(--text-tertiary)] shadow-[var(--card-shadow)]">
-          Loading calendar…
-        </div>
-      ) : (
-        <div className="grid gap-5 xl:grid-cols-[1.8fr_0.9fr]">
-          <CalendarGrid
-            year={year}
-            month={month}
-            events={events}
-            onEventClick={(event) => setSelectedEvent(event)}
-            onDayClick={(day) => {
-              if (!canEdit) return
-              setModalDefault(day)
-              setShowModal(true)
-            }}
-            canEdit={canEdit}
-            onPrevMonth={() => {
-              if (month === 0) {
-                setMonth(11)
-                setYear((value) => value - 1)
-              } else {
-                setMonth((value) => value - 1)
-              }
-            }}
-            onNextMonth={() => {
-              if (month === 11) {
-                setMonth(0)
-                setYear((value) => value + 1)
-              } else {
-                setMonth((value) => value + 1)
-              }
-            }}
-            onToday={() => {
-              const now = new Date()
-              setYear(now.getFullYear())
-              setMonth(now.getMonth())
-            }}
-          />
-
-          <div className="space-y-4">
-            <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-              <div className="mb-4 flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]">
-                <CalendarDays size={18} className="text-[var(--accent)]" />
-                Upcoming Events
-              </div>
-              <div className="space-y-3">
-                {nextThree.length > 0 ? nextThree.map((event) => (
-                  <CalendarEventCard key={event.id} event={event} canEdit={false} />
-                )) : (
-                  <div className="rounded-[20px] border border-dashed border-[var(--border)] bg-[var(--surface-tertiary)] p-6 text-sm text-[var(--text-tertiary)]">
-                    No upcoming events in the next 30 days.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {selectedEvent ? (
-              <CalendarEventCard
-                event={selectedEvent}
-                canEdit={canEdit}
-                onEdit={(event) => {
-                  setSelectedEvent(event)
-                  setShowModal(true)
-                }}
-                onDelete={handleDelete}
-              />
-            ) : null}
-          </div>
-        </div>
-      )}
+      <CalendarView
+        events={events}
+        loading={loading}
+        year={year}
+        month={month}
+        upcomingEvents={upcoming}
+        highlightedEventId={location.state?.highlightedEventId ?? null}
+        onEventClick={setSelectedEvent}
+        onDayClick={(day) => {
+          if (!canEdit) return
+          setModalDefault(day)
+          setShowModal(true)
+        }}
+        onAddEvent={canEdit ? () => setShowModal(true) : undefined}
+        onEditEvent={(event) => {
+          setSelectedEvent(event)
+          setShowModal(true)
+        }}
+        onDeleteEvent={handleDelete}
+        onPrevMonth={() => {
+          if (month === 0) {
+            setMonth(11)
+            setYear((value) => value - 1)
+          } else {
+            setMonth((value) => value - 1)
+          }
+        }}
+        onNextMonth={() => {
+          if (month === 11) {
+            setMonth(0)
+            setYear((value) => value + 1)
+          } else {
+            setMonth((value) => value + 1)
+          }
+        }}
+        onToday={() => {
+          const now = new Date()
+          setYear(now.getFullYear())
+          setMonth(now.getMonth())
+        }}
+        readOnly={!canEdit}
+      />
 
       {showModal ? (
         <EventModal
           event={selectedEvent}
           defaultDate={modalDefault}
+          canEditOverride={canEdit}
           onSaved={loadCalendar}
           onClose={closeModal}
         />

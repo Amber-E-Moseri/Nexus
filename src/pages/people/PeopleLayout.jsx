@@ -10,6 +10,7 @@ export default function PeopleLayout({ title, description, actions, children }) 
       : []),
     { to: '/people/departments', label: 'Departments' },
     { to: '/people/pastoral-assignments', label: 'Pastoral Assignments' },
+    ...(role === 'super_admin' ? [{ to: '/people/permissions', label: 'Permissions' }] : []),
   ]
 
   return (

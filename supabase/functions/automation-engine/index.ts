@@ -1,8 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info',
+  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
+  'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info, Authorization',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -16,6 +16,59 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   })
 }
 
+function isSafeWebhookUrl(value: string) {
+  let parsed: URL
+
+  try {
+    parsed = new URL(value)
+  } catch {
+    return false
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    return false
+  }
+
+  const hostname = parsed.hostname.toLowerCase()
+
+  if (hostname === 'localhost' || hostname === '::1') {
+    return false
+  }
+
+  if (hostname === '169.254.169.254') {
+    return false
+  }
+
+  if (/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
+    return false
+  }
+
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
+    return false
+  }
+
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
+    return false
+  }
+
+  if (/^169\.254\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
+    return false
+  }
+
+  const octets = hostname.split('.').map((part) => Number(part))
+  if (
+    octets.length === 4 &&
+    octets.every((part) => Number.isInteger(part) && part >= 0 && part <= 255) &&
+    octets[0] === 172 &&
+    octets[1] >= 16 &&
+    octets[1] <= 31
+  ) {
+    return false
+  }
+
+  return true
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -25,10 +78,36 @@ Deno.serve(async (req) => {
     return jsonResponse(405, { error: 'Method not allowed' })
   }
 
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) {
+    return jsonResponse(401, { error: 'Missing Authorization header' })
+  }
+
+  const callerClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    { global: { headers: { Authorization: authHeader } } },
+  )
+
+  const { data: { user }, error: authError } = await callerClient.auth.getUser()
+  if (authError || !user) {
+    return jsonResponse(401, { error: 'Invalid or expired token' })
+  }
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   )
+
+  const { data: caller } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (caller?.role !== 'super_admin' && caller?.role !== 'dept_lead') {
+    return jsonResponse(403, { error: 'Forbidden: insufficient role' })
+  }
 
   const body = await req.json().catch(() => null) as
     | { trigger_type?: string; trigger_payload?: Record<string, unknown> }
@@ -193,6 +272,7 @@ async function executeAction(
     case 'post_webhook': {
       const url = typeof config.url === 'string' ? config.url : null
       if (!url) return { skipped: true, reason: 'missing url' }
+      if (!isSafeWebhookUrl(url)) return { skipped: true, reason: 'unsafe_url' }
 
       const response = await fetch(url, {
         method: 'POST',
@@ -207,4 +287,3 @@ async function executeAction(
       return { skipped: true, reason: `unknown action type: ${action.type}` }
   }
 }
-
