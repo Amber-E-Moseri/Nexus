@@ -1,7 +1,14 @@
+<<<<<<< Updated upstream
 import { DndContext, DragOverlay, PointerSensor, closestCorners, useSensor, useSensors } from '@dnd-kit/core'
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import InlineTaskComposer from './InlineTaskComposer'
+=======
+import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core'
+import { useState } from 'react'
+import { useDndSensors } from '../../dnd'
+import { useTasks } from './TasksContext'
+>>>>>>> Stashed changes
 import KanbanColumn from './KanbanColumn'
 import TaskCard from './TaskCard'
 import { useTasks } from './TasksContext'
@@ -72,9 +79,7 @@ export default function KanbanBoard({
     return source.map(mapStatusForBoard)
   }, [spaceStatuses, statuses, statusesOverride])
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-  )
+  const sensors = useDndSensors()
 
   function handleDragStart({ active }) {
     setActiveTask(allTasks.find((task) => task.id === active.id) ?? null)
