@@ -3,9 +3,10 @@ import { Link, useParams } from 'react-router-dom'
 import Badge from '../../components/ui/Badge'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent } from '../../lib/calendar'
-import { advanceSprintStatus, duplicateSprint, getSprintDetail, getSprintTasks, updateSprint } from '../../lib/sprints'
+import { advanceSprintStatus, calculateSprintTaskStats, duplicateSprint, getSprintDetail, getSprintTasks, restoreSprint, updateSprint } from '../../lib/sprints'
 import { supabase } from '../../lib/supabase'
 import { isTaskCompleted } from '../../lib/taskStatuses'
+import SprintProgressBar from '../../modules/sprints/SprintProgressBar'
 import CalendarView from '../../modules/calendar/CalendarView'
 import EventModal from '../../modules/calendar/EventModal'
 import SprintMemberPanel from '../../modules/sprints/SprintMemberPanel'
@@ -14,6 +15,49 @@ import SprintTeamPanel from '../../modules/sprints/SprintTeamPanel'
 import SprintReview from './SprintReview'
 
 const TABS = ['Overview', 'Tasks', 'Calendar', 'Teams', 'Members', 'Review']
+
+function ArchivedSprintBanner({ sprint, onRestore, userRole }) {
+  const canRestore = userRole === 'super_admin' || userRole === 'dept_lead'
+
+  return (
+    <div
+      style={{
+        marginBottom: 20,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 20px',
+        background: '#F3F0EB',
+        border: '1px solid #EDE8DC',
+        borderRadius: 12,
+      }}
+    >
+      <span style={{ fontSize: 14, fontWeight: 500, color: '#2D2A22' }}>
+        📦 This sprint is archived
+      </span>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          type="button"
+          onClick={onRestore}
+          disabled={!canRestore}
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            padding: '6px 12px',
+            borderRadius: 8,
+            background: canRestore ? 'var(--accent)' : '#E5E0D4',
+            color: canRestore ? 'white' : '#9E9488',
+            border: 'none',
+            cursor: canRestore ? 'pointer' : 'not-allowed',
+            opacity: canRestore ? 1 : 0.6,
+          }}
+        >
+          Restore
+        </button>
+      </div>
+    </div>
+  )
+}
 const NEXT_ACTION = {
   planning: { label: 'Start Sprint', next: 'active' },
   active: { label: 'Complete Sprint', next: 'completed' },
@@ -165,6 +209,19 @@ export default function SprintOverview() {
     await duplicateSprint(detail.sprint.id, profile.id)
   }
 
+  async function handleRestore() {
+    try {
+      const result = await restoreSprint(detail.sprint.id, detail.sprint.department_id)
+      if (result.error) {
+        alert(result.error)
+      } else {
+        await loadDetail()
+      }
+    } catch (err) {
+      alert('Failed to restore sprint')
+    }
+  }
+
   if (loading) {
     return <div style={{ padding: '1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading...</div>
   }
@@ -204,6 +261,10 @@ export default function SprintOverview() {
         </div>
       </div>
 
+      {isArchived && (
+        <ArchivedSprintBanner sprint={detail.sprint} onRestore={handleRestore} userRole={role} />
+      )}
+
       <div role="tablist" className="flex flex-wrap gap-2">
         {visibleTabs.map((tab) => {
           const tabId = tab.toLowerCase().replace(/\s+/g, '-')
@@ -231,6 +292,11 @@ export default function SprintOverview() {
 
       {activeTab === 'Overview' ? (
         <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0} className="space-y-5">
+          {tasks.length > 0 && (
+            <div className="rounded-[24px] border border-[var(--border)] bg-white p-6 shadow-[var(--card-shadow)]">
+              <SprintProgressBar tasksCount={calculateSprintTaskStats(tasks)} compact={false} />
+            </div>
+          )}
           <section className="grid gap-4 md:grid-cols-3">
             <Stat label="Members" value={detail.members.length} />
             <Stat label="Tasks" value={tasks.length} />

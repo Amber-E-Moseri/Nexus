@@ -59,6 +59,13 @@ export async function createSpace(data, createdBy) {
     created_by: createdBy,
   })
 
+  const { error: statusError } = await supabase.rpc('clone_global_statuses_for_space', {
+    p_department_id: space.id,
+  })
+  if (statusError) {
+    console.warn(`Failed to create default task statuses for space ${space.id}:`, statusError)
+  }
+
   return space
 }
 

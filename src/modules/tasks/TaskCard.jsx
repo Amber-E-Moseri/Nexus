@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { formatDueDate } from '../../lib/dateUtils'
 import { PRIORITY_STYLES } from '../../lib/priorities'
-import { isTaskCompleted } from '../../lib/taskStatuses'
+import { getTaskStatusLabel, isTaskCompleted } from '../../lib/taskStatuses'
 
 function Initials({ name }) {
   const initials = (name ?? '')
@@ -61,6 +61,8 @@ function TaskCard({ task, onClick, isDragging = false }) {
 
   const due = formatDueDate(task.due_date)
   const priority = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium
+  const statusLabel = getTaskStatusLabel(task)
+  const isBlocked = statusLabel === 'Blocked'
   const doneCount = task.subtasks?.filter((subtask) => isTaskCompleted(subtask)).length ?? 0
   const totalSubtasks = task.subtasks?.length ?? 0
   const commentCount = task.comments?.[0]?.count ?? 0
@@ -105,20 +107,38 @@ function TaskCard({ task, onClick, isDragging = false }) {
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
           {scopeLabel}
         </span>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            padding: '3px 8px',
-            borderRadius: 999,
-            background: priority.bg,
-            color: priority.text,
-            textTransform: 'capitalize',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {task.priority}
-        </span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {isBlocked && (
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                padding: '3px 8px',
+                borderRadius: 999,
+                background: '#C94830',
+                color: '#FFFFFF',
+                textTransform: 'capitalize',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🚫 Blocked
+            </span>
+          )}
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              padding: '3px 8px',
+              borderRadius: 999,
+              background: priority.bg,
+              color: priority.text,
+              textTransform: 'capitalize',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {task.priority}
+          </span>
+        </div>
       </div>
 
       <p

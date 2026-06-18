@@ -7,9 +7,9 @@ import { createNotification } from '../../lib/notifications'
 import { getMySpaces, SPACE_TYPE_ICONS } from '../../lib/spaces'
 import { getSprintMembers } from '../../lib/sprints'
 import { normalizeTaskFieldSettings } from '../../lib/taskFieldSettings'
-import { createTask, deleteTask, updateTask } from '../../lib/tasks'
+import { createTask, deleteTask, getTaskBlockers, updateTask } from '../../lib/tasks'
 import {
-  getTaskStatusId,
+  getTaskStatusLabel,
   listTaskStatuses,
   selectDefaultStatus,
 } from '../../lib/taskStatuses'
@@ -117,6 +117,7 @@ export default function TaskModal({
   sprintId,
   listId,
   isPersonal = false,
+  isReadOnly = false,
   onClose,
   onSaved,
   onDeleted,
@@ -142,6 +143,7 @@ export default function TaskModal({
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState(null)
+  const [blockers, setBlockers] = useState([])
 
   const titleRef = useRef(null)
 
@@ -197,6 +199,19 @@ export default function TaskModal({
     }
   }, [mode, profile?.id, role, profile?.department_id])
 
+  useEffect(() => {
+    if (mode === 'edit' && task?.id) {
+      getTaskBlockers(task.id)
+        .then((blockingTasks) => {
+          const activeBlockers = blockingTasks.filter((b) => b.task?.status_definition?.category !== 'completed')
+          setBlockers(activeBlockers)
+        })
+        .catch(() => setBlockers([]))
+    } else {
+      setBlockers([])
+    }
+  }, [mode, task?.id])
+
   async function handleSave() {
     if (!title.trim()) {
       setError('Title is required.')
@@ -221,7 +236,7 @@ export default function TaskModal({
         due_date: dueDate || null,
         is_personal: personal,
         source: 'manual',
-        department_id: personal ? departmentId ?? null : sprintId ? null : selectedSpaceId || departmentId ?? null,
+        department_id: personal ? departmentId ?? null : sprintId ? null : (selectedSpaceId || departmentId) ?? null,
         sprint_id: personal ? null : sprintId ?? task?.sprint_id ?? null,
         list_id: personal ? null : listId ?? task?.list_id ?? null,
         task_type: personal ? 'personal' : sprintId || task?.sprint_id ? 'sprint' : 'space',
@@ -343,6 +358,21 @@ export default function TaskModal({
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+            {isReadOnly && (
+              <div
+                style={{
+                  marginBottom: 14,
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  background: '#F4F1EA',
+                  color: '#9E9488',
+                  fontSize: 12,
+                  fontWeight: 500,
+                }}
+              >
+                📦 Archived sprint — view only
+              </div>
+            )}
             {error ? (
               <div
                 style={{
@@ -358,23 +388,40 @@ export default function TaskModal({
               </div>
             ) : null}
 
+            {blockers.length > 0 && getTaskStatusLabel(task) === 'Blocked' && (
+              <div
+                style={{
+                  marginBottom: 14,
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  background: '#C94830',
+                  color: '#FFFFFF',
+                  fontSize: 13,
+                  fontWeight: 500,
+                }}
+              >
+                🚫 Blocked by: {blockers.map((b) => b.task?.title || b.depends_on?.title || 'Unknown').join(', ')}
+              </div>
+            )}
+
             <div style={{ marginBottom: 18 }}>
               <label style={labelStyle}>Task title</label>
               <input
                 ref={titleRef}
                 type="text"
+                disabled={isReadOnly}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="What needs to get done?"
-                style={{ ...inputStyle, fontSize: 15, padding: '10px 12px' }}
-                onFocus={(e) => { e.target.style.borderColor = 'var(--accent)' }}
-                onBlur={(e) => { e.target.style.borderColor = 'var(--border)' }}
+                style={{ ...inputStyle, fontSize: 15, padding: '10px 12px', opacity: isReadOnly ? 0.6 : 1 }}
+                onFocus={(e) => { if (!isReadOnly) e.target.style.borderColor = 'var(--accent)' }}
+                onBlur={(e) => { if (!isReadOnly) e.target.style.borderColor = 'var(--border)' }}
               />
             </div>
 
             <div style={{ marginBottom: 18 }}>
               <label style={labelStyle}>Space</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, pointerEvents: isReadOnly ? 'none' : 'auto', opacity: isReadOnly ? 0.6 : 1 }}>
                 {spaces.map((space) => {
                   const isSelected = selectedSpaceId === space.id
                   const spaceIcon = SPACE_TYPE_ICONS[space.space_type] ?? space.name[0]?.toUpperCase()
@@ -395,7 +442,7 @@ export default function TaskModal({
                         border: isSelected ? `1px solid ${spaceColor}` : '1px solid var(--border)',
                         fontSize: 13,
                         fontWeight: 500,
-                        cursor: 'pointer',
+                        cursor: isReadOnly ? 'default' : 'pointer',
                       }}
                     >
                       <span style={{ fontSize: 16 }}>{spaceIcon}</span> {space.name}
@@ -412,7 +459,7 @@ export default function TaskModal({
 
             <div style={{ marginBottom: 18 }}>
               <label style={labelStyle}>Status</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, pointerEvents: isReadOnly ? 'none' : 'auto', opacity: isReadOnly ? 0.6 : 1 }}>
                 {statuses.map((status) => (
                   <button
                     key={status.id}
@@ -423,7 +470,7 @@ export default function TaskModal({
                       borderRadius: 20,
                       fontSize: 13,
                       fontWeight: 500,
-                      cursor: 'pointer',
+                      cursor: isReadOnly ? 'default' : 'pointer',
                       background: statusId === status.id ? 'var(--accent)' : '#E5E7EB',
                       color: statusId === status.id ? 'white' : '#6B7280',
                       border: 'none',
@@ -437,7 +484,7 @@ export default function TaskModal({
 
             <div style={{ marginBottom: 18 }}>
               <label style={labelStyle}>Priority</label>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, pointerEvents: isReadOnly ? 'none' : 'auto', opacity: isReadOnly ? 0.6 : 1 }}>
                 {PRIORITIES.map((p) => (
                   <button
                     key={p.value}
@@ -448,7 +495,7 @@ export default function TaskModal({
                       borderRadius: 20,
                       fontSize: 13,
                       fontWeight: 500,
-                      cursor: 'pointer',
+                      cursor: isReadOnly ? 'default' : 'pointer',
                       background: priority === p.value ? 'var(--accent)' : '#E5E7EB',
                       color: priority === p.value ? 'white' : '#6B7280',
                       border: 'none',
@@ -462,7 +509,7 @@ export default function TaskModal({
 
             <div style={{ marginBottom: 18 }}>
               <label style={labelStyle}>Assignees</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, pointerEvents: isReadOnly ? 'none' : 'auto', opacity: isReadOnly ? 0.6 : 1 }}>
                 {members.map((member) => {
                   const isSelected = assigneeIds.includes(member.id)
                   return (
@@ -484,7 +531,7 @@ export default function TaskModal({
                         borderRadius: 20,
                         fontSize: 12,
                         fontWeight: 500,
-                        cursor: 'pointer',
+                        cursor: isReadOnly ? 'default' : 'pointer',
                         background: isSelected ? 'var(--accent)' : 'white',
                         color: isSelected ? 'white' : 'var(--text-secondary)',
                         border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border)',
@@ -523,15 +570,16 @@ export default function TaskModal({
             </div>
 
             {isPersonal ? (
-              <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8, pointerEvents: isReadOnly ? 'none' : 'auto', opacity: isReadOnly ? 0.6 : 1 }}>
                 <input
                   type="checkbox"
                   id="is-personal"
+                  disabled={isReadOnly}
                   checked={personal}
                   onChange={(e) => setPersonal(e.target.checked)}
-                  style={{ accentColor: 'var(--accent)', width: 14, height: 14 }}
+                  style={{ accentColor: 'var(--accent)', width: 14, height: 14, cursor: isReadOnly ? 'default' : 'pointer' }}
                 />
-                <label htmlFor="is-personal" style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <label htmlFor="is-personal" style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: isReadOnly ? 'default' : 'pointer' }}>
                   Private task (visible only to me)
                 </label>
               </div>
@@ -575,7 +623,7 @@ export default function TaskModal({
             }}
           >
             <div>
-              {mode === 'edit' ? (
+              {mode === 'edit' && !isReadOnly ? (
                 <button
                   type="button"
                   onClick={handleDelete}
@@ -608,29 +656,31 @@ export default function TaskModal({
                   border: '1px solid var(--border)',
                 }}
               >
-                Cancel
+                Close
               </Dialog.Close>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  padding: '7px 20px',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  background: 'var(--accent)',
-                  color: 'white',
-                  border: 'none',
-                  opacity: saving ? 0.7 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                {saving ? 'Saving…' : mode === 'create' ? 'Create task' : 'Save changes'}
-              </button>
+              {!isReadOnly ? (
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 500,
+                    padding: '7px 20px',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    background: 'var(--accent)',
+                    color: 'white',
+                    border: 'none',
+                    opacity: saving ? 0.7 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  {saving ? 'Saving…' : mode === 'create' ? 'Create task' : 'Save changes'}
+                </button>
+              ) : null}
             </div>
           </div>
         </Dialog.Content>

@@ -8,8 +8,9 @@ import IntegrationsSection from './IntegrationsSection'
 import NotificationsSection from './NotificationsSection'
 import ProfileSection from './ProfileSection'
 import SecuritySection from './SecuritySection'
+import MembersPanel from '../../components/settings/MembersPanel'
 
-const TABS = ['Profile', 'Notifications', 'Integrations', 'Automations']
+const TABS = ['Profile', 'Notifications', 'Integrations', 'Automations', 'Members']
 
 export default function Settings() {
   const { user, profile, role, refreshProfile } = useAuth()
@@ -36,6 +37,7 @@ export default function Settings() {
 
   const visibleTabs = TABS.filter((tab) => {
     if (tab === 'Automations') return role === 'super_admin' || role === 'dept_lead'
+    if (tab === 'Members') return role === 'super_admin' || role === 'dept_lead' || role === 'owner'
     return true
   })
 
@@ -218,6 +220,12 @@ export default function Settings() {
       {activeTab === 'Automations' && (role === 'super_admin' || role === 'dept_lead') ? (
         <div role="tabpanel" id="tabpanel-automations" aria-labelledby="tab-automations" tabIndex={0}>
           <AutomationsPage embedded />
+        </div>
+      ) : null}
+
+      {activeTab === 'Members' && (role === 'super_admin' || role === 'dept_lead' || role === 'owner') ? (
+        <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}>
+          <MembersPanel />
         </div>
       ) : null}
     </div>

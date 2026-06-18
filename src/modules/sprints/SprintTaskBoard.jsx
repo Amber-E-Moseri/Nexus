@@ -102,6 +102,7 @@ function SprintTasksInner({ sprintId, canEdit }) {
           task={modal.task}
           defaultStatus={modal.defaultStatus ?? ''}
           sprintId={sprintId}
+          isReadOnly={!canEdit}
           onClose={() => setModal(null)}
         />
       ) : null}

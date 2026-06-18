@@ -1,9 +1,12 @@
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core'
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { supabase } from '../../lib/supabase'
 import { useDndSensors } from '../../dnd'
 import { useTasks } from './TasksContext'
 import KanbanColumn from './KanbanColumn'
 import TaskCard from './TaskCard'
+import PlainKanbanBoard from './PlainKanbanBoard'
+import InlineTaskComposer from './InlineTaskComposer'
 
 const STATUS_CATEGORY_DOT_COLORS = {
   open: '#7A7D86',
@@ -141,7 +144,13 @@ export default function KanbanBoard({
   )
 
   if (readOnly) {
-    return columns
+    return (
+      <PlainKanbanBoard
+        filteredTasks={tasks}
+        onTaskClick={onTaskClick}
+        statuses={boardStatuses}
+      />
+    )
   }
 
   return (

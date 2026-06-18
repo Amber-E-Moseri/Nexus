@@ -9,6 +9,12 @@ function uniqueTeamIds(teamIds = []) {
   return [...new Set((teamIds ?? []).filter(Boolean))]
 }
 
+export function calculateSprintTaskStats(tasks = []) {
+  const total = tasks.length
+  const done = tasks.filter((task) => task.status_definition?.category === 'completed').length
+  return { done, total }
+}
+
 export async function getMySprints() {
   const { data, error } = await supabase
     .from('sprint_members')
@@ -159,12 +165,31 @@ export async function advanceSprintStatus(sprintId, newStatus) {
   return updateSprint(sprintId, updates)
 }
 
-export async function restoreSprint(sprintId) {
-  return updateSprint(sprintId, {
-    status: 'planning',
+export async function restoreSprint(sprintId, departmentId) {
+  if (departmentId) {
+    const { data: activeSprints, error: checkError } = await supabase
+      .from('sprints')
+      .select('id, name')
+      .eq('department_id', departmentId)
+      .eq('status', 'active')
+      .limit(1)
+
+    if (checkError) throw checkError
+
+    if (activeSprints?.length > 0) {
+      return {
+        error: `Cannot restore: "${activeSprints[0].name}" is already active in this space. Complete or archive it first.`,
+      }
+    }
+  }
+
+  const result = await updateSprint(sprintId, {
+    status: 'active',
     is_archived: false,
     archived_at: null,
   })
+
+  return { success: true, data: result }
 }
 
 export async function duplicateSprint(sprintId, createdBy) {

@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../context/ToastContext'
+import AbsenceBatchConfirmModal from '../../components/meetings/AbsenceBatchConfirmModal'
 
 const PRINT_STYLES = `
 @media print {
@@ -882,6 +883,7 @@ export default function MeetingReportTab() {
   const [loadingHistory, setLoadingHistory] = useState(true)
 
   const [emailSending, setEmailSending] = useState(false)
+  const [emailConfirmation, setEmailConfirmation] = useState(null)
   const { showToast } = useToast()
 
   useEffect(() => {
@@ -1284,31 +1286,36 @@ export default function MeetingReportTab() {
       return
     }
 
+    const absentWithEmails = report.absent.filter((person) => {
+      const rosterMatch = roster.find((r) => normalizeNameKey(r.full_name) === normalizeNameKey(person.name))
+      return rosterMatch?.email
+    })
+
+    if (absentWithEmails.length === 0) {
+      showToast('No email addresses found for absent members.', { tone: 'warning' })
+      return
+    }
+
+    const recipients = absentWithEmails.map((person) => {
+      const rosterMatch = roster.find((r) => normalizeNameKey(r.full_name) === normalizeNameKey(person.name))
+      return {
+        name: person.name,
+        email: rosterMatch.email,
+      }
+    })
+
+    setEmailConfirmation({ recipients, meetingName: report.label })
+  }
+
+  async function handleConfirmEmail() {
+    if (!emailConfirmation) return
+
     setEmailSending(true)
     try {
-      const absentWithEmails = report.absent.filter((person) => {
-        const rosterMatch = roster.find((r) => normalizeNameKey(r.full_name) === normalizeNameKey(person.name))
-        return rosterMatch?.email
-      })
-
-      if (absentWithEmails.length === 0) {
-        showToast('No email addresses found for absent members.', { tone: 'warning' })
-        setEmailSending(false)
-        return
-      }
-
-      const recipients = absentWithEmails.map((person) => {
-        const rosterMatch = roster.find((r) => normalizeNameKey(r.full_name) === normalizeNameKey(person.name))
-        return {
-          name: person.name,
-          email: rosterMatch.email,
-        }
-      })
-
       const { data, error } = await supabase.functions.invoke('send-absence-emails', {
         body: {
           report_id: report.id,
-          recipients,
+          recipients: emailConfirmation.recipients,
           subject: `We missed you at ${report.label}`,
           body_template: 'Hi {{name}}, we missed you at {{meeting_label}}. Please review the meeting attendance report.',
         },
@@ -1316,7 +1323,8 @@ export default function MeetingReportTab() {
 
       if (error) throw error
 
-      showToast(`Sent absence notification to ${recipients.length} member${recipients.length !== 1 ? 's' : ''}.`, { tone: 'success' })
+      showToast(`Sent absence notification to ${emailConfirmation.recipients.length} member${emailConfirmation.recipients.length !== 1 ? 's' : ''}.`, { tone: 'success' })
+      setEmailConfirmation(null)
     } catch (err) {
       showToast(`Failed to send emails: ${err.message}`, { tone: 'error' })
     } finally {
@@ -1973,6 +1981,17 @@ export default function MeetingReportTab() {
             <HistoryRow key={record.id} record={record} onView={handleViewHistory} onDelete={handleDeleteHistory} />
           ))}
         </div>
+      )}
+
+      {/* Absence Email Confirmation Modal */}
+      {emailConfirmation && (
+        <AbsenceBatchConfirmModal
+          absentees={emailConfirmation.recipients}
+          meetingName={emailConfirmation.meetingName}
+          loading={emailSending}
+          onConfirm={handleConfirmEmail}
+          onCancel={() => setEmailConfirmation(null)}
+        />
       )}
     </div>
   )

@@ -13,6 +13,15 @@ const MUTED = '#9E9488'
 const BG = '#F4F1EA'
 const SURFACE = '#FFFFFF'
 
+const MERGE_TAGS = [
+  '{{first_name}}',
+  '{{last_name}}',
+  '{{email}}',
+  '{{department}}',
+  '{{role}}',
+  '{{org_name}}',
+]
+
 export default function TemplateEditor({ template, onClose, onSaved }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
@@ -25,12 +34,29 @@ export default function TemplateEditor({ template, onClose, onSaved }) {
   const [customName, setCustomName] = useState('')
   const [showSaveAs, setShowSaveAs] = useState(false)
   const [error, setError] = useState(null)
+  const [bodyContent, setBodyContent] = useState(template.html_content || '')
+  const [subjectLine, setSubjectLine] = useState(template.subject || '')
+  const [bodyTextareaRef, setBodyTextareaRef] = useState(null)
 
-  const previewHtml = applyTemplateVariables(template.html_content, {
+  const previewHtml = applyTemplateVariables(bodyContent, {
     headerBg,
     accentColor,
     footerText,
   })
+
+  function insertMergeTag(tag) {
+    if (!bodyTextareaRef) return
+    const textarea = bodyTextareaRef
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const before = bodyContent.substring(0, start)
+    const after = bodyContent.substring(end)
+    setBodyContent(before + tag + after)
+    setTimeout(() => {
+      textarea.selectionStart = textarea.selectionEnd = start + tag.length
+      textarea.focus()
+    }, 0)
+  }
 
   async function handleSaveAsCustom() {
     if (!customName.trim()) {
@@ -44,7 +70,8 @@ export default function TemplateEditor({ template, onClose, onSaved }) {
       await createEmailTemplate(supabase, {
         name: customName.trim(),
         category: template.category,
-        html_content: template.html_content,
+        html_content: bodyContent,
+        subject: subjectLine,
         is_system: false,
         variables: { headerBg, accentColor, footerText },
         created_by: profile?.id ?? null,
@@ -66,7 +93,8 @@ export default function TemplateEditor({ template, onClose, onSaved }) {
       id: template.id,
       name: customName || template.name,
       category: template.category,
-      html_content: template.html_content,
+      html_content: bodyContent,
+      subject: subjectLine,
       variables: { headerBg, accentColor, footerText },
     }
     sessionStorage.setItem('selected_email_template', JSON.stringify(customTemplate))
@@ -90,9 +118,86 @@ export default function TemplateEditor({ template, onClose, onSaved }) {
           </button>
         </div>
 
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* Settings Panel */}
-          <div style={{ width: 300, borderRight: `1px solid ${BORDER}`, background: SURFACE, padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', flexDirection: 'column' }}>
+          {/* Subject + Body Editor */}
+          <div style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}`, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '40%', overflow: 'auto' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: TEXT, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                Subject Line
+              </label>
+              <input
+                type="text"
+                value={subjectLine}
+                onChange={(e) => setSubjectLine(e.target.value)}
+                style={{ width: '100%', border: `1px solid ${BORDER}`, borderRadius: 6, padding: '8px 10px', fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                placeholder="Email subject"
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: TEXT, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                Body Content
+              </label>
+
+              {/* Merge Tags Bar */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 0', borderBottom: `1px solid ${BORDER}`, paddingBottom: 8 }}>
+                {MERGE_TAGS.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => insertMergeTag(tag)}
+                    title="Replaced with real value when sent"
+                    style={{
+                      fontSize: 11,
+                      padding: '4px 8px',
+                      border: `1px solid ${PRIMARY}`,
+                      background: '#EDE8F8',
+                      color: PRIMARY,
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      fontFamily: 'monospace',
+                      transition: 'all 150ms',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = PRIMARY
+                      e.currentTarget.style.color = SURFACE
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#EDE8F8'
+                      e.currentTarget.style.color = PRIMARY
+                    }}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                ref={setBodyTextareaRef}
+                value={bodyContent}
+                onChange={(e) => setBodyContent(e.target.value)}
+                style={{
+                  flex: 1,
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 6,
+                  padding: '10px 12px',
+                  fontSize: 12,
+                  outline: 'none',
+                  fontFamily: 'monospace',
+                  resize: 'vertical',
+                  minHeight: 120,
+                  boxSizing: 'border-box',
+                }}
+                placeholder="Email body HTML..."
+              />
+            </div>
+          </div>
+
+          {/* Settings Panel and Preview */}
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            {/* Settings Panel */}
+            <div style={{ width: 300, borderRight: `1px solid ${BORDER}`, background: SURFACE, padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Header Background Color */}
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: TEXT, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>

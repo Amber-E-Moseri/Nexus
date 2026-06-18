@@ -62,54 +62,81 @@ export default function AttendanceTrendsDashboard() {
 
           {error && (
             <div style={{ fontSize: 12.5, color: '#C94830', background: '#FEF0ED', border: '1px solid #F5C4B8', borderRadius: 10, padding: '10px 14px' }}>
-              {error} <button type="button" onClick={reload} style={{ color: '#4C2A92', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Retry</button>
+              Could not load attendance trends — try refreshing. <button type="button" onClick={reload} style={{ color: '#4C2A92', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, marginLeft: 8 }}>Retry</button>
             </div>
           )}
 
-          {/* Top KPI row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-            <KpiTile label="Subgroups Tracked" value={loading ? '…' : ranking.length} bg="#F4F1EA" bd="#EDE8DC" circle="rgba(76,42,146,.12)" labelColor="#9E9488" valueColor="#2D2A22" />
-            <KpiTile label="Flagged (2+ Absences)" value={loading ? '…' : absences.length} bg="#FEF0ED" bd="#F5C4B8" circle="rgba(201,72,48,.15)" labelColor="#C94830" valueColor="#7A1C24" />
-            <KpiTile label="LIT Dropout Rate" value={loading ? '…' : `${lit?.dropoutPct ?? 0}%`} bg="#FFF8EC" bd="#EDD88A" circle="rgba(232,160,32,.15)" labelColor="#E8A020" valueColor="#7A5A00" />
-            <KpiTile label="LIT Active" value={loading ? '…' : `${lit?.activeLit ?? 0}/${lit?.totalLit ?? 0}`} bg="#EEF6F1" bd="#C3E0CC" circle="rgba(45,134,83,.15)" labelColor="#2D8653" valueColor="#1B5E3C" />
-          </div>
-
-          {/* Trend line + role bar chart */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16, alignItems: 'start' }}>
-            <Card title={`Monthly Attendance % — ${selectedSubgroupName} (${new Date().getFullYear()})`}>
-              <TrendLineChart data={monthlyTrend} />
-            </Card>
-            <Card title="Attendance by Leadership Role (most recent meeting)">
-              <RoleBarChart data={roleBreakdown} />
-            </Card>
-          </div>
-
-          {/* Subgroup ranking + absence alerts */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16, alignItems: 'start' }}>
-            <Card title="Subgroup Ranking">
-              <SubgroupRankingTable rows={ranking} />
-            </Card>
-            <Card title="Consecutive Absence Alerts">
-              <AbsenceAlerts members={absences} />
-            </Card>
-          </div>
-
-          {/* LIT dropout detail */}
-          {lit && lit.droppedLit > 0 && (
-            <Card title={`Leaders in Training — Dropped Off (${lit.droppedLit})`}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {lit.members.map((m) => (
-                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#F9F7F3', borderRadius: 8, fontSize: 12.5 }}>
-                    <span style={{ fontWeight: 600, color: '#2D2A22' }}>{m.name}</span>
-                    <span style={{ color: '#9E9488' }}>
-                      First: {m.firstAttended ? new Date(m.firstAttended).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                      {' · '}
-                      Last: {m.lastAttended ? new Date(m.lastAttended).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                    </span>
-                  </div>
+          {loading && (
+            <>
+              {/* KPI Skeleton */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} style={{ background: '#E8E4DC', borderRadius: 14, padding: '14px 16px', minHeight: 60 }} />
                 ))}
               </div>
-            </Card>
+
+              {/* Chart Skeleton */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16 }}>
+                <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 14, padding: '18px', minHeight: 280, background: '#E8E4DC' }} />
+                <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 14, padding: '18px', minHeight: 280, background: '#E8E4DC' }} />
+              </div>
+
+              {/* Table + Alerts Skeleton */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
+                <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 14, padding: '18px', minHeight: 200, background: '#E8E4DC' }} />
+                <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 14, padding: '18px', minHeight: 200, background: '#E8E4DC' }} />
+              </div>
+            </>
+          )}
+
+          {!loading && !error && (
+            <>
+              {/* Top KPI row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                <KpiTile label="Subgroups Tracked" value={ranking.length} bg="#F4F1EA" bd="#EDE8DC" circle="rgba(76,42,146,.12)" labelColor="#9E9488" valueColor="#2D2A22" />
+                <KpiTile label="Flagged (2+ Absences)" value={absences.length} bg="#FEF0ED" bd="#F5C4B8" circle="rgba(201,72,48,.15)" labelColor="#C94830" valueColor="#7A1C24" />
+                <KpiTile label="LIT Dropout Rate" value={`${lit?.dropoutPct ?? 0}%`} bg="#FFF8EC" bd="#EDD88A" circle="rgba(232,160,32,.15)" labelColor="#E8A020" valueColor="#7A5A00" />
+                <KpiTile label="LIT Active" value={`${lit?.activeLit ?? 0}/${lit?.totalLit ?? 0}`} bg="#EEF6F1" bd="#C3E0CC" circle="rgba(45,134,83,.15)" labelColor="#2D8653" valueColor="#1B5E3C" />
+              </div>
+
+              {/* Trend line + role bar chart */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16, alignItems: 'start' }}>
+                <Card title={`Monthly Attendance % — ${selectedSubgroupName} (${new Date().getFullYear()})`}>
+                  <TrendLineChart data={monthlyTrend} />
+                </Card>
+                <Card title="Attendance by Leadership Role (most recent meeting)">
+                  <RoleBarChart data={roleBreakdown} />
+                </Card>
+              </div>
+
+              {/* Subgroup ranking + absence alerts */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16, alignItems: 'start' }}>
+                <Card title="Subgroup Ranking">
+                  <SubgroupRankingTable rows={ranking} />
+                </Card>
+                <Card title="Consecutive Absence Alerts">
+                  <AbsenceAlerts members={absences} />
+                </Card>
+              </div>
+
+              {/* LIT dropout detail */}
+              {lit && lit.droppedLit > 0 && (
+                <Card title={`Leaders in Training — Dropped Off (${lit.droppedLit})`}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {lit.members.map((m) => (
+                      <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#F9F7F3', borderRadius: 8, fontSize: 12.5 }}>
+                        <span style={{ fontWeight: 600, color: '#2D2A22' }}>{m.name}</span>
+                        <span style={{ color: '#9E9488' }}>
+                          First: {m.firstAttended ? new Date(m.firstAttended).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                          {' · '}
+                          Last: {m.lastAttended ? new Date(m.lastAttended).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+            </>
           )}
         </div>
       </div>

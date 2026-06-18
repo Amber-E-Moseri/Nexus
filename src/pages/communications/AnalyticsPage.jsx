@@ -59,6 +59,7 @@ function CampaignDrilldown({ campaign }) {
   const [sends, setSends]           = useState([])
   const [abTest, setAbTest]         = useState(null)
   const [clicks, setClicks]         = useState([])
+  const [bounces, setBounces]       = useState([])
   const [loading, setLoading]       = useState(true)
   const [filterStatus, setFilter]   = useState('all')
   const [markingWinner, setMarking] = useState(false)
@@ -69,16 +70,19 @@ function CampaignDrilldown({ campaign }) {
     setSends([])
     setAbTest(null)
     setClicks([])
+    setBounces([])
     setWinnerMsg(null)
 
     Promise.all([
       supabase.from('communication_sends').select('*').eq('campaign_id', campaign.id).order('created_at'),
       supabase.from('communication_ab_tests').select('*').eq('campaign_id', campaign.id).maybeSingle(),
       supabase.from('campaign_link_clicks').select('*').eq('campaign_id', campaign.id).catch(() => ({ data: [] })),
-    ]).then(([sendsRes, abRes, clicksRes]) => {
+      supabase.from('email_bounces').select('*').eq('campaign_id', campaign.id).catch(() => ({ data: [] })),
+    ]).then(([sendsRes, abRes, clicksRes, bouncesRes]) => {
       setSends(sendsRes.data ?? [])
       setAbTest(abRes.data ?? null)
       setClicks(clicksRes.data ?? [])
+      setBounces(bouncesRes.data ?? [])
       setLoading(false)
     })
   }, [campaign.id])
@@ -87,6 +91,63 @@ function CampaignDrilldown({ campaign }) {
   const opened    = useMemo(() => sends.filter((s) => s.status === 'opened').length, [sends])
   const failed    = useMemo(() => sends.filter((s) => s.status === 'failed' || s.status === 'bounced').length, [sends])
   const totalClicks = useMemo(() => clicks.reduce((acc, c) => acc + (c.click_count ?? 1), 0), [clicks])
+
+  // Link performance: unique clickers per URL
+  const linkPerformance = useMemo(() => {
+    const grouped = {}
+    clicks.forEach((c) => {
+      if (!grouped[c.link_url]) {
+        grouped[c.link_url] = { url: c.link_url, clicks: 0, unique_clickers: new Set() }
+      }
+      grouped[c.link_url].clicks += c.click_count ?? 1
+      if (c.clicker_email) grouped[c.link_url].unique_clickers.add(c.clicker_email)
+    })
+    return Object.values(grouped)
+      .map((item) => ({ ...item, unique_clickers: item.unique_clickers.size }))
+      .sort((a, b) => b.clicks - a.clicks)
+  }, [clicks])
+
+  // Engagement timeline: opens + clicks by hour
+  const engagementTimeline = useMemo(() => {
+    const hours = Array(24).fill(0).map((_, i) => ({ hour: i, count: 0 }))
+    sends.forEach((s) => {
+      if (s.opened_at) {
+        const date = new Date(s.opened_at)
+        const hour = date.getHours()
+        hours[hour].count += 1
+      }
+    })
+    clicks.forEach((c) => {
+      if (c.clicked_at) {
+        const date = new Date(c.clicked_at)
+        const hour = date.getHours()
+        if (hours[hour]) hours[hour].count += (c.click_count ?? 1)
+      }
+    })
+    return hours.filter((h) => h.count > 0).length >= 3 ? hours : null
+  }, [sends, clicks])
+
+  // Export CSV
+  function exportCSV() {
+    const headers = ['Email', 'Name', 'Status', 'Opened At', 'Error']
+    const rows = sends.map((s) => [
+      `"${s.recipient_email}"`,
+      `"${s.recipient_name ?? ''}"`,
+      `"${s.status}"`,
+      `"${s.opened_at ? new Date(s.opened_at).toLocaleString() : ''}"`,
+      `"${s.error_message ?? ''}"`,
+    ])
+    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `${campaign.name.replace(/\s+/g, '_')}_sends.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   const filtered = useMemo(() => {
     if (filterStatus === 'all') return sends
@@ -120,6 +181,64 @@ function CampaignDrilldown({ campaign }) {
       setWinnerMsg(`Winner: Subject ${computedVariant.toUpperCase()} — "${subject}" (${Math.round((rpcData ? (computedVariant === 'a' ? rateA : rateB) : 0) * 100)}% opens)`)
     }
     setMarking(false)
+  }
+
+  // Engagement chart component
+  function EngagementChart() {
+    if (!engagementTimeline) {
+      return <div style={{ fontSize: 13, color: MUTED }}>Not enough data to display timeline.</div>
+    }
+    const maxCount = Math.max(...engagementTimeline.map((h) => h.count))
+    const width = 800
+    const height = 200
+    const padding = 40
+    const graphWidth = width - padding * 2
+    const graphHeight = height - padding * 2
+    const barWidth = graphWidth / 24
+    return (
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto' }}>
+        {/* Grid lines */}
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+          const y = padding + graphHeight * (1 - ratio)
+          const val = Math.round(maxCount * ratio)
+          return (
+            <g key={i}>
+              <line x1={padding} y1={y} x2={width - padding} y2={y} stroke={BORDER} strokeWidth={1} strokeDasharray="2,2" />
+              <text x={padding - 8} y={y} textAnchor="end" dy="0.3em" fontSize="11" fill={MUTED}>{val}</text>
+            </g>
+          )
+        })}
+        {/* Bars */}
+        {engagementTimeline.map((h) => {
+          const x = padding + h.hour * barWidth + barWidth * 0.1
+          const barHeight = (h.count / maxCount) * graphHeight
+          const y = padding + graphHeight - barHeight
+          return (
+            <rect
+              key={h.hour}
+              x={x}
+              y={y}
+              width={barWidth * 0.8}
+              height={barHeight}
+              fill={PRIMARY}
+              rx={2}
+            />
+          )
+        })}
+        {/* X axis labels */}
+        {[0, 3, 6, 9, 12, 15, 18, 21].map((hour) => {
+          const x = padding + hour * barWidth + barWidth * 0.5
+          return (
+            <text key={hour} x={x} y={height - 10} textAnchor="middle" fontSize="11" fill={MUTED}>
+              {hour}h
+            </text>
+          )
+        })}
+        {/* Axes */}
+        <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke={TEXT} strokeWidth={1} />
+        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke={TEXT} strokeWidth={1} />
+      </svg>
+    )
   }
 
   if (loading) {

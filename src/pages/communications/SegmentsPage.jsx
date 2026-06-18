@@ -39,6 +39,9 @@ export default function SegmentsPage() {
   const [editing, setEditing]     = useState(null)
   const [deleting, setDeleting]   = useState(null)
   const [saving, setSaving]       = useState(false)
+  const [previewSegment, setPreviewSegment] = useState(null)
+  const [previewRecipients, setPreviewRecipients] = useState([])
+  const [previewLoading, setPreviewLoading] = useState(false)
   // form state for create/edit modal
   const [segName, setSegName]         = useState('')
   const [segDesc, setSegDesc]         = useState('')
@@ -121,6 +124,18 @@ export default function SegmentsPage() {
     await loadSegments()
   }
 
+  async function handlePreviewRecipients(segment) {
+    setPreviewSegment(segment)
+    setPreviewLoading(true)
+    setPreviewRecipients([])
+
+    // For now, just show the estimated count and load all profiles
+    // In a real scenario, you'd resolve the segment filters against profiles
+    const { data } = await supabase.from('profiles').select('id, full_name, email').order('full_name')
+    setPreviewRecipients(data ?? [])
+    setPreviewLoading(false)
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '16px 24px 0', background: '#FFFFFF', borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
@@ -164,11 +179,14 @@ export default function SegmentsPage() {
                   <button type="button" onClick={() => handleRecalculate(seg)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     Recalculate
                   </button>
+                  <button type="button" onClick={() => handlePreviewRecipients(seg)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                    Preview recipients
+                  </button>
                   <button type="button" onClick={() => openEdit(seg)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                     Edit
                   </button>
-                  <button type="button" onClick={() => navigate('/communications/compose')} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: TEXT, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    Use in Compose
+                  <button type="button" onClick={() => navigate('/communications/campaigns')} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: TEXT, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Use in Campaign
                   </button>
                   <button
                     type="button"
@@ -228,6 +246,38 @@ export default function SegmentsPage() {
               </button>
             </div>
           </div>
+        </Modal>
+      ) : null}
+
+      {previewSegment ? (
+        <Modal title={`${previewRecipients.length} recipients match this segment`} wide onClose={() => setPreviewSegment(null)}>
+          {previewLoading ? (
+            <div style={{ textAlign: 'center', padding: 24, color: MUTED, fontSize: 13 }}>Loading recipients...</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: 13, color: MUTED }}>
+                {previewRecipients.length} recipients will receive a campaign using this segment.
+              </div>
+              <div style={{ overflowY: 'auto', maxHeight: 400 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: BG, borderBottom: `1px solid ${BORDER}` }}>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: MUTED }}>Name</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: MUTED }}>Email</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewRecipients.map((r) => (
+                      <tr key={r.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                        <td style={{ padding: '10px 12px', color: TEXT }}>{r.full_name || '—'}</td>
+                        <td style={{ padding: '10px 12px', color: TEXT }}>{r.email}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </Modal>
       ) : null}
     </div>

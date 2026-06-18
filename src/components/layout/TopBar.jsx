@@ -144,7 +144,7 @@ export default function TopBar() {
           .from('sprints')
           .select('id, name, status')
           .ilike('name', pattern)
-          .neq('status', 'archived')
+          .neq('status', 'archived')  // SELECTOR FILTER: archived sprints excluded — users should not assign tasks to archived sprints
           .limit(3),
         supabase
           .from('calendar_events')

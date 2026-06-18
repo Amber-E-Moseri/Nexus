@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import PeopleLayout from './PeopleLayout'
 import { useAuth } from '../../hooks/useAuth'
+import { useToast } from '../../context/ToastContext'
 import {
   cancelInvitation,
   copyInvitationLink,
@@ -73,6 +74,7 @@ function DepartmentGlyph({ department }) {
 
 export default function InvitationsPage() {
   const { profile, role } = useAuth()
+  const { showToast } = useToast()
   const [departments, setDepartments] = useState([])
   const [users, setUsers] = useState([])
   const [invitations, setInvitations] = useState([])
@@ -92,6 +94,7 @@ export default function InvitationsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [confirmAction, setConfirmAction] = useState(null)
 
   const canManage = role === 'super_admin' || role === 'dept_lead'
 
@@ -476,18 +479,9 @@ export default function InvitationsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex justify-end gap-2">
-                        {canResend ? (
-                          <button
-                            type="button"
-                            disabled={saving}
-                            onClick={() => handleSend(invitation.id, 'resend')}
-                            className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)] disabled:opacity-60"
-                          >
-                            Resend
-                          </button>
-                        ) : null}
-                        {canRevoke ? (
+                      {confirmAction?.invitationId === invitation.id ? (
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="text-xs text-[var(--text-secondary)]">{confirmAction.message}</span>
                           <button
                             type="button"
                             disabled={saving}
@@ -495,30 +489,78 @@ export default function InvitationsPage() {
                               setSaving(true)
                               setError('')
                               try {
-                                await cancelInvitation(invitation.id)
+                                await confirmAction.onConfirm()
                                 await loadData()
+                                showToast(confirmAction.successMessage, { tone: 'success' })
                               } catch (nextError) {
                                 setError(nextError.message)
+                                showToast(nextError.message, { tone: 'error' })
                               } finally {
                                 setSaving(false)
+                                setConfirmAction(null)
                               }
                             }}
-                            className="rounded-lg border border-[#F3B6A8] px-3 py-1.5 text-xs font-semibold text-[#C94830] disabled:opacity-60"
+                            className="rounded-lg border border-[var(--accent)] px-2 py-1 text-xs font-semibold text-[var(--accent)] disabled:opacity-60"
                           >
-                            Revoke
+                            Confirm
                           </button>
-                        ) : null}
-                        {canManage && invitation.status === 'pending' ? (
                           <button
                             type="button"
                             disabled={saving}
-                            onClick={() => handleCopyLink(invitation.id)}
-                            className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] disabled:opacity-60"
+                            onClick={() => setConfirmAction(null)}
+                            className="rounded-lg border border-[var(--border)] px-2 py-1 text-xs font-semibold text-[var(--text-secondary)] disabled:opacity-60"
                           >
-                            Copy link
+                            Cancel
                           </button>
-                        ) : null}
-                      </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end gap-2">
+                          {canResend ? (
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() =>
+                                setConfirmAction({
+                                  invitationId: invitation.id,
+                                  message: `Re-send to ${invitation.email}?`,
+                                  onConfirm: () => handleSend(invitation.id, 'resend'),
+                                  successMessage: `Invitation re-sent to ${invitation.email}`,
+                                })
+                              }
+                              className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)] disabled:opacity-60"
+                            >
+                              Resend
+                            </button>
+                          ) : null}
+                          {canRevoke ? (
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() =>
+                                setConfirmAction({
+                                  invitationId: invitation.id,
+                                  message: 'Revoke this invitation?',
+                                  onConfirm: () => cancelInvitation(invitation.id),
+                                  successMessage: 'Invitation revoked',
+                                })
+                              }
+                              className="rounded-lg border border-[#F3B6A8] px-3 py-1.5 text-xs font-semibold text-[#C94830] disabled:opacity-60"
+                            >
+                              Revoke
+                            </button>
+                          ) : null}
+                          {canManage && invitation.status === 'pending' ? (
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() => handleCopyLink(invitation.id)}
+                              className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] disabled:opacity-60"
+                            >
+                              Copy link
+                            </button>
+                          ) : null}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )

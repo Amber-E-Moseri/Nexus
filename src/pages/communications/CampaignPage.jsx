@@ -80,6 +80,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   const [preview, setPreview]       = useState(false)
   const [templates, setTemplates]   = useState([])
   const [selectedTemplate, setSelectedTemplate] = useState('')
+  const [draftCampaignId, setDraftCampaignId] = useState(initial?.id ?? null)
 
   useEffect(() => {
     supabase.from('communication_segments').select('id, name, estimated_count').order('name')
@@ -87,6 +88,41 @@ function CampaignForm({ initial, onSaved, onCancel }) {
     supabase.from('absence_email_templates').select('id, name, subject, body').order('name')
       .then(({ data }) => setTemplates(data ?? []))
   }, [])
+
+  async function autosaveDraft() {
+    const payload = {
+      name:              name.trim() || 'Untitled Campaign',
+      subject:           subject.trim(),
+      body:              body.trim(),
+      status:            'draft',
+      segment_id:        segmentId || null,
+      recipient_filters: useCustomFilter ? inlineConditions : [],
+      scheduled_at:      scheduleMode === 'later' ? scheduledAt || null : null,
+      from_name:         fromName.trim(),
+      created_by:        profile?.id ?? null,
+    }
+
+    try {
+      if (draftCampaignId) {
+        await supabase.from('communication_campaigns').update(payload).eq('id', draftCampaignId)
+      } else {
+        const { data, error: err } = await supabase.from('communication_campaigns').insert(payload).select('id').single()
+        if (!err && data) {
+          setDraftCampaignId(data.id)
+          sessionStorage.setItem('comm_draft_campaign_id', data.id)
+        }
+      }
+    } catch (e) {
+      console.error('Autosave failed:', e)
+    }
+  }
+
+  async function handleNext() {
+    await autosaveDraft()
+    if (step < 5) {
+      setStep(step + 1)
+    }
+  }
 
   async function handleSubmit() {
     if (!name.trim() || !subject.trim() || !body.trim()) {
@@ -108,7 +144,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       created_by:        profile?.id ?? null,
     }
 
-    let campaignId = initial?.id ?? null
+    let campaignId = draftCampaignId ?? null
 
     if (campaignId) {
       const { error: err } = await supabase.from('communication_campaigns').update(payload).eq('id', campaignId)
@@ -154,6 +190,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       }
     }
 
+    sessionStorage.removeItem('comm_draft_campaign_id')
     setSaving(false)
     onSaved()
   }
@@ -164,7 +201,13 @@ function CampaignForm({ initial, onSaved, onCancel }) {
     })
   }
 
-  const stepLabels = ['Details', 'Recipients', 'Content', 'Schedule']
+  const stepLabels = ['Details', 'Recipients', 'Content', 'Schedule', 'Review']
+
+  function getStepStatus(stepNum) {
+    if (stepNum < step) return 'completed'
+    if (stepNum === step) return 'active'
+    return 'upcoming'
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -172,23 +215,43 @@ function CampaignForm({ initial, onSaved, onCancel }) {
         <div style={{ background: '#FEF0ED', border: '1px solid #F5C4B8', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#C94830' }}>{error}</div>
       ) : null}
 
-      {/* Step indicator */}
-      <div style={{ display: 'flex', gap: 0 }}>
+      {/* Step indicator - horizontal stepper */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 16 }}>
         {stepLabels.map((label, i) => {
           const n = i + 1
+          const status = getStepStatus(n)
+          const isClickable = status === 'completed'
+
           return (
-            <button
-              key={label}
-              type="button"
-              onClick={() => setStep(n)}
-              style={{
-                flex: 1, border: 'none', borderBottom: `2px solid ${step === n ? PRIMARY : BORDER}`,
-                background: 'transparent', padding: '8px 4px', fontSize: 12, fontWeight: step === n ? 700 : 500,
-                color: step === n ? PRIMARY : MUTED, cursor: 'pointer',
-              }}
-            >
-              {n}. {label}
-            </button>
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button
+                type="button"
+                onClick={() => isClickable && setStep(n)}
+                disabled={!isClickable}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  border: status === 'active' ? `2px solid ${PRIMARY}` : `2px solid ${status === 'completed' ? PRIMARY : BORDER}`,
+                  background: status === 'active' ? PRIMARY : status === 'completed' ? PRIMARY : SURFACE,
+                  color: status === 'active' || status === 'completed' ? '#FFFFFF' : MUTED,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: isClickable ? 'pointer' : 'default',
+                }}
+              >
+                {status === 'completed' ? '✓' : n}
+              </button>
+              <span style={{ fontSize: 13, fontWeight: step === n ? 700 : 500, color: step === n ? PRIMARY : MUTED, whiteSpace: 'nowrap' }}>
+                {label}
+              </span>
+              {i < stepLabels.length - 1 ? (
+                <div style={{ width: 16, height: 2, background: getStepStatus(n + 1) === 'upcoming' ? BORDER : PRIMARY, marginLeft: 4 }}></div>
+              ) : null}
+            </div>
           )
         })}
       </div>
@@ -282,14 +345,24 @@ function CampaignForm({ initial, onSaved, onCancel }) {
 
           {abEnabled ? (
             <div style={{ background: BG, borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
-                Subject A
-                <input value={subjectA} onChange={(e) => setSubjectA(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
-                Subject B
-                <input value={subjectB} onChange={(e) => setSubjectB(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
-              </label>
+              <div>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
+                  Subject A
+                  <input value={subjectA} onChange={(e) => setSubjectA(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+                </label>
+                <div style={{ fontSize: 12, marginTop: 4, color: subjectA.length <= 60 ? '#2D8653' : subjectA.length <= 80 ? '#92400E' : '#C94830' }}>
+                  {subjectA.length} / 60 characters
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
+                  Subject B
+                  <input value={subjectB} onChange={(e) => setSubjectB(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+                </label>
+                <div style={{ fontSize: 12, marginTop: 4, color: subjectB.length <= 60 ? '#2D8653' : subjectB.length <= 80 ? '#92400E' : '#C94830' }}>
+                  {subjectB.length} / 60 characters
+                </div>
+              </div>
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: 1 }}>
                   Test group size
@@ -329,6 +402,12 @@ function CampaignForm({ initial, onSaved, onCancel }) {
             autosave={false}
           />
 
+          {!abEnabled ? (
+            <div style={{ fontSize: 12, color: subject.length <= 60 ? '#2D8653' : subject.length <= 80 ? '#92400E' : '#C94830', marginTop: -8 }}>
+              {subject.length} / 60 characters
+            </div>
+          ) : null}
+
           <button
             type="button"
             onClick={() => setPreview(true)}
@@ -336,6 +415,46 @@ function CampaignForm({ initial, onSaved, onCancel }) {
           >
             Preview email
           </button>
+        </div>
+      ) : step === 5 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 4 }}>Review Your Campaign</div>
+
+          {/* Read-only review summary */}
+          <div style={{ background: BG, borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}` }}>
+              <span style={{ color: MUTED }}>Campaign name</span>
+              <strong style={{ color: TEXT }}>{name || '—'}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}` }}>
+              <span style={{ color: MUTED }}>From name</span>
+              <strong style={{ color: TEXT }}>{fromName || '—'}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}` }}>
+              <span style={{ color: MUTED }}>Recipients</span>
+              <strong style={{ color: TEXT }}>
+                {useCustomFilter ? `Custom filter (~${inlineCount})` : (segments.find((s) => s.id === segmentId)?.name ?? 'None')}
+              </strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}` }}>
+              <span style={{ color: MUTED }}>Subject</span>
+              <strong style={{ color: TEXT }}>
+                {abEnabled && subjectA && subjectB ? `${subjectA} / ${subjectB}` : subject || '—'}
+              </strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}` }}>
+              <span style={{ color: MUTED }}>Send time</span>
+              <strong style={{ color: TEXT }}>
+                {scheduleMode === 'now' ? 'Now' : scheduledAt ? new Date(scheduledAt).toLocaleString() : '(no date set)'}
+              </strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: MUTED }}>Recurring</span>
+              <strong style={{ color: TEXT }}>
+                {abEnabled ? `A/B test — ${splitPercent}% split, pick winner after ${abHours}h` : 'None'}
+              </strong>
+            </div>
+          </div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -359,16 +478,6 @@ function CampaignForm({ initial, onSaved, onCancel }) {
               <div style={{ fontSize: 11, color: MUTED, marginTop: 5 }}>Times are Eastern (Toronto).</div>
             </div>
           ) : null}
-
-          {/* Review summary */}
-          <div style={{ background: BG, borderRadius: 12, padding: '14px 16px', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontWeight: 700, color: TEXT, marginBottom: 4 }}>Review</div>
-            <div><span style={{ color: MUTED }}>Campaign:</span> <strong>{name || '—'}</strong></div>
-            <div><span style={{ color: MUTED }}>Subject:</span> <strong>{subject || (abEnabled ? subjectA : '') || '—'}</strong></div>
-            <div><span style={{ color: MUTED }}>Recipients:</span> <strong>{useCustomFilter ? `Custom filter (~${inlineCount})` : (segments.find((s) => s.id === segmentId)?.name ?? 'None')}</strong></div>
-            <div><span style={{ color: MUTED }}>Schedule:</span> <strong>{scheduleMode === 'now' ? 'Send immediately' : scheduledAt || '(no date set)'}</strong></div>
-            {abEnabled ? <div><span style={{ color: MUTED }}>A/B test:</span> <strong>Enabled — {splitPercent}% split, pick winner after {abHours}h</strong></div> : null}
-          </div>
         </div>
       )}
 
@@ -376,7 +485,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
         <div style={{ display: 'flex', gap: 8 }}>
           {step > 1 ? (
             <button type="button" onClick={() => setStep((s) => s - 1)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-              Back
+              {step === 5 ? '← Back to edit' : 'Back'}
             </button>
           ) : null}
           <button type="button" onClick={onCancel} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
@@ -384,7 +493,11 @@ function CampaignForm({ initial, onSaved, onCancel }) {
           </button>
         </div>
         {step < 4 ? (
-          <button type="button" onClick={() => setStep((s) => s + 1)} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          <button type="button" onClick={handleNext} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            Next
+          </button>
+        ) : step === 4 ? (
+          <button type="button" onClick={handleNext} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             Next
           </button>
         ) : (
@@ -394,7 +507,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
             disabled={saving}
             style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}
           >
-            {saving ? 'Saving...' : scheduleMode === 'now' ? 'Send now' : 'Schedule'}
+            {saving ? 'Saving...' : 'Confirm and send'}
           </button>
         )}
       </div>
@@ -521,6 +634,7 @@ export default function CampaignPage() {
   const [statusFilter, setStatusFilter] = useState(null) // null = all, else specific status
   const [sortBy, setSortBy] = useState('created_at') // created_at | name | open_count | sent_at
   const [sortAsc, setSortAsc] = useState(false)
+  const [draftCampaignId, setDraftCampaignId] = useState(null)
 
   async function loadCampaigns() {
     setLoading(true)
@@ -535,7 +649,11 @@ export default function CampaignPage() {
     setLoading(false)
   }
 
-  useEffect(() => { loadCampaigns() }, [statusFilter, sortBy, sortAsc])
+  useEffect(() => {
+    loadCampaigns()
+    const draftId = sessionStorage.getItem('comm_draft_campaign_id')
+    setDraftCampaignId(draftId)
+  }, [statusFilter, sortBy, sortAsc])
 
   async function handleDelete(id) {
     if (!window.confirm('Delete this campaign?')) return
@@ -552,7 +670,7 @@ export default function CampaignPage() {
     const { data } = await supabase
       .from('communication_campaigns')
       .insert({
-        name: `${campaign.name} (copy)`,
+        name: `${campaign.name} (Copy)`,
         subject: campaign.subject,
         preview_text: campaign.preview_text ?? null,
         body: campaign.body,
@@ -563,10 +681,15 @@ export default function CampaignPage() {
         segment_id: campaign.segment_id,
         from_name: campaign.from_name ?? 'BLW Canada',
         reply_to_email: campaign.reply_to_email ?? null,
+        sent_count: 0,
+        failed_count: 0,
       })
       .select('id')
       .single()
-    if (data) await loadCampaigns()
+    if (data) {
+      sessionStorage.setItem('comm_draft_campaign_id', data.id)
+      navigate(`/communications/campaigns/${data.id}/edit`)
+    }
   }
 
   return (
@@ -591,6 +714,37 @@ export default function CampaignPage() {
       </div>
 
       <div style={{ flex: 1, overflow: 'auto', padding: '16px 24px', background: BG }}>
+        {/* Draft banner */}
+        {draftCampaignId ? (
+          <div style={{ background: '#E8EEFA', border: `1px solid #1A56DB`, borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 13, color: '#1A56DB', fontWeight: 500 }}>
+              You have an unsaved draft — continue editing to complete it.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  navigate(`/communications/campaigns/${draftCampaignId}/edit`)
+                }}
+                style={{ border: `1px solid #1A56DB`, background: '#FFFFFF', color: '#1A56DB', borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Continue editing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.removeItem('comm_draft_campaign_id')
+                  setDraftCampaignId(null)
+                  supabase.from('communication_campaigns').delete().eq('id', draftCampaignId)
+                }}
+                style={{ border: `1px solid #D8D3C9`, background: '#FFFFFF', color: MUTED, borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {/* Filter + Sort Controls */}
         {campaigns.length > 0 && (
           <div style={{ marginBottom: 20, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -699,11 +853,13 @@ export default function CampaignPage() {
                           <>
                             <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
                             <button type="button" onClick={() => handleDelete(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+                            <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
                           </>
                         ) : c.status === 'scheduled' ? (
                           <>
                             <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
                             <button type="button" onClick={() => handleCancel(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                            <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
                           </>
                         ) : c.status === 'sent' ? (
                           <>

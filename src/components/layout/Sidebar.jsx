@@ -1111,13 +1111,38 @@ export default function Sidebar() {
             onClick={() => go('/meetings/attendance-trends')}
           />
         ) : null}
+        <SidebarItem
+          active={isPathActive(location.pathname, '/meetings/absence-email-log')}
+          label="Absence Email Send Log"
+          glyph={
+            <span style={{ width: 20, flex: '0 0 20px', textAlign: 'center', fontSize: 13, opacity: 0.7 }}>✉</span>
+          }
+          onClick={() => go('/meetings/absence-email-log')}
+        />
         {showAdminPlatform ? (
-          <SidebarItem
-            active={isPathActive(location.pathname, '/communications')}
-            icon={MailPlus}
-            label="Communications"
-            onClick={() => go('/communications')}
-          />
+          <>
+            <SidebarSectionLabel>Communications</SidebarSectionLabel>
+            <SidebarItem
+              active={isPathActive(location.pathname, '/communications/campaigns')}
+              label="Campaigns"
+              onClick={() => go('/communications/campaigns')}
+            />
+            <SidebarItem
+              active={isPathActive(location.pathname, '/communications/segments')}
+              label="Segments"
+              onClick={() => go('/communications/segments')}
+            />
+            <SidebarItem
+              active={isPathActive(location.pathname, '/communications/recipients')}
+              label="Recipients"
+              onClick={() => go('/communications/recipients')}
+            />
+            <SidebarItem
+              active={isPathActive(location.pathname, '/communications/analytics')}
+              label="Analytics"
+              onClick={() => go('/communications/analytics')}
+            />
+          </>
         ) : null}
         <SidebarItem
           active={false}

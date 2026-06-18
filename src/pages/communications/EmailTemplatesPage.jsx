@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { getEmailTemplates } from '../../lib/communications'
+import { getEmailTemplates, createEmailTemplate } from '../../lib/communications'
 import TemplateEditor from '../../modules/communications/TemplateEditor'
-import { Search, Palette } from 'lucide-react'
+import { Search, Palette, Eye, Copy } from 'lucide-react'
 
 const PRIMARY = '#4C2A92'
 const BORDER = '#EDE8DC'
@@ -25,6 +25,9 @@ export default function EmailTemplatesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [editing, setEditing] = useState(null)
   const [realtime, setRealtime] = useState(null)
+  const [previewTemplate, setPreviewTemplate] = useState(null)
+  const [duplicating, setDuplicating] = useState(null)
+  const [toast, setToast] = useState(null)
 
   useEffect(() => {
     loadTemplates()
@@ -71,6 +74,29 @@ export default function EmailTemplatesPage() {
       return a.name.localeCompare(b.name)
     })
   }, [templates, selectedCategory, searchTerm])
+
+  async function handleDuplicate(template) {
+    setDuplicating(template.id)
+    try {
+      await createEmailTemplate(supabase, {
+        name: `${template.name} (Copy)`,
+        category: template.category,
+        html_content: template.html_content,
+        subject: template.subject,
+        is_system: false,
+        created_by: null,
+      })
+      setToast({ type: 'success', message: 'Template duplicated' })
+      setTimeout(() => setToast(null), 3000)
+      loadTemplates()
+    } catch (err) {
+      console.error('Failed to duplicate template:', err)
+      setToast({ type: 'error', message: 'Failed to duplicate template' })
+      setTimeout(() => setToast(null), 3000)
+    } finally {
+      setDuplicating(null)
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -136,27 +162,18 @@ export default function EmailTemplatesPage() {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
             {filtered.map((template) => (
-              <button
+              <div
                 key={template.id}
-                type="button"
-                onClick={() => setEditing(template)}
                 style={{
                   border: `1px solid ${BORDER}`,
                   background: '#FFFFFF',
                   borderRadius: 12,
                   padding: 16,
-                  cursor: 'pointer',
                   textAlign: 'left',
                   transition: 'all 200ms',
                   boxShadow: '0 2px 4px rgba(14,14,30,0.05)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = '0 8px 16px rgba(14,14,30,0.1)'
-                  e.currentTarget.style.transform = 'translateY(-2px)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = '0 2px 4px rgba(14,14,30,0.05)'
-                  e.currentTarget.style.transform = 'translateY(0)'
+                  display: 'flex',
+                  flexDirection: 'column',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -166,15 +183,101 @@ export default function EmailTemplatesPage() {
                   </span>
                 </div>
                 <h3 style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 700, color: TEXT }}>{template.name}</h3>
-                <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, minHeight: 36, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, minHeight: 36, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 12 }}>
                   {template.html_content?.substring(0, 80).replace(/<[^>]*>/g, '') || 'Click to customize'}
                 </div>
                 {template.is_system ? (
-                  <div style={{ marginTop: 12, fontSize: 11, color: '#2D8653', fontWeight: 600 }}>✓ System Template</div>
+                  <div style={{ fontSize: 11, color: '#2D8653', fontWeight: 600, marginBottom: 12 }}>✓ System Template</div>
                 ) : (
-                  <div style={{ marginTop: 12, fontSize: 11, color: PRIMARY, fontWeight: 600 }}>★ Your Custom Template</div>
+                  <div style={{ fontSize: 11, color: PRIMARY, fontWeight: 600, marginBottom: 12 }}>★ Your Custom Template</div>
                 )}
-              </button>
+                <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewTemplate(template)}
+                    style={{
+                      flex: 1,
+                      border: `1px solid ${BORDER}`,
+                      background: '#FFFFFF',
+                      color: PRIMARY,
+                      borderRadius: 6,
+                      padding: '8px 10px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      transition: 'all 150ms',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#EDE8F8'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#FFFFFF'
+                    }}
+                  >
+                    <Eye size={14} />
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDuplicate(template)}
+                    disabled={duplicating === template.id}
+                    style={{
+                      flex: 1,
+                      border: `1px solid ${BORDER}`,
+                      background: '#FFFFFF',
+                      color: PRIMARY,
+                      borderRadius: 6,
+                      padding: '8px 10px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: duplicating === template.id ? 'not-allowed' : 'pointer',
+                      opacity: duplicating === template.id ? 0.6 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      transition: 'all 150ms',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (duplicating !== template.id) e.currentTarget.style.background = '#EDE8F8'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#FFFFFF'
+                    }}
+                  >
+                    <Copy size={14} />
+                    {duplicating === template.id ? 'Copying...' : 'Duplicate'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditing(template)}
+                    style={{
+                      flex: 1,
+                      border: 'none',
+                      background: PRIMARY,
+                      color: '#FFFFFF',
+                      borderRadius: 6,
+                      padding: '8px 10px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 150ms',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.opacity = '0.9'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.opacity = '1'
+                    }}
+                  >
+                    Customize
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -191,6 +294,82 @@ export default function EmailTemplatesPage() {
           }}
         />
       ) : null}
+
+      {/* Preview Modal */}
+      {previewTemplate ? (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', background: 'rgba(14,14,30,0.5)', alignItems: 'center', justifyContent: 'center' }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setPreviewTemplate(null) }}
+        >
+          <div style={{ background: '#FFFFFF', borderRadius: 16, maxWidth: 600, width: '90%', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px rgba(0,0,0,0.15)' }}>
+            <div style={{ padding: '20px 24px', borderBottom: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: TEXT }}>{previewTemplate.subject || previewTemplate.name}</h2>
+              <button
+                type="button"
+                onClick={() => setPreviewTemplate(null)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 24, color: MUTED, padding: 4 }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px', background: BG }}>
+              <iframe
+                srcDoc={previewTemplate.html_content?.replace(/\{\{[^}]+\}\}/g, (match) => `<span style="background-color: #D8BFD8; color: #4C2A92; font-weight: 600; padding: 2px 4px; border-radius: 3px;">${match}</span>`) || ''}
+                style={{ width: '100%', height: '100%', border: 'none', minHeight: 300, background: '#FFFFFF', borderRadius: 8 }}
+                title="Template Preview"
+              />
+            </div>
+            <div style={{ padding: '16px 24px', borderTop: `1px solid ${BORDER}`, textAlign: 'right' }}>
+              <button
+                type="button"
+                onClick={() => setPreviewTemplate(null)}
+                style={{
+                  border: 'none',
+                  background: PRIMARY,
+                  color: '#FFFFFF',
+                  borderRadius: 6,
+                  padding: '10px 16px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Toast Notification */}
+      {toast ? (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 20,
+            right: 20,
+            background: toast.type === 'success' ? '#EBF7F1' : '#FEF0ED',
+            border: `1px solid ${toast.type === 'success' ? '#A5D6D3' : '#F5C4B8'}`,
+            borderRadius: 8,
+            padding: '12px 16px',
+            fontSize: 13,
+            fontWeight: 600,
+            color: toast.type === 'success' ? '#2D8653' : '#C94830',
+            zIndex: 100,
+            boxShadow: '0 4px 12px rgba(14,14,30,0.1)',
+            animation: 'slideIn 0.3s ease-out',
+          }}
+        >
+          {toast.message}
+        </div>
+      ) : null}
+
+      <style>{`
+        @keyframes slideIn {
+          from { transform: translateX(400px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+      `}</style>
     </div>
   )
 }

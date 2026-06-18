@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { approveEvent, rejectEvent } from '../../lib/calendar'
 import { useAuth } from '../../hooks/useAuth'
-import { useToast } from '../../hooks/useToast'
+import { useToast } from '../../context/ToastContext'
 
 export default function EventDetailModal({ event, onClose, onApproved, canApprove = false }) {
   const { profile } = useAuth()
-  const { addToast } = useToast()
+  const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
   const [showRejectForm, setShowRejectForm] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('')
@@ -16,12 +16,12 @@ export default function EventDetailModal({ event, onClose, onApproved, canApprov
     setLoading(true)
     try {
       await approveEvent(event.id, profile.id)
-      addToast('Event approved successfully', 'success')
+      showToast('Event approved successfully', { tone: 'success' })
       onApproved?.()
       onClose()
     } catch (err) {
       console.error('Failed to approve event:', err)
-      addToast('Failed to approve event', 'error')
+      showToast('Failed to approve event', { tone: 'error' })
     } finally {
       setLoading(false)
     }
@@ -29,18 +29,18 @@ export default function EventDetailModal({ event, onClose, onApproved, canApprov
 
   async function handleReject() {
     if (!canApprove || !event || !rejectionReason.trim()) {
-      addToast('Please provide a rejection reason', 'error')
+      showToast('Please provide a rejection reason', { tone: 'error' })
       return
     }
     setLoading(true)
     try {
       await rejectEvent(event.id, profile.id, rejectionReason)
-      addToast('Event rejected successfully', 'success')
+      showToast('Event rejected successfully', { tone: 'success' })
       onApproved?.()
       onClose()
     } catch (err) {
       console.error('Failed to reject event:', err)
-      addToast('Failed to reject event', 'error')
+      showToast('Failed to reject event', { tone: 'error' })
     } finally {
       setLoading(false)
     }

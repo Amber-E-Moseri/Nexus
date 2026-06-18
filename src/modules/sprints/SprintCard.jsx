@@ -1,4 +1,5 @@
 import Badge from '../../components/ui/Badge'
+import SprintProgressBar from './SprintProgressBar'
 
 const STATUS_LABELS = {
   planning: 'Planning',
@@ -57,7 +58,7 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore }) 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
-            {sprint.name}
+            {isArchived ? '📦 ' : ''}{sprint.name}
           </div>
           {sprint.goal && (
             <div
@@ -80,31 +81,7 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore }) 
 
       {taskCount > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Progress
-            </span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
-              {progress}%
-            </span>
-          </div>
-          <div style={{
-            height: 6,
-            background: '#F3F0EB',
-            borderRadius: 3,
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              height: '100%',
-              width: `${progress}%`,
-              background: 'linear-gradient(90deg, var(--accent), #6B4FD3)',
-              borderRadius: 3,
-              transition: 'width 0.3s ease',
-            }} />
-          </div>
-          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-tertiary)' }}>
-            {completedCount} of {taskCount} tasks
-          </div>
+          <SprintProgressBar tasksCount={{ done: completedCount, total: taskCount }} compact={true} />
         </div>
       )}
 

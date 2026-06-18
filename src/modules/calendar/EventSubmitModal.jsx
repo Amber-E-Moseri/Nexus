@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { submitEvent } from '../../lib/calendar'
 import { useAuth } from '../../hooks/useAuth'
-import { useToast } from '../../hooks/useToast'
+import { useToast } from '../../context/ToastContext'
 
 export default function EventSubmitModal({ onClose, onSubmitted, departments = [] }) {
   const { profile } = useAuth()
-  const { addToast } = useToast()
+  const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     title: '',
@@ -27,7 +27,7 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
   async function handleSubmit(e) {
     e.preventDefault()
     if (!formData.title.trim()) {
-      addToast('Event title is required', 'error')
+      showToast('Event title is required', { tone: 'error' })
       return
     }
 
@@ -46,12 +46,12 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
       const userRole = profile?.user_role || 'user'
       await submitEvent(eventData, profile.id, userRole)
 
-      addToast('Event submitted successfully', 'success')
+      showToast('Event submitted successfully', { tone: 'success' })
       onSubmitted?.()
       onClose()
     } catch (err) {
       console.error('Failed to submit event:', err)
-      addToast('Failed to submit event', 'error')
+      showToast('Failed to submit event', { tone: 'error' })
     } finally {
       setLoading(false)
     }

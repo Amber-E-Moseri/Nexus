@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Copy, Trash2, Settings, Plus } from 'lucide-react'
 import { getICalSubscriptions, deleteICalSubscription, generateICalToken } from '../../lib/calendar'
-import { useToast } from '../../hooks/useToast'
+import { useToast } from '../../context/ToastContext'
 
 export default function CalendarSettingsPanel({ userId, departments = [] }) {
-  const { addToast } = useToast()
+  const { showToast } = useToast()
   const [subscriptions, setSubscriptions] = useState([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
@@ -19,7 +19,7 @@ export default function CalendarSettingsPanel({ userId, departments = [] }) {
       setSubscriptions(data || [])
     } catch (err) {
       console.error('Failed to load subscriptions:', err)
-      addToast('Failed to load subscriptions', 'error')
+      showToast('Failed to load subscriptions', { tone: 'error' })
     } finally {
       setLoading(false)
     }
@@ -32,20 +32,20 @@ export default function CalendarSettingsPanel({ userId, departments = [] }) {
   async function handleGenerateToken() {
     if (!userId) return
     if (newSub.scope === 'department' && !newSub.department_id) {
-      addToast('Please select a department', 'error')
+      showToast('Please select a department', { tone: 'error' })
       return
     }
 
     setGenerating(true)
     try {
       const result = await generateICalToken(userId, newSub.scope, newSub.department_id)
-      addToast('iCal token generated successfully', 'success')
+      showToast('iCal token generated successfully', { tone: 'success' })
       setShowNewForm(false)
       setNewSub({ scope: 'all', department_id: null })
       await loadSubscriptions()
     } catch (err) {
       console.error('Failed to generate token:', err)
-      addToast('Failed to generate token', 'error')
+      showToast('Failed to generate token', { tone: 'error' })
     } finally {
       setGenerating(false)
     }
@@ -56,11 +56,11 @@ export default function CalendarSettingsPanel({ userId, departments = [] }) {
 
     try {
       await deleteICalSubscription(id)
-      addToast('Subscription deleted', 'success')
+      showToast('Subscription deleted', { tone: 'success' })
       setSubscriptions(subscriptions.filter((s) => s.id !== id))
     } catch (err) {
       console.error('Failed to delete subscription:', err)
-      addToast('Failed to delete subscription', 'error')
+      showToast('Failed to delete subscription', { tone: 'error' })
     }
   }
 
@@ -68,10 +68,10 @@ export default function CalendarSettingsPanel({ userId, departments = [] }) {
     const url = `${window.location.origin}/calendar-ical?token=${token}`
     navigator.clipboard.writeText(url).then(() => {
       setCopiedId(token)
-      addToast('iCal URL copied to clipboard', 'success')
+      showToast('iCal URL copied to clipboard', { tone: 'success' })
       setTimeout(() => setCopiedId(null), 2000)
     }).catch(() => {
-      addToast('Failed to copy URL', 'error')
+      showToast('Failed to copy URL', { tone: 'error' })
     })
   }
 

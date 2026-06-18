@@ -153,7 +153,7 @@ export default function SprintsList() {
                 <section key={status} className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
-                      {status}
+                      {status} {status === 'archived' && items.length > 0 ? `(${items.length})` : ''}
                     </h2>
                     {status === 'archived' ? (
                       <button
@@ -161,7 +161,7 @@ export default function SprintsList() {
                         onClick={() => setShowArchivedGroup((value) => !value)}
                         className="text-xs text-[var(--accent)]"
                       >
-                        {collapsed ? 'Show archived' : 'Hide archived'}
+                        {collapsed ? '▶ Show archived' : '▼ Hide archived'}
                       </button>
                     ) : null}
                   </div>

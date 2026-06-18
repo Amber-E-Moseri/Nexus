@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { hasPermission } from './permissions'
+import { createNotification } from './notifications'
 
 export async function getCalendarEvents(startDate, endDate) {
   const { data, error } = await supabase
@@ -111,7 +112,20 @@ export async function approveEvent(eventId, approverId) {
 
   if (error) throw error
   if (data?.error) throw new Error(data.error)
-  return data?.event
+
+  const event = data?.event
+  if (event && event.created_by) {
+    await createNotification({
+      recipient_id: event.created_by,
+      type: 'calendar_event_approved',
+      related_resource_type: 'calendar_event',
+      related_resource_id: eventId,
+      title: `Event approved: ${event.title}`,
+      description: `Your calendar event has been approved.`,
+    }).catch(err => console.error('Failed to create approval notification:', err))
+  }
+
+  return event
 }
 
 export async function rejectEvent(eventId, approverId, rejectionNote) {
@@ -124,7 +138,20 @@ export async function rejectEvent(eventId, approverId, rejectionNote) {
 
   if (error) throw error
   if (data?.error) throw new Error(data.error)
-  return data?.event
+
+  const event = data?.event
+  if (event && event.created_by) {
+    await createNotification({
+      recipient_id: event.created_by,
+      type: 'calendar_event_rejected',
+      related_resource_type: 'calendar_event',
+      related_resource_id: eventId,
+      title: `Event rejected: ${event.title}`,
+      description: `Your calendar event was rejected. Reason: ${rejectionNote}`,
+    }).catch(err => console.error('Failed to create rejection notification:', err))
+  }
+
+  return event
 }
 
 // ---- iCal subscriptions ----

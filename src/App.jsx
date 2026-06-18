@@ -14,12 +14,14 @@ const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const MinistryCalendar = lazy(() => import('./pages/calendar/MinistryCalendar'))
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage'))
 const CommunicationsPage = lazy(() => import('./pages/communications/CommunicationsPage'))
+const RecipientsPage = lazy(() => import('./pages/communications/RecipientsPage'))
 const DeptSpace = lazy(() => import('./pages/dept/DeptSpace'))
 const FlockView = lazy(() => import('./pages/flock/FlockView'))
 const Login = lazy(() => import('./pages/Login'))
 const CanMapPage = lazy(() => import('./pages/map/CanMapPage'))
 const MeetingsModule = lazy(() => import('./pages/meetings/MeetingsModule'))
 const ExpectedAttendeesPage = lazy(() => import('./pages/meetings/ExpectedAttendeesPage'))
+const AbsenceEmailLogPage = lazy(() => import('./pages/meetings/AbsenceEmailLogPage'))
 const AttendanceTrendsDashboard = lazy(() => import('./pages/AttendanceTrendsDashboard'))
 const MyTasks = lazy(() => import('./pages/personal/MyTasks'))
 const AllPeoplePage = lazy(() => import('./pages/people/AllPeoplePage'))
@@ -98,6 +100,12 @@ export default function App() {
             }
           />
           <Route
+            path="/meetings/absence-email-log"
+            element={
+              <AbsenceEmailLogPage />
+            }
+          />
+          <Route
             path="/people"
             element={
               <ProtectedRoute roles={['super_admin', 'dept_lead', 'pastor']}>
@@ -158,6 +166,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['super_admin', 'dept_lead']}>
                 <CommunicationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/communications/recipients"
+            element={
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+                <RecipientsPage />
               </ProtectedRoute>
             }
           />
