@@ -1175,47 +1175,51 @@ export default function Sidebar() {
             />
           </>
         ) : null}
-        <button
-          type="button"
-          onClick={() => setCommunicationsExpanded(!communicationsExpanded)}
-          style={{
-            ...ITEM_BASE_STYLE,
-            borderLeft: isPathActive(location.pathname, '/communications') ? '3px solid #4C2A92' : '3px solid transparent',
-            background: isPathActive(location.pathname, '/communications') ? '#EDE8F8' : 'transparent',
-            color: isPathActive(location.pathname, '/communications') ? '#4C2A92' : '#1C1610',
-          }}
-          onMouseEnter={(e) => {
-            if (!isPathActive(location.pathname, '/communications')) e.currentTarget.style.background = '#F2EEE6'
-          }}
-          onMouseLeave={(e) => {
-            if (!isPathActive(location.pathname, '/communications')) e.currentTarget.style.background = 'transparent'
-          }}
-        >
-          <ChevronDown size={15} style={{ opacity: 0.85, transform: communicationsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
-          <span style={{ flex: 1 }}>Communications</span>
-        </button>
-        {communicationsExpanded && showAdminPlatform ? (
+        {showAdminPlatform ? (
           <>
-            <SidebarItem
-              active={isPathActive(location.pathname, '/communications/campaigns')}
-              label="Campaigns"
-              onClick={() => go('/communications/campaigns')}
-            />
-            <SidebarItem
-              active={isPathActive(location.pathname, '/communications/segments')}
-              label="Segments"
-              onClick={() => go('/communications/segments')}
-            />
-            <SidebarItem
-              active={isPathActive(location.pathname, '/communications/recipients')}
-              label="Recipients"
-              onClick={() => go('/communications/recipients')}
-            />
-            <SidebarItem
-              active={isPathActive(location.pathname, '/communications/analytics')}
-              label="Analytics"
-              onClick={() => go('/communications/analytics')}
-            />
+            <button
+              type="button"
+              onClick={() => setCommunicationsExpanded(!communicationsExpanded)}
+              style={{
+                ...ITEM_BASE_STYLE,
+                borderLeft: isPathActive(location.pathname, '/communications') ? '3px solid #4C2A92' : '3px solid transparent',
+                background: isPathActive(location.pathname, '/communications') ? '#EDE8F8' : 'transparent',
+                color: isPathActive(location.pathname, '/communications') ? '#4C2A92' : '#1C1610',
+              }}
+              onMouseEnter={(e) => {
+                if (!isPathActive(location.pathname, '/communications')) e.currentTarget.style.background = '#F2EEE6'
+              }}
+              onMouseLeave={(e) => {
+                if (!isPathActive(location.pathname, '/communications')) e.currentTarget.style.background = 'transparent'
+              }}
+            >
+              <ChevronDown size={15} style={{ opacity: 0.85, transform: communicationsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+              <span style={{ flex: 1 }}>Communications</span>
+            </button>
+            {communicationsExpanded ? (
+              <>
+                <SidebarItem
+                  active={isPathActive(location.pathname, '/communications/campaigns')}
+                  label="Campaigns"
+                  onClick={() => go('/communications/campaigns')}
+                />
+                <SidebarItem
+                  active={isPathActive(location.pathname, '/communications/segments')}
+                  label="Segments"
+                  onClick={() => go('/communications/segments')}
+                />
+                <SidebarItem
+                  active={isPathActive(location.pathname, '/communications/recipients')}
+                  label="Recipients"
+                  onClick={() => go('/communications/recipients')}
+                />
+                <SidebarItem
+                  active={isPathActive(location.pathname, '/communications/analytics')}
+                  label="Analytics"
+                  onClick={() => go('/communications/analytics')}
+                />
+              </>
+            ) : null}
           </>
         ) : null}
         <SidebarItem
