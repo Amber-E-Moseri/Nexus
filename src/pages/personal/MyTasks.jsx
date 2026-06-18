@@ -444,23 +444,6 @@ export default function MyTasks() {
     })
   }
 
-  const today = startOfDay(new Date())
-  const endOfCurrentWeek = startOfDay(endOfWeek(today, { weekStartsOn: 1 }))
-
-  const groups = useMemo(() => buildGroups(tasks, today), [tasks, today])
-
-  const boardCounts = useMemo(
-    () => Object.fromEntries(BOARD_VIEWS.map((v) => [v, filterBoardTasks(tasks, v, today, endOfCurrentWeek).length])),
-    [tasks, today, endOfCurrentWeek],
-  )
-
-  const boardVisible = useMemo(
-    () => filterBoardTasks(tasks, activeView, today, endOfCurrentWeek),
-    [tasks, activeView, today, endOfCurrentWeek],
-  )
-
-  const columns = useMemo(() => boardColumns(boardVisible), [boardVisible])
-
   function handleSaved(saved) {
     setTasks((prev) =>
       prev.some((task) => task.id === saved.id)
