@@ -68,6 +68,11 @@ export default function OverdueByMemberWidget({ role, userId, departmentId }) {
     return () => { active = false }
   }, [role, userId, departmentId])
 
+  // SCOPING FIX: member — overdue by member is org-wide data, not visible to members
+  if (role === 'member') {
+    return <div style={{ fontSize: 13, color: '#9E9488', padding: '20px 0', textAlign: 'center' }}>Overdue data is for admins only</div>
+  }
+
   const MAX = 8
   const visible = members.slice(0, MAX)
   const extra = members.length - MAX

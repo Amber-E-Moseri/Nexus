@@ -58,6 +58,11 @@ export default function MemberActivityWidget({ role, userId, departmentId }) {
     return () => { active = false }
   }, [role, userId, departmentId])
 
+  // SCOPING FIX: member — org-wide activity widget should not be visible to members
+  if (role === 'member') {
+    return <div style={{ fontSize: 13, color: '#9E9488', padding: '20px 0', textAlign: 'center' }}>Activity data is for admins only</div>
+  }
+
   const MAX = 8
   const visible = members.slice(0, MAX)
   const extra = members.length - MAX

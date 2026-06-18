@@ -14,6 +14,10 @@ import MemberActivityWidget from '../modules/dashboard/MemberActivityWidget'
 import OverdueByMemberWidget from '../modules/dashboard/OverdueByMemberWidget'
 import SprintProgressWidget from '../modules/dashboard/SprintProgressWidget'
 import UpcomingEventsWidget from '../modules/dashboard/UpcomingEventsWidget'
+import UpcomingMeetingsWidget from '../modules/dashboard/UpcomingMeetingsWidget'
+import AttendanceSummaryWidget from '../modules/dashboard/AttendanceSummaryWidget'
+import ActivityFeedWidget from '../modules/dashboard/ActivityFeedWidget'
+import OrgReportExport from '../modules/dashboard/OrgReportExport'
 
 function greetingForHour() {
   const h = new Date().getHours()
@@ -143,13 +147,16 @@ function QuickActionsWidget({ role }) {
 // ─── Widget registry ──────────────────────────────────────────────────────────
 
 const WIDGET_META = {
-  upcoming_events:   { title: 'Upcoming Events',           Component: UpcomingEventsWidget },
-  sprint_progress:   { title: 'Sprint Progress',           Component: SprintProgressWidget },
-  overdue_by_member: { title: 'Overdue Tasks by Member',   Component: OverdueByMemberWidget },
-  member_activity:   { title: 'Member Activity',           Component: MemberActivityWidget },
-  completion_rate:   { title: 'Completion Rate This Week', Component: CompletionRateWidget },
-  my_tasks_summary:  { title: 'My Tasks Summary',          Component: MyTasksSummaryWidget },
-  quick_actions:     { title: 'Quick Actions',             Component: QuickActionsWidget },
+  upcoming_events:      { title: 'Upcoming Events',           Component: UpcomingEventsWidget },
+  upcoming_meetings:    { title: 'Upcoming Meetings',         Component: UpcomingMeetingsWidget },
+  sprint_progress:      { title: 'Sprint Progress',           Component: SprintProgressWidget },
+  overdue_by_member:    { title: 'Overdue Tasks by Member',   Component: OverdueByMemberWidget },
+  member_activity:      { title: 'Member Activity',           Component: MemberActivityWidget },
+  completion_rate:      { title: 'Completion Rate This Week', Component: CompletionRateWidget },
+  attendance_summary:   { title: 'Attendance Summary',        Component: AttendanceSummaryWidget },
+  activity_feed:        { title: 'Recent Activity',           Component: ActivityFeedWidget },
+  my_tasks_summary:     { title: 'My Tasks Summary',          Component: MyTasksSummaryWidget },
+  quick_actions:        { title: 'Quick Actions',             Component: QuickActionsWidget },
 }
 
 const ALL_WIDGET_KEYS = Object.keys(WIDGET_META)
@@ -543,25 +550,28 @@ export default function Dashboard() {
               {unreadCount > 0 ? ` · ${unreadCount} unread` : ''}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowCustomize(true)}
-            style={{
-              background: 'white',
-              border: '1px solid #EDE8DC',
-              borderRadius: 10,
-              padding: '8px 14px',
-              fontSize: 12.5,
-              fontWeight: 600,
-              color: '#4C2A92',
-              cursor: 'pointer',
-              transition: 'border-color .12s',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92' }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#EDE8DC' }}
-          >
-            Customize Dashboard
-          </button>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <OrgReportExport role={role} />
+            <button
+              type="button"
+              onClick={() => setShowCustomize(true)}
+              style={{
+                background: 'white',
+                border: '1px solid #EDE8DC',
+                borderRadius: 10,
+                padding: '8px 14px',
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: '#4C2A92',
+                cursor: 'pointer',
+                transition: 'border-color .12s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#EDE8DC' }}
+            >
+              Customize Dashboard
+            </button>
+          </div>
         </section>
 
         {visibleWidgets.length === 0 ? (

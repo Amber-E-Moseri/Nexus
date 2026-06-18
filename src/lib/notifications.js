@@ -53,6 +53,58 @@ export async function createNotification(userId, type, payload) {
   return data
 }
 
+export async function createMentionNotifications(commenterId, commenterName, commentBody, taskId, taskTitle) {
+  // Parse @mentions from comment body: /@([a-zA-Z0-9_\s]+)/g
+  const mentionPattern = /@([a-zA-Z0-9_\s]+)/g
+  const matches = commentBody.match(mentionPattern) || []
+
+  if (matches.length === 0) return []
+
+  const mentionedNames = matches.map((match) => match.slice(1).trim())
+  const uniqueNames = [...new Set(mentionedNames)]
+
+  // Look up users by full_name or username
+  const { data: foundUsers } = await supabase
+    .from('users')
+    .select('id, name')
+    .in('name', uniqueNames)
+
+  if (!foundUsers || foundUsers.length === 0) return []
+
+  // Check preferences for each mentioned user
+  const { data: userPrefs } = await supabase
+    .from('user_notification_prefs')
+    .select('user_id')
+    .in('user_id', foundUsers.map((u) => u.id))
+    .eq('notification_type', 'mention')
+    .eq('in_app', false)
+
+  const disabledUserIds = new Set((userPrefs || []).map((p) => p.user_id))
+
+  // Insert notifications for enabled mentions
+  const notificationsToInsert = foundUsers
+    .filter((u) => u.id !== commenterId && !disabledUserIds.has(u.id))
+    .map((mentionedUser) => ({
+      user_id: mentionedUser.id,
+      type: 'mention',
+      payload: {
+        actor_name: commenterName,
+        task_title: taskTitle,
+        task_id: taskId,
+      },
+    }))
+
+  if (notificationsToInsert.length === 0) return []
+
+  const { data: inserted, error } = await supabase
+    .from('notifications')
+    .insert(notificationsToInsert)
+    .select()
+
+  if (error) console.error('Failed to insert mention notifications:', error)
+  return inserted || []
+}
+
 export async function getNotificationPrefs(userId) {
   const { data, error } = await supabase
     .from('user_notification_prefs')
@@ -85,18 +137,19 @@ export async function setNotificationPref(userId, type, inApp, email) {
 }
 
 export const NOTIFICATION_TYPES = {
-  task_assigned: { label: 'Task assigned to me', icon: '📋' },
-  task_comment: { label: 'Comment on my task', icon: '💬' },
-  task_due_soon: { label: 'Task due date approaching', icon: '⏰' },
-  sprint_added: { label: 'Added to a sprint', icon: '⚡' },
-  sprint_status: { label: 'Sprint status changed', icon: '🔄' },
-  invitation_accepted: { label: 'Invitation accepted', icon: '✅' },
-  meeting_created: { label: 'Meeting created in my dept', icon: '🎙' },
-  comment_added: { label: 'Comment on my task', icon: '💬' },
-  mention: { label: "I'm @mentioned", icon: '@' },
-  event_approved: { label: 'Calendar event approved', icon: '✅' },
-  event_rejected: { label: 'Calendar event rejected', icon: '❌' },
-  system: { label: 'System notification', icon: '🔔' },
+  task_assigned: { label: 'Task assigned to me', icon: '📋', description: 'In-app only' },
+  task_comment: { label: 'Comment on my task', icon: '💬', description: 'In-app only' },
+  task_due_soon: { label: 'Task due date approaching', icon: '⏰', description: 'In-app only' },
+  sprint_added: { label: 'Added to a sprint', icon: '⚡', description: 'In-app only' },
+  sprint_status: { label: 'Sprint status changed', icon: '🔄', description: 'In-app only' },
+  invitation_accepted: { label: 'Invitation accepted', icon: '✅', description: 'In-app only' },
+  meeting_created: { label: 'Meeting created in my dept', icon: '🎙', description: 'In-app only' },
+  comment_added: { label: 'Comment on my task', icon: '💬', description: 'In-app only' },
+  mention: { label: "I'm @mentioned", icon: '@', description: 'In-app only' },
+  event_approved: { label: 'Calendar event approved', icon: '✅', description: 'In-app only' },
+  event_rejected: { label: 'Calendar event rejected', icon: '❌', description: 'In-app only' },
+  email_digest: { label: 'Weekly email digest', icon: '📧', description: 'Sent every Monday with a summary of unread notifications' },
+  system: { label: 'System notification', icon: '🔔', description: 'In-app only' },
 }
 
 export function formatNotificationMessage(notification) {

@@ -3,6 +3,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { formatRelativeDate } from '../../lib/dateUtils'
 import { recordActivity } from '../../lib/activityFeed'
 import { createComment, deleteComment, getTaskComments } from '../../lib/tasks'
+import { createMentionNotifications } from '../../lib/notifications'
 import { supabase } from '../../lib/supabase'
 
 function formatRelativeTime(dateStr) {
@@ -250,6 +251,15 @@ export default function TaskComments({ taskId }) {
           body_preview: updatedComment.body.slice(0, 100),
         })
       }
+
+      // Create @mention notifications
+      void createMentionNotifications(
+        profile.id,
+        profile.name,
+        body,
+        taskId,
+        task?.title ?? 'a task'
+      )
 
       setBody('')
       setMentions([])

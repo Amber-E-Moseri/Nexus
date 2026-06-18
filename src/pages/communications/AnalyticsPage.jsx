@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { supabase } from '../../lib/supabase'
+
+const OpenRateChart = lazy(() => import('./OpenRateChart'))
 
 const PRIMARY = '#4C2A92'
 const BORDER  = '#EDE8DC'
@@ -706,15 +707,9 @@ export default function AnalyticsPage() {
                 <div style={{ fontSize: 13, fontWeight: 800, color: TEXT, marginBottom: 14 }}>
                   Open Rate by Campaign (last {openRateData.length})
                 </div>
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={openRateData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: MUTED }} tickLine={false} axisLine={false} />
-                    <YAxis unit="%" tick={{ fontSize: 10, fill: MUTED }} tickLine={false} axisLine={false} domain={[0, 100]} />
-                    <Tooltip formatter={(value) => [`${value}%`, 'Open Rate']} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${BORDER}` }} />
-                    <Line type="monotone" dataKey="openRate" stroke={PRIMARY} strokeWidth={2} dot={{ r: 4, fill: PRIMARY }} activeDot={{ r: 6 }} />
-                  </LineChart>
-                </ResponsiveContainer>
+                <Suspense fallback={<div style={{ height: 200, background: '#F4F1EA', borderRadius: 8 }} />}>
+                  <OpenRateChart data={openRateData} />
+                </Suspense>
               </div>
             ) : null}
 

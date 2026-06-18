@@ -6,6 +6,7 @@ import { PRIORITIES } from '../../lib/constants'
 import { createNotification } from '../../lib/notifications'
 import { getMySpaces, SPACE_TYPE_ICONS } from '../../lib/spaces'
 import { getSprintMembers } from '../../lib/sprints'
+import { supabase } from '../../lib/supabase'
 import { normalizeTaskFieldSettings } from '../../lib/taskFieldSettings'
 import { createTask, deleteTask, getTaskBlockers, updateTask } from '../../lib/tasks'
 import {
@@ -42,6 +43,91 @@ const labelStyle = {
   marginBottom: 6,
 }
 
+function TaskActivityLog({ taskId }) {
+  const [activities, setActivities] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadActivities()
+  }, [taskId])
+
+  async function loadActivities() {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('activity_log')
+        .select('id, user_id, action, entity_type, entity_id, timestamp, user:users!user_id(id, name)')
+        .eq('entity_id', taskId)
+        .eq('entity_type', 'task')
+        .order('timestamp', { ascending: false })
+        .limit(20)
+
+      if (error) throw error
+      setActivities(data || [])
+    } catch (err) {
+      console.error('Error loading activity:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading...</div>
+  }
+
+  if (activities.length === 0) {
+    return <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No activity recorded for this task.</div>
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {activities.map((log) => (
+        <div key={log.id} style={{ display: 'flex', gap: 10, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+          <div
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: '50%',
+              background: '#4C2A92',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 9,
+              fontWeight: 700,
+              flexShrink: 0,
+            }}
+          >
+            {(log.user?.name ?? '?')
+              .split(/\s+/)
+              .slice(0, 2)
+              .map((p) => p.charAt(0).toUpperCase())
+              .join('')}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>
+              {log.user?.name || 'Unknown'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+              {log.action.replace(/_/g, ' ')}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
+              {new Date(log.timestamp).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+              })}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function TaskModalTabs({ taskId, departmentId, sprintId }) {
   const [activeTab, setActiveTab] = useState('comments')
 
@@ -49,6 +135,7 @@ function TaskModalTabs({ taskId, departmentId, sprintId }) {
     { id: 'comments', label: 'Comments' },
     { id: 'files', label: 'Files' },
     { id: 'dependencies', label: 'Dependencies' },
+    { id: 'activity', label: 'Activity' },
   ]
 
   return (
@@ -102,6 +189,11 @@ function TaskModalTabs({ taskId, departmentId, sprintId }) {
       {activeTab === 'dependencies' ? (
         <div role="tabpanel" id="tabpanel-dependencies" aria-labelledby="tab-dependencies" tabIndex={0}>
           <TaskDependencies taskId={taskId} departmentId={departmentId} sprintId={sprintId} />
+        </div>
+      ) : null}
+      {activeTab === 'activity' ? (
+        <div role="tabpanel" id="tabpanel-activity" aria-labelledby="tab-activity" tabIndex={0}>
+          <TaskActivityLog taskId={taskId} />
         </div>
       ) : null}
     </div>

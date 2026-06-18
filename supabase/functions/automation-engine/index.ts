@@ -16,7 +16,7 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   })
 }
 
-function isSafeWebhookUrl(value: string) {
+function isSafeWebhookUrl(value: string): boolean {
   let parsed: URL
 
   try {
@@ -69,6 +69,218 @@ function isSafeWebhookUrl(value: string) {
   return true
 }
 
+function renderTemplate(template: string, context: Record<string, unknown>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    const value = context[key]
+    return value != null ? String(value) : `{{${key}}}`
+  })
+}
+
+type TriggerConditions = {
+  from_status?: string
+  to_status?: string
+  any_status_change?: boolean
+  department_id?: string
+}
+
+function evaluateTriggerConditions(
+  triggerType: string,
+  conditions: TriggerConditions | null,
+  newRecord: Record<string, unknown>,
+  oldRecord: Record<string, unknown> | null,
+): boolean {
+  if (!conditions) return true
+
+  if (triggerType === 'task_status_change') {
+    if (oldRecord?.status === newRecord.status) return false
+
+    if (conditions.from_status && conditions.to_status) {
+      return oldRecord?.status === conditions.from_status && newRecord.status === conditions.to_status
+    }
+
+    if (conditions.any_status_change) return true
+
+    if (conditions.from_status && oldRecord?.status !== conditions.from_status) return false
+    if (conditions.to_status && newRecord.status !== conditions.to_status) return false
+
+    return true
+  }
+
+  if (triggerType === 'task_assigned') {
+    if (conditions.department_id) {
+      return newRecord.department_id === conditions.department_id
+    }
+    return true
+  }
+
+  if (triggerType === 'meeting_created') {
+    if (conditions.department_id) {
+      return newRecord.department_id === conditions.department_id
+    }
+    return true
+  }
+
+  return true
+}
+
+async function executeAction(
+  supabase: ReturnType<typeof createClient>,
+  action: { type?: string; config?: Record<string, unknown> },
+  context: Record<string, unknown>,
+  automation: Record<string, unknown>,
+): Promise<{ action_type?: string; result?: unknown; error?: string }> {
+  const config = action.config ?? {}
+
+  try {
+    switch (action.type) {
+      case 'send_notification': {
+        let userId: string | null = null
+
+        if (config.user_id === 'assigned_to') {
+          userId = typeof context.assigned_to === 'string' ? context.assigned_to : null
+        } else if (config.user_id === 'created_by') {
+          userId = typeof context.created_by === 'string' ? context.created_by : null
+        } else if (typeof config.user_id === 'string') {
+          userId = config.user_id
+        }
+
+        if (!userId) {
+          return { action_type: 'send_notification', result: { skipped: true, reason: 'no_user_id' } }
+        }
+
+        const message = typeof config.message === 'string' ? renderTemplate(config.message, context) : ''
+
+        await supabase.from('notifications').insert({
+          user_id: userId,
+          type: 'automation',
+          payload: {
+            message,
+            automation_name: automation.name,
+          },
+        })
+
+        return { action_type: 'send_notification', result: { notified: userId } }
+      }
+
+      case 'send_email': {
+        const to = typeof config.to === 'string' ? renderTemplate(config.to, context) : null
+        const subject = typeof config.subject === 'string' ? renderTemplate(config.subject, context) : 'Notification'
+        const body = typeof config.body === 'string' ? renderTemplate(config.body, context) : ''
+
+        if (!to) {
+          return { action_type: 'send_email', result: { skipped: true, reason: 'no_email' } }
+        }
+
+        const resendApiKey = Deno.env.get('RESEND_API_KEY')
+        if (!resendApiKey) {
+          return { action_type: 'send_email', result: { skipped: true, reason: 'no_api_key' } }
+        }
+
+        const emailResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'noreply@blwcanada.org',
+            to,
+            subject,
+            html: body,
+          }),
+        })
+
+        if (!emailResponse.ok) {
+          const errorData = await emailResponse.json()
+          throw new Error(`Resend API error: ${JSON.stringify(errorData)}`)
+        }
+
+        return { action_type: 'send_email', result: { sent: true } }
+      }
+
+      case 'create_task': {
+        const title = typeof config.title === 'string' ? renderTemplate(config.title, context) : 'Automated task'
+
+        let dueDate: string | null = null
+        if (typeof config.due_offset_days === 'number') {
+          const future = new Date()
+          future.setDate(future.getDate() + config.due_offset_days)
+          dueDate = future.toISOString().split('T')[0]
+        }
+
+        let assigneeId: string | null = null
+        if (config.assigned_to === 'task_assigned_to') {
+          assigneeId = typeof context.assigned_to === 'string' ? context.assigned_to : null
+        } else if (typeof config.assigned_to === 'string') {
+          assigneeId = config.assigned_to
+        }
+
+        const { data: task, error } = await supabase
+          .from('tasks')
+          .insert({
+            title,
+            department_id: typeof config.department_id === 'string' ? config.department_id : null,
+            assignee_id: assigneeId,
+            status: 'backlog',
+            priority: typeof config.priority === 'string' ? config.priority : 'medium',
+            source: 'automation',
+            source_name: String(automation.name ?? 'Automation'),
+            task_type: 'space',
+            is_personal: false,
+            due_date: dueDate,
+          })
+          .select()
+          .single()
+
+        if (error) throw error
+        return { action_type: 'create_task', result: { created_task_id: task?.id } }
+      }
+
+      case 'post_webhook': {
+        const url = typeof config.url === 'string' ? config.url : null
+        if (!url) {
+          return { action_type: 'post_webhook', result: { skipped: true, reason: 'missing_url' } }
+        }
+
+        if (!isSafeWebhookUrl(url)) {
+          return { action_type: 'post_webhook', result: { skipped: true, reason: 'unsafe_url' } }
+        }
+
+        let bodyTemplate = config.body_template
+        if (!bodyTemplate) {
+          bodyTemplate = JSON.stringify(context)
+        } else if (typeof bodyTemplate === 'string') {
+          bodyTemplate = renderTemplate(bodyTemplate, context)
+        }
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: typeof bodyTemplate === 'string' ? bodyTemplate : JSON.stringify(bodyTemplate),
+        })
+
+        const responseBody = await response.text()
+
+        await supabase.from('webhook_delivery_log').insert({
+          automation_id: automation.id,
+          webhook_url: url,
+          payload: context,
+          response_status: response.status,
+          response_body: responseBody.slice(0, 500),
+        })
+
+        return { action_type: 'post_webhook', result: { status: response.status } }
+      }
+
+      default:
+        return { action_type: action.type, result: { skipped: true, reason: 'unknown_action_type' } }
+    }
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    return { action_type: action.type, error: errorMsg }
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -78,46 +290,42 @@ Deno.serve(async (req) => {
     return jsonResponse(405, { error: 'Method not allowed' })
   }
 
-  const authHeader = req.headers.get('Authorization')
-  if (!authHeader) {
-    return jsonResponse(401, { error: 'Missing Authorization header' })
-  }
-
-  const callerClient = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-    { global: { headers: { Authorization: authHeader } } },
-  )
-
-  const { data: { user }, error: authError } = await callerClient.auth.getUser()
-  if (authError || !user) {
-    return jsonResponse(401, { error: 'Invalid or expired token' })
-  }
-
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   )
 
-  const { data: caller } = await supabase
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (caller?.role !== 'super_admin' && caller?.role !== 'dept_lead') {
-    return jsonResponse(403, { error: 'Forbidden: insufficient role' })
+  let body: Record<string, unknown>
+  try {
+    body = await req.json()
+  } catch {
+    return jsonResponse(400, { error: 'Invalid JSON' })
   }
 
-  const body = await req.json().catch(() => null) as
-    | { trigger_type?: string; trigger_payload?: Record<string, unknown> }
-    | null
-
-  const triggerType = body?.trigger_type
-  const triggerPayload = body?.trigger_payload ?? {}
-
+  const triggerType = typeof body.trigger_type === 'string' ? body.trigger_type : null
   if (!triggerType) {
     return jsonResponse(400, { error: 'trigger_type is required' })
+  }
+
+  let newRecord: Record<string, unknown> | null = null
+  let oldRecord: Record<string, unknown> | null = null
+
+  if (triggerType === 'task_status_change' || triggerType === 'task_assigned') {
+    newRecord = typeof body.new_record === 'object' && body.new_record ? (body.new_record as Record<string, unknown>) : null
+    oldRecord = typeof body.old_record === 'object' && body.old_record ? (body.old_record as Record<string, unknown>) : null
+  } else if (triggerType === 'meeting_created') {
+    newRecord = typeof body.record === 'object' && body.record ? (body.record as Record<string, unknown>) : null
+  }
+
+  if (!newRecord) {
+    return jsonResponse(400, { error: 'record data is required' })
+  }
+
+  // Task assigned condition: check if assignment actually changed
+  if (triggerType === 'task_assigned' && oldRecord) {
+    if (oldRecord.assigned_to === newRecord.assigned_to) {
+      return jsonResponse(200, { matched: 0, message: 'No assignment change detected' })
+    }
   }
 
   const { data: automations, error } = await supabase
@@ -127,6 +335,7 @@ Deno.serve(async (req) => {
     .eq('enabled', true)
 
   if (error) {
+    console.error('Error fetching automations:', error.message)
     return jsonResponse(500, { error: error.message })
   }
 
@@ -138,20 +347,31 @@ Deno.serve(async (req) => {
 
   for (const automation of automations) {
     const runStart = Date.now()
-    const actionsTaken: Array<Record<string, unknown>> = []
-    let runStatus: 'success' | 'failed' | 'partial' = 'success'
+    const actionsExecuted: Array<Record<string, unknown>> = []
+    let runSuccess = true
     let runError: string | null = null
 
     try {
-      const conditionsMet = evaluateConditions(automation.conditions, triggerPayload)
+      const triggerConditions = automation.trigger_conditions as TriggerConditions | null
+
+      const conditionsMet = evaluateTriggerConditions(triggerType, triggerConditions, newRecord, oldRecord)
+
       if (!conditionsMet) {
-        results.push({ automation_id: automation.id, skipped: true, reason: 'conditions_not_met' })
         continue
       }
 
+      const actionContext = {
+        ...newRecord,
+        old_status: oldRecord?.status,
+      }
+
       for (const action of automation.actions ?? []) {
-        const result = await executeAction(supabase, action, triggerPayload, automation)
-        actionsTaken.push({ action_type: action.type, result })
+        const actionResult = await executeAction(supabase, action, actionContext, automation)
+        actionsExecuted.push(actionResult)
+
+        if (actionResult.error) {
+          runSuccess = false
+        }
       }
 
       await supabase
@@ -162,156 +382,21 @@ Deno.serve(async (req) => {
         })
         .eq('id', automation.id)
     } catch (err) {
-      runStatus = 'failed'
+      runSuccess = false
       runError = err instanceof Error ? err.message : String(err)
     }
 
-    await supabase.from('automation_runs').insert({
+    await supabase.from('automation_run_log').insert({
       automation_id: automation.id,
-      trigger_payload: triggerPayload,
-      actions_taken: actionsTaken,
-      status: runStatus,
-      error: runError,
-      duration_ms: Date.now() - runStart,
+      trigger_type: triggerType,
+      trigger_payload: { ...body, new_record: newRecord, old_record: oldRecord },
+      actions_executed: actionsExecuted,
+      success: runSuccess,
+      error_message: runError,
     })
 
-    results.push({ automation_id: automation.id, status: runStatus, actions: actionsTaken.length })
+    results.push({ automation_id: automation.id, success: runSuccess, actions: actionsExecuted.length })
   }
 
   return jsonResponse(200, { matched: automations.length, results })
 })
-
-function evaluateConditions(
-  conditions: Array<{ field?: string; operator?: string; value?: unknown }> | null,
-  payload: Record<string, unknown>,
-) {
-  if (!conditions?.length) return true
-
-  return conditions.every((condition) => {
-    const value = condition.field ? payload[condition.field] : undefined
-
-    switch (condition.operator) {
-      case 'equals':
-        return value === condition.value
-      case 'not_equals':
-        return value !== condition.value
-      case 'is_empty':
-        return !value
-      case 'not_empty':
-        return !!value
-      default:
-        return true
-    }
-  })
-}
-
-async function executeAction(
-  supabase: ReturnType<typeof createClient>,
-  action: { type?: string; config?: Record<string, unknown> },
-  payload: Record<string, unknown>,
-  automation: Record<string, unknown>,
-) {
-  const config = action.config ?? {}
-
-  switch (action.type) {
-    case 'notify_user': {
-      const userId = typeof config.user_id === 'string' ? config.user_id : null
-      if (!userId) return { skipped: true, reason: 'missing user_id' }
-
-      await supabase.from('notifications').insert({
-        user_id: userId,
-        type: 'automation',
-        payload: {
-          message: config.message,
-          automation_name: automation.name,
-          ...payload,
-        },
-      })
-
-      return { notified: userId }
-    }
-
-    case 'update_task_status': {
-      const taskId = typeof payload.task_id === 'string' ? payload.task_id : null
-      const status = typeof config.status === 'string' ? config.status : null
-      if (!taskId || !status) return { skipped: true }
-
-      await supabase.from('tasks').update({ status }).eq('id', taskId)
-      return { updated_status: status }
-    }
-
-    case 'create_task': {
-      const taskTitle =
-        typeof config.title_template === 'string'
-          ? config.title_template.replace('{{trigger}}', String(payload.title ?? ''))
-          : String(config.title ?? 'Automation task')
-
-      const { data: task, error } = await supabase
-        .from('tasks')
-        .insert({
-          title: taskTitle,
-          department_id:
-            typeof config.department_id === 'string'
-              ? config.department_id
-              : (automation.department_id as string | null) ?? null,
-          assignee_id: typeof config.assignee_id === 'string' ? config.assignee_id : null,
-          status: 'backlog',
-          priority: typeof config.priority === 'string' ? config.priority : 'medium',
-          source: 'automation',
-          source_name: String(automation.name ?? 'Automation'),
-          task_type: 'space',
-          is_personal: false,
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-      return { created_task_id: task?.id }
-    }
-
-    case 'post_webhook': {
-      const url = typeof config.url === 'string' ? config.url : null
-      if (!url) return { skipped: true, reason: 'missing url' }
-      if (!isSafeWebhookUrl(url)) return { skipped: true, reason: 'unsafe_url' }
-
-      const requestPayload = { ...payload, automation_name: automation.name }
-      let responseStatus: number | null = null
-      let responseBody: string | null = null
-
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestPayload),
-        })
-
-        responseStatus = response.status
-        const bodyText = await response.text()
-        responseBody = bodyText.slice(0, 500)
-
-        await supabase.from('webhook_delivery_log').insert({
-          automation_id: automation.id,
-          webhook_url: url,
-          payload: requestPayload,
-          response_status: responseStatus,
-          response_body: responseBody,
-        })
-
-        return { webhook_status: responseStatus }
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-        await supabase.from('webhook_delivery_log').insert({
-          automation_id: automation.id,
-          webhook_url: url,
-          payload: requestPayload,
-          response_status: null,
-          response_body: errorMessage.slice(0, 500),
-        })
-        throw err
-      }
-    }
-
-    default:
-      return { skipped: true, reason: `unknown action type: ${action.type}` }
-  }
-}

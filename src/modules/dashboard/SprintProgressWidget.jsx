@@ -9,7 +9,7 @@ const STATUS_COLORS = {
   review:   { bg: '#FFF8EC', text: '#D17A1C' },
 }
 
-export default function SprintProgressWidget({ userId }) {
+export default function SprintProgressWidget({ role, userId, departmentId }) {
   const [sprints, setSprints] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -18,18 +18,58 @@ export default function SprintProgressWidget({ userId }) {
     async function load() {
       setLoading(true)
       try {
-        const { data: memberRows } = await supabase
-          .from('sprint_members')
-          .select('sprint:sprints(id, name, status, start_date, end_date)')
-          .eq('user_id', userId)
+        let query = supabase
+          .from('sprints')
+          .select('id, name, status, start_date, end_date, department_id')
+          .in('status', ['planning', 'active', 'review'])
 
-        const rawSprints = (memberRows ?? [])
-          .map(r => r.sprint)
-          .filter(s => s && ['planning', 'active', 'review'].includes(s.status))
-          .slice(0, 3)
+        // SCOPING FIX: role-based filtering for sprints visibility
+        if (role === 'dept_lead' && departmentId) {
+          query = query.eq('department_id', departmentId)
+        } else if (role === 'member') {
+          // member: only show sprints they are members of
+          const { data: memberRows } = await supabase
+            .from('sprint_members')
+            .select('sprint_id')
+            .eq('user_id', userId)
+          const sprintIds = (memberRows ?? []).map(r => r.sprint_id)
+          if (sprintIds.length === 0) {
+            if (active) setSprints([])
+            if (active) setLoading(false)
+            return
+          }
+          query = query.in('id', sprintIds)
+        } else if (role === 'pastor') {
+          // SCOPING FIX: pastor — filter to sprints containing their assigned members
+          const { data: flockRows } = await supabase
+            .from('pastor_members')
+            .select('member_id')
+            .eq('pastor_id', userId)
+          const memberIds = (flockRows ?? []).map(r => r.member_id)
+          if (memberIds.length === 0) {
+            if (active) setSprints([])
+            if (active) setLoading(false)
+            return
+          }
+          const { data: sprintMemberRows } = await supabase
+            .from('sprint_members')
+            .select('sprint_id')
+            .in('user_id', memberIds)
+          const sprintIds = [...new Set((sprintMemberRows ?? []).map(r => r.sprint_id))]
+          if (sprintIds.length === 0) {
+            if (active) setSprints([])
+            if (active) setLoading(false)
+            return
+          }
+          query = query.in('id', sprintIds)
+        }
+
+        const { data: rawSprints } = await query
+
+        const filteredSprints = (rawSprints ?? []).slice(0, 3)
 
         const withProgress = await Promise.all(
-          rawSprints.map(async (sprint) => {
+          filteredSprints.map(async (sprint) => {
             const { data: tasks } = await supabase
               .from('tasks')
               .select('id, status_definition:task_status_definitions!status_id(category)')
@@ -49,7 +89,7 @@ export default function SprintProgressWidget({ userId }) {
     }
     load()
     return () => { active = false }
-  }, [userId])
+  }, [role, userId, departmentId])
 
   if (loading) return <div style={{ fontSize: 12.5, color: '#9E9488' }}>Loading…</div>
   if (sprints.length === 0) return (

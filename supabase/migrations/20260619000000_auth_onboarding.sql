@@ -1,3 +1,5 @@
+create extension if not exists pgcrypto;
+
 create or replace view public.user_invites as
 select * from public.user_invitations;
 
@@ -21,7 +23,7 @@ alter table public.user_invitations
   check (status in ('pending', 'accepted', 'expired', 'revoked'));
 
 update public.user_invitations
-set invitation_token_hash = encode(digest(invitation_token, 'sha256'), 'hex')
+set invitation_token_hash = encode(digest(invitation_token::bytea, 'sha256'::text), 'hex')
 where invitation_token is not null
   and invitation_token_hash is null;
 
@@ -72,7 +74,7 @@ begin
   end if;
 
   v_token := encode(gen_random_bytes(24), 'hex');
-  v_hash := encode(digest(v_token, 'sha256'), 'hex');
+  v_hash := encode(digest(v_token::bytea, 'sha256'::text), 'hex');
 
   update public.user_invitations
   set
@@ -106,7 +108,7 @@ security definer
 set search_path = public, auth
 as $$
 declare
-  v_hash text := encode(digest(p_token, 'sha256'), 'hex');
+  v_hash text := encode(digest(p_token::bytea, 'sha256'::text), 'hex');
 begin
   update public.user_invitations
   set
@@ -396,7 +398,7 @@ declare
   v_auth_email text;
   v_user public.users%rowtype;
   v_full_name text;
-  v_hash text := encode(digest(p_token, 'sha256'), 'hex');
+  v_hash text := encode(digest(p_token::bytea, 'sha256'::text), 'hex');
 begin
   if auth.uid() is null then
     raise exception 'Authentication required';

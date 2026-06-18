@@ -5,6 +5,7 @@ import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { supabase } from '../../lib/supabase'
 import EmailComposer from '../../modules/communications/EmailComposer'
 import EmailPreviewModal from '../../modules/communications/EmailPreviewModal'
+import EmailSignatureEditor from '../../modules/communications/EmailSignatureEditor'
 import SegmentBuilderAdvanced from '../../modules/communications/SegmentBuilderAdvanced'
 import { Edit2, BarChart3 } from 'lucide-react'
 
@@ -87,12 +88,17 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   const [templates, setTemplates]   = useState([])
   const [selectedTemplate, setSelectedTemplate] = useState('')
   const [draftCampaignId, setDraftCampaignId] = useState(initial?.id ?? null)
+  const [orgSignature, setOrgSignature] = useState('')
+  const [useOrgSignature, setUseOrgSignature] = useState(false)
+  const [showSignatureEditor, setShowSignatureEditor] = useState(false)
 
   useEffect(() => {
     supabase.from('communication_segments').select('id, name, estimated_count').order('name')
       .then(({ data }) => setSegments(data ?? []))
     supabase.from('absence_email_templates').select('id, name, subject, body').order('name')
       .then(({ data }) => setTemplates(data ?? []))
+    supabase.from('app_settings').select('value').eq('key', 'email_signature').single()
+      .then(({ data }) => { if (data) setOrgSignature(data.value || '') })
   }, [])
 
   function convertETtoUTC(date, time) {
@@ -177,10 +183,12 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       scheduledAt = convertETtoUTC(scheduledDate, scheduledTime)
     }
 
+    const finalBody = useOrgSignature && orgSignature ? `${body.trim()}\n\n${orgSignature}` : body.trim()
+
     const payload = {
       name:              name.trim(),
       subject:           subject.trim(),
-      body:              body.trim(),
+      body:              finalBody,
       status,
       segment_id:        segmentId || null,
       recipient_filters: useCustomFilter ? inlineConditions : [],
@@ -239,8 +247,9 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   }
 
   async function handleSendTest(testEmail) {
+    const finalBody = useOrgSignature && orgSignature ? `${body}\n\n${orgSignature}` : body
     await supabase.functions.invoke('send-communication-email', {
-      body: { to: [{ name: 'Test Recipient', email: testEmail }], subject: `[TEST] ${subject}`, body },
+      body: { to: [{ name: 'Test Recipient', email: testEmail }], subject: `[TEST] ${subject}`, body: finalBody },
     })
   }
 
@@ -387,6 +396,28 @@ function CampaignForm({ initial, onSaved, onCancel }) {
             </select>
           </label>
 
+          {/* Email signature section */}
+          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: TEXT, cursor: 'pointer' }}>
+                <input type="checkbox" checked={useOrgSignature} onChange={(e) => setUseOrgSignature(e.target.checked)} />
+                Use organization signature
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowSignatureEditor(true)}
+                style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Edit signature
+              </button>
+            </div>
+            {orgSignature && (
+              <div style={{ fontSize: 11, color: MUTED, background: '#F4F1EA', borderRadius: 8, padding: '8px 10px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: 100, overflow: 'hidden' }}>
+                {orgSignature}
+              </div>
+            )}
+          </div>
+
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: TEXT, cursor: 'pointer' }}>
             <input type="checkbox" checked={abEnabled} onChange={(e) => setAbEnabled(e.target.checked)} />
             Enable A/B subject test
@@ -412,22 +443,22 @@ function CampaignForm({ initial, onSaved, onCancel }) {
                   {subjectB.length} / 60 characters
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: 1 }}>
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', flexDirection: window.innerWidth <= 768 ? 'column' : 'row' }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: window.innerWidth <= 768 ? 'none' : 1 }}>
                   Test group size
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <input type="range" min={10} max={50} value={splitPercent} onChange={(e) => setSplitPercent(Number(e.target.value))} style={{ flex: 1 }} />
                     <span style={{ fontSize: 13, color: TEXT, fontWeight: 700, minWidth: 32 }}>{splitPercent}%</span>
                   </div>
                 </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: 1 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: window.innerWidth <= 768 ? 'none' : 1 }}>
                   Metric
                   <select value={abMetric} onChange={(e) => setAbMetric(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '7px 10px', fontSize: 13, fontFamily: 'inherit' }}>
                     <option value="opens">Opens</option>
                     <option value="clicks">Clicks</option>
                   </select>
                 </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: 1 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: window.innerWidth <= 768 ? 'none' : 1 }}>
                   Pick winner after
                   <select value={abHours} onChange={(e) => setAbHours(Number(e.target.value))} style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '7px 10px', fontSize: 13, fontFamily: 'inherit' }}>
                     {[1, 2, 4, 8].map((h) => <option key={h} value={h}>{h}h</option>)}
@@ -471,33 +502,33 @@ function CampaignForm({ initial, onSaved, onCancel }) {
 
           {/* Read-only review summary */}
           <div style={{ background: BG, borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}`, flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 4 : 0 }}>
               <span style={{ color: MUTED }}>Campaign name</span>
-              <strong style={{ color: TEXT }}>{name || '—'}</strong>
+              <strong style={{ color: TEXT, wordBreak: 'break-word' }}>{name || '—'}</strong>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}`, flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 4 : 0 }}>
               <span style={{ color: MUTED }}>From name</span>
               <strong style={{ color: TEXT }}>{fromName || '—'}</strong>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}`, flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 4 : 0 }}>
               <span style={{ color: MUTED }}>Recipients</span>
-              <strong style={{ color: TEXT }}>
+              <strong style={{ color: TEXT, wordBreak: 'break-word' }}>
                 {useCustomFilter ? `Custom filter (~${inlineCount})` : (segments.find((s) => s.id === segmentId)?.name ?? 'None')}
               </strong>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}`, flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 4 : 0 }}>
               <span style={{ color: MUTED }}>Subject</span>
-              <strong style={{ color: TEXT }}>
+              <strong style={{ color: TEXT, wordBreak: 'break-word' }}>
                 {abEnabled && subjectA && subjectB ? `${subjectA} / ${subjectB}` : subject || '—'}
               </strong>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}`, flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 4 : 0 }}>
               <span style={{ color: MUTED }}>Send time</span>
               <strong style={{ color: TEXT }}>
                 {scheduleMode === 'now' ? 'Now' : scheduledAt ? new Date(scheduledAt).toLocaleString() : '(no date set)'}
               </strong>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 4 : 0 }}>
               <span style={{ color: MUTED }}>Recurring</span>
               <strong style={{ color: TEXT }}>
                 {abEnabled ? `A/B test — ${splitPercent}% split, pick winner after ${abHours}h` : 'None'}
@@ -524,12 +555,12 @@ function CampaignForm({ initial, onSaved, onCancel }) {
 
           {scheduleMode === 'later' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', flexDirection: window.innerWidth <= 640 ? 'column' : 'row' }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: window.innerWidth <= 640 ? 'none' : 1 }}>
                   Date
                   <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
                 </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: window.innerWidth <= 640 ? 'none' : 1 }}>
                   Time
                   <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
                 </label>
@@ -599,23 +630,23 @@ function CampaignForm({ initial, onSaved, onCancel }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 4 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 4, flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 12 : 0 }}>
+        <div style={{ display: 'flex', gap: 8, flexDirection: window.innerWidth <= 640 ? 'column' : 'row' }}>
           {step > 1 ? (
-            <button type="button" onClick={() => setStep((s) => s - 1)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            <button type="button" onClick={() => setStep((s) => s - 1)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: window.innerWidth <= 640 ? '100%' : 'auto' }}>
               {step === 5 ? '← Back to edit' : 'Back'}
             </button>
           ) : null}
-          <button type="button" onClick={onCancel} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          <button type="button" onClick={onCancel} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: window.innerWidth <= 640 ? '100%' : 'auto' }}>
             Cancel
           </button>
         </div>
         {step < 4 ? (
-          <button type="button" onClick={handleNext} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          <button type="button" onClick={handleNext} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', width: window.innerWidth <= 640 ? '100%' : 'auto' }}>
             Next
           </button>
         ) : step === 4 ? (
-          <button type="button" onClick={handleNext} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          <button type="button" onClick={handleNext} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', width: window.innerWidth <= 640 ? '100%' : 'auto' }}>
             Next
           </button>
         ) : (
@@ -623,7 +654,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
             type="button"
             onClick={handleSubmit}
             disabled={saving}
-            style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}
+            style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1, width: window.innerWidth <= 640 ? '100%' : 'auto' }}
           >
             {saving ? 'Saving...' : 'Confirm and send'}
           </button>
@@ -633,10 +664,17 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       {preview ? (
         <EmailPreviewModal
           subject={subject}
-          body={body}
+          body={useOrgSignature && orgSignature ? `${body}\n\n${orgSignature}` : body}
           previewRecipient={null}
           onClose={() => setPreview(false)}
           onSendTest={handleSendTest}
+        />
+      ) : null}
+
+      {showSignatureEditor ? (
+        <EmailSignatureEditor
+          onClose={() => setShowSignatureEditor(false)}
+          onSaved={(newSignature) => setOrgSignature(newSignature)}
         />
       ) : null}
     </div>

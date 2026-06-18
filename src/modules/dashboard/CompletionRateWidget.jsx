@@ -14,38 +14,47 @@ export default function CompletionRateWidget({ role, userId, departmentId }) {
         const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString()
         const lastWeekStart = subWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), 1).toISOString()
 
-        function applyRoleFilter(query) {
+        // Helper to apply role-based filtering
+        async function applyRoleFilter(query) {
           if (role === 'member') return query.eq('assignee_id', userId)
           if (role === 'dept_lead' && departmentId) return query.eq('department_id', departmentId)
+          // SCOPING FIX: pastor — should filter to assigned members only
+          if (role === 'pastor') {
+            const { data: flockRows } = await supabase
+              .from('pastor_members')
+              .select('member_id')
+              .eq('pastor_id', userId)
+            const ids = (flockRows ?? []).map(r => r.member_id)
+            return ids.length === 0 ? query.eq('assignee_id', 'null-uuid-never-matches') : query.in('assignee_id', ids)
+          }
           return query
         }
 
-        const [completedRes, createdRes, lastWeekRes] = await Promise.allSettled([
-          applyRoleFilter(
-            supabase
-              .from('tasks')
-              .select('id', { count: 'exact', head: true })
-              .in('status', ['done', 'completed'])
-              .gte('updated_at', weekStart)
-              .eq('is_personal', false),
-          ),
-          applyRoleFilter(
-            supabase
-              .from('tasks')
-              .select('id', { count: 'exact', head: true })
-              .gte('created_at', weekStart)
-              .eq('is_personal', false),
-          ),
-          applyRoleFilter(
-            supabase
-              .from('tasks')
-              .select('id', { count: 'exact', head: true })
-              .in('status', ['done', 'completed'])
-              .gte('updated_at', lastWeekStart)
-              .lt('updated_at', weekStart)
-              .eq('is_personal', false),
-          ),
-        ])
+        const q1 = await applyRoleFilter(
+          supabase
+            .from('tasks')
+            .select('id', { count: 'exact', head: true })
+            .in('status', ['done', 'completed'])
+            .gte('updated_at', weekStart)
+            .eq('is_personal', false),
+        )
+        const q2 = await applyRoleFilter(
+          supabase
+            .from('tasks')
+            .select('id', { count: 'exact', head: true })
+            .gte('created_at', weekStart)
+            .eq('is_personal', false),
+        )
+        const q3 = await applyRoleFilter(
+          supabase
+            .from('tasks')
+            .select('id', { count: 'exact', head: true })
+            .in('status', ['done', 'completed'])
+            .gte('updated_at', lastWeekStart)
+            .lt('updated_at', weekStart)
+            .eq('is_personal', false),
+        )
+        const [completedRes, createdRes, lastWeekRes] = await Promise.allSettled([q1, q2, q3])
 
         if (!active) return
         setData({

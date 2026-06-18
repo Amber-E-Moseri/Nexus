@@ -8,6 +8,7 @@ const ORDERED_TYPES = [
   'event_approved',
   'event_rejected',
   'task_due_soon',
+  'email_digest',
 ]
 
 function Toggle({ checked, onClick }) {
@@ -50,9 +51,11 @@ export default function NotificationsSection({ prefs, role, onTogglePref }) {
                 <div className="text-base font-semibold text-[var(--text-primary)]">
                   {NOTIFICATION_TYPES[type]?.label ?? type}
                 </div>
-                <div className="mt-1 text-sm text-[var(--text-secondary)]">
-                  {NOTIFICATION_TYPES[type]?.description ?? 'Toggle this notification on or off.'}
-                </div>
+                {NOTIFICATION_TYPES[type]?.description && (
+                  <div className="mt-1 text-sm text-[var(--text-secondary)]">
+                    {NOTIFICATION_TYPES[type].description}
+                  </div>
+                )}
               </div>
 
               <Toggle checked={enabled} onClick={() => onTogglePref(type)} />

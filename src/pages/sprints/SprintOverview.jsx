@@ -226,6 +226,53 @@ export default function SprintOverview() {
     }
   }
 
+  async function handleExportToGoogleDrive() {
+    if (!detail?.sprint || !tasks) return
+
+    try {
+      // Generate CSV content
+      const headers = ['Title', 'Status', 'Assignee', 'Due Date']
+      const rows = tasks.map((task) => [
+        task.title,
+        task.status_name || 'Unknown',
+        task.assigned_to_name || 'Unassigned',
+        task.due_at ? new Date(task.due_at).toLocaleDateString() : 'None',
+      ])
+
+      let csv = headers.join(',') + '\n'
+      csv += rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
+
+      const { data: { session } } = await supabase.auth.getSession()
+      const fileName = `Sprint Report - ${detail.sprint.name}.csv`
+
+      const formData = new FormData()
+      formData.append('file', new Blob([csv], { type: 'text/csv' }), fileName)
+      formData.append('file_name', fileName)
+      formData.append('meeting_id', detail.sprint.id) // Use as identifier for tracking
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-drive-upload`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: formData,
+        }
+      )
+
+      if (!response.ok) {
+        const error = await response.json()
+        alert(`Export failed: ${error.error}`)
+        return
+      }
+
+      alert('Sprint report exported to Google Drive!')
+    } catch (err) {
+      alert(`Export error: ${String(err)}`)
+    }
+  }
+
   if (loading) {
     return <div style={{ padding: '1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading...</div>
   }
@@ -261,6 +308,9 @@ export default function SprintOverview() {
                 Duplicate
               </button>
             ) : null}
+            <button type="button" onClick={handleExportToGoogleDrive} className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
+              Export to Drive
+            </button>
           </div>
         </div>
       </div>

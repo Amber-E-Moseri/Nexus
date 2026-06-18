@@ -40,7 +40,9 @@ const SprintsList = lazy(() => import('./pages/sprints/SprintsList'))
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
 const Settings = lazy(() => import('./pages/settings/Settings'))
 const IntegrationStatusPage = lazy(() => import('./pages/settings/IntegrationStatusPage'))
+const GoogleDriveAuthCallback = lazy(() => import('./pages/auth/GoogleDriveAuthCallback'))
 const ApiDocumentationPage = lazy(() => import('./pages/ApiDocumentationPage'))
+const ActivityLogPage = lazy(() => import('./pages/ActivityLogPage'))
 
 function onError(error, errorInfo) {
   console.error('[AppErrorBoundary]', error, errorInfo)
@@ -56,12 +58,21 @@ export default function App() {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/activate" element={<ActivateInvitation />} />
       <Route path="/accept-invite" element={<ActivateInvitation />} />
+      <Route path="/auth/google-drive/callback" element={<GoogleDriveAuthCallback />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>
           <Route path="/" element={<Home />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route
+            path="/activity-log"
+            element={
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+                <ActivityLogPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/my-tasks" element={<MyTasks />} />
           <Route path="/calendar" element={<MinistryCalendar />} />

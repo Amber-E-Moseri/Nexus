@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import AbsenceAlerts from '../components/attendance-trends/AbsenceAlerts'
-import RoleBarChart from '../components/attendance-trends/RoleBarChart'
 import SubgroupRankingTable from '../components/attendance-trends/SubgroupRankingTable'
-import TrendLineChart from '../components/attendance-trends/TrendLineChart'
 import TrendsFilters from '../components/attendance-trends/TrendsFilters'
 import { useAttendanceTrends } from '../hooks/useAttendanceTrends'
+
+const RoleBarChart = lazy(() => import('../components/attendance-trends/RoleBarChart'))
+const TrendLineChart = lazy(() => import('../components/attendance-trends/TrendLineChart'))
 
 function KpiTile({ label, value, bg, bd, circle, labelColor, valueColor }) {
   return (
@@ -77,14 +78,14 @@ export default function AttendanceTrendsDashboard() {
 
               {/* Chart Skeleton */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16 }}>
-                <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 14, padding: '18px', minHeight: 280, background: '#E8E4DC' }} />
-                <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 14, padding: '18px', minHeight: 280, background: '#E8E4DC' }} />
+                <div style={{ background: '#E8E4DC', border: '1px solid #EDE8DC', borderRadius: 14, padding: '18px', minHeight: 280 }} />
+                <div style={{ background: '#E8E4DC', border: '1px solid #EDE8DC', borderRadius: 14, padding: '18px', minHeight: 280 }} />
               </div>
 
               {/* Table + Alerts Skeleton */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
-                <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 14, padding: '18px', minHeight: 200, background: '#E8E4DC' }} />
-                <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 14, padding: '18px', minHeight: 200, background: '#E8E4DC' }} />
+                <div style={{ background: '#E8E4DC', border: '1px solid #EDE8DC', borderRadius: 14, padding: '18px', minHeight: 200 }} />
+                <div style={{ background: '#E8E4DC', border: '1px solid #EDE8DC', borderRadius: 14, padding: '18px', minHeight: 200 }} />
               </div>
             </>
           )}
@@ -102,10 +103,14 @@ export default function AttendanceTrendsDashboard() {
               {/* Trend line + role bar chart */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16, alignItems: 'start' }}>
                 <Card title={`Monthly Attendance % — ${selectedSubgroupName} (${new Date().getFullYear()})`}>
-                  <TrendLineChart data={monthlyTrend} />
+                  <Suspense fallback={<div style={{ height: 280, background: '#F4F1EA', borderRadius: 8 }} />}>
+                    <TrendLineChart data={monthlyTrend} />
+                  </Suspense>
                 </Card>
                 <Card title="Attendance by Leadership Role (most recent meeting)">
-                  <RoleBarChart data={roleBreakdown} />
+                  <Suspense fallback={<div style={{ height: 280, background: '#F4F1EA', borderRadius: 8 }} />}>
+                    <RoleBarChart data={roleBreakdown} />
+                  </Suspense>
                 </Card>
               </div>
 

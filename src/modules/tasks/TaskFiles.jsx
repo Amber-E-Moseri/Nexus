@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { attachFileLink, getTaskFiles, removeTaskFile } from '../../lib/tasks'
 import { safeHref } from '../../lib/urlUtils'
+import { supabase } from '../../lib/supabase'
 
 function fileIcon(url) {
   if (!url) return '📎'
@@ -23,6 +24,9 @@ export default function TaskFiles({ taskId }) {
   const [saving, setSaving] = useState(false)
   const [attachError, setAttachError] = useState(null)
   const [removeError, setRemoveError] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     let active = true
@@ -65,6 +69,57 @@ export default function TaskFiles({ taskId }) {
       setFiles((prev) => prev.filter((file) => file.id !== fileId))
     } catch {
       setRemoveError('Could not remove file. Try again.')
+    }
+  }
+
+  async function handleFileUpload(file) {
+    if (!file) return
+
+    setUploadError(null)
+    setUploading(true)
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('file_name', file.name)
+      formData.append('task_id', taskId)
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-drive-upload`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: formData,
+        }
+      )
+
+      if (!response.ok) {
+        const error = await response.json()
+        setUploadError(error.error || 'Upload failed')
+        return
+      }
+
+      const { web_view_link } = await response.json()
+
+      // Add the file to the list
+      const newFile = {
+        id: `drive-${Date.now()}`,
+        name: file.name,
+        url: web_view_link,
+      }
+
+      setFiles((prev) => [...prev, newFile])
+    } catch (err) {
+      setUploadError(`Upload error: ${String(err)}`)
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     }
   }
 
@@ -127,9 +182,69 @@ export default function TaskFiles({ taskId }) {
             <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--coral-dark)' }}>{removeError}</div>
           ) : null}
 
-          {adding ? (
+          {uploading ? (
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+              Uploading {fileInputRef.current?.files?.[0]?.name || 'file'}…
+            </div>
+          ) : null}
+
+          {uploadError ? (
+            <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--coral-dark)' }}>
+              {uploadError}
+            </div>
+          ) : null}
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              style={{
+                fontSize: 11, color: '#4C2A92',
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                opacity: uploading ? 0.5 : 1,
+              }}
+            >
+              ↑ Upload to Drive
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={(e) => handleFileUpload(e.target.files?.[0])}
+              style={{ display: 'none' }}
+            />
+
+            {adding ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setAdding(false); setName(''); setUrl('') }}
+                  style={{
+                    fontSize: 11, padding: '0',
+                    background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)',
+                  }}
+                >
+                  + Attach link
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAdding(true)}
+                style={{
+                  fontSize: 11, color: 'var(--accent)',
+                  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                }}
+              >
+                + Attach link
+              </button>
+            )}
+          </div>
+
+          {adding && !uploading ? (
             <div
               style={{
+                marginTop: 8,
                 padding: '10px', borderRadius: 8,
                 background: 'var(--surface-secondary)',
                 border: '0.5px solid var(--border)',
@@ -193,18 +308,7 @@ export default function TaskFiles({ taskId }) {
                 <div style={{ marginTop: 8, fontSize: 12, color: 'var(--coral-dark)' }}>{attachError}</div>
               ) : null}
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              style={{
-                fontSize: 11, color: 'var(--accent)',
-                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-              }}
-            >
-              + Attach link
-            </button>
-          )}
+          ) : null}
         </>
       )}
     </div>

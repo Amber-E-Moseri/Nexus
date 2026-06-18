@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { supabase } from '../../lib/supabase'
 
 const PRIMARY = '#4C2A92'
@@ -31,6 +32,8 @@ function Modal({ title, wide, onClose, children }) {
 export default function RecipientsPage() {
   const navigate = useNavigate()
   const { profile } = useAuth()
+  const windowWidth = useWindowWidth()
+  const isMobile = windowWidth <= 768
   const [tab, setTab] = useState('all') // 'all' | 'suppressed'
   const [profiles, setProfiles] = useState([])
   const [suppressedRows, setSuppressedRows] = useState([])
@@ -242,18 +245,18 @@ export default function RecipientsPage() {
         ) : tab === 'all' ? (
           <>
             {/* Filters */}
-            <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', flexDirection: isMobile ? 'column' : 'row' }}>
               <input
                 type="text"
                 placeholder="Search by name or email..."
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, minWidth: 200, outline: 'none' }}
+                style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, minWidth: isMobile ? 'auto' : 200, outline: 'none', width: isMobile ? '100%' : 'auto' }}
               />
               <select
                 value={filterDept}
                 onChange={(e) => setFilterDept(e.target.value)}
-                style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none' }}
+                style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none', flex: isMobile ? 1 : 'initial', width: isMobile ? '100%' : 'auto' }}
               >
                 <option value="">All departments</option>
                 {departments.map((d) => (
@@ -263,7 +266,7 @@ export default function RecipientsPage() {
               <select
                 value={filterSubscribed}
                 onChange={(e) => setFilterSubscribed(e.target.value)}
-                style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none' }}
+                style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none', flex: isMobile ? 1 : 'initial', width: isMobile ? '100%' : 'auto' }}
               >
                 <option value="">All</option>
                 <option value="subscribed">Subscribed only</option>
@@ -273,84 +276,142 @@ export default function RecipientsPage() {
 
             {/* Bulk actions */}
             {selectedRows.size > 0 ? (
-              <div style={{ background: '#EDE8F8', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: PRIMARY }}>{selectedRows.size} selected</span>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button type="button" onClick={handleSuppressSelected} style={{ border: `1px solid ${PRIMARY}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              <div style={{ background: '#EDE8F8', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 10 : 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: PRIMARY, textAlign: isMobile ? 'center' : 'left' }}>{selectedRows.size} selected</span>
+                <div style={{ display: 'flex', gap: 8, flexDirection: isMobile ? 'column' : 'row' }}>
+                  <button type="button" onClick={handleSuppressSelected} style={{ border: `1px solid ${PRIMARY}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', flex: isMobile ? 1 : 'initial' }}>
                     Suppress selected
                   </button>
-                  <button type="button" onClick={handleReactivateSelected} style={{ border: `1px solid ${PRIMARY}`, background: PRIMARY, color: '#FFFFFF', borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  <button type="button" onClick={handleReactivateSelected} style={{ border: `1px solid ${PRIMARY}`, background: PRIMARY, color: '#FFFFFF', borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', flex: isMobile ? 1 : 'initial' }}>
                     Reactivate selected
                   </button>
                 </div>
               </div>
             ) : null}
 
-            {/* Table */}
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', background: '#FFFFFF', borderRadius: 14, overflow: 'hidden' }}>
-                <thead>
-                  <tr style={{ background: BG }}>
-                    <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${BORDER}` }}>
-                      <input
-                        type="checkbox"
-                        checked={selectAll && filteredProfiles.length > 0}
-                        onChange={(e) => handleSelectAll(e.target.checked)}
-                        style={{ cursor: 'pointer' }}
-                      />
-                    </th>
-                    {['Name', 'Email', 'Department', 'Role', 'Subscribed', 'Actions'].map((h) => (
-                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${BORDER}` }}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredProfiles.map((profile) => {
-                    const isSelected = selectedRows.has(profile.id)
-                    const isSuppressed = suppressedIds.has(profile.id)
-                    const dept = departments.find((d) => d.id === profile.department_id)
+            {/* Table / Card view */}
+            {isMobile ? (
+              // Mobile card-based layout
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={selectAll && filteredProfiles.length > 0}
+                    onChange={(e) => handleSelectAll(e.target.checked)}
+                    style={{ cursor: 'pointer', width: 18, height: 18 }}
+                  />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: MUTED }}>Select all</span>
+                </div>
+                {filteredProfiles.map((profile) => {
+                  const isSelected = selectedRows.has(profile.id)
+                  const isSuppressed = suppressedIds.has(profile.id)
+                  const dept = departments.find((d) => d.id === profile.department_id)
 
-                    return (
-                      <tr key={profile.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                        <td style={{ padding: '12px 14px' }}>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleSelectRow(profile.id)}
-                            style={{ cursor: 'pointer' }}
-                          />
-                        </td>
-                        <td style={{ padding: '12px 14px', color: TEXT, fontSize: 13, fontWeight: 600 }}>{profile.full_name || '—'}</td>
-                        <td style={{ padding: '12px 14px', color: TEXT, fontSize: 13 }}>{profile.email}</td>
-                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{dept?.name ?? '—'}</td>
-                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13, textTransform: 'capitalize' }}>{profile.role ?? '—'}</td>
-                        <td style={{ padding: '12px 14px', fontSize: 13 }}>
-                          <span style={{ fontSize: 16 }}>{isSuppressed ? '🚫' : '✅'}</span>
-                        </td>
-                        <td style={{ padding: '12px 14px' }}>
-                          {isSuppressed ? (
-                            <button type="button" onClick={() => handleReactivate(profile.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#2D8653', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                              Reactivate
-                            </button>
-                          ) : (
-                            <button type="button" onClick={() => handleSuppress(profile.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                              Suppress
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {filteredProfiles.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} style={{ padding: 20, textAlign: 'center', color: MUTED, fontSize: 13 }}>No members found.</td>
+                  return (
+                    <div key={profile.id} style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleSelectRow(profile.id)}
+                          style={{ cursor: 'pointer', marginTop: 2, width: 18, height: 18 }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: TEXT, marginBottom: 2 }}>{profile.full_name || '—'}</div>
+                          <div style={{ fontSize: 12, color: TEXT, wordBreak: 'break-word', marginBottom: 6 }}>{profile.email}</div>
+                          <div style={{ fontSize: 12, color: MUTED }}>
+                            {dept?.name ?? '—'} · {profile.role ?? '—'}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 18, flexShrink: 0 }}>
+                          {isSuppressed ? '🚫' : '✅'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {isSuppressed ? (
+                          <button type="button" onClick={() => handleReactivate(profile.id)} style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#2D8653', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                            Reactivate
+                          </button>
+                        ) : (
+                          <button type="button" onClick={() => handleSuppress(profile.id)} style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                            Suppress
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+                {filteredProfiles.length === 0 && (
+                  <div style={{ padding: 20, textAlign: 'center', color: MUTED, fontSize: 13 }}>No members found.</div>
+                )}
+              </div>
+            ) : (
+              // Desktop table layout
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', background: '#FFFFFF', borderRadius: 14, overflow: 'hidden' }}>
+                  <thead>
+                    <tr style={{ background: BG }}>
+                      <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${BORDER}` }}>
+                        <input
+                          type="checkbox"
+                          checked={selectAll && filteredProfiles.length > 0}
+                          onChange={(e) => handleSelectAll(e.target.checked)}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </th>
+                      {['Name', 'Email', 'Department', 'Role', 'Subscribed', 'Actions'].map((h) => (
+                        <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${BORDER}` }}>
+                          {h}
+                        </th>
+                      ))}
                     </tr>
+                  </thead>
+                  <tbody>
+                    {filteredProfiles.map((profile) => {
+                      const isSelected = selectedRows.has(profile.id)
+                      const isSuppressed = suppressedIds.has(profile.id)
+                      const dept = departments.find((d) => d.id === profile.department_id)
+
+                      return (
+                        <tr key={profile.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                          <td style={{ padding: '12px 14px' }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleSelectRow(profile.id)}
+                              style={{ cursor: 'pointer' }}
+                            />
+                          </td>
+                          <td style={{ padding: '12px 14px', color: TEXT, fontSize: 13, fontWeight: 600 }}>{profile.full_name || '—'}</td>
+                          <td style={{ padding: '12px 14px', color: TEXT, fontSize: 13 }}>{profile.email}</td>
+                          <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{dept?.name ?? '—'}</td>
+                          <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13, textTransform: 'capitalize' }}>{profile.role ?? '—'}</td>
+                          <td style={{ padding: '12px 14px', fontSize: 13 }}>
+                            <span style={{ fontSize: 16 }}>{isSuppressed ? '🚫' : '✅'}</span>
+                          </td>
+                          <td style={{ padding: '12px 14px' }}>
+                            {isSuppressed ? (
+                              <button type="button" onClick={() => handleReactivate(profile.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#2D8653', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                                Reactivate
+                              </button>
+                            ) : (
+                              <button type="button" onClick={() => handleSuppress(profile.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                                Suppress
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                    {filteredProfiles.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} style={{ padding: 20, textAlign: 'center', color: MUTED, fontSize: 13 }}>No members found.</td>
+                      </tr>
                   ) : null}
-                </tbody>
-              </table>
-            </div>
+                  </tbody>
+                </table>
+              </div>
+            )}
           </>
         ) : (
           <>

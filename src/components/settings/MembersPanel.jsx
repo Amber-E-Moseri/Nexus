@@ -3,6 +3,7 @@ import Avatar from '../ui/Avatar'
 import Badge from '../ui/Badge'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../context/ToastContext'
+import { supabase } from '../../lib/supabase'
 import { listUsers, listInvitations, listDepartments } from '../../lib/people/api'
 import { deactivateUser, reactivateUser, updateUserRole, revokeInvitation } from '../../lib/users'
 
@@ -173,6 +174,24 @@ export default function MembersPanel() {
     }
   }
 
+  const handleDepartmentChange = async (userId, userName, newDepartmentId) => {
+    setSaving(true)
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ department_id: newDepartmentId || null })
+        .eq('id', userId)
+      if (error) throw error
+      showToast(`${userName}'s department updated`, { tone: 'success' })
+      const nextUsers = await listUsers()
+      setUsers(nextUsers)
+    } catch (error) {
+      showToast(error.message, { tone: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleRevokeInvitation = async (invitationId, email) => {
     setConfirmAction({
       invitationId,
@@ -243,12 +262,35 @@ export default function MembersPanel() {
         <td
           style={{
             padding: '16px',
-            fontSize: '14px',
-            color: 'var(--text-primary)',
             borderRight: '1px solid var(--border)',
           }}
         >
-          {department?.name || '—'}
+          {canChangeRoles && !isPending && !isDeactivated ? (
+            <select
+              disabled={saving}
+              value={member.department_id || ''}
+              onChange={(e) => handleDepartmentChange(member.id, member.displayName, e.target.value || null)}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '8px',
+                border: '1px solid var(--border)',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="">No Department</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+              {department?.name || '—'}
+            </span>
+          )}
         </td>
 
         {/* Role */}

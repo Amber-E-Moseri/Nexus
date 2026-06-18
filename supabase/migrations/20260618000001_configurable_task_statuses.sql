@@ -84,20 +84,19 @@ where task.status_id is null
   )
   and status_map.legacy_key = coalesce(task.status, 'backlog');
 
-update public.tasks task
-set status_id = fallback.id
-from lateral (
+update public.tasks
+set status_id = (
   select id
   from public.task_status_definitions status_map
   where (
-      (task.department_id is not null and status_map.department_id = task.department_id)
-      or (task.department_id is null and status_map.department_id is null)
+      (tasks.department_id is not null and status_map.department_id = tasks.department_id)
+      or (tasks.department_id is null and status_map.department_id is null)
     )
     and status_map.is_default = true
   order by status_map.sort_order
   limit 1
-) fallback
-where task.status_id is null;
+)
+where status_id is null;
 
 alter table public.tasks
   alter column status_id set not null;

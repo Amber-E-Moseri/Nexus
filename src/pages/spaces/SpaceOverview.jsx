@@ -24,7 +24,7 @@ import { TasksProvider, useTasks } from '../../modules/tasks/TasksContext'
 import { useTaskFilters } from '../../modules/tasks/useTaskFilters'
 import { mergeTaskFieldSettings, normalizeTaskFieldSettings, TASK_FIELD_OPTIONS } from '../../lib/taskFieldSettings'
 
-const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Sprints', 'Automations', 'Members', 'Integrations', 'Settings']
+const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Sprints', 'Activity', 'Automations', 'Members', 'Integrations', 'Settings']
 
 const STATUS_ACCENT = {
   open: '#C9BEAD',
@@ -320,11 +320,13 @@ function FolderTree({
   onEditList,
   onNewFolder,
   onNewList,
+  onNewUnfoldedList,
 }) {
   const listsByFolder = useMemo(
     () => folders.reduce((acc, folder) => ({ ...acc, [folder.id]: lists.filter((list) => list.folder_id === folder.id) }), {}),
     [folders, lists],
   )
+  const unfoldedLists = useMemo(() => lists.filter((list) => !list.folder_id), [lists])
 
   return (
     <div className="space-y-3">
@@ -413,6 +415,53 @@ function FolderTree({
       </div>
 
       {folders.length === 0 ? <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-6 text-sm text-[var(--text-tertiary)]">No folders yet. Create one to organize lists in this space.</div> : null}
+
+      {unfoldedLists.length > 0 ? (
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-tertiary)] p-3">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="text-sm font-medium text-[var(--text-primary)]">Unfolded</div>
+            {canManage ? (
+              <button type="button" onClick={onNewUnfoldedList} className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs text-[var(--text-secondary)]">
+                + List
+              </button>
+            ) : null}
+          </div>
+          <div className="space-y-2">
+            {unfoldedLists.map((list) => (
+              <div
+                key={list.id}
+                className={[
+                  'flex items-center gap-2 rounded-xl px-3 py-2',
+                  selectedListId === list.id ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]' : '',
+                ].join(' ')}
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelectList(list.id)}
+                  className={[
+                    'flex min-w-0 flex-1 items-center gap-2 text-left text-sm',
+                    selectedListId === list.id ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]',
+                  ].join(' ')}
+                >
+                  <span>📋</span>
+                  <span className="truncate">{list.name}</span>
+                </button>
+                {canEditList(list) ? (
+                  <button
+                    type="button"
+                    onClick={() => onEditList(list)}
+                    className="rounded-lg border border-[var(--border)] bg-white px-2 py-1 text-xs text-[var(--text-secondary)]"
+                    aria-label={`Edit settings for ${list.name}`}
+                    title="List settings"
+                  >
+                    <span aria-hidden="true">⚙️</span>
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {canManage ? (
         <button type="button" onClick={onNewFolder} className="w-full rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
@@ -511,10 +560,16 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
     if (!listModalFolder || !listName.trim()) return
     setTreeSaving(true)
     try {
-      const { data: maxOrder } = await supabase.from('lists').select('sort_order').eq('folder_id', listModalFolder.id).order('sort_order', { ascending: false }).limit(1).maybeSingle()
+      const query = supabase.from('lists').select('sort_order')
+      if (listModalFolder.id) {
+        query.eq('folder_id', listModalFolder.id)
+      } else {
+        query.is('folder_id', null).eq('department_id', spaceId)
+      }
+      const { data: maxOrder } = await query.order('sort_order', { ascending: false }).limit(1).maybeSingle()
       const { error: insertError } = await supabase.from('lists').insert({
         name: listName.trim(),
-        folder_id: listModalFolder.id,
+        folder_id: listModalFolder.id ?? null,
         department_id: spaceId,
         sort_order: (maxOrder?.sort_order ?? -1) + 1,
         created_by: profile?.id ?? null,
@@ -587,6 +642,7 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
           }}
           onNewFolder={() => setFolderModalOpen(true)}
           onNewList={(folder) => setListModalFolder(folder)}
+          onNewUnfoldedList={() => setListModalFolder({ id: null, name: 'Unfolded' })}
         />
       )}
 
@@ -615,7 +671,7 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
       ) : null}
 
       {listModalFolder ? (
-        <ModalShell title={`New List in ${listModalFolder.name}`} onClose={() => { setListModalFolder(null); setListFieldSettings(normalizeTaskFieldSettings({})) }}>
+        <ModalShell title={listModalFolder.id ? `New List in ${listModalFolder.name}` : 'New Unfolded List'} onClose={() => { setListModalFolder(null); setListFieldSettings(normalizeTaskFieldSettings({})) }}>
           <form onSubmit={handleCreateList} className="space-y-4">
             <input value={listName} onChange={(event) => setListName(event.target.value)} placeholder="List name" className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm text-[var(--text-primary)]" />
             <TaskFieldSettingsEditor value={listFieldSettings} onChange={setListFieldSettings} />
@@ -804,6 +860,106 @@ function SpaceMembersTab({ members }) {
             </span>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function SpaceActivityTab({ departmentId }) {
+  const [activities, setActivities] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadActivities()
+  }, [departmentId])
+
+  async function loadActivities() {
+    try {
+      setLoading(true)
+      const { data: deptUserIds } = await supabase
+        .from('users')
+        .select('id')
+        .eq('department_id', departmentId)
+      const ids = (deptUserIds || []).map((u) => u.id)
+
+      let query = supabase
+        .from('activity_log')
+        .select('id, user_id, action, entity_type, entity_id, timestamp, user:users!user_id(id, name)')
+        .gte('timestamp', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+        .order('timestamp', { ascending: false })
+        .limit(50)
+
+      if (ids.length > 0) {
+        query = query.in('user_id', ids)
+      }
+
+      const { data, error } = await query
+
+      if (error) throw error
+      setActivities(data || [])
+    } catch (err) {
+      console.error('Error loading space activity:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading...</div>
+  }
+
+  return (
+    <div className="overflow-hidden rounded-[24px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)]">
+      <div className="divide-y divide-[var(--border)]">
+        {activities.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            No activity in the last 30 days.
+          </div>
+        ) : (
+          activities.map((log) => (
+            <div key={log.id} style={{ padding: '16px 20px', display: 'flex', gap: 12 }}>
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  background: '#4C2A92',
+                  color: '#FFFFFF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}
+              >
+                {(log.user?.name ?? '?')
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((p) => p.charAt(0).toUpperCase())
+                  .join('')}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                  {log.user?.name || 'Unknown'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                  {log.action.replace(/_/g, ' ')} · {log.entity_type}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                  {new Date(log.timestamp).toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true,
+                  })}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   )
@@ -1045,7 +1201,15 @@ export default function SpaceOverview() {
                 events={taskCalendarEvents}
                 onEventClick={() => {}}
                 onDayClick={undefined}
-                canEdit={false}
+                canEdit={canManage}
+                onDateReschedule={canManage ? async (taskId, newDate) => {
+                  try {
+                    await supabase.from('tasks').update({ due_date: newDate.toISOString().split('T')[0] }).eq('id', taskId)
+                    setSpaceTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, due_date: newDate.toISOString().split('T')[0] } : t))
+                  } catch (err) {
+                    console.error('Failed to reschedule task:', err)
+                  }
+                } : undefined}
                 onPrevMonth={() => {
                   if (calendarMonth === 0) {
                     setCalendarMonth(11)
@@ -1073,6 +1237,7 @@ export default function SpaceOverview() {
         </div>
       ) : null}
       {activeTab === 'Sprints' ? <div role="tabpanel" id="tabpanel-sprints" aria-labelledby="tab-sprints" tabIndex={0}><SpaceSprintsTab canManage={canManage} sprints={spaceSprints} spaceColor={space.color} onCreate={() => setShowSprintModal(true)} onOpen={(sprint) => navigate(`/sprints/${sprint.id}`)} /></div> : null}
+      {activeTab === 'Activity' ? <div role="tabpanel" id="tabpanel-activity" aria-labelledby="tab-activity" tabIndex={0}><SpaceActivityTab departmentId={spaceId} /></div> : null}
       {activeTab === 'Automations' ? <div role="tabpanel" id="tabpanel-automations" aria-labelledby="tab-automations" tabIndex={0}><SpaceAutomationsTab space={space} canManage={canManageStatuses} /></div> : null}
       {activeTab === 'Members' ? <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}><SpaceMembersTab members={spaceMembers} /></div> : null}
       {activeTab === 'Integrations' && canManage ? <div role="tabpanel" id="tabpanel-integrations" aria-labelledby="tab-integrations" tabIndex={0}><SpaceIntegrationsTab spaceId={spaceId} canManage={canManage} /></div> : null}

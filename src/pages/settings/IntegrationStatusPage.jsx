@@ -171,6 +171,7 @@ function IntegrationCard({ integration, onConfigure, configuring }) {
   const getActionButton = () => {
     const style = { borderRadius: 8, border: '1px solid var(--border)', padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: '#FFFFFF', color: 'var(--text)' }
     const primaryStyle = { ...style, background: 'var(--primary)', color: '#FFFFFF', border: 'none' }
+    const dangerStyle = { ...style, color: '#C94830', borderColor: '#F8D5CE' }
 
     switch (integration.integration_type) {
       case 'zoom':
@@ -180,7 +181,18 @@ function IntegrationCard({ integration, onConfigure, configuring }) {
           </button>
         )
       case 'google_drive':
-        return <span style={{ fontSize: 12, color: 'var(--muted)' }}>API key only</span>
+        if (integration.hasSecrets) {
+          return (
+            <button type="button" onClick={() => handleDisconnectGoogleDrive(integration.id)} style={dangerStyle}>
+              Disconnect
+            </button>
+          )
+        }
+        return (
+          <button type="button" onClick={() => handleConnectGoogleDrive()} style={primaryStyle}>
+            Connect OAuth
+          </button>
+        )
       case 'resend':
         return <span style={{ fontSize: 12, color: 'var(--muted)' }}>Connected</span>
       default:
@@ -306,6 +318,55 @@ export default function IntegrationStatusPage() {
       await loadIntegrations()
     } catch (err) {
       alert(`Failed to save Zoom credentials: ${String(err)}`)
+    } finally {
+      setConfiguring(false)
+    }
+  }
+
+  async function handleConnectGoogleDrive() {
+    setConfiguring(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-drive-auth?action=authorize`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+        }
+      )
+
+      if (!response.ok) {
+        const error = await response.json()
+        alert(`Error: ${error.error}`)
+        return
+      }
+
+      const { url } = await response.json()
+      window.location.href = url
+    } catch (err) {
+      alert(`Failed to initiate Google Drive connection: ${String(err)}`)
+      setConfiguring(false)
+    }
+  }
+
+  async function handleDisconnectGoogleDrive(integrationId) {
+    if (!window.confirm('Disconnect Google Drive?')) return
+
+    setConfiguring(true)
+    try {
+      const { error } = await supabase
+        .from('space_integration_secrets')
+        .delete()
+        .eq('integration_id', integrationId)
+
+      if (error) throw error
+
+      await loadIntegrations()
+    } catch (err) {
+      alert(`Failed to disconnect: ${String(err)}`)
     } finally {
       setConfiguring(false)
     }

@@ -20,6 +20,7 @@ export default function CalendarView({
   onAddEvent,
   onEditEvent,
   onDeleteEvent,
+  onDateReschedule,
   highlightedEventId = null,
   upcomingEvents,
   readOnly = false,
@@ -82,6 +83,7 @@ export default function CalendarView({
           onPrevMonth={onPrevMonth}
           onNextMonth={onNextMonth}
           onToday={onToday}
+          onDateReschedule={readOnly ? undefined : onDateReschedule}
         />
 
         <div className="space-y-4">

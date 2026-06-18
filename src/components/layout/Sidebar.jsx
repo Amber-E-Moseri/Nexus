@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  Clock,
   Copy,
   Home,
   LayoutGrid,
@@ -738,6 +739,14 @@ export default function Sidebar() {
           label="Home"
           onClick={() => go('/')}
         />
+        {role === 'super_admin' || role === 'dept_lead' ? (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/activity-log')}
+            icon={Clock}
+            label="Activity Log"
+            onClick={() => go('/activity-log')}
+          />
+        ) : null}
         <SidebarItem
           active={isPathActive(location.pathname, '/my-tasks')}
           icon={Check}

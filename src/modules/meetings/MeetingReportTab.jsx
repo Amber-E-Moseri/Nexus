@@ -1332,6 +1332,68 @@ export default function MeetingReportTab() {
     }
   }
 
+  async function handleExportToGoogleDrive() {
+    if (!report) return
+
+    try {
+      // Generate report text content
+      const reportDate = report.reportDate ? new Date(report.reportDate).toLocaleDateString() : new Date().toLocaleDateString()
+      const reportText = `Meeting Report
+Title: ${report.label}
+Date: ${reportDate}
+
+Summary
+-------
+Expected Attendees: ${report.expectedCount}
+Attended: ${report.attendedCount}
+Absent: ${report.absentCount}
+New Leaders: ${report.unexpectedCount}
+Reach: ${Math.round((report.reachPct || 0) * 100)}%
+
+Present Leaders
+---------------
+${report.presentNames && report.presentNames.length > 0 ? report.presentNames.join('\n') : 'None'}
+
+Absent Leaders
+--------------
+${report.absentNames && report.absentNames.length > 0 ? report.absentNames.join('\n') : 'None'}
+
+New Leaders
+-----------
+${report.unexpectedNames && report.unexpectedNames.length > 0 ? report.unexpectedNames.join('\n') : 'None'}
+`
+
+      const { data: { session } } = await supabase.auth.getSession()
+      const fileName = `Meeting Report - ${report.label} - ${reportDate}.txt`
+
+      const formData = new FormData()
+      formData.append('file', new Blob([reportText], { type: 'text/plain' }), fileName)
+      formData.append('file_name', fileName)
+      formData.append('meeting_id', report.id)
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-drive-upload`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: formData,
+        }
+      )
+
+      if (!response.ok) {
+        const error = await response.json()
+        showToast(`Failed to export: ${error.error}`, { tone: 'error' })
+        return
+      }
+
+      showToast('Meeting report saved to Google Drive!', { tone: 'success' })
+    } catch (err) {
+      showToast(`Export error: ${String(err)}`, { tone: 'error' })
+    }
+  }
+
   const canGenerate = !rosterLoading && !rosterError && !attendedError
 
   if (report && visibleReport) {
@@ -1448,6 +1510,17 @@ export default function MeetingReportTab() {
                   }}
                 >
                   <Printer size={13} /> Print / PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportToGoogleDrive}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: '#2D1B69', color: 'white', border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  <Files size={13} /> Save to Drive
                 </button>
                 <button
                   type="button"
