@@ -9,6 +9,7 @@ import { getSprintMembers } from '../../lib/sprints'
 import { normalizeTaskFieldSettings } from '../../lib/taskFieldSettings'
 import { createTask, deleteTask, getTaskBlockers, updateTask } from '../../lib/tasks'
 import {
+  getTaskStatusId,
   getTaskStatusLabel,
   listTaskStatuses,
   selectDefaultStatus,

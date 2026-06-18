@@ -112,6 +112,10 @@ export default function SprintOverview() {
       setTasks(nextTasks)
       setGoalDraft(nextDetail.sprint.goal ?? '')
       setDescriptionDraft(nextDetail.sprint.description ?? '')
+    } catch (error) {
+      console.error('Failed to load sprint:', error)
+      setDetail(null)
+      setTasks([])
     } finally {
       setLoading(false)
     }

@@ -46,59 +46,36 @@ export async function getAllSprints() {
 }
 
 export async function getSprintDetail(sprintId) {
-  const [sprintRes, teamsRes, membersRes, teamMembershipsRes, reviewRes] = await Promise.all([
-    supabase.from('sprints').select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by').eq('id', sprintId).single(),
-    supabase
-      .from('sprint_teams')
-      .select('*, lead:users!lead_user_id(id, name, email, avatar_url, status)')
-      .eq('sprint_id', sprintId)
-      .order('created_at'),
-    supabase
-      .from('sprint_members')
-      .select(`
-        role,
-        joined_at,
-        user:users(id, name, email, avatar_url, role, department_id, status)
-      `)
-      .eq('sprint_id', sprintId)
-      .order('joined_at'),
-    supabase
-      .from('sprint_team_members')
-      .select(`
-        user_id,
-        sprint_team_id,
-        sprint_team:sprint_teams(id, name)
-      `)
-      .eq('sprint_id', sprintId),
-    supabase.from('sprint_reviews').select('id, sprint_id, completed_at, completed_by, overall_summary, team_feedback, lessons_learned, created_at').eq('sprint_id', sprintId).maybeSingle(),
-  ])
+  let actualSprintId = sprintId
 
-  if (sprintRes.error) throw sprintRes.error
+  // Try to find by ID first, if that fails, try by name
+  let sprintRes = await supabase.from('sprints').select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by').eq('id', sprintId).single()
+
+  if (sprintRes.error && sprintRes.error.code === 'PGRST116') {
+    // No rows found by ID, try by name
+    const nameRes = await supabase.from('sprints').select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by').eq('name', sprintId).single()
+    if (nameRes.error) throw nameRes.error
+    sprintRes = nameRes
+    actualSprintId = nameRes.data.id
+  } else if (sprintRes.error) {
+    throw sprintRes.error
+  }
+
+  const [teamsRes, membersRes] = await Promise.all([
+    supabase.from('sprint_teams').select('*').eq('sprint_id', actualSprintId).order('created_at'),
+    supabase.from('sprint_members').select('*').eq('sprint_id', actualSprintId).order('joined_at'),
+  ])
   if (teamsRes.error) throw teamsRes.error
   if (membersRes.error) throw membersRes.error
-  if (teamMembershipsRes.error) throw teamMembershipsRes.error
-  if (reviewRes.error) throw reviewRes.error
 
-  const teamMembershipsByUser = (teamMembershipsRes.data ?? []).reduce((acc, membership) => {
-    if (!acc[membership.user_id]) acc[membership.user_id] = []
-    acc[membership.user_id].push(membership)
-    return acc
-  }, {})
+  const reviewRes = await supabase.from('sprint_reviews').select('*').eq('sprint_id', actualSprintId).maybeSingle().catch(() => ({ data: null }))
 
-  const members = (membersRes.data ?? []).map((member) => {
-    const memberships = teamMembershipsByUser[member.user?.id] ?? []
-    return {
-      ...member,
-      team_memberships: memberships,
-      sprint_team_ids: memberships.map((membership) => membership.sprint_team_id),
-      sprint_teams: memberships.map((membership) => membership.sprint_team).filter(Boolean),
-    }
-  })
+  const members = membersRes.data ?? []
 
   return {
     sprint: sprintRes.data,
     teams: teamsRes.data ?? [],
-    members,
+    members: members,
     review: reviewRes.data ?? null,
   }
 }

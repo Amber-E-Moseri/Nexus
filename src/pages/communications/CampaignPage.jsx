@@ -63,7 +63,11 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   const [subject, setSubject]       = useState(initial?.subject ?? '')
   const [body, setBody]             = useState(initial?.body ?? '')
   const [scheduleMode, setScheduleMode] = useState('now')
-  const [scheduledAt, setScheduledAt]   = useState('')
+  const [scheduledDate, setScheduledDate] = useState('')
+  const [scheduledTime, setScheduledTime] = useState('09:00')
+  const [recurringFrequency, setRecurringFrequency] = useState('weekly')
+  const [recurringDayOfWeek, setRecurringDayOfWeek] = useState(1)
+  const [recurringEndDate, setRecurringEndDate] = useState('')
   const [segmentId, setSegmentId]   = useState(initial?.segment_id ?? '')
   const [segments, setSegments]     = useState([])
   const [useCustomFilter, setUseCustomFilter] = useState(false)
@@ -89,7 +93,17 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       .then(({ data }) => setTemplates(data ?? []))
   }, [])
 
+  function convertETtoUTC(date, time) {
+    const dt = new Date(`${date}T${time}`)
+    return dt.toISOString()
+  }
+
   async function autosaveDraft() {
+    let scheduledAt = null
+    if (scheduleMode === 'later' && scheduledDate && scheduledTime) {
+      scheduledAt = convertETtoUTC(scheduledDate, scheduledTime)
+    }
+
     const payload = {
       name:              name.trim() || 'Untitled Campaign',
       subject:           subject.trim(),
@@ -97,7 +111,8 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       status:            'draft',
       segment_id:        segmentId || null,
       recipient_filters: useCustomFilter ? inlineConditions : [],
-      scheduled_at:      scheduleMode === 'later' ? scheduledAt || null : null,
+      scheduled_at:      scheduledAt,
+      recurring_rule:    null,
       from_name:         fromName.trim(),
       created_by:        profile?.id ?? null,
     }
@@ -132,15 +147,43 @@ function CampaignForm({ initial, onSaved, onCancel }) {
     setSaving(true)
     setError(null)
 
-    const status   = scheduleMode === 'now' ? 'sending' : 'scheduled'
-    const payload  = {
+    let status = 'sending'
+    let scheduledAt = null
+    let recurringRule = null
+
+    if (scheduleMode === 'later') {
+      if (!scheduledDate || !scheduledTime) {
+        setError('Please set a date and time for scheduled send.')
+        setSaving(false)
+        return
+      }
+      status = 'scheduled'
+      scheduledAt = convertETtoUTC(scheduledDate, scheduledTime)
+    } else if (scheduleMode === 'recurring') {
+      if (!scheduledDate || !scheduledTime) {
+        setError('Please set a time for recurring send.')
+        setSaving(false)
+        return
+      }
+      status = 'scheduled'
+      recurringRule = {
+        frequency: recurringFrequency,
+        day_of_week: recurringDayOfWeek,
+        time: scheduledTime,
+        end_date: recurringEndDate || null,
+      }
+      scheduledAt = convertETtoUTC(scheduledDate, scheduledTime)
+    }
+
+    const payload = {
       name:              name.trim(),
       subject:           subject.trim(),
       body:              body.trim(),
       status,
       segment_id:        segmentId || null,
       recipient_filters: useCustomFilter ? inlineConditions : [],
-      scheduled_at:      scheduleMode === 'later' ? scheduledAt || null : null,
+      scheduled_at:      scheduledAt,
+      recurring_rule:    recurringRule,
       created_by:        profile?.id ?? null,
     }
 
@@ -177,7 +220,6 @@ function CampaignForm({ initial, onSaved, onCancel }) {
           const { data: rosterRows } = await supabase.from('expected_attendees').select('full_name, email, subgroup, leadership_category').eq('active', true).not('email', 'is', null)
           recipients = (rosterRows ?? []).map((r) => ({ name: r.full_name ?? r.email, email: r.email, subgroup: r.subgroup, leadership_category: r.leadership_category }))
         }
-        // Add more resolution here as needed based on filters
       }
 
       if (recipients.length > 0) {
@@ -185,7 +227,6 @@ function CampaignForm({ initial, onSaved, onCancel }) {
           body: { to: recipients, subject: subject.trim(), body: body.trim(), campaign_id: campaignId, context: { sender_name: profile?.name ?? '' } },
         })
       } else {
-        // No segment / no recipients → mark as sent with 0
         await supabase.from('communication_campaigns').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', campaignId)
       }
     }
@@ -456,28 +497,97 @@ function CampaignForm({ initial, onSaved, onCancel }) {
             </div>
           </div>
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      ) : step === 4 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: TEXT, cursor: 'pointer' }}>
               <input type="radio" name="schedule" value="now" checked={scheduleMode === 'now'} onChange={() => setScheduleMode('now')} />
               Send now
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: TEXT, cursor: 'pointer' }}>
               <input type="radio" name="schedule" value="later" checked={scheduleMode === 'later'} onChange={() => setScheduleMode('later')} />
-              Schedule for later
+              Send later
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: TEXT, cursor: 'pointer' }}>
+              <input type="radio" name="schedule" value="recurring" checked={scheduleMode === 'recurring'} onChange={() => setScheduleMode('recurring')} />
+              Recurring
             </label>
           </div>
 
           {scheduleMode === 'later' ? (
-            <div>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
-                Date &amp; time
-                <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit', maxWidth: 280 }} />
-              </label>
-              <div style={{ fontSize: 11, color: MUTED, marginTop: 5 }}>Times are Eastern (Toronto).</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
+                  Date
+                  <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
+                  Time
+                  <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+                </label>
+              </div>
+              <div style={{ fontSize: 11, color: MUTED }}>Times are Eastern Time (Toronto, UTC−4/−5)</div>
+            </div>
+          ) : scheduleMode === 'recurring' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: TEXT, marginBottom: 8 }}>
+                  Frequency
+                  <select value={recurringFrequency} onChange={(e) => setRecurringFrequency(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit', background: '#FFFFFF' }}>
+                    <option value="weekly">Weekly</option>
+                    <option value="biweekly">Bi-weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </label>
+              </div>
+
+              {recurringFrequency === 'weekly' || recurringFrequency === 'biweekly' ? (
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: TEXT, marginBottom: 8, display: 'block' }}>Day of week</label>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => setRecurringDayOfWeek(i)}
+                        style={{
+                          border: `1px solid ${recurringDayOfWeek === i ? PRIMARY : BORDER}`,
+                          background: recurringDayOfWeek === i ? PRIMARY : '#FFFFFF',
+                          color: recurringDayOfWeek === i ? '#FFFFFF' : TEXT,
+                          borderRadius: 6,
+                          padding: '6px 12px',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: TEXT }}>
+                  Time
+                  <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit', maxWidth: 200 }} />
+                </label>
+              </div>
+
+              <div>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: TEXT }}>
+                  Run until (optional)
+                  <input type="date" value={recurringEndDate} onChange={(e) => setRecurringEndDate(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit', maxWidth: 200 }} />
+                </label>
+                <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>Leave empty for indefinite. Recurring sends create a new campaign record each time they fire.</div>
+              </div>
             </div>
           ) : null}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Empty placeholder for other steps */}
         </div>
       )}
 
@@ -630,30 +740,103 @@ export default function CampaignPage() {
   const navigate   = useNavigate()
   const [campaigns, setCampaigns]   = useState([])
   const [loading, setLoading]       = useState(true)
-  const [modal, setModal]           = useState(null) // null | { mode: 'create' | 'edit' | 'report', campaign? }
-  const [statusFilter, setStatusFilter] = useState(null) // null = all, else specific status
-  const [sortBy, setSortBy] = useState('created_at') // created_at | name | open_count | sent_at
+  const [modal, setModal]           = useState(null)
+  const [statusFilter, setStatusFilter] = useState(null)
+  const [sortBy, setSortBy] = useState('created_at')
   const [sortAsc, setSortAsc] = useState(false)
   const [draftCampaignId, setDraftCampaignId] = useState(null)
+  const [view, setView] = useState('all') // 'all' or 'scheduled'
+  const [toast, setToast] = useState(null)
 
   async function loadCampaigns() {
     setLoading(true)
     let query = supabase.from('communication_campaigns').select('*')
 
-    if (statusFilter) {
-      query = query.eq('status', statusFilter)
+    if (view === 'scheduled') {
+      query = query.eq('status', 'scheduled').order('scheduled_at', { ascending: true })
+    } else {
+      if (statusFilter) {
+        query = query.eq('status', statusFilter)
+      }
+      query = query.order(sortBy, { ascending: sortAsc })
     }
 
-    const { data } = await query.order(sortBy, { ascending: sortAsc })
+    const { data } = await query
     setCampaigns(data ?? [])
     setLoading(false)
   }
 
+  async function fireScheduledCampaigns() {
+    const now = new Date().toISOString()
+    const { data: dueList } = await supabase
+      .from('communication_campaigns')
+      .select('*')
+      .eq('status', 'scheduled')
+      .lte('scheduled_at', now)
+
+    if (dueList && dueList.length > 0) {
+      for (const campaign of dueList) {
+        await supabase.from('communication_campaigns').update({ status: 'sending' }).eq('id', campaign.id)
+        await supabase.functions.invoke('send-communication-email', {
+          body: {
+            campaign_id: campaign.id,
+            subject: campaign.subject,
+            body: campaign.body,
+            segment_id: campaign.segment_id,
+            recipient_filters: campaign.recipient_filters,
+          },
+        })
+      }
+      await loadCampaigns()
+    }
+  }
+
   useEffect(() => {
     loadCampaigns()
+    fireScheduledCampaigns()
     const draftId = sessionStorage.getItem('comm_draft_campaign_id')
     setDraftCampaignId(draftId)
-  }, [statusFilter, sortBy, sortAsc])
+  }, [statusFilter, sortBy, sortAsc, view])
+
+  // Realtime subscription for sending campaigns
+  useEffect(() => {
+    const sendingCampaigns = campaigns.filter((c) => c.status === 'sending')
+    if (sendingCampaigns.length === 0) return
+
+    const subscriptions = sendingCampaigns.map((campaign) => {
+      const channel = supabase
+        .channel(`campaign-${campaign.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'communication_campaigns',
+            filter: `id=eq.${campaign.id}`,
+          },
+          (payload) => {
+            const updated = payload.new
+            setCampaigns((prev) =>
+              prev.map((c) => (c.id === updated.id ? updated : c))
+            )
+            // Show toast when campaign finishes sending
+            if (updated.status !== 'sending') {
+              setToast({
+                message: `Campaign '${updated.name}' finished sending — ${updated.sent_count ?? 0} delivered, ${updated.failed_count ?? 0} failed`,
+              })
+              setTimeout(() => setToast(null), 5000)
+            }
+          }
+        )
+        .subscribe()
+
+      return channel
+    })
+
+    return () => {
+      subscriptions.forEach((channel) => supabase.removeChannel(channel))
+    }
+  }, [campaigns])
 
   async function handleDelete(id) {
     if (!window.confirm('Delete this campaign?')) return
@@ -745,8 +928,26 @@ export default function CampaignPage() {
           </div>
         ) : null}
 
+        {/* View Tabs */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, borderBottom: `1px solid ${BORDER}`, paddingBottom: 12 }}>
+          <button
+            type="button"
+            onClick={() => { setView('all'); setStatusFilter(null) }}
+            style={{ border: 'none', background: 'none', fontSize: 13, fontWeight: view === 'all' ? 700 : 500, color: view === 'all' ? PRIMARY : MUTED, padding: '4px 0', cursor: 'pointer', borderBottom: view === 'all' ? `2px solid ${PRIMARY}` : 'none' }}
+          >
+            All campaigns
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('scheduled')}
+            style={{ border: 'none', background: 'none', fontSize: 13, fontWeight: view === 'scheduled' ? 700 : 500, color: view === 'scheduled' ? PRIMARY : MUTED, padding: '4px 0', cursor: 'pointer', borderBottom: view === 'scheduled' ? `2px solid ${PRIMARY}` : 'none' }}
+          >
+            Scheduled ({campaigns.filter((c) => c.status === 'scheduled').length})
+          </button>
+        </div>
+
         {/* Filter + Sort Controls */}
-        {campaigns.length > 0 && (
+        {campaigns.length > 0 && view === 'all' && (
           <div style={{ marginBottom: 20, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             {/* Status Filter */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -822,53 +1023,108 @@ export default function CampaignPage() {
           <div style={{ textAlign: 'center', padding: 48, color: MUTED, fontSize: 13 }}>Loading...</div>
         ) : campaigns.length === 0 ? (
           <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 16, padding: '36px 24px', textAlign: 'center', color: MUTED, fontSize: 13 }}>
-            {statusFilter ? 'No campaigns with this status.' : 'No campaigns yet. Create one to get started.'}
+            {view === 'scheduled' ? 'No scheduled campaigns.' : statusFilter ? 'No campaigns with this status.' : 'No campaigns yet. Create one to get started.'}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', background: '#FFFFFF', borderRadius: 14, overflow: 'hidden' }}>
               <thead>
                 <tr style={{ background: BG }}>
-                  {['Name', 'Status', 'Recipients', 'Sent', 'Opens', 'Scheduled / Sent', 'Actions'].map((h) => (
-                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${BORDER}` }}>
-                      {h}
-                    </th>
-                  ))}
+                  {view === 'scheduled' ? (
+                    ['Name', 'Recipients', 'Scheduled for', 'Type', 'Actions'].map((h) => (
+                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${BORDER}` }}>
+                        {h}
+                      </th>
+                    ))
+                  ) : (
+                    ['Name', 'Status', 'Recipients', 'Sent', 'Opens', 'Scheduled / Sent', 'Actions'].map((h) => (
+                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${BORDER}` }}>
+                        {h}
+                      </th>
+                    ))
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {campaigns.map((c) => (
-                  <tr key={c.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                    <td style={{ padding: '12px 14px', fontWeight: 700, color: TEXT, fontSize: 13 }}>{c.name}</td>
-                    <td style={{ padding: '12px 14px' }}><StatusBadge status={c.status} /></td>
-                    <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.recipient_count ?? '—'}</td>
-                    <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.sent_count ?? '—'}</td>
-                    <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.open_count ?? '—'}</td>
-                    <td style={{ padding: '12px 14px', color: MUTED, fontSize: 12 }}>
-                      {c.status === 'sent' && c.sent_at ? new Date(c.sent_at).toLocaleDateString() : c.scheduled_at ? new Date(c.scheduled_at).toLocaleString() : '—'}
-                    </td>
-                    <td style={{ padding: '12px 14px' }}>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {c.status === 'draft' ? (
-                          <>
-                            <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
-                            <button type="button" onClick={() => handleDelete(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
-                            <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
-                          </>
-                        ) : c.status === 'scheduled' ? (
-                          <>
-                            <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
-                            <button type="button" onClick={() => handleCancel(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-                            <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
-                          </>
-                        ) : c.status === 'sent' ? (
-                          <>
-                            <button type="button" onClick={() => setModal({ mode: 'report', campaign: c })} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>View Report</button>
-                            <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
-                          </>
-                        ) : null}
-                      </div>
-                    </td>
+                  <tr key={c.id} style={{ borderBottom: `1px solid ${BORDER}`, position: 'relative' }}>
+                    {view === 'scheduled' ? (
+                      <>
+                        <td style={{ padding: '12px 14px', fontWeight: 700, color: TEXT, fontSize: 13 }}>{c.name}</td>
+                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.recipient_count ?? '—'}</td>
+                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 12 }}>
+                          {c.scheduled_at ? new Date(c.scheduled_at).toLocaleString() : '—'}
+                        </td>
+                        <td style={{ padding: '12px 14px' }}>
+                          {c.recurring_rule ? (
+                            <span style={{ display: 'inline-block', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600, background: '#E8EEFA', color: '#1A56DB' }}>
+                              Recurring
+                            </span>
+                          ) : (
+                            <span style={{ display: 'inline-block', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600, background: BG, color: MUTED }}>
+                              Once
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px 14px' }}>
+                          <button type="button" onClick={() => handleCancel(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                            Cancel
+                          </button>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td style={{ padding: '12px 14px', fontWeight: 700, color: TEXT, fontSize: 13 }}>
+                          {c.name}
+                          {c.status === 'sending' ? (
+                            <div style={{ fontSize: 11, color: MUTED, fontWeight: 500, marginTop: 4 }}>
+                              Sending… {c.sent_count ?? 0} / {c.recipient_count ?? 0} sent
+                            </div>
+                          ) : null}
+                        </td>
+                        <td style={{ padding: '12px 14px' }}><StatusBadge status={c.status} /></td>
+                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.recipient_count ?? '—'}</td>
+                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.sent_count ?? '—'}</td>
+                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.open_count ?? '—'}</td>
+                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 12 }}>
+                          {c.status === 'sent' && c.sent_at ? new Date(c.sent_at).toLocaleDateString() : c.scheduled_at ? new Date(c.scheduled_at).toLocaleString() : '—'}
+                        </td>
+                        <td style={{ padding: '12px 14px' }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {c.status === 'draft' ? (
+                              <>
+                                <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                                <button type="button" onClick={() => handleDelete(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
+                              </>
+                            ) : c.status === 'scheduled' ? (
+                              <>
+                                <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                                <button type="button" onClick={() => handleCancel(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
+                              </>
+                            ) : c.status === 'sent' || c.status === 'sending' ? (
+                              <>
+                                <button type="button" onClick={() => setModal({ mode: 'report', campaign: c })} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>View Report</button>
+                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
+                              </>
+                            ) : null}
+                          </div>
+                        </td>
+                      </>
+                    )}
+                    {/* Animated progress bar for sending campaigns */}
+                    {c.status === 'sending' ? (
+                      <div style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: 3,
+                        background: PRIMARY,
+                        animation: 'progress-bar 2s infinite',
+                      }} />
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -882,6 +1138,44 @@ export default function CampaignPage() {
           <CampaignReport campaign={modal.campaign} onClose={() => setModal(null)} />
         </Modal>
       ) : null}
+
+      {/* Toast notification */}
+      {toast ? (
+        <div style={{
+          position: 'fixed',
+          bottom: 20,
+          right: 20,
+          background: '#2D6A4F',
+          color: '#FFFFFF',
+          padding: '12px 16px',
+          borderRadius: 8,
+          fontSize: 13,
+          fontWeight: 600,
+          zIndex: 1000,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          animation: 'slideIn 0.3s ease-out',
+        }}>
+          {toast.message}
+        </div>
+      ) : null}
+
+      <style>{`
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes progress-bar {
+          0% { opacity: 0.5; }
+          50% { opacity: 1; }
+          100% { opacity: 0.5; }
+        }
+      `}</style>
     </div>
   )
 }

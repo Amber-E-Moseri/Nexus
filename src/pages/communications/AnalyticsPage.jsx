@@ -11,9 +11,16 @@ const BG      = '#F4F1EA'
 const SUCCESS = '#2D6A4F'
 const ERROR   = '#C94830'
 
-function StatTile({ label, value, sub, color }) {
+function StatTile({ label, value, sub, color, flash }) {
   return (
-    <div style={{ flex: '1 1 160px', background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, padding: '18px 20px' }}>
+    <div style={{
+      flex: '1 1 160px',
+      background: '#FFFFFF',
+      border: flash ? `2px solid ${PRIMARY}` : `1px solid ${BORDER}`,
+      borderRadius: 14,
+      padding: '18px 20px',
+      transition: 'border-color 0.3s ease',
+    }}>
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: MUTED, marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 28, fontWeight: 800, color: color ?? TEXT }}>{value}</div>
       {sub ? <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>{sub}</div> : null}
@@ -64,6 +71,7 @@ function CampaignDrilldown({ campaign }) {
   const [filterStatus, setFilter]   = useState('all')
   const [markingWinner, setMarking] = useState(false)
   const [winnerMsg, setWinnerMsg]   = useState(null)
+  const [flashOpensTile, setFlashOpensTile] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -86,6 +94,39 @@ function CampaignDrilldown({ campaign }) {
       setLoading(false)
     })
   }, [campaign.id])
+
+  // Realtime subscription for opens in sent campaigns
+  useEffect(() => {
+    if (campaign.status !== 'sent') return
+
+    const channel = supabase
+      .channel(`campaign-sends-${campaign.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'communication_sends',
+          filter: `campaign_id=eq.${campaign.id}`,
+        },
+        (payload) => {
+          const updated = payload.new
+          const prev = payload.old
+          // If opened_at was just set, increment counter and flash tile
+          if (!prev.opened_at && updated.opened_at) {
+            setFlashOpensTile(true)
+            setTimeout(() => setFlashOpensTile(false), 1000)
+          }
+          // Update the specific row in local state
+          setSends((prevSends) =>
+            prevSends.map((s) => (s.id === updated.id ? updated : s))
+          )
+        }
+      )
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [campaign.id, campaign.status])
 
   const delivered = useMemo(() => sends.filter((s) => s.status !== 'failed' && s.status !== 'bounced').length, [sends])
   const opened    = useMemo(() => sends.filter((s) => s.status === 'opened').length, [sends])
@@ -253,7 +294,7 @@ function CampaignDrilldown({ campaign }) {
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <StatTile label="Recipients"    value={(campaign.recipient_count ?? sends.length).toLocaleString()} />
         <StatTile label="Delivered"     value={delivered.toLocaleString()} sub={pct(delivered, sends.length)} color={PRIMARY} />
-        <StatTile label="Opens"         value={opened.toLocaleString()}    sub={pct(opened, delivered)} color={PRIMARY} />
+        <StatTile label="Opens"         value={opened.toLocaleString()}    sub={pct(opened, delivered)} color={PRIMARY} flash={flashOpensTile} />
         <StatTile label="Clicks"        value={totalClicks.toLocaleString()} sub={pct(totalClicks, delivered)} color="#1A56DB" />
         <StatTile label="Bounced / Failed" value={failed.toLocaleString()} sub={pct(failed, sends.length)} color={failed > 0 ? ERROR : TEXT} />
       </div>
@@ -330,29 +371,78 @@ function CampaignDrilldown({ campaign }) {
         </div>
       ) : null}
 
-      {/* Click breakdown */}
+      {/* Link Performance */}
       {clicks.length > 0 ? (
         <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
           <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, fontSize: 13, fontWeight: 800, color: TEXT }}>
-            Top Links Clicked
+            Link Performance
+          </div>
+          {linkPerformance.length === 0 ? (
+            <div style={{ padding: '16px', color: MUTED, fontSize: 13 }}>No link click data recorded yet.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: BG }}>
+                    {['URL', 'Clicks', 'Unique Clickers'].map((h) => (
+                      <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: MUTED, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: `1px solid ${BORDER}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {linkPerformance.slice(0, 10).map((item) => {
+                    const urlDisplay = item.url.length > 50 ? `${item.url.slice(0, 50)}…` : item.url
+                    return (
+                      <tr key={item.url} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                        <td style={{ padding: '9px 14px', color: TEXT, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', title: item.url }}>
+                          <a href={item.url} target="_blank" rel="noreferrer" style={{ color: PRIMARY }}>{urlDisplay}</a>
+                        </td>
+                        <td style={{ padding: '9px 14px', color: MUTED, fontWeight: 700 }}>{item.clicks}</td>
+                        <td style={{ padding: '9px 14px', color: MUTED }}>{item.unique_clickers}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, padding: '16px', color: MUTED, fontSize: 13 }}>
+          No link click data recorded yet.
+        </div>
+      )}
+
+      {/* Engagement Timeline */}
+      <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, padding: '16px' }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: TEXT, marginBottom: 12 }}>Engagement over time</div>
+        <EngagementChart />
+      </div>
+
+      {/* Bounce Breakdown */}
+      {bounces.length > 0 ? (
+        <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, fontSize: 13, fontWeight: 800, color: TEXT }}>
+            Bounces
+          </div>
+          <div style={{ padding: '12px 16px', fontSize: 12, color: MUTED, borderBottom: `1px solid ${BORDER}`, fontStyle: 'italic' }}>
+            Hard bounces are permanent failures. Repeated soft bounces auto-suppress the address.
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: BG }}>
-                  {['URL', 'Clicks', '% of total'].map((h) => (
+                  {['Email', 'Bounce Type', 'Bounced At'].map((h) => (
                     <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: MUTED, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: `1px solid ${BORDER}` }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {clicks.sort((a, b) => (b.click_count ?? 1) - (a.click_count ?? 1)).slice(0, 10).map((c) => (
-                  <tr key={c.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                    <td style={{ padding: '9px 14px', color: TEXT, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      <a href={c.link_url} target="_blank" rel="noreferrer" style={{ color: PRIMARY }}>{c.link_url}</a>
-                    </td>
-                    <td style={{ padding: '9px 14px', color: MUTED, fontWeight: 700 }}>{c.click_count ?? 1}</td>
-                    <td style={{ padding: '9px 14px', color: MUTED }}>{pct(c.click_count ?? 1, totalClicks)}</td>
+                {bounces.map((b) => (
+                  <tr key={b.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                    <td style={{ padding: '9px 14px', color: TEXT }}>{b.bounced_email}</td>
+                    <td style={{ padding: '9px 14px', color: TEXT, textTransform: 'capitalize' }}>{b.bounce_type ?? 'bounce'}</td>
+                    <td style={{ padding: '9px 14px', color: MUTED, fontSize: 11 }}>{b.bounced_at ? new Date(b.bounced_at).toLocaleString() : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -376,6 +466,13 @@ function CampaignDrilldown({ campaign }) {
                 {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={exportCSV}
+              style={{ border: `1px solid ${PRIMARY}`, background: PRIMARY, color: '#FFFFFF', borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+            >
+              Export CSV
+            </button>
           </div>
         </div>
         <div style={{ overflowX: 'auto' }}>
