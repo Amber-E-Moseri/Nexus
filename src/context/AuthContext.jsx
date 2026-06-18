@@ -31,14 +31,15 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   const refreshProfile = useCallback(
-    async (userId = user?.id) => {
-      if (!userId) {
+    async (userId) => {
+      const resolvedUserId = userId ?? user?.id
+      if (!resolvedUserId) {
         setProfile(null)
         return null
       }
 
-      const nextProfile = await fetchProfile(userId)
-      setProfile(nextProfile)
+      const nextProfile = await fetchProfile(resolvedUserId)
+      setProfile((prev) => (prev?.id === nextProfile.id ? { ...prev, ...nextProfile } : nextProfile))
       return nextProfile
     },
     [user]

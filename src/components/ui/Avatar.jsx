@@ -6,7 +6,7 @@ export default function Avatar({ name = 'User', src }) {
     .join('')
 
   if (src) {
-    return <img src={src} alt={name} className="h-10 w-10 rounded-full object-cover" />
+    return <img src={src} alt={name} width="40" height="40" className="h-10 w-10 rounded-full object-cover" />
   }
 
   return (
