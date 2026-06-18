@@ -90,9 +90,9 @@ function SidebarSectionLabel({ children, onAdd }) {
           type="button"
           onClick={onAdd}
           aria-label={`Add ${String(children).toLowerCase()}`}
-          style={{ border: 'none', background: 'none', color: '#B0A696', fontSize: 15, lineHeight: 1, cursor: 'pointer', padding: '0 2px', display: 'flex', alignItems: 'center' }}
+          style={{ border: 'none', background: 'none', color: '#7A6F5E', fontSize: 15, lineHeight: 1, cursor: 'pointer', padding: '0 2px', display: 'flex', alignItems: 'center', fontWeight: 700 }}
           onMouseEnter={(e) => { e.currentTarget.style.color = '#4C2A92' }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = '#B0A696' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#7A6F5E' }}
         >
           +
         </button>
