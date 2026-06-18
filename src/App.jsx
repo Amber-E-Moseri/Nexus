@@ -93,7 +93,7 @@ export default function App() {
           <Route
             path="/calendar-management"
             element={
-              <ProtectedRoute roles={['super_admin']}>
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
                 <CalendarPage />
               </ProtectedRoute>
             }

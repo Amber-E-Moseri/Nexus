@@ -777,7 +777,7 @@ export default function Sidebar() {
           label="Ministry Calendar"
           onClick={() => go('/calendar')}
         />
-        {role === 'super_admin' ? (
+        {role === 'super_admin' || role === 'dept_lead' ? (
           <SidebarItem
             active={isPathActive(location.pathname, '/calendar-management')}
             icon={Settings}
