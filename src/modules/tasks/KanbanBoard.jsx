@@ -1,4 +1,5 @@
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useDndSensors } from '../../dnd'
@@ -41,6 +42,7 @@ export default function KanbanBoard({
   const { tasks: allTasks, moveTask, statuses } = useTasks()
   const tasks = filteredTasks ?? allTasks
   const [activeTask, setActiveTask] = useState(null)
+  const [overColumnId, setOverColumnId] = useState(null)
   const [composerStatusId, setComposerStatusId] = useState(null)
   const [spaceStatuses, setSpaceStatuses] = useState([])
 
@@ -76,22 +78,50 @@ export default function KanbanBoard({
 
   const sensors = useDndSensors()
 
+  function handleDragOver({ over }) {
+    if (!over) {
+      setOverColumnId(null)
+      return
+    }
+    // If over.id is a status id, use it directly
+    const directMatch = boardStatuses.find((s) => s.id === over.id)
+    if (directMatch) {
+      setOverColumnId(directMatch.id)
+      return
+    }
+    // Otherwise over.id is a task id — find which status that task belongs to
+    const overTask = tasks.find((t) => t.id === over.id)
+    if (overTask) {
+      const col = boardStatuses.find(
+        (s) => s.id === overTask.status_id || s.legacy_key === overTask.status
+      )
+      setOverColumnId(col?.id ?? null)
+    } else {
+      setOverColumnId(null)
+    }
+  }
+
   function handleDragStart({ active }) {
     setActiveTask(allTasks.find((task) => task.id === active.id) ?? null)
   }
 
   function handleDragEnd({ active, over }) {
     setActiveTask(null)
-    if (!over) return
+    const resolvedColumnId = overColumnId
+    setOverColumnId(null)
+    if (!over && !resolvedColumnId) return
 
-    const destinationStatusId = over.id
     const task = allTasks.find((item) => item.id === active.id)
-    const destinationStatus = boardStatuses.find((status) => status.id === destinationStatusId) ?? null
+    // Try over.id as a status id first, then fall back to overColumnId
+    const destinationStatus =
+      boardStatuses.find((s) => s.id === over?.id) ??
+      boardStatuses.find((s) => s.id === resolvedColumnId)
 
     if (!task || !destinationStatus) return
 
-    const isSameStatus = task.status_id === destinationStatus.id
-      || (!task.status_id && task.status === destinationStatus.legacy_key)
+    const isSameStatus =
+      task.status_id === destinationStatus.id ||
+      (!task.status_id && task.status === destinationStatus.legacy_key)
 
     if (!isSameStatus) {
       moveTask(task.id, destinationStatus)
@@ -100,6 +130,7 @@ export default function KanbanBoard({
 
   function handleDragCancel() {
     setActiveTask(null)
+    setOverColumnId(null)
   }
 
   const columns = (
@@ -138,6 +169,7 @@ export default function KanbanBoard({
             />
           ) : null}
           readOnly={readOnly}
+          isOver={overColumnId === status.id}
         />
       ))}
     </div>
@@ -158,6 +190,7 @@ export default function KanbanBoard({
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >

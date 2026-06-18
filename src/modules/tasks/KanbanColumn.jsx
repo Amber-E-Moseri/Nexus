@@ -10,8 +10,10 @@ function KanbanColumn({
   onStartAddTask,
   composer = null,
   readOnly = false,
+  isOver: isOverProp,
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: status.id })
+  const { setNodeRef, isOver: isOverDroppable } = useDroppable({ id: status.id })
+  const isOver = isOverProp ?? isOverDroppable
 
   return (
     <div
