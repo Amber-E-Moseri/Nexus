@@ -51,6 +51,7 @@ export default function SprintMemberPanel({
   const [selectedUserId, setSelectedUserId] = useState('')
   const [selectedRole, setSelectedRole] = useState('contributor')
   const [selectedTeamIds, setSelectedTeamIds] = useState([])
+  const [selectedMembershipEndDate, setSelectedMembershipEndDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(false)
 
@@ -67,7 +68,7 @@ export default function SprintMemberPanel({
     if (!selectedUserId) return
     setSaving(true)
     try {
-      await addSprintMember(sprintId, selectedUserId, selectedRole, selectedTeamIds)
+      await addSprintMember(sprintId, selectedUserId, selectedRole, selectedTeamIds, selectedMembershipEndDate || null)
       if (selectedUserId !== profile?.id) {
         await createNotification(selectedUserId, 'sprint_added', {
           sprint_id: sprintId,
@@ -78,6 +79,7 @@ export default function SprintMemberPanel({
       setSelectedUserId('')
       setSelectedRole('contributor')
       setSelectedTeamIds([])
+      setSelectedMembershipEndDate('')
       await onChanged?.()
     } finally {
       setSaving(false)
@@ -111,56 +113,75 @@ export default function SprintMemberPanel({
         </div>
 
         <div className="space-y-3">
-          {members.map((member) => (
-            <div key={member.user?.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-[var(--text-primary)]">{member.user?.name ?? member.user?.email ?? '—'}</div>
-                <div className="truncate text-xs text-[var(--text-tertiary)]">{member.user?.email}</div>
+          {members.map((member) => {
+            const hasExpiredMembership = member.team_memberships?.some(
+              (membership) => membership.membership_end_date && new Date(membership.membership_end_date) < new Date()
+            )
+            const expiringMemberships = member.team_memberships?.filter(
+              (membership) => membership.membership_end_date && new Date(membership.membership_end_date) > new Date()
+            ) ?? []
+
+            return (
+              <div key={member.user?.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-[var(--text-primary)]">{member.user?.name ?? member.user?.email ?? '—'}</div>
+                  <div className="truncate text-xs text-[var(--text-tertiary)]">{member.user?.email}</div>
+                  {expiringMemberships.length > 0 && (
+                    <div className="mt-1 text-xs text-[var(--warning)]">
+                      Expires: {expiringMemberships.map((m) => new Date(m.membership_end_date).toLocaleDateString()).join(', ')}
+                    </div>
+                  )}
+                </div>
+
+                {canEdit && !isArchived ? (
+                  <>
+                    <select
+                      value={member.role}
+                      onChange={(e) => handleRoleChange(member.user.id, e.target.value)}
+                      className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-primary)]"
+                    >
+                      {ROLE_OPTIONS.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      multiple
+                      value={member.sprint_team_ids ?? []}
+                      onChange={(e) => handleTeamChange(member.user.id, selectedValuesFromOptions(e.target.options))}
+                      className="min-w-[180px] rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-primary)]"
+                    >
+                      {teams.map((team) => (
+                        <option key={team.id} value={team.id}>{team.name}</option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemove(member.user.id)}
+                      className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-secondary)]"
+                    >
+                      Remove
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Badge tone={badgeToneForRole(member.role)}>
+                      {member.role}
+                    </Badge>
+                    <span className="text-xs text-[var(--text-tertiary)]">
+                      {member.sprint_teams?.length ? member.sprint_teams.map((team) => team.name).join(', ') : 'No team'}
+                    </span>
+                    {expiringMemberships.length > 0 && (
+                      <Badge tone="archived">
+                        Temp member
+                      </Badge>
+                    )}
+                  </>
+                )}
               </div>
-
-              {canEdit && !isArchived ? (
-                <>
-                  <select
-                    value={member.role}
-                    onChange={(e) => handleRoleChange(member.user.id, e.target.value)}
-                    className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-primary)]"
-                  >
-                    {ROLE_OPTIONS.map((role) => (
-                      <option key={role} value={role}>{role}</option>
-                    ))}
-                  </select>
-
-                  <select
-                    multiple
-                    value={member.sprint_team_ids ?? []}
-                    onChange={(e) => handleTeamChange(member.user.id, selectedValuesFromOptions(e.target.options))}
-                    className="min-w-[180px] rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-primary)]"
-                  >
-                    {teams.map((team) => (
-                      <option key={team.id} value={team.id}>{team.name}</option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(member.user.id)}
-                    className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-secondary)]"
-                  >
-                    Remove
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Badge tone={badgeToneForRole(member.role)}>
-                    {member.role}
-                  </Badge>
-                  <span className="text-xs text-[var(--text-tertiary)]">
-                    {member.sprint_teams?.length ? member.sprint_teams.map((team) => team.name).join(', ') : 'No team'}
-                  </span>
-                </>
-              )}
-            </div>
-          ))}
+            )
+          })}
 
           {members.length === 0 ? (
             <EmptyState icon="👥" title="No members yet" subtitle="Add members to get started" />
@@ -176,49 +197,74 @@ export default function SprintMemberPanel({
               Loading...
             </div>
           ) : null}
-          <div className="grid gap-3 md:grid-cols-[1.6fr_0.8fr_1fr_auto]">
-            <select
-              value={selectedUserId}
-              onChange={(e) => setSelectedUserId(e.target.value)}
-              className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--text-primary)]"
-            >
-              <option value="">Select active user</option>
-              {addableUsers.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name} — {user.email}
-                </option>
-              ))}
-            </select>
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-[1.6fr_0.8fr_1fr_auto]">
+              <select
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(e.target.value)}
+                className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--text-primary)]"
+              >
+                <option value="">Select active user</option>
+                {addableUsers.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} — {user.email}
+                  </option>
+                ))}
+              </select>
 
-            <select
-              value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
-              className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--text-primary)]"
-            >
-              {ROLE_OPTIONS.map((role) => (
-                <option key={role} value={role}>{role}</option>
-              ))}
-            </select>
+              <select
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value)}
+                className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--text-primary)]"
+              >
+                {ROLE_OPTIONS.map((role) => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
+              </select>
 
-            <select
-              multiple
-              value={selectedTeamIds}
-              onChange={(e) => setSelectedTeamIds(selectedValuesFromOptions(e.target.options))}
-              className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--text-primary)]"
-            >
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>{team.name}</option>
-              ))}
-            </select>
+              <select
+                multiple
+                value={selectedTeamIds}
+                onChange={(e) => setSelectedTeamIds(selectedValuesFromOptions(e.target.options))}
+                className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--text-primary)]"
+              >
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>{team.name}</option>
+                ))}
+              </select>
 
-            <button
-              type="button"
-              onClick={handleAdd}
-              disabled={!selectedUserId || saving}
-              className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
-            >
-              {saving ? 'Adding…' : 'Add'}
-            </button>
+              <button
+                type="button"
+                onClick={handleAdd}
+                disabled={!selectedUserId || saving}
+                className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {saving ? 'Adding…' : 'Add'}
+              </button>
+            </div>
+
+            {selectedTeamIds.length > 0 && (
+              <div className="pt-2">
+                <label className="text-xs font-medium text-[var(--text-secondary)]">
+                  Membership expiration (optional)
+                </label>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={selectedMembershipEndDate}
+                    onChange={(e) => setSelectedMembershipEndDate(e.target.value)}
+                    className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-primary)]"
+                  />
+                  <span className="text-xs text-[var(--text-tertiary)]">
+                    {selectedMembershipEndDate ? (
+                      <>Leave empty for permanent membership</>
+                    ) : (
+                      <>Permanent member</>
+                    )}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       ) : null}

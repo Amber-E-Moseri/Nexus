@@ -8,8 +8,19 @@ const STATUS_LABELS = {
   archived: 'Archived',
 }
 
+const STATUS_COLORS = {
+  planning: '#EDE8F8',
+  active: '#E0F2FE',
+  completed: '#DCFCE7',
+  review: '#FEF3C7',
+  archived: '#F3F0EB',
+}
+
 export default function SprintCard({ sprint, onClick, onDuplicate, onRestore }) {
   const isArchived = sprint.status === 'archived'
+  const taskCount = sprint.task_count || 0
+  const completedCount = sprint.completed_count || 0
+  const progress = taskCount > 0 ? Math.round((completedCount / taskCount) * 100) : 0
 
   const dateRange = sprint.start_date && sprint.end_date
     ? `${new Date(sprint.start_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })} — ${new Date(sprint.end_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}`
@@ -21,28 +32,39 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore }) 
     <div
       onClick={onClick}
       style={{
-        background: isArchived ? 'var(--surface-secondary)' : 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 14,
-        padding: '16px 20px',
+        background: isArchived ? '#F9F7F3' : '#FFFFFF',
+        border: `2px solid ${STATUS_COLORS[sprint.status] || '#E9E4D8'}`,
+        borderRadius: 16,
+        padding: '20px',
         cursor: 'pointer',
         opacity: isArchived ? 0.72 : 1,
-        transition: 'box-shadow 0.15s',
+        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        boxShadow: isArchived ? 'none' : '0 2px 8px rgba(28,22,16,0.08)',
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = 'var(--card-shadow)' }}
-      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none' }}
+      onMouseEnter={(e) => {
+        if (!isArchived) {
+          e.currentTarget.style.boxShadow = '0 12px 32px rgba(28,22,16,0.15)'
+          e.currentTarget.style.transform = 'translateY(-4px)'
+          e.currentTarget.style.borderColor = 'var(--accent)'
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = '0 2px 8px rgba(28,22,16,0.08)'
+        e.currentTarget.style.transform = 'translateY(0)'
+        e.currentTarget.style.borderColor = STATUS_COLORS[sprint.status] || '#E9E4D8'
+      }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
             {sprint.name}
           </div>
           {sprint.goal && (
             <div
               style={{
-                fontSize: 12,
+                fontSize: 12.5,
                 color: 'var(--text-secondary)',
-                lineHeight: 1.5,
+                lineHeight: 1.6,
                 overflow: 'hidden',
                 display: '-webkit-box',
                 WebkitLineClamp: 2,
@@ -56,42 +78,76 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore }) 
         <Badge tone={sprint.status}>{STATUS_LABELS[sprint.status] ?? sprint.status}</Badge>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
-        <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>📅 {dateRange}</span>
-        {isArchived && onRestore ? (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onRestore(sprint.id) }}
-            style={{
-              marginLeft: 'auto',
-              fontSize: 11,
-              color: 'var(--accent)',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
-            }}
-          >
-            Restore
-          </button>
-        ) : null}
-        {onDuplicate ? (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onDuplicate(sprint.id) }}
-            style={{
-              marginLeft: 'auto',
-              fontSize: 11,
-              color: 'var(--text-tertiary)',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
-            }}
-          >
-            Duplicate
-          </button>
-        ) : null}
+      {taskCount > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Progress
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+              {progress}%
+            </span>
+          </div>
+          <div style={{
+            height: 6,
+            background: '#F3F0EB',
+            borderRadius: 3,
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              height: '100%',
+              width: `${progress}%`,
+              background: 'linear-gradient(90deg, var(--accent), #6B4FD3)',
+              borderRadius: 3,
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-tertiary)' }}>
+            {completedCount} of {taskCount} tasks
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid #E9E4D8' }}>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>📅 {dateRange}</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          {isArchived && onRestore ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRestore(sprint.id) }}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--accent)',
+                background: 'rgba(75, 42, 146, 0.08)',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: 6,
+              }}
+            >
+              Restore
+            </button>
+          ) : null}
+          {onDuplicate ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDuplicate(sprint.id) }}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--text-secondary)',
+                background: 'transparent',
+                border: '1px solid #E9E4D8',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: 6,
+              }}
+            >
+              Duplicate
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   )
