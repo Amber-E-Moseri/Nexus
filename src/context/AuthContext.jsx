@@ -120,6 +120,16 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  const signIn = useCallback(
+    (email, password) => supabase.auth.signInWithPassword({ email, password }),
+    [],
+  )
+
+  const signUp = useCallback(
+    (email, password, userData) => supabase.auth.signUp({ email, password, options: { data: userData } }),
+    [],
+  )
+
   const value = useMemo(
     () => ({
       user,
@@ -127,10 +137,12 @@ export function AuthProvider({ children }) {
       role: profile?.role ?? null,
       effectiveRole: jwtRole ?? profile?.role ?? null,
       loading,
+      signIn,
+      signUp,
       signOut: () => supabase.auth.signOut(),
       refreshProfile,
     }),
-    [jwtRole, loading, profile, user],
+    [jwtRole, loading, profile, user, signIn, signUp],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

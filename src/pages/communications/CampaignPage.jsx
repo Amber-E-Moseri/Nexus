@@ -15,6 +15,9 @@ const TEXT    = '#2D2A22'
 const MUTED   = '#9E9488'
 const BG      = '#F4F1EA'
 const SURFACE = '#FFFFFF'
+const CAMPAIGN_SELECT = 'id, name, status, subject, body, segment_id, recipient_filters, scheduled_at, sent_at, recipient_count, sent_count, open_count, failed_count, created_at, recurring_rule'
+const SEND_SELECT = 'id, campaign_id, recipient_email, recipient_name, status, opened_at, error_message, created_at'
+const AB_TEST_SELECT = 'id, campaign_id, subject_a, subject_b, winner_subject'
 
 const STATUS_STYLE = {
   draft:     { bg: '#F4F1EA', color: '#9E9488' },
@@ -689,8 +692,8 @@ function CampaignReport({ campaign, onClose }) {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('communication_sends').select('*').eq('campaign_id', campaign.id).order('created_at'),
-      supabase.from('communication_ab_tests').select('*').eq('campaign_id', campaign.id).single(),
+      supabase.from('communication_sends').select(SEND_SELECT).eq('campaign_id', campaign.id).order('created_at'),
+      supabase.from('communication_ab_tests').select(AB_TEST_SELECT).eq('campaign_id', campaign.id).single(),
     ]).then(([sendsRes, abRes]) => {
       setSends(sendsRes.data ?? [])
       if (!abRes.error) setAbTest(abRes.data)
@@ -798,7 +801,7 @@ export default function CampaignPage() {
 
   async function loadCampaigns() {
     setLoading(true)
-    let query = supabase.from('communication_campaigns').select('*')
+    let query = supabase.from('communication_campaigns').select(CAMPAIGN_SELECT)
 
     if (view === 'scheduled') {
       query = query.eq('status', 'scheduled').order('scheduled_at', { ascending: true })
@@ -818,7 +821,7 @@ export default function CampaignPage() {
     const now = new Date().toISOString()
     const { data: dueList } = await supabase
       .from('communication_campaigns')
-      .select('*')
+      .select(CAMPAIGN_SELECT)
       .eq('status', 'scheduled')
       .lte('scheduled_at', now)
 
@@ -1208,7 +1211,6 @@ export default function CampaignPage() {
               </tbody>
             </table>
           </div>
-        )}
         )}
       </div>
 
