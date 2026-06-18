@@ -24,6 +24,16 @@ function getKeyStatus(key) {
   return { label: 'Active', style: { background: 'var(--status-done-bg)', color: 'var(--status-done-text)' } }
 }
 
+function MetaChip({ label, value }) {
+  if (!value || value === '—') return null
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <span style={{ fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>{label}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{value}</span>
+    </div>
+  )
+}
+
 export default function ApiKeyManager({
   departmentId,
   currentUserId,
@@ -105,7 +115,9 @@ export default function ApiKeyManager({
     <section className="space-y-4 rounded-2xl border border-[var(--border)] bg-white p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-[var(--text-primary)]">API Keys</h2>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
+            API Keys <span style={{ fontSize: 12, fontWeight: 600, background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 999, padding: '2px 9px', marginLeft: 6 }}>{keys.length}</span>
+          </h2>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
             Generate department-scoped keys for Google Sheets, Apps Script, and other external tools.
           </p>
@@ -124,89 +136,106 @@ export default function ApiKeyManager({
         <div className="rounded-xl border px-3 py-2 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>{error}</div>
       ) : null}
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
-          <thead className="text-[var(--text-secondary)]">
-            <tr className="border-b border-[var(--border)]">
-              <th className="px-3 py-3 font-medium">Name</th>
-              <th className="px-3 py-3 font-medium">Prefix</th>
-              <th className="px-3 py-3 font-medium">Permissions</th>
-              <th className="px-3 py-3 font-medium">Rate limit</th>
-              <th className="px-3 py-3 font-medium">Last used</th>
-              <th className="px-3 py-3 font-medium">Expires</th>
-              <th className="px-3 py-3 font-medium">Status</th>
-              <th className="px-3 py-3 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {keys.map((key) => {
-              const status = getKeyStatus(key)
-              return (
-                <tr key={key.id} className="border-b border-[var(--border)]/60 align-top">
-                  <td className="px-3 py-3 font-medium text-[var(--text-primary)]">{key.name}</td>
-                  <td className="px-3 py-3 font-mono text-xs text-[var(--text-secondary)]">{key.key_prefix}</td>
-                  <td className="px-3 py-3 text-[var(--text-secondary)]">{(key.permissions ?? []).join(', ')}</td>
-                  <td className="px-3 py-3 text-sm text-[var(--text-secondary)]">60 req/min</td>
-                  <td className="px-3 py-3 text-[var(--text-secondary)]">{formatDateTime(key.last_used_at)}</td>
-                  <td className="px-3 py-3 text-[var(--text-secondary)]">{formatDateTime(key.expires_at)}</td>
-                  <td className="px-3 py-3">
-                    <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={status.style}>
-                      {status.label}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={key.revoked}
-                        onClick={async () => {
-                          setSaving(true)
-                          try {
-                            await revokeApiKey(key.id)
-                            await loadKeys()
-                          } catch (nextError) {
-                            setError(nextError.message)
-                          } finally {
-                            setSaving(false)
-                          }
-                        }}
-                        className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] disabled:opacity-50"
-                      >
-                        Revoke
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!window.confirm(`Delete API key "${key.name}" permanently?`)) return
-                          setSaving(true)
-                          try {
-                            await deleteApiKey(key.id)
-                            await loadKeys()
-                          } catch (nextError) {
-                            setError(nextError.message)
-                          } finally {
-                            setSaving(false)
-                          }
-                        }}
-                        className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)]"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-
-            {!loading && keys.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-3 py-10 text-center text-[var(--text-secondary)]">
-                  No API keys created for this department yet.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {keys.map((key) => {
+          const status = getKeyStatus(key)
+          return (
+            <div
+              key={key.id}
+              style={{
+                background: 'white',
+                border: '1px solid var(--border)',
+                borderRadius: 14,
+                padding: '14px 16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {key.name}
+                  </div>
+                  <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-tertiary)', marginTop: 2 }}>
+                    {key.key_prefix}…
+                  </div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '3px 10px', ...status.style }}>
+                  {status.label}
+                </span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    disabled={key.revoked}
+                    onClick={async () => {
+                      setSaving(true)
+                      try {
+                        await revokeApiKey(key.id)
+                        await loadKeys()
+                      } catch (nextError) {
+                        setError(nextError.message)
+                      } finally {
+                        setSaving(false)
+                      }
+                    }}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: '4px 10px',
+                      borderRadius: 8,
+                      border: '1px solid var(--border)',
+                      background: 'transparent',
+                      color: 'var(--text-secondary)',
+                      cursor: key.revoked ? 'not-allowed' : 'pointer',
+                      opacity: key.revoked ? 0.4 : 1,
+                    }}
+                  >
+                    Revoke
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!window.confirm(`Delete "${key.name}"?`)) return
+                      setSaving(true)
+                      try {
+                        await deleteApiKey(key.id)
+                        await loadKeys()
+                      } catch (nextError) {
+                        setError(nextError.message)
+                      } finally {
+                        setSaving(false)
+                      }
+                    }}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: '4px 10px',
+                      borderRadius: 8,
+                      border: '1px solid var(--border)',
+                      background: 'transparent',
+                      color: 'var(--coral-dark)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                <MetaChip label="Permissions" value={(key.permissions ?? []).join(', ')} />
+                <MetaChip label="Rate limit" value="60 req/min" />
+                <MetaChip label="Last used" value={formatDateTime(key.last_used_at)} />
+                <MetaChip label="Expires" value={formatDateTime(key.expires_at)} />
+              </div>
+            </div>
+          )
+        })}
+        {!loading && keys.length === 0 ? (
+          <div style={{ padding: '32px 16px', textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', border: '1px dashed var(--border)', borderRadius: 14 }}>
+            No API keys created for this department yet.
+          </div>
+        ) : null}
       </div>
 
       <div className="rounded-2xl bg-[var(--surface-secondary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
