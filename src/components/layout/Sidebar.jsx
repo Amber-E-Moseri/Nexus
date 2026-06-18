@@ -733,6 +733,12 @@ export default function Sidebar() {
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 6px 12px' }}>
         <SidebarSectionLabel>Workspace</SidebarSectionLabel>
         <SidebarItem
+          active={isPathActive(location.pathname, '/dashboard')}
+          icon={LayoutGrid}
+          label="Dashboard"
+          onClick={() => go('/dashboard')}
+        />
+        <SidebarItem
           active={isPathActive(location.pathname, '/inbox')}
           icon={Bell}
           label="Inbox"
