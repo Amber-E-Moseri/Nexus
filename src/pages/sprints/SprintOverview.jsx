@@ -74,11 +74,52 @@ function getNextAction(sprint) {
   return actions[sprint.status]
 }
 
-function Stat({ label, value }) {
+function Stat({ label, value, bg, textColor, border }) {
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-4">
-      <div className="text-xs uppercase tracking-[0.08em] text-[var(--text-tertiary)]">{label}</div>
-      <div className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">{value}</div>
+    <div
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        borderRadius: 16,
+        padding: '16px 18px',
+        background: bg,
+        border: border ? `1px solid ${border}` : 'none',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          right: -20,
+          bottom: -24,
+          width: 80,
+          height: 80,
+          borderRadius: 999,
+          background: 'rgba(255,255,255,0.07)',
+        }}
+      />
+      <div
+        style={{
+          fontSize: '10.5px',
+          fontWeight: 700,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: textColor,
+          opacity: 0.85,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 28,
+          fontWeight: 800,
+          lineHeight: 1,
+          marginTop: 8,
+          color: textColor,
+        }}
+      >
+        {value}
+      </div>
     </div>
   )
 }
@@ -361,10 +402,32 @@ export default function SprintOverview() {
               <SprintProgressBar tasksCount={calculateSprintTaskStats(tasks)} compact={false} />
             </div>
           )}
-          <section className="grid gap-4 md:grid-cols-3">
-            <Stat label="Members" value={detail.members.length} />
-            <Stat label="Tasks" value={tasks.length} />
-            <Stat label="Completion" value={`${completion}%`} />
+          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
+            <Stat
+              label="Tasks Done"
+              value={`${tasks.filter((t) => isTaskCompleted(t)).length}/${tasks.length}`}
+              bg="#4C2A92"
+              textColor="white"
+            />
+            <Stat
+              label="Progress"
+              value={`${completion}%`}
+              bg="#1C1C2E"
+              textColor="white"
+            />
+            <Stat
+              label="Remaining"
+              value={tasks.length - tasks.filter((t) => isTaskCompleted(t)).length}
+              bg="#E8A020"
+              textColor="white"
+            />
+            <Stat
+              label="Teams"
+              value={detail.teams.length}
+              bg="#FEF0ED"
+              textColor="#C94830"
+              border="#F9C4B3"
+            />
           </section>
 
           <section className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
@@ -524,6 +587,28 @@ export default function SprintOverview() {
 
       {activeTab === 'Review' ? (
         <div role="tabpanel" id="tabpanel-review" aria-labelledby="tab-review" tabIndex={0}>
+          {tasks.length > 0 && (
+            <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 20 }}>
+              <Stat
+                label="Completed"
+                value={`${tasks.filter((t) => isTaskCompleted(t)).length}/${tasks.length}`}
+                bg="#4C2A92"
+                textColor="white"
+              />
+              <Stat
+                label="Progress"
+                value={`${completion}%`}
+                bg="#1C1C2E"
+                textColor="white"
+              />
+              <Stat
+                label="Remaining"
+                value={tasks.length - tasks.filter((t) => isTaskCompleted(t)).length}
+                bg="#E8A020"
+                textColor="white"
+              />
+            </section>
+          )}
           <SprintReview
             sprint={detail.sprint}
             canManage={Boolean(canManage)}
