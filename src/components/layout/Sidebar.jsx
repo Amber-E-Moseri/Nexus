@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Clock,
   Copy,
+  Folder,
   Home,
   LayoutGrid,
   Mail,
@@ -88,6 +89,7 @@ function SidebarSectionLabel({ children, onAdd }) {
         <button
           type="button"
           onClick={onAdd}
+          aria-label={`Add ${String(children).toLowerCase()}`}
           style={{ border: 'none', background: 'none', color: '#B0A696', fontSize: 15, lineHeight: 1, cursor: 'pointer', padding: '0 2px', display: 'flex', alignItems: 'center' }}
           onMouseEnter={(e) => { e.currentTarget.style.color = '#4C2A92' }}
           onMouseLeave={(e) => { e.currentTarget.style.color = '#B0A696' }}
@@ -687,6 +689,8 @@ export default function Sidebar() {
           <img
             src="/canada_sr.png"
             alt="BLW Canada"
+            width="24"
+            height="24"
             style={{
               width: 24,
               height: 24,
@@ -740,12 +744,20 @@ export default function Sidebar() {
           onClick={() => go('/')}
         />
         {role === 'super_admin' || role === 'dept_lead' ? (
-          <SidebarItem
-            active={isPathActive(location.pathname, '/activity-log')}
-            icon={Clock}
-            label="Activity Log"
-            onClick={() => go('/activity-log')}
-          />
+          <>
+            <SidebarItem
+              active={isPathActive(location.pathname, '/activity-log')}
+              icon={Clock}
+              label="Activity Log"
+              onClick={() => go('/activity-log')}
+            />
+            <SidebarItem
+              active={isPathActive(location.pathname, '/files')}
+              icon={Folder}
+              label="Files"
+              onClick={() => go('/files')}
+            />
+          </>
         ) : null}
         <SidebarItem
           active={isPathActive(location.pathname, '/my-tasks')}
