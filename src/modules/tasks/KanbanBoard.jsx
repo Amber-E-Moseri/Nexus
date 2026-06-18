@@ -2,10 +2,8 @@ import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core'
 import { useState } from 'react'
 import { useDndSensors } from '../../dnd'
 import { useTasks } from './TasksContext'
-
 import KanbanColumn from './KanbanColumn'
 import TaskCard from './TaskCard'
-import { useTasks } from './TasksContext'
 
 const STATUS_CATEGORY_DOT_COLORS = {
   open: '#7A7D86',
