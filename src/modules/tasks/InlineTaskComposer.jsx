@@ -28,7 +28,7 @@ export default function InlineTaskComposer({
   const [departmentId, setDepartmentId] = useState(defaultDepartmentId ?? departments[0]?.id ?? '')
   const [priority, setPriority] = useState('medium')
   const [dueDate, setDueDate] = useState('')
-  const [assigneeIds, setAssigneeIds] = useState([])
+  const [assigneeId, setAssigneeId] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -55,7 +55,7 @@ export default function InlineTaskComposer({
         priority,
         dueDate: dueDate || null,
         listId,
-        assigneeIds: assigneeIds.length > 0 ? assigneeIds : undefined,
+        assigneeId: assigneeId || undefined,
       })
     } catch (submitError) {
       setError(submitError.message ?? 'Failed to create task.')
@@ -150,35 +150,27 @@ export default function InlineTaskComposer({
       {!compact && teamMembers.length > 0 && (
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
-            Assignees
+            Assign to
           </span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <select
+            value={assigneeId}
+            onChange={(event) => setAssigneeId(event.target.value)}
+            style={{
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              padding: '9px 11px',
+              fontSize: 13,
+              color: assigneeId ? 'var(--text-primary)' : 'var(--text-secondary)',
+              background: '#FFFFFF',
+            }}
+          >
+            <option value="">Unassigned</option>
             {teamMembers.map((member) => (
-              <button
-                key={member.id}
-                type="button"
-                onClick={() => {
-                  setAssigneeIds((prev) =>
-                    prev.includes(member.id)
-                      ? prev.filter((id) => id !== member.id)
-                      : [...prev, member.id]
-                  )
-                }}
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: 999,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  border: assigneeIds.includes(member.id) ? 'none' : '1px solid var(--border)',
-                  background: assigneeIds.includes(member.id) ? 'var(--accent)' : '#FFFFFF',
-                  color: assigneeIds.includes(member.id) ? 'white' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                }}
-              >
+              <option key={member.id} value={member.id}>
                 {member.name ?? member.email}
-              </button>
+              </option>
             ))}
-          </div>
+          </select>
         </label>
       )}
 
