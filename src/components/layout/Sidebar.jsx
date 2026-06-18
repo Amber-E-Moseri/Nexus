@@ -669,17 +669,30 @@ export default function Sidebar() {
           gap: 10,
         }}
       >
-        <img
-          src="/canada_sr.png"
-          alt="BLW Canada"
+        <div
           style={{
-            width: 32,
-            height: 32,
-            borderRadius: 6,
+            width: 36,
+            height: 36,
+            borderRadius: 8,
             flexShrink: 0,
-            objectFit: 'contain',
+            background: 'linear-gradient(135deg, #4C2A92 0%, #6B4BBE 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(76,42,146,0.16)',
           }}
-        />
+        >
+          <img
+            src="/canada_sr.png"
+            alt="BLW Canada"
+            style={{
+              width: 24,
+              height: 24,
+              objectFit: 'contain',
+              filter: 'brightness(0) invert(1)',
+            }}
+          />
+        </div>
         <div style={{ minWidth: 0 }}>
           <div
             style={{
