@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { SlidersHorizontal } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { getMonthEvents } from '../../lib/calendar'
@@ -878,6 +878,7 @@ function SpaceSettingsTab({ space, canManage, onSaved, onArchive }) {
 export default function SpaceOverview() {
   const { effectiveRole, profile } = useAuth()
   const { spaceId } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('Overview')
   const [detail, setDetail] = useState(null)
@@ -915,6 +916,14 @@ export default function SpaceOverview() {
   useEffect(() => {
     setSelectedListId(null)
   }, [spaceId])
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const listId = params.get('list')
+    if (listId) {
+      setSelectedListId(listId)
+    }
+  }, [location.search])
 
   async function loadDetail() {
     setLoading(true)

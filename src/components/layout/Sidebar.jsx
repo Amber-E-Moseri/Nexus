@@ -27,6 +27,7 @@ import { useInboxCount } from '../../context/InboxCountContext'
 import { useAuth } from '../../hooks/useAuth'
 import { archiveSpace, getSpacesByType, restoreSpace, updateSpace } from '../../lib/spaces'
 import { supabase } from '../../lib/supabase'
+import SidebarSpaceTree from './SidebarSpaceTree'
 import SpaceModal from '../../modules/spaces/SpaceModal'
 import SprintModal from '../../modules/sprints/SprintModal'
 import { useSprints } from '../../modules/sprints/SprintsContext'
@@ -971,6 +972,7 @@ export default function Sidebar() {
                 <div style={{ marginTop: 8, fontSize: 11, color: '#B0A696' }}>{quickAddSaving ? 'Saving…' : 'Press Enter to save'}</div>
               </div>
             ) : null}
+            <SidebarSpaceTree spaceId={space.id} spaceName={space.name} isActive={isPathActive(location.pathname, `/spaces/${space.id}`)} />
           </div>
         ))}
         {archivedSpaces.length > 0 ? (
