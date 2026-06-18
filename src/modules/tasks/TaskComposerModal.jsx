@@ -8,6 +8,7 @@ export default function TaskComposerModal({
   defaultDepartmentId = '',
   listId = null,
   teamMembers = [],
+  statuses = [],
   onSubmit,
 }) {
   return (
@@ -33,6 +34,7 @@ export default function TaskComposerModal({
               defaultDepartmentId={defaultDepartmentId}
               listId={listId}
               teamMembers={teamMembers}
+              statuses={statuses}
               compact={false}
               onSubmit={async (draft) => {
                 await onSubmit(draft)

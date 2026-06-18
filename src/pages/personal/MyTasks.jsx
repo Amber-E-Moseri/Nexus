@@ -5,8 +5,10 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../hooks/useAuth'
 import { formatDueDate } from '../../lib/dateUtils'
-import { getMyTasks } from '../../lib/tasks'
+import { getMyTasks, createTask } from '../../lib/tasks'
+import { listTaskStatuses } from '../../lib/taskStatuses'
 import TaskModal from '../../modules/tasks/TaskModal'
+import TaskComposerModal from '../../modules/tasks/TaskComposerModal'
 
 const PRIORITY_DOT = {
   urgent: '#C94830',
@@ -355,6 +357,7 @@ export default function MyTasks() {
   const location = useLocation()
   const navigate = useNavigate()
   const [tasks, setTasks] = useState([])
+  const [statuses, setStatuses] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null)
   const [viewMode, setViewMode] = useState(loadViewMode)
@@ -365,8 +368,12 @@ export default function MyTasks() {
     if (!profile?.id) return
     setLoading(true)
     try {
-      const data = await getMyTasks(profile.id)
-      setTasks(data)
+      const [taskData, statusData] = await Promise.all([
+        getMyTasks(profile.id),
+        listTaskStatuses(),
+      ])
+      setTasks(taskData)
+      setStatuses(statusData)
     } finally {
       setLoading(false)
     }
@@ -588,7 +595,17 @@ export default function MyTasks() {
         )}
       </div>
 
-      {modal ? (
+      {modal?.mode === 'create' ? (
+        <TaskComposerModal
+          open={true}
+          onOpenChange={(open) => !open && setModal(null)}
+          statuses={statuses}
+          onSubmit={async (draft) => {
+            await createTask(draft)
+            await load()
+          }}
+        />
+      ) : modal ? (
         <TaskModal
           mode={modal.mode}
           task={modal.task}

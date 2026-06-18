@@ -23,12 +23,14 @@ export default function InlineTaskComposer({
   onCancel,
   compact = false,
   teamMembers = [],
+  statuses = [],
 }) {
   const [title, setTitle] = useState('')
   const [departmentId, setDepartmentId] = useState(defaultDepartmentId ?? departments[0]?.id ?? '')
   const [priority, setPriority] = useState('medium')
   const [dueDate, setDueDate] = useState('')
   const [assigneeId, setAssigneeId] = useState('')
+  const [statusId, setStatusId] = useState(statuses.find(s => s.category === 'open')?.id ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -56,6 +58,7 @@ export default function InlineTaskComposer({
         dueDate: dueDate || null,
         listId,
         assigneeId: assigneeId || undefined,
+        statusId: statusId || undefined,
       })
     } catch (submitError) {
       setError(submitError.message ?? 'Failed to create task.')
@@ -206,6 +209,32 @@ export default function InlineTaskComposer({
           })}
         </div>
       </div>
+
+      {!compact && statuses.length > 0 && (
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
+            Status
+          </span>
+          <select
+            value={statusId}
+            onChange={(event) => setStatusId(event.target.value)}
+            style={{
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              padding: '9px 11px',
+              fontSize: 13,
+              color: 'var(--text-primary)',
+              background: '#FFFFFF',
+            }}
+          >
+            {statuses.map((status) => (
+              <option key={status.id} value={status.id}>
+                {status.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       {error ? <div style={{ marginTop: 10, fontSize: 12, color: 'var(--coral-dark)' }}>{error}</div> : null}
 
