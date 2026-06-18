@@ -184,6 +184,7 @@ export async function duplicateSprint(sprintId, createdBy) {
       status: 'planning',
       start_date: null,
       end_date: null,
+      department_id: sprint.department_id ?? null,
     },
     createdBy,
   )

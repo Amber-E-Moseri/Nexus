@@ -201,7 +201,7 @@ export default function SprintsList() {
         <EmptyState />
       )}
 
-      {showModal ? <SprintModal onSaved={loadSprints} onClose={closeModal} /> : null}
+      {showModal ? <SprintModal initialDepartmentId={profile?.department_id ?? null} onSaved={loadSprints} onClose={closeModal} /> : null}
     </div>
   )
 }
