@@ -33,6 +33,8 @@ export default function InlineTaskComposer({
   const [statusId, setStatusId] = useState(statuses.find(s => s.category === 'open')?.id ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [subtasks, setSubtasks] = useState([])
+  const [newSubtask, setNewSubtask] = useState('')
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -59,6 +61,7 @@ export default function InlineTaskComposer({
         listId,
         assigneeId: assigneeId || undefined,
         statusId: statusId || undefined,
+        subtasks: subtasks.filter(s => s.trim()),
       })
     } catch (submitError) {
       setError(submitError.message ?? 'Failed to create task.')
@@ -234,6 +237,97 @@ export default function InlineTaskComposer({
             ))}
           </select>
         </label>
+      )}
+
+      {!compact && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A', marginBottom: 8 }}>
+            Subtasks
+          </div>
+          {subtasks.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              {subtasks.map((subtask, index) => (
+                <div
+                  key={index}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px',
+                    marginBottom: 6,
+                    background: '#F5F3F0',
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', wordBreak: 'break-word' }}>
+                    {subtask}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSubtasks(subtasks.filter((_, i) => i !== index))}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-tertiary)',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      padding: '0 4px',
+                      flexShrink: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="text"
+              value={newSubtask}
+              onChange={(event) => setNewSubtask(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && newSubtask.trim()) {
+                  event.preventDefault()
+                  setSubtasks([...subtasks, newSubtask.trim()])
+                  setNewSubtask('')
+                }
+              }}
+              placeholder="Add a subtask"
+              style={{
+                flex: 1,
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: '8px 10px',
+                fontSize: 12,
+                color: 'var(--text-primary)',
+                background: '#FFFFFF',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (newSubtask.trim()) {
+                  setSubtasks([...subtasks, newSubtask.trim()])
+                  setNewSubtask('')
+                }
+              }}
+              style={{
+                border: '1px solid var(--border)',
+                background: '#FFFFFF',
+                color: 'var(--accent)',
+                borderRadius: 8,
+                padding: '8px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              + Add
+            </button>
+          </div>
+        </div>
       )}
 
       {error ? <div style={{ marginTop: 10, fontSize: 12, color: 'var(--coral-dark)' }}>{error}</div> : null}

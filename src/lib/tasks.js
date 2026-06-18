@@ -221,6 +221,9 @@ export async function getTaskById(taskId) {
 
 export async function createTask(taskData) {
   const payload = buildTaskPayload(taskData)
+  const subtasksToCreate = payload.subtasks || []
+  delete payload.subtasks
+
   const {
     data: { user },
     error: authError,
@@ -262,6 +265,25 @@ export async function createTask(taskData) {
     department_id: data.department_id,
     sprint_id: data.sprint_id,
   })
+
+  if (subtasksToCreate.length > 0) {
+    const subtaskPayloads = subtasksToCreate.map(title => ({
+      title: title.trim(),
+      parent_task_id: data.id,
+      department_id: data.department_id,
+      status: 'open',
+      created_by: user.id,
+    }))
+
+    const { data: subtasksData, error: subtasksError } = await supabase
+      .from('tasks')
+      .insert(subtaskPayloads)
+      .select(`*, ${TASK_STATUS_SELECT}`)
+
+    if (!subtasksError && subtasksData) {
+      data.subtasks = normalizeTaskResultList(subtasksData)
+    }
+  }
 
   return normalizeTaskResult(data)
 }
