@@ -1120,7 +1120,7 @@ export default function Sidebar() {
         <SidebarSectionLabel>Platform</SidebarSectionLabel>
         <button
           type="button"
-          onClick={() => setMeetingsExpanded(!meetingsExpanded)}
+          onClick={() => go('/meetings')}
           style={{
             ...ITEM_BASE_STYLE,
             borderLeft: isPathActive(location.pathname, '/meetings') ? '3px solid #4C2A92' : '3px solid transparent',
@@ -1134,7 +1134,16 @@ export default function Sidebar() {
             if (!isPathActive(location.pathname, '/meetings')) e.currentTarget.style.background = 'transparent'
           }}
         >
-          <ChevronDown size={15} style={{ opacity: 0.85, transform: meetingsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setMeetingsExpanded(!meetingsExpanded)
+            }}
+            style={{ border: 'none', background: 'none', padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+          >
+            <ChevronDown size={15} style={{ opacity: 0.85, transform: meetingsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+          </button>
           <span style={{ flex: 1 }}>Meetings</span>
         </button>
         {meetingsExpanded ? (
@@ -1177,7 +1186,7 @@ export default function Sidebar() {
         ) : null}
         <button
           type="button"
-          onClick={() => setCommunicationsExpanded(!communicationsExpanded)}
+          onClick={() => go('/communications')}
           style={{
             ...ITEM_BASE_STYLE,
             borderLeft: isPathActive(location.pathname, '/communications') ? '3px solid #4C2A92' : '3px solid transparent',
@@ -1191,7 +1200,16 @@ export default function Sidebar() {
             if (!isPathActive(location.pathname, '/communications')) e.currentTarget.style.background = 'transparent'
           }}
         >
-          <ChevronDown size={15} style={{ opacity: 0.85, transform: communicationsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setCommunicationsExpanded(!communicationsExpanded)
+            }}
+            style={{ border: 'none', background: 'none', padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+          >
+            <ChevronDown size={15} style={{ opacity: 0.85, transform: communicationsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+          </button>
           <span style={{ flex: 1 }}>Communications</span>
         </button>
         {communicationsExpanded && showAdminPlatform ? (
