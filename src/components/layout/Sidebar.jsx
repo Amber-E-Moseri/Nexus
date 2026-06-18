@@ -766,6 +766,12 @@ export default function Sidebar() {
           onClick={() => go('/my-tasks')}
         />
         <SidebarItem
+          active={isPathActive(location.pathname, '/planner')}
+          icon={CalendarDays}
+          label="Planner"
+          onClick={() => go('/planner')}
+        />
+        <SidebarItem
           active={isPathActive(location.pathname, '/calendar')}
           icon={CalendarDays}
           label="Ministry Calendar"

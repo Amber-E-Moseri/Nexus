@@ -28,6 +28,7 @@ const ExpectedAttendeesPage = lazy(() => import('./pages/meetings/ExpectedAttend
 const AbsenceEmailLogPage = lazy(() => import('./pages/meetings/AbsenceEmailLogPage'))
 const AttendanceTrendsDashboard = lazy(() => import('./pages/AttendanceTrendsDashboard'))
 const MyTasks = lazy(() => import('./pages/personal/MyTasks'))
+const Planner = lazy(() => import('./pages/Planner'))
 const AllPeoplePage = lazy(() => import('./pages/people/AllPeoplePage'))
 const DepartmentsPage = lazy(() => import('./pages/people/DepartmentsPage'))
 const InvitationsPage = lazy(() => import('./pages/people/InvitationsPage'))
@@ -87,6 +88,7 @@ export default function App() {
           />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/my-tasks" element={<MyTasks />} />
+          <Route path="/planner" element={<Planner />} />
           <Route path="/calendar" element={<MinistryCalendar />} />
           <Route
             path="/calendar-management"
