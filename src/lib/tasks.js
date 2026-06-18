@@ -244,6 +244,15 @@ export async function createTask(taskData) {
     .single()
 
   if (error) throw error
+
+  recordActivity('task_created', {
+    entity_type: 'task',
+    entity_id: data.id,
+    entity_title: data.title,
+    department_id: data.department_id,
+    sprint_id: data.sprint_id,
+  })
+
   return normalizeTaskResult(data)
 }
 

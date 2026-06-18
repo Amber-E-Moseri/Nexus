@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { getDefaultTaskStatusId, normalizeTaskRows } from './taskStatuses'
+import { recordActivity } from './activityFeed'
 
 export async function getDeptMeetings(departmentId) {
   if (!departmentId) return []
@@ -69,6 +70,13 @@ export async function createMeeting(meetingData) {
     if (attendanceError) throw attendanceError
   }
 
+  recordActivity('meeting_created', {
+    entity_type: 'meeting',
+    entity_id: data.id,
+    entity_title: data.title,
+    department_id: data.department_id,
+  })
+
   return {
     ...data,
     attendance: attendanceUserIds.map((userId) => ({ user_id: userId, status: 'present' })),
@@ -99,6 +107,14 @@ export async function updateMeeting(meetingId, updates) {
     .single()
 
   if (error) throw error
+
+  recordActivity('meeting_updated', {
+    entity_type: 'meeting',
+    entity_id: data.id,
+    entity_title: data.title,
+    department_id: data.department_id,
+  })
+
   return data
 }
 
