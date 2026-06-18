@@ -1,0 +1,1 @@
+-- Skipped: invitation_templates table not created yet
