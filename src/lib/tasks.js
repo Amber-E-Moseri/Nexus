@@ -61,6 +61,11 @@ function buildTaskPayload(taskData = {}) {
     delete payload.statusId
   }
 
+  if ('assigneeId' in payload) {
+    payload.assignee_id = payload.assigneeId
+    delete payload.assigneeId
+  }
+
   if ('statusCategory' in payload) {
     delete payload.statusCategory
   }
