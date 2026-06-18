@@ -1044,7 +1044,6 @@ export default function Sidebar() {
         ) : null}
         <button
           type="button"
-          onClick={() => go('/communications')}
           style={{
             ...ITEM_BASE_STYLE,
             borderLeft: isPathActive(location.pathname, '/communications') ? '3px solid #4C2A92' : '3px solid transparent',
@@ -1058,8 +1057,8 @@ export default function Sidebar() {
             if (!isPathActive(location.pathname, '/communications')) e.currentTarget.style.background = 'transparent'
           }}
         >
-          <button
-            type="button"
+          <span style={{ flex: 1 }}>Communications</span>
+          <div
             onClick={(e) => {
               e.stopPropagation()
               setCommunicationsExpanded(!communicationsExpanded)
@@ -1067,8 +1066,7 @@ export default function Sidebar() {
             style={{ border: 'none', background: 'none', padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
           >
             <ChevronDown size={15} style={{ opacity: 0.85, transform: communicationsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
-          </button>
-          <span style={{ flex: 1 }}>Communications</span>
+          </div>
         </button>
         {communicationsExpanded && showAdminPlatform ? (
           <>
