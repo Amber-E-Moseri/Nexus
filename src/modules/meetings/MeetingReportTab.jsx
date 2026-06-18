@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarRange, Files, LayoutGrid, Link2, Printer, RotateCcw, Users } from 'lucide-react'
+import { CalendarRange, Files, LayoutGrid, Link2, Mail, Printer, RotateCcw, Users } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
+import { useToast } from '../../context/ToastContext'
 
 const PRINT_STYLES = `
 @media print {
@@ -880,6 +881,9 @@ export default function MeetingReportTab() {
   const [history, setHistory] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(true)
 
+  const [emailSending, setEmailSending] = useState(false)
+  const { showToast } = useToast()
+
   useEffect(() => {
     loadRoster()
     loadHistory()
@@ -1274,6 +1278,52 @@ export default function MeetingReportTab() {
     setHistory((prev) => prev.filter((record) => record.id !== id))
   }
 
+  async function handleEmailAbsentees() {
+    if (!report?.absent || report.absent.length === 0) {
+      showToast('No absent members to email.', { tone: 'warning' })
+      return
+    }
+
+    setEmailSending(true)
+    try {
+      const absentWithEmails = report.absent.filter((person) => {
+        const rosterMatch = roster.find((r) => normalizeNameKey(r.full_name) === normalizeNameKey(person.name))
+        return rosterMatch?.email
+      })
+
+      if (absentWithEmails.length === 0) {
+        showToast('No email addresses found for absent members.', { tone: 'warning' })
+        setEmailSending(false)
+        return
+      }
+
+      const recipients = absentWithEmails.map((person) => {
+        const rosterMatch = roster.find((r) => normalizeNameKey(r.full_name) === normalizeNameKey(person.name))
+        return {
+          name: person.name,
+          email: rosterMatch.email,
+        }
+      })
+
+      const { data, error } = await supabase.functions.invoke('send-absence-emails', {
+        body: {
+          report_id: report.id,
+          recipients,
+          subject: `We missed you at ${report.label}`,
+          body_template: 'Hi {{name}}, we missed you at {{meeting_label}}. Please review the meeting attendance report.',
+        },
+      })
+
+      if (error) throw error
+
+      showToast(`Sent absence notification to ${recipients.length} member${recipients.length !== 1 ? 's' : ''}.`, { tone: 'success' })
+    } catch (err) {
+      showToast(`Failed to send emails: ${err.message}`, { tone: 'error' })
+    } finally {
+      setEmailSending(false)
+    }
+  }
+
   const canGenerate = !rosterLoading && !rosterError && !attendedError
 
   if (report && visibleReport) {
@@ -1366,6 +1416,20 @@ export default function MeetingReportTab() {
                     <Link2 size={13} /> {copiedLink ? 'Link Copied' : 'Copy Report Link'}
                   </button>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={handleEmailAbsentees}
+                  disabled={emailSending || !report.absent || report.absent.length === 0}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: 'rgba(255,255,255,0.10)', color: '#DCE9F8',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: emailSending ? 'not-allowed' : 'pointer',
+                    opacity: emailSending || !report.absent || report.absent.length === 0 ? 0.5 : 1,
+                  }}
+                >
+                  <Mail size={13} /> {emailSending ? 'Sending...' : `Email Absent (${report.absent?.length || 0})`}
+                </button>
                 <button
                   type="button"
                   onClick={() => window.print()}
