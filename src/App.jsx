@@ -16,6 +16,9 @@ const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage'))
 const CalendarReviewPage = lazy(() => import('./pages/calendar/CalendarReviewPage'))
 const CommunicationsPage = lazy(() => import('./pages/communications/CommunicationsPage'))
 const RecipientsPage = lazy(() => import('./pages/communications/RecipientsPage'))
+const AnalyticsPage = lazy(() => import('./pages/communications/AnalyticsPage'))
+const CampaignPage = lazy(() => import('./pages/communications/CampaignPage'))
+const SegmentsPage = lazy(() => import('./pages/communications/SegmentsPage'))
 const DeptSpace = lazy(() => import('./pages/dept/DeptSpace'))
 const FlockView = lazy(() => import('./pages/flock/FlockView'))
 const Login = lazy(() => import('./pages/Login'))
@@ -43,6 +46,7 @@ const IntegrationStatusPage = lazy(() => import('./pages/settings/IntegrationSta
 const GoogleDriveAuthCallback = lazy(() => import('./pages/auth/GoogleDriveAuthCallback'))
 const ApiDocumentationPage = lazy(() => import('./pages/ApiDocumentationPage'))
 const ActivityLogPage = lazy(() => import('./pages/ActivityLogPage'))
+const FilesPage = lazy(() => import('./pages/FilesPage'))
 
 function onError(error, errorInfo) {
   console.error('[AppErrorBoundary]', error, errorInfo)
@@ -70,6 +74,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['super_admin', 'dept_lead']}>
                 <ActivityLogPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/files"
+            element={
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+                <FilesPage />
               </ProtectedRoute>
             }
           />
@@ -191,6 +203,30 @@ export default function App() {
             element={
               <ProtectedRoute roles={['super_admin', 'dept_lead']}>
                 <RecipientsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/communications/campaigns"
+            element={
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+                <CampaignPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/communications/segments"
+            element={
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+                <SegmentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/communications/analytics"
+            element={
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+                <AnalyticsPage />
               </ProtectedRoute>
             }
           />
