@@ -230,7 +230,7 @@ export default function InlineTaskComposer({
               background: '#FFFFFF',
             }}
           >
-            {statuses.map((status) => (
+            {statuses.filter(s => s.name !== 'Not Started').map((status) => (
               <option key={status.id} value={status.id}>
                 {status.name}
               </option>
