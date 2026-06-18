@@ -137,19 +137,56 @@ export async function setNotificationPref(userId, type, inApp, email) {
 }
 
 export const NOTIFICATION_TYPES = {
-  task_assigned: { label: 'Task assigned to me', icon: '📋', description: 'In-app only' },
-  task_comment: { label: 'Comment on my task', icon: '💬', description: 'In-app only' },
-  task_due_soon: { label: 'Task due date approaching', icon: '⏰', description: 'In-app only' },
-  sprint_added: { label: 'Added to a sprint', icon: '⚡', description: 'In-app only' },
-  sprint_status: { label: 'Sprint status changed', icon: '🔄', description: 'In-app only' },
-  invitation_accepted: { label: 'Invitation accepted', icon: '✅', description: 'In-app only' },
-  meeting_created: { label: 'Meeting created in my dept', icon: '🎙', description: 'In-app only' },
-  comment_added: { label: 'Comment on my task', icon: '💬', description: 'In-app only' },
-  mention: { label: "I'm @mentioned", icon: '@', description: 'In-app only' },
-  event_approved: { label: 'Calendar event approved', icon: '✅', description: 'In-app only' },
-  event_rejected: { label: 'Calendar event rejected', icon: '❌', description: 'In-app only' },
-  email_digest: { label: 'Weekly email digest', icon: '📧', description: 'Sent every Monday with a summary of unread notifications' },
-  system: { label: 'System notification', icon: '🔔', description: 'In-app only' },
+  task_assigned: { label: 'Task assigned to me', icon: '📋', description: 'When someone assigns a task to you' },
+  task_comment: { label: 'Comment on my task', icon: '💬', description: 'When someone comments on your task' },
+  task_due_soon: { label: 'Task due date approaching', icon: '⏰', description: 'When a task is due soon' },
+  sprint_added: { label: 'Added to a sprint', icon: '⚡', description: 'When you are added to a sprint' },
+  sprint_status: { label: 'Sprint status changed', icon: '🔄', description: 'When sprint status changes' },
+  mention: { label: "I'm @mentioned", icon: '@', description: 'When someone mentions you in a comment' },
+  invitation_accepted: { label: 'Invitation accepted', icon: '✅', description: 'When a user accepts their invitation' },
+  meeting_created: { label: 'Meeting created', icon: '🎙', description: 'When a meeting is created in your department' },
+  event_approval_pending: { label: 'Calendar event awaiting approval', icon: '📅', description: 'When a calendar event needs your approval' },
+  event_approved: { label: 'Calendar event approved', icon: '✅', description: 'When your calendar event is approved' },
+  event_rejected: { label: 'Calendar event rejected', icon: '❌', description: 'When your calendar event is rejected' },
+  meeting_reminder: { label: 'Meeting reminder', icon: '🔔', description: 'Reminder 1 hour before a meeting' },
+  system: { label: 'System notification', icon: '🔔', description: 'Important system-wide announcements' },
+}
+
+export async function sendBrowserPushNotification(title, options = {}) {
+  if (!('serviceWorker' in navigator) || !('Notification' in window)) {
+    return false
+  }
+
+  if (Notification.permission !== 'granted') {
+    return false
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready
+    await registration.showNotification(title, {
+      icon: '/logo.png',
+      badge: '/logo.png',
+      ...options,
+    })
+    return true
+  } catch (err) {
+    console.error('Failed to send browser push notification:', err)
+    return false
+  }
+}
+
+export async function testPushNotifications(userId) {
+  try {
+    const response = await fetch('/functions/v1/test-push-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId }),
+    })
+    return await response.json()
+  } catch (err) {
+    console.error('Failed to send test notification:', err)
+    return { error: err.message }
+  }
 }
 
 export function formatNotificationMessage(notification) {

@@ -115,15 +115,6 @@ export default function CalendarGrid({
                   >
                     {day.getDate()}
                   </div>
-                  {canEdit ? (
-                    <button
-                      type="button"
-                      onClick={() => onDayClick?.(day)}
-                      className="text-xs text-[var(--accent)]"
-                    >
-                      + Add
-                    </button>
-                  ) : null}
                 </div>
 
                 <div className="space-y-1">

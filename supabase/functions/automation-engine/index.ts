@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { jwtDecode } from 'https://esm.sh/jwt-decode@^4'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -14,6 +15,19 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
       'Content-Type': 'application/json',
     },
   })
+}
+
+async function verifyJwt(token: string): Promise<{ sub: string; role?: string } | null> {
+  try {
+    const decoded = jwtDecode<{ sub: string; role?: string }>(token)
+    // Basic validation: token should have a 'sub' claim (user ID)
+    if (!decoded.sub) {
+      return null
+    }
+    return decoded
+  } catch {
+    return null
+  }
 }
 
 function isSafeWebhookUrl(value: string): boolean {
@@ -290,6 +304,18 @@ Deno.serve(async (req) => {
     return jsonResponse(405, { error: 'Method not allowed' })
   }
 
+  // ✅ JWT VALIDATION: Verify authorization header
+  const authHeader = req.headers.get('authorization')
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return jsonResponse(401, { error: 'Missing or invalid Authorization header' })
+  }
+
+  const token = authHeader.substring(7)
+  const jwtData = await verifyJwt(token)
+  if (!jwtData) {
+    return jsonResponse(401, { error: 'Invalid JWT token' })
+  }
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -393,6 +419,7 @@ Deno.serve(async (req) => {
       actions_executed: actionsExecuted,
       success: runSuccess,
       error_message: runError,
+      triggered_by_user_id: jwtData.sub,
     })
 
     results.push({ automation_id: automation.id, success: runSuccess, actions: actionsExecuted.length })

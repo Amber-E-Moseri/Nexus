@@ -5,7 +5,7 @@ import { SlidersHorizontal } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { getMonthEvents } from '../../lib/calendar'
 import { hasPermission } from '../../lib/permissions'
-import { archiveSpace, canManageSpace, getSpaceDetail, getSpaceMembers, getSpaceSprints, restoreSpace, SPACE_TYPE_LABELS, updateSpace } from '../../lib/spaces'
+import { archiveSpace, canManageSpace, createFolder, createList, deleteFolder, deleteList, getFolders, getLists, getSpaceDetail, getSpaceListsCount, getSpaceMembers, getSpaceMeetings, getSpaceSprints, getSpaceTasks, restoreSpace, SPACE_TYPE_LABELS, updateFolder, updateList, updateSpace, updateTaskDueDate } from '../../lib/spaces'
 import { supabase } from '../../lib/supabase'
 import Badge from '../../components/ui/Badge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
@@ -500,16 +500,13 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
   async function loadTree() {
     setTreeLoading(true)
     try {
-      const [{ data: folderRows, error: folderError }, { data: listRows, error: listError }] = await Promise.all([
-        supabase.from('folders').select('id, name, sort_order, created_by, task_field_settings').eq('department_id', spaceId).order('sort_order'),
-        supabase.from('lists').select('id, name, sort_order, folder_id, created_by, task_field_settings').eq('department_id', spaceId).order('sort_order'),
+      const [folderRows, listRows] = await Promise.all([
+        getFolders(spaceId),
+        getLists(spaceId),
       ])
 
-      if (folderError) throw folderError
-      if (listError) throw listError
-
-      setFolders(folderRows ?? [])
-      setLists(listRows ?? [])
+      setFolders(folderRows)
+      setLists(listRows)
       setOpenFolders((current) => {
         const next = { ...current }
         for (const folder of folderRows ?? []) {
@@ -546,15 +543,10 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
     if (!folderName.trim()) return
     setTreeSaving(true)
     try {
-      const { data: maxOrder } = await supabase.from('folders').select('sort_order').eq('department_id', spaceId).order('sort_order', { ascending: false }).limit(1).maybeSingle()
-      const { error: insertError } = await supabase.from('folders').insert({
-        name: folderName.trim(),
-        department_id: spaceId,
-        sort_order: (maxOrder?.sort_order ?? -1) + 1,
-        created_by: profile?.id ?? null,
-        task_field_settings: folderFieldSettings,
-      })
-      if (insertError) throw insertError
+      const folder = await createFolder(spaceId, folderName, profile?.id)
+      if (folderFieldSettings && Object.keys(folderFieldSettings).length > 0) {
+        await updateFolder(folder.id, { task_field_settings: folderFieldSettings })
+      }
       setFolderName('')
       setFolderFieldSettings(normalizeTaskFieldSettings({}))
       setFolderModalOpen(false)
@@ -569,22 +561,10 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
     if (!listModalFolder || !listName.trim()) return
     setTreeSaving(true)
     try {
-      const query = supabase.from('lists').select('sort_order')
-      if (listModalFolder.id) {
-        query.eq('folder_id', listModalFolder.id)
-      } else {
-        query.is('folder_id', null).eq('department_id', spaceId)
+      const list = await createList(spaceId, listName, listModalFolder.id ?? null, profile?.id)
+      if (listFieldSettings && Object.keys(listFieldSettings).length > 0) {
+        await updateList(list.id, { task_field_settings: listFieldSettings })
       }
-      const { data: maxOrder } = await query.order('sort_order', { ascending: false }).limit(1).maybeSingle()
-      const { error: insertError } = await supabase.from('lists').insert({
-        name: listName.trim(),
-        folder_id: listModalFolder.id ?? null,
-        department_id: spaceId,
-        sort_order: (maxOrder?.sort_order ?? -1) + 1,
-        created_by: profile?.id ?? null,
-        task_field_settings: listFieldSettings,
-      })
-      if (insertError) throw insertError
       setListName('')
       setListFieldSettings(normalizeTaskFieldSettings({}))
       setListModalFolder(null)
@@ -599,8 +579,7 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
     if (!editingFolder || !folderName.trim()) return
     setTreeSaving(true)
     try {
-      const { error } = await supabase.from('folders').update({ name: folderName.trim(), task_field_settings: folderFieldSettings }).eq('id', editingFolder.id)
-      if (error) throw error
+      await updateFolder(editingFolder.id, { name: folderName.trim(), task_field_settings: folderFieldSettings })
       setEditingFolder(null)
       setFolderName('')
       setFolderFieldSettings(normalizeTaskFieldSettings({}))
@@ -615,8 +594,7 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
     if (!editingList || !listName.trim()) return
     setTreeSaving(true)
     try {
-      const { error } = await supabase.from('lists').update({ name: listName.trim(), task_field_settings: listFieldSettings }).eq('id', editingList.id)
-      if (error) throw error
+      await updateList(editingList.id, { name: listName.trim(), task_field_settings: listFieldSettings })
       setEditingList(null)
       setListName('')
       setListFieldSettings(normalizeTaskFieldSettings({}))
@@ -1125,9 +1103,9 @@ export default function SpaceOverview() {
 
     getSpaceMembers(detail.space).then(setSpaceMembers).catch(() => setSpaceMembers([]))
     getSpaceSprints(spaceId).then(setSpaceSprints).catch(() => setSpaceSprints([]))
-    supabase.from('meetings').select('id, title, description, date, location, organizer_id, department_id, created_at, status').eq('department_id', spaceId).order('date', { ascending: false }).then(({ data }) => setSpaceMeetings(data ?? []))
-    supabase.from('tasks').select('id, title, status, status_id, priority, due_date, assignee_id, department_id, created_at, sprint_id').eq('department_id', spaceId).is('parent_task_id', null).then(({ data }) => setSpaceTasks(data ?? []))
-    supabase.from('lists').select('id', { count: 'exact', head: true }).eq('department_id', spaceId).then(({ count }) => setListsCount(count ?? 0)).catch(() => setListsCount(0))
+    getSpaceMeetings(spaceId).then(setSpaceMeetings).catch(() => setSpaceMeetings([]))
+    getSpaceTasks(spaceId).then(setSpaceTasks).catch(() => setSpaceTasks([]))
+    getSpaceListsCount(spaceId).then(setListsCount).catch(() => setListsCount(0))
   }, [detail?.space, spaceId])
 
   useEffect(() => {
@@ -1207,7 +1185,7 @@ export default function SpaceOverview() {
                 canEdit={canManage}
                 onDateReschedule={canManage ? async (taskId, newDate) => {
                   try {
-                    await supabase.from('tasks').update({ due_date: newDate.toISOString().split('T')[0] }).eq('id', taskId)
+                    await updateTaskDueDate(taskId, newDate)
                     setSpaceTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, due_date: newDate.toISOString().split('T')[0] } : t))
                   } catch (err) {
                     console.error('Failed to reschedule task:', err)

@@ -19,6 +19,15 @@ export function calculateSprintTaskStats(tasks = []) {
   return { done, total }
 }
 
+export function shouldAutoStartSprint(sprint) {
+  if (sprint.status !== 'planning' || !sprint.start_date) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const startDate = new Date(sprint.start_date)
+  startDate.setHours(0, 0, 0, 0)
+  return startDate <= today
+}
+
 export async function getMySprints() {
   const { data, error } = await supabase
     .from('sprint_members')

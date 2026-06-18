@@ -2,15 +2,13 @@ import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Calendar } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
-import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingEvents } from '../../lib/calendar'
+import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingEvents, getEventTypes } from '../../lib/calendar'
 import { hasPermission } from '../../lib/permissions'
 import { useToast } from '../../context/ToastContext'
 import CalendarView from '../../modules/calendar/CalendarView'
 import EventModal from '../../modules/calendar/EventModal'
 import { EVENT_COLORS } from '../../modules/calendar/CalendarEventCard'
 import EventSubmitModal from '../../modules/calendar/EventSubmitModal'
-
-const EVENT_TYPES = ['conference', 'program', 'training', 'prayer', 'graduation', 'event', 'deadline']
 
 export default function MinistryCalendar() {
   const { effectiveRole, profile } = useAuth()
@@ -28,7 +26,8 @@ export default function MinistryCalendar() {
   const [canEdit, setCanEdit] = useState(false)
   const [canApprove, setCanApprove] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
-  const [selectedEventTypes, setSelectedEventTypes] = useState(new Set(EVENT_TYPES))
+  const [eventTypes, setEventTypes] = useState([])
+  const [selectedEventTypes, setSelectedEventTypes] = useState(new Set())
   const [deptOnly, setDeptOnly] = useState(false)
 
   async function loadCalendar() {
@@ -54,6 +53,20 @@ export default function MinistryCalendar() {
       console.error('Failed to load pending events:', err)
     }
   }
+
+  async function loadEventTypes() {
+    try {
+      const types = await getEventTypes()
+      setEventTypes(types)
+      setSelectedEventTypes(new Set(types))
+    } catch (err) {
+      console.error('Failed to load event types:', err)
+    }
+  }
+
+  useEffect(() => {
+    loadEventTypes()
+  }, [])
 
   useEffect(() => {
     loadCalendar()
@@ -251,7 +264,7 @@ export default function MinistryCalendar() {
               Event Types
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {EVENT_TYPES.map((type) => (
+              {eventTypes.map((type) => (
                 <label
                   key={type}
                   style={{

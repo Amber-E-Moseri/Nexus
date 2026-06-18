@@ -1,17 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
-import { submitEvent } from '../../lib/calendar'
+import { submitEvent, getEventTypes } from '../../lib/calendar'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../context/ToastContext'
 import { EVENT_COLORS } from './CalendarEventCard'
 
-const EVENT_TYPES = ['conference', 'program', 'training', 'prayer', 'graduation', 'event', 'deadline']
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function EventSubmitModal({ onClose, onSubmitted, departments = [] }) {
   const { profile, effectiveRole } = useAuth()
   const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [eventTypes, setEventTypes] = useState([])
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -34,6 +34,21 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
     occurrences: 4,
     endDate: new Date().toISOString().split('T')[0],
   })
+
+  useEffect(() => {
+    async function loadTypes() {
+      try {
+        const types = await getEventTypes()
+        setEventTypes(types)
+        if (types.length > 0 && !types.includes(formData.event_type)) {
+          setFormData((prev) => ({ ...prev, event_type: types[0] }))
+        }
+      } catch (err) {
+        console.error('Failed to load event types:', err)
+      }
+    }
+    loadTypes()
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -643,7 +658,7 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
                 boxSizing: 'border-box'
               }}
             >
-              {EVENT_TYPES.map((type) => (
+              {eventTypes.map((type) => (
                 <option key={type} value={type}>
                   ● {type.charAt(0).toUpperCase() + type.slice(1)}
                 </option>

@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import Badge from '../../components/ui/Badge'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent } from '../../lib/calendar'
-import { advanceSprintStatus, calculateSprintTaskStats, duplicateSprint, getSprintDetail, getSprintTasks, restoreSprint, updateSprint } from '../../lib/sprints'
+import { advanceSprintStatus, calculateSprintTaskStats, duplicateSprint, getSprintDetail, getSprintTasks, restoreSprint, shouldAutoStartSprint, updateSprint } from '../../lib/sprints'
 import { supabase } from '../../lib/supabase'
 import { isTaskCompleted } from '../../lib/taskStatuses'
 import SprintProgressBar from '../../modules/sprints/SprintProgressBar'
@@ -60,10 +60,18 @@ function ArchivedSprintBanner({ sprint, onRestore, userRole }) {
     </div>
   )
 }
-const NEXT_ACTION = {
-  planning: { label: 'Start Sprint', next: 'active' },
-  active: { label: 'Complete Sprint', next: 'completed' },
-  completed: { label: 'Begin Review', next: 'review' },
+function getNextAction(sprint) {
+  const actions = {
+    planning: { label: 'Start Sprint', next: 'active' },
+    active: { label: 'Complete Sprint', next: 'completed' },
+    completed: { label: 'Begin Review', next: 'review' },
+  }
+
+  if (sprint.status === 'planning' && shouldAutoStartSprint(sprint)) {
+    return { label: 'Start Now', next: 'active', urgent: true }
+  }
+
+  return actions[sprint.status]
 }
 
 function Stat({ label, value }) {
@@ -189,7 +197,7 @@ export default function SprintOverview() {
   }
 
   async function handleAdvance() {
-    const action = NEXT_ACTION[detail.sprint.status]
+    const action = getNextAction(detail.sprint)
     if (!action) return
     await advanceSprintStatus(detail.sprint.id, action.next)
     await loadDetail()
@@ -300,9 +308,9 @@ export default function SprintOverview() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {NEXT_ACTION[detail.sprint.status] && canManage && !isArchived ? (
+            {getNextAction(detail.sprint) && canManage && !isArchived ? (
               <button type="button" onClick={handleAdvance} disabled={detail.sprint.status === 'review' && !reviewCompleted} title={detail.sprint.status === 'review' && !reviewCompleted ? 'Complete the sprint review before archiving' : ''} className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">
-                {NEXT_ACTION[detail.sprint.status].label}
+                {getNextAction(detail.sprint).label}
               </button>
             ) : null}
             {canCreateSprint ? (

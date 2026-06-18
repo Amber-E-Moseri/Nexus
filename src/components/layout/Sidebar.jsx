@@ -1025,6 +1025,16 @@ export default function Sidebar() {
               }
               onClick={() => go('/meetings')}
             />
+            {showAdminPlatform ? (
+              <SidebarItem
+                active={isPathActive(location.pathname, '/meetings/wizard')}
+                label="Plan meeting"
+                glyph={
+                  <span style={{ width: 20, flex: '0 0 20px', textAlign: 'center', fontSize: 13, opacity: 0.7 }}>📋</span>
+                }
+                onClick={() => go('/meetings/wizard')}
+              />
+            ) : null}
             <SidebarItem
               active={isPathActive(location.pathname, '/meetings/expected-attendees')}
               label="Attendee Roster"
@@ -1163,6 +1173,7 @@ export default function Sidebar() {
             borderRadius: 10,
             padding: '8px 10px',
             width: '100%',
+            cursor: 'pointer',
           }}
           onClick={() => go('/settings')}
           onMouseEnter={(e) => {
@@ -1174,7 +1185,6 @@ export default function Sidebar() {
           role="button"
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter') go('/settings') }}
-          style={{ cursor: 'pointer' }}
         >
           <div
             style={{

@@ -1,5 +1,6 @@
 import Badge from '../../components/ui/Badge'
 import SprintProgressBar from './SprintProgressBar'
+import { shouldAutoStartSprint } from '../../lib/sprints'
 
 const STATUS_LABELS = {
   planning: 'Planning',
@@ -57,8 +58,8 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore }) 
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
-            {isArchived ? '📦 ' : ''}{sprint.name}
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {isArchived ? '📦 ' : shouldAutoStartSprint(sprint) ? '⚡ ' : ''}{sprint.name}
           </div>
           {sprint.goal && (
             <div
@@ -76,7 +77,10 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore }) 
             </div>
           )}
         </div>
-        <Badge tone={sprint.status}>{STATUS_LABELS[sprint.status] ?? sprint.status}</Badge>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <Badge tone={sprint.status}>{STATUS_LABELS[sprint.status] ?? sprint.status}</Badge>
+          {shouldAutoStartSprint(sprint) && <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>Ready to start</div>}
+        </div>
       </div>
 
       {taskCount > 0 && (

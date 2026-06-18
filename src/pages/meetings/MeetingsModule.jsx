@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import MeetingModal from '../../modules/meetings/MeetingModal'
@@ -13,6 +13,7 @@ function MeetingsContent({ canManage, onAddMeeting }) {
 }
 
 function MeetingsModuleFallback() {
+  const navigate = useNavigate()
   const { profile, role } = useAuth()
   const [departments, setDepartments] = useState([])
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(profile?.department_id ?? '')
@@ -104,22 +105,40 @@ function MeetingsModuleFallback() {
               </select>
             ) : null}
             {canManage ? (
-              <button
-                type="button"
-                onClick={() => setShowModal(true)}
-                style={{
-                  borderRadius: 10,
-                  border: 'none',
-                  background: 'var(--accent)',
-                  padding: '9px 14px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: 'white',
-                  cursor: 'pointer',
-                }}
-              >
-                + Log meeting
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(true)}
+                  style={{
+                    borderRadius: 10,
+                    border: 'none',
+                    background: 'var(--accent)',
+                    padding: '9px 14px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'white',
+                    cursor: 'pointer',
+                  }}
+                >
+                  + Log meeting
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/meetings/wizard')}
+                  style={{
+                    borderRadius: 10,
+                    border: '1px solid var(--border)',
+                    background: 'white',
+                    padding: '9px 14px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'var(--accent)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📋 Plan meeting
+                </button>
+              </div>
             ) : null}
           </div>
         </div>

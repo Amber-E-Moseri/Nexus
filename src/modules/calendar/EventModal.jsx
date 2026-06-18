@@ -1,12 +1,10 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { createCalendarEvent, deleteCalendarEvent, updateCalendarEvent } from '../../lib/calendar'
+import { createCalendarEvent, deleteCalendarEvent, updateCalendarEvent, getEventTypes } from '../../lib/calendar'
 import { listDepartments } from '../../lib/people/api'
 import { getMySprints } from '../../lib/sprints'
 import { EVENT_COLORS } from './CalendarEventCard'
-
-const EVENT_TYPES = ['conference', 'program', 'training', 'prayer', 'graduation', 'event', 'deadline']
 
 const inputStyle = {
   width: '100%',
@@ -58,6 +56,7 @@ export default function EventModal({
   const { profile, role } = useAuth()
   const [departments, setDepartments] = useState([])
   const [sprints, setSprints] = useState([])
+  const [eventTypes, setEventTypes] = useState([])
   const [title, setTitle] = useState(event?.title ?? '')
   const [eventType, setEventType] = useState(event?.event_type ?? 'event')
   const [date, setDate] = useState(toDateInput(event?.start_date ?? defaultDate))
@@ -83,6 +82,7 @@ export default function EventModal({
   useEffect(() => {
     listDepartments().then(setDepartments).catch(() => setDepartments([]))
     getMySprints().then(setSprints).catch(() => setSprints([]))
+    getEventTypes().then(setEventTypes).catch(() => setEventTypes([]))
   }, [])
 
   const startDateValue = useMemo(() => {
@@ -187,7 +187,7 @@ export default function EventModal({
               <div>
                 <label style={labelStyle}>Event type</label>
                 <select value={eventType} onChange={(e) => setEventType(e.target.value)} style={inputStyle}>
-                  {EVENT_TYPES.map((type) => (
+                  {eventTypes.map((type) => (
                     <option key={type} value={type}>{type}</option>
                   ))}
                 </select>

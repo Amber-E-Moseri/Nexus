@@ -71,22 +71,110 @@ Deno.serve(async (req) => {
     return jsonResponse(200, { skipped: true, reason: 'no_email' })
   }
 
-  const templates: Record<string, { subject: string; body: string }> = {
+  const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://blwcanada.org'
+  const currentYear = new Date().getFullYear()
+
+  function htmlTemplate(userName: string, body: string, actionUrl?: string, actionLabel?: string): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: #2d2a22; margin: 0; padding: 0; }
+            .container { max-width: 600px; margin: 0 auto; background: #ffffff; }
+            .header { background: #4c2a92; color: #ffffff; padding: 20px; text-align: center; }
+            .content { padding: 24px; }
+            .footer { background: #f9f7f5; border-top: 1px solid #e8dedd; padding: 16px; text-align: center; font-size: 12px; color: #9e9488; }
+            .button { display: inline-block; padding: 10px 20px; background: #4c2a92; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 500; }
+            .section { margin-bottom: 16px; }
+            h2 { margin-top: 0; color: #4c2a92; }
+            p { margin: 0 0 12px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin: 0; font-size: 24px;">BLW Canada OS</h1>
+            </div>
+            <div class="content">
+              <div class="section">
+                <p>Hi ${userName},</p>
+              </div>
+              <div class="section">
+                <p>${body}</p>
+              </div>
+              ${actionUrl ? `<div class="section" style="margin-top: 24px;">
+                <a href="${actionUrl}" class="button">${actionLabel || 'View in BLW Canada OS'}</a>
+              </div>` : ''}
+              <div class="section" style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e8dedd;">
+                <p style="font-size: 12px; color: #9e9488; margin: 0;">
+                  <a href="${frontendUrl}/settings/notifications" style="color: #4c2a92; text-decoration: none; font-weight: 500;">Manage notification preferences</a>
+                </p>
+              </div>
+            </div>
+            <div class="footer">
+              <p>© ${currentYear} BLW Canada Sub-Region. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `
+  }
+
+  const templates: Record<string, { subject: string; body: string; actionUrl?: string; actionLabel?: string }> = {
     task_assigned: {
-      subject: `New task assigned: ${payload.task_title ?? 'Task'}`,
-      body: `Hi ${user.name},\n\n${payload.assigner_name ?? 'Someone'} assigned you a task: "${payload.task_title ?? 'a task'}".\n\nOpen BLW Canada OS to view it.\n\nBLW Canada OS`,
+      subject: `"${payload.task_title ?? 'Task'}" assigned to you`,
+      body: `${payload.assigner_name ?? 'Someone'} assigned you a task: <strong>"${payload.task_title ?? 'a task'}"</strong>${payload.task_description ? ` – ${payload.task_description}` : ''}.`,
+      actionUrl: actionUrl || `${frontendUrl}/my-tasks`,
+      actionLabel: 'View Task'
     },
     sprint_added: {
-      subject: `You've been added to sprint: ${payload.sprint_name ?? 'Sprint'}`,
-      body: `Hi ${user.name},\n\n${payload.added_by ?? 'Someone'} added you to the sprint "${payload.sprint_name ?? 'a sprint'}".\n\nOpen BLW Canada OS to view the sprint.\n\nBLW Canada OS`,
+      subject: `Added to sprint: ${payload.sprint_name ?? 'Sprint'}`,
+      body: `${payload.added_by ?? 'Someone'} added you to the sprint <strong>"${payload.sprint_name ?? 'a sprint'}"</strong>.`,
+      actionUrl: actionUrl || `${frontendUrl}/sprints`,
+      actionLabel: 'View Sprint'
     },
     comment_added: {
-      subject: `New comment on: ${payload.task_title ?? 'Task'}`,
-      body: `Hi ${user.name},\n\n${payload.author_name ?? 'Someone'} commented on "${payload.task_title ?? 'your task'}".\n\nOpen BLW Canada OS to see the comment.\n\nBLW Canada OS`,
+      subject: `New comment on "${payload.task_title ?? 'Task'}"`,
+      body: `${payload.author_name ?? 'Someone'} commented on <strong>"${payload.task_title ?? 'your task'}"</strong>: <em>"${payload.comment_excerpt ?? 'Comment'}"</em>`,
+      actionUrl: actionUrl || `${frontendUrl}/my-tasks`,
+      actionLabel: 'View Comment'
+    },
+    task_comment: {
+      subject: `New comment on "${payload.task_title ?? 'Task'}"`,
+      body: `${payload.author_name ?? 'Someone'} commented on <strong>"${payload.task_title ?? 'your task'}"</strong>.`,
+      actionUrl: actionUrl || `${frontendUrl}/my-tasks`,
+      actionLabel: 'View Comment'
+    },
+    mention: {
+      subject: `You were mentioned by ${payload.actor_name ?? 'Someone'}`,
+      body: `${payload.actor_name ?? 'Someone'} mentioned you in a comment on <strong>"${payload.task_title ?? 'a task'}"</strong>.`,
+      actionUrl: actionUrl || `${frontendUrl}/my-tasks`,
+      actionLabel: 'View Mention'
     },
     invitation_accepted: {
       subject: `${payload.user_name ?? 'A user'} activated their account`,
-      body: `Hi ${user.name},\n\n${payload.user_name ?? 'A user'} accepted their invitation and activated their account.\n\nBLW Canada OS`,
+      body: `Good news! ${payload.user_name ?? 'A user'} accepted their invitation and activated their account on BLW Canada OS.`,
+    },
+    event_approval_pending: {
+      subject: `Calendar event needs your approval: ${payload.event_title ?? 'Event'}`,
+      body: `${payload.submitter_name ?? 'Someone'} submitted a calendar event <strong>"${payload.event_title ?? 'an event'}"</strong> for your approval.`,
+      actionUrl: actionUrl || `${frontendUrl}/calendar`,
+      actionLabel: 'Review Event'
+    },
+    event_approved: {
+      subject: `Your event was approved: ${payload.event_title ?? 'Event'}`,
+      body: `Your calendar event <strong>"${payload.event_title ?? 'an event'}"</strong> has been approved by ${payload.approver_name ?? 'someone'}.`,
+      actionUrl: actionUrl || `${frontendUrl}/calendar`,
+      actionLabel: 'View Event'
+    },
+    meeting_reminder: {
+      subject: `Reminder: ${payload.meeting_title ?? 'Meeting'} in 1 hour`,
+      body: `This is a friendly reminder that <strong>"${payload.meeting_title ?? 'a meeting'}"</strong> is starting in 1 hour at ${payload.meeting_time ?? '(time TBD)'}.`,
+      actionUrl: actionUrl || `${frontendUrl}/meetings`,
+      actionLabel: 'View Meeting'
     },
   }
 
@@ -102,6 +190,9 @@ Deno.serve(async (req) => {
     return jsonResponse(500, { error: 'Missing RESEND_API_KEY' })
   }
 
+  const payloadActionUrl = payload.action_url as string | undefined
+  const htmlContent = htmlTemplate(user.name, message.body, payloadActionUrl || message.actionUrl, message.actionLabel)
+
   const emailResponse = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -112,7 +203,7 @@ Deno.serve(async (req) => {
       from: `BLW Canada OS <${fromEmail}>`,
       to: [user.email],
       subject: message.subject,
-      text: message.body,
+      html: htmlContent,
     }),
   })
 

@@ -1,10 +1,16 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AppError from './components/layout/AppError'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import Shell from './components/layout/Shell'
 import PageSpinner from './components/ui/PageSpinner'
+
+// Register service worker for push notifications
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js')
+    .catch(err => console.warn('Service Worker registration failed:', err))
+}
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Home = lazy(() => import('./pages/Home'))
@@ -13,6 +19,7 @@ const ActivateInvitation = lazy(() => import('./pages/ActivateInvitation'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const MinistryCalendar = lazy(() => import('./pages/calendar/MinistryCalendar'))
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage'))
+const CalendarManagementPage = lazy(() => import('./pages/calendar/CalendarManagementPage'))
 const CalendarReviewPage = lazy(() => import('./pages/calendar/CalendarReviewPage'))
 const CommunicationsPage = lazy(() => import('./pages/communications/CommunicationsPage'))
 const RecipientsPage = lazy(() => import('./pages/communications/RecipientsPage'))
@@ -24,6 +31,7 @@ const FlockView = lazy(() => import('./pages/flock/FlockView'))
 const Login = lazy(() => import('./pages/Login'))
 const CanMapPage = lazy(() => import('./pages/map/CanMapPage'))
 const MeetingsModule = lazy(() => import('./pages/meetings/MeetingsModule'))
+const MeetingWizardPage = lazy(() => import('./pages/meetings/MeetingWizardPage'))
 const ExpectedAttendeesPage = lazy(() => import('./pages/meetings/ExpectedAttendeesPage'))
 const AbsenceEmailLogPage = lazy(() => import('./pages/meetings/AbsenceEmailLogPage'))
 const AttendanceTrendsDashboard = lazy(() => import('./pages/AttendanceTrendsDashboard'))
@@ -94,7 +102,7 @@ export default function App() {
             path="/calendar-management"
             element={
               <ProtectedRoute roles={['super_admin', 'dept_lead']}>
-                <CalendarPage />
+                <CalendarManagementPage />
               </ProtectedRoute>
             }
           />
@@ -114,6 +122,14 @@ export default function App() {
             }
           />
           <Route path="/meetings" element={<MeetingsModule />} />
+          <Route
+            path="/meetings/wizard"
+            element={
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+                <MeetingWizardPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/meetings/expected-attendees"
             element={

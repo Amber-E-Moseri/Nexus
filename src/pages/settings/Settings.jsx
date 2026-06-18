@@ -5,7 +5,7 @@ import { getNotificationPrefs, setNotificationPref } from '../../lib/notificatio
 import { supabase } from '../../lib/supabase'
 import AutomationsPage from '../platform/AutomationsPage'
 import IntegrationsSection from './IntegrationsSection'
-import NotificationsSection from './NotificationsSection'
+import NotificationsSection from '../../components/settings/NotificationsSection'
 import ProfileSection from './ProfileSection'
 import SecuritySection from './SecuritySection'
 import EmailSignatureSection from './EmailSignatureSection'

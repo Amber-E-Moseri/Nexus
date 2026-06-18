@@ -253,3 +253,58 @@ export async function getCalendarPermissions() {
   if (error) throw error
   return data ?? []
 }
+
+// ---- Event Types ----
+
+export async function getEventTypes() {
+  const { data, error } = await supabase
+    .from('calendar_event_types')
+    .select('id, name, color')
+    .eq('active', true)
+    .order('sort_order')
+
+  if (error) {
+    console.error('Failed to fetch event types:', error)
+    // Fallback to default types if table doesn't exist or query fails
+    return ['conference', 'program', 'training', 'prayer', 'graduation', 'event', 'deadline']
+  }
+
+  return (data ?? []).map((type) => type.name)
+}
+
+export async function createEventType(eventType) {
+  const { data, error } = await supabase
+    .from('calendar_event_types')
+    .insert({
+      name: eventType.name,
+      color: eventType.color,
+      active: true,
+      sort_order: 0,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function updateEventType(id, updates) {
+  const { data, error } = await supabase
+    .from('calendar_event_types')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function deleteEventType(id) {
+  const { error } = await supabase
+    .from('calendar_event_types')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw error
+}

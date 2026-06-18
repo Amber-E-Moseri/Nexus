@@ -170,3 +170,158 @@ export const VISIBILITY_LABELS = {
   department: 'Department only',
   org: 'Everyone',
 }
+
+// Folders & Lists Management
+export async function getFolders(departmentId) {
+  const { data, error } = await supabase
+    .from('folders')
+    .select('id, name, sort_order, created_by, task_field_settings')
+    .eq('department_id', departmentId)
+    .order('sort_order')
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getLists(departmentId, folderId = null) {
+  let query = supabase
+    .from('lists')
+    .select('id, name, sort_order, folder_id, created_by, task_field_settings')
+    .eq('department_id', departmentId)
+
+  if (folderId) {
+    query = query.eq('folder_id', folderId)
+  }
+
+  const { data, error } = await query.order('sort_order')
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createFolder(departmentId, name, createdBy) {
+  const { data: maxOrder } = await supabase
+    .from('folders')
+    .select('sort_order')
+    .eq('department_id', departmentId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const nextOrder = (maxOrder?.sort_order ?? -1) + 1
+
+  const { data, error } = await supabase
+    .from('folders')
+    .insert({
+      name: name.trim(),
+      department_id: departmentId,
+      sort_order: nextOrder,
+      created_by: createdBy,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function updateFolder(folderId, updates) {
+  const { data, error } = await supabase
+    .from('folders')
+    .update({ ...updates, name: updates.name?.trim?.() || updates.name })
+    .eq('id', folderId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function deleteFolder(folderId) {
+  const { error } = await supabase
+    .from('folders')
+    .delete()
+    .eq('id', folderId)
+
+  if (error) throw error
+}
+
+export async function createList(departmentId, name, folderId = null, createdBy) {
+  let query = supabase.from('lists').select('sort_order')
+
+  if (folderId) {
+    query = query.eq('folder_id', folderId)
+  } else {
+    query = query.is('folder_id', null)
+  }
+
+  const { data: maxOrder } = await query.eq('department_id', departmentId).order('sort_order', { ascending: false }).limit(1).maybeSingle()
+
+  const nextOrder = (maxOrder?.sort_order ?? -1) + 1
+
+  const { data, error } = await supabase
+    .from('lists')
+    .insert({
+      name: name.trim(),
+      department_id: departmentId,
+      folder_id: folderId ?? null,
+      sort_order: nextOrder,
+      created_by: createdBy,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function updateList(listId, updates) {
+  const { data, error } = await supabase
+    .from('lists')
+    .update({ ...updates, name: updates.name?.trim?.() || updates.name })
+    .eq('id', listId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function deleteList(listId) {
+  const { error } = await supabase
+    .from('lists')
+    .delete()
+    .eq('id', listId)
+
+  if (error) throw error
+}
+
+export async function getSpaceTasks(departmentId) {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, title, status, status_id, priority, due_date, assignee_id, department_id, created_at, sprint_id')
+    .eq('department_id', departmentId)
+    .is('parent_task_id', null)
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getSpaceListsCount(departmentId) {
+  const { count, error } = await supabase
+    .from('lists')
+    .select('id', { count: 'exact', head: true })
+    .eq('department_id', departmentId)
+
+  if (error) throw error
+  return count ?? 0
+}
+
+export async function updateTaskDueDate(taskId, dueDate) {
+  const { error } = await supabase
+    .from('tasks')
+    .update({ due_date: dueDate.toISOString().split('T')[0] })
+    .eq('id', taskId)
+
+  if (error) throw error
+}
