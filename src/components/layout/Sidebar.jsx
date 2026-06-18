@@ -1003,6 +1003,7 @@ export default function Sidebar() {
             if (!isPathActive(location.pathname, '/meetings')) e.currentTarget.style.background = 'transparent'
           }}
         >
+          <span style={{ flex: 1 }}>Meetings</span>
           <button
             type="button"
             onClick={(e) => {
@@ -1013,7 +1014,6 @@ export default function Sidebar() {
           >
             <ChevronDown size={15} style={{ opacity: 0.85, transform: meetingsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
           </button>
-          <span style={{ flex: 1 }}>Meetings</span>
         </button>
         {meetingsExpanded ? (
           <>
