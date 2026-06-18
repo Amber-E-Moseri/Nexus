@@ -258,17 +258,6 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
           tasks={tasks}
         />
       </div>
-<<<<<<< Updated upstream
-      <div style={{ flex: 1, overflow: 'hidden', background: '#fff', borderRadius: 12, border: '1px solid #E9E4D8' }}>
-        {filtered.length === 0 ? (
-          <EmptyTasks onAdd={() => onAddTask(defaultStatusId)} />
-        ) : (
-          <TaskListView
-            tasks={filtered}
-            onTaskClick={onTaskClick}
-            onAddTask={() => onAddTask(defaultStatusId)}
-          />
-=======
 
       <div style={{ flex: 1, padding: '16px 24px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {filtered.length === 0 && view !== 'calendar' ? (
@@ -285,6 +274,11 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
               filteredTasks={filtered}
               onTaskClick={onTaskClick}
               onAddTask={(defaultStatusId) => onAddTask(defaultStatusId)}
+              departmentId={dept?.id}
+              departments={[dept].filter(Boolean)}
+              defaultDepartmentId={dept?.id}
+              members={members}
+              onCreateTask={onAddTask}
             />
           </div>
         ) : view === 'list' ? (
@@ -303,7 +297,6 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
               onAddTask={() => onAddTask(defaultStatusId)}
             />
           </div>
->>>>>>> Stashed changes
         )}
       </div>
     </div>
@@ -492,7 +485,6 @@ export default function DeptSpace() {
               </div>
             </div>
 
-<<<<<<< Updated upstream
             <TabBar
               activeTab={tab}
               onTab={setTab}
@@ -501,128 +493,6 @@ export default function DeptSpace() {
               onNewTask={() => setModal({ mode: 'create' })}
               onNewMeeting={() => setShowMeetingModal(true)}
             />
-=======
-            {section === 'tasks' ? (
-              <>
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: 2,
-                    background: 'var(--surface-secondary)',
-                    borderRadius: 8,
-                    padding: 3,
-                  }}
-                >
-                  {['kanban', 'list', 'calendar'].map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => setView(option)}
-                      style={{
-                        padding: '4px 12px',
-                        fontSize: 12,
-                        fontWeight: 500,
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        border: 'none',
-                        background: view === option ? 'white' : 'transparent',
-                        color: view === option ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                        boxShadow: view === option ? '0 1px 3px rgba(20,20,43,0.1)' : 'none',
-                        transition: 'all 0.15s',
-                      }}
-                    >
-                      {option === 'kanban' ? 'Board' : option === 'list' ? 'List' : 'Calendar'}
-                    </button>
-                  ))}
-                </div>
-
-                {canManageTasks ? (
-                  <button
-                    type="button"
-                    onClick={() => setModal({ mode: 'create' })}
-                    style={{
-                      padding: '6px 16px',
-                      fontSize: 13,
-                      fontWeight: 500,
-                      background: 'var(--accent)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    + New task
-                  </button>
-                ) : null}
-              </>
-            ) : null}
-
-            {section === 'meetings' ? (
-              <>
-                {import.meta.env.VITE_MEETING_OS_URL ? (
-                  <a
-                    href={import.meta.env.VITE_MEETING_OS_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '6px 14px',
-                      borderRadius: 8,
-                      border: '1px solid var(--border)',
-                      background: 'white',
-                      color: 'var(--text-primary)',
-                      fontSize: 13,
-                      fontWeight: 500,
-                      textDecoration: 'none',
-                    }}
-                  >
-                    Open Meeting OS ↗
-                  </a>
-                ) : null}
-                {canManageMeetings ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowMeetingModal(true)}
-                    style={{
-                      padding: '6px 16px',
-                      fontSize: 13,
-                      fontWeight: 500,
-                      background: 'var(--accent)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    + Log meeting
-                  </button>
-                ) : null}
-              </>
-            ) : null}
-
-            {section === 'calendar' ? (
-              <a
-                href="/calendar"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '6px 14px',
-                  borderRadius: 8,
-                  border: '1px solid var(--border)',
-                  background: 'white',
-                  color: 'var(--text-primary)',
-                  fontSize: 13,
-                  fontWeight: 500,
-                  textDecoration: 'none',
-                }}
-              >
-                Open full calendar →
-              </a>
-            ) : null}
->>>>>>> Stashed changes
           </div>
 
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: '0 24px 16px' }}>

@@ -669,23 +669,17 @@ export default function Sidebar() {
           gap: 10,
         }}
       >
-        <div
+        <img
+          src="/canada_sr.png"
+          alt="BLW Canada"
           style={{
-            width: 30,
-            height: 30,
-            borderRadius: 8,
-            background: '#4C2A92',
-            color: '#E8A020',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 14,
-            fontWeight: 800,
+            width: 32,
+            height: 32,
+            borderRadius: 6,
             flexShrink: 0,
+            objectFit: 'contain',
           }}
-        >
-          B
-        </div>
+        />
         <div style={{ minWidth: 0 }}>
           <div
             style={{
