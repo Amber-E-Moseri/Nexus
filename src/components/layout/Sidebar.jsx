@@ -219,204 +219,6 @@ function EmojiGlyph({ emoji }) {
   )
 }
 
-function SpaceActionsMenu({
-  space,
-  role,
-  onRename,
-  onOpenStatuses,
-  onHide,
-  onArchive,
-  onRestore,
-  onDelete,
-  onClose,
-}) {
-  const canManage = role === 'super_admin' || role === 'dept_lead'
-  const canArchiveDelete = role === 'super_admin'
-
-  return (
-    <DropdownMenu.Portal>
-      <DropdownMenu.Content
-        side="right"
-        align="start"
-        sideOffset={8}
-        collisionPadding={8}
-        onCloseAutoFocus={(event) => event.preventDefault()}
-        style={{
-          minWidth: 208,
-          background: '#FFFFFF',
-          border: '1px solid #E9E4D8',
-          borderRadius: 12,
-          boxShadow: '0 8px 28px rgba(28,22,16,.14)',
-          padding: 6,
-          zIndex: 60,
-        }}
-      >
-        <DropdownMenu.Item
-          disabled={!canManage}
-          onSelect={() => {
-            onRename()
-            onClose()
-          }}
-          style={{
-            width: '100%',
-            border: 'none',
-            background: 'transparent',
-            borderRadius: 8,
-            padding: '8px 10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            textAlign: 'left',
-            fontSize: 12.5,
-            color: canManage ? '#1C1610' : '#B0A696',
-            cursor: canManage ? 'pointer' : 'not-allowed',
-            fontFamily: 'inherit',
-            outline: 'none',
-          }}
-        >
-          <Pencil size={14} />
-          <span>Rename</span>
-        </DropdownMenu.Item>
-
-        <DropdownMenu.Item
-          disabled={!canManage}
-          onSelect={() => {
-            onOpenStatuses()
-            onClose()
-          }}
-          style={{
-            width: '100%',
-            border: 'none',
-            background: 'transparent',
-            borderRadius: 8,
-            padding: '8px 10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            textAlign: 'left',
-            fontSize: 12.5,
-            color: canManage ? '#1C1610' : '#B0A696',
-            cursor: canManage ? 'pointer' : 'not-allowed',
-            fontFamily: 'inherit',
-            outline: 'none',
-          }}
-        >
-          <Settings size={14} />
-          <span>Task Statuses</span>
-        </DropdownMenu.Item>
-
-        <DropdownMenu.Item
-          disabled={!canManage}
-          onSelect={() => {
-            onHide()
-            onClose()
-          }}
-          style={{
-            width: '100%',
-            border: 'none',
-            background: 'transparent',
-            borderRadius: 8,
-            padding: '8px 10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            textAlign: 'left',
-            fontSize: 12.5,
-            color: canManage ? '#1C1610' : '#B0A696',
-            cursor: canManage ? 'pointer' : 'not-allowed',
-            fontFamily: 'inherit',
-            outline: 'none',
-          }}
-        >
-          <EyeOff size={14} />
-          <span>Hide Space</span>
-        </DropdownMenu.Item>
-
-        {space.status === 'archived' ? (
-          <DropdownMenu.Item
-            onSelect={() => {
-              onRestore()
-              onClose()
-            }}
-            style={{
-              width: '100%',
-              border: 'none',
-              background: 'transparent',
-              borderRadius: 8,
-              padding: '8px 10px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              textAlign: 'left',
-              fontSize: 12.5,
-              color: '#1C1610',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              outline: 'none',
-            }}
-          >
-            <Archive size={14} />
-            <span>Restore</span>
-          </DropdownMenu.Item>
-        ) : canArchiveDelete ? (
-          <DropdownMenu.Item
-            onSelect={() => {
-              onArchive()
-              onClose()
-            }}
-            style={{
-              width: '100%',
-              border: 'none',
-              background: 'transparent',
-              borderRadius: 8,
-              padding: '8px 10px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              textAlign: 'left',
-              fontSize: 12.5,
-              color: '#1C1610',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              outline: 'none',
-            }}
-          >
-            <Archive size={14} />
-            <span>Archive</span>
-          </DropdownMenu.Item>
-        ) : null}
-
-        {canArchiveDelete ? (
-          <DropdownMenu.Item
-            onSelect={() => {
-              onDelete()
-              onClose()
-            }}
-            style={{
-              width: '100%',
-              border: 'none',
-              background: 'transparent',
-              borderRadius: 8,
-              padding: '8px 10px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              textAlign: 'left',
-              fontSize: 12.5,
-              color: '#C94830',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              outline: 'none',
-            }}
-          >
-            <Trash2 size={14} />
-            <span>Delete</span>
-          </DropdownMenu.Item>
-        ) : null}
-      </DropdownMenu.Content>
-    </DropdownMenu.Portal>
-  )
-}
 
 export default function Sidebar() {
   const { profile, role, signOut } = useAuth()
@@ -901,6 +703,8 @@ export default function Sidebar() {
                         side="right"
                         align="start"
                         sideOffset={8}
+                        collisionPadding={8}
+                        onCloseAutoFocus={(event) => event.preventDefault()}
                         style={{
                           minWidth: 196,
                           background: '#FFFFFF',
@@ -1077,16 +881,75 @@ export default function Sidebar() {
                       onClick={() => go(`/spaces/${space.id}`)}
                     />
                     {openSpaceMenuId === space.id ? (
-                      <SpaceMenu
-                        space={space}
-                        onOpen={() => go(`/spaces/${space.id}`)}
-                        onEdit={() => setEditingSpace(space)}
-                        onOpenStatuses={() => go(`/dept/${slugifySpaceName(space.slug ?? space.name)}?openStatuses=true`)}
-                        onCopyLink={() => handleCopySpaceLink(space)}
-                        onArchive={() => handleArchiveSpace(space)}
-                        onRestore={() => handleRestoreSpace(space)}
-                        onClose={() => setOpenSpaceMenuId(null)}
-                      />
+                      <DropdownMenu.Root open={openSpaceMenuId === space.id} onOpenChange={(open) => setOpenSpaceMenuId(open ? space.id : null)}>
+                        <DropdownMenu.Portal>
+                          <DropdownMenu.Content
+                            side="right"
+                            align="start"
+                            sideOffset={8}
+                            collisionPadding={8}
+                            onCloseAutoFocus={(event) => event.preventDefault()}
+                            style={{
+                              minWidth: 196,
+                              background: '#FFFFFF',
+                              border: '1px solid #E9E4D8',
+                              borderRadius: 12,
+                              boxShadow: '0 8px 28px rgba(28,22,16,.14)',
+                              padding: 6,
+                              zIndex: 60,
+                            }}
+                          >
+                            <DropdownMenu.Item
+                              onSelect={() => {
+                                setInlineRenameId(space.id)
+                                setInlineRenameValue(space.name)
+                              }}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                            >
+                              <Pencil size={14} />
+                              <span>Rename</span>
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Item
+                              onSelect={() => navigate(`/dept/${slugifySpaceName(space.slug ?? space.name)}?openStatuses=true`)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                            >
+                              <Settings size={14} />
+                              <span>Task Statuses</span>
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Item
+                              onSelect={() => handleHideSpace(space.id)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                            >
+                              <EyeOff size={14} />
+                              <span>Hide Space</span>
+                            </DropdownMenu.Item>
+                            {role === 'super_admin' ? (
+                              <DropdownMenu.Item
+                                onSelect={() => {
+                                  if (space.status === 'archived') {
+                                    handleRestoreSpace(space).catch(console.error)
+                                  } else {
+                                    handleArchiveSpace(space).catch(console.error)
+                                  }
+                                }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                              >
+                                <Archive size={14} />
+                                <span>{space.status === 'archived' ? 'Restore' : 'Archive'}</span>
+                              </DropdownMenu.Item>
+                            ) : null}
+                            {role === 'super_admin' ? (
+                              <DropdownMenu.Item
+                                onSelect={() => handleDeleteSpace(space).catch(console.error)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none', color: '#C94830' }}
+                              >
+                                <Trash2 size={14} />
+                                <span>Delete</span>
+                              </DropdownMenu.Item>
+                            ) : null}
+                          </DropdownMenu.Content>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu.Root>
                     ) : null}
                   </div>
                 ))
@@ -1290,9 +1153,7 @@ export default function Sidebar() {
       </div>
 
       <div style={{ borderTop: '1px solid #EDE8DC', padding: 10 }}>
-        <button
-          type="button"
-          onClick={() => go('/settings')}
+        <div
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -1302,14 +1163,18 @@ export default function Sidebar() {
             borderRadius: 10,
             padding: '8px 10px',
             width: '100%',
-            cursor: 'pointer',
           }}
+          onClick={() => go('/settings')}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = '#F2EEE6'
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = '#F9F7F3'
           }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter') go('/settings') }}
+          style={{ cursor: 'pointer' }}
         >
           <div
             style={{
@@ -1375,7 +1240,7 @@ export default function Sidebar() {
           >
             <ChevronDown size={14} />
           </button>
-        </button>
+        </div>
       </div>
 
       {showSpaceModal ? <SpaceModal onSaved={loadSpaces} onClose={() => setShowSpaceModal(false)} /> : null}
