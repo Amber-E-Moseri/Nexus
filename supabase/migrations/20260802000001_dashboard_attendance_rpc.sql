@@ -16,7 +16,7 @@ language sql
 stable
 as $$
   with date_range as (
-    select (current_date - p_days_back::interval)::date as start_date
+    select (current_date - (p_days_back || ' days')::interval)::date as start_date
   ),
   scoped_attendance as (
     select

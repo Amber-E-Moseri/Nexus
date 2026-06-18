@@ -18,11 +18,8 @@ CREATE POLICY "Managers read all RSVPs"
   ON calendar_rsvps FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM profiles WHERE profiles.id = auth.uid()
-      AND (profiles.role = 'super_admin' OR EXISTS (
-        SELECT 1 FROM calendar_permissions
-        WHERE calendar_permissions.user_id = auth.uid() AND can_manage = true
-      ))
+      SELECT 1 FROM public.users WHERE public.users.id = auth.uid()
+      AND public.users.role = 'super_admin'
     )
   );
 

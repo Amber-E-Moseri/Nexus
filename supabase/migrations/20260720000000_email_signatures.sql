@@ -20,8 +20,8 @@ CREATE POLICY "Super admin read all signatures"
   ON email_signatures FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM profiles
-      WHERE profiles.id = auth.uid()
-      AND profiles.role = 'super_admin'
+      SELECT 1 FROM public.users
+      WHERE public.users.id = auth.uid()
+      AND public.users.role = 'super_admin'
     )
   );

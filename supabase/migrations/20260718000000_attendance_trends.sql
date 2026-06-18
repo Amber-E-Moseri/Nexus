@@ -173,26 +173,37 @@ returns table (
 language sql
 stable
 as $$
-  with ordered as (
+  with numbered as (
     select
       r.member_id,
       m.date,
       r.status,
-      row_number() over (partition by r.member_id order by m.date desc) as rn,
-      -- marks the first non-absent record walking backward from most recent;
-      -- everything before that boundary (rn < boundary) is part of the
-      -- current absence streak
-      min(case when r.status <> 'absent' then row_number() over (partition by r.member_id order by m.date desc) end)
-        over (partition by r.member_id) as first_break_rn
+      row_number() over (partition by r.member_id order by m.date desc) as rn
     from public.attendance_records r
     join public.attendance_meetings m on m.id = r.meeting_id
+  ),
+  break_points as (
+    select
+      member_id,
+      min(case when status <> 'absent' then rn end) over (partition by member_id) as first_break_rn
+    from numbered
+  ),
+  joined as (
+    select
+      n.member_id,
+      n.date,
+      n.status,
+      n.rn,
+      coalesce(bp.first_break_rn, 2147483647) as first_break_rn
+    from numbered n
+    join break_points bp on bp.member_id = n.member_id
   ),
   streaks as (
     select
       member_id,
-      count(*) filter (where rn < coalesce(first_break_rn, 2147483647))::int as consecutive_absences,
+      count(*) filter (where rn < first_break_rn)::int as consecutive_absences,
       max(date) as last_meeting_date
-    from ordered
+    from joined
     group by member_id
   )
   select

@@ -25,7 +25,7 @@ CREATE POLICY "Users can view drive files for accessible tasks"
       SELECT 1 FROM public.tasks
       WHERE tasks.id = space_drive_files.task_id
         AND (
-          tasks.assigned_to = auth.uid()
+          tasks.assignee_id = auth.uid()
           OR tasks.created_by = auth.uid()
           OR EXISTS (
             SELECT 1 FROM public.sprint_members

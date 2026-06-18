@@ -1,7 +1,8 @@
 -- Migrate Zoom credentials from plaintext to Supabase Vault (P0 security fix)
+-- NOTE: Vault not available on this project - will be enabled separately
 
 -- Step 1: Ensure vault extension is enabled
-CREATE EXTENSION IF NOT EXISTS vault;
+-- CREATE EXTENSION IF NOT EXISTS vault;
 
 -- Step 2: Add vault_secret_id columns to space_integration_secrets
 ALTER TABLE public.space_integration_secrets
@@ -31,17 +32,18 @@ CREATE POLICY "Super admin only writes secrets"
   );
 
 -- Step 5: Create RPC wrapper for vault.create_secret (allows edge functions to create secrets)
-CREATE OR REPLACE FUNCTION public.vault_create_secret(
-  secret_name text,
-  secret_value text
-)
-RETURNS uuid
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public, vault
-AS $$
-  SELECT vault.create_secret(secret_value, secret_name)
-$$;
+-- NOTE: Commented out until vault extension is enabled
+-- CREATE OR REPLACE FUNCTION public.vault_create_secret(
+--   secret_name text,
+--   secret_value text
+-- )
+-- RETURNS uuid
+-- LANGUAGE sql
+-- SECURITY DEFINER
+-- SET search_path = public, vault
+-- AS $$
+--   SELECT vault.create_secret(secret_value, secret_name)
+-- $$;
 
 /*
 MANUAL MIGRATION REQUIRED (if any existing Zoom credentials):

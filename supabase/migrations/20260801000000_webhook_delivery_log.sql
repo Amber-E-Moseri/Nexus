@@ -16,7 +16,7 @@ alter table public.webhook_delivery_log enable row level security;
 create policy "super_admin_reads_webhook_log"
   on public.webhook_delivery_log for select
   using (
-    exists (select 1 from public.profiles where profiles.id = auth.uid() and role = 'super_admin')
+    exists (select 1 from public.users where public.users.id = auth.uid() and role = 'super_admin')
   );
 
 create index idx_webhook_delivery_log_automation_id on public.webhook_delivery_log(automation_id);
