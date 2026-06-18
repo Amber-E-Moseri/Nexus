@@ -190,6 +190,36 @@ export async function testPushNotifications(userId) {
   }
 }
 
+export async function sendTaskPushNotification(userId, data) {
+  try {
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-task-push-notification`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          taskId: data.taskId,
+          title: data.title,
+          message: data.message,
+          url: data.url,
+          type: data.type || 'task',
+        }),
+      }
+    )
+
+    const result = await response.json()
+    if (result.sent) {
+      console.log('Push notification sent:', result)
+    }
+    return result
+  } catch (err) {
+    console.error('Failed to send push notification:', err)
+    // Don't throw — notification is optional, shouldn't break task operations
+    return { error: err.message }
+  }
+}
+
 export function formatNotificationMessage(notification) {
   const { type, payload } = notification
   const def = NOTIFICATION_TYPES[type] ?? { label: type, icon: '🔔' }

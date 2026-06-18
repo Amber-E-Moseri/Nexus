@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { NOTIFICATION_TYPES, setNotificationPref } from '../../lib/notifications'
 import { supabase } from '../../lib/supabase'
-import { Bell, Mail, Smartphone, AlertCircle } from 'lucide-react'
+import { requestPushPermission, unsubscribePush, isPushEnabled, getPushStatus } from '../../lib/webPush'
+import { Bell, Mail, Smartphone, AlertCircle, Check } from 'lucide-react'
 
 const NOTIFICATION_CHANNELS = [
   { id: 'in_app', label: 'In-App', icon: Bell, alwaysOn: true, description: 'Bell icon notifications' },
@@ -17,6 +18,9 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
   const [browserSupport, setBrowserSupport] = useState(false)
   const [browserPermission, setBrowserPermission] = useState('default')
   const [mobileToken, setMobileToken] = useState(null)
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
+  const [pushStatus, setPushStatus] = useState({ supported: false, permission: 'denied', subscribed: false })
   const [saving, setSaving] = useState({})
   const [message, setMessage] = useState('')
 
@@ -25,7 +29,44 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
       setBrowserSupport(true)
       setBrowserPermission(Notification.permission)
     }
+    checkPushStatus()
   }, [])
+
+  const checkPushStatus = async () => {
+    const status = await getPushStatus()
+    setPushStatus(status)
+    setPushEnabled(status.subscribed)
+  }
+
+  const handleTogglePush = async () => {
+    setPushLoading(true)
+    setMessage('')
+
+    try {
+      if (pushEnabled) {
+        const success = await unsubscribePush()
+        if (success) {
+          setPushEnabled(false)
+          setMessage('Mobile push notifications disabled')
+        } else {
+          setMessage('Failed to disable push notifications')
+        }
+      } else {
+        const success = await requestPushPermission()
+        if (success) {
+          setPushEnabled(true)
+          setMessage('✅ Mobile push notifications enabled!')
+          await checkPushStatus()
+        } else {
+          setMessage('Failed to enable push notifications. Please check browser permissions.')
+        }
+      }
+    } catch (err) {
+      setMessage(`Error: ${err.message}`)
+    } finally {
+      setPushLoading(false)
+    }
+  }
 
   const handleChannelToggle = async (type, channel) => {
     setSaving((prev) => ({ ...prev, [`${type}-${channel}`]: true }))
@@ -94,7 +135,7 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
 
       {/* Browser Notification Status */}
       {browserSupport && (
-        <div className="rounded-xl border border-[var(--border)] bg-white p-5">
+        <div className="rounded-xl border border-[var(--border)] bg-white p-5 mb-4">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
@@ -116,6 +157,41 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Push Notification Status */}
+      {pushStatus.supported && (
+        <div className="rounded-xl border border-[var(--border)] bg-white p-5 mb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <Smartphone size={18} style={{ color: 'var(--accent)' }} />
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                  Mobile Push Notifications
+                </h3>
+              </div>
+              <p className="text-xs text-[var(--text-secondary)] mb-3">
+                {pushEnabled
+                  ? '✅ Enabled - You will receive notifications on this device'
+                  : '⭕ Disabled - Enable to get task notifications on your phone'}
+              </p>
+              <p style={{ fontSize: '11px', color: '#9e9488', margin: '8px 0 0 0' }}>
+                Works on Android Chrome, Firefox, Edge and iOS Safari
+              </p>
+            </div>
+            <button
+              onClick={handleTogglePush}
+              disabled={pushLoading}
+              className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition ${
+                pushEnabled
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                  : 'bg-[var(--accent)] text-white hover:opacity-90'
+              } disabled:opacity-50`}
+            >
+              {pushLoading ? 'Updating...' : pushEnabled ? 'Disable' : 'Enable'}
+            </button>
           </div>
         </div>
       )}
