@@ -3,6 +3,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { attachFileLink, getTaskFiles, removeTaskFile } from '../../lib/tasks'
 import { safeHref } from '../../lib/urlUtils'
 import { supabase } from '../../lib/supabase'
+import FileList from '../../components/files/FileList'
 
 function fileIcon(url) {
   if (!url) return '📎'
@@ -309,6 +310,17 @@ export default function TaskFiles({ taskId }) {
               ) : null}
             </div>
           ) : null}
+        </>
+      )}
+
+      {!loading && (
+        <>
+          <div style={{ borderTop: '1px solid var(--border)', margin: '16px 0', paddingTop: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              — Uploaded files —
+            </div>
+            <FileList entityType="task" entityId={taskId} showUpload={true} />
+          </div>
         </>
       )}
     </div>

@@ -32,6 +32,7 @@ const PANEL_BORDER = '#DDD7C8'
 const TEXT = '#2C2C2A'
 const MUTED = '#7B776F'
 const HEADER_GRADIENT = 'linear-gradient(135deg, #2D1B69 0%, #4C2A92 50%, #6B3FAF 100%)'
+const REPORT_SELECT = 'id, label, created_at, subgroup_filter, present_names, absent_names, unexpected_names, expected_count, attended_count, absent_count, unexpected_count, reach_pct'
 
 function reachBand(pct) {
   const p = pct * 100
@@ -114,7 +115,7 @@ export default function MeetingReportPublicPage() {
 
       const { data, error } = await supabase
         .from('meeting_attendance_reports')
-        .select('*')
+        .select(REPORT_SELECT)
         .eq('id', reportId)
         .single()
 

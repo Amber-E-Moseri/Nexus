@@ -196,7 +196,7 @@ export default function IntegrationsSection({ role, supabaseClient }) {
     setLoading(true)
     const { data, error } = await supabaseClient
       .from('external_integrations')
-      .select('*')
+      .select('id, name, type, launch_url, description, icon_emoji, visible_to, department_id, enabled, show_in_sidebar, sort_order')
       .order('sort_order')
 
     if (error) {

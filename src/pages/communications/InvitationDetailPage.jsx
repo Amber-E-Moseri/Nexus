@@ -11,6 +11,8 @@ const BG = '#F4F1EA'
 const SUCCESS = '#2D6A4F'
 const WARNING = '#92400E'
 const ERROR = '#C94830'
+const CAMPAIGN_SELECT = 'id, name, status, sent_at'
+const RECIPIENT_SELECT = 'id, campaign_id, full_name, email, token, status, sent_at, opened_at, rsvp_at, created_at'
 
 function StatCard({ label, value, percentage, color }) {
   return (
@@ -188,8 +190,8 @@ export default function InvitationDetailPage() {
         setError(null)
 
         const [campaignRes, recipientsRes] = await Promise.all([
-          supabase.from('invitation_campaigns').select('*').eq('id', campaignId).single(),
-          supabase.from('invitation_recipients').select('*').eq('campaign_id', campaignId).order('created_at'),
+          supabase.from('invitation_campaigns').select(CAMPAIGN_SELECT).eq('id', campaignId).single(),
+          supabase.from('invitation_recipients').select(RECIPIENT_SELECT).eq('campaign_id', campaignId).order('created_at'),
         ])
 
         if (campaignRes.error) throw campaignRes.error

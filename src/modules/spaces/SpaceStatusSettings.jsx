@@ -4,6 +4,8 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 
+const STATUS_SELECT = 'id, name, category, active, is_default, department_id, sort_order, legacy_key'
+
 const CATEGORY_OPTIONS = [
   { value: 'open', label: 'Open' },
   { value: 'in_progress', label: 'In Progress' },
@@ -156,7 +158,7 @@ export default function SpaceStatusSettings({ departmentId, departmentName }) {
     try {
       const { data, error } = await supabase
         .from('task_status_definitions')
-        .select('*')
+        .select(STATUS_SELECT)
         .eq('department_id', departmentId)
         .order('sort_order')
 
@@ -181,11 +183,12 @@ export default function SpaceStatusSettings({ departmentId, departmentName }) {
     const resequenced = nextStatuses.map((status, index) => ({ ...status, sort_order: index + 1 }))
     setStatuses(resequenced)
 
-    await Promise.all(
-      resequenced.map((status) =>
-        supabase.from('task_status_definitions').update({ sort_order: status.sort_order }).eq('id', status.id),
+    const { error } = await supabase.rpc('reorder_task_statuses', {
+      p_status_updates: JSON.stringify(
+        resequenced.map((status) => ({ id: status.id, sort_order: status.sort_order })),
       ),
-    )
+    })
+    if (error) throw error
 
     return resequenced
   }
@@ -293,7 +296,7 @@ export default function SpaceStatusSettings({ departmentId, departmentName }) {
       const { data, error } = await supabase
         .from('task_status_definitions')
         .insert(payload)
-        .select()
+        .select(STATUS_SELECT)
         .single()
 
       if (error) throw error

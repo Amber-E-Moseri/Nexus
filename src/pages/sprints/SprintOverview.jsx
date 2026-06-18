@@ -13,8 +13,10 @@ import SprintMemberPanel from '../../modules/sprints/SprintMemberPanel'
 import SprintTaskBoard from '../../modules/sprints/SprintTaskBoard'
 import SprintTeamPanel from '../../modules/sprints/SprintTeamPanel'
 import SprintReview from './SprintReview'
+import FileList from '../../components/files/FileList'
 
-const TABS = ['Overview', 'Tasks', 'Calendar', 'Teams', 'Members', 'Review']
+const TABS = ['Overview', 'Tasks', 'Calendar', 'Teams', 'Members', 'Files', 'Review']
+const CALENDAR_EVENT_SELECT = 'id, title, description, event_type, start_date, end_date, all_day, location, zoom_join_url, sprint_id, space_id, created_by, created_at, status, department_id, approved_by, approved_at, rejection_note, is_org_wide'
 
 function ArchivedSprintBanner({ sprint, onRestore, userRole }) {
   const canRestore = userRole === 'super_admin' || userRole === 'dept_lead'
@@ -129,7 +131,7 @@ export default function SprintOverview() {
     setCalendarLoading(true)
     supabase
       .from('calendar_events')
-      .select('*')
+      .select(CALENDAR_EVENT_SELECT)
       .eq('sprint_id', sprintId)
       .order('start_date', { ascending: true })
       .then(({ data, error }) => {
@@ -175,7 +177,7 @@ export default function SprintOverview() {
     try {
       const { data, error } = await supabase
         .from('calendar_events')
-        .select('*')
+        .select(CALENDAR_EVENT_SELECT)
         .eq('sprint_id', sprintId)
         .order('start_date', { ascending: true })
 
@@ -501,6 +503,14 @@ export default function SprintOverview() {
             isArchived={Boolean(isArchived)}
             onChanged={loadDetail}
           />
+        </div>
+      ) : null}
+
+      {activeTab === 'Files' ? (
+        <div role="tabpanel" id="tabpanel-files" aria-labelledby="tab-files" tabIndex={0}>
+          <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+            <FileList entityType="sprint" entityId={sprintId} showUpload={true} />
+          </div>
         </div>
       ) : null}
 

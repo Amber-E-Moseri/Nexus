@@ -42,7 +42,7 @@ export default function Login() {
       <div className="relative z-10 w-full max-w-[500px]">
         <div className="text-center">
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl shadow-[0_18px_40px_rgba(28,22,16,0.12)]" style={{ background: 'linear-gradient(135deg, #4C2A92 0%, #6B4BBE 100%)' }}>
-            <img src="/canada_sr.png" alt="BLW Canada" className="h-14 w-14 object-contain filter brightness-0 invert" />
+            <img src="/canada_sr.png" alt="BLW Canada" width="56" height="56" className="h-14 w-14 object-contain filter brightness-0 invert" />
           </div>
           <h1 className="mt-6 text-[40px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
             Welcome back!

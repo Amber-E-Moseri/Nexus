@@ -190,6 +190,7 @@ export default function SearchModal() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
+            aria-label="Search tasks, spaces, sprints, and events"
             placeholder="Search tasks, spaces, sprints, events…"
             style={{ flex: 1, border: 'none', outline: 'none', fontSize: 16, color: '#1C1610', fontFamily: 'inherit', background: 'transparent' }}
           />

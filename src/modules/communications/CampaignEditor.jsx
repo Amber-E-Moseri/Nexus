@@ -108,7 +108,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       // Get suppressed count
       const { count: suppressed } = await supabase
         .from('email_bounces')
-        .select('*', { count: 'exact' })
+        .select('id', { count: 'exact' })
       setSuppressedCount(suppressed ?? 0)
 
       setShowSendConfirm(true)
@@ -377,7 +377,7 @@ export default function CampaignEditor({ campaignId, onSaved, onCancel }) {
     if (campaignId) {
       supabase
         .from('communication_campaigns')
-        .select('*')
+        .select('id, name, subject, body, segment_id, recipient_filters')
         .eq('id', campaignId)
         .single()
         .then(({ data }) => {

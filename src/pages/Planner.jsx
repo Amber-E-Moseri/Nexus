@@ -129,6 +129,7 @@ function DayInlineAdd({ dateISO, onCreate }) {
   return (
     <input
       autoFocus
+      aria-label={`Task title for ${dateISO}`}
       value={title}
       disabled={saving}
       onChange={(e) => setTitle(e.target.value)}
@@ -275,10 +276,10 @@ export default function Planner() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: TEXT, letterSpacing: '-0.02em' }}>My Planner</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button type="button" onClick={() => setWeekStart((w) => addDays(w, -7))} style={navBtn}><ChevronLeft size={16} /></button>
+          <button type="button" onClick={() => setWeekStart((w) => addDays(w, -7))} aria-label="Previous week" style={navBtn}><ChevronLeft size={16} /></button>
           <span style={{ fontSize: 13, fontWeight: 700, color: TEXT, minWidth: 130, textAlign: 'center' }}>{formatRange(weekStart)}</span>
-          <button type="button" onClick={() => setWeekStart((w) => addDays(w, 7))} style={navBtn}><ChevronRight size={16} /></button>
-          <button type="button" onClick={() => setWeekStart(startOfWeek(new Date()))} style={{ ...navBtn, width: 'auto', padding: '0 12px', fontSize: 12, fontWeight: 700 }}>Today</button>
+          <button type="button" onClick={() => setWeekStart((w) => addDays(w, 7))} aria-label="Next week" style={navBtn}><ChevronRight size={16} /></button>
+          <button type="button" onClick={() => setWeekStart(startOfWeek(new Date()))} aria-label="Go to current week" style={{ ...navBtn, width: 'auto', padding: '0 12px', fontSize: 12, fontWeight: 700 }}>Today</button>
         </div>
       </div>
 

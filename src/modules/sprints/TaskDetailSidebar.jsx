@@ -5,7 +5,14 @@ import { PRIORITIES } from '../../lib/constants'
 import { createNotification } from '../../lib/notifications'
 import { getSprintMembers } from '../../lib/sprints'
 import { normalizeTaskFieldSettings } from '../../lib/taskFieldSettings'
+import {
+  formatActivityDateTime,
+  formatActivityRelativeTime,
+  getActivityActionLabel,
+  getActivityInitials,
+} from '../../lib/activityLog'
 import { createTask, deleteTask, updateTask } from '../../lib/tasks'
+import { supabase } from '../../lib/supabase'
 import {
   getTaskStatusId,
   listTaskStatuses,
@@ -48,6 +55,7 @@ function TaskDetailTabs({ taskId, departmentId, sprintId }) {
     { id: 'comments', label: 'Comments' },
     { id: 'files', label: 'Files' },
     { id: 'dependencies', label: 'Dependencies' },
+    { id: 'activity', label: 'Activity' },
   ]
 
   return (
@@ -103,6 +111,90 @@ function TaskDetailTabs({ taskId, departmentId, sprintId }) {
           <TaskDependencies taskId={taskId} departmentId={departmentId} sprintId={sprintId} />
         </div>
       ) : null}
+      {activeTab === 'activity' ? (
+        <div role="tabpanel" id="tabpanel-activity" aria-labelledby="tab-activity" tabIndex={0}>
+          <TaskActivityLog taskId={taskId} />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function TaskActivityLog({ taskId }) {
+  const [activities, setActivities] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let active = true
+
+    async function loadActivities() {
+      try {
+        setLoading(true)
+        const { data, error } = await supabase
+          .from('activity_log')
+          .select('id, user_id, action, entity_type, entity_id, timestamp, user:users!user_id(id, name)')
+          .eq('entity_id', taskId)
+          .eq('entity_type', 'task')
+          .order('timestamp', { ascending: false })
+          .limit(20)
+
+        if (error) throw error
+        if (active) setActivities(data ?? [])
+      } catch (error) {
+        console.error('Failed to load task activity', error)
+        if (active) setActivities([])
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    loadActivities()
+
+    return () => {
+      active = false
+    }
+  }, [taskId])
+
+  if (loading) {
+    return <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading...</div>
+  }
+
+  if (activities.length === 0) {
+    return <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No activity recorded for this task.</div>
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {activities.map((log) => (
+        <div key={log.id} style={{ display: 'flex', gap: 10, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+          <div
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: '50%',
+              background: '#4C2A92',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 9,
+              fontWeight: 700,
+              flexShrink: 0,
+            }}
+          >
+            {getActivityInitials(log.user?.name ?? '?')}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.45 }}>
+              <span style={{ fontWeight: 600 }}>{log.user?.name || 'Unknown'}</span>{' '}
+              <span>{getActivityActionLabel(log.action)}</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
+              {formatActivityRelativeTime(log.timestamp)} · {formatActivityDateTime(log.timestamp)}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -126,8 +218,8 @@ function TaskDetailContent({
   setStatusId,
   priority,
   setPriority,
-  assigneeId,
-  setAssigneeId,
+  assigneeIds,
+  setAssigneeIds,
   dueDate,
   setDueDate,
   personal,
@@ -471,8 +563,8 @@ export default function TaskDetailSidebar({
     setStatusId,
     priority,
     setPriority,
-    assigneeId,
-    setAssigneeId,
+    assigneeIds,
+    setAssigneeIds,
     dueDate,
     setDueDate,
     personal,

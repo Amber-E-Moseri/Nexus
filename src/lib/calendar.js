@@ -8,10 +8,11 @@ export async function getCalendarEvents(startDate, endDate) {
     .select(`
       id, title, description, event_type, start_date, end_date,
       all_day, location, zoom_join_url, space_id, sprint_id, created_by, created_at,
-      status, department_id, approved_by, approved_at, rejection_note
+      status, department_id, approved_by, approved_at, rejection_note, is_org_wide
     `)
     .gte('start_date', startDate.toISOString())
     .lte('start_date', endDate.toISOString())
+    .eq('status', 'approved')
     .order('start_date', { ascending: true })
 
   if (error) throw error
@@ -74,15 +75,11 @@ export async function deleteCalendarEvent(eventId) {
 
 // ---- Approval workflow ----
 
-export async function submitEvent(eventData, userId, userRole) {
-  // Determine if user can auto-approve
-  const canAutoApprove = userRole === 'super_admin' || await hasPermission(userId, 'calendar:write')
-
+export async function submitEvent(eventData, userId) {
   const eventToInsert = {
     ...eventData,
-    status: canAutoApprove ? 'approved' : 'pending',
+    status: 'pending',
     created_by: userId,
-    submitted_by: userId
   }
 
   const { data, error } = await supabase
@@ -95,84 +92,93 @@ export async function submitEvent(eventData, userId, userRole) {
   return data
 }
 
-export async function getPendingApprovals() {
+export async function getPendingEvents() {
   const { data, error } = await supabase
-    .rpc('list_pending_approvals')
+    .rpc('get_pending_calendar_events')
 
   if (error) throw error
   return data ?? []
 }
 
-export async function approveEvent(eventId, approverId) {
-  const { data, error } = await supabase
-    .rpc('approve_calendar_event', {
-      p_event_id: eventId,
-      p_approver_id: approverId
-    })
+export async function approveEvent(eventId) {
+  const { error } = await supabase
+    .rpc('approve_calendar_event', { event_id: eventId })
 
   if (error) throw error
-  if (data?.error) throw new Error(data.error)
 
-  const event = data?.event
-  if (event && event.created_by) {
+  const { data: event } = await supabase
+    .from('calendar_events')
+    .select('id, title, created_by')
+    .eq('id', eventId)
+    .single()
+
+  if (event?.created_by) {
     await createNotification({
       recipient_id: event.created_by,
       type: 'calendar_event_approved',
       related_resource_type: 'calendar_event',
       related_resource_id: eventId,
       title: `Event approved: ${event.title}`,
-      description: `Your calendar event has been approved.`,
-    }).catch(err => console.error('Failed to create approval notification:', err))
+      description: `Your calendar event "${event.title}" has been approved.`,
+    }).catch(() => {})
   }
 
   return event
 }
 
-export async function rejectEvent(eventId, approverId, rejectionNote) {
-  const { data, error } = await supabase
-    .rpc('reject_calendar_event', {
-      p_event_id: eventId,
-      p_approver_id: approverId,
-      p_rejection_note: rejectionNote
-    })
+export async function rejectEvent(eventId, rejectionNote) {
+  const { error } = await supabase
+    .rpc('reject_calendar_event', { event_id: eventId, note: rejectionNote })
 
   if (error) throw error
-  if (data?.error) throw new Error(data.error)
 
-  const event = data?.event
-  if (event && event.created_by) {
+  const { data: event } = await supabase
+    .from('calendar_events')
+    .select('id, title, created_by')
+    .eq('id', eventId)
+    .single()
+
+  if (event?.created_by) {
     await createNotification({
       recipient_id: event.created_by,
       type: 'calendar_event_rejected',
       related_resource_type: 'calendar_event',
       related_resource_id: eventId,
-      title: `Event rejected: ${event.title}`,
-      description: `Your calendar event was rejected. Reason: ${rejectionNote}`,
-    }).catch(err => console.error('Failed to create rejection notification:', err))
+      title: `Event not approved: ${event.title}`,
+      description: `Your calendar event was declined. Reason: ${rejectionNote}`,
+    }).catch(() => {})
   }
 
   return event
 }
 
-// ---- iCal subscriptions ----
-
-export async function generateICalToken(userId, scope = 'all', departmentId = null) {
-  const { data, error } = await supabase
-    .rpc('generate_ical_token', {
-      p_user_id: userId,
-      p_scope: scope,
-      p_department_id: departmentId
-    })
+export async function getPendingApprovals() {
+  const { data, error } = await supabase.rpc('list_pending_approvals')
 
   if (error) throw error
-  if (data?.error) throw new Error(data.error)
+  return data ?? []
+}
+
+// ---- iCal subscriptions ----
+
+export async function getOrCreateSubscription(userId, scope = 'all', departmentId = null) {
+  const { data, error } = await supabase
+    .from('calendar_subscriptions')
+    .upsert(
+      { user_id: userId, scope, dept_id: departmentId },
+      { onConflict: 'user_id,scope,dept_id' }
+    )
+    .select()
+    .single()
+
+  if (error) throw error
   return data
 }
 
-export async function getICalSubscriptions(userId) {
+export async function getSubscriptions(userId) {
   const { data, error } = await supabase
     .from('calendar_subscriptions')
-    .select('id, token, scope, department_id, created_at, last_accessed_at')
+    .select('id, token, scope, dept_id, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
 
@@ -180,7 +186,7 @@ export async function getICalSubscriptions(userId) {
   return data ?? []
 }
 
-export async function deleteICalSubscription(subscriptionId) {
+export async function deleteSubscription(subscriptionId) {
   const { error } = await supabase
     .from('calendar_subscriptions')
     .delete()
@@ -192,81 +198,57 @@ export async function deleteICalSubscription(subscriptionId) {
 export async function getEventsBySubscriptionToken(token) {
   const { data: subscription, error: subError } = await supabase
     .from('calendar_subscriptions')
-    .select('user_id, scope, department_id')
+    .select('user_id, scope, dept_id')
     .eq('token', token)
     .single()
 
-  if (subError) throw new Error('Invalid token')
-
-  // Update last_accessed_at
-  await supabase
-    .from('calendar_subscriptions')
-    .update({ last_accessed_at: new Date().toISOString() })
-    .eq('token', token)
+  if (subError) throw new Error('Invalid subscription token')
 
   let query = supabase
     .from('calendar_events')
-    .select('id, title, description, start_date, end_date, all_day, location, zoom_join_url, status, department_id')
+    .select('id, title, description, start_date, end_date, all_day, location, status')
     .eq('status', 'approved')
+    .gte('start_date', new Date().toISOString())
 
-  if (subscription.scope === 'department' && subscription.department_id) {
-    query = query.or(`department_id.eq.${subscription.department_id},and(department_id.is.null)`)
+  if (subscription.scope === 'department' && subscription.dept_id) {
+    query = query.or(`department_id.eq.${subscription.dept_id},department_id.is.null`)
   }
 
-  const { data, error } = await query.gte('start_date', new Date().toISOString())
+  const { data, error } = await query
 
   if (error) throw error
   return data ?? []
 }
 
-// ---- RSVP Management ----
+// ---- Permissions Management ----
 
-export async function upsertRSVP(eventId, userId, response) {
-  const { data, error } = await supabase
-    .from('calendar_rsvps')
+export async function grantCalendarPermission(userId) {
+  const { error } = await supabase
+    .from('calendar_permissions')
     .upsert(
-      { event_id: eventId, user_id: userId, response },
-      { onConflict: 'event_id,user_id' }
+      { user_id: userId, can_manage: true, granted_by: (await supabase.auth.getUser()).data.user.id },
+      { onConflict: 'user_id' }
     )
-    .select()
-    .single()
 
   if (error) throw error
-  return data
 }
 
-export async function getRSVPCounts(eventId) {
-  const { data, error } = await supabase
-    .from('calendar_rsvps')
-    .select('response')
-    .eq('event_id', eventId)
+export async function revokeCalendarPermission(userId) {
+  const { error } = await supabase
+    .from('calendar_permissions')
+    .upsert(
+      { user_id: userId, can_manage: false },
+      { onConflict: 'user_id' }
+    )
 
   if (error) throw error
-
-  const counts = { going: 0, maybe: 0, not_going: 0 }
-  data?.forEach((rsvp) => {
-    counts[rsvp.response]++
-  })
-  return counts
 }
 
-export async function getUserRSVP(eventId, userId) {
+export async function getCalendarPermissions() {
   const { data, error } = await supabase
-    .from('calendar_rsvps')
-    .select('response')
-    .eq('event_id', eventId)
-    .eq('user_id', userId)
-    .single()
-
-  if (error && error.code !== 'PGRST116') throw error
-  return data?.response ?? null
-}
-
-export async function getRSVPList(eventId) {
-  const { data, error } = await supabase
-    .from('calendar_rsvps')
-    .select('response, profiles(id, display_name, email)')
-    .eq('event_id', eventId)
+    .from('calendar_permissions')
+    .select('id, user_id, can_manage, granted_at, users!calendar_permissions_user_id_fkey(id, name, email)')
+    .order('granted_at', { ascending: false })
 
   if (error) throw error
   return data ?? []

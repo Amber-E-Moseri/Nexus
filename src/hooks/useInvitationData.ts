@@ -22,7 +22,7 @@ export function useInvitationData(token: string) {
         // Fetch recipient by token
         const { data: recipientData, error: recipientError } = await supabase
           .from('invitation_recipients')
-          .select('*')
+          .select('id, campaign_id, email, token, custom_fields, status, sent_at, opened_at, rsvp_at')
           .eq('token', token)
           .single()
 
@@ -40,7 +40,7 @@ export function useInvitationData(token: string) {
         // Fetch campaign
         const { data: campaignData, error: campaignError } = await supabase
           .from('invitation_campaigns')
-          .select('*')
+          .select('id, org_id, template_id, name, content, status, scheduled_at, sent_at, created_at')
           .eq('id', recipient.campaign_id)
           .single()
 
@@ -49,7 +49,7 @@ export function useInvitationData(token: string) {
         // Fetch template
         const { data: templateData, error: templateError } = await supabase
           .from('invitation_templates')
-          .select('*')
+          .select('id, org_id, name, description, occasion, theme_config, animation_config, content_slots, token_fields, email_subject, email_preview, thumbnail_url, status, version, created_at')
           .eq('id', campaignData.template_id)
           .single()
 

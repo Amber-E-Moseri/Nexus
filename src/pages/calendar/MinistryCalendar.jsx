@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Calendar } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
-import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingApprovals } from '../../lib/calendar'
+import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingEvents } from '../../lib/calendar'
 import { hasPermission } from '../../lib/permissions'
 import { useToast } from '../../context/ToastContext'
 import CalendarView from '../../modules/calendar/CalendarView'
@@ -48,10 +48,10 @@ export default function MinistryCalendar() {
   async function loadPendingCount() {
     if (!canApprove) return
     try {
-      const pending = await getPendingApprovals()
+      const pending = await getPendingEvents()
       setPendingCount(pending.length)
     } catch (err) {
-      console.error('Failed to load pending approvals:', err)
+      console.error('Failed to load pending events:', err)
     }
   }
 

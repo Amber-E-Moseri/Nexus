@@ -1,58 +1,92 @@
-import { useEffect, useState } from 'react'
-import { Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import {
+  ACTIVITY_ENTITY_OPTIONS,
+  formatActivityDateTime,
+  getActivityActionLabel,
+  getActivityEntityPath,
+  getActivityEntityText,
+  getActivityInitials,
+} from '../lib/activityLog'
 import { supabase } from '../lib/supabase'
 
-const ACTION_LABELS = {
-  invitation_created: 'Invitation Sent',
-  invitation_cancelled: 'Invitation Cancelled',
-  user_activated: 'User Activated',
-  user_status_changed: 'Status Changed',
-  department_membership_changed: 'Department Changed',
-  pastor_assignment_changed: 'Pastor Assignment Changed',
+const ROWS_PER_PAGE = 50
+
+const inputStyle = {
+  width: '100%',
+  padding: '10px 12px',
+  border: '1px solid #D9D1C3',
+  borderRadius: 8,
+  fontSize: 13,
+  background: '#FFFFFF',
+  color: '#2D2A22',
 }
 
-const ENTITY_TYPE_LABELS = {
-  user: 'User',
-  user_invitation: 'Invitation',
-  task: 'Task',
-  meeting: 'Meeting',
-  sprint: 'Sprint',
-  calendar_event: 'Calendar Event',
+const labelStyle = {
+  display: 'block',
+  fontSize: 12,
+  fontWeight: 700,
+  marginBottom: 6,
+  color: '#6B6360',
 }
 
-function getInitials(name = '') {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join('') || '?'
-}
+function buildLogsQuery({ userIds, filters, count = false }) {
+  let query = supabase
+    .from('activity_log')
+    .select(
+      `
+      id,
+      user_id,
+      action,
+      entity_type,
+      entity_id,
+      timestamp,
+      user:users!user_id(id, name, department_id, avatar_url)
+    `,
+      count ? { count: 'exact' } : undefined,
+    )
+    .order('timestamp', { ascending: false })
 
-function formatDateTime(timestamp) {
-  if (!timestamp) return ''
-  const date = new Date(timestamp)
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  })
+  if (userIds) {
+    query = userIds.length > 0 ? query.in('user_id', userIds) : query.eq('user_id', '00000000-0000-0000-0000-000000000000')
+  }
+
+  if (filters.fromDate) {
+    query = query.gte('timestamp', `${filters.fromDate}T00:00:00`)
+  }
+
+  if (filters.toDate) {
+    query = query.lte('timestamp', `${filters.toDate}T23:59:59.999`)
+  }
+
+  if (filters.userId) {
+    query = query.eq('user_id', filters.userId)
+  }
+
+  if (filters.action) {
+    query = query.eq('action', filters.action)
+  }
+
+  if (filters.entityType && filters.entityType !== 'All') {
+    query = query.eq('entity_type', filters.entityType)
+  }
+
+  return query
 }
 
 export default function ActivityLogPage() {
-  const { user, role, departmentId } = useAuth()
-  const [logs, setLogs] = useState([])
-  const [allLogs, setAllLogs] = useState([])
+  const navigate = useNavigate()
+  const { role, profile } = useAuth()
+  const [rows, setRows] = useState([])
   const [users, setUsers] = useState([])
   const [actions, setActions] = useState([])
-  const [entityTypes, setEntityTypes] = useState([])
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
-
+  const [totalCount, setTotalCount] = useState(0)
+  const [page, setPage] = useState(1)
+  const [accessibleUserIds, setAccessibleUserIds] = useState(null)
   const [filters, setFilters] = useState({
     fromDate: '',
     toDate: '',
@@ -60,362 +94,219 @@ export default function ActivityLogPage() {
     action: '',
     entityType: 'All',
   })
-
-  const [pagination, setPagination] = useState({ page: 1, perPage: 50 })
-  const ROWS_PER_PAGE = 50
+  const [appliedFilters, setAppliedFilters] = useState({
+    fromDate: '',
+    toDate: '',
+    userId: '',
+    action: '',
+    entityType: 'All',
+  })
 
   useEffect(() => {
-    if (role !== 'super_admin' && role !== 'dept_lead') {
-      window.location.href = '/dashboard'
-      return
+    if (role && role !== 'super_admin' && role !== 'dept_lead') {
+      navigate('/dashboard', { replace: true })
     }
-    loadData()
-  }, [role, departmentId])
+  }, [navigate, role])
 
-  async function loadData() {
-    try {
-      setLoading(true)
-      const query = supabase.from('activity_log').select(`
-        id,
-        user_id,
-        action,
-        entity_type,
-        entity_id,
-        timestamp,
-        user:users!user_id(id, name, avatar_url)
-      `)
+  useEffect(() => {
+    let active = true
 
-      if (role === 'dept_lead') {
-        const { data: deptUserIds } = await supabase
-          .from('users')
-          .select('id')
-          .eq('department_id', departmentId)
-        const ids = (deptUserIds || []).map((u) => u.id)
-        if (ids.length > 0) {
-          query.in('user_id', ids)
-        }
+    async function loadFilterOptions() {
+      if (!role) return
+
+      const departmentId = profile?.department_id ?? null
+      const usersQuery = supabase
+        .from('users')
+        .select('id, name, department_id')
+        .order('name')
+
+      const scopedUsersQuery = role === 'dept_lead' && departmentId
+        ? usersQuery.eq('department_id', departmentId)
+        : usersQuery
+
+      const { data: userRows, error: usersError } = await scopedUsersQuery
+      if (usersError) throw usersError
+
+      const nextUsers = userRows ?? []
+      const nextUserIds = role === 'dept_lead' ? nextUsers.map((entry) => entry.id) : null
+
+      let actionQuery = supabase
+        .from('activity_log')
+        .select('action')
+        .order('timestamp', { ascending: false })
+        .limit(1000)
+
+      if (nextUserIds) {
+        actionQuery = nextUserIds.length > 0 ? actionQuery.in('user_id', nextUserIds) : actionQuery.eq('user_id', '00000000-0000-0000-0000-000000000000')
       }
 
-      const { data: logsData, error } = await query.order('timestamp', { ascending: false })
+      const { data: actionRows, error: actionsError } = await actionQuery
+      if (actionsError) throw actionsError
 
-      if (error) throw error
+      if (!active) return
 
-      setAllLogs(logsData || [])
-      setLogs(logsData || [])
-
-      const distinctUsers = Array.from(
-        new Map((logsData || []).map((log) => [log.user_id, log.user])).values()
-      ).sort((a, b) => (a?.name || '').localeCompare(b?.name || ''))
-      setUsers(distinctUsers)
-
-      const distinctActions = [...new Set((logsData || []).map((log) => log.action))].sort()
-      setActions(distinctActions)
-
-      const distinctTypes = [
-        'All',
-        ...Array.from(new Set((logsData || []).map((log) => log.entity_type))).sort(),
-      ]
-      setEntityTypes(distinctTypes)
-
-      setPagination({ page: 1, perPage: ROWS_PER_PAGE })
-    } catch (err) {
-      console.error('Error loading activity log:', err)
-    } finally {
-      setLoading(false)
+      setUsers(nextUsers)
+      setAccessibleUserIds(nextUserIds)
+      setActions(Array.from(new Set((actionRows ?? []).map((entry) => entry.action).filter(Boolean))).sort())
     }
-  }
+
+    loadFilterOptions().catch((error) => {
+      console.error('Failed to load activity log filters', error)
+      if (!active) return
+      setUsers([])
+      setAccessibleUserIds(role === 'dept_lead' ? [] : null)
+      setActions([])
+    })
+
+    return () => {
+      active = false
+    }
+  }, [profile?.department_id, role])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadLogs() {
+      if (!role || accessibleUserIds === undefined) return
+      setLoading(true)
+
+      try {
+        const from = (page - 1) * ROWS_PER_PAGE
+        const to = from + ROWS_PER_PAGE - 1
+        const query = buildLogsQuery({
+          userIds: role === 'dept_lead' ? accessibleUserIds ?? [] : null,
+          filters: appliedFilters,
+          count: true,
+        }).range(from, to)
+
+        const { data, count, error } = await query
+        if (error) throw error
+
+        if (!active) return
+        setRows(data ?? [])
+        setTotalCount(count ?? 0)
+      } catch (error) {
+        console.error('Failed to load activity log rows', error)
+        if (!active) return
+        setRows([])
+        setTotalCount(0)
+      } finally {
+        if (active) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadLogs()
+
+    return () => {
+      active = false
+    }
+  }, [accessibleUserIds, appliedFilters, page, role])
+
+  const pageCount = Math.max(1, Math.ceil(totalCount / ROWS_PER_PAGE))
+  const startIndex = totalCount === 0 ? 0 : (page - 1) * ROWS_PER_PAGE + 1
+  const endIndex = Math.min(page * ROWS_PER_PAGE, totalCount)
+  const pageNumbers = useMemo(() => Array.from({ length: pageCount }, (_, index) => index + 1), [pageCount])
 
   function applyFilters() {
-    let filtered = [...allLogs]
-
-    if (filters.fromDate) {
-      const fromTime = new Date(filters.fromDate).getTime()
-      filtered = filtered.filter((log) => new Date(log.timestamp).getTime() >= fromTime)
-    }
-
-    if (filters.toDate) {
-      const toDate = new Date(filters.toDate)
-      toDate.setHours(23, 59, 59, 999)
-      const toTime = toDate.getTime()
-      filtered = filtered.filter((log) => new Date(log.timestamp).getTime() <= toTime)
-    }
-
-    if (filters.userId) {
-      filtered = filtered.filter((log) => log.user_id === filters.userId)
-    }
-
-    if (filters.action) {
-      filtered = filtered.filter((log) => log.action === filters.action)
-    }
-
-    if (filters.entityType !== 'All') {
-      filtered = filtered.filter((log) => log.entity_type === filters.entityType)
-    }
-
-    setLogs(filtered)
-    setPagination({ page: 1, perPage: ROWS_PER_PAGE })
+    setAppliedFilters(filters)
+    setPage(1)
   }
 
   function clearFilters() {
-    setFilters({
+    const empty = {
       fromDate: '',
       toDate: '',
       userId: '',
       action: '',
       entityType: 'All',
-    })
-    setLogs(allLogs)
-    setPagination({ page: 1, perPage: ROWS_PER_PAGE })
+    }
+    setFilters(empty)
+    setAppliedFilters(empty)
+    setPage(1)
   }
 
   async function handleExportCSV() {
     try {
       setExporting(true)
+      const query = buildLogsQuery({
+        userIds: role === 'dept_lead' ? accessibleUserIds ?? [] : null,
+        filters: appliedFilters,
+      }).range(0, 999)
 
-      let toExport = [...logs]
-      if (toExport.length > 1000) {
-        toExport = toExport.slice(0, 1000)
-      }
+      const { data, error } = await query
+      if (error) throw error
 
       const headers = ['Date', 'Time', 'Actor', 'Action', 'Entity Type', 'Entity ID']
-      const rows = toExport.map((log) => {
-        const date = new Date(log.timestamp)
-        const dateStr = date.toLocaleDateString('en-US')
-        const timeStr = date.toLocaleTimeString('en-US', {
+      const lines = (data ?? []).map((entry) => {
+        const date = new Date(entry.timestamp)
+        const datePart = date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        })
+        const timePart = date.toLocaleTimeString('en-US', {
           hour: '2-digit',
           minute: '2-digit',
-          second: '2-digit',
           hour12: true,
         })
+
         return [
-          dateStr,
-          timeStr,
-          log.user?.name || 'Unknown',
-          ACTION_LABELS[log.action] || log.action,
-          ENTITY_TYPE_LABELS[log.entity_type] || log.entity_type,
-          log.entity_id || '',
+          datePart,
+          timePart,
+          entry.user?.name ?? 'Unknown',
+          getActivityActionLabel(entry.action),
+          entry.entity_type ?? '',
+          entry.entity_id ?? '',
         ]
       })
 
-      const csvContent = [
+      const csv = [
         headers.join(','),
-        ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+        ...lines.map((line) => line.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
       ].join('\n')
 
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-      const link = document.createElement('a')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
-      link.setAttribute('href', url)
-      link.setAttribute(
-        'download',
-        `activity-log-${new Date().toISOString().split('T')[0]}.csv`
-      )
-      link.style.visibility = 'hidden'
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `activity-log-${new Date().toISOString().slice(0, 10)}.csv`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-    } catch (err) {
-      console.error('Error exporting CSV:', err)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Failed to export activity log', error)
     } finally {
       setExporting(false)
     }
   }
 
-  const pageCount = Math.ceil(logs.length / ROWS_PER_PAGE)
-  const startIdx = (pagination.page - 1) * ROWS_PER_PAGE
-  const endIdx = Math.min(startIdx + ROWS_PER_PAGE, logs.length)
-  const pageLogsData = logs.slice(startIdx, endIdx)
-
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#F4F1EA' }}>
-      <div style={{ padding: '32px 40px', borderBottom: '1px solid #EDE8DC' }}>
-        <h1
-          style={{
-            fontSize: 32,
-            fontWeight: 700,
-            color: '#2D2A22',
-            margin: '0 0 24px',
-          }}
-        >
-          Activity Log
-        </h1>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr auto auto',
-            gap: 12,
-            alignItems: 'end',
-          }}
-        >
+    <div style={{ flex: 1, background: '#F4F1EA', minHeight: '100%' }}>
+      <div style={{ padding: '32px 40px 24px', borderBottom: '1px solid #EDE8DC' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#6B6360' }}>
-              From
-            </label>
-            <input
-              type="date"
-              value={filters.fromDate}
-              onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid #D9D1C3',
-                borderRadius: 6,
-                fontSize: 13,
-                background: '#FFFFFF',
-              }}
-            />
+            <h1 style={{ fontSize: 32, lineHeight: 1.1, fontWeight: 700, color: '#2D2A22', margin: 0 }}>Activity Log</h1>
           </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#6B6360' }}>
-              To
-            </label>
-            <input
-              type="date"
-              value={filters.toDate}
-              onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid #D9D1C3',
-                borderRadius: 6,
-                fontSize: 13,
-                background: '#FFFFFF',
-              }}
-            />
-          </div>
-
-          {role === 'super_admin' && (
-            <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#6B6360' }}>
-                User
-              </label>
-              <select
-                value={filters.userId}
-                onChange={(e) => setFilters({ ...filters, userId: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #D9D1C3',
-                  borderRadius: 6,
-                  fontSize: 13,
-                  background: '#FFFFFF',
-                }}
-              >
-                <option value="">All Users</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#6B6360' }}>
-              Action
-            </label>
-            <select
-              value={filters.action}
-              onChange={(e) => setFilters({ ...filters, action: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid #D9D1C3',
-                borderRadius: 6,
-                fontSize: 13,
-                background: '#FFFFFF',
-              }}
-            >
-              <option value="">All Actions</option>
-              {actions.map((a) => (
-                <option key={a} value={a}>
-                  {ACTION_LABELS[a] || a}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#6B6360' }}>
-              Entity Type
-            </label>
-            <select
-              value={filters.entityType}
-              onChange={(e) => setFilters({ ...filters, entityType: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid #D9D1C3',
-                borderRadius: 6,
-                fontSize: 13,
-                background: '#FFFFFF',
-              }}
-            >
-              {entityTypes.map((t) => (
-                <option key={t} value={t}>
-                  {ENTITY_TYPE_LABELS[t] || t}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <button
-            onClick={applyFilters}
-            style={{
-              padding: '8px 16px',
-              background: '#4C2A92',
-              color: '#FFFFFF',
-              border: 'none',
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Apply
-          </button>
-
-          <button
-            onClick={clearFilters}
-            style={{
-              padding: '8px 16px',
-              background: 'transparent',
-              color: '#4C2A92',
-              border: '1px solid #D9D1C3',
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-
-      <div style={{ flex: 1, padding: '24px 40px', overflow: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <span style={{ fontSize: 13, color: '#6B6360' }}>
-            Showing {logs.length === 0 ? 0 : startIdx + 1}–{endIdx} of {logs.length} entries
-          </span>
-          <button
+            type="button"
             onClick={handleExportCSV}
-            disabled={exporting || logs.length === 0}
+            disabled={exporting || loading}
             style={{
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
               gap: 8,
-              padding: '8px 16px',
-              background: exporting ? '#E9E4D8' : '#FFFFFF',
-              color: exporting ? '#9E9488' : '#4C2A92',
+              padding: '10px 14px',
+              borderRadius: 8,
               border: '1px solid #D9D1C3',
-              borderRadius: 6,
+              background: '#FFFFFF',
+              color: '#4C2A92',
               fontSize: 13,
-              fontWeight: 600,
-              cursor: exporting ? 'default' : 'pointer',
+              fontWeight: 700,
+              cursor: exporting || loading ? 'default' : 'pointer',
+              opacity: exporting || loading ? 0.7 : 1,
             }}
           >
             <Download size={14} />
@@ -423,194 +314,232 @@ export default function ActivityLogPage() {
           </button>
         </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, alignItems: 'end' }}>
+          <div>
+            <label htmlFor="activity-from-date" style={labelStyle}>From</label>
+            <input
+              id="activity-from-date"
+              type="date"
+              value={filters.fromDate}
+              onChange={(event) => setFilters((current) => ({ ...current, fromDate: event.target.value }))}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label htmlFor="activity-to-date" style={labelStyle}>To</label>
+            <input
+              id="activity-to-date"
+              type="date"
+              value={filters.toDate}
+              onChange={(event) => setFilters((current) => ({ ...current, toDate: event.target.value }))}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label htmlFor="activity-user" style={labelStyle}>User</label>
+            <select
+              id="activity-user"
+              value={filters.userId}
+              onChange={(event) => setFilters((current) => ({ ...current, userId: event.target.value }))}
+              style={inputStyle}
+            >
+              <option value="">All users</option>
+              {users.map((entry) => (
+                <option key={entry.id} value={entry.id}>{entry.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="activity-action" style={labelStyle}>Action type</label>
+            <select
+              id="activity-action"
+              value={filters.action}
+              onChange={(event) => setFilters((current) => ({ ...current, action: event.target.value }))}
+              style={inputStyle}
+            >
+              <option value="">All actions</option>
+              {actions.map((action) => (
+                <option key={action} value={action}>{getActivityActionLabel(action)}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="activity-entity" style={labelStyle}>Entity type</label>
+            <select
+              id="activity-entity"
+              value={filters.entityType}
+              onChange={(event) => setFilters((current) => ({ ...current, entityType: event.target.value }))}
+              style={inputStyle}
+            >
+              {ACTIVITY_ENTITY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={applyFilters}
+            style={{
+              padding: '10px 14px',
+              background: '#4C2A92',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Apply filters
+          </button>
+          <button
+            type="button"
+            onClick={clearFilters}
+            style={{
+              padding: '10px 0',
+              background: 'transparent',
+              color: '#4C2A92',
+              border: 'none',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <div style={{ padding: '24px 40px 36px' }}>
+        <div style={{ marginBottom: 16, fontSize: 13, color: '#6B6360' }}>
+          Showing {startIndex}-{endIndex} of {totalCount} entries
+        </div>
+
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#9E9488' }}>Loading...</div>
-        ) : logs.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#9E9488' }}>
+          <div style={{ padding: 40, textAlign: 'center', color: '#9E9488' }}>Loading...</div>
+        ) : rows.length === 0 ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#9E9488', background: '#FFFFFF', border: '1px solid #EDE8DC', borderRadius: 12 }}>
             No activity log entries found.
           </div>
         ) : (
           <>
-            <table
-              style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                background: '#FFFFFF',
-                borderRadius: 8,
-                overflow: 'hidden',
-                border: '1px solid #EDE8DC',
-              }}
-            >
-              <thead>
-                <tr style={{ background: '#F4F1EA', borderBottom: '1px solid #EDE8DC' }}>
-                  <th
-                    style={{
-                      padding: '12px 16px',
-                      textAlign: 'left',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: '#2D2A22',
-                      width: '25%',
-                    }}
-                  >
-                    Actor
-                  </th>
-                  <th
-                    style={{
-                      padding: '12px 16px',
-                      textAlign: 'left',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: '#2D2A22',
-                      width: '25%',
-                    }}
-                  >
-                    Action
-                  </th>
-                  <th
-                    style={{
-                      padding: '12px 16px',
-                      textAlign: 'left',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: '#2D2A22',
-                      width: '25%',
-                    }}
-                  >
-                    Entity
-                  </th>
-                  <th
-                    style={{
-                      padding: '12px 16px',
-                      textAlign: 'left',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: '#2D2A22',
-                      width: '25%',
-                    }}
-                  >
-                    Date & Time
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageLogsData.map((log) => (
-                  <tr
-                    key={log.id}
-                    style={{
-                      borderBottom: '1px solid #EDE8DC',
-                      background: '#FFFFFF',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#F9F7F1' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = '#FFFFFF' }}
-                  >
-                    <td style={{ padding: '12px 16px', fontSize: 13, color: '#2D2A22' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div
-                          style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: '50%',
-                            background: '#4C2A92',
-                            color: '#FFFFFF',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 11,
-                            fontWeight: 700,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {getInitials(log.user?.name)}
-                        </div>
-                        <span>{log.user?.name || 'Unknown'}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: 13, color: '#2D2A22' }}>
-                      {ACTION_LABELS[log.action] || log.action}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: 13, color: '#2D2A22' }}>
-                      {ENTITY_TYPE_LABELS[log.entity_type] || log.entity_type}
-                      {log.entity_id && ` · ${log.entity_id.slice(0, 8)}...`}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: 13, color: '#2D2A22' }}>
-                      {formatDateTime(log.timestamp)}
-                    </td>
+            <div style={{ overflow: 'hidden', borderRadius: 12, border: '1px solid #EDE8DC', background: '#FFFFFF' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#F4F1EA', borderBottom: '1px solid #EDE8DC' }}>
+                    <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#2D2A22' }}>Actor</th>
+                    <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#2D2A22' }}>Action</th>
+                    <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#2D2A22' }}>Entity</th>
+                    <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#2D2A22' }}>Date &amp; time</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {rows.map((entry) => {
+                    const entityPath = getActivityEntityPath(entry)
+                    return (
+                      <tr key={entry.id} style={{ borderBottom: '1px solid #EDE8DC' }}>
+                        <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 999,
+                                background: '#4C2A92',
+                                color: '#FFFFFF',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {getActivityInitials(entry.user?.name ?? '')}
+                            </div>
+                            <span>{entry.user?.name ?? 'Unknown'}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>
+                          {getActivityActionLabel(entry.action)}
+                        </td>
+                        <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>
+                          {entityPath ? (
+                            <Link to={entityPath} style={{ color: '#4C2A92', textDecoration: 'underline' }}>
+                              {getActivityEntityText(entry)}
+                            </Link>
+                          ) : (
+                            getActivityEntityText(entry)
+                          )}
+                        </td>
+                        <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>
+                          {formatActivityDateTime(entry.timestamp)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-            {pageCount > 1 && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  marginTop: 24,
-                }}
-              >
+            {pageCount > 1 ? (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 24, flexWrap: 'wrap' }}>
                 <button
-                  onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
-                  disabled={pagination.page === 1}
+                  type="button"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page === 1}
                   style={{
-                    width: 32,
-                    height: 32,
+                    width: 34,
+                    height: 34,
+                    borderRadius: 8,
                     border: '1px solid #D9D1C3',
-                    background: pagination.page === 1 ? '#F4F1EA' : '#FFFFFF',
-                    borderRadius: 4,
-                    cursor: pagination.page === 1 ? 'default' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: pagination.page === 1 ? '#B0A696' : '#2D2A22',
+                    background: '#FFFFFF',
+                    color: page === 1 ? '#B0A696' : '#2D2A22',
+                    cursor: page === 1 ? 'default' : 'pointer',
                   }}
                 >
                   <ChevronLeft size={16} />
                 </button>
-
-                {Array.from({ length: pageCount }, (_, i) => i + 1).map((pageNum) => (
+                {pageNumbers.map((pageNumber) => (
                   <button
-                    key={pageNum}
-                    onClick={() => setPagination({ ...pagination, page: pageNum })}
+                    key={pageNumber}
+                    type="button"
+                    onClick={() => setPage(pageNumber)}
                     style={{
-                      minWidth: 32,
-                      height: 32,
-                      border:
-                        pageNum === pagination.page ? '1px solid #4C2A92' : '1px solid #D9D1C3',
-                      background: pageNum === pagination.page ? '#EDE8F8' : '#FFFFFF',
-                      borderRadius: 4,
-                      cursor: 'pointer',
+                      minWidth: 34,
+                      height: 34,
+                      padding: '0 10px',
+                      borderRadius: 8,
+                      border: `1px solid ${pageNumber === page ? '#4C2A92' : '#D9D1C3'}`,
+                      background: pageNumber === page ? '#EDE8F8' : '#FFFFFF',
+                      color: pageNumber === page ? '#4C2A92' : '#2D2A22',
                       fontSize: 13,
-                      fontWeight: 600,
-                      color: pageNum === pagination.page ? '#4C2A92' : '#2D2A22',
+                      fontWeight: 700,
+                      cursor: 'pointer',
                     }}
                   >
-                    {pageNum}
+                    {pageNumber}
                   </button>
                 ))}
-
                 <button
-                  onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
-                  disabled={pagination.page === pageCount}
+                  type="button"
+                  onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                  disabled={page === pageCount}
                   style={{
-                    width: 32,
-                    height: 32,
+                    width: 34,
+                    height: 34,
+                    borderRadius: 8,
                     border: '1px solid #D9D1C3',
-                    background: pagination.page === pageCount ? '#F4F1EA' : '#FFFFFF',
-                    borderRadius: 4,
-                    cursor: pagination.page === pageCount ? 'default' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: pagination.page === pageCount ? '#B0A696' : '#2D2A22',
+                    background: '#FFFFFF',
+                    color: page === pageCount ? '#B0A696' : '#2D2A22',
+                    cursor: page === pageCount ? 'default' : 'pointer',
                   }}
                 >
                   <ChevronRight size={16} />
                 </button>
               </div>
-            )}
+            ) : null}
           </>
         )}
       </div>

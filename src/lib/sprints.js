@@ -1,6 +1,10 @@
 import { supabase } from './supabase'
 import { normalizeTaskRows } from './taskStatuses'
 
+const SPRINT_TEAM_SELECT = 'id, sprint_id, name, description, lead_user_id, created_at'
+const SPRINT_MEMBER_SELECT = 'id, sprint_id, user_id, role, joined_at, created_at'
+const SPRINT_REVIEW_SELECT = 'id, sprint_id, completed_at, completed_by, overall_summary, team_feedback, lessons_learned, goals_achieved, outstanding_items, wins_testimonies, recommendations, final_decisions, final_attachments, reviewed_at, created_at'
+
 function sortByCreatedAtDesc(items = []) {
   return [...items].sort((a, b) => new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0))
 }
@@ -62,13 +66,13 @@ export async function getSprintDetail(sprintId) {
   }
 
   const [teamsRes, membersRes] = await Promise.all([
-    supabase.from('sprint_teams').select('*').eq('sprint_id', actualSprintId).order('created_at'),
-    supabase.from('sprint_members').select('*').eq('sprint_id', actualSprintId).order('joined_at'),
+    supabase.from('sprint_teams').select(SPRINT_TEAM_SELECT).eq('sprint_id', actualSprintId).order('created_at'),
+    supabase.from('sprint_members').select(SPRINT_MEMBER_SELECT).eq('sprint_id', actualSprintId).order('joined_at'),
   ])
   if (teamsRes.error) throw teamsRes.error
   if (membersRes.error) throw membersRes.error
 
-  const reviewRes = await supabase.from('sprint_reviews').select('*').eq('sprint_id', actualSprintId).maybeSingle().catch(() => ({ data: null }))
+  const reviewRes = await supabase.from('sprint_reviews').select(SPRINT_REVIEW_SELECT).eq('sprint_id', actualSprintId).maybeSingle().catch(() => ({ data: null }))
 
   const members = membersRes.data ?? []
 
@@ -84,7 +88,7 @@ export async function createSprint(data, createdBy) {
   const { data: sprint, error } = await supabase
     .from('sprints')
     .insert({ ...data, created_by: createdBy })
-    .select()
+    .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by')
     .single()
 
   if (error) throw error
@@ -106,7 +110,7 @@ export async function updateSprint(sprintId, updates) {
     .from('sprints')
     .update(updates)
     .eq('id', sprintId)
-    .select()
+    .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by')
     .single()
 
   if (error) throw error
@@ -203,7 +207,7 @@ export async function createSprintTeam(sprintId, name, description, leadUserId =
   const { data, error } = await supabase
     .from('sprint_teams')
     .insert({ sprint_id: sprintId, name, description, lead_user_id: leadUserId })
-    .select()
+    .select(SPRINT_TEAM_SELECT)
     .single()
 
   if (error) throw error
@@ -215,7 +219,7 @@ export async function updateSprintTeam(teamId, updates) {
     .from('sprint_teams')
     .update(updates)
     .eq('id', teamId)
-    .select()
+    .select(SPRINT_TEAM_SELECT)
     .single()
 
   if (error) throw error
@@ -233,7 +237,7 @@ export async function addSprintMember(sprintId, userId, role = 'contributor', te
   const { data, error } = await supabase
     .from('sprint_members')
     .insert({ sprint_id: sprintId, user_id: userId, role })
-    .select()
+    .select(SPRINT_MEMBER_SELECT)
     .single()
 
   if (error) throw error
@@ -277,7 +281,7 @@ export async function updateSprintMemberRole(sprintId, userId, role) {
     .update({ role })
     .eq('sprint_id', sprintId)
     .eq('user_id', userId)
-    .select()
+    .select(SPRINT_MEMBER_SELECT)
     .single()
 
   if (error) throw error
@@ -290,7 +294,7 @@ export async function updateSprintMember(sprintId, userId, updates) {
     .update(updates)
     .eq('sprint_id', sprintId)
     .eq('user_id', userId)
-    .select()
+    .select(SPRINT_MEMBER_SELECT)
     .single()
 
   if (error) throw error
@@ -319,7 +323,7 @@ export async function updateSprintMemberTeams(sprintId, userId, teamIds = []) {
         user_id: userId,
       })),
     )
-    .select()
+    .select('id, sprint_id, sprint_team_id, user_id')
 
   if (error) throw error
   return data ?? []
@@ -391,7 +395,7 @@ export async function saveSprintReview(sprintId, reviewData, completedBy) {
       },
       { onConflict: 'sprint_id' },
     )
-    .select()
+    .select(SPRINT_REVIEW_SELECT)
     .single()
 
   if (error) throw error

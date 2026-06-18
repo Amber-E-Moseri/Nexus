@@ -24,7 +24,7 @@ function GoogleDriveCard({ spaceId, canManage }) {
   async function loadIntegration() {
     const { data } = await supabase
       .from('space_integrations')
-      .select('*')
+      .select('id, department_id, integration_type, display_name, config, is_active')
       .eq('department_id', spaceId)
       .eq('integration_type', 'google_drive')
       .maybeSingle()
@@ -215,7 +215,7 @@ function ZoomCard({ spaceId, canManage }) {
   async function loadIntegration() {
     const { data } = await supabase
       .from('space_integrations')
-      .select('*')
+      .select('id, department_id, integration_type, display_name, config, is_active')
       .eq('department_id', spaceId)
       .eq('integration_type', 'zoom')
       .maybeSingle()

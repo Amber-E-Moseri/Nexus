@@ -187,7 +187,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
 
   useEffect(() => {
     loadPageData()
-  }, [deptId, role, profile?.department_id])
+  }, [loadPageData])
 
   useEffect(() => {
     if (activeTab === 'webhooks') {

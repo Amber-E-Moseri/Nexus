@@ -12,6 +12,12 @@ const MUTED   = '#9E9488'
 const BG      = '#F4F1EA'
 const SUCCESS = '#2D6A4F'
 const ERROR   = '#C94830'
+const CAMPAIGN_SELECT = 'id, name, status, sent_at, scheduled_at, recipient_count, sent_count, open_count, failed_count'
+const SEND_SELECT = 'id, campaign_id, recipient_email, recipient_name, status, opened_at, error_message, created_at'
+const AB_TEST_SELECT = 'id, campaign_id, subject_a, subject_b, split_percent, metric, test_duration_hours, winner_subject, open_rate_a, open_rate_b'
+const CLICK_SELECT = 'id, campaign_id, link_url, click_count, clicker_email, clicked_at'
+const BOUNCE_SELECT = 'id, campaign_id, bounced_email, bounce_type, bounced_at'
+const UNSUBSCRIBE_SELECT = 'id, unsubscribed_via, unsubscribed_at'
 
 function StatTile({ label, value, sub, color, flash }) {
   return (
@@ -86,10 +92,10 @@ function CampaignDrilldown({ campaign }) {
     setWinnerMsg(null)
 
     Promise.all([
-      supabase.from('communication_sends').select('*').eq('campaign_id', campaign.id).order('created_at'),
-      supabase.from('communication_ab_tests').select('*').eq('campaign_id', campaign.id).maybeSingle(),
-      supabase.from('campaign_link_clicks').select('*').eq('campaign_id', campaign.id).catch(() => ({ data: [] })),
-      supabase.from('email_bounces').select('*').eq('campaign_id', campaign.id).catch(() => ({ data: [] })),
+      supabase.from('communication_sends').select(SEND_SELECT).eq('campaign_id', campaign.id).order('created_at'),
+      supabase.from('communication_ab_tests').select(AB_TEST_SELECT).eq('campaign_id', campaign.id).maybeSingle(),
+      supabase.from('campaign_link_clicks').select(CLICK_SELECT).eq('campaign_id', campaign.id).catch(() => ({ data: [] })),
+      supabase.from('email_bounces').select(BOUNCE_SELECT).eq('campaign_id', campaign.id).catch(() => ({ data: [] })),
     ]).then(([sendsRes, abRes, clicksRes, bouncesRes]) => {
       setSends(sendsRes.data ?? [])
       setAbTest(abRes.data ?? null)
@@ -573,8 +579,8 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('communication_campaigns').select('*').order('sent_at', { ascending: false }),
-      supabase.from('communication_unsubscribes').select('*').order('unsubscribed_at', { ascending: false }),
+      supabase.from('communication_campaigns').select(CAMPAIGN_SELECT).order('sent_at', { ascending: false }),
+      supabase.from('communication_unsubscribes').select(UNSUBSCRIBE_SELECT).order('unsubscribed_at', { ascending: false }),
     ]).then(([campRes, unsubRes]) => {
       setCampaigns(campRes.data ?? [])
       setUnsubscribes(unsubRes.data ?? [])

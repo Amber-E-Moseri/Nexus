@@ -56,7 +56,7 @@ export default function SegmentsPage() {
     setLoading(true)
     const { data } = await supabase
       .from('communication_segments')
-      .select('*')
+      .select('id, name, description, filters, estimated_count, created_at')
       .order('created_at', { ascending: false })
     setSegments(data ?? [])
     setLoading(false)

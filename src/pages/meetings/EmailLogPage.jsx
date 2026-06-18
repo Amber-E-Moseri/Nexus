@@ -50,6 +50,7 @@ const FILTER_OPTIONS = [
   { value: '30', label: 'Last 30 days' },
   { value: 'all', label: 'All' },
 ]
+const EMAIL_LOG_SELECT = 'id, recipient_name, recipient_email, subject, status, report_id, sent_by, error_message, sent_at'
 
 function startOfMonth(date = new Date()) {
   return new Date(date.getFullYear(), date.getMonth(), 1)
@@ -114,7 +115,7 @@ export default function EmailLogPage() {
       const [{ data: logs, error: logError }, { data: users, error: userError }] = await Promise.all([
         supabase
           .from('absence_email_log')
-          .select('*')
+          .select(EMAIL_LOG_SELECT)
           .order('sent_at', { ascending: false })
           .limit(200),
         supabase.from('users').select('id, name, email'),

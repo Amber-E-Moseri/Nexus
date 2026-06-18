@@ -1,32 +1,8 @@
 import { useEffect, useState } from 'react'
 import { formatDistanceToNow, parseISO } from 'date-fns'
 import { useNavigate } from 'react-router-dom'
+import { getActivityActionLabel, getActivityEntityText, getActivityInitials } from '../../lib/activityLog'
 import { supabase } from '../../lib/supabase'
-
-const ACTION_LABELS = {
-  task_created: 'created task',
-  task_status_changed: 'updated status of task',
-  task_assigned: 'assigned task',
-  meeting_created: 'created meeting',
-  invitation_created: 'invited',
-  user_activated: 'joined the org',
-  user_status_changed: 'updated member status',
-  department_membership_changed: 'transferred to department',
-  pastor_assignment_changed: 'updated pastoral assignment',
-}
-
-function getActionLabel(action) {
-  return ACTION_LABELS[action] || action
-}
-
-function initials(name = '') {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map(w => w[0]?.toUpperCase() ?? '')
-    .join('') || '?'
-}
 
 export default function ActivityFeedWidget({ role, userId, departmentId }) {
   const navigate = useNavigate()
@@ -114,7 +90,7 @@ export default function ActivityFeedWidget({ role, userId, departmentId }) {
       {activities.slice(0, 15).map((activity) => {
         const actor = activity.users
         const actorName = actor?.name ?? 'Unknown'
-        const actionLabel = getActionLabel(activity.action)
+        const actionLabel = getActivityActionLabel(activity.action)
         const isClickable =
           (activity.entity_type === 'task' && activity.entity_id) ||
           (activity.entity_type === 'meeting' && activity.entity_id)
@@ -136,7 +112,7 @@ export default function ActivityFeedWidget({ role, userId, departmentId }) {
                 flexShrink: 0,
               }}
             >
-              {initials(actorName)}
+              {getActivityInitials(actorName)}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, color: '#2D2A22', lineHeight: 1.4 }}>
@@ -157,15 +133,11 @@ export default function ActivityFeedWidget({ role, userId, departmentId }) {
                       fontSize: 13,
                     }}
                   >
-                    {activity.entity_id
-                      ? `${activity.entity_type} #${activity.entity_id.slice(0, 8)}`
-                      : activity.entity_type}
+                    {getActivityEntityText(activity)}
                   </button>
                 ) : (
                   <span style={{ fontWeight: 600 }}>
-                    {activity.entity_id
-                      ? `${activity.entity_type} #${activity.entity_id.slice(0, 8)}`
-                      : activity.entity_type}
+                    {getActivityEntityText(activity)}
                   </span>
                 )}
               </div>

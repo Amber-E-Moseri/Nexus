@@ -7,6 +7,12 @@ import { createNotification } from '../../lib/notifications'
 import { getMySpaces, SPACE_TYPE_ICONS } from '../../lib/spaces'
 import { getSprintMembers } from '../../lib/sprints'
 import { supabase } from '../../lib/supabase'
+import {
+  formatActivityDateTime,
+  formatActivityRelativeTime,
+  getActivityActionLabel,
+  getActivityInitials,
+} from '../../lib/activityLog'
 import { normalizeTaskFieldSettings } from '../../lib/taskFieldSettings'
 import { createTask, deleteTask, getTaskBlockers, updateTask } from '../../lib/tasks'
 import {
@@ -98,28 +104,15 @@ function TaskActivityLog({ taskId }) {
               flexShrink: 0,
             }}
           >
-            {(log.user?.name ?? '?')
-              .split(/\s+/)
-              .slice(0, 2)
-              .map((p) => p.charAt(0).toUpperCase())
-              .join('')}
+            {getActivityInitials(log.user?.name ?? '?')}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>
-              {log.user?.name || 'Unknown'}
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-              {log.action.replace(/_/g, ' ')}
+            <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.45 }}>
+              <span style={{ fontWeight: 600 }}>{log.user?.name || 'Unknown'}</span>{' '}
+              <span>{getActivityActionLabel(log.action)}</span>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
-              {new Date(log.timestamp).toLocaleString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true,
-              })}
+              {formatActivityRelativeTime(log.timestamp)} · {formatActivityDateTime(log.timestamp)}
             </div>
           </div>
         </div>

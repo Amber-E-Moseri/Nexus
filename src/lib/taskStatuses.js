@@ -225,12 +225,12 @@ export async function archiveTaskStatus(statusId) {
 }
 
 export async function reorderTaskStatuses(statuses = []) {
+  const updates = statuses.map((status, index) => ({
+    id: status.id,
+    sort_order: index + 1,
+  }))
   const { error } = await supabase
-    .from('task_status_definitions')
-    .upsert(
-      statuses.map((status, index) => ({ id: status.id, sort_order: index + 1 })),
-      { onConflict: 'id' }
-    )
+    .rpc('reorder_task_statuses', { p_status_updates: JSON.stringify(updates) })
 
   if (error) throw error
 }

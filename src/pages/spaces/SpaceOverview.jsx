@@ -23,8 +23,17 @@ import TaskModal from '../../modules/tasks/TaskModal'
 import { TasksProvider, useTasks } from '../../modules/tasks/TasksContext'
 import { useTaskFilters } from '../../modules/tasks/useTaskFilters'
 import { mergeTaskFieldSettings, normalizeTaskFieldSettings, TASK_FIELD_OPTIONS } from '../../lib/taskFieldSettings'
+import {
+  formatActivityDateTime,
+  formatActivityRelativeTime,
+  getActivityActionLabel,
+  getActivityEntityPath,
+  getActivityEntityText,
+  getActivityInitials,
+} from '../../lib/activityLog'
+import FileList from '../../components/files/FileList'
 
-const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Sprints', 'Activity', 'Automations', 'Members', 'Integrations', 'Settings']
+const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Sprints', 'Activity', 'Files', 'Automations', 'Members', 'Integrations', 'Settings']
 
 const STATUS_ACCENT = {
   open: '#C9BEAD',
@@ -933,28 +942,22 @@ function SpaceActivityTab({ departmentId }) {
                   flexShrink: 0,
                 }}
               >
-                {(log.user?.name ?? '?')
-                  .split(/\s+/)
-                  .slice(0, 2)
-                  .map((p) => p.charAt(0).toUpperCase())
-                  .join('')}
+                {getActivityInitials(log.user?.name ?? '?')}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
-                  {log.user?.name || 'Unknown'}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
-                  {log.action.replace(/_/g, ' ')} · {log.entity_type}
+                <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.45 }}>
+                  <span style={{ fontWeight: 600 }}>{log.user?.name || 'Unknown'}</span>{' '}
+                  <span>{getActivityActionLabel(log.action)}</span>{' '}
+                  {getActivityEntityPath(log) ? (
+                    <Link to={getActivityEntityPath(log)} className="text-[var(--accent)] underline">
+                      {getActivityEntityText(log)}
+                    </Link>
+                  ) : (
+                    <span>{getActivityEntityText(log)}</span>
+                  )}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
-                  {new Date(log.timestamp).toLocaleString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true,
-                  })}
+                  {formatActivityRelativeTime(log.timestamp)} · {formatActivityDateTime(log.timestamp)}
                 </div>
               </div>
             </div>
@@ -1238,6 +1241,7 @@ export default function SpaceOverview() {
       ) : null}
       {activeTab === 'Sprints' ? <div role="tabpanel" id="tabpanel-sprints" aria-labelledby="tab-sprints" tabIndex={0}><SpaceSprintsTab canManage={canManage} sprints={spaceSprints} spaceColor={space.color} onCreate={() => setShowSprintModal(true)} onOpen={(sprint) => navigate(`/sprints/${sprint.id}`)} /></div> : null}
       {activeTab === 'Activity' ? <div role="tabpanel" id="tabpanel-activity" aria-labelledby="tab-activity" tabIndex={0}><SpaceActivityTab departmentId={spaceId} /></div> : null}
+      {activeTab === 'Files' ? <div role="tabpanel" id="tabpanel-files" aria-labelledby="tab-files" tabIndex={0}><div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]"><FileList entityType="space" entityId={spaceId} showUpload={true} /></div></div> : null}
       {activeTab === 'Automations' ? <div role="tabpanel" id="tabpanel-automations" aria-labelledby="tab-automations" tabIndex={0}><SpaceAutomationsTab space={space} canManage={canManageStatuses} /></div> : null}
       {activeTab === 'Members' ? <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}><SpaceMembersTab members={spaceMembers} /></div> : null}
       {activeTab === 'Integrations' && canManage ? <div role="tabpanel" id="tabpanel-integrations" aria-labelledby="tab-integrations" tabIndex={0}><SpaceIntegrationsTab spaceId={spaceId} canManage={canManage} /></div> : null}

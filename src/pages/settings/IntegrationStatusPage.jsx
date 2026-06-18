@@ -259,7 +259,7 @@ export default function IntegrationStatusPage() {
     try {
       const { data: integrationRows, error: intError } = await supabase
         .from('space_integrations')
-        .select('*')
+        .select('id, department_id, integration_type, display_name, description, config, is_active, last_synced_at, created_at')
         .order('created_at', { ascending: false })
 
       if (intError) throw intError

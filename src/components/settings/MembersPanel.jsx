@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import Avatar from '../ui/Avatar'
-import Badge from '../ui/Badge'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../context/ToastContext'
-import { supabase } from '../../lib/supabase'
-import { listUsers, listInvitations, listDepartments } from '../../lib/people/api'
-import { deactivateUser, reactivateUser, updateUserRole, revokeInvitation } from '../../lib/users'
+import {
+  createInvitation,
+  listDepartments,
+  listInvitations,
+  listUsers,
+  resendInvitation,
+  sendInvitationEmail,
+  updateUserMembership,
+} from '../../lib/people/api'
 
 const ROLE_LABELS = {
   super_admin: 'Super Admin',
@@ -14,558 +18,516 @@ const ROLE_LABELS = {
   member: 'Member',
 }
 
-const ROLE_TONES = {
-  super_admin: { bg: '#EFE7FF', text: '#6B3FD4' },
-  dept_lead: { bg: '#E8EEFF', text: '#2E5BCE' },
-  pastor: { bg: '#FFF0D9', text: '#C47E0A' },
-  member: { bg: '#F4EFE8', text: '#8A6F47' },
+const STATUS_TABS = ['Active', 'Inactive', 'Pending']
+
+function getInitials(name = '', email = '') {
+  const source = name || email || '?'
+  return source
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('') || '?'
 }
 
-const STATUS_TONES = {
-  active: { bg: '#E7F8ED', text: '#2D8653', border: '#A6E2BB' },
-  deactivated: { bg: '#FDEBE6', text: '#C94830', border: '#F3B6A8' },
-  pending: { bg: '#FFF2D9', text: '#C47E0A', border: '#F1C46D' },
+function debounceText(value) {
+  return value.trim().toLowerCase()
 }
 
-function roleTone(role) {
-  return ROLE_TONES[role] ?? { bg: '#F4EFE8', text: '#8A6F47' }
-}
+function InviteMemberModal({ departments, pastors, initialDepartmentId, role, saving, onClose, onSubmit }) {
+  const [form, setForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    departmentId: role === 'dept_lead' ? (initialDepartmentId ?? '') : '',
+    role: 'member',
+    assignedPastorId: '',
+    message: '',
+  })
 
-function statusTone(status) {
-  return STATUS_TONES[status] ?? { bg: '#F4F1EA', text: '#9E9488', border: '#E1D6C7' }
+  const scopedDepartments = role === 'dept_lead'
+    ? departments.filter((department) => department.id === initialDepartmentId)
+    : departments
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.45)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 60,
+        padding: 16,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          width: 'min(760px, 100%)',
+          background: '#FFFFFF',
+          borderRadius: 20,
+          border: '1px solid #EDE8DC',
+          boxShadow: '0 20px 45px rgba(45,42,34,0.16)',
+          padding: 24,
+        }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#2D2A22' }}>Invite member</div>
+            <div style={{ fontSize: 13, color: '#9E9488', marginTop: 4 }}>Send a new onboarding invitation.</div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ border: 'none', background: 'transparent', fontSize: 22, color: '#9E9488', cursor: 'pointer' }}
+            aria-label="Close invite member modal"
+          >
+            ×
+          </button>
+        </div>
+
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            onSubmit(form)
+          }}
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}
+        >
+          <input
+            required
+            value={form.firstName}
+            onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))}
+            placeholder="First name"
+            style={{ border: '1px solid #EDE8DC', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}
+          />
+          <input
+            required
+            value={form.lastName}
+            onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))}
+            placeholder="Last name"
+            style={{ border: '1px solid #EDE8DC', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}
+          />
+          <input
+            required
+            type="email"
+            value={form.email}
+            onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+            placeholder="Email address"
+            style={{ border: '1px solid #EDE8DC', borderRadius: 10, padding: '10px 12px', fontSize: 13, gridColumn: '1 / -1' }}
+          />
+          <select
+            required
+            disabled={role === 'dept_lead'}
+            value={form.departmentId}
+            onChange={(event) => setForm((current) => ({ ...current, departmentId: event.target.value, assignedPastorId: '' }))}
+            style={{ border: '1px solid #EDE8DC', borderRadius: 10, padding: '10px 12px', fontSize: 13, background: role === 'dept_lead' ? '#F9F7F1' : '#FFFFFF' }}
+          >
+            <option value="">Select department</option>
+            {scopedDepartments.map((department) => (
+              <option key={department.id} value={department.id}>{department.name}</option>
+            ))}
+          </select>
+          <select
+            required
+            disabled={role !== 'super_admin'}
+            value={form.role}
+            onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}
+            style={{ border: '1px solid #EDE8DC', borderRadius: 10, padding: '10px 12px', fontSize: 13, background: role !== 'super_admin' ? '#F9F7F1' : '#FFFFFF' }}
+          >
+            <option value="member">Member</option>
+            {role === 'super_admin' ? (
+              <>
+                <option value="pastor">Pastor</option>
+                <option value="dept_lead">Department Lead</option>
+                <option value="super_admin">Super Admin</option>
+              </>
+            ) : null}
+          </select>
+          <select
+            value={form.assignedPastorId}
+            onChange={(event) => setForm((current) => ({ ...current, assignedPastorId: event.target.value }))}
+            style={{ border: '1px solid #EDE8DC', borderRadius: 10, padding: '10px 12px', fontSize: 13, gridColumn: '1 / -1' }}
+          >
+            <option value="">Assigned pastor (optional)</option>
+            {pastors
+              .filter((pastor) => pastor.department_id === form.departmentId)
+              .map((pastor) => (
+                <option key={pastor.id} value={pastor.id}>{pastor.name}</option>
+              ))}
+          </select>
+          <textarea
+            value={form.message}
+            onChange={(event) => setForm((current) => ({ ...current, message: event.target.value }))}
+            placeholder="Optional welcome message"
+            rows={4}
+            style={{ border: '1px solid #EDE8DC', borderRadius: 10, padding: '10px 12px', fontSize: 13, gridColumn: '1 / -1', resize: 'vertical' }}
+          />
+          <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{ border: '1px solid #EDE8DC', background: '#FFFFFF', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              style={{ border: 'none', background: '#4C2A92', color: '#FFFFFF', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}
+            >
+              {saving ? 'Sending...' : 'Send invitation'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
 }
 
 export default function MembersPanel() {
-  const { profile, role, refreshProfile } = useAuth()
+  const { profile, role } = useAuth()
   const { showToast } = useToast()
   const [users, setUsers] = useState([])
   const [invitations, setInvitations] = useState([])
   const [departments, setDepartments] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [confirmAction, setConfirmAction] = useState(null)
-
-  const canDeactivate = role === 'super_admin' || role === 'owner'
-  const canChangeRoles = role === 'super_admin' || role === 'owner'
-  const canAssignAdmin = role === 'super_admin'
-
-  const departmentMap = useMemo(
-    () => new Map(departments.map((d) => [d.id, d])),
-    [departments]
-  )
-
-  const members = useMemo(() => {
-    const active = users
-      .filter((u) => !u.deactivated_at)
-      .map((u) => ({
-        ...u,
-        type: 'user',
-        status: 'active',
-        displayName: u.name,
-        displayEmail: u.email,
-      }))
-
-    const deactivated = users
-      .filter((u) => u.deactivated_at)
-      .map((u) => ({
-        ...u,
-        type: 'user',
-        status: 'deactivated',
-        displayName: u.name,
-        displayEmail: u.email,
-      }))
-
-    const pending = invitations
-      .filter((i) => i.status === 'pending')
-      .map((i) => ({
-        ...i,
-        type: 'invitation',
-        status: 'pending',
-        displayName: `${i.first_name} ${i.last_name}`.trim(),
-        displayEmail: i.email,
-      }))
-
-    return {
-      active,
-      deactivated,
-      pending,
-    }
-  }, [users, invitations])
+  const [activeTab, setActiveTab] = useState('Active')
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [showInviteModal, setShowInviteModal] = useState(false)
 
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true)
-      try {
-        const [nextUsers, nextInvitations, nextDepartments] = await Promise.all([
-          listUsers(),
-          listInvitations(),
-          listDepartments(),
-        ])
-        setUsers(nextUsers)
-        setInvitations(nextInvitations)
-        setDepartments(nextDepartments)
-      } catch (error) {
-        showToast(error.message, { tone: 'error' })
-      } finally {
-        setLoading(false)
-      }
-    }
+    const timer = window.setTimeout(() => setDebouncedSearch(debounceText(search)), 300)
+    return () => window.clearTimeout(timer)
+  }, [search])
 
+  async function loadData() {
+    setLoading(true)
+    try {
+      const [nextUsers, nextInvitations, nextDepartments] = await Promise.all([
+        listUsers(),
+        listInvitations(),
+        listDepartments(),
+      ])
+      setUsers(nextUsers)
+      setInvitations(nextInvitations)
+      setDepartments(nextDepartments)
+    } catch (error) {
+      showToast(error.message, { tone: 'error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     loadData()
-  }, [showToast])
+  }, [])
 
-  const handleDeactivate = async (userId, userName) => {
-    if (userId === profile?.id) {
-      showToast('Cannot deactivate yourself', { tone: 'error' })
-      return
+  const scopedUsers = useMemo(() => {
+    if (role === 'dept_lead') {
+      return users.filter((entry) => entry.department_id === profile?.department_id)
     }
+    return users
+  }, [profile?.department_id, role, users])
 
-    setConfirmAction({
-      userId,
-      action: 'deactivate',
-      message: `Deactivate ${userName}? They will lose access immediately.`,
-      onConfirm: async () => {
-        setSaving(true)
-        try {
-          await deactivateUser(userId, profile.id)
-          showToast(`${userName} has been deactivated`, { tone: 'success' })
-          const nextUsers = await listUsers()
-          setUsers(nextUsers)
-        } catch (error) {
-          showToast(error.message, { tone: 'error' })
-        } finally {
-          setSaving(false)
-          setConfirmAction(null)
-        }
-      },
-    })
-  }
-
-  const handleReactivate = async (userId, userName) => {
-    setSaving(true)
-    try {
-      await reactivateUser(userId)
-      showToast(`${userName} has been reactivated`, { tone: 'success' })
-      const nextUsers = await listUsers()
-      setUsers(nextUsers)
-    } catch (error) {
-      showToast(error.message, { tone: 'error' })
-    } finally {
-      setSaving(false)
+  const scopedInvitations = useMemo(() => {
+    if (role === 'dept_lead') {
+      return invitations.filter((entry) => entry.department_id === profile?.department_id)
     }
-  }
+    return invitations
+  }, [invitations, profile?.department_id, role])
 
-  const handleRoleChange = async (userId, userName, newRole) => {
-    if (newRole === 'super_admin' && role !== 'super_admin') {
-      showToast('Cannot assign super_admin role', { tone: 'error' })
-      return
-    }
+  const departmentMap = useMemo(
+    () => new Map(departments.map((entry) => [entry.id, entry.name])),
+    [departments],
+  )
 
-    setSaving(true)
-    try {
-      await updateUserRole(userId, newRole)
-      showToast(`${userName}'s role updated to ${ROLE_LABELS[newRole]}`, { tone: 'success' })
-      const nextUsers = await listUsers()
-      setUsers(nextUsers)
-    } catch (error) {
-      showToast(error.message, { tone: 'error' })
-    } finally {
-      setSaving(false)
-    }
-  }
+  const pastors = useMemo(
+    () => scopedUsers.filter((entry) => entry.role === 'pastor' && entry.status === 'active'),
+    [scopedUsers],
+  )
 
-  const handleDepartmentChange = async (userId, userName, newDepartmentId) => {
-    setSaving(true)
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ department_id: newDepartmentId || null })
-        .eq('id', userId)
-      if (error) throw error
-      showToast(`${userName}'s department updated`, { tone: 'success' })
-      const nextUsers = await listUsers()
-      setUsers(nextUsers)
-    } catch (error) {
-      showToast(error.message, { tone: 'error' })
-    } finally {
-      setSaving(false)
-    }
-  }
+  const pendingInvitationByEmail = useMemo(() => {
+    const map = new Map()
+    scopedInvitations
+      .filter((entry) => entry.status === 'pending')
+      .forEach((entry) => map.set(entry.email.toLowerCase(), entry))
+    return map
+  }, [scopedInvitations])
 
-  const handleRevokeInvitation = async (invitationId, email) => {
-    setConfirmAction({
-      invitationId,
-      action: 'revoke',
-      message: `Revoke invitation to ${email}?`,
-      onConfirm: async () => {
-        setSaving(true)
-        try {
-          await revokeInvitation(invitationId)
-          showToast('Invitation revoked', { tone: 'success' })
-          const nextInvitations = await listInvitations()
-          setInvitations(nextInvitations)
-        } catch (error) {
-          showToast(error.message, { tone: 'error' })
-        } finally {
-          setSaving(false)
-          setConfirmAction(null)
-        }
-      },
-    })
-  }
+  const filteredUsers = useMemo(() => {
+    const source = activeTab === 'Inactive'
+      ? scopedUsers.filter((entry) => entry.status === 'inactive' || entry.status === 'archived')
+      : scopedUsers.filter((entry) => entry.status === 'active')
 
-  const getRoleOptions = () => {
-    if (role === 'super_admin') {
-      return ['member', 'pastor', 'dept_lead', 'super_admin']
-    }
-    if (role === 'owner') {
-      return ['member', 'contributor', 'viewer']
-    }
-    return []
-  }
+    if (!debouncedSearch) return source
 
-  const renderMemberRow = (member) => {
-    const department = departmentMap.get(member.department_id)
-    const statusBadge = statusTone(member.status)
-    const isDeactivated = member.status === 'deactivated'
-    const isPending = member.type === 'invitation'
-
-    return (
-      <tr
-        key={member.id}
-        className="border-t"
-        style={{ borderColor: 'var(--border)' }}
-      >
-        {/* Avatar & Name */}
-        <td style={{ padding: '16px', borderRight: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Avatar name={member.displayName} src={member.avatar_url} />
-            <div>
-              <div
-                style={{
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: isDeactivated ? '#9E9488' : 'var(--text-primary)',
-                  textDecoration: isDeactivated ? 'line-through' : 'none',
-                }}
-              >
-                {member.displayName}
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                {member.displayEmail}
-              </div>
-            </div>
-          </div>
-        </td>
-
-        {/* Department */}
-        <td
-          style={{
-            padding: '16px',
-            borderRight: '1px solid var(--border)',
-          }}
-        >
-          {canChangeRoles && !isPending && !isDeactivated ? (
-            <select
-              disabled={saving}
-              value={member.department_id || ''}
-              onChange={(e) => handleDepartmentChange(member.id, member.displayName, e.target.value || null)}
-              style={{
-                padding: '6px 10px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer',
-              }}
-            >
-              <option value="">No Department</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
-              {department?.name || '—'}
-            </span>
-          )}
-        </td>
-
-        {/* Role */}
-        <td
-          style={{
-            padding: '16px',
-            borderRight: '1px solid var(--border)',
-          }}
-        >
-          {canChangeRoles && !isPending && !isDeactivated ? (
-            <select
-              disabled={saving}
-              value={member.role || 'member'}
-              onChange={(e) => handleRoleChange(member.id, member.displayName, e.target.value)}
-              style={{
-                padding: '6px 10px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer',
-              }}
-            >
-              {getRoleOptions().map((r) => (
-                <option key={r} value={r}>
-                  {ROLE_LABELS[r]}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span
-              style={{
-                display: 'inline-block',
-                padding: '6px 12px',
-                borderRadius: '999px',
-                fontSize: '12px',
-                fontWeight: '600',
-                background: roleTone(member.role).bg,
-                color: roleTone(member.role).text,
-              }}
-            >
-              {ROLE_LABELS[member.role] || member.role}
-            </span>
-          )}
-        </td>
-
-        {/* Status */}
-        <td
-          style={{
-            padding: '16px',
-            borderRight: '1px solid var(--border)',
-          }}
-        >
-          <span
-            style={{
-              display: 'inline-block',
-              padding: '6px 12px',
-              borderRadius: '999px',
-              fontSize: '12px',
-              fontWeight: '600',
-              background: statusBadge.bg,
-              color: statusBadge.text,
-              border: `1px solid ${statusBadge.border}`,
-            }}
-          >
-            {member.status === 'active'
-              ? 'Active'
-              : member.status === 'deactivated'
-                ? 'Deactivated'
-                : 'Pending'}
-          </span>
-        </td>
-
-        {/* Actions */}
-        <td style={{ padding: '16px', textAlign: 'right' }}>
-          {confirmAction?.userId === member.id || confirmAction?.invitationId === member.id ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                {confirmAction.message}
-              </span>
-              <button
-                disabled={saving}
-                onClick={confirmAction.onConfirm}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--accent)',
-                  background: 'transparent',
-                  color: 'var(--accent)',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  opacity: saving ? 0.6 : 1,
-                }}
-              >
-                Confirm
-              </button>
-              <button
-                disabled={saving}
-                onClick={() => setConfirmAction(null)}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border)',
-                  background: 'transparent',
-                  color: 'var(--text-secondary)',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  opacity: saving ? 0.6 : 1,
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              {!isPending && canDeactivate ? (
-                isDeactivated ? (
-                  <button
-                    disabled={saving}
-                    onClick={() => handleReactivate(member.id, member.displayName)}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid #2D8653',
-                      background: 'transparent',
-                      color: '#2D8653',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      opacity: saving ? 0.6 : 1,
-                    }}
-                  >
-                    Reactivate
-                  </button>
-                ) : (
-                  <button
-                    disabled={saving}
-                    onClick={() =>
-                      handleDeactivate(member.id, member.displayName)
-                    }
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid #C94830',
-                      background: 'transparent',
-                      color: '#C94830',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      opacity: saving ? 0.6 : 1,
-                    }}
-                  >
-                    Deactivate
-                  </button>
-                )
-              ) : null}
-              {isPending && canChangeRoles ? (
-                <button
-                  disabled={saving}
-                  onClick={() =>
-                    handleRevokeInvitation(member.id, member.displayEmail)
-                  }
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #C94830',
-                    background: 'transparent',
-                    color: '#C94830',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    opacity: saving ? 0.6 : 1,
-                  }}
-                >
-                  Revoke
-                </button>
-              ) : null}
-            </div>
-          )}
-        </td>
-      </tr>
+    return source.filter((entry) =>
+      entry.name?.toLowerCase().includes(debouncedSearch) ||
+      entry.email?.toLowerCase().includes(debouncedSearch),
     )
+  }, [activeTab, debouncedSearch, scopedUsers])
+
+  const filteredInvitations = useMemo(() => {
+    const source = scopedInvitations.filter((entry) => entry.status === 'pending')
+    if (!debouncedSearch) return source
+
+    return source.filter((entry) =>
+      `${entry.first_name} ${entry.last_name}`.trim().toLowerCase().includes(debouncedSearch) ||
+      entry.email?.toLowerCase().includes(debouncedSearch),
+    )
+  }, [debouncedSearch, scopedInvitations])
+
+  async function handleInviteMember(form) {
+    setSaving(true)
+    try {
+      const invitation = await createInvitation(form)
+      await sendInvitationEmail(invitation.id, 'send')
+      showToast('Invitation sent.', { tone: 'success' })
+      setShowInviteModal(false)
+      setActiveTab('Pending')
+      await loadData()
+    } catch (error) {
+      showToast(error.message, { tone: 'error' })
+    } finally {
+      setSaving(false)
+    }
   }
 
-  if (loading) {
-    return (
-      <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-        Loading members…
-      </div>
-    )
+  async function handleRoleChange(userId, nextRole) {
+    setSaving(true)
+    try {
+      await updateUserMembership({
+        userId,
+        role: nextRole,
+        reason: `Role changed to ${nextRole}`,
+      })
+      showToast('Role updated.', { tone: 'success' })
+      await loadData()
+    } catch (error) {
+      showToast(error.message, { tone: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeactivate(userId) {
+    setSaving(true)
+    try {
+      await updateUserMembership({
+        userId,
+        status: 'inactive',
+        reason: 'Deactivated from settings',
+      })
+      showToast('Member deactivated.', { tone: 'success' })
+      await loadData()
+    } catch (error) {
+      showToast(error.message, { tone: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleResend(invitationId) {
+    setSaving(true)
+    try {
+      await resendInvitation(invitationId)
+      await sendInvitationEmail(invitationId, 'resend')
+      showToast('Invitation re-sent.', { tone: 'success' })
+      await loadData()
+    } catch (error) {
+      showToast(error.message, { tone: 'error' })
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Active Members */}
-      <section style={{ borderRadius: '22px', border: '1px solid var(--border)', background: 'white', overflow: 'hidden' }}>
-        <div style={{ padding: '20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-secondary)' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
-            Active Members ({members.active.length})
-          </h2>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              style={{
+                border: `1px solid ${activeTab === tab ? '#4C2A92' : '#EDE8DC'}`,
+                background: activeTab === tab ? '#4C2A92' : '#FFFFFF',
+                color: activeTab === tab ? '#FFFFFF' : '#2D2A22',
+                borderRadius: 999,
+                padding: '8px 14px',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              {tab}
+            </button>
+          ))}
         </div>
+
+        {(role === 'super_admin' || role === 'dept_lead') ? (
+          <button
+            type="button"
+            onClick={() => setShowInviteModal(true)}
+            style={{ border: 'none', background: '#4C2A92', color: '#FFFFFF', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+          >
+            Invite member
+          </button>
+        ) : null}
+      </div>
+
+      <div>
+        <input
+          type="text"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search by name or email"
+          style={{ width: '100%', maxWidth: 360, border: '1px solid #EDE8DC', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}
+        />
+      </div>
+
+      <div style={{ borderRadius: 22, border: '1px solid #EDE8DC', background: '#FFFFFF', overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ background: 'var(--surface-secondary)' }}>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>Name</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>Department</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>Role</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>Status</th>
-              <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}> </th>
+            <tr style={{ background: '#F9F7F1', borderBottom: '1px solid #EDE8DC' }}>
+              <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9E9488', textTransform: 'uppercase' }}>Name</th>
+              <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9E9488', textTransform: 'uppercase' }}>Email</th>
+              <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9E9488', textTransform: 'uppercase' }}>Role</th>
+              <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9E9488', textTransform: 'uppercase' }}>Department</th>
+              <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9E9488', textTransform: 'uppercase' }}>Status</th>
+              <th style={{ padding: '14px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#9E9488', textTransform: 'uppercase' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {members.active.map(renderMemberRow)}
-            {members.active.length === 0 && (
+            {loading ? (
               <tr>
-                <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                  No active members
+                <td colSpan={6} style={{ padding: 28, textAlign: 'center', color: '#9E9488', fontSize: 13 }}>Loading members...</td>
+              </tr>
+            ) : activeTab === 'Pending' ? (
+              filteredInvitations.length > 0 ? filteredInvitations.map((invitation) => (
+                <tr key={invitation.id} style={{ borderBottom: '1px solid #EDE8DC' }}>
+                  <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 999, background: '#4C2A92', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+                        {getInitials(`${invitation.first_name} ${invitation.last_name}`, invitation.email)}
+                      </div>
+                      <span>{`${invitation.first_name} ${invitation.last_name}`.trim() || invitation.email}</span>
+                    </div>
+                  </td>
+                  <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>{invitation.email}</td>
+                  <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>{ROLE_LABELS[invitation.role] ?? invitation.role}</td>
+                  <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>{departmentMap.get(invitation.department_id) ?? '—'}</td>
+                  <td style={{ padding: '14px 16px', fontSize: 13, color: '#C47E0A' }}>Pending</td>
+                  <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                    {role === 'super_admin' ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => handleResend(invitation.id)}
+                        style={{ border: '1px solid #EDE8DC', background: '#FFFFFF', color: '#4C2A92', borderRadius: 8, padding: '8px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}
+                      >
+                        Re-invite
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: 12, color: '#9E9488' }}>View only</span>
+                    )}
+                  </td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan={6} style={{ padding: 28, textAlign: 'center', color: '#9E9488', fontSize: 13 }}>No pending invitations.</td>
+                </tr>
+              )
+            ) : filteredUsers.length > 0 ? filteredUsers.map((entry) => {
+              const pendingInvitation = pendingInvitationByEmail.get(entry.email?.toLowerCase())
+              const canManage = role === 'super_admin'
+
+              return (
+                <tr key={entry.id} style={{ borderBottom: '1px solid #EDE8DC' }}>
+                  <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 999, background: '#4C2A92', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+                        {getInitials(entry.name, entry.email)}
+                      </div>
+                      <span>{entry.name}</span>
+                    </div>
+                  </td>
+                  <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>{entry.email}</td>
+                  <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>
+                    {canManage && activeTab === 'Active' ? (
+                      <select
+                        disabled={saving}
+                        value={entry.role}
+                        onChange={(event) => handleRoleChange(entry.id, event.target.value)}
+                        style={{ border: '1px solid #EDE8DC', borderRadius: 8, padding: '7px 10px', fontSize: 12, background: '#FFFFFF' }}
+                      >
+                        <option value="super_admin">Super Admin</option>
+                        <option value="dept_lead">Dept Lead</option>
+                        <option value="pastor">Pastor</option>
+                        <option value="member">Member</option>
+                      </select>
+                    ) : (
+                      ROLE_LABELS[entry.role] ?? entry.role
+                    )}
+                  </td>
+                  <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>{departmentMap.get(entry.department_id) ?? '—'}</td>
+                  <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>{entry.status}</td>
+                  <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                    {canManage && activeTab === 'Active' ? (
+                      <div style={{ display: 'inline-flex', gap: 8 }}>
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => handleDeactivate(entry.id)}
+                          style={{ border: '1px solid #EDE8DC', background: '#FFFFFF', color: '#C94830', borderRadius: 8, padding: '8px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}
+                        >
+                          Deactivate
+                        </button>
+                        {pendingInvitation ? (
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => handleResend(pendingInvitation.id)}
+                            style={{ border: '1px solid #EDE8DC', background: '#FFFFFF', color: '#4C2A92', borderRadius: 8, padding: '8px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}
+                          >
+                            Re-invite
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 12, color: '#9E9488' }}>View only</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            }) : (
+              <tr>
+                <td colSpan={6} style={{ padding: 28, textAlign: 'center', color: '#9E9488', fontSize: 13 }}>
+                  {activeTab === 'Inactive' ? 'No inactive members.' : 'No active members.'}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
-      </section>
+      </div>
 
-      {/* Pending Invitations */}
-      {members.pending.length > 0 && (
-        <section style={{ borderRadius: '22px', border: '1px solid var(--border)', background: 'white', overflow: 'hidden' }}>
-          <div style={{ padding: '20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-secondary)' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
-              Pending Invitations ({members.pending.length})
-            </h2>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'var(--surface-secondary)' }}>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>Name</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>Department</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>Role</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>Status</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}> </th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.pending.map(renderMemberRow)}
-            </tbody>
-          </table>
-        </section>
-      )}
-
-      {/* Deactivated Members */}
-      {members.deactivated.length > 0 && (
-        <section style={{ borderRadius: '22px', border: '1px solid var(--border)', background: 'white', overflow: 'hidden' }}>
-          <div style={{ padding: '20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-secondary)' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
-              Deactivated Members ({members.deactivated.length})
-            </h2>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'var(--surface-secondary)' }}>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>Name</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>Department</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>Role</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>Status</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}> </th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.deactivated.map(renderMemberRow)}
-            </tbody>
-          </table>
-        </section>
-      )}
+      {showInviteModal ? (
+        <InviteMemberModal
+          departments={departments}
+          pastors={pastors}
+          initialDepartmentId={profile?.department_id}
+          role={role}
+          saving={saving}
+          onClose={() => setShowInviteModal(false)}
+          onSubmit={handleInviteMember}
+        />
+      ) : null}
     </div>
   )
 }

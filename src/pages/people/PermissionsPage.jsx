@@ -50,7 +50,7 @@ export default function PermissionsPage() {
     try {
       const [{ data: userRows, error: userError }, { data: permissionRows, error: permissionError }, { data: grantRows, error: grantError }] = await Promise.all([
         supabase.from('users').select('id, name, email, role, department_id, avatar_url').order('name'),
-        supabase.from('available_permissions').select('*').order('area, label'),
+        supabase.from('available_permissions').select('key, area, label, description').order('area, label'),
         supabase.from('user_permissions').select('user_id, permission'),
       ])
 

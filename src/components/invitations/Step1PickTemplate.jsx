@@ -100,7 +100,7 @@ export default function Step1PickTemplate({ onSelect, wizardState }) {
         setLoading(true)
         const { data, error: err } = await supabase
           .from('invitation_templates')
-          .select('*')
+          .select('id, name, occasion, thumbnail_url')
           .eq('status', 'active')
           .eq('org_id', profile?.org_id ?? '')
           .order('name')

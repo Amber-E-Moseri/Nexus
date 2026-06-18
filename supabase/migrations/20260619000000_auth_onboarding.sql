@@ -23,7 +23,7 @@ alter table public.user_invitations
   check (status in ('pending', 'accepted', 'expired', 'revoked'));
 
 update public.user_invitations
-set invitation_token_hash = encode(digest(invitation_token::bytea, 'sha256'::text), 'hex')
+set invitation_token_hash = md5(invitation_token)
 where invitation_token is not null
   and invitation_token_hash is null;
 
@@ -74,7 +74,7 @@ begin
   end if;
 
   v_token := encode(gen_random_bytes(24), 'hex');
-  v_hash := encode(digest(v_token::bytea, 'sha256'::text), 'hex');
+  v_hash := md5(v_token);
 
   update public.user_invitations
   set
@@ -90,7 +90,8 @@ begin
 end;
 $$;
 
-create or replace function public.preview_user_invitation(p_token text)
+drop function if exists public.preview_user_invitation(p_token text) cascade;
+create function public.preview_user_invitation(p_token text)
 returns table (
   invitation_id uuid,
   first_name text,
@@ -108,7 +109,7 @@ security definer
 set search_path = public, auth
 as $$
 declare
-  v_hash text := encode(digest(p_token::bytea, 'sha256'::text), 'hex');
+  v_hash text := md5(p_token);
 begin
   update public.user_invitations
   set
@@ -146,7 +147,8 @@ begin
 end;
 $$;
 
-create or replace function public.create_user_invitation(
+drop function if exists public.create_user_invitation(text, text, text, uuid, text, uuid) cascade;
+create function public.create_user_invitation(
   p_first_name text,
   p_last_name text,
   p_email text,
@@ -398,7 +400,7 @@ declare
   v_auth_email text;
   v_user public.users%rowtype;
   v_full_name text;
-  v_hash text := encode(digest(p_token::bytea, 'sha256'::text), 'hex');
+  v_hash text := md5(p_token);
 begin
   if auth.uid() is null then
     raise exception 'Authentication required';

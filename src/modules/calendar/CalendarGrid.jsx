@@ -71,13 +71,13 @@ export default function CalendarGrid({
             {new Date(year, month, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })}
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={onToday} className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-secondary)]">
+            <button type="button" aria-label="Jump to today" onClick={onToday} className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-secondary)]">
               Today
             </button>
-            <button type="button" onClick={onPrevMonth} className="rounded-xl border border-[var(--border)] bg-white p-2 text-[var(--text-secondary)]">
+            <button type="button" aria-label="Previous month" onClick={onPrevMonth} className="rounded-xl border border-[var(--border)] bg-white p-2 text-[var(--text-secondary)]">
               <ChevronLeft size={16} />
             </button>
-            <button type="button" onClick={onNextMonth} className="rounded-xl border border-[var(--border)] bg-white p-2 text-[var(--text-secondary)]">
+            <button type="button" aria-label="Next month" onClick={onNextMonth} className="rounded-xl border border-[var(--border)] bg-white p-2 text-[var(--text-secondary)]">
               <ChevronRight size={16} />
             </button>
           </div>

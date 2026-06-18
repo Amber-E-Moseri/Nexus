@@ -12,6 +12,7 @@ const MUTED = '#9E9488'
 const ACCENT = '#4C2A92'
 const DANGER = '#C94830'
 const SUCCESS = '#2D8653'
+const TEMPLATE_SELECT = 'id, name, subject, body, is_default, created_by, updated_at'
 
 const INPUT = {
   width: '100%',
@@ -95,7 +96,7 @@ export default function EmailTemplatesPage() {
     setError(null)
     const { data, error: queryError } = await supabase
       .from('absence_email_templates')
-      .select('*')
+      .select(TEMPLATE_SELECT)
       .order('is_default', { ascending: false })
       .order('updated_at', { ascending: false })
 

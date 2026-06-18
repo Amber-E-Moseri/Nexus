@@ -1290,7 +1290,9 @@ export default function Sidebar() {
       </div>
 
       <div style={{ borderTop: '1px solid #EDE8DC', padding: 10 }}>
-        <div
+        <button
+          type="button"
+          onClick={() => go('/settings')}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -1299,6 +1301,14 @@ export default function Sidebar() {
             border: '1px solid #EDE8DC',
             borderRadius: 10,
             padding: '8px 10px',
+            width: '100%',
+            cursor: 'pointer',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#F2EEE6'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#F9F7F3'
           }}
         >
           <div
@@ -1318,7 +1328,7 @@ export default function Sidebar() {
           >
             {initials}
           </div>
-          <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
             <div
               style={{
                 fontSize: 12.5,
@@ -1345,7 +1355,10 @@ export default function Sidebar() {
           </div>
           <button
             type="button"
-            onClick={signOut}
+            onClick={(e) => {
+              e.stopPropagation()
+              signOut()
+            }}
             style={{
               border: 'none',
               background: 'transparent',
@@ -1362,7 +1375,7 @@ export default function Sidebar() {
           >
             <ChevronDown size={14} />
           </button>
-        </div>
+        </button>
       </div>
 
       {showSpaceModal ? <SpaceModal onSaved={loadSpaces} onClose={() => setShowSpaceModal(false)} /> : null}

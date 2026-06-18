@@ -171,13 +171,13 @@ export default function Inbox() {
           .order('assigned_at', { ascending: false }),
         supabase
           .from('activity_feed')
-          .select('*')
+          .select('id, user_id, action, payload, read, created_at')
           .eq('user_id', profile.id)
           .order('created_at', { ascending: false })
           .limit(50),
         supabase
           .from('notifications')
-          .select('*')
+          .select('id, user_id, type, payload, read, created_at')
           .eq('user_id', profile.id)
           .order('created_at', { ascending: false })
           .limit(50),

@@ -35,7 +35,7 @@ begin
       'General',
       sl.space_id,
       0,
-      min(sl.created_by),
+      (array_agg(sl.created_by order by sl.created_at))[1],
       min(sl.created_at)
     from public.space_lists sl
     where not exists (
@@ -94,6 +94,7 @@ begin
     from _list_migration_map map
     where t.list_id = map.old_list_id;
 
+    drop view if exists public.actionable_tasks cascade;
     alter table public.tasks drop column if exists list_id;
     alter table public.tasks rename column list_id_v2 to list_id;
   else

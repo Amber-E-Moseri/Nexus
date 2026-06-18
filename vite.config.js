@@ -16,6 +16,7 @@ export default defineConfig({
     process.env.ANALYZE === 'true' && visualizer({ open: true, gzipSize: true, brotliSize: true }),
   ].filter(Boolean),
   build: {
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         manualChunks: {

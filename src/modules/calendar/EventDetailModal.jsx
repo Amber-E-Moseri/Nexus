@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
-import { approveEvent, rejectEvent, upsertRSVP, getRSVPCounts, getUserRSVP, getRSVPList } from '../../lib/calendar'
+import { approveEvent, rejectEvent } from '../../lib/calendar'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../context/ToastContext'
-import { hasPermission } from '../../lib/permissions'
 
 export default function EventDetailModal({ event, onClose, onApproved, canApprove = false }) {
   const { profile, effectiveRole } = useAuth()
@@ -11,18 +10,13 @@ export default function EventDetailModal({ event, onClose, onApproved, canApprov
   const [loading, setLoading] = useState(false)
   const [showRejectForm, setShowRejectForm] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('')
-  const [userRSVP, setUserRSVP] = useState(null)
-  const [rsvpCounts, setRSVPCounts] = useState({ going: 0, maybe: 0, not_going: 0 })
-  const [rsvpList, setRSVPList] = useState(null)
-  const [showRSVPList, setShowRSVPList] = useState(false)
-  const [canManageRSVPs, setCanManageRSVPs] = useState(false)
 
   async function handleApprove() {
     if (!canApprove || !event) return
     setLoading(true)
     try {
-      await approveEvent(event.id, profile.id)
-      showToast('Event approved successfully', { tone: 'success' })
+      await approveEvent(event.id)
+      showToast('Event approved and creator notified', { tone: 'success' })
       onApproved?.()
       onClose()
     } catch (err) {
@@ -40,8 +34,8 @@ export default function EventDetailModal({ event, onClose, onApproved, canApprov
     }
     setLoading(true)
     try {
-      await rejectEvent(event.id, profile.id, rejectionReason)
-      showToast('Event rejected successfully', { tone: 'success' })
+      await rejectEvent(event.id, rejectionReason)
+      showToast('Event rejected and creator notified', { tone: 'success' })
       onApproved?.()
       onClose()
     } catch (err) {
@@ -52,69 +46,6 @@ export default function EventDetailModal({ event, onClose, onApproved, canApprov
     }
   }
 
-  // Load RSVP data
-  useEffect(() => {
-    if (!event) return
-
-    let active = true
-
-    async function loadRSVP() {
-      try {
-        const [counts, userResponse] = await Promise.all([
-          getRSVPCounts(event.id),
-          profile ? getUserRSVP(event.id, profile.id) : null,
-        ])
-        if (active) {
-          setRSVPCounts(counts)
-          setUserRSVP(userResponse)
-        }
-      } catch (err) {
-        console.error('Failed to load RSVP data:', err)
-      }
-    }
-
-    async function checkCanManage() {
-      if (['super_admin'].includes(effectiveRole)) {
-        if (active) setCanManageRSVPs(true)
-        return
-      }
-
-      const allowed = await hasPermission(profile?.id, 'calendar:write')
-      if (active) setCanManageRSVPs(allowed)
-    }
-
-    loadRSVP()
-    checkCanManage()
-
-    return () => { active = false }
-  }, [event, profile, effectiveRole])
-
-  async function handleRSVP(response) {
-    if (!profile || !event) return
-    try {
-      await upsertRSVP(event.id, profile.id, response)
-      setUserRSVP(response)
-
-      const counts = await getRSVPCounts(event.id)
-      setRSVPCounts(counts)
-
-      showToast(`You marked as ${response}`, { tone: 'success' })
-    } catch (err) {
-      console.error('Failed to update RSVP:', err)
-      showToast('Failed to update RSVP', { tone: 'error' })
-    }
-  }
-
-  async function loadRSVPList() {
-    if (rsvpList || !event) return
-    try {
-      const list = await getRSVPList(event.id)
-      setRSVPList(list)
-    } catch (err) {
-      console.error('Failed to load RSVP list:', err)
-      showToast('Failed to load RSVPs', { tone: 'error' })
-    }
-  }
 
   if (!event) return null
 
@@ -247,119 +178,6 @@ export default function EventDetailModal({ event, onClose, onApproved, canApprov
           )}
         </div>
 
-        {/* RSVP Section */}
-        {event.status === 'approved' && profile && (
-          <div style={{
-            marginBottom: '24px',
-            padding: '16px',
-            backgroundColor: 'var(--surface-tertiary)',
-            borderRadius: '8px'
-          }}>
-            <div style={{ marginBottom: '12px' }}>
-              <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: 0, marginBottom: '8px' }}>
-                RSVP
-              </p>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <button
-                  onClick={() => handleRSVP('going')}
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: userRSVP === 'going' ? 'var(--accent)' : 'white',
-                    color: userRSVP === 'going' ? 'white' : 'var(--text-primary)',
-                    border: `1px solid ${userRSVP === 'going' ? 'var(--accent)' : 'var(--border)'}`,
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  Going
-                </button>
-                <button
-                  onClick={() => handleRSVP('maybe')}
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: userRSVP === 'maybe' ? 'var(--accent)' : 'white',
-                    color: userRSVP === 'maybe' ? 'white' : 'var(--text-primary)',
-                    border: `1px solid ${userRSVP === 'maybe' ? 'var(--accent)' : 'var(--border)'}`,
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  Maybe
-                </button>
-                <button
-                  onClick={() => handleRSVP('not_going')}
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: userRSVP === 'not_going' ? 'var(--accent)' : 'white',
-                    color: userRSVP === 'not_going' ? 'white' : 'var(--text-primary)',
-                    border: `1px solid ${userRSVP === 'not_going' ? 'var(--accent)' : 'var(--border)'}`,
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  Not Going
-                </button>
-              </div>
-            </div>
-
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              {rsvpCounts.going} Going · {rsvpCounts.maybe} Maybe · {rsvpCounts.not_going} Not Going
-            </div>
-
-            {canManageRSVPs && (
-              <button
-                onClick={() => {
-                  setShowRSVPList(!showRSVPList)
-                  if (!showRSVPList && !rsvpList) {
-                    loadRSVPList()
-                  }
-                }}
-                style={{
-                  marginTop: '8px',
-                  padding: '4px 8px',
-                  backgroundColor: 'transparent',
-                  color: 'var(--accent)',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 500
-                }}
-              >
-                {showRSVPList ? 'Hide' : 'See'} who's going
-              </button>
-            )}
-
-            {showRSVPList && rsvpList && (
-              <div style={{ marginTop: '12px', maxHeight: '200px', overflowY: 'auto' }}>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {rsvpList.length === 0 ? (
-                    'No RSVPs yet'
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {rsvpList.map((rsvp) => (
-                        <div key={rsvp.id || rsvp.profiles?.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>{rsvp.profiles?.display_name || rsvp.profiles?.email || 'Unknown'}</span>
-                          <span style={{ color: 'var(--text-tertiary)', textTransform: 'capitalize' }}>
-                            {rsvp.response.replace('_', ' ')}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         <div style={{ marginBottom: '24px', color: 'var(--text-secondary)', fontSize: '14px' }}>
           {event.rejection_note && (

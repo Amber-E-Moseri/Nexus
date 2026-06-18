@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { safeHref } from '../../lib/urlUtils'
 import { supabase } from '../../lib/supabase'
 
+const SPRINT_REVIEW_SELECT = `
+  id, sprint_id, goals_achieved, outstanding_items, lessons_learned,
+  wins_testimonies, recommendations, final_decisions, final_attachments,
+  reviewed_at, completed_at, completed_by, created_at
+`
+
 const FIELDS = [
   ['goals_achieved', 'Goals Achieved'],
   ['outstanding_items', 'Outstanding Items'],
@@ -36,7 +42,7 @@ export default function SprintReview({ sprint, canManage, onSaved }) {
     try {
       const { data, error } = await supabase
         .from('sprint_reviews')
-        .select('*')
+        .select(SPRINT_REVIEW_SELECT)
         .eq('sprint_id', sprint.id)
         .maybeSingle()
 
@@ -82,7 +88,7 @@ export default function SprintReview({ sprint, canManage, onSaved }) {
         sprint_id: sprint.id,
         final_attachments: [],
       })
-      .select()
+      .select(SPRINT_REVIEW_SELECT)
       .single()
 
     if (error) throw error
@@ -103,7 +109,7 @@ export default function SprintReview({ sprint, canManage, onSaved }) {
       const { data, error } = await supabase
         .from('sprint_reviews')
         .upsert(payload, { onConflict: 'sprint_id' })
-        .select()
+        .select(SPRINT_REVIEW_SELECT)
         .single()
 
       if (error) throw error
