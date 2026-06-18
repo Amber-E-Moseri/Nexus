@@ -1004,8 +1004,7 @@ export default function Sidebar() {
           }}
         >
           <span style={{ flex: 1 }}>Meetings</span>
-          <button
-            type="button"
+          <div
             onClick={(e) => {
               e.stopPropagation()
               setMeetingsExpanded(!meetingsExpanded)
@@ -1013,52 +1012,32 @@ export default function Sidebar() {
             style={{ border: 'none', background: 'none', padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
           >
             <ChevronDown size={15} style={{ opacity: 0.85, transform: meetingsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
-          </button>
+          </div>
         </button>
         {meetingsExpanded ? (
           <>
-            <SidebarItem
-              active={isPathActive(location.pathname, '/meetings') && !isPathActive(location.pathname, '/meetings/expected-attendees')}
-              label="Dashboard"
-              glyph={
-                <span style={{ width: 20, flex: '0 0 20px', textAlign: 'center', fontSize: 13, opacity: 0.7 }}>📊</span>
-              }
-              onClick={() => go('/meetings')}
-            />
             {showAdminPlatform ? (
               <SidebarItem
                 active={isPathActive(location.pathname, '/meetings/wizard')}
                 label="Plan meeting"
-                glyph={
-                  <span style={{ width: 20, flex: '0 0 20px', textAlign: 'center', fontSize: 13, opacity: 0.7 }}>📋</span>
-                }
                 onClick={() => go('/meetings/wizard')}
               />
             ) : null}
             <SidebarItem
               active={isPathActive(location.pathname, '/meetings/expected-attendees')}
               label="Attendee Roster"
-              glyph={
-                <span style={{ width: 20, flex: '0 0 20px', textAlign: 'center', fontSize: 13, opacity: 0.7 }}>☑</span>
-              }
               onClick={() => go('/meetings/expected-attendees')}
             />
             {(showAdminPlatform || role === 'pastor') ? (
               <SidebarItem
                 active={isPathActive(location.pathname, '/meetings/attendance-trends')}
                 label="Attendance Trends"
-                glyph={
-                  <span style={{ width: 20, flex: '0 0 20px', textAlign: 'center', fontSize: 13, opacity: 0.7 }}>📈</span>
-                }
                 onClick={() => go('/meetings/attendance-trends')}
               />
             ) : null}
             <SidebarItem
               active={isPathActive(location.pathname, '/meetings/absence-email-log')}
               label="Absence Email Send Log"
-              glyph={
-                <span style={{ width: 20, flex: '0 0 20px', textAlign: 'center', fontSize: 13, opacity: 0.7 }}>✉</span>
-              }
               onClick={() => go('/meetings/absence-email-log')}
             />
           </>
