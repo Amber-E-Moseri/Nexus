@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { X, AlertCircle } from 'lucide-react'
+import { X, AlertCircle, Upload } from 'lucide-react'
+import CSVImporter from './CSVImporter'
 
 const PRIMARY = '#4C2A92'
 const BORDER = '#EDE8DC'
@@ -20,6 +21,7 @@ function prettifyKey(key) {
 }
 
 export default function Step3Recipients({ template, onUpdate, wizardState }) {
+  const [inputMode, setInputMode] = useState('manual') // 'manual' | 'csv'
   const [formData, setFormData] = useState({
     email: '',
     name: '',
@@ -110,6 +112,11 @@ export default function Step3Recipients({ template, onUpdate, wizardState }) {
 
   const hasErrors = Object.keys(formErrors).length > 0
 
+  const handleCSVImportComplete = (recipients) => {
+    onUpdate([...wizardState.recipients, ...recipients])
+    setInputMode('manual')
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
@@ -117,12 +124,63 @@ export default function Step3Recipients({ template, onUpdate, wizardState }) {
           Add Recipients
         </div>
         <p style={{ margin: 0, fontSize: 13, color: MUTED }}>
-          Add recipients one by one. You can add CSV import in a future update.
+          Import recipients via CSV or add them manually.
         </p>
       </div>
 
+      {/* Input Mode Selector */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          type="button"
+          onClick={() => setInputMode('manual')}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            border: `2px solid ${inputMode === 'manual' ? PRIMARY : BORDER}`,
+            background: inputMode === 'manual' ? '#EDE8F8' : '#FFFFFF',
+            borderRadius: 8,
+            cursor: 'pointer',
+            fontWeight: inputMode === 'manual' ? 600 : 500,
+            fontSize: 13,
+            color: inputMode === 'manual' ? PRIMARY : TEXT,
+            transition: 'all 0.2s'
+          }}
+        >
+          ✏️ Manual Entry
+        </button>
+        <button
+          type="button"
+          onClick={() => setInputMode('csv')}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            border: `2px solid ${inputMode === 'csv' ? PRIMARY : BORDER}`,
+            background: inputMode === 'csv' ? '#EDE8F8' : '#FFFFFF',
+            borderRadius: 8,
+            cursor: 'pointer',
+            fontWeight: inputMode === 'csv' ? 600 : 500,
+            fontSize: 13,
+            color: inputMode === 'csv' ? PRIMARY : TEXT,
+            transition: 'all 0.2s'
+          }}
+        >
+          📁 CSV Import
+        </button>
+      </div>
+
+      {/* CSV Importer */}
+      {inputMode === 'csv' && (
+        <CSVImporter
+          templateTokenFields={tokenFields}
+          onComplete={handleCSVImportComplete}
+        />
+      )}
+
+      {/* Manual Entry */}
+      {inputMode === 'manual' && (
+
       <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, background: '#FFFFFF' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>
@@ -286,20 +344,21 @@ export default function Step3Recipients({ template, onUpdate, wizardState }) {
         </div>
       )}
 
-      <div
-        style={{
-          background: hasErrors ? '#FEF0ED' : '#EBF7F1',
-          border: `1px solid ${hasErrors ? '#F5C4B8' : '#A7DDBA'}`,
-          borderRadius: 10,
-          padding: '12px 16px',
-          fontSize: 13,
-          color: hasErrors ? '#C94830' : '#1B5E3C',
-        }}
-      >
-        {hasErrors
-          ? `${Object.keys(formErrors).length} validation error(s)`
-          : `Ready to continue (${wizardState.recipients.length} recipient${wizardState.recipients.length !== 1 ? 's' : ''})`}
-      </div>
+        <div
+          style={{
+            background: hasErrors ? '#FEF0ED' : '#EBF7F1',
+            border: `1px solid ${hasErrors ? '#F5C4B8' : '#A7DDBA'}`,
+            borderRadius: 10,
+            padding: '12px 16px',
+            fontSize: 13,
+            color: hasErrors ? '#C94830' : '#1B5E3C',
+          }}
+        >
+          {hasErrors
+            ? `${Object.keys(formErrors).length} validation error(s)`
+            : `Ready to continue (${wizardState.recipients.length} recipient${wizardState.recipients.length !== 1 ? 's' : ''})`}
+        </div>
+      )}
     </div>
   )
 }

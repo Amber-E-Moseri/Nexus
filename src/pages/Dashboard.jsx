@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationsContext'
 import { useAuth } from '../hooks/useAuth'
+import { getUserDashboardPreferences, getRoleDashboardDefaults, upsertDashboardPreferences, deleteDashboardPreferences } from '../lib/dashboards'
 import { supabase } from '../lib/supabase'
 import { getMyTasks } from '../lib/tasks'
 import { isTaskCompleted } from '../lib/taskStatuses'
@@ -441,11 +442,7 @@ export default function Dashboard() {
     async function loadPrefs() {
       setLoadingPrefs(true)
       try {
-        const { data: userPrefs } = await supabase
-          .from('dashboard_preferences')
-          .select('widget_key, visible, sort_order')
-          .eq('user_id', profile.id)
-          .order('sort_order')
+        const userPrefs = await getUserDashboardPreferences(profile.id)
 
         if (!active) return
 
@@ -454,11 +451,7 @@ export default function Dashboard() {
           return
         }
 
-        const { data: roleDefaults } = await supabase
-          .from('dashboard_role_defaults')
-          .select('widget_key, visible, sort_order')
-          .eq('role', role)
-          .order('sort_order')
+        const roleDefaults = await getRoleDashboardDefaults(role)
 
         if (!active) return
 
@@ -485,32 +478,19 @@ export default function Dashboard() {
     )
     if (!profile?.id) return
     const existing = prefs.find((p) => p.widget_key === widgetKey)
-    await supabase.from('dashboard_preferences').upsert(
-      { user_id: profile.id, widget_key: widgetKey, visible: false, sort_order: existing?.sort_order ?? 999 },
-      { onConflict: 'user_id,widget_key' },
-    )
+    await upsertDashboardPreferences(profile.id, [{ widget_key: widgetKey, visible: false, sort_order: existing?.sort_order ?? 999 }])
   }
 
   async function handleSavePrefs(nextPrefs) {
     setPrefs(nextPrefs)
     if (!profile?.id) return
-    const rows = nextPrefs.map((p) => ({
-      user_id: profile.id,
-      widget_key: p.widget_key,
-      visible: p.visible,
-      sort_order: p.sort_order,
-    }))
-    await supabase.from('dashboard_preferences').upsert(rows, { onConflict: 'user_id,widget_key' })
+    await upsertDashboardPreferences(profile.id, nextPrefs)
   }
 
   async function handleReset() {
     if (!profile?.id) return
-    await supabase.from('dashboard_preferences').delete().eq('user_id', profile.id)
-    const { data: roleDefaults } = await supabase
-      .from('dashboard_role_defaults')
-      .select('widget_key, visible, sort_order')
-      .eq('role', role)
-      .order('sort_order')
+    await deleteDashboardPreferences(profile.id)
+    const roleDefaults = await getRoleDashboardDefaults(role)
     setPrefs(mergeWithAllKeys(roleDefaults ?? []))
     setShowCustomize(false)
   }

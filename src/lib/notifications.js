@@ -145,6 +145,7 @@ export const NOTIFICATION_TYPES = {
   mention: { label: "I'm @mentioned", icon: '@', description: 'When someone mentions you in a comment' },
   invitation_accepted: { label: 'Invitation accepted', icon: '✅', description: 'When a user accepts their invitation' },
   meeting_created: { label: 'Meeting created', icon: '🎙', description: 'When a meeting is created in your department' },
+  absent_from_meeting: { label: 'Follow-up when I miss a meeting', icon: '📧', description: 'Follow-up email after missing a meeting' },
   event_approval_pending: { label: 'Calendar event awaiting approval', icon: '📅', description: 'When a calendar event needs your approval' },
   event_approved: { label: 'Calendar event approved', icon: '✅', description: 'When your calendar event is approved' },
   event_rejected: { label: 'Calendar event rejected', icon: '❌', description: 'When your calendar event is rejected' },

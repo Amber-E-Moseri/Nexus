@@ -1333,7 +1333,14 @@ export default function MeetingReportTab() {
 
       if (error) throw error
 
-      showToast(`Sent absence notification to ${emailConfirmation.recipients.length} member${emailConfirmation.recipients.length !== 1 ? 's' : ''}.`, { tone: 'success' })
+      let message = `Sent to ${data.sent} member${data.sent !== 1 ? 's' : ''}`
+      if (data.skipped > 0) {
+        message += `, ${data.skipped} skipped (preferences disabled)`
+      }
+      if (data.failed > 0) {
+        message += `, ${data.failed} failed`
+      }
+      showToast(message, { tone: 'success' })
       setEmailConfirmation(null)
     } catch (err) {
       showToast(`Failed to send emails: ${err.message}`, { tone: 'error' })

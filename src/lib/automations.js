@@ -83,3 +83,55 @@ export async function getRecentAutomationRuns(automationIds, limit = 50) {
   if (error) throw error
   return data ?? []
 }
+
+export async function getAllDepartments() {
+  const { data, error } = await supabase
+    .from('departments')
+    .select('id, name, color')
+    .order('name')
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getAllUsers() {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, name, department_id, status')
+    .order('name')
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getAllAutomations() {
+  const { data, error } = await supabase
+    .from('automations')
+    .select('id, name, description, enabled, trigger_type, trigger_config, actions, conditions, fire_count, last_fired_at, created_at, created_by, department_id')
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getAutomationRunLog(limit = 100) {
+  const { data, error } = await supabase
+    .from('automation_run_log')
+    .select('id, automation_id, trigger_type, trigger_payload, actions_executed, success, error_message, ran_at')
+    .order('ran_at', { ascending: false })
+    .limit(limit)
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getWebhookDeliveryLog(limit = 100) {
+  const { data, error } = await supabase
+    .from('webhook_delivery_log')
+    .select('id, automation_id, webhook_url, response_status, response_body, delivered_at, success')
+    .order('delivered_at', { ascending: false })
+    .limit(limit)
+
+  if (error) throw error
+  return data ?? []
+}

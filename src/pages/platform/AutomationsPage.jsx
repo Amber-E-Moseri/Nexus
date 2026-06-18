@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { ACTION_LABELS, TRIGGER_LABELS, deleteAutomation, getRecentAutomationRuns, toggleAutomation } from '../../lib/automations'
+import { ACTION_LABELS, TRIGGER_LABELS, deleteAutomation, getRecentAutomationRuns, toggleAutomation, getAllDepartments, getAllUsers, getAllAutomations, getAutomationRunLog, getWebhookDeliveryLog } from '../../lib/automations'
 import { formatLastActive } from '../../lib/dateUtils'
 import { supabase } from '../../lib/supabase'
 import AutomationBuilder from '../../modules/automations/AutomationBuilder'
@@ -89,14 +89,13 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
       setError('')
 
       try {
-        const departmentsPromise = supabase.from('departments').select('id, name').order('name')
-        const usersPromise = supabase.from('users').select('id, name, department_id, status').order('name')
+        const [departmentsRes, usersRes, automationsRes] = await Promise.all([
+          getAllDepartments(),
+          getAllUsers(),
+          getAllAutomations(),
+        ])
 
-        let automationsQuery = supabase
-          .from('automations')
-          .select('id, name, description, enabled, trigger_type, trigger_config, actions, conditions, fire_count, last_fired_at, created_at, created_by, department_id')
-          .order('created_at', { ascending: false })
-
+        let nextAutomations = automationsRes
         if (role !== 'super_admin') {
           if (!targetDeptId) {
             setAutomations([])
@@ -106,31 +105,20 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
             setLoading(false)
             return
           }
-
-          automationsQuery = automationsQuery.eq('department_id', targetDeptId)
+          nextAutomations = automationsRes.filter((a) => a.department_id === targetDeptId)
         }
 
-        const [automationsRes, departmentsRes, usersRes] = await Promise.all([
-          automationsQuery,
-          departmentsPromise,
-          usersPromise,
-        ])
-
-        if (automationsRes.error) throw automationsRes.error
-        if (departmentsRes.error) throw departmentsRes.error
-        if (usersRes.error) throw usersRes.error
-
-        const nextDepartments = departmentsRes.data ?? []
-        const nextAutomations = (automationsRes.data ?? []).map((automation) => ({
+        const nextDepartments = departmentsRes ?? []
+        const mapped = (nextAutomations ?? []).map((automation) => ({
           ...automation,
           department: nextDepartments.find((department) => department.id === automation.department_id) ?? null,
         }))
 
         setDepartments(nextDepartments)
-        setAutomations(nextAutomations)
-        setRunLog(await getRecentAutomationRuns(nextAutomations.map((automation) => automation.id)))
+        setAutomations(mapped)
+        setRunLog(await getRecentAutomationRuns(mapped.map((automation) => automation.id)))
         setUsers(
-          (usersRes.data ?? []).filter((user) => (
+          (usersRes ?? []).filter((user) => (
             role === 'super_admin'
               ? true
               : user.department_id === (targetDeptId ?? profile?.department_id ?? null)
@@ -150,13 +138,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
 
     setRunLogLoading(true)
     try {
-      const { data, error: err } = await supabase
-        .from('automation_run_log')
-        .select('id, automation_id, trigger_type, trigger_payload, actions_executed, success, error_message, ran_at')
-        .order('ran_at', { ascending: false })
-        .limit(100)
-
-      if (err) throw err
+      const data = await getAutomationRunLog(100)
       setAutomationRunLog(data ?? [])
     } catch (nextError) {
       setError(nextError.message)
@@ -170,13 +152,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
 
     setWebhookLoading(true)
     try {
-      const { data, error: err } = await supabase
-        .from('webhook_delivery_log')
-        .select('id, automation_id, webhook_url, response_status, response_body, delivered_at, success')
-        .order('delivered_at', { ascending: false })
-        .limit(100)
-
-      if (err) throw err
+      const data = await getWebhookDeliveryLog(100)
       setWebhookLog(data ?? [])
     } catch (nextError) {
       setError(nextError.message)

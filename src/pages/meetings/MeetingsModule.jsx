@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { getAllDepartments } from '../../lib/automations'
 import { supabase } from '../../lib/supabase'
 import MeetingModal from '../../modules/meetings/MeetingModal'
 import MeetingsList from '../../modules/meetings/MeetingsList'
@@ -24,14 +25,14 @@ function MeetingsModuleFallback() {
   useEffect(() => {
     let active = true
 
-    supabase
-      .from('departments')
-      .select('id, name, color')
-      .order('name')
-      .then(({ data }) => {
+    getAllDepartments()
+      .then((data) => {
         if (active) {
           setDepartments(data ?? [])
         }
+      })
+      .catch(() => {
+        if (active) setDepartments([])
       })
 
     return () => {

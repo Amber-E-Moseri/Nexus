@@ -158,10 +158,37 @@ Deno.serve(async (request) => {
 
   let sent = 0
   let failed = 0
+  let skipped = 0
   const errors: Array<{ name: string; email: string; error: string }> = []
 
   for (let i = 0; i < recipients.length; i++) {
     const recipient = recipients[i]
+
+    // Check if recipient has notification preference enabled for absence emails
+    const { data: prefData, error: prefError } = await supabase
+      .from('user_notification_prefs')
+      .select('email')
+      .eq('notification_type', 'absent_from_meeting')
+      .maybeSingle()
+
+    // If preference is explicitly disabled (email: false), skip this recipient
+    if (!prefError && prefData && prefData.email === false) {
+      skipped += 1
+      const { error: logError } = await supabase.from('absence_email_log').insert({
+        report_id: reportId,
+        recipient_name: recipient.name ?? '',
+        recipient_email: recipient.email,
+        subject,
+        body: bodyTemplate,
+        status: 'skipped',
+        error_message: 'User disabled absence email notifications',
+        sent_by: user.id ?? null,
+      })
+      if (logError) {
+        console.error('Failed to write absence_email_log row', logError)
+      }
+      continue
+    }
 
     const personalizedBody = personalize(bodyTemplate, {
       name: recipient.name ?? '',
@@ -222,5 +249,5 @@ Deno.serve(async (request) => {
     }
   }
 
-  return jsonResponse(200, { sent, failed, errors })
+  return jsonResponse(200, { sent, failed, skipped, errors })
 })

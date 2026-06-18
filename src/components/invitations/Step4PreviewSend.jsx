@@ -3,6 +3,7 @@ import { Send, Calendar, Bookmark } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
+import { sendCampaignInvitations } from '../../lib/invitations/sendEmail'
 
 const PRIMARY = '#4C2A92'
 const BORDER = '#EDE8DC'
@@ -61,6 +62,7 @@ export default function Step4PreviewSend({ template, wizardState, onUpdate }) {
   const [previewRecipientIndex, setPreviewRecipientIndex] = useState(0)
   const [sendMode, setSendMode] = useState('now')
   const [scheduledAt, setScheduledAt] = useState('')
+  const [testMode, setTestMode] = useState(true) // Default: test mode for soft launch
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
@@ -108,17 +110,14 @@ export default function Step4PreviewSend({ template, wizardState, onUpdate }) {
       if (recipientErr) throw recipientErr
 
       if (sendMode === 'now') {
-        await supabase.functions.invoke('send-invitations', {
-          body: { campaign_id: campaign.id },
-        })
-
-        await supabase
-          .from('invitation_campaigns')
-          .update({ sent_at: new Date().toISOString() })
-          .eq('id', campaign.id)
+        // Send via test mode or production
+        const sendResult = await sendCampaignInvitations(campaign.id, testMode)
+        setSuccess(`Campaign ${testMode ? '[TEST MODE] ' : ''}sent successfully! (${sendResult.sent} recipients)`)
+      } else if (sendMode === 'schedule') {
+        setSuccess(`Campaign scheduled successfully!`)
+      } else {
+        setSuccess(`Campaign saved as draft!`)
       }
-
-      setSuccess(`Campaign ${sendMode === 'now' ? 'launched' : sendMode === 'schedule' ? 'scheduled' : 'saved'} successfully!`)
 
       window.setTimeout(() => {
         navigate(`/communications/invitations/${campaign.id}`)
@@ -130,7 +129,11 @@ export default function Step4PreviewSend({ template, wizardState, onUpdate }) {
     }
   }
 
-  const buttonText = sendMode === 'now' ? 'Launch Campaign' : sendMode === 'schedule' ? 'Schedule Campaign' : 'Save Draft'
+  const buttonText = sendMode === 'now'
+    ? (testMode ? '🧪 Test Send' : '📧 Send Invitations')
+    : sendMode === 'schedule'
+    ? 'Schedule Campaign'
+    : 'Save Draft'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -321,6 +324,39 @@ export default function Step4PreviewSend({ template, wizardState, onUpdate }) {
                   outline: 'none',
                 }}
               />
+            </div>
+          )}
+
+          {/* Test Mode Toggle (only show if sendMode is 'now') */}
+          {sendMode === 'now' && (
+            <div style={{
+              background: testMode ? '#fff3cd' : '#f0f8ff',
+              padding: '12px 14px',
+              borderRadius: '6px',
+              border: `1px solid ${testMode ? '#ffc107' : '#87ceeb'}`,
+              marginTop: 8
+            }}>
+              <label style={{ display: 'flex', gap: '8px', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={testMode}
+                  onChange={(e) => setTestMode(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span style={{ fontWeight: 500, fontSize: 13, color: TEXT }}>
+                  {testMode ? '🧪 Test Mode (No Emails)' : '📧 Production Mode (Send Real Emails)'}
+                </span>
+              </label>
+              <p style={{
+                margin: '6px 0 0 0',
+                fontSize: '11px',
+                color: testMode ? '#856404' : '#00008B',
+                lineHeight: 1.4
+              }}>
+                {testMode
+                  ? 'Recipients will be marked as "sent" but no emails will be sent. Perfect for testing!'
+                  : 'Real emails will be sent via Resend. Make sure all recipients are correct!'}
+              </p>
             </div>
           )}
 
