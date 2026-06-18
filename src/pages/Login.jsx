@@ -41,8 +41,8 @@ export default function Login() {
 
       <div className="relative z-10 w-full max-w-[500px]">
         <div className="text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-[0_18px_40px_rgba(28,22,16,0.08)]">
-            <div className="flex h-8 w-8 items-center justify-center rounded-[10px] text-sm font-black" style={{ background: 'var(--accent)', color: 'var(--amber)' }}>B</div>
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-[0_18px_40px_rgba(28,22,16,0.08)]">
+            <img src="/canada_sr.png" alt="BLW Canada" className="h-12 w-12 object-contain" />
           </div>
           <h1 className="mt-6 text-[40px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
             Welcome back!
