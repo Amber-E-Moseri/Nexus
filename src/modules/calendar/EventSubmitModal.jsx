@@ -3,9 +3,12 @@ import { X } from 'lucide-react'
 import { submitEvent } from '../../lib/calendar'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../context/ToastContext'
+import { EVENT_COLORS } from './CalendarEventCard'
+
+const EVENT_TYPES = ['conference', 'program', 'training', 'prayer', 'graduation', 'event', 'deadline']
 
 export default function EventSubmitModal({ onClose, onSubmitted, departments = [] }) {
-  const { profile } = useAuth()
+  const { profile, effectiveRole } = useAuth()
   const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -17,17 +20,26 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
     end_time: '10:00',
     all_day: false,
     location: '',
-    zoom_join_url: '',
-    event_type: 'meeting',
+    event_type: 'event',
     department_id: null,
-    space_id: null,
-    sprint_id: null,
+    is_org_wide: true,
   })
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!formData.title.trim()) {
       showToast('Event title is required', { tone: 'error' })
+      return
+    }
+    if (!formData.event_type) {
+      showToast('Event type is required', { tone: 'error' })
+      return
+    }
+
+    const startDate = new Date(formData.start_date)
+    const endDate = new Date(formData.end_date)
+    if (endDate < startDate) {
+      showToast('End date must be after start date', { tone: 'error' })
       return
     }
 
@@ -43,10 +55,11 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
           : new Date(`${formData.end_date}T${formData.end_time}`).toISOString(),
       }
 
-      const userRole = profile?.user_role || 'user'
+      const userRole = effectiveRole || 'user'
       await submitEvent(eventData, profile.id, userRole)
 
-      showToast('Event submitted successfully', { tone: 'success' })
+      const isAutoApproved = userRole === 'super_admin' || (profile?.can_manage === true)
+      showToast(isAutoApproved ? 'Event added to calendar' : 'Event submitted for review', { tone: 'success' })
       onSubmitted?.()
       onClose()
     } catch (err) {
@@ -334,33 +347,6 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
             />
           </div>
 
-          {/* Zoom URL */}
-          <div>
-            <label style={{
-              display: 'block',
-              fontSize: '14px',
-              fontWeight: 600,
-              marginBottom: '8px',
-              color: 'var(--text-primary)'
-            }}>
-              Zoom Link
-            </label>
-            <input
-              type="url"
-              name="zoom_join_url"
-              value={formData.zoom_join_url}
-              onChange={handleChange}
-              placeholder="https://zoom.us/j/..."
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                fontSize: '14px',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
 
           {/* Event Type */}
           <div>
@@ -371,12 +357,13 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
               marginBottom: '8px',
               color: 'var(--text-primary)'
             }}>
-              Event Type
+              Event Type *
             </label>
             <select
               name="event_type"
               value={formData.event_type}
               onChange={handleChange}
+              required
               style={{
                 width: '100%',
                 padding: '10px 12px',
@@ -386,11 +373,11 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
                 boxSizing: 'border-box'
               }}
             >
-              <option value="meeting">Meeting</option>
-              <option value="service">Service</option>
-              <option value="training">Training</option>
-              <option value="deadline">Deadline</option>
-              <option value="other">Other</option>
+              {EVENT_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  ● {type.charAt(0).toUpperCase() + type.slice(1)}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -426,6 +413,28 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {/* Org-wide Toggle (super_admin only) */}
+          {effectiveRole === 'super_admin' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <input
+                type="checkbox"
+                name="is_org_wide"
+                checked={formData.is_org_wide}
+                onChange={handleChange}
+                id="org-wide-checkbox"
+                style={{ cursor: 'pointer' }}
+              />
+              <label htmlFor="org-wide-checkbox" style={{
+                fontSize: '14px',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                cursor: 'pointer'
+              }}>
+                Visible to entire organization
+              </label>
             </div>
           )}
 

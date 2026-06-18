@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Search, Tag, Upload, Users } from 'lucide-react'
+import { useWindowWidth } from '../../hooks/useWindowWidth'
 
 const BORDER = '#EDE8DC'
 const TEXT = '#2D2A22'
@@ -317,6 +318,8 @@ function RecipientPill({ pill, onRemove }) {
 }
 
 export default function RecipientField({ value, onChange, allData, resolvedCount }) {
+  const windowWidth = useWindowWidth()
+  const isMobile = windowWidth <= 768
   const rootRef = useRef(null)
   const inputRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -438,11 +441,12 @@ export default function RecipientField({ value, onChange, allData, resolvedCount
           borderRadius: 10,
           padding: 10,
           background: '#FAFAF7',
-          minHeight: 72,
+          minHeight: isMobile ? 80 : 72,
           display: 'flex',
           flexWrap: 'wrap',
           gap: 8,
-          alignItems: 'center',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          alignContent: 'flex-start',
         }}
         onClick={() => inputRef.current?.focus()}
       >
@@ -510,30 +514,31 @@ export default function RecipientField({ value, onChange, allData, resolvedCount
           style={{ border: 'none', outline: 'none', background: 'none', fontSize: 12.5, color: TEXT, fontFamily: 'inherit', padding: '4px 2px', minWidth: 180, flex: 1 }}
         />
 
-        <div style={{ marginLeft: 'auto', position: 'relative' }}>
-          <button
-            type="button"
-            onClick={() => {
-              setImportMenuOpen((open) => !open)
-              setMenuOpen(false)
-            }}
-            style={{
-              border: `1px solid ${BORDER}`,
-              background: 'white',
-              color: TEXT,
-              borderRadius: 8,
-              padding: '7px 10px',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            Import
-            <ChevronDown size={14} />
-          </button>
+        {!isMobile && (
+          <div style={{ marginLeft: 'auto', position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setImportMenuOpen((open) => !open)
+                setMenuOpen(false)
+              }}
+              style={{
+                border: `1px solid ${BORDER}`,
+                background: 'white',
+                color: TEXT,
+                borderRadius: 8,
+                padding: '7px 10px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              Import
+              <ChevronDown size={14} />
+            </button>
 
           {importMenuOpen ? (
             <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 210, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: '0 8px 24px rgba(28,22,16,.10)', overflow: 'hidden', zIndex: 20 }}>
@@ -560,8 +565,56 @@ export default function RecipientField({ value, onChange, allData, resolvedCount
               </button>
             </div>
           ) : null}
-        </div>
+            </div>
+        )}
       </div>
+
+      {isMobile && (
+        <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              flex: 1,
+              border: `1px solid ${BORDER}`,
+              background: 'white',
+              color: TEXT,
+              borderRadius: 8,
+              padding: '8px 10px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+            }}
+          >
+            <Upload size={14} /> CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => setPasteOpen(true)}
+            style={{
+              flex: 1,
+              border: `1px solid ${BORDER}`,
+              background: 'white',
+              color: TEXT,
+              borderRadius: 8,
+              padding: '8px 10px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+            }}
+          >
+            <Upload size={14} /> Paste
+          </button>
+        </div>
+      )}
 
       <input ref={fileInputRef} type="file" accept=".csv,text/csv,.txt" onChange={handleFileImport} style={{ display: 'none' }} />
 

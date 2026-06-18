@@ -1,13 +1,13 @@
 import Badge from '../../components/ui/Badge'
 
 export const EVENT_COLORS = {
-  conference: '#534AB7',
-  program: '#185FA5',
-  training: '#1A6B35',
-  prayer: '#9B5500',
-  graduation: '#A82828',
-  event: '#534AB7',
-  deadline: '#A82828',
+  conference: '#7C3AED',
+  program: '#2563EB',
+  training: '#D97706',
+  prayer: '#059669',
+  graduation: '#DB2777',
+  event: '#4C2A92',
+  deadline: '#DC2626',
 }
 
 function formatEventTime(event) {

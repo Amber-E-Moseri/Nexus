@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { supabase } from '../../lib/supabase'
 import EmailComposer from '../../modules/communications/EmailComposer'
 import EmailPreviewModal from '../../modules/communications/EmailPreviewModal'
 import SegmentBuilderAdvanced from '../../modules/communications/SegmentBuilderAdvanced'
+import { Edit2, BarChart3 } from 'lucide-react'
 
 const PRIMARY = '#4C2A92'
 const BORDER  = '#EDE8DC'
@@ -256,46 +258,52 @@ function CampaignForm({ initial, onSaved, onCancel }) {
         <div style={{ background: '#FEF0ED', border: '1px solid #F5C4B8', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#C94830' }}>{error}</div>
       ) : null}
 
-      {/* Step indicator - horizontal stepper */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 16 }}>
-        {stepLabels.map((label, i) => {
-          const n = i + 1
-          const status = getStepStatus(n)
-          const isClickable = status === 'completed'
+      {/* Step indicator - horizontal stepper on desktop, text on mobile */}
+      {window.innerWidth > 768 ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 16, overflowX: 'auto' }}>
+          {stepLabels.map((label, i) => {
+            const n = i + 1
+            const status = getStepStatus(n)
+            const isClickable = status === 'completed'
 
-          return (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <button
-                type="button"
-                onClick={() => isClickable && setStep(n)}
-                disabled={!isClickable}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  border: status === 'active' ? `2px solid ${PRIMARY}` : `2px solid ${status === 'completed' ? PRIMARY : BORDER}`,
-                  background: status === 'active' ? PRIMARY : status === 'completed' ? PRIMARY : SURFACE,
-                  color: status === 'active' || status === 'completed' ? '#FFFFFF' : MUTED,
-                  fontSize: 14,
-                  fontWeight: 700,
-                  cursor: isClickable ? 'pointer' : 'default',
-                }}
-              >
-                {status === 'completed' ? '✓' : n}
-              </button>
-              <span style={{ fontSize: 13, fontWeight: step === n ? 700 : 500, color: step === n ? PRIMARY : MUTED, whiteSpace: 'nowrap' }}>
-                {label}
-              </span>
-              {i < stepLabels.length - 1 ? (
-                <div style={{ width: 16, height: 2, background: getStepStatus(n + 1) === 'upcoming' ? BORDER : PRIMARY, marginLeft: 4 }}></div>
-              ) : null}
-            </div>
-          )
-        })}
-      </div>
+            return (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => isClickable && setStep(n)}
+                  disabled={!isClickable}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    border: status === 'active' ? `2px solid ${PRIMARY}` : `2px solid ${status === 'completed' ? PRIMARY : BORDER}`,
+                    background: status === 'active' ? PRIMARY : status === 'completed' ? PRIMARY : SURFACE,
+                    color: status === 'active' || status === 'completed' ? '#FFFFFF' : MUTED,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: isClickable ? 'pointer' : 'default',
+                  }}
+                >
+                  {status === 'completed' ? '✓' : n}
+                </button>
+                <span style={{ fontSize: 13, fontWeight: step === n ? 700 : 500, color: step === n ? PRIMARY : MUTED, whiteSpace: 'nowrap' }}>
+                  {label}
+                </span>
+                {i < stepLabels.length - 1 ? (
+                  <div style={{ width: 16, height: 2, background: getStepStatus(n + 1) === 'upcoming' ? BORDER : PRIMARY, marginLeft: 4 }}></div>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div style={{ paddingBottom: 16, fontSize: 14, fontWeight: 700, color: PRIMARY }}>
+          Step {step} of 4
+        </div>
+      )}
 
       {step === 1 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -738,6 +746,8 @@ function CampaignReport({ campaign, onClose }) {
 
 export default function CampaignPage() {
   const navigate   = useNavigate()
+  const windowWidth = useWindowWidth()
+  const isMobile = windowWidth <= 768
   const [campaigns, setCampaigns]   = useState([])
   const [loading, setLoading]       = useState(true)
   const [modal, setModal]           = useState(null)
@@ -1025,6 +1035,36 @@ export default function CampaignPage() {
           <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 16, padding: '36px 24px', textAlign: 'center', color: MUTED, fontSize: 13 }}>
             {view === 'scheduled' ? 'No scheduled campaigns.' : statusFilter ? 'No campaigns with this status.' : 'No campaigns yet. Create one to get started.'}
           </div>
+        ) : isMobile ? (
+          // Mobile: Stacked cards
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {campaigns.map((c) => (
+              <div key={c.id} style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontWeight: 700, color: TEXT, fontSize: 14 }}>{c.name}</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <StatusBadge status={c.status} />
+                  <span style={{ fontSize: 12, color: MUTED }}>
+                    {c.status === 'sent' && c.sent_at ? new Date(c.sent_at).toLocaleDateString() : c.scheduled_at ? new Date(c.scheduled_at).toLocaleString() : '—'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                  {c.status === 'draft' ? (
+                    <>
+                      <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ flex: 1, minWidth: 60, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Edit2 size={14} /> Edit</button>
+                      <button type="button" onClick={() => handleDelete(c.id)} style={{ flex: 1, minWidth: 60, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+                    </>
+                  ) : c.status === 'scheduled' ? (
+                    <>
+                      <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ flex: 1, minWidth: 60, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Edit2 size={14} /> Edit</button>
+                      <button type="button" onClick={() => handleCancel(c.id)} style={{ flex: 1, minWidth: 60, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                    </>
+                  ) : c.status === 'sent' || c.status === 'sending' ? (
+                    <button type="button" onClick={() => setModal({ mode: 'report', campaign: c })} style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><BarChart3 size={14} /> Report</button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', background: '#FFFFFF', borderRadius: 14, overflow: 'hidden' }}>
@@ -1130,6 +1170,7 @@ export default function CampaignPage() {
               </tbody>
             </table>
           </div>
+        )}
         )}
       </div>
 

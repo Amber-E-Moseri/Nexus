@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { supabase } from '../../lib/supabase'
 
 const PRIMARY = '#4C2A92'
@@ -63,6 +64,8 @@ function StatusBadge({ status }) {
 // ─── Campaign Drilldown ──────────────────────────────────────────────────────
 
 function CampaignDrilldown({ campaign }) {
+  const windowWidth = useWindowWidth()
+  const isMobile = windowWidth <= 768
   const [sends, setSends]           = useState([])
   const [abTest, setAbTest]         = useState(null)
   const [clicks, setClicks]         = useState([])
@@ -290,14 +293,19 @@ function CampaignDrilldown({ campaign }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Stat tiles */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      {/* Stat tiles - 2x2 grid on mobile, flex wrap on desktop */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
         <StatTile label="Recipients"    value={(campaign.recipient_count ?? sends.length).toLocaleString()} />
         <StatTile label="Delivered"     value={delivered.toLocaleString()} sub={pct(delivered, sends.length)} color={PRIMARY} />
         <StatTile label="Opens"         value={opened.toLocaleString()}    sub={pct(opened, delivered)} color={PRIMARY} flash={flashOpensTile} />
         <StatTile label="Clicks"        value={totalClicks.toLocaleString()} sub={pct(totalClicks, delivered)} color="#1A56DB" />
-        <StatTile label="Bounced / Failed" value={failed.toLocaleString()} sub={pct(failed, sends.length)} color={failed > 0 ? ERROR : TEXT} />
+        {!isMobile && <StatTile label="Bounced / Failed" value={failed.toLocaleString()} sub={pct(failed, sends.length)} color={failed > 0 ? ERROR : TEXT} />}
       </div>
+      {isMobile && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+          <StatTile label="Bounced / Failed" value={failed.toLocaleString()} sub={pct(failed, sends.length)} color={failed > 0 ? ERROR : TEXT} />
+        </div>
+      )}
 
       {/* Bounce warning */}
       {bounceRate > 5 && (
@@ -379,6 +387,20 @@ function CampaignDrilldown({ campaign }) {
           </div>
           {linkPerformance.length === 0 ? (
             <div style={{ padding: '16px', color: MUTED, fontSize: 13 }}>No link click data recorded yet.</div>
+          ) : isMobile ? (
+            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {linkPerformance.slice(0, 10).map((item) => (
+                <div key={item.url} style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <a href={item.url} target="_blank" rel="noreferrer" style={{ color: PRIMARY, fontSize: 12, fontWeight: 600, wordBreak: 'break-word' }}>
+                    {item.url.length > 60 ? `${item.url.slice(0, 60)}…` : item.url}
+                  </a>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: MUTED }}>
+                    <span>Clicks: <strong>{item.clicks}</strong></span>
+                    <span>Unique: <strong>{item.unique_clickers}</strong></span>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -453,53 +475,82 @@ function CampaignDrilldown({ campaign }) {
 
       {/* Send log */}
       <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: TEXT }}>Send Log</div>
-          <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: TEXT, alignSelf: isMobile ? 'flex-start' : 'center' }}>Send Log</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignSelf: isMobile ? 'stretch' : 'center', width: isMobile ? '100%' : 'auto' }}>
             {['all', 'opened', 'failed', 'bounced'].map((f) => (
               <button
                 key={f}
                 type="button"
                 onClick={() => setFilter(f)}
-                style={{ border: `1px solid ${filterStatus === f ? PRIMARY : BORDER}`, background: filterStatus === f ? '#EDE8F8' : '#FFFFFF', color: filterStatus === f ? PRIMARY : MUTED, borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                style={{ flex: isMobile ? 1 : 'initial', border: `1px solid ${filterStatus === f ? PRIMARY : BORDER}`, background: filterStatus === f ? '#EDE8F8' : '#FFFFFF', color: filterStatus === f ? PRIMARY : MUTED, borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
               >
                 {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
+          </div>
+        </div>
+        {isMobile ? (
+          <div style={{ padding: 12, paddingTop: 0 }}>
             <button
               type="button"
               onClick={exportCSV}
-              style={{ border: `1px solid ${PRIMARY}`, background: PRIMARY, color: '#FFFFFF', borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+              style={{ width: '100%', border: `1px solid ${PRIMARY}`, background: PRIMARY, color: '#FFFFFF', borderRadius: 8, padding: '8px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginBottom: 12 }}
             >
               Export CSV
             </button>
-          </div>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: BG }}>
-                {['Email', 'Name', 'Status', 'Opened At', 'Error'].map((h) => (
-                  <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: MUTED, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: `1px solid ${BORDER}` }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {filtered.map((s) => (
-                <tr key={s.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                  <td style={{ padding: '9px 14px', color: TEXT }}>{s.recipient_email}</td>
-                  <td style={{ padding: '9px 14px', color: TEXT }}>{s.recipient_name ?? '—'}</td>
-                  <td style={{ padding: '9px 14px' }}><StatusBadge status={s.status} /></td>
-                  <td style={{ padding: '9px 14px', color: MUTED, fontSize: 11 }}>{s.opened_at ? new Date(s.opened_at).toLocaleString() : '—'}</td>
-                  <td style={{ padding: '9px 14px', color: ERROR, fontSize: 11 }}>{s.error_message ?? '—'}</td>
-                </tr>
+                <div key={s.id} style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontWeight: 700, color: TEXT, fontSize: 13 }}>{s.recipient_email}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <StatusBadge status={s.status} />
+                    <span style={{ fontSize: 11, color: MUTED }}>{s.opened_at ? new Date(s.opened_at).toLocaleString() : '—'}</span>
+                  </div>
+                  {s.error_message && <div style={{ fontSize: 11, color: ERROR }}>{s.error_message}</div>}
+                </div>
               ))}
-              {filtered.length === 0 ? (
-                <tr><td colSpan={5} style={{ padding: 20, textAlign: 'center', color: MUTED, fontSize: 13 }}>No records.</td></tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
+              {filtered.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: MUTED, fontSize: 13 }}>No records.</div>}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={exportCSV}
+                style={{ border: `1px solid ${PRIMARY}`, background: PRIMARY, color: '#FFFFFF', borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Export CSV
+              </button>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: BG }}>
+                    {['Email', 'Name', 'Status', 'Opened At', 'Error'].map((h) => (
+                      <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: MUTED, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: `1px solid ${BORDER}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((s) => (
+                    <tr key={s.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                      <td style={{ padding: '9px 14px', color: TEXT }}>{s.recipient_email}</td>
+                      <td style={{ padding: '9px 14px', color: TEXT }}>{s.recipient_name ?? '—'}</td>
+                      <td style={{ padding: '9px 14px' }}><StatusBadge status={s.status} /></td>
+                      <td style={{ padding: '9px 14px', color: MUTED, fontSize: 11 }}>{s.opened_at ? new Date(s.opened_at).toLocaleString() : '—'}</td>
+                      <td style={{ padding: '9px 14px', color: ERROR, fontSize: 11 }}>{s.error_message ?? '—'}</td>
+                    </tr>
+                  ))}
+                  {filtered.length === 0 ? (
+                    <tr><td colSpan={5} style={{ padding: 20, textAlign: 'center', color: MUTED, fontSize: 13 }}>No records.</td></tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -509,6 +560,8 @@ function CampaignDrilldown({ campaign }) {
 
 export default function AnalyticsPage() {
   const navigate = useNavigate()
+  const windowWidth = useWindowWidth()
+  const isMobile = windowWidth <= 768
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedId = searchParams.get('campaign_id') ?? ''
 
@@ -633,14 +686,19 @@ export default function AnalyticsPage() {
         ) : (
           // ── Aggregate view ──
           <>
-            {/* Stat tiles */}
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {/* Stat tiles - 2x2 grid on mobile, flex on desktop */}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
               <StatTile label="Campaigns sent"  value={sentCampaigns.length} />
               <StatTile label="Total delivered" value={totals.sent.toLocaleString()} />
               <StatTile label="Total opens"     value={totals.opens.toLocaleString()} sub={`${pct(totals.opens, totals.sent)} avg open rate`} color={PRIMARY} />
               <StatTile label="Failed"          value={totals.failed.toLocaleString()} sub={pct(totals.failed, totals.sent + totals.failed)} color={totals.failed > 0 ? ERROR : TEXT} />
-              <StatTile label="Unsubscribes"    value={unsubscribes.length.toLocaleString()} color={unsubscribes.length > 10 ? ERROR : TEXT} />
+              {!isMobile && <StatTile label="Unsubscribes"    value={unsubscribes.length.toLocaleString()} color={unsubscribes.length > 10 ? ERROR : TEXT} />}
             </div>
+            {isMobile && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                <StatTile label="Unsubscribes"    value={unsubscribes.length.toLocaleString()} color={unsubscribes.length > 10 ? ERROR : TEXT} />
+              </div>
+            )}
 
             {/* Open rate trend */}
             {openRateData.length > 0 ? (

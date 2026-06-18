@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { supabase } from '../../lib/supabase'
 import SegmentBuilderAdvanced from '../../modules/communications/SegmentBuilderAdvanced'
+import { Eye, Edit2, Trash2 } from 'lucide-react'
 
 const PRIMARY = '#4C2A92'
 const BORDER  = '#EDE8DC'
@@ -31,6 +33,8 @@ function Modal({ title, onClose, children }) {
 export default function SegmentsPage() {
   const navigate   = useNavigate()
   const { profile } = useAuth()
+  const windowWidth = useWindowWidth()
+  const isMobile = windowWidth <= 768
   const [segments, setSegments]   = useState([])
   const [loading, setLoading]     = useState(true)
   const [allData, setAllData]     = useState({ depts: [], roster: [], users: [] })
@@ -167,34 +171,28 @@ export default function SegmentsPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {segments.map((seg) => (
-              <div key={seg.id} style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <div key={seg.id} style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, padding: isMobile ? 12 : '16px 18px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? 12 : 14, flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: 200 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: TEXT }}>{seg.name}</div>
+                  <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 800, color: TEXT }}>{seg.name}</div>
                   {seg.description ? <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>{seg.description}</div> : null}
                   <div style={{ fontSize: 12, color: '#9E9488', marginTop: 4 }}>
                     ~{seg.estimated_count ?? 0} recipients
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button type="button" onClick={() => handleRecalculate(seg)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    Recalculate
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', width: isMobile ? '100%' : 'auto' }}>
+                  <button type="button" onClick={() => handlePreviewRecipients(seg)} style={{ flex: isMobile ? '1 1 calc(50% - 3px)' : 'initial', border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 8, padding: isMobile ? '6px 8px' : '6px 12px', fontSize: isMobile ? 11 : 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                    <Eye size={isMobile ? 12 : 14} /> Preview
                   </button>
-                  <button type="button" onClick={() => handlePreviewRecipients(seg)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                    Preview recipients
-                  </button>
-                  <button type="button" onClick={() => openEdit(seg)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                    Edit
-                  </button>
-                  <button type="button" onClick={() => navigate('/communications/campaigns')} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: TEXT, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    Use in Campaign
+                  <button type="button" onClick={() => openEdit(seg)} style={{ flex: isMobile ? '1 1 calc(50% - 3px)' : 'initial', border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 8, padding: isMobile ? '6px 8px' : '6px 12px', fontSize: isMobile ? 11 : 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                    <Edit2 size={isMobile ? 12 : 14} /> Edit
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDelete(seg)}
                     disabled={deleting === seg.id}
-                    style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: deleting === seg.id ? 'not-allowed' : 'pointer', opacity: deleting === seg.id ? 0.6 : 1 }}
+                    style={{ flex: isMobile ? '1 1 calc(50% - 3px)' : 'initial', border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 8, padding: isMobile ? '6px 8px' : '6px 12px', fontSize: isMobile ? 11 : 12, fontWeight: 700, cursor: deleting === seg.id ? 'not-allowed' : 'pointer', opacity: deleting === seg.id ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
                   >
-                    {deleting === seg.id ? 'Deleting...' : 'Delete'}
+                    <Trash2 size={isMobile ? 12 : 14} /> {deleting === seg.id ? 'Deleting...' : 'Delete'}
                   </button>
                 </div>
               </div>

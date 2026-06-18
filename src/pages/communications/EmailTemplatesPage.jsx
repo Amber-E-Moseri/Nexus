@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { supabase } from '../../lib/supabase'
 import { getEmailTemplates, createEmailTemplate } from '../../lib/communications'
 import TemplateEditor from '../../modules/communications/TemplateEditor'
-import { Search, Palette, Eye, Copy } from 'lucide-react'
+import { Search, Palette, Eye, Copy, Edit3, Trash2 } from 'lucide-react'
 
 const PRIMARY = '#4C2A92'
 const BORDER = '#EDE8DC'
@@ -19,6 +20,8 @@ const CATEGORIES = [
 ]
 
 export default function EmailTemplatesPage() {
+  const windowWidth = useWindowWidth()
+  const isMobile = windowWidth <= 768
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -27,6 +30,7 @@ export default function EmailTemplatesPage() {
   const [realtime, setRealtime] = useState(null)
   const [previewTemplate, setPreviewTemplate] = useState(null)
   const [duplicating, setDuplicating] = useState(null)
+  const [deleting, setDeleting] = useState(null)
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
@@ -98,6 +102,23 @@ export default function EmailTemplatesPage() {
     }
   }
 
+  async function handleDelete(template) {
+    if (!window.confirm(`Delete template "${template.name}"?`)) return
+    setDeleting(template.id)
+    try {
+      await supabase.from('communication_email_templates').delete().eq('id', template.id)
+      setToast({ type: 'success', message: 'Template deleted' })
+      setTimeout(() => setToast(null), 3000)
+      loadTemplates()
+    } catch (err) {
+      console.error('Failed to delete template:', err)
+      setToast({ type: 'error', message: 'Failed to delete template' })
+      setTimeout(() => setToast(null), 3000)
+    } finally {
+      setDeleting(null)
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
@@ -160,7 +181,7 @@ export default function EmailTemplatesPage() {
             {searchTerm ? 'No templates match your search.' : 'No templates in this category.'}
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+          <div style={{ display: isMobile ? 'flex' : 'grid', flexDirection: isMobile ? 'column' : undefined, gridTemplateColumns: isMobile ? undefined : 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
             {filtered.map((template) => (
               <div
                 key={template.id}
@@ -191,24 +212,24 @@ export default function EmailTemplatesPage() {
                 ) : (
                   <div style={{ fontSize: 11, color: PRIMARY, fontWeight: 600, marginBottom: 12 }}>★ Your Custom Template</div>
                 )}
-                <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
+                <div style={{ display: 'flex', gap: 8, marginTop: 'auto', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
                   <button
                     type="button"
                     onClick={() => setPreviewTemplate(template)}
                     style={{
-                      flex: 1,
+                      flex: isMobile ? '1 1 calc(50% - 4px)' : 1,
                       border: `1px solid ${BORDER}`,
                       background: '#FFFFFF',
                       color: PRIMARY,
                       borderRadius: 6,
-                      padding: '8px 10px',
-                      fontSize: 12,
+                      padding: isMobile ? '6px 8px' : '8px 10px',
+                      fontSize: isMobile ? 11 : 12,
                       fontWeight: 600,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: 6,
+                      gap: 4,
                       transition: 'all 150ms',
                     }}
                     onMouseEnter={(e) => {
@@ -218,28 +239,28 @@ export default function EmailTemplatesPage() {
                       e.currentTarget.style.background = '#FFFFFF'
                     }}
                   >
-                    <Eye size={14} />
-                    Preview
+                    {!isMobile && <Eye size={14} />}
+                    <Eye size={isMobile ? 12 : 14} />
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDuplicate(template)}
                     disabled={duplicating === template.id}
                     style={{
-                      flex: 1,
+                      flex: isMobile ? '1 1 calc(50% - 4px)' : 1,
                       border: `1px solid ${BORDER}`,
                       background: '#FFFFFF',
                       color: PRIMARY,
                       borderRadius: 6,
-                      padding: '8px 10px',
-                      fontSize: 12,
+                      padding: isMobile ? '6px 8px' : '8px 10px',
+                      fontSize: isMobile ? 11 : 12,
                       fontWeight: 600,
                       cursor: duplicating === template.id ? 'not-allowed' : 'pointer',
                       opacity: duplicating === template.id ? 0.6 : 1,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: 6,
+                      gap: 4,
                       transition: 'all 150ms',
                     }}
                     onMouseEnter={(e) => {
@@ -249,22 +270,26 @@ export default function EmailTemplatesPage() {
                       e.currentTarget.style.background = '#FFFFFF'
                     }}
                   >
-                    <Copy size={14} />
-                    {duplicating === template.id ? 'Copying...' : 'Duplicate'}
+                    {!isMobile && <Copy size={14} />}
+                    <Copy size={isMobile ? 12 : 14} />
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditing(template)}
                     style={{
-                      flex: 1,
+                      flex: isMobile ? '1 1 calc(50% - 4px)' : 1,
                       border: 'none',
                       background: PRIMARY,
                       color: '#FFFFFF',
                       borderRadius: 6,
-                      padding: '8px 10px',
-                      fontSize: 12,
+                      padding: isMobile ? '6px 8px' : '8px 10px',
+                      fontSize: isMobile ? 11 : 12,
                       fontWeight: 600,
                       cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
                       transition: 'all 150ms',
                     }}
                     onMouseEnter={(e) => {
@@ -274,8 +299,42 @@ export default function EmailTemplatesPage() {
                       e.currentTarget.style.opacity = '1'
                     }}
                   >
-                    Customize
+                    {!isMobile && <Edit3 size={14} />}
+                    <Edit3 size={isMobile ? 12 : 14} />
                   </button>
+                  {!template.is_system && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(template)}
+                      disabled={deleting === template.id}
+                      style={{
+                        flex: isMobile ? '1 1 calc(50% - 4px)' : 1,
+                        border: `1px solid ${BORDER}`,
+                        background: '#FFFFFF',
+                        color: '#C94830',
+                        borderRadius: 6,
+                        padding: isMobile ? '6px 8px' : '8px 10px',
+                        fontSize: isMobile ? 11 : 12,
+                        fontWeight: 600,
+                        cursor: deleting === template.id ? 'not-allowed' : 'pointer',
+                        opacity: deleting === template.id ? 0.6 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 4,
+                        transition: 'all 150ms',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (deleting !== template.id) e.currentTarget.style.background = '#FEF0ED'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#FFFFFF'
+                      }}
+                    >
+                      {!isMobile && <Trash2 size={14} />}
+                      <Trash2 size={isMobile ? 12 : 14} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
