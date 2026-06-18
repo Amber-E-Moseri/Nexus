@@ -151,15 +151,20 @@ export async function getPersonalTasks(userId) {
 
 export async function getMyTasks(userId) {
   const { data, error } = await supabase
-    .from('actionable_tasks')
+    .from('tasks')
     .select(`
       *,
       ${TASK_STATUS_SELECT},
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
-      subtasks:tasks!parent_task_id(${SUBTASK_SELECT})
+      assignee:users!assignee_id(id, name, avatar_url),
+      subtasks:tasks!parent_task_id(${SUBTASK_SELECT}),
+      comments:task_comments(count),
+      files:task_files(count)
     `)
     .eq('assignee_id', userId)
+    .eq('is_personal', false)
+    .is('parent_task_id', null)
     .order('due_date', { ascending: true, nullsFirst: false })
     .limit(200)
 
