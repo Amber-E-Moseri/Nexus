@@ -1312,12 +1312,22 @@ export default function MeetingReportTab() {
 
     setEmailSending(true)
     try {
+      // Fetch default absence email template
+      const { data: template, error: templateError } = await supabase
+        .from('absence_email_templates')
+        .select('subject, body')
+        .eq('is_default', true)
+        .maybeSingle()
+
+      if (templateError) throw templateError
+
       const { data, error } = await supabase.functions.invoke('send-absence-emails', {
         body: {
           report_id: report.id,
           recipients: emailConfirmation.recipients,
-          subject: `We missed you at ${report.label}`,
-          body_template: 'Hi {{name}}, we missed you at {{meeting_label}}. Please review the meeting attendance report.',
+          subject: template?.subject || `We missed you at ${report.label}`,
+          body_template: template?.body || 'Hi {{name}}, we missed you at {{meeting_label}}. Please review the meeting attendance report.',
+          meeting_label: report.label,
         },
       })
 
