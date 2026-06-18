@@ -6,6 +6,7 @@ import { useToast } from '../../context/ToastContext'
 import { EVENT_COLORS } from './CalendarEventCard'
 
 const EVENT_TYPES = ['conference', 'program', 'training', 'prayer', 'graduation', 'event', 'deadline']
+const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function EventSubmitModal({ onClose, onSubmitted, departments = [] }) {
   const { profile, effectiveRole } = useAuth()
@@ -23,6 +24,15 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
     event_type: 'event',
     department_id: null,
     is_org_wide: true,
+  })
+  const [recurring, setRecurring] = useState(false)
+  const [recurrenceData, setRecurrenceData] = useState({
+    frequency: 'none',
+    daysOfWeek: new Set(),
+    dayOfMonth: 1,
+    endType: 'never',
+    occurrences: 4,
+    endDate: new Date().toISOString().split('T')[0],
   })
 
   async function handleSubmit(e) {
@@ -53,6 +63,7 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
         end_date: formData.all_day
           ? new Date(formData.end_date).toISOString()
           : new Date(`${formData.end_date}T${formData.end_time}`).toISOString(),
+        recurrence_rule: buildRRule(),
       }
 
       const userRole = effectiveRole || 'user'
@@ -76,6 +87,36 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
     }))
+  }
+
+  function buildRRule() {
+    if (!recurring || recurrenceData.frequency === 'none') return null
+
+    let rrule = `FREQ=${recurrenceData.frequency.toUpperCase()}`
+
+    if (recurrenceData.frequency === 'bi-weekly') {
+      rrule = `FREQ=WEEKLY;INTERVAL=2`
+    }
+
+    if (recurrenceData.frequency === 'weekly' || recurrenceData.frequency === 'bi-weekly') {
+      if (recurrenceData.daysOfWeek.size > 0) {
+        const dayMap = { Sun: 'SU', Mon: 'MO', Tue: 'TU', Wed: 'WE', Thu: 'TH', Fri: 'FR', Sat: 'SA' }
+        const days = Array.from(recurrenceData.daysOfWeek).map((d) => dayMap[d]).join(',')
+        rrule += `;BYDAY=${days}`
+      }
+    } else if (recurrenceData.frequency === 'monthly') {
+      rrule += `;BYMONTHDAY=${recurrenceData.dayOfMonth}`
+    }
+
+    if (recurrenceData.endType === 'occurrences') {
+      rrule += `;COUNT=${recurrenceData.occurrences}`
+    } else if (recurrenceData.endType === 'date') {
+      const endDate = new Date(recurrenceData.endDate)
+      const dateStr = endDate.toISOString().split('T')[0].replace(/-/g, '')
+      rrule += `;UNTIL=${dateStr}T000000Z`
+    }
+
+    return rrule
   }
 
   return (
@@ -318,6 +359,235 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
               </div>
             )}
           </div>
+
+          {/* Recurrence Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <input
+              type="checkbox"
+              checked={recurring}
+              onChange={(e) => setRecurring(e.target.checked)}
+              id="recurrence-checkbox"
+              style={{ cursor: 'pointer' }}
+            />
+            <label htmlFor="recurrence-checkbox" style={{
+              fontSize: '14px',
+              fontWeight: 500,
+              color: 'var(--text-primary)',
+              cursor: 'pointer'
+            }}>
+              Repeat this event
+            </label>
+          </div>
+
+          {/* Recurrence Options */}
+          {recurring && (
+            <div style={{
+              padding: '16px',
+              backgroundColor: 'var(--surface-tertiary)',
+              borderRadius: '8px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px'
+            }}>
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  marginBottom: '8px',
+                  color: 'var(--text-primary)'
+                }}>
+                  Frequency
+                </label>
+                <select
+                  value={recurrenceData.frequency}
+                  onChange={(e) => setRecurrenceData((prev) => ({ ...prev, frequency: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border)',
+                    fontSize: '14px',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="none">None</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="bi-weekly">Bi-weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+
+              {(recurrenceData.frequency === 'weekly' || recurrenceData.frequency === 'bi-weekly') && (
+                <div>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    marginBottom: '8px',
+                    color: 'var(--text-primary)'
+                  }}>
+                    Days of Week
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' }}>
+                    {DAYS_OF_WEEK.map((day, idx) => (
+                      <label key={day} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={recurrenceData.daysOfWeek.has(day)}
+                          onChange={(e) => {
+                            const newDays = new Set(recurrenceData.daysOfWeek)
+                            if (e.target.checked) {
+                              newDays.add(day)
+                            } else {
+                              newDays.delete(day)
+                            }
+                            setRecurrenceData((prev) => ({ ...prev, daysOfWeek: newDays }))
+                          }}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        {day}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {recurrenceData.frequency === 'monthly' && (
+                <div>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    marginBottom: '8px',
+                    color: 'var(--text-primary)'
+                  }}>
+                    Day of Month
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={recurrenceData.dayOfMonth}
+                    onChange={(e) => setRecurrenceData((prev) => ({ ...prev, dayOfMonth: Math.max(1, Math.min(31, parseInt(e.target.value) || 1)) }))}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border)',
+                      fontSize: '14px',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  marginBottom: '8px',
+                  color: 'var(--text-primary)'
+                }}>
+                  End After
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}>
+                    <input
+                      type="radio"
+                      name="endType"
+                      value="occurrences"
+                      checked={recurrenceData.endType === 'occurrences'}
+                      onChange={(e) => setRecurrenceData((prev) => ({ ...prev, endType: e.target.value }))}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="365"
+                        value={recurrenceData.occurrences}
+                        onChange={(e) => setRecurrenceData((prev) => ({ ...prev, occurrences: Math.max(1, parseInt(e.target.value) || 1) }))}
+                        style={{
+                          width: '60px',
+                          padding: '6px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border)',
+                          fontSize: '12px',
+                          marginRight: '6px'
+                        }}
+                      />
+                      occurrences
+                    </span>
+                  </label>
+
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}>
+                    <input
+                      type="radio"
+                      name="endType"
+                      value="date"
+                      checked={recurrenceData.endType === 'date'}
+                      onChange={(e) => setRecurrenceData((prev) => ({ ...prev, endType: e.target.value }))}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span>
+                      On date
+                      <input
+                        type="date"
+                        value={recurrenceData.endDate}
+                        onChange={(e) => setRecurrenceData((prev) => ({ ...prev, endDate: e.target.value }))}
+                        style={{
+                          padding: '6px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border)',
+                          fontSize: '12px',
+                          marginLeft: '6px'
+                        }}
+                      />
+                    </span>
+                  </label>
+
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}>
+                    <input
+                      type="radio"
+                      name="endType"
+                      value="never"
+                      checked={recurrenceData.endType === 'never'}
+                      onChange={(e) => setRecurrenceData((prev) => ({ ...prev, endType: e.target.value }))}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    Never
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Location */}
           <div>

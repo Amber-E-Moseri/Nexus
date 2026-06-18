@@ -1,17 +1,8 @@
 import { useEffect, useState } from 'react'
 import { format, isToday, isTomorrow, parseISO } from 'date-fns'
 import { NavLink } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
-
-const EVENT_TYPE_COLORS = {
-  conference:  { bg: '#EDE8F8', text: '#4C2A92' },
-  program:     { bg: '#EBF7F1', text: '#2D8653' },
-  training:    { bg: '#FFF8EC', text: '#D17A1C' },
-  prayer:      { bg: '#FEF8E7', text: '#B87D0E' },
-  graduation:  { bg: '#EBF7F1', text: '#2D8653' },
-  event:       { bg: '#F4F1EA', text: '#6B6560' },
-  deadline:    { bg: '#FEF0ED', text: '#C94830' },
-}
+import { getUpcomingEvents } from '../../lib/calendar'
+import { EVENT_COLORS } from '../../modules/calendar/CalendarEventCard'
 
 function dateLabel(dateStr) {
   const d = parseISO(dateStr)
@@ -29,13 +20,11 @@ export default function UpcomingEventsWidget() {
     async function load() {
       setLoading(true)
       try {
-        const { data } = await supabase
-          .from('calendar_events')
-          .select('id, title, start_date, end_date, event_type, all_day')
-          .gte('start_date', new Date().toISOString())
-          .order('start_date', { ascending: true })
-          .limit(5)
-        if (active) setEvents(data ?? [])
+        const data = await getUpcomingEvents(5)
+        if (active) {
+          const filtered = (data ?? []).filter((e) => e.status === 'approved')
+          setEvents(filtered)
+        }
       } finally {
         if (active) setLoading(false)
       }
@@ -52,7 +41,7 @@ export default function UpcomingEventsWidget() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {events.map(evt => {
-        const col = EVENT_TYPE_COLORS[evt.event_type] ?? EVENT_TYPE_COLORS.event
+        const color = EVENT_COLORS[evt.event_type] || EVENT_COLORS.event
         return (
           <div key={evt.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
@@ -61,19 +50,26 @@ export default function UpcomingEventsWidget() {
             }}>
               {dateLabel(evt.start_date)}
             </div>
+            <div style={{
+              width: '3px',
+              height: '16px',
+              backgroundColor: color,
+              borderRadius: '2px',
+              flexShrink: 0
+            }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#2D2A22', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {evt.title}
               </div>
             </div>
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: col.bg, color: col.text, flexShrink: 0 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: 'var(--surface-tertiary)', color: 'var(--text-secondary)', flexShrink: 0, textTransform: 'capitalize' }}>
               {evt.event_type ?? 'event'}
             </span>
           </div>
         )
       })}
       <NavLink to="/calendar" style={{ fontSize: 12, color: '#4C2A92', fontWeight: 600, textDecoration: 'none', marginTop: 2 }}>
-        View calendar →
+        View all →
       </NavLink>
     </div>
   )

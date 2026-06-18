@@ -131,6 +131,7 @@ export default function ApiKeyManager({
               <th className="px-3 py-3 font-medium">Name</th>
               <th className="px-3 py-3 font-medium">Prefix</th>
               <th className="px-3 py-3 font-medium">Permissions</th>
+              <th className="px-3 py-3 font-medium">Rate limit</th>
               <th className="px-3 py-3 font-medium">Last used</th>
               <th className="px-3 py-3 font-medium">Expires</th>
               <th className="px-3 py-3 font-medium">Status</th>
@@ -145,6 +146,7 @@ export default function ApiKeyManager({
                   <td className="px-3 py-3 font-medium text-[var(--text-primary)]">{key.name}</td>
                   <td className="px-3 py-3 font-mono text-xs text-[var(--text-secondary)]">{key.key_prefix}</td>
                   <td className="px-3 py-3 text-[var(--text-secondary)]">{(key.permissions ?? []).join(', ')}</td>
+                  <td className="px-3 py-3 text-sm text-[var(--text-secondary)]">60 req/min</td>
                   <td className="px-3 py-3 text-[var(--text-secondary)]">{formatDateTime(key.last_used_at)}</td>
                   <td className="px-3 py-3 text-[var(--text-secondary)]">{formatDateTime(key.expires_at)}</td>
                   <td className="px-3 py-3">
@@ -198,7 +200,7 @@ export default function ApiKeyManager({
 
             {!loading && keys.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-10 text-center text-[var(--text-secondary)]">
+                <td colSpan={8} className="px-3 py-10 text-center text-[var(--text-secondary)]">
                   No API keys created for this department yet.
                 </td>
               </tr>
@@ -210,6 +212,14 @@ export default function ApiKeyManager({
       <div className="rounded-2xl bg-[var(--surface-secondary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
         <div>API endpoint: <span className="font-mono text-xs text-[var(--text-primary)]">{endpoint}</span></div>
         <div className="mt-1">Include header: <span className="font-mono text-xs text-[var(--text-primary)]">x-api-key: [your key]</span></div>
+        <div className="mt-3 pt-3 border-t border-[var(--border)]">
+          <a
+            href="/settings/api-docs"
+            className="inline-flex items-center gap-1 text-[var(--accent)] hover:text-[var(--accent-hover)] font-medium"
+          >
+            View API documentation →
+          </a>
+        </div>
       </div>
 
       <Dialog.Root open={open} onOpenChange={(nextOpen) => {

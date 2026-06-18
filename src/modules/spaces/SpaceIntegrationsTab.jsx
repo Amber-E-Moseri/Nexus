@@ -12,6 +12,7 @@ function formatDate(iso) {
 function GoogleDriveCard({ spaceId, canManage }) {
   const { profile } = useAuth()
   const [integration, setIntegration] = useState(undefined) // undefined = loading
+  const [isEnabled, setIsEnabled] = useState(true)
   const [files, setFiles] = useState([])
   const [filesLoading, setFilesLoading] = useState(false)
   const [connectMode, setConnectMode] = useState(false)
@@ -26,9 +27,18 @@ function GoogleDriveCard({ spaceId, canManage }) {
       .select('*')
       .eq('department_id', spaceId)
       .eq('integration_type', 'google_drive')
-      .eq('is_active', true)
       .maybeSingle()
-    setIntegration(data ?? null)
+
+    if (data) {
+      setIsEnabled(data.is_active)
+      if (data.is_active) {
+        setIntegration(data)
+      } else {
+        setIntegration(null)
+      }
+    } else {
+      setIntegration(null)
+    }
   }
 
   async function loadFiles(integrationId) {
@@ -166,6 +176,8 @@ function GoogleDriveCard({ spaceId, canManage }) {
             </div>
           )}
         </>
+      ) : !isEnabled ? (
+        <div style={{ fontSize: 13, color: '#9E9488' }}>Google Drive disabled for this space.</div>
       ) : canManage ? (
         connectMode ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -197,6 +209,7 @@ function GoogleDriveCard({ spaceId, canManage }) {
 function ZoomCard({ spaceId, canManage }) {
   const { profile } = useAuth()
   const [integration, setIntegration] = useState(undefined)
+  const [isEnabled, setIsEnabled] = useState(true)
   const [disconnecting, setDisconnecting] = useState(false)
 
   async function loadIntegration() {
@@ -205,9 +218,18 @@ function ZoomCard({ spaceId, canManage }) {
       .select('*')
       .eq('department_id', spaceId)
       .eq('integration_type', 'zoom')
-      .eq('is_active', true)
       .maybeSingle()
-    setIntegration(data ?? null)
+
+    if (data) {
+      setIsEnabled(data.is_active)
+      if (data.is_active) {
+        setIntegration(data)
+      } else {
+        setIntegration(null)
+      }
+    } else {
+      setIntegration(null)
+    }
   }
 
   useEffect(() => { loadIntegration() }, [spaceId])
@@ -276,11 +298,106 @@ function ZoomCard({ spaceId, canManage }) {
             </div>
           )}
         </>
+      ) : !isEnabled ? (
+        <div style={{ fontSize: 13, color: '#9E9488' }}>Zoom disabled for this space.</div>
       ) : canManage ? (
         <button type="button" onClick={handleConnect} style={primaryBtn}>Connect Zoom</button>
       ) : (
         <div style={{ fontSize: 13, color: '#9E9488' }}>Zoom not connected.</div>
       )}
+    </div>
+  )
+}
+
+// ── Integration Toggle Panel ──────────────────────────────────────────────
+
+function IntegrationTogglesPanel({ spaceId }) {
+  const [toggles, setToggles] = useState({
+    google_drive: true,
+    zoom: true,
+    resend: false,
+  })
+  const [saving, setSaving] = useState(null)
+
+  useEffect(() => {
+    loadToggles()
+  }, [spaceId])
+
+  async function loadToggles() {
+    const { data } = await supabase
+      .from('space_integrations')
+      .select('integration_type, is_active')
+      .eq('department_id', spaceId)
+
+    if (data) {
+      const toggleState = { google_drive: true, zoom: true, resend: false }
+      data.forEach((row) => {
+        if (row.integration_type in toggleState) {
+          toggleState[row.integration_type] = row.is_active
+        }
+      })
+      setToggles(toggleState)
+    }
+  }
+
+  async function handleToggle(integrationType, newValue) {
+    setSaving(integrationType)
+    try {
+      const { error } = await supabase.from('space_integrations').upsert({
+        department_id: spaceId,
+        integration_type: integrationType,
+        display_name: integrationType.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+        config: {},
+        is_active: newValue,
+      }, { onConflict: 'department_id,integration_type' })
+
+      if (!error) {
+        setToggles((prev) => ({ ...prev, [integrationType]: newValue }))
+      }
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const panelStyle = { background: '#FFFFFF', border: '1px solid #EDE8DC', borderRadius: 14, padding: '18px 20px' }
+  const labelStyle = { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, cursor: 'pointer' }
+
+  return (
+    <div style={panelStyle}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: '#2D2A22', marginBottom: 14 }}>Enable integrations for this space</div>
+
+      <div style={labelStyle} onClick={() => handleToggle('google_drive', !toggles.google_drive)}>
+        <input
+          type="checkbox"
+          checked={toggles.google_drive}
+          onChange={(e) => e.stopPropagation()}
+          disabled={saving === 'google_drive'}
+          style={{ cursor: 'pointer' }}
+        />
+        <span style={{ fontSize: 13, color: '#2D2A22', fontWeight: 500 }}>📁 Google Drive</span>
+      </div>
+
+      <div style={labelStyle} onClick={() => handleToggle('zoom', !toggles.zoom)}>
+        <input
+          type="checkbox"
+          checked={toggles.zoom}
+          onChange={(e) => e.stopPropagation()}
+          disabled={saving === 'zoom'}
+          style={{ cursor: 'pointer' }}
+        />
+        <span style={{ fontSize: 13, color: '#2D2A22', fontWeight: 500 }}>🎥 Zoom</span>
+      </div>
+
+      <div style={labelStyle} onClick={() => handleToggle('resend', !toggles.resend)}>
+        <input
+          type="checkbox"
+          checked={toggles.resend}
+          onChange={(e) => e.stopPropagation()}
+          disabled={saving === 'resend'}
+          style={{ cursor: 'pointer' }}
+        />
+        <span style={{ fontSize: 13, color: '#2D2A22', fontWeight: 500 }}>📧 Email (Resend)</span>
+      </div>
     </div>
   )
 }
@@ -294,6 +411,8 @@ export default function SpaceIntegrationsTab({ spaceId, canManage }) {
         <div style={{ fontSize: 16, fontWeight: 700, color: '#2D2A22' }}>Space Integrations</div>
         <div style={{ fontSize: 13, color: '#9E9488', marginTop: 2 }}>Connect tools to this space to streamline your team's workflow.</div>
       </div>
+
+      {canManage && <IntegrationTogglesPanel spaceId={spaceId} />}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
         <GoogleDriveCard spaceId={spaceId} canManage={canManage} />

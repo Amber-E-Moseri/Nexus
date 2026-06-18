@@ -4,6 +4,7 @@ import { Calendar } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingApprovals } from '../../lib/calendar'
 import { hasPermission } from '../../lib/permissions'
+import { useToast } from '../../context/ToastContext'
 import CalendarView from '../../modules/calendar/CalendarView'
 import EventModal from '../../modules/calendar/EventModal'
 import { EVENT_COLORS } from '../../modules/calendar/CalendarEventCard'
@@ -13,6 +14,7 @@ const EVENT_TYPES = ['conference', 'program', 'training', 'prayer', 'graduation'
 
 export default function MinistryCalendar() {
   const { effectiveRole, profile } = useAuth()
+  const { showToast } = useToast()
   const location = useLocation()
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth())
@@ -104,8 +106,69 @@ export default function MinistryCalendar() {
     return true
   })
 
+  const [showExportMenu, setShowExportMenu] = useState(false)
   const miniCalendarStart = new Date(year, month, 1)
   const miniCalendarEnd = new Date(year, month + 1, 0)
+
+  function generateICS() {
+    let ics = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//BLW Canada OS//EN\n'
+
+    filteredEvents.forEach((event) => {
+      if (event.status === 'approved') {
+        const startDate = new Date(event.start_date)
+        const endDate = new Date(event.end_date)
+
+        const formatDatetime = (date) => {
+          const year = date.getUTCFullYear()
+          const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+          const day = String(date.getUTCDate()).padStart(2, '0')
+          const hours = String(date.getUTCHours()).padStart(2, '0')
+          const minutes = String(date.getUTCMinutes()).padStart(2, '0')
+          const seconds = String(date.getUTCSeconds()).padStart(2, '0')
+          return `${year}${month}${day}T${hours}${minutes}${seconds}Z`
+        }
+
+        ics += 'BEGIN:VEVENT\n'
+        ics += `UID:${event.id}@blwcanada.org\n`
+        ics += `SUMMARY:${event.title.replace(/"/g, '\\"')}\n`
+        ics += `DTSTART:${formatDatetime(startDate)}\n`
+        ics += `DTEND:${formatDatetime(endDate)}\n`
+        if (event.description) {
+          ics += `DESCRIPTION:${event.description.replace(/"/g, '\\"').replace(/\n/g, '\\n')}\n`
+        }
+        if (event.location) {
+          ics += `LOCATION:${event.location}\n`
+        }
+        ics += 'END:VEVENT\n'
+      }
+    })
+
+    ics += 'END:VCALENDAR'
+    return ics
+  }
+
+  function downloadICS() {
+    const ics = generateICS()
+    const blob = new Blob([ics], { type: 'text/calendar' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'blwcanada-calendar.ics'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    setShowExportMenu(false)
+    showToast('Calendar downloaded', { tone: 'success' })
+  }
+
+  function copySubscribeLink() {
+    const projectUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co'
+    const url = `webcal://${projectUrl.replace('https://', '')}/functions/v1/calendar-ical?token=YOUR_TOKEN`
+    navigator.clipboard.writeText(url)
+    setShowExportMenu(false)
+    showToast('Subscribe link copied — paste into Google Calendar or Apple Calendar', { tone: 'success' })
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -260,7 +323,7 @@ export default function MinistryCalendar() {
 
         {/* Main Calendar */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', position: 'relative' }}>
             <button
               onClick={() => setShowSubmitModal(true)}
               style={{
@@ -276,9 +339,77 @@ export default function MinistryCalendar() {
             >
               + Add Event
             </button>
+
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                style={{
+                  padding: '10px 16px',
+                  backgroundColor: 'var(--surface-secondary)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '14px'
+                }}
+              >
+                📥 Export
+              </button>
+
+              {showExportMenu && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '4px',
+                  backgroundColor: 'white',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  zIndex: 100,
+                  minWidth: '180px'
+                }}>
+                  <button
+                    onClick={downloadICS}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      padding: '12px 16px',
+                      textAlign: 'left',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      color: 'var(--text-primary)',
+                      borderBottom: '1px solid var(--border)'
+                    }}
+                  >
+                    Download .ics
+                  </button>
+                  <button
+                    onClick={copySubscribeLink}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      padding: '12px 16px',
+                      textAlign: 'left',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      color: 'var(--text-primary)'
+                    }}
+                  >
+                    Copy subscribe link
+                  </button>
+                </div>
+              )}
+            </div>
+
             {canApprove && pendingCount > 0 && (
               <button
-                onClick={() => window.location.href = '/calendar-management'}
+                onClick={() => window.location.href = '/calendar/review'}
                 style={{
                   padding: '10px 16px',
                   backgroundColor: '#FEF3C7',

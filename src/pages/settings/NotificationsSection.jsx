@@ -2,12 +2,12 @@ import { NOTIFICATION_TYPES } from '../../lib/notifications'
 
 const ORDERED_TYPES = [
   'task_assigned',
-  'comment_added',
-  'sprint_status',
-  'sprint_added',
+  'task_comment',
+  'mention',
   'meeting_created',
+  'event_approved',
+  'event_rejected',
   'task_due_soon',
-  'invitation_accepted',
 ]
 
 function Toggle({ checked, onClick }) {
@@ -40,7 +40,6 @@ export default function NotificationsSection({ prefs, role, onTogglePref }) {
       </div>
 
       {ORDERED_TYPES
-        .filter((type) => type !== 'invitation_accepted' || role === 'super_admin' || role === 'dept_lead')
         .map((type) => {
           const current = prefs[type] ?? { in_app: true, email: true }
           const enabled = current.in_app || current.email

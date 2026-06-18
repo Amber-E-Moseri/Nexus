@@ -85,14 +85,18 @@ export async function setNotificationPref(userId, type, inApp, email) {
 }
 
 export const NOTIFICATION_TYPES = {
-  task_assigned: { label: 'Task assigned to you', icon: '📋' },
-  task_due_soon: { label: 'Task due soon', icon: '⏰' },
+  task_assigned: { label: 'Task assigned to me', icon: '📋' },
+  task_comment: { label: 'Comment on my task', icon: '💬' },
+  task_due_soon: { label: 'Task due date approaching', icon: '⏰' },
   sprint_added: { label: 'Added to a sprint', icon: '⚡' },
   sprint_status: { label: 'Sprint status changed', icon: '🔄' },
   invitation_accepted: { label: 'Invitation accepted', icon: '✅' },
-  meeting_created: { label: 'New meeting scheduled', icon: '🎙' },
-  comment_added: { label: 'New comment on your task', icon: '💬' },
-  mention: { label: 'You were mentioned', icon: '@' },
+  meeting_created: { label: 'Meeting created in my dept', icon: '🎙' },
+  comment_added: { label: 'Comment on my task', icon: '💬' },
+  mention: { label: "I'm @mentioned", icon: '@' },
+  event_approved: { label: 'Calendar event approved', icon: '✅' },
+  event_rejected: { label: 'Calendar event rejected', icon: '❌' },
+  system: { label: 'System notification', icon: '🔔' },
 }
 
 export function formatNotificationMessage(notification) {
@@ -102,6 +106,9 @@ export function formatNotificationMessage(notification) {
   switch (type) {
     case 'task_assigned':
       return `${payload.assigner_name ?? 'Someone'} assigned you "${payload.task_title ?? 'a task'}"`
+    case 'task_comment':
+    case 'comment_added':
+      return `${payload.author_name ?? 'Someone'} commented on "${payload.task_title ?? 'your task'}"`
     case 'sprint_added':
       return `You were added to sprint "${payload.sprint_name ?? 'a sprint'}"`
     case 'sprint_status':
@@ -110,8 +117,16 @@ export function formatNotificationMessage(notification) {
       return `${payload.user_name ?? 'A user'} accepted their invitation`
     case 'meeting_created':
       return `New meeting: "${payload.meeting_title ?? 'Untitled'}"`
-    case 'comment_added':
-      return `${payload.author_name ?? 'Someone'} commented on "${payload.task_title ?? 'your task'}"`
+    case 'mention':
+      return `${payload.author_name ?? 'Someone'} mentioned you`
+    case 'task_due_soon':
+      return `"${payload.task_title ?? 'A task'}" is due soon`
+    case 'event_approved':
+      return `Your event "${payload.event_title ?? 'Untitled'}" was approved`
+    case 'event_rejected':
+      return `Your event "${payload.event_title ?? 'Untitled'}" was rejected`
+    case 'system':
+      return payload.message ?? def.label
     default:
       return def.label
   }

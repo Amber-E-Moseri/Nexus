@@ -59,10 +59,14 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
   const [users, setUsers] = useState([])
   const [automations, setAutomations] = useState([])
   const [runLog, setRunLog] = useState([])
+  const [webhookLog, setWebhookLog] = useState([])
+  const [webhookFilter, setWebhookFilter] = useState('all')
   const [showBuilder, setShowBuilder] = useState(false)
   const [editingAutomation, setEditingAutomation] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [webhookLoading, setWebhookLoading] = useState(false)
   const [error, setError] = useState('')
+  const [activeTab, setActiveTab] = useState('automations')
 
   useEffect(() => {
     if (initialDepartmentId) {
@@ -137,9 +141,35 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
     [deptId, role, profile?.department_id]
   )
 
+  const loadWebhookLog = useCallback(async () => {
+    if (role !== 'super_admin') return
+
+    setWebhookLoading(true)
+    try {
+      const { data, error: err } = await supabase
+        .from('webhook_delivery_log')
+        .select('id, automation_id, webhook_url, response_status, response_body, delivered_at, success')
+        .order('delivered_at', { ascending: false })
+        .limit(100)
+
+      if (err) throw err
+      setWebhookLog(data ?? [])
+    } catch (nextError) {
+      setError(nextError.message)
+    } finally {
+      setWebhookLoading(false)
+    }
+  }, [role])
+
   useEffect(() => {
     loadPageData()
   }, [deptId, role, profile?.department_id])
+
+  useEffect(() => {
+    if (activeTab === 'webhooks') {
+      loadWebhookLog()
+    }
+  }, [activeTab, loadWebhookLog])
 
   const scopedDepartments = useMemo(() => {
     if (role === 'super_admin') return departments
@@ -201,7 +231,36 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
           Loading automations…
         </div>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-[1fr_520px]">
+        <>
+          {role === 'super_admin' ? (
+            <div className="flex gap-2 border-b border-[var(--border)]">
+              <button
+                type="button"
+                onClick={() => setActiveTab('automations')}
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
+                  activeTab === 'automations'
+                    ? 'border-[var(--accent)] text-[var(--accent)]'
+                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Automations
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('webhooks')}
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
+                  activeTab === 'webhooks'
+                    ? 'border-[var(--accent)] text-[var(--accent)]'
+                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Webhook Log
+              </button>
+            </div>
+          ) : null}
+
+          {activeTab === 'automations' ? (
+            <div className="grid gap-4 xl:grid-cols-[1fr_520px]">
           <section className="space-y-4">
             {!automations.length ? (
               <div className="rounded-3xl border border-dashed border-[var(--border)] bg-white p-10 text-center">
@@ -302,7 +361,97 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
               </div>
             )}
           </section>
-        </div>
+            </div>
+          ) : null}
+
+          {activeTab === 'webhooks' ? (
+            <div className="rounded-3xl border border-[var(--border)] bg-white shadow-[var(--card-shadow)]">
+              <div className="border-b border-[var(--border)] px-5 py-4 flex items-center justify-between gap-4">
+                <h3 className="text-lg font-semibold text-[var(--text-primary)]">Webhook Delivery Log</h3>
+                <div className="flex gap-2">
+                  {['all', 'success', 'failed'].map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => setWebhookFilter(filter)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${
+                        webhookFilter === filter
+                          ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]'
+                          : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]'
+                      }`}
+                    >
+                      {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {webhookLoading ? (
+                <div className="px-5 py-6 text-sm text-[var(--text-secondary)]">Loading webhook log…</div>
+              ) : !webhookLog.length ? (
+                <div className="px-5 py-6 text-sm text-[var(--text-secondary)]">No webhook deliveries recorded yet.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="text-[var(--text-secondary)]">
+                      <tr className="border-b border-[var(--border)]">
+                        <th className="px-5 py-3 font-medium">URL</th>
+                        <th className="px-5 py-3 font-medium">Status</th>
+                        <th className="px-5 py-3 font-medium">Delivered</th>
+                        <th className="px-5 py-3 font-medium">Response</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {webhookLog
+                        .filter((entry) => {
+                          if (webhookFilter === 'success') return entry.success
+                          if (webhookFilter === 'failed') return !entry.success
+                          return true
+                        })
+                        .map((entry) => (
+                          <tr key={entry.id} className="border-b border-[var(--border)]/60">
+                            <td className="px-5 py-3 text-xs font-mono text-[var(--text-secondary)]">
+                              {entry.webhook_url.length > 50
+                                ? entry.webhook_url.substring(0, 50) + '…'
+                                : entry.webhook_url}
+                            </td>
+                            <td className="px-5 py-3">
+                              {entry.response_status ? (
+                                <span
+                                  className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                                  style={{
+                                    background: entry.success ? 'var(--status-done-bg)' : 'var(--status-blocked-bg)',
+                                    color: entry.success ? 'var(--status-done-text)' : 'var(--status-blocked-text)',
+                                  }}
+                                >
+                                  {entry.response_status}
+                                </span>
+                              ) : (
+                                <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: 'var(--status-blocked-bg)', color: 'var(--status-blocked-text)' }}>
+                                  Error
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3 text-xs text-[var(--text-secondary)]">
+                              {new Date(entry.delivered_at).toLocaleString('en-CA', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })}
+                            </td>
+                            <td className="px-5 py-3 text-xs text-[var(--text-secondary)] max-w-xs truncate">
+                              {entry.response_body || '—'}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </>
       )}
 
       {showBuilder ? (

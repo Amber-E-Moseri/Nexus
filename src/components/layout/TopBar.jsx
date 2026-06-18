@@ -7,9 +7,11 @@ import { formatDueDate } from '../../lib/dateUtils'
 import { getTaskById } from '../../lib/tasks'
 import { supabase } from '../../lib/supabase'
 import TaskModal from '../../modules/tasks/TaskModal'
+import NotificationBell from '../../modules/notifications/NotificationBell'
 
 const ROUTE_CRUMBS = {
   '/inbox': [['Inbox', '/inbox']],
+  '/notifications': [['Notifications', '/notifications']],
   '/dashboard': [['Home', '/dashboard']],
   '/my-tasks': [['My Tasks', '/my-tasks']],
   '/calendar': [['Ministry Calendar', '/calendar']],
@@ -397,6 +399,8 @@ export default function TopBar() {
               <Plus size={14} />
               New Task
             </button>
+
+            <NotificationBell />
 
             <button
               type="button"

@@ -409,6 +409,8 @@ Deno.serve(async (request) => {
 
   let callerUserId: string | null = null
   let callerEmail: string | null = null
+  let senderSignature: string | null = null
+  let senderProfile: { name?: string; role?: string } | null = null
 
   if (!isInternalServiceCall) {
     const authClient = createClient(supabaseUrl, serviceRoleKey, {
@@ -420,7 +422,7 @@ Deno.serve(async (request) => {
 
     const { data: profile } = await supabase
       .from('users')
-      .select('id, email, role')
+      .select('id, email, role, name')
       .eq('id', authData.user.id)
       .single()
 
@@ -430,6 +432,17 @@ Deno.serve(async (request) => {
 
     callerUserId = profile.id
     callerEmail = profile.email ?? authData.user.email ?? null
+    senderProfile = { name: profile.name, role: profile.role }
+
+    // Fetch the sender's email signature
+    const { data: sigData } = await supabase
+      .from('email_signatures')
+      .select('signature_html')
+      .eq('user_id', authData.user.id)
+      .eq('is_default', true)
+      .maybeSingle()
+
+    senderSignature = sigData?.signature_html ?? null
   }
 
   let {
@@ -585,6 +598,15 @@ Deno.serve(async (request) => {
       personalizedSubject = await resolveAllTags(personalizedSubject, recipient, context, supabase)
       const personalizedText = await resolveAllTags(plainTextTemplate.trim(), recipient, context, supabase)
       let personalizedHtmlTemplate = await resolveAllTags(safeHtmlTemplate.trim(), recipient, context, supabase)
+
+      // Append signature if present
+      if (senderSignature && senderProfile) {
+        let processedSignature = senderSignature
+        processedSignature = processedSignature.replace(/\{\{your_name\}\}/g, senderProfile.name ?? '')
+        processedSignature = processedSignature.replace(/\{\{your_role\}\}/g, senderProfile.role ?? '')
+        processedSignature = processedSignature.replace(/\{\{org_name\}\}/g, 'BLW Canada Sub-Region')
+        personalizedHtmlTemplate += `<hr style="border:none;border-top:1px solid #EDE8DC;margin:24px 0">${processedSignature}`
+      }
 
       // Rewrite links for tracking if this is a campaign
       if (campaignId) {

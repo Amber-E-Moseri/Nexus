@@ -8,6 +8,7 @@ import IntegrationsSection from './IntegrationsSection'
 import NotificationsSection from './NotificationsSection'
 import ProfileSection from './ProfileSection'
 import SecuritySection from './SecuritySection'
+import EmailSignatureSection from './EmailSignatureSection'
 import MembersPanel from '../../components/settings/MembersPanel'
 
 const TABS = ['Profile', 'Notifications', 'Integrations', 'Automations', 'Members']
@@ -201,6 +202,10 @@ export default function Settings() {
               passwordSaving={passwordSaving}
               onPasswordUpdate={handlePasswordUpdate}
             />
+          ) : null}
+
+          {user?.id ? (
+            <EmailSignatureSection userId={user.id} profile={profile} />
           ) : null}
         </div>
       ) : null}

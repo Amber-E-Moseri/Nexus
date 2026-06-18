@@ -1,9 +1,11 @@
 import { Bell } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useNotifications } from '../../context/NotificationsContext'
 import NotificationItem from './NotificationItem'
 
 export default function NotificationBell() {
+  const navigate = useNavigate()
   const { notifications, unreadCount, isOpen, setIsOpen, markAllAsRead } = useNotifications()
   const ref = useRef(null)
 
@@ -125,11 +127,39 @@ export default function NotificationBell() {
                 No notifications yet
               </div>
             ) : (
-              notifications.map((notification) => (
+              notifications.slice(0, 5).map((notification) => (
                 <NotificationItem key={notification.id} notification={notification} />
               ))
             )}
           </div>
+
+          {notifications.length > 5 && (
+            <div
+              style={{
+                borderTop: '0.5px solid var(--border)',
+                padding: '10px 16px',
+                textAlign: 'center',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false)
+                  navigate('/notifications')
+                }}
+                style={{
+                  fontSize: 12,
+                  color: 'var(--accent)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}
+              >
+                View all notifications
+              </button>
+            </div>
+          )}
         </div>
       ) : null}
     </div>

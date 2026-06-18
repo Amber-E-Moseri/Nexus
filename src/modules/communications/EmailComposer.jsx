@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { Copy, Eye, EyeOff, Send, AlertCircle, Check } from 'lucide-react'
+import { Copy, Eye, EyeOff, Send, AlertCircle, Check, ChevronDown } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../hooks/useAuth'
 
 const PRIMARY = '#4C2A92'
 const ACCENT = '#E8A020'
@@ -289,6 +291,90 @@ function TestEmailForm({ onSendTest, subject, loading }) {
   )
 }
 
+function SignaturePreview({ userId }) {
+  const [signature, setSignature] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const iframeRef = useRef(null)
+
+  useEffect(() => {
+    if (!expanded || !userId) return
+    loadSignature()
+  }, [expanded, userId])
+
+  async function loadSignature() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('email_signatures')
+      .select('signature_html')
+      .eq('user_id', userId)
+      .eq('is_default', true)
+      .maybeSingle()
+
+    setSignature(data?.signature_html ?? null)
+    setLoading(false)
+  }
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          padding: '10px 12px',
+          background: BG,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 8,
+          fontSize: 12,
+          fontWeight: 600,
+          color: TEXT,
+          cursor: 'pointer',
+          transition: 'all 150ms',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = BORDER }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = BG }}
+      >
+        <span>Signature preview</span>
+        <ChevronDown size={14} style={{ transform: expanded ? 'rotate(180deg)' : '', transition: 'transform 150ms' }} />
+      </button>
+
+      {expanded && (
+        <div style={{ marginTop: 8 }}>
+          {loading ? (
+            <div style={{ padding: 16, textAlign: 'center', color: MUTED, fontSize: 12 }}>Loading signature...</div>
+          ) : !signature ? (
+            <div style={{ padding: 16, background: BG, borderRadius: 8, textAlign: 'center', color: MUTED, fontSize: 12 }}>
+              <p>(No signature set)</p>
+              <a href="/settings" style={{ color: PRIMARY, textDecoration: 'underline', fontSize: 11 }}>
+                Add one in Settings
+              </a>
+            </div>
+          ) : (
+            <iframe
+              ref={iframeRef}
+              srcDoc={signature}
+              style={{
+                width: '100%',
+                height: 200,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 8,
+                minHeight: 100,
+                background: SURFACE,
+              }}
+              title="Signature Preview"
+            />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function EmailComposer({
   value = '',
   onChange = () => {},
@@ -304,6 +390,7 @@ export default function EmailComposer({
   showSubject = true,
   autosave = true,
 }) {
+  const { user } = useAuth()
   const [mode, setMode] = useState('plain') // 'plain', 'rich', 'mjml'
   const [autoSaveIndicator, setAutoSaveIndicator] = useState('saved')
   const [testLoading, setTestLoading] = useState(false)
@@ -582,6 +669,10 @@ export default function EmailComposer({
             <div style={{ marginTop: 12 }}>
               <TestEmailForm onSendTest={handleSendTest} subject={subject} loading={testLoading} />
             </div>
+
+            {user?.id && (
+              <SignaturePreview userId={user.id} />
+            )}
 
             {/* Variable legend */}
             <div style={{ background: BG, borderRadius: 10, padding: 12 }}>

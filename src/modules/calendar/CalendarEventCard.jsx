@@ -32,6 +32,7 @@ export function CalendarEventChip({ event, onClick }) {
       style={{ borderLeft: `3px solid ${EVENT_COLORS[event.event_type] ?? EVENT_COLORS.event}` }}
       title={event.title}
     >
+      {event.recurrence_rule && <span style={{ fontSize: '10px' }}>🔁</span>}
       <span className="truncate">{event.title}</span>
     </button>
   )

@@ -218,3 +218,56 @@ export async function getEventsBySubscriptionToken(token) {
   if (error) throw error
   return data ?? []
 }
+
+// ---- RSVP Management ----
+
+export async function upsertRSVP(eventId, userId, response) {
+  const { data, error } = await supabase
+    .from('calendar_rsvps')
+    .upsert(
+      { event_id: eventId, user_id: userId, response },
+      { onConflict: 'event_id,user_id' }
+    )
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function getRSVPCounts(eventId) {
+  const { data, error } = await supabase
+    .from('calendar_rsvps')
+    .select('response')
+    .eq('event_id', eventId)
+
+  if (error) throw error
+
+  const counts = { going: 0, maybe: 0, not_going: 0 }
+  data?.forEach((rsvp) => {
+    counts[rsvp.response]++
+  })
+  return counts
+}
+
+export async function getUserRSVP(eventId, userId) {
+  const { data, error } = await supabase
+    .from('calendar_rsvps')
+    .select('response')
+    .eq('event_id', eventId)
+    .eq('user_id', userId)
+    .single()
+
+  if (error && error.code !== 'PGRST116') throw error
+  return data?.response ?? null
+}
+
+export async function getRSVPList(eventId) {
+  const { data, error } = await supabase
+    .from('calendar_rsvps')
+    .select('response, profiles(id, display_name, email)')
+    .eq('event_id', eventId)
+
+  if (error) throw error
+  return data ?? []
+}

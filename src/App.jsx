@@ -13,6 +13,7 @@ const ActivateInvitation = lazy(() => import('./pages/ActivateInvitation'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const MinistryCalendar = lazy(() => import('./pages/calendar/MinistryCalendar'))
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage'))
+const CalendarReviewPage = lazy(() => import('./pages/calendar/CalendarReviewPage'))
 const CommunicationsPage = lazy(() => import('./pages/communications/CommunicationsPage'))
 const RecipientsPage = lazy(() => import('./pages/communications/RecipientsPage'))
 const DeptSpace = lazy(() => import('./pages/dept/DeptSpace'))
@@ -36,7 +37,10 @@ const SpacesList = lazy(() => import('./pages/spaces/SpacesList'))
 const SpaceOverview = lazy(() => import('./pages/spaces/SpaceOverview'))
 const SprintOverview = lazy(() => import('./pages/sprints/SprintOverview'))
 const SprintsList = lazy(() => import('./pages/sprints/SprintsList'))
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
 const Settings = lazy(() => import('./pages/settings/Settings'))
+const IntegrationStatusPage = lazy(() => import('./pages/settings/IntegrationStatusPage'))
+const ApiDocumentationPage = lazy(() => import('./pages/ApiDocumentationPage'))
 
 function onError(error, errorInfo) {
   console.error('[AppErrorBoundary]', error, errorInfo)
@@ -57,6 +61,7 @@ export default function App() {
         <Route element={<Shell />}>
           <Route path="/" element={<Home />} />
           <Route path="/inbox" element={<Inbox />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/my-tasks" element={<MyTasks />} />
           <Route path="/calendar" element={<MinistryCalendar />} />
@@ -68,6 +73,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/calendar/review" element={<CalendarReviewPage />} />
           <Route path="/map" element={<CanMapPage />} />
           <Route path="/spaces" element={<SpacesList />} />
           <Route path="/spaces/:spaceId" element={<SpaceOverview />} />
@@ -178,6 +184,15 @@ export default function App() {
             }
           />
           <Route path="/settings" element={<Settings />} />
+          <Route
+            path="/settings/integrations"
+            element={
+              <ProtectedRoute roles={['super_admin']}>
+                <IntegrationStatusPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/settings/api-docs" element={<ApiDocumentationPage />} />
         </Route>
       </Route>
 

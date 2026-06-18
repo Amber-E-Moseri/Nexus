@@ -274,13 +274,41 @@ async function executeAction(
       if (!url) return { skipped: true, reason: 'missing url' }
       if (!isSafeWebhookUrl(url)) return { skipped: true, reason: 'unsafe_url' }
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, automation_name: automation.name }),
-      })
+      const requestPayload = { ...payload, automation_name: automation.name }
+      let responseStatus: number | null = null
+      let responseBody: string | null = null
 
-      return { webhook_status: response.status }
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestPayload),
+        })
+
+        responseStatus = response.status
+        const bodyText = await response.text()
+        responseBody = bodyText.slice(0, 500)
+
+        await supabase.from('webhook_delivery_log').insert({
+          automation_id: automation.id,
+          webhook_url: url,
+          payload: requestPayload,
+          response_status: responseStatus,
+          response_body: responseBody,
+        })
+
+        return { webhook_status: responseStatus }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        await supabase.from('webhook_delivery_log').insert({
+          automation_id: automation.id,
+          webhook_url: url,
+          payload: requestPayload,
+          response_status: null,
+          response_body: errorMessage.slice(0, 500),
+        })
+        throw err
+      }
     }
 
     default:
