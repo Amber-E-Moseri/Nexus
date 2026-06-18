@@ -43,6 +43,56 @@ function MeetingsModuleFallback() {
   }, [])
 
   useEffect(() => {
+    if (!selectedDepartmentId) return
+    let active = true
+
+    async function loadKpis() {
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      const cutoff = thirtyDaysAgo.toISOString()
+
+      const [
+        { count: logged30d },
+        { data: actionData },
+        { count: withMinutes },
+        { data: depts },
+      ] = await Promise.all([
+        supabase
+          .from('meetings')
+          .select('id', { count: 'exact', head: true })
+          .eq('department_id', selectedDepartmentId)
+          .gte('created_at', cutoff),
+        supabase
+          .from('tasks')
+          .select('id')
+          .eq('department_id', selectedDepartmentId)
+          .not('meeting_id', 'is', null),
+        supabase
+          .from('meetings')
+          .select('id', { count: 'exact', head: true })
+          .eq('department_id', selectedDepartmentId)
+          .not('description', 'is', null),
+        supabase
+          .from('departments')
+          .select('id'),
+      ])
+
+      if (!active) return
+      setKpiStats({
+        logged30d: logged30d ?? 0,
+        actionItems: actionData?.length ?? 0,
+        withMinutes: withMinutes ?? 0,
+        deptCount: depts?.length ?? 0,
+      })
+    }
+
+    loadKpis().catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [selectedDepartmentId])
+
+  useEffect(() => {
     if (!isSuperAdmin) {
       setSelectedDepartmentId(profile?.department_id ?? '')
       return
