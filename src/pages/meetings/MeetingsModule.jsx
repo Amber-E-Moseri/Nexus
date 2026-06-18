@@ -380,7 +380,7 @@ export default function MeetingsModule() {
   const [activeTab, setActiveTab] = useState(() => {
     if (searchParams.get('report')) return 'report'
     if (searchParams.get('tab') === 'roster') return 'roster'
-    return 'meetings'
+    return 'report'
   })
 
   useEffect(() => {
