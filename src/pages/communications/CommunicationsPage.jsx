@@ -1,4 +1,14 @@
+import { useState } from 'react'
+import InvitationWizard from './InvitationWizard'
+import InvitationsListPage from './InvitationsListPage'
+
+const PRIMARY = '#4C2A92'
+const BORDER = '#EDE8DC'
+const TEXT = '#2D2A22'
+const MUTED = '#9E9488'
+
 export default function CommunicationsPage() {
+  const [view, setView] = useState('campaigns') // 'campaigns' | 'invitations'
   const mailUrl = import.meta.env.VITE_MAIL_OS_URL ?? '/apps/mail/index.html'
 
   return (
@@ -19,31 +29,90 @@ export default function CommunicationsPage() {
             Communications
           </h1>
           <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '2px 0 0' }}>
-            Email campaigns for Admin and ORS
+            {view === 'campaigns' ? 'Email campaigns for Admin and ORS' : 'Invitation campaigns'}
           </p>
         </div>
-        <a
-          href={mailUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            fontSize: 12,
-            color: 'var(--accent)',
-            textDecoration: 'none',
-            padding: '5px 10px',
-            border: '0.5px solid var(--border)',
-            borderRadius: 8,
-          }}
-        >
-          Open full screen ↗
-        </a>
+        {view === 'campaigns' && (
+          <a
+            href={mailUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: 12,
+              color: 'var(--accent)',
+              textDecoration: 'none',
+              padding: '5px 10px',
+              border: '0.5px solid var(--border)',
+              borderRadius: 8,
+            }}
+          >
+            Open full screen ↗
+          </a>
+        )}
       </div>
 
-      <iframe
-        src={mailUrl}
-        style={{ flex: 1, width: '100%', border: 'none', background: 'var(--surface-secondary)' }}
-        title="BLW Mail"
-      />
+      {/* Tab Navigation */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '12px',
+          borderBottom: `1px solid ${BORDER}`,
+          padding: '0 24px',
+          background: 'var(--surface)',
+          flexShrink: 0,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setView('campaigns')}
+          style={{
+            padding: '12px 16px',
+            borderBottom: view === 'campaigns' ? `3px solid ${PRIMARY}` : 'none',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: view === 'campaigns' ? 600 : 400,
+            fontSize: 13,
+            color: view === 'campaigns' ? PRIMARY : MUTED,
+            transition: 'all 0.2s',
+          }}
+        >
+          Email Campaigns
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('invitations')}
+          style={{
+            padding: '12px 16px',
+            borderBottom: view === 'invitations' ? `3px solid ${PRIMARY}` : 'none',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: view === 'invitations' ? 600 : 400,
+            fontSize: 13,
+            color: view === 'invitations' ? PRIMARY : MUTED,
+            transition: 'all 0.2s',
+          }}
+        >
+          Invitations
+        </button>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflow: 'auto', background: 'var(--surface-secondary)' }}>
+        {view === 'campaigns' && (
+          <iframe
+            src={mailUrl}
+            style={{ width: '100%', height: '100%', border: 'none' }}
+            title="BLW Mail"
+          />
+        )}
+        {view === 'invitations' && (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <InvitationsListPage />
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -178,8 +178,7 @@ export default function Step3Recipients({ template, onUpdate, wizardState }) {
 
       {/* Manual Entry */}
       {inputMode === 'manual' && (
-
-      <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, background: '#FFFFFF' }}>
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, background: '#FFFFFF' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -283,7 +282,8 @@ export default function Step3Recipients({ template, onUpdate, wizardState }) {
             Add Recipient
           </button>
         </div>
-      </div>
+        </div>
+      )}
 
       {wizardState.recipients.length > 0 && (
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, overflow: 'hidden' }}>
@@ -344,21 +344,20 @@ export default function Step3Recipients({ template, onUpdate, wizardState }) {
         </div>
       )}
 
-        <div
-          style={{
-            background: hasErrors ? '#FEF0ED' : '#EBF7F1',
-            border: `1px solid ${hasErrors ? '#F5C4B8' : '#A7DDBA'}`,
-            borderRadius: 10,
-            padding: '12px 16px',
-            fontSize: 13,
-            color: hasErrors ? '#C94830' : '#1B5E3C',
-          }}
-        >
-          {hasErrors
-            ? `${Object.keys(formErrors).length} validation error(s)`
-            : `Ready to continue (${wizardState.recipients.length} recipient${wizardState.recipients.length !== 1 ? 's' : ''})`}
-        </div>
-      )}
+      <div
+        style={{
+          background: hasErrors ? '#FEF0ED' : '#EBF7F1',
+          border: `1px solid ${hasErrors ? '#F5C4B8' : '#A7DDBA'}`,
+          borderRadius: 10,
+          padding: '12px 16px',
+          fontSize: 13,
+          color: hasErrors ? '#C94830' : '#1B5E3C',
+        }}
+      >
+        {hasErrors
+          ? `${Object.keys(formErrors).length} validation error(s)`
+          : `Ready to continue (${wizardState.recipients.length} recipient${wizardState.recipients.length !== 1 ? 's' : ''})`}
+      </div>
     </div>
   )
 }

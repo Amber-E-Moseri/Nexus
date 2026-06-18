@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS public.agendas (
   status text DEFAULT 'draft' CHECK (status IN ('draft', 'finalized', 'archived'))
 );
 
--- Agenda items (sequence-based ordering)
+-- Agenda items (sort-order based ordering)
 CREATE TABLE IF NOT EXISTS public.agenda_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   agenda_id uuid NOT NULL REFERENCES public.agendas(id) ON DELETE CASCADE,
@@ -23,9 +23,9 @@ CREATE TABLE IF NOT EXISTS public.agenda_items (
 );
 
 -- Indexes
-CREATE INDEX idx_agendas_created_by ON public.agendas(created_by);
-CREATE INDEX idx_agenda_items_agenda_id ON public.agenda_items(agenda_id);
-CREATE INDEX idx_agenda_items_sequence ON public.agenda_items(agenda_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_agendas_created_by ON public.agendas(created_by);
+CREATE INDEX IF NOT EXISTS idx_agenda_items_agenda_id ON public.agenda_items(agenda_id);
+CREATE INDEX IF NOT EXISTS idx_agenda_items_sequence ON public.agenda_items(agenda_id, sort_order);
 
 -- RLS
 ALTER TABLE public.agendas ENABLE ROW LEVEL SECURITY;
