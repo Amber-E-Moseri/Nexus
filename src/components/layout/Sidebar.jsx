@@ -481,7 +481,7 @@ export default function Sidebar() {
 
     supabase
       .from('external_integrations')
-      .select('*')
+      .select('id, name, type, enabled, show_in_sidebar, sort_order, config, icon_url')
       .eq('enabled', true)
       .eq('show_in_sidebar', true)
       .order('sort_order')
@@ -749,6 +749,14 @@ export default function Sidebar() {
           label="Ministry Calendar"
           onClick={() => go('/calendar')}
         />
+        {role === 'super_admin' ? (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/calendar-management')}
+            icon={Settings}
+            label="Calendar Management"
+            onClick={() => go('/calendar-management')}
+          />
+        ) : null}
         {role === 'pastor' ? (
           <SidebarItem
             active={isPathActive(location.pathname, '/flock')}

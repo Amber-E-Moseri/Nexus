@@ -12,6 +12,7 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import CalendarGrid from '../../modules/calendar/CalendarGrid'
 import EventModal from '../../modules/calendar/EventModal'
 import SpaceAutomationsTab from '../../modules/spaces/SpaceAutomationsTab'
+import SpaceIntegrationsTab from '../../modules/spaces/SpaceIntegrationsTab'
 import SpaceModal from '../../modules/spaces/SpaceModal'
 import SpaceStatusSettings from '../../modules/spaces/SpaceStatusSettings'
 import SprintModal from '../../modules/sprints/SprintModal'
@@ -23,7 +24,7 @@ import { TasksProvider, useTasks } from '../../modules/tasks/TasksContext'
 import { useTaskFilters } from '../../modules/tasks/useTaskFilters'
 import { mergeTaskFieldSettings, normalizeTaskFieldSettings, TASK_FIELD_OPTIONS } from '../../lib/taskFieldSettings'
 
-const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Sprints', 'Automations', 'Members']
+const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Sprints', 'Automations', 'Members', 'Integrations', 'Settings']
 
 const STATUS_ACCENT = {
   open: '#C9BEAD',
@@ -671,7 +672,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
   const visibleStatuses = statuses
   const departmentOptions = useMemo(() => [{ id: spaceId, name: spaceName }], [spaceId, spaceName])
 
-  async function handleInlineCreateTask({ title, departmentId, priority, dueDate, statusId }) {
+  async function handleInlineCreateTask({ title, departmentId, priority, dueDate, statusId, listId }) {
     if (!profile?.id) {
       throw new Error('You must be signed in to add a task.')
     }
@@ -686,7 +687,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
       created_by: profile.id,
       department_id: department?.id ?? spaceId,
       department,
-      list_id: selectedListId ?? null,
+      list_id: listId ?? selectedListId ?? null,
       source: 'manual',
     })
   }
@@ -756,6 +757,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
               statuses={visibleStatuses}
               departments={departmentOptions}
               defaultDepartmentId={spaceId}
+              listId={selectedListId}
               canAddTask={canManage}
               onCreateTask={handleInlineCreateTask}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
@@ -955,8 +957,8 @@ export default function SpaceOverview() {
 
     getSpaceMembers(detail.space).then(setSpaceMembers).catch(() => setSpaceMembers([]))
     getSpaceSprints(spaceId).then(setSpaceSprints).catch(() => setSpaceSprints([]))
-    supabase.from('meetings').select('*').eq('department_id', spaceId).order('date', { ascending: false }).then(({ data }) => setSpaceMeetings(data ?? []))
-    supabase.from('tasks').select('*').eq('department_id', spaceId).is('parent_task_id', null).then(({ data }) => setSpaceTasks(data ?? []))
+    supabase.from('meetings').select('id, title, description, date, location, organizer_id, department_id, created_at, status').eq('department_id', spaceId).order('date', { ascending: false }).then(({ data }) => setSpaceMeetings(data ?? []))
+    supabase.from('tasks').select('id, title, status, status_id, priority, due_date, assignee_id, department_id, created_at, sprint_id').eq('department_id', spaceId).is('parent_task_id', null).then(({ data }) => setSpaceTasks(data ?? []))
     supabase.from('lists').select('id', { count: 'exact', head: true }).eq('department_id', spaceId).then(({ count }) => setListsCount(count ?? 0)).catch(() => setListsCount(0))
   }, [detail?.space, spaceId])
 
@@ -1064,6 +1066,7 @@ export default function SpaceOverview() {
       {activeTab === 'Sprints' ? <div role="tabpanel" id="tabpanel-sprints" aria-labelledby="tab-sprints" tabIndex={0}><SpaceSprintsTab canManage={canManage} sprints={spaceSprints} spaceColor={space.color} onCreate={() => setShowSprintModal(true)} onOpen={(sprint) => navigate(`/sprints/${sprint.id}`)} /></div> : null}
       {activeTab === 'Automations' ? <div role="tabpanel" id="tabpanel-automations" aria-labelledby="tab-automations" tabIndex={0}><SpaceAutomationsTab space={space} canManage={canManageStatuses} /></div> : null}
       {activeTab === 'Members' ? <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}><SpaceMembersTab members={spaceMembers} /></div> : null}
+      {activeTab === 'Integrations' && canManage ? <div role="tabpanel" id="tabpanel-integrations" aria-labelledby="tab-integrations" tabIndex={0}><SpaceIntegrationsTab spaceId={spaceId} canManage={canManage} /></div> : null}
       {activeTab === 'Settings' && canManage ? <SpaceSettingsTab space={space} canManage={canManage} onSaved={(updated) => setDetail((current) => ({ ...current, space: updated }))} onArchive={async () => { await archiveSpace(spaceId); await loadDetail() }} /> : null}
     </>
   )

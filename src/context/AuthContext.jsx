@@ -1,4 +1,4 @@
-import { createContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import { touchLastActive } from '../lib/people/api'
 import { supabase } from '../lib/supabase'
 
@@ -30,16 +30,19 @@ export function AuthProvider({ children }) {
   const [jwtRole, setJwtRole] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const refreshProfile = async (userId = user?.id) => {
-    if (!userId) {
-      setProfile(null)
-      return null
-    }
+  const refreshProfile = useCallback(
+    async (userId = user?.id) => {
+      if (!userId) {
+        setProfile(null)
+        return null
+      }
 
-    const nextProfile = await fetchProfile(userId)
-    setProfile(nextProfile)
-    return nextProfile
-  }
+      const nextProfile = await fetchProfile(userId)
+      setProfile(nextProfile)
+      return nextProfile
+    },
+    [user]
+  )
 
   useEffect(() => {
     let mounted = true

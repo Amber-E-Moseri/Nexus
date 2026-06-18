@@ -18,6 +18,7 @@ const PRIORITY_PILL_STYLES = {
 export default function InlineTaskComposer({
   departments = [],
   defaultDepartmentId = '',
+  listId = null,
   onSubmit,
   onCancel,
   compact = false,
@@ -51,6 +52,7 @@ export default function InlineTaskComposer({
         departmentId,
         priority,
         dueDate: dueDate || null,
+        listId,
       })
     } catch (submitError) {
       setError(submitError.message ?? 'Failed to create task.')

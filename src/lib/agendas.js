@@ -82,7 +82,7 @@ export async function updateAgenda(agendaId, updates) {
 export async function getAgenda(agendaId) {
   const { data: agenda, error: agendaError } = await supabase
     .from('agendas')
-    .select('*')
+    .select('id, title, meeting_type, department_id, date, start_time, end_time, location, moderator_name, theme, template_id, created_by, meeting_id, is_archived, updated_at, created_at')
     .eq('id', agendaId)
     .single()
 
@@ -92,7 +92,7 @@ export async function getAgenda(agendaId) {
 
   const { data: items, error: itemsError } = await supabase
     .from('agenda_items')
-    .select('*')
+    .select('id, agenda_id, segment, notes, duration_minutes, sort_order, is_pinned, created_at, updated_at')
     .eq('agenda_id', agendaId)
     .order('sort_order')
 
@@ -117,7 +117,7 @@ export async function deleteAgenda(agendaId) {
 export async function getDepartmentAgendas(departmentId) {
   const { data, error } = await supabase
     .from('agendas')
-    .select('*')
+    .select('id, title, meeting_type, department_id, date, start_time, end_time, location, moderator_name, theme, template_id, created_by, meeting_id, is_archived, updated_at, created_at')
     .eq('department_id', departmentId)
     .eq('is_archived', false)
     .order('created_at', { ascending: false })
@@ -168,7 +168,7 @@ export async function updateAgendaItems(agendaId, items) {
 export async function getAgendaItems(agendaId) {
   const { data, error } = await supabase
     .from('agenda_items')
-    .select('*')
+    .select('id, agenda_id, segment, notes, duration_minutes, sort_order, is_pinned, created_at, updated_at')
     .eq('agenda_id', agendaId)
     .order('sort_order')
 
@@ -186,14 +186,14 @@ export async function getAgendaItems(agendaId) {
 export async function getAgendaTemplates(departmentId = null) {
   let query = supabase
     .from('agenda_templates')
-    .select('*')
+    .select('id, name, description, meeting_type, items, department_id, created_by, is_default, is_archived, created_at, updated_at')
     .eq('is_archived', false)
 
   // Get default templates + department templates
   if (departmentId) {
     query = supabase
       .from('agenda_templates')
-      .select('*')
+      .select('id, name, description, meeting_type, items, department_id, created_by, is_default, is_archived, created_at, updated_at')
       .or(`is_default.eq.true,department_id.eq.${departmentId}`)
       .eq('is_archived', false)
   } else {
@@ -212,7 +212,7 @@ export async function getAgendaTemplates(departmentId = null) {
 export async function getTemplate(templateId) {
   const { data, error } = await supabase
     .from('agenda_templates')
-    .select('*')
+    .select('id, name, description, meeting_type, items, department_id, created_by, is_default, is_archived, created_at, updated_at')
     .eq('id', templateId)
     .single()
 

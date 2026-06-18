@@ -12,6 +12,7 @@ const Inbox = lazy(() => import('./pages/Inbox'))
 const ActivateInvitation = lazy(() => import('./pages/ActivateInvitation'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const MinistryCalendar = lazy(() => import('./pages/calendar/MinistryCalendar'))
+const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage'))
 const CommunicationsPage = lazy(() => import('./pages/communications/CommunicationsPage'))
 const DeptSpace = lazy(() => import('./pages/dept/DeptSpace'))
 const FlockView = lazy(() => import('./pages/flock/FlockView'))
@@ -57,6 +58,14 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/my-tasks" element={<MyTasks />} />
           <Route path="/calendar" element={<MinistryCalendar />} />
+          <Route
+            path="/calendar-management"
+            element={
+              <ProtectedRoute roles={['super_admin']}>
+                <CalendarPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/map" element={<CanMapPage />} />
           <Route path="/spaces" element={<SpacesList />} />
           <Route path="/spaces/:spaceId" element={<SpaceOverview />} />

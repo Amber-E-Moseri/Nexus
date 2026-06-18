@@ -146,7 +146,7 @@ export async function listTaskStatuses({ departmentId = null, includeInactive = 
     return includeInactive ? statuses : statuses.filter((status) => status.active !== false)
   }
 
-  let query = supabase.from('task_status_definitions').select('*').order('sort_order').order('name')
+  let query = supabase.from('task_status_definitions').select('id, name, color, category, department_id, sort_order, is_default, active, legacy_key').order('sort_order').order('name')
   query = applyStatusContextFilter(query, departmentId)
 
   if (!includeInactive) {
@@ -160,23 +160,30 @@ export async function listTaskStatuses({ departmentId = null, includeInactive = 
 }
 
 export async function getStatusUsageCounts({ departmentId = null } = {}) {
-  let query = supabase.from('tasks').select('id, status_id, department_id')
-  query = departmentId ? query.eq('department_id', departmentId) : query.is('department_id', null)
+  const { data, error } = await supabase.rpc('get_status_usage_counts', {
+    p_department_id: departmentId,
+  })
 
-  const { data, error } = await query
   if (error) throw error
   return data ?? []
 }
 
 export async function getTaskStatusCatalog({ departmentId = null, includeInactive = true } = {}) {
-  const [statuses, tasks] = await Promise.all([
+  const [statuses, countRows] = await Promise.all([
     listTaskStatuses({ departmentId, includeInactive }),
     getStatusUsageCounts({ departmentId }),
   ])
 
+  const usageCounts = Object.fromEntries(
+    statuses.map((status) => [status.id, 0])
+  )
+  for (const row of countRows) {
+    usageCounts[row.status_id] = row.count
+  }
+
   return {
     statuses,
-    usageCounts: selectTaskStatusUsageCounts(statuses, tasks),
+    usageCounts,
     preview: selectStatusWorkflowPreview(statuses),
   }
 }
@@ -218,11 +225,14 @@ export async function archiveTaskStatus(statusId) {
 }
 
 export async function reorderTaskStatuses(statuses = []) {
-  await Promise.all(
-    statuses.map((status, index) =>
-      supabase.from('task_status_definitions').update({ sort_order: index + 1 }).eq('id', status.id),
-    ),
-  )
+  const { error } = await supabase
+    .from('task_status_definitions')
+    .upsert(
+      statuses.map((status, index) => ({ id: status.id, sort_order: index + 1 })),
+      { onConflict: 'id' }
+    )
+
+  if (error) throw error
 }
 
 export async function getDefaultTaskStatusId({ departmentId = null, preferredCategory = STATUS_CATEGORIES.OPEN } = {}) {

@@ -21,7 +21,7 @@ export const ACTION_LABELS = {
 export async function getDeptAutomations(departmentId) {
   const { data, error } = await supabase
     .from('automations')
-    .select('*')
+    .select('id, name, description, enabled, trigger_type, trigger_config, actions, conditions, fire_count, last_fired_at, created_at, created_by, department_id')
     .eq('department_id', departmentId)
     .order('created_at', { ascending: false })
 

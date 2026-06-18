@@ -188,6 +188,7 @@ export default function Settings() {
             onSaveProfile={handleSaveProfile}
             onChangePassword={() => setShowPasswordForm((value) => !value)}
             onSignOut={() => supabase.auth.signOut({ scope: 'global' })}
+            onRefreshProfile={() => refreshProfile(profile?.id)}
           />
 
           {showPasswordForm ? (

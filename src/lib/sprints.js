@@ -32,7 +32,7 @@ export async function getMySprints() {
 export async function getAllSprints() {
   const { data, error } = await supabase
     .from('sprints')
-    .select('*')
+    .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by')
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -41,7 +41,7 @@ export async function getAllSprints() {
 
 export async function getSprintDetail(sprintId) {
   const [sprintRes, teamsRes, membersRes, teamMembershipsRes, reviewRes] = await Promise.all([
-    supabase.from('sprints').select('*').eq('id', sprintId).single(),
+    supabase.from('sprints').select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by').eq('id', sprintId).single(),
     supabase
       .from('sprint_teams')
       .select('*, lead:users!lead_user_id(id, name, email, avatar_url, status)')
@@ -64,7 +64,7 @@ export async function getSprintDetail(sprintId) {
         sprint_team:sprint_teams(id, name)
       `)
       .eq('sprint_id', sprintId),
-    supabase.from('sprint_reviews').select('*').eq('sprint_id', sprintId).maybeSingle(),
+    supabase.from('sprint_reviews').select('id, sprint_id, completed_at, completed_by, overall_summary, team_feedback, lessons_learned, created_at').eq('sprint_id', sprintId).maybeSingle(),
   ])
 
   if (sprintRes.error) throw sprintRes.error
@@ -399,7 +399,7 @@ export async function saveSprintReview(sprintId, reviewData, completedBy) {
 export async function getSprintReview(sprintId) {
   const { data, error } = await supabase
     .from('sprint_reviews')
-    .select('*')
+    .select('id, sprint_id, completed_at, completed_by, overall_summary, team_feedback, lessons_learned, created_at')
     .eq('sprint_id', sprintId)
     .maybeSingle()
 

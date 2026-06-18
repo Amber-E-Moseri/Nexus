@@ -123,6 +123,7 @@ export default function KanbanBoard({
               key={status.id}
               departments={departments}
               defaultDepartmentId={defaultDepartmentId}
+              listId={listId}
               onCancel={() => setComposerStatusId(null)}
               onSubmit={async (draft) => {
                 await onCreateTask?.({

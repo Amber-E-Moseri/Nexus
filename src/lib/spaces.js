@@ -23,22 +23,12 @@ export async function getSpacesByType(userId, role, departmentId) {
 }
 
 export async function getSpaceDetail(spaceId) {
-  const [spaceRes, listsRes] = await Promise.all([
-    supabase.from('departments').select('*').eq('id', spaceId).single(),
-    supabase
-      .from('space_lists')
-      .select('id, name, description, sort_order, status, created_by')
-      .eq('space_id', spaceId)
-      .eq('status', 'active')
-      .order('sort_order'),
-  ])
+  const spaceRes = await supabase.from('departments').select('id, name, color, health_status, space_type, visibility, status, description, owner_id, start_date, end_date, task_field_settings').eq('id', spaceId).single()
 
   if (spaceRes.error) throw spaceRes.error
-  if (listsRes.error) throw listsRes.error
 
   return {
     space: spaceRes.data,
-    lists: listsRes.data ?? [],
   }
 }
 
@@ -92,50 +82,10 @@ export async function restoreSpace(spaceId) {
   return updateSpace(spaceId, { status: 'active' })
 }
 
-export async function createList(spaceId, name, createdBy) {
-  const { data: maxOrder } = await supabase
-    .from('space_lists')
-    .select('sort_order')
-    .eq('space_id', spaceId)
-    .order('sort_order', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const { data, error } = await supabase
-    .from('space_lists')
-    .insert({
-      space_id: spaceId,
-      name,
-      sort_order: (maxOrder?.sort_order ?? -1) + 1,
-      created_by: createdBy,
-    })
-    .select()
-    .single()
-
-  if (error) throw error
-  return data
-}
-
-export async function updateList(listId, updates) {
-  const { data, error } = await supabase
-    .from('space_lists')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', listId)
-    .select()
-    .single()
-
-  if (error) throw error
-  return data
-}
-
-export async function archiveList(listId) {
-  return updateList(listId, { status: 'archived' })
-}
-
 export async function getSpaceSprints(spaceId) {
   const { data, error } = await supabase
     .from('sprints')
-    .select('*')
+    .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id')
     .eq('department_id', spaceId)
     .order('created_at', { ascending: false })
 
@@ -146,7 +96,7 @@ export async function getSpaceSprints(spaceId) {
 export async function getSpaceMeetings(spaceId) {
   const { data, error } = await supabase
     .from('meetings')
-    .select('*')
+    .select('id, title, description, date, location, organizer_id, department_id, created_at, status')
     .eq('department_id', spaceId)
     .order('date', { ascending: false })
 

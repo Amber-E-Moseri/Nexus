@@ -382,7 +382,7 @@ export async function loadCommunicationSources(supabase) {
 
 export async function getEmailTemplates(supabase, filters = {}) {
   const { category = null, isSystem = null } = filters
-  let query = supabase.from('communication_email_templates').select('*').order('name')
+  let query = supabase.from('communication_email_templates').select('id, name, category, is_system, html_content, subject, created_at, updated_at').order('name')
 
   if (category) query = query.eq('category', category)
   if (isSystem !== null) query = query.eq('is_system', isSystem)
@@ -395,7 +395,7 @@ export async function getEmailTemplates(supabase, filters = {}) {
 export async function getEmailTemplate(supabase, id) {
   const { data, error } = await supabase
     .from('communication_email_templates')
-    .select('*')
+    .select('id, name, category, is_system, html_content, subject, created_at, updated_at')
     .eq('id', id)
     .single()
   if (error) throw error
@@ -445,7 +445,7 @@ export function applyTemplateVariables(htmlContent = '', variables = {}) {
 export async function getABTestResults(supabase, campaignId) {
   const { data: abTest, error: abError } = await supabase
     .from('communication_ab_tests')
-    .select('*')
+    .select('id, campaign_id, subject_variant_a, subject_variant_b, created_at, updated_at')
     .eq('campaign_id', campaignId)
     .maybeSingle()
 
@@ -476,7 +476,7 @@ export async function getABTestResults(supabase, campaignId) {
 export async function getClickTrackingData(supabase, campaignId) {
   const { data: clicks, error } = await supabase
     .from('campaign_link_clicks')
-    .select('*')
+    .select('id, campaign_id, link_url, click_count, clicked_at, created_at')
     .eq('campaign_id', campaignId)
     .order('clicked_at', { ascending: false })
 

@@ -1,3 +1,8 @@
+import { useRef, useState } from 'react'
+import Avatar from '../../components/ui/Avatar'
+import { deleteAvatar, uploadAvatar } from '../../lib/users'
+import { useToast } from '../../context/ToastContext'
+
 function getInitials(name = '') {
   return name
     .trim()
@@ -20,14 +25,94 @@ export default function ProfileSection({
   onSaveProfile,
   onChangePassword,
   onSignOut,
+  onRefreshProfile,
 }) {
+  const { showToast } = useToast()
+  const fileInputRef = useRef(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [avatarError, setAvatarError] = useState('')
+
+  const handleChangePhotoClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setAvatarError('')
+
+    if (file.size > 2 * 1024 * 1024) {
+      setAvatarError('File must be less than 2MB')
+      showToast('File must be less than 2MB', { tone: 'error' })
+      return
+    }
+
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!validTypes.includes(file.type)) {
+      setAvatarError('Only JPG, PNG, and WebP images are allowed')
+      showToast('Only JPG, PNG, and WebP images are allowed', { tone: 'error' })
+      return
+    }
+
+    setAvatarUploading(true)
+    try {
+      await uploadAvatar(file, profile.id)
+      showToast('Photo updated', { tone: 'success' })
+      await onRefreshProfile?.()
+    } catch (error) {
+      setAvatarError(error.message)
+      showToast(error.message, { tone: 'error' })
+    } finally {
+      setAvatarUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  const handleRemovePhoto = async () => {
+    if (!profile?.avatar_url) return
+
+    setAvatarUploading(true)
+    try {
+      await deleteAvatar(profile.id, profile.avatar_url)
+      showToast('Photo removed', { tone: 'success' })
+      await onRefreshProfile?.()
+    } catch (error) {
+      showToast(error.message, { tone: 'error' })
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
+
   return (
     <div className="grid gap-4 xl:grid-cols-[1.05fr_1fr]">
       <section className="rounded-3xl border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[linear-gradient(135deg,_var(--accent),_#5a49c8)] text-xl font-semibold text-white">
-              {getInitials(name)}
+            <div style={{ position: 'relative' }}>
+              <Avatar name={name} src={profile?.avatar_url} />
+              {avatarUploading && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontSize: '12px',
+                  }}
+                >
+                  Uploading…
+                </div>
+              )}
             </div>
             <div>
               <h2 className="text-xl font-semibold text-[var(--text-primary)]">{name || 'Your profile'}</h2>
@@ -37,13 +122,41 @@ export default function ProfileSection({
             </div>
           </div>
 
-          <button
-            type="button"
-            className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-semibold text-[var(--text-primary)]"
-          >
-            Change photo
-          </button>
+          <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+            <button
+              type="button"
+              onClick={handleChangePhotoClick}
+              disabled={avatarUploading}
+              className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-semibold text-[var(--text-primary)] disabled:opacity-60"
+            >
+              Change photo
+            </button>
+            {profile?.avatar_url && (
+              <button
+                type="button"
+                onClick={handleRemovePhoto}
+                disabled={avatarUploading}
+                className="rounded-xl border border-[#F3B6A8] px-4 py-2 text-sm font-semibold text-[#C94830] disabled:opacity-60"
+              >
+                Remove photo
+              </button>
+            )}
+          </div>
         </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handleFileChange}
+          style={{ display: 'none' }}
+        />
+
+        {avatarError && (
+          <p className="mt-3 text-sm" style={{ color: '#C94830' }}>
+            {avatarError}
+          </p>
+        )}
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <label className="space-y-1">

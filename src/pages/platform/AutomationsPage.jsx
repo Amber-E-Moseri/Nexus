@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { ACTION_LABELS, TRIGGER_LABELS, deleteAutomation, getRecentAutomationRuns, toggleAutomation } from '../../lib/automations'
 import { formatLastActive } from '../../lib/dateUtils'
@@ -75,64 +75,67 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
     }
   }, [initialDepartmentId, profile?.department_id])
 
-  async function loadPageData(targetDeptId = deptId) {
-    setLoading(true)
-    setError('')
+  const loadPageData = useCallback(
+    async (targetDeptId = deptId) => {
+      setLoading(true)
+      setError('')
 
-    try {
-      const departmentsPromise = supabase.from('departments').select('id, name').order('name')
-      const usersPromise = supabase.from('users').select('id, name, department_id, status').order('name')
+      try {
+        const departmentsPromise = supabase.from('departments').select('id, name').order('name')
+        const usersPromise = supabase.from('users').select('id, name, department_id, status').order('name')
 
-      let automationsQuery = supabase
-        .from('automations')
-        .select('id, name, description, enabled, trigger_type, trigger_config, actions, conditions, fire_count, last_fired_at, created_at, created_by, department_id')
-        .order('created_at', { ascending: false })
+        let automationsQuery = supabase
+          .from('automations')
+          .select('id, name, description, enabled, trigger_type, trigger_config, actions, conditions, fire_count, last_fired_at, created_at, created_by, department_id')
+          .order('created_at', { ascending: false })
 
-      if (role !== 'super_admin') {
-        if (!targetDeptId) {
-          setAutomations([])
-          setRunLog([])
-          setDepartments([])
-          setUsers([])
-          setLoading(false)
-          return
+        if (role !== 'super_admin') {
+          if (!targetDeptId) {
+            setAutomations([])
+            setRunLog([])
+            setDepartments([])
+            setUsers([])
+            setLoading(false)
+            return
+          }
+
+          automationsQuery = automationsQuery.eq('department_id', targetDeptId)
         }
 
-        automationsQuery = automationsQuery.eq('department_id', targetDeptId)
+        const [automationsRes, departmentsRes, usersRes] = await Promise.all([
+          automationsQuery,
+          departmentsPromise,
+          usersPromise,
+        ])
+
+        if (automationsRes.error) throw automationsRes.error
+        if (departmentsRes.error) throw departmentsRes.error
+        if (usersRes.error) throw usersRes.error
+
+        const nextDepartments = departmentsRes.data ?? []
+        const nextAutomations = (automationsRes.data ?? []).map((automation) => ({
+          ...automation,
+          department: nextDepartments.find((department) => department.id === automation.department_id) ?? null,
+        }))
+
+        setDepartments(nextDepartments)
+        setAutomations(nextAutomations)
+        setRunLog(await getRecentAutomationRuns(nextAutomations.map((automation) => automation.id)))
+        setUsers(
+          (usersRes.data ?? []).filter((user) => (
+            role === 'super_admin'
+              ? true
+              : user.department_id === (targetDeptId ?? profile?.department_id ?? null)
+          )),
+        )
+      } catch (nextError) {
+        setError(nextError.message)
+      } finally {
+        setLoading(false)
       }
-
-      const [automationsRes, departmentsRes, usersRes] = await Promise.all([
-        automationsQuery,
-        departmentsPromise,
-        usersPromise,
-      ])
-
-      if (automationsRes.error) throw automationsRes.error
-      if (departmentsRes.error) throw departmentsRes.error
-      if (usersRes.error) throw usersRes.error
-
-      const nextDepartments = departmentsRes.data ?? []
-      const nextAutomations = (automationsRes.data ?? []).map((automation) => ({
-        ...automation,
-        department: nextDepartments.find((department) => department.id === automation.department_id) ?? null,
-      }))
-
-      setDepartments(nextDepartments)
-      setAutomations(nextAutomations)
-      setRunLog(await getRecentAutomationRuns(nextAutomations.map((automation) => automation.id)))
-      setUsers(
-        (usersRes.data ?? []).filter((user) => (
-          role === 'super_admin'
-            ? true
-            : user.department_id === (targetDeptId ?? profile?.department_id ?? null)
-        )),
-      )
-    } catch (nextError) {
-      setError(nextError.message)
-    } finally {
-      setLoading(false)
-    }
-  }
+    },
+    [deptId, role, profile?.department_id]
+  )
 
   useEffect(() => {
     loadPageData()

@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useDeptMembers } from '../../hooks/useDeptMembers'
 import { PRIORITIES } from '../../lib/constants'
 import { createNotification } from '../../lib/notifications'
+import { getMySpaces, SPACE_TYPE_ICONS } from '../../lib/spaces'
 import { getSprintMembers } from '../../lib/sprints'
 import { normalizeTaskFieldSettings } from '../../lib/taskFieldSettings'
 import { createTask, deleteTask, updateTask } from '../../lib/tasks'
@@ -120,7 +121,7 @@ export default function TaskModal({
   onSaved,
   onDeleted,
 }) {
-  const { profile } = useAuth()
+  const { profile, role } = useAuth()
   const ctx = useContext(TasksContext)
   const contextStatuses = ctx?.statuses ?? []
   const visibleFields = normalizeTaskFieldSettings(fieldSettings)
@@ -130,10 +131,12 @@ export default function TaskModal({
   const [statuses, setStatuses] = useState(contextStatuses)
   const [statusId, setStatusId] = useState(getTaskStatusId(task) ?? defaultStatus ?? '')
   const [priority, setPriority] = useState(task?.priority ?? 'medium')
-  const [assigneeId, setAssigneeId] = useState(task?.assignee_id ?? '')
+  const [assigneeIds, setAssigneeIds] = useState(task?.assignee_id ? [task.assignee_id] : [])
   const [dueDate, setDueDate] = useState(task?.due_date ?? defaultDueDate ?? '')
   const [personal, setPersonal] = useState(task?.is_personal ?? isPersonal)
   const [subtasks, setSubtasks] = useState(task?.subtasks ?? [])
+  const [spaces, setSpaces] = useState([])
+  const [selectedSpaceId, setSelectedSpaceId] = useState(departmentId ?? '')
   const deptMembers = useDeptMembers(departmentId)
   const [members, setMembers] = useState(sprintId ? [] : deptMembers)
   const [saving, setSaving] = useState(false)
@@ -184,6 +187,16 @@ export default function TaskModal({
     }
   }, [defaultDueDate, mode, task])
 
+  useEffect(() => {
+    if (mode === 'create' && profile?.id && role) {
+      getMySpaces(profile.id, role, profile.department_id)
+        .then((data) => {
+          setSpaces(data.filter((space) => space.status === 'active'))
+        })
+        .catch(() => setSpaces([]))
+    }
+  }, [mode, profile?.id, role, profile?.department_id])
+
   async function handleSave() {
     if (!title.trim()) {
       setError('Title is required.')
@@ -204,11 +217,11 @@ export default function TaskModal({
         statusId: selectedStatus?.id ?? statusId,
         statusCategory: selectedStatus?.category,
         priority,
-        assignee_id: assigneeId || null,
+        assignee_id: assigneeIds[0] || null,
         due_date: dueDate || null,
         is_personal: personal,
         source: 'manual',
-        department_id: personal ? departmentId ?? null : sprintId ? null : departmentId ?? null,
+        department_id: personal ? departmentId ?? null : sprintId ? null : selectedSpaceId || departmentId ?? null,
         sprint_id: personal ? null : sprintId ?? task?.sprint_id ?? null,
         list_id: personal ? null : listId ?? task?.list_id ?? null,
         task_type: personal ? 'personal' : sprintId || task?.sprint_id ? 'sprint' : 'space',
@@ -218,8 +231,8 @@ export default function TaskModal({
         payload.created_by = profile?.id
         const created = ctx ? await ctx.addTask(payload) : await createTask(payload)
 
-        if (assigneeId && assigneeId !== profile?.id) {
-          await createNotification(assigneeId, 'task_assigned', {
+        if (assigneeIds[0] && assigneeIds[0] !== profile?.id) {
+          await createNotification(assigneeIds[0], 'task_assigned', {
             task_id: created.id,
             task_title: created.title,
             assigner_name: profile?.name,
@@ -230,8 +243,8 @@ export default function TaskModal({
       } else {
         const updated = ctx ? await ctx.editTask(task.id, payload) : await updateTask(task.id, payload)
 
-        if (assigneeId && assigneeId !== previousAssigneeId && assigneeId !== profile?.id) {
-          await createNotification(assigneeId, 'task_assigned', {
+        if (assigneeIds[0] && assigneeIds[0] !== previousAssigneeId && assigneeIds[0] !== profile?.id) {
+          await createNotification(assigneeIds[0], 'task_assigned', {
             task_id: updated.id,
             task_title: updated.title,
             assigner_name: profile?.name,
@@ -345,93 +358,168 @@ export default function TaskModal({
               </div>
             ) : null}
 
-            <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>Title *</label>
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Task title</label>
               <input
                 ref={titleRef}
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Task title"
+                placeholder="What needs to get done?"
                 style={{ ...inputStyle, fontSize: 15, padding: '10px 12px' }}
                 onFocus={(e) => { e.target.style.borderColor = 'var(--accent)' }}
                 onBlur={(e) => { e.target.style.borderColor = 'var(--border)' }}
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-              <div>
-                <label style={labelStyle}>Status</label>
-                <select
-                  value={statusId}
-                  onChange={(e) => setStatusId(e.target.value)}
-                  style={inputStyle}
-                  onFocus={(e) => { e.target.style.borderColor = 'var(--accent)' }}
-                  onBlur={(e) => { e.target.style.borderColor = 'var(--border)' }}
-                >
-                  {statuses.map((option) => (
-                    <option key={option.id} value={option.id}>{option.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Priority</label>
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  style={inputStyle}
-                  onFocus={(e) => { e.target.style.borderColor = 'var(--accent)' }}
-                  onBlur={(e) => { e.target.style.borderColor = 'var(--border)' }}
-                >
-                  {PRIORITIES.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Space</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {spaces.map((space) => {
+                  const isSelected = selectedSpaceId === space.id
+                  const spaceIcon = SPACE_TYPE_ICONS[space.space_type] ?? space.name[0]?.toUpperCase()
+                  const spaceColor = `#${space.color}`
+                  return (
+                    <button
+                      key={space.id}
+                      type="button"
+                      onClick={() => setSelectedSpaceId(space.id)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '6px 12px',
+                        borderRadius: 20,
+                        background: isSelected ? spaceColor : 'white',
+                        color: isSelected ? 'white' : '#6B7280',
+                        border: isSelected ? `1px solid ${spaceColor}` : '1px solid var(--border)',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span style={{ fontSize: 16 }}>{spaceIcon}</span> {space.name}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-              {members.length > 0 ? (
-                <div>
-                  <label style={labelStyle}>Assignee</label>
-                  <select
-                    value={assigneeId}
-                    onChange={(e) => setAssigneeId(e.target.value)}
-                    style={inputStyle}
-                    onFocus={(e) => { e.target.style.borderColor = 'var(--accent)' }}
-                    onBlur={(e) => { e.target.style.borderColor = 'var(--border)' }}
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Link to sprint</label>
+              <div style={{ color: '#9CA3AF', fontSize: 13 }}>Not linked</div>
+            </div>
+
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Status</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {statuses.map((status) => (
+                  <button
+                    key={status.id}
+                    type="button"
+                    onClick={() => setStatusId(status.id)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 20,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      background: statusId === status.id ? 'var(--accent)' : '#E5E7EB',
+                      color: statusId === status.id ? 'white' : '#6B7280',
+                      border: 'none',
+                    }}
                   >
-                    <option value="">Unassigned</option>
-                    {members.map((member) => (
-                      <option key={member.id} value={member.id}>{member.name}</option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
-              <div>
-                <label style={labelStyle}>Due date</label>
-                <input
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  style={inputStyle}
-                  onFocus={(e) => { e.target.style.borderColor = 'var(--accent)' }}
-                  onBlur={(e) => { e.target.style.borderColor = 'var(--border)' }}
-                />
+                    {status.name}
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>Description</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Add details, context, or acceptance criteria…"
-                rows={3}
-                style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
-                onFocus={(e) => { e.target.style.borderColor = 'var(--accent)' }}
-                onBlur={(e) => { e.target.style.borderColor = 'var(--border)' }}
-              />
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Priority</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {PRIORITIES.map((p) => (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={() => setPriority(p.value)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 20,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      background: priority === p.value ? 'var(--accent)' : '#E5E7EB',
+                      color: priority === p.value ? 'white' : '#6B7280',
+                      border: 'none',
+                    }}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Assignees</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {members.map((member) => {
+                  const isSelected = assigneeIds.includes(member.id)
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => {
+                        setAssigneeIds(
+                          isSelected
+                            ? assigneeIds.filter((id) => id !== member.id)
+                            : [...assigneeIds, member.id]
+                        )
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '4px 8px',
+                        borderRadius: 20,
+                        fontSize: 12,
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        background: isSelected ? 'var(--accent)' : 'white',
+                        color: isSelected ? 'white' : 'var(--text-secondary)',
+                        border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border)',
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 20,
+                          height: 20,
+                          borderRadius: '50%',
+                          background: isSelected ? 'rgba(255,255,255,0.3)' : '#E5E7EB',
+                          fontSize: 9,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {member.name
+                          .split(' ')
+                          .slice(0, 2)
+                          .map((p) => p[0]?.toUpperCase() ?? '')
+                          .join('')}
+                      </span>
+                      {member.name.split(' ')[0]}
+                      {isSelected && <span>×</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Subtasks</label>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>0</div>
             </div>
 
             {isPersonal ? (

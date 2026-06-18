@@ -63,6 +63,7 @@ export default function TaskListView({
   canAddTask = false,
   departments = [],
   defaultDepartmentId = '',
+  listId = null,
   onCreateTask,
 }) {
   const [composerStatusId, setComposerStatusId] = useState(null)
@@ -176,6 +177,7 @@ export default function TaskListView({
                     compact
                     departments={departments}
                     defaultDepartmentId={defaultDepartmentId}
+                    listId={listId}
                     onCancel={() => setComposerStatusId(null)}
                     onSubmit={async (draft) => {
                       await onCreateTask?.({
