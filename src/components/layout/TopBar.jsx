@@ -83,6 +83,7 @@ export default function TopBar() {
   const [searchLoading, setSearchLoading] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const [taskModal, setTaskModal] = useState(null)
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false)
   const menuRef = useRef(null)
   const searchRef = useRef(null)
   const searchRequestRef = useRef(0)
@@ -394,7 +395,7 @@ export default function TopBar() {
               type="button"
               className="hidden items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12px] font-bold text-white transition sm:flex"
               style={{ background: 'var(--amber)' }}
-              onClick={() => navigate('/my-tasks?new=true')}
+              onClick={() => setShowNewTaskModal(true)}
             >
               <Plus size={14} />
               New Task
@@ -479,6 +480,14 @@ export default function TopBar() {
           onClose={() => setTaskModal(null)}
           onSaved={setTaskModal}
           onDeleted={() => setTaskModal(null)}
+        />
+      ) : null}
+
+      {showNewTaskModal ? (
+        <TaskModal
+          mode="create"
+          onClose={() => setShowNewTaskModal(false)}
+          onSaved={() => setShowNewTaskModal(false)}
         />
       ) : null}
     </>
