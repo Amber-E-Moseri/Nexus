@@ -19,6 +19,8 @@ function MeetingsModuleFallback() {
   const [departments, setDepartments] = useState([])
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(profile?.department_id ?? '')
   const [showModal, setShowModal] = useState(false)
+  const [viewMode, setViewMode] = useState('log')
+  const [kpiStats, setKpiStats] = useState({ logged30d: null, actionItems: null, withMinutes: null, deptCount: null })
   const isSuperAdmin = role === 'super_admin'
   const canManage = role !== 'member'
 
@@ -142,6 +144,104 @@ function MeetingsModuleFallback() {
               </div>
             ) : null}
           </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={() => setViewMode('log')}
+            style={{
+              borderRadius: 999,
+              padding: '8px 18px',
+              fontSize: 13,
+              fontWeight: 600,
+              border: viewMode === 'log' ? 'none' : '1px solid var(--border)',
+              background: viewMode === 'log' ? 'var(--accent)' : 'white',
+              color: viewMode === 'log' ? 'white' : 'var(--text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            Log
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('workspace')}
+            style={{
+              borderRadius: 999,
+              padding: '8px 18px',
+              fontSize: 13,
+              fontWeight: 600,
+              border: viewMode === 'workspace' ? 'none' : '1px solid var(--border)',
+              background: viewMode === 'workspace' ? 'var(--accent)' : 'white',
+              color: viewMode === 'workspace' ? 'white' : 'var(--text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            Workspace
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gap: 13,
+            marginBottom: 18,
+          }}
+        >
+          {[
+            { label: 'Logged (30D)', value: kpiStats.logged30d, bg: '#4C2A92', textColor: 'white' },
+            { label: 'Action Items', value: kpiStats.actionItems, bg: '#1C1C2E', textColor: 'white' },
+            { label: 'With Minutes', value: kpiStats.withMinutes, bg: '#E8A020', textColor: 'white' },
+            { label: 'Departments', value: kpiStats.deptCount, bg: '#FEF0ED', textColor: '#C94830', border: '#F9C4B3' },
+          ].map((stat, idx) => (
+            <div
+              key={idx}
+              style={{
+                position: 'relative',
+                overflow: 'hidden',
+                borderRadius: 16,
+                padding: '16px',
+                background: stat.bg,
+                border: stat.border ? `1px solid ${stat.border}` : 'none',
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  right: -20,
+                  bottom: -24,
+                  width: 80,
+                  height: 80,
+                  borderRadius: 999,
+                  background: 'rgba(255,255,255,0.1)',
+                }}
+              />
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: stat.textColor,
+                  opacity: 0.85,
+                }}
+              >
+                {stat.label}
+              </div>
+              <div
+                style={{
+                  fontSize: 28,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  marginTop: 8,
+                  color: stat.textColor,
+                }}
+              >
+                {stat.value ?? '—'}
+              </div>
+            </div>
+          ))}
         </div>
 
         <div
