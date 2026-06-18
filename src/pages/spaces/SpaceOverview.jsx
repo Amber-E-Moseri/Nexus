@@ -5,8 +5,7 @@ import { SlidersHorizontal } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { getMonthEvents } from '../../lib/calendar'
 import { hasPermission } from '../../lib/permissions'
-import { archiveSpace, canManageSpace, createFolder, createList, deleteFolder, deleteList, getFolders, getLists, getSpaceDetail, getSpaceListsCount, getSpaceMembers, getSpaceMeetings, getSpaceSprints, getSpaceTasks, restoreSpace, SPACE_TYPE_LABELS, updateFolder, updateList, updateSpace, updateTaskDueDate } from '../../lib/spaces'
-import { supabase } from '../../lib/supabase'
+import { archiveSpace, canManageSpace, createFolder, createList, deleteFolder, deleteList, getFolders, getLists, getSpaceActivity, getSpaceDetail, getSpaceListsCount, getSpaceMembers, getSpaceMeetings, getSpaceSprints, getSpaceTasks, restoreSpace, SPACE_TYPE_LABELS, updateFolder, updateList, updateSpace, updateTaskDueDate } from '../../lib/spaces'
 import Badge from '../../components/ui/Badge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import CalendarGrid from '../../modules/calendar/CalendarGrid'
@@ -863,27 +862,8 @@ function SpaceActivityTab({ departmentId }) {
   async function loadActivities() {
     try {
       setLoading(true)
-      const { data: deptUserIds } = await supabase
-        .from('users')
-        .select('id')
-        .eq('department_id', departmentId)
-      const ids = (deptUserIds || []).map((u) => u.id)
-
-      let query = supabase
-        .from('activity_log')
-        .select('id, user_id, action, entity_type, entity_id, timestamp, user:users!user_id(id, name)')
-        .gte('timestamp', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
-        .order('timestamp', { ascending: false })
-        .limit(50)
-
-      if (ids.length > 0) {
-        query = query.in('user_id', ids)
-      }
-
-      const { data, error } = await query
-
-      if (error) throw error
-      setActivities(data || [])
+      const activities = await getSpaceActivity(departmentId)
+      setActivities(activities)
     } catch (err) {
       console.error('Error loading space activity:', err)
     } finally {

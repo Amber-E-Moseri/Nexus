@@ -325,3 +325,31 @@ export async function updateTaskDueDate(taskId, dueDate) {
 
   if (error) throw error
 }
+
+export async function getSpaceActivity(departmentId) {
+  const { data: deptUserIds, error: usersError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('department_id', departmentId)
+
+  if (usersError) throw usersError
+
+  const ids = (deptUserIds || []).map((u) => u.id)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+  let query = supabase
+    .from('activity_log')
+    .select('id, user_id, action, entity_type, entity_id, timestamp, user:users!user_id(id, name)')
+    .gte('timestamp', thirtyDaysAgo)
+    .order('timestamp', { ascending: false })
+    .limit(50)
+
+  if (ids.length > 0) {
+    query = query.in('user_id', ids)
+  }
+
+  const { data, error } = await query
+
+  if (error) throw error
+  return data ?? []
+}
