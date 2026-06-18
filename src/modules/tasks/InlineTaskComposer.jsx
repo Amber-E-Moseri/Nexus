@@ -22,11 +22,13 @@ export default function InlineTaskComposer({
   onSubmit,
   onCancel,
   compact = false,
+  teamMembers = [],
 }) {
   const [title, setTitle] = useState('')
   const [departmentId, setDepartmentId] = useState(defaultDepartmentId ?? departments[0]?.id ?? '')
   const [priority, setPriority] = useState('medium')
   const [dueDate, setDueDate] = useState('')
+  const [assigneeIds, setAssigneeIds] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -53,6 +55,7 @@ export default function InlineTaskComposer({
         priority,
         dueDate: dueDate || null,
         listId,
+        assigneeIds: assigneeIds.length > 0 ? assigneeIds : undefined,
       })
     } catch (submitError) {
       setError(submitError.message ?? 'Failed to create task.')
@@ -143,6 +146,42 @@ export default function InlineTaskComposer({
           />
         </label>
       </div>
+
+      {!compact && teamMembers.length > 0 && (
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
+            Assignees
+          </span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {teamMembers.map((member) => (
+              <button
+                key={member.id}
+                type="button"
+                onClick={() => {
+                  setAssigneeIds((prev) =>
+                    prev.includes(member.id)
+                      ? prev.filter((id) => id !== member.id)
+                      : [...prev, member.id]
+                  )
+                }}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  border: assigneeIds.includes(member.id) ? 'none' : '1px solid var(--border)',
+                  background: assigneeIds.includes(member.id) ? 'var(--accent)' : '#FFFFFF',
+                  color: assigneeIds.includes(member.id) ? 'white' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                }}
+              >
+                {member.name ?? member.email}
+              </button>
+            ))}
+          </div>
+        </label>
+      )}
+
 
       <div style={{ marginTop: 10 }}>
         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A', marginBottom: 8 }}>
