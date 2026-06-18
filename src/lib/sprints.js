@@ -59,36 +59,27 @@ export async function getAllSprints() {
 }
 
 export async function getSprintDetail(sprintId) {
-  let actualSprintId = sprintId
+  const sprintRes = await supabase
+    .from('sprints')
+    .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by')
+    .eq('id', sprintId)
+    .single()
 
-  // Try to find by ID first, if that fails, try by name
-  let sprintRes = await supabase.from('sprints').select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by').eq('id', sprintId).single()
+  if (sprintRes.error) throw sprintRes.error
 
-  if (sprintRes.error && sprintRes.error.code === 'PGRST116') {
-    // No rows found by ID, try by name
-    const nameRes = await supabase.from('sprints').select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by').eq('name', sprintId).single()
-    if (nameRes.error) throw nameRes.error
-    sprintRes = nameRes
-    actualSprintId = nameRes.data.id
-  } else if (sprintRes.error) {
-    throw sprintRes.error
-  }
-
-  const [teamsRes, membersRes] = await Promise.all([
-    supabase.from('sprint_teams').select(SPRINT_TEAM_SELECT).eq('sprint_id', actualSprintId).order('created_at'),
-    supabase.from('sprint_members').select(SPRINT_MEMBER_SELECT).eq('sprint_id', actualSprintId).order('joined_at'),
+  const [teamsRes, membersRes, reviewRes] = await Promise.all([
+    supabase.from('sprint_teams').select(SPRINT_TEAM_SELECT).eq('sprint_id', sprintId).order('created_at'),
+    supabase.from('sprint_members').select(SPRINT_MEMBER_SELECT).eq('sprint_id', sprintId).order('joined_at'),
+    supabase.from('sprint_reviews').select(SPRINT_REVIEW_SELECT).eq('sprint_id', sprintId).maybeSingle().catch(() => ({ data: null })),
   ])
+
   if (teamsRes.error) throw teamsRes.error
   if (membersRes.error) throw membersRes.error
-
-  const reviewRes = await supabase.from('sprint_reviews').select(SPRINT_REVIEW_SELECT).eq('sprint_id', actualSprintId).maybeSingle().catch(() => ({ data: null }))
-
-  const members = membersRes.data ?? []
 
   return {
     sprint: sprintRes.data,
     teams: teamsRes.data ?? [],
-    members: members,
+    members: membersRes.data ?? [],
     review: reviewRes.data ?? null,
   }
 }
