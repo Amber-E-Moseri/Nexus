@@ -15,7 +15,7 @@ function MeetingsViewContent({ viewMode, canManage, onAddMeeting, onStartLive })
   if (viewMode === 'workspace') {
     return <MeetingsWorkspace canManage={canManage} onStartLive={onStartLive} />
   }
-  return <MeetingsList canManage={canManage} onAddMeeting={onAddMeeting} />
+  return <MeetingsList canManage={canManage} onAddMeeting={onAddMeeting} onStartLive={onStartLive} />
 }
 
 function MeetingsContent({ liveSession, viewMode, canManage, onAddMeeting, onStartLive, onCloseLive }) {
