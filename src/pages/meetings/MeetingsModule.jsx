@@ -326,45 +326,6 @@ function MeetingsModuleFallback() {
           ))}
         </div>
 
-        {selectedDepartmentId !== 'all' && selectedDepartment ? (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              borderRadius: 14,
-              border: '1px solid var(--border)',
-              background: 'white',
-              padding: '14px 16px',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                height: 36,
-                width: 36,
-                flexShrink: 0,
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 12,
-                background: selectedDepartment?.color ? `#${selectedDepartment.color}` : 'var(--accent)',
-                color: 'white',
-                fontSize: 14,
-                fontWeight: 700,
-              }}
-            >
-              {selectedDepartment?.name?.charAt(0) ?? 'M'}
-            </div>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                {selectedDepartment?.name ?? 'Department meetings'}
-              </div>
-              <div style={{ marginTop: 3, fontSize: 12, color: 'var(--text-secondary)' }}>
-                Meeting records live here. The standalone Meeting OS remains unchanged until an embed URL is configured.
-              </div>
-            </div>
-          </div>
-        ) : null}
 
         <MeetingsContent
           liveSession={liveSession}
@@ -514,10 +475,6 @@ export default function MeetingsModule() {
       ) : (
         <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
           <div style={{ maxWidth: 1200 }}>
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
-              Set <code>VITE_MEETING_OS_URL</code> in your environment to embed Meeting OS here. Until then, use the
-              meeting log below.
-            </p>
             <MeetingsModuleFallback />
           </div>
         </div>
