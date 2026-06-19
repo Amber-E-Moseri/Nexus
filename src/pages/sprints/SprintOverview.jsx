@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import Badge from '../../components/ui/Badge'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent } from '../../lib/calendar'
-import { advanceSprintStatus, calculateSprintTaskStats, createSprintTeam, duplicateSprint, getSprintDetail, getSprintTasks, restoreSprint, shouldAutoStartSprint, updateSprint } from '../../lib/sprints'
+import { advanceSprintStatus, archiveSprintWithAutoDeactivation, calculateSprintTaskStats, createSprintTeam, duplicateSprint, getSprintDetail, getSprintTasks, getTemporarySprintMembers, restoreSprint, shouldAutoStartSprint, updateSprint } from '../../lib/sprints'
 import { supabase } from '../../lib/supabase'
 import { isTaskCompleted } from '../../lib/taskStatuses'
 import SprintProgressBar from '../../modules/sprints/SprintProgressBar'
@@ -12,6 +12,7 @@ import EventModal from '../../modules/calendar/EventModal'
 import SprintMemberPanel from '../../modules/sprints/SprintMemberPanel'
 import SprintTaskBoard from '../../modules/sprints/SprintTaskBoard'
 import SprintTeamPanel from '../../modules/sprints/SprintTeamPanel'
+import CreateTeamModal from '../../modules/sprints/CreateTeamModal'
 import SprintReview from './SprintReview'
 import FileList from '../../components/files/FileList'
 
@@ -156,6 +157,8 @@ export default function SprintOverview() {
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState(null)
   const [calendarDefaultDate, setCalendarDefaultDate] = useState(null)
   const [savingTeam, setSavingTeam] = useState(false)
+  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false)
+  const [temporaryMembers, setTemporaryMembers] = useState([])
 
   const completion = useMemo(() => {
     if (tasks.length === 0) return 0
@@ -182,15 +185,21 @@ export default function SprintOverview() {
     setLoading(true)
     setLoadError(null)
     try {
-      const [nextDetail, nextTasks] = await Promise.all([getSprintDetail(sprintId), getSprintTasks(sprintId)])
+      const [nextDetail, nextTasks, tempMembers] = await Promise.all([
+        getSprintDetail(sprintId),
+        getSprintTasks(sprintId),
+        getTemporarySprintMembers(sprintId).catch(() => []),
+      ])
       setDetail(nextDetail)
       setTasks(nextTasks)
+      setTemporaryMembers(tempMembers)
       setGoalDraft(nextDetail.sprint.goal ?? '')
       setDescriptionDraft(nextDetail.sprint.description ?? '')
     } catch (error) {
       console.error('Failed to load sprint:', error)
       setDetail(null)
       setTasks([])
+      setTemporaryMembers([])
       if (error?.code === 'PGRST116' || error?.message?.includes('no rows')) {
         setLoadError('This sprint was deleted.')
       } else {
@@ -293,9 +302,17 @@ export default function SprintOverview() {
   }
 
   async function handleArchive() {
-    if (!window.confirm('Archive this sprint? You can restore it later from the sprints list.')) return
+    let confirmMessage = 'Archive this sprint? You can restore it later from the sprints list.'
+    if (temporaryMembers.length > 0) {
+      const memberNames = temporaryMembers
+        .map((m) => m.users?.name || m.users?.email)
+        .filter(Boolean)
+        .join(', ')
+      confirmMessage = `⚠️ This will deactivate ${temporaryMembers.length} temporary member(s): ${memberNames}\n\n${confirmMessage}`
+    }
+    if (!window.confirm(confirmMessage)) return
     try {
-      await advanceSprintStatus(detail.sprint.id, 'archived')
+      await archiveSprintWithAutoDeactivation(detail.sprint.id)
       await loadDetail()
     } catch (err) {
       console.error('Failed to archive sprint:', err)
@@ -333,13 +350,15 @@ export default function SprintOverview() {
     }
   }
 
-  async function handleCreateTeam() {
-    const teamName = prompt('Enter team name:')
-    if (!teamName?.trim()) return
+  function handleCreateTeam() {
+    setShowCreateTeamModal(true)
+  }
 
+  async function handleSaveTeam(teamName) {
     setSavingTeam(true)
     try {
-      await createSprintTeam(detail.sprint.id, teamName.trim())
+      await createSprintTeam(detail.sprint.id, teamName)
+      setShowCreateTeamModal(false)
       await loadDetail()
     } catch (err) {
       alert(`Failed to create team: ${err?.message || String(err)}`)
@@ -485,6 +504,20 @@ export default function SprintOverview() {
         </div>
       )}
 
+      {/* Members Section */}
+      <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+        <SprintMemberPanel
+          sprintId={detail.sprint.id}
+          sprintName={detail.sprint.name}
+          sprintEndDate={detail.sprint.end_date}
+          members={detail.members || []}
+          teams={detail.teams || []}
+          canEdit={Boolean(canManage && !isArchived)}
+          isArchived={Boolean(isArchived)}
+          onChanged={loadDetail}
+        />
+      </div>
+
 
       {detail.sprint.status === 'archived' ? (
         <div className="text-sm text-[var(--text-secondary)]">
@@ -510,6 +543,13 @@ export default function SprintOverview() {
           }}
         />
       ) : null}
+
+      <CreateTeamModal
+        open={showCreateTeamModal}
+        onClose={() => setShowCreateTeamModal(false)}
+        onSave={handleSaveTeam}
+        saving={savingTeam}
+      />
     </div>
   )
 }

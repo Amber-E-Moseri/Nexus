@@ -1,0 +1,53 @@
+name: Deactivate Temporary Sprint Members
+
+# Run daily at midnight UTC
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  deactivate:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run deactivation task
+        run: |
+          node -e "
+            import('./src/lib/scheduled-tasks.js').then(module => {
+              const task = module.default || module.scheduleTemporaryMemberDeactivation;
+              task().then(result => {
+                console.log('Task result:', JSON.stringify(result, null, 2));
+                process.exit(result.success ? 0 : 1);
+              }).catch(err => {
+                console.error('Task error:', err);
+                process.exit(1);
+              });
+            });
+          "
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Log completion
+        if: success()
+        run: echo "✓ Temporary member deactivation completed successfully"
+
+      - name: Log failure
+        if: failure()
+        run: echo "✗ Temporary member deactivation failed"

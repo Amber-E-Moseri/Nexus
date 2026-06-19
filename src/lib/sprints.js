@@ -1,9 +1,12 @@
 import { supabase } from './supabase'
 import { normalizeTaskRows } from './taskStatuses'
+import { createNotification } from './notifications'
 
 const SPRINT_TEAM_SELECT = 'id, sprint_id, name, description, lead_user_id, created_at'
 const SPRINT_TEAM_MEMBERS_SELECT = 'id, team_id, user_id, role, joined_at, users:user_id(id, name, email, department_id, status)'
 const SPRINT_MEMBER_SELECT = 'sprint_id, user_id, role, joined_at'
+const SPRINT_MEMBER_WITH_TEMP_SELECT = 'sprint_id, user_id, role, joined_at, membership_end_date, is_temporary, invited_by'
+const TEMP_MEMBER_SELECT = 'id, sprint_id, user_id, role, membership_end_date, is_temporary, invited_by, joined_at, users:user_id(id, name, email, status, is_temporary)'
 const SPRINT_REVIEW_SELECT = 'id, sprint_id, completed_at, completed_by, lessons_learned, goals_achieved, outstanding_items, wins_testimonies, recommendations, final_decisions, created_at'
 const VALID_SPRINT_STATUSES = ['planning', 'active', 'completed', 'review', 'archived']
 
@@ -71,7 +74,7 @@ export async function getSprintDetail(sprintId) {
 
   const [teamsRes, membersRes, reviewRes] = await Promise.all([
     supabase.from('sprint_teams').select(SPRINT_TEAM_SELECT).eq('sprint_id', sprintId).order('created_at'),
-    supabase.from('sprint_members').select(`${SPRINT_MEMBER_SELECT}, user:user_id(id, name)`).eq('sprint_id', sprintId).order('joined_at'),
+    supabase.from('sprint_members').select(`${SPRINT_MEMBER_WITH_TEMP_SELECT}, user:user_id(id, name, email, status, is_temporary)`).eq('sprint_id', sprintId).order('joined_at'),
     (async () => {
       try {
         return await supabase.from('sprint_reviews').select(SPRINT_REVIEW_SELECT).eq('sprint_id', sprintId).maybeSingle()
@@ -453,13 +456,25 @@ export async function archiveTeam(teamId) {
   return data
 }
 
-export async function addSprintMember(sprintId, userId, role = 'contributor', teamIds = []) {
+export async function addSprintMember(sprintId, userId, role = 'contributor', teamIds = [], membershipEndDate = null) {
   const normalizedTeamIds = uniqueTeamIds(teamIds)
   const sprintTeamId = normalizedTeamIds.length > 0 ? normalizedTeamIds[0] : null
 
+  const insertPayload = {
+    sprint_id: sprintId,
+    user_id: userId,
+    role,
+    sprint_team_id: sprintTeamId,
+  }
+
+  // Add optional membership end date if provided (for team-based temporary memberships)
+  if (membershipEndDate) {
+    insertPayload.membership_end_date = membershipEndDate
+  }
+
   const { data, error } = await supabase
     .from('sprint_members')
-    .insert({ sprint_id: sprintId, user_id: userId, role, sprint_team_id: sprintTeamId })
+    .insert(insertPayload)
     .select(SPRINT_MEMBER_SELECT)
     .single()
 
@@ -600,4 +615,375 @@ export async function getSprintReview(sprintId) {
 
   if (error) throw error
   return data
+}
+
+// ─────────────────────────────────────────────────────────────
+// Temporary Sprint Invites
+// ─────────────────────────────────────────────────────────────
+
+export async function inviteExternalToSprint(payload) {
+  const {
+    email,
+    name,
+    sprintId,
+    role = 'contributor',
+    membershipEndDate,
+  } = payload
+
+  const { data: user } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // Step 1: Check if user exists
+  let existingUser = null
+  try {
+    const { data } = await supabase
+      .from('users')
+      .select('id, status, email')
+      .eq('email', email.toLowerCase())
+      .single()
+    existingUser = data
+  } catch (err) {
+    // User doesn't exist, that's fine
+  }
+
+  let userId
+  let isNewUser = false
+
+  if (existingUser) {
+    userId = existingUser.id
+  } else {
+    // Step 2: Create new temp user
+    const { data: newUser, error: userError } = await supabase
+      .from('users')
+      .insert({
+        email: email.toLowerCase(),
+        name: name || email.split('@')[0],
+        status: 'pending_activation',
+        is_temporary: true,
+        created_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single()
+
+    if (userError) throw userError
+    userId = newUser.id
+    isNewUser = true
+  }
+
+  // Step 3: Check if already in sprint
+  const { data: existingMember } = await supabase
+    .from('sprint_members')
+    .select('id')
+    .eq('sprint_id', sprintId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (existingMember) {
+    throw new Error('User is already a member of this sprint')
+  }
+
+  // Step 4: Add to sprint as temporary member
+  const { data: sprintMember, error: memberError } = await supabase
+    .from('sprint_members')
+    .insert({
+      sprint_id: sprintId,
+      user_id: userId,
+      role,
+      membership_end_date: membershipEndDate,
+      is_temporary: true,
+      invited_by: user.user.id,
+    })
+    .select(SPRINT_MEMBER_WITH_TEMP_SELECT)
+    .single()
+
+  if (memberError) throw memberError
+
+  // Step 5: Send invite email (if new user)
+  if (isNewUser) {
+    await sendSprintInvitationEmail({
+      userId,
+      email,
+      name: name || existingUser?.name,
+      sprintId,
+      membershipEndDate,
+      isNewAccount: true,
+    })
+  }
+
+  return { userId, sprintMember, isNewUser }
+}
+
+export async function getTemporarySprintMembers(sprintId) {
+  const { data, error } = await supabase
+    .from('sprint_members')
+    .select(TEMP_MEMBER_SELECT)
+    .eq('sprint_id', sprintId)
+    .eq('is_temporary', true)
+    .order('membership_end_date', { ascending: true })
+
+  if (error) throw error
+  return data
+}
+
+export async function updateSprintMembershipEndDate(sprintMemberId, newEndDate) {
+  const { data: user } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // Get member details
+  const { data: member, error: fetchError } = await supabase
+    .from('sprint_members')
+    .select('sprint_id, user_id, is_temporary')
+    .eq('sprint_id', sprintMemberId.split(':')[0])
+    .eq('user_id', sprintMemberId.split(':')[1])
+    .maybeSingle()
+
+  // Try another approach - query by sprint and user
+  const parts = sprintMemberId.split(':')
+  if (parts.length === 2) {
+    const [sprintId, userId] = parts
+
+    const { data: sm } = await supabase
+      .from('sprint_members')
+      .select('sprint_id, user_id, is_temporary')
+      .eq('sprint_id', sprintId)
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (!sm?.is_temporary) {
+      throw new Error('Can only update end date for temporary members')
+    }
+
+    const { data: sprint } = await supabase
+      .from('sprints')
+      .select('created_by')
+      .eq('id', sprintId)
+      .single()
+
+    const { data: currentUser } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.user.id)
+      .single()
+
+    const canUpdate = sprint.created_by === user.user.id || currentUser.role === 'super_admin'
+    if (!canUpdate) {
+      throw new Error('Only sprint owner or super admin can update end date')
+    }
+
+    const { data, error } = await supabase
+      .from('sprint_members')
+      .update({ membership_end_date: newEndDate })
+      .eq('sprint_id', sprintId)
+      .eq('user_id', userId)
+      .select(SPRINT_MEMBER_WITH_TEMP_SELECT)
+      .single()
+
+    if (error) throw error
+    return data
+  }
+
+  throw new Error('Invalid sprint member ID format')
+}
+
+export async function deactivateExpiredSprintMembers() {
+  const today = new Date().toISOString().split('T')[0]
+
+  // Step 1: Find all expired temporary members
+  const { data: expiredMembers, error: fetchError } = await supabase
+    .from('sprint_members')
+    .select('user_id, membership_end_date, sprint_id')
+    .eq('is_temporary', true)
+    .lte('membership_end_date', today)
+
+  if (fetchError) throw fetchError
+
+  if (expiredMembers.length === 0) {
+    return { deactivated: 0, message: 'No expired temporary members' }
+  }
+
+  // Step 2: Get unique user IDs
+  const userIds = [...new Set(expiredMembers.map((m) => m.user_id))]
+
+  // Step 3: Deactivate each user
+  const { error: updateError } = await supabase
+    .from('users')
+    .update({
+      status: 'inactive',
+      inactivated_at: new Date().toISOString(),
+    })
+    .in('id', userIds)
+
+  if (updateError) throw updateError
+
+  // Step 4: Send notifications (create notification records)
+  for (const userId of userIds) {
+    try {
+      await createNotification(userId, 'sprint_access_ended', {
+        title: 'Sprint Access Ended',
+        message: 'Your temporary sprint access has ended. Your account is now inactive.',
+      })
+    } catch (err) {
+      console.error('Error creating notification:', err)
+    }
+  }
+
+  return {
+    deactivated: userIds.length,
+    userIds,
+    message: `Deactivated ${userIds.length} temporary member(s)`,
+  }
+}
+
+export async function archiveSprintWithAutoDeactivation(sprintId) {
+  // Step 1: Archive the sprint
+  const { error: archiveError } = await supabase
+    .from('sprints')
+    .update({
+      status: 'archived',
+      is_archived: true,
+      archived_at: new Date().toISOString(),
+    })
+    .eq('id', sprintId)
+
+  if (archiveError) throw archiveError
+
+  // Step 2: Immediately deactivate temporary members of THIS sprint
+  const { data: tempMembers } = await supabase
+    .from('sprint_members')
+    .select('user_id')
+    .eq('sprint_id', sprintId)
+    .eq('is_temporary', true)
+
+  if (tempMembers && tempMembers.length > 0) {
+    const userIds = tempMembers.map((m) => m.user_id)
+    await supabase
+      .from('users')
+      .update({
+        status: 'inactive',
+        inactivated_at: new Date().toISOString(),
+      })
+      .in('id', userIds)
+
+    // Notify each
+    for (const userId of userIds) {
+      try {
+        await createNotification(userId, 'sprint_archived', {
+          title: 'Sprint Archived',
+          message: 'The sprint you were working on has been archived. Your access is now inactive.',
+        })
+      } catch (err) {
+        console.error('Error creating notification:', err)
+      }
+    }
+  }
+
+  return { archived: true, deactivated: tempMembers?.length || 0 }
+}
+
+export async function reactivateTemporaryMember(userId) {
+  const { data: user } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // Verify permission: must be super admin
+  const { data: currentUser } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', user.user.id)
+    .single()
+
+  const { data: targetUser } = await supabase
+    .from('users')
+    .select('is_temporary')
+    .eq('id', userId)
+    .single()
+
+  if (!targetUser?.is_temporary) {
+    throw new Error('Can only reactivate temporary members')
+  }
+
+  // Check if super admin or owner of a sprint with this user
+  if (currentUser.role !== 'super_admin') {
+    const { data: sprintsUserIsIn } = await supabase
+      .from('sprint_members')
+      .select('sprint_id')
+      .eq('user_id', userId)
+
+    const { data: ownedSprints } = await supabase
+      .from('sprints')
+      .select('id')
+      .eq('created_by', user.user.id)
+      .in(
+        'id',
+        sprintsUserIsIn?.map((m) => m.sprint_id) || [],
+      )
+
+    if (!ownedSprints || ownedSprints.length === 0) {
+      throw new Error('Only super admin or sprint owner can reactivate temporary members')
+    }
+  }
+
+  // Reactivate
+  const { data, error } = await supabase
+    .from('users')
+    .update({
+      status: 'active',
+      activated_at: new Date().toISOString(),
+    })
+    .eq('id', userId)
+    .select()
+    .single()
+
+  if (error) throw error
+
+  // Notify
+  try {
+    await createNotification(userId, 'account_reactivated', {
+      title: 'Account Reactivated',
+      message: 'Your account has been reactivated. You can login again.',
+    })
+  } catch (err) {
+    console.error('Error creating notification:', err)
+  }
+
+  return data
+}
+
+export async function sendSprintInvitationEmail(payload) {
+  const { userId, email, name, sprintId, membershipEndDate, isNewAccount } = payload
+
+  // Get sprint details
+  const { data: sprint } = await supabase
+    .from('sprints')
+    .select('id, name, end_date')
+    .eq('id', sprintId)
+    .single()
+
+  if (!sprint) throw new Error('Sprint not found')
+
+  // Prepare email content
+  const subject = isNewAccount ? `You're invited to ${sprint.name} sprint` : `You've been added to ${sprint.name} sprint`
+
+  const actionUrl = isNewAccount
+    ? `${import.meta.env.VITE_APP_URL || 'http://localhost:5173'}/auth/set-password?email=${encodeURIComponent(email)}`
+    : `${import.meta.env.VITE_APP_URL || 'http://localhost:5173'}/sprints/${sprintId}`
+
+  const expiresDate = new Date(membershipEndDate).toLocaleDateString()
+
+  const body = isNewAccount
+    ? `You've been invited to join the ${sprint.name} sprint (ends ${expiresDate}).\n\nThis is a temporary invitation. After the sprint ends, your access will be deactivated.\n\nTo get started, click the link below to set up your account:\n${actionUrl}\n\nYour temporary access expires: ${expiresDate}`
+    : `You've been added to the ${sprint.name} sprint (ends ${expiresDate}).\n\nView the sprint: ${actionUrl}\n\nYour temporary access expires: ${expiresDate}`
+
+  // Log email sending (since we might not have Resend configured)
+  console.log('Email invitation sent:', {
+    to: email,
+    subject,
+    body,
+  })
+
+  // Note: In production, integrate with Resend or your email service
+  // For now, just logging the email
+  return {
+    success: true,
+    message: 'Invitation email prepared (logging enabled)',
+  }
 }

@@ -8,7 +8,9 @@ import {
   removeSprintMember,
   updateSprintMemberRole,
   updateSprintMemberTeams,
+  reactivateTemporaryMember,
 } from '../../lib/sprints'
+import InviteExternalModal from './InviteExternalModal'
 
 const ROLE_OPTIONS = ['owner', 'manager', 'contributor', 'viewer']
 
@@ -52,6 +54,7 @@ function EmptyState({ icon, title, subtitle }) {
 export default function SprintMemberPanel({
   sprintId,
   sprintName,
+  sprintEndDate,
   members,
   teams,
   canEdit,
@@ -66,6 +69,8 @@ export default function SprintMemberPanel({
   const [selectedMembershipEndDate, setSelectedMembershipEndDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(false)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [reactivating, setReactivating] = useState(null)
 
   useEffect(() => {
     if (!canEdit || isArchived) return
@@ -113,6 +118,27 @@ export default function SprintMemberPanel({
     await onChanged?.()
   }
 
+  async function handleReactivate(userId) {
+    try {
+      setReactivating(userId)
+      await reactivateTemporaryMember(userId)
+      await onChanged?.()
+      alert('Account reactivated successfully')
+    } catch (err) {
+      alert(`Error reactivating account: ${err.message}`)
+    } finally {
+      setReactivating(null)
+    }
+  }
+
+  function daysUntilExpiration(endDate) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const end = new Date(endDate)
+    end.setHours(0, 0, 0, 0)
+    return Math.ceil((end - today) / (1000 * 60 * 60 * 24))
+  }
+
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       {/* Existing Members Section */}
@@ -124,7 +150,30 @@ export default function SprintMemberPanel({
               Cross-functional members assigned to this sprint.
             </div>
           </div>
-          <Badge tone={isArchived ? 'archived' : 'active'}>{members.length} members</Badge>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {canEdit && !isArchived && (
+              <button
+                onClick={() => setShowInviteModal(true)}
+                style={{
+                  padding: '8px 16px',
+                  background: TOKENS.primary,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  fontFamily: 'DM Sans, system-ui, sans-serif',
+                  transition: 'all 0.12s',
+                }}
+                onMouseEnter={(e) => { e.target.style.opacity = '0.9' }}
+                onMouseLeave={(e) => { e.target.style.opacity = '1' }}
+              >
+                + Invite external
+              </button>
+            )}
+            <Badge tone={isArchived ? 'archived' : 'active'}>{members.length} members</Badge>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gap: 12 }}>
@@ -148,13 +197,39 @@ export default function SprintMemberPanel({
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: TOKENS.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {member.user?.name ?? member.user?.email ?? '—'}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: TOKENS.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {member.user?.name ?? member.user?.email ?? '—'}
+                    </div>
+                    {member.is_temporary && (
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          padding: '2px 8px',
+                          background: '#FFF2D9',
+                          color: '#C47E0A',
+                          borderRadius: '999px',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Temporary
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: 12, color: TOKENS.textTertiary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {member.user?.email}
                   </div>
-                  {expiringMemberships.length > 0 && (
+                  {member.is_temporary && member.membership_end_date && (
+                    <div style={{ marginTop: 4, fontSize: 12, color: '#DC2626' }}>
+                      Expires: {new Date(member.membership_end_date).toLocaleDateString()}
+                      {daysUntilExpiration(member.membership_end_date) <= 7 && (
+                        <span style={{ marginLeft: 4, color: '#C47E0A' }}>
+                          ({daysUntilExpiration(member.membership_end_date)} days)
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {expiringMemberships.length > 0 && !member.is_temporary && (
                     <div style={{ marginTop: 4, fontSize: 12, color: '#DC2626' }}>
                       Expires: {expiringMemberships.map((m) => new Date(m.membership_end_date).toLocaleDateString()).join(', ')}
                     </div>
@@ -232,8 +307,31 @@ export default function SprintMemberPanel({
                     <span style={{ fontSize: 12, color: TOKENS.textTertiary }}>
                       {member.sprint_teams?.length ? member.sprint_teams.map((team) => team.name).join(', ') : 'No team'}
                     </span>
-                    {expiringMemberships.length > 0 && (
+                    {member.is_temporary && (
                       <Badge tone="archived">Temp member</Badge>
+                    )}
+                    {expiringMemberships.length > 0 && !member.is_temporary && (
+                      <Badge tone="archived">Temp member</Badge>
+                    )}
+                    {member.is_temporary && member.user?.status === 'inactive' && profile?.role === 'super_admin' && (
+                      <button
+                        onClick={() => handleReactivate(member.user.id)}
+                        disabled={reactivating === member.user.id}
+                        style={{
+                          padding: '4px 8px',
+                          background: TOKENS.primary,
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: reactivating === member.user.id ? 'not-allowed' : 'pointer',
+                          fontFamily: 'DM Sans, system-ui, sans-serif',
+                          opacity: reactivating === member.user.id ? 0.6 : 1,
+                        }}
+                      >
+                        {reactivating === member.user.id ? 'Reactivating…' : 'Reactivate'}
+                      </button>
                     )}
                   </>
                 )}
@@ -372,6 +470,17 @@ export default function SprintMemberPanel({
           </div>
         </div>
       ) : null}
+
+      {/* Invite External Modal */}
+      {showInviteModal && (
+        <InviteExternalModal
+          sprintId={sprintId}
+          sprintEndDate={sprintEndDate}
+          sprintName={sprintName}
+          onClose={() => setShowInviteModal(false)}
+          onSuccess={() => onChanged?.()}
+        />
+      )}
     </div>
   )
 }
