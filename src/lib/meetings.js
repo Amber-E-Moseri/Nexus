@@ -22,7 +22,8 @@ export async function getDeptMeetings(departmentId) {
       created_by,
       created_at,
       creator:users!created_by(id, name),
-      attendance:meeting_attendance(user_id, status)
+      attendance:meeting_attendance(user_id, status),
+      agendas(id, title, start_time, end_time, location, moderator_name, theme, created_by, agenda_items(id, segment, notes, duration_minutes, sort_order, is_pinned))
     `)
 
   if (departmentId !== 'all') {

@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import { useMeetings } from './MeetingsContext'
 import MeetingRecordTabs from './MeetingRecordTabs'
+import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../hooks/useAuth'
 
 const TYPE_CHIP_COLORS = {
   general: '#4C2A92',
@@ -21,9 +23,32 @@ function groupMeetingsByCategory(meetings) {
 }
 
 export default function MeetingsList({ onAddMeeting, onTasksAdded, canManage = false, onStartLive }) {
-  const { meetings, loading, error } = useMeetings()
+  const { meetings, loading, error, reload } = useMeetings()
+  const { profile } = useAuth()
   const [selectedMeetingId, setSelectedMeetingId] = useState(null)
   const [activeType, setActiveType] = useState('all')
+
+  const handleQuickCreateMeeting = async () => {
+    try {
+      const { data, error: insertError } = await supabase
+        .from('meetings')
+        .insert([{
+          title: `Meeting ${new Date().toLocaleDateString()}`,
+          meeting_type: 'general',
+          date: new Date().toISOString(),
+          department_id: meetings[0]?.department_id,
+          created_by: profile?.id,
+        }])
+        .select()
+        .single()
+
+      if (insertError) throw insertError
+      setSelectedMeetingId(data.id)
+      reload()
+    } catch (err) {
+      console.error('Failed to create meeting:', err)
+    }
+  }
 
   const selectedMeeting = useMemo(
     () => meetings?.find((m) => m.id === selectedMeetingId) ?? null,
@@ -154,6 +179,29 @@ export default function MeetingsList({ onAddMeeting, onTasksAdded, canManage = f
           background: 'white',
         }}
       >
+        {/* Sidebar header with + New button */}
+        <div style={{ paddingLeft: 16, paddingRight: 16, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Meetings</div>
+          {canManage && (
+            <button
+              type="button"
+              onClick={handleQuickCreateMeeting}
+              style={{
+                padding: '4px 12px',
+                fontSize: 13,
+                background: 'var(--accent)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              + New
+            </button>
+          )}
+        </div>
+
         {/* Category filter buttons */}
         <div style={{ paddingLeft: 16, paddingRight: 16, marginBottom: 16 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>

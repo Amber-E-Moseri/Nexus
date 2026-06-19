@@ -19,7 +19,7 @@ export default function Step2BuildAgenda() {
   function handleLoadTemplate(templateId) {
     setIsLoadingTemplate(true)
     const template = ALL_TEMPLATES.find((t) => t.id === templateId)
-    if (template && template.items.length > 0) {
+    if (template) {
       const newItems = template.items.map((item, index) => ({
         id: `item-${Date.now()}-${index}`,
         segment: item.segment,

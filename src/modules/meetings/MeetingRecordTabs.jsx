@@ -173,7 +173,33 @@ export default function MeetingRecordTabs({ meeting }) {
 
         {activeTab === 'Agenda' && (
           <div style={{ paddingLeft: 16, paddingRight: 16 }}>
-            {meeting.agenda ? (
+            {meeting.agendas && meeting.agendas[0]?.agenda_items && meeting.agendas[0].agenda_items.length > 0 ? (
+              <div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #E5E5E4' }}>
+                      <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 600, color: '#7E7D78' }}>#</th>
+                      <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: '#7E7D78' }}>Agenda Item</th>
+                      <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: '#7E7D78' }}>Time</th>
+                      <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 600, color: '#7E7D78' }}>Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {meeting.agendas[0].agenda_items.map((item, idx) => (
+                      <tr key={item.id} style={{ borderBottom: '1px solid #E5E5E4' }}>
+                        <td style={{ padding: '12px 0', color: '#7E7D78', fontWeight: 500 }}>{idx + 1}</td>
+                        <td style={{ padding: '12px', color: '#1C1C1C' }}>
+                          <div style={{ fontWeight: 500 }}>{item.segment}</div>
+                          {item.notes && <div style={{ fontSize: 12, color: '#7E7D78', marginTop: 2 }}>{item.notes}</div>}
+                        </td>
+                        <td style={{ padding: '12px', color: '#7E7D78', fontSize: 12 }}>—</td>
+                        <td style={{ padding: '12px 0', color: '#7E7D78', fontSize: 12 }}>{item.duration_minutes}m</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : meeting.agenda ? (
               <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.7, color: '#1C1C1C' }}>
                 {meeting.agenda}
               </div>

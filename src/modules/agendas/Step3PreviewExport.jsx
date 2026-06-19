@@ -50,36 +50,6 @@ export default function Step3PreviewExport() {
         createdBy: profile?.id,
       }
 
-      const agenda = await createAgenda(preparedAgendaData, agendaItems)
-
-      alert(`✓ Agenda saved! (ID: ${agenda.id.slice(0, 8)})`)
-      reset()
-      navigate('/meetings')
-    } catch (err) {
-      setExportError(err.message || 'Failed to save agenda')
-      console.error(err)
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  async function handleCreateMeeting() {
-    setExportError(null)
-    setIsSaving(true)
-    try {
-      const preparedAgendaData = {
-        title: agendaData.title,
-        meetingType: agendaData.meetingType,
-        departmentId: profile?.department_id,
-        date: agendaData.date,
-        startTime: agendaData.startTime,
-        endTime: agendaData.endTime,
-        location: agendaData.location,
-        moderator: agendaData.moderator,
-        theme: agendaData.theme,
-        createdBy: profile?.id,
-      }
-
       const meetingData = {
         title: agendaData.title,
         summary: null,
@@ -94,16 +64,17 @@ export default function Step3PreviewExport() {
         agendaItems
       )
 
-      alert(`✓ Meeting created! (ID: ${meeting.id.slice(0, 8)})`)
+      alert(`✓ Meeting planned! (ID: ${meeting.id.slice(0, 8)})`)
       reset()
       navigate('/meetings')
     } catch (err) {
-      setExportError(err.message || 'Failed to create meeting')
+      setExportError(err.message || 'Failed to save agenda')
       console.error(err)
     } finally {
       setIsSaving(false)
     }
   }
+
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, maxWidth: 1200 }}>
@@ -236,27 +207,8 @@ export default function Step3PreviewExport() {
             disabled={isSaving}
             style={{
               borderRadius: 8,
-              border: '1px solid #E5DDD0',
-              background: 'white',
-              padding: '12px 14px',
-              fontSize: 13,
-              fontWeight: 600,
-              color: '#666',
-              cursor: isSaving ? 'not-allowed' : 'pointer',
-              opacity: isSaving ? 0.6 : 1,
-              transition: 'opacity .2s',
-            }}
-          >
-            {isSaving ? '⏳ Saving...' : '💾 Save Agenda'}
-          </button>
-          <button
-            type="button"
-            onClick={handleCreateMeeting}
-            disabled={isSaving}
-            style={{
-              borderRadius: 8,
               border: 'none',
-              background: '#28A745',
+              background: '#4C2A92',
               padding: '12px 14px',
               fontSize: 13,
               fontWeight: 600,
@@ -266,7 +218,7 @@ export default function Step3PreviewExport() {
               transition: 'opacity .2s',
             }}
           >
-            {isSaving ? '⏳ Creating...' : '✓ Create Meeting'}
+            {isSaving ? '⏳ Planning...' : '💾 Plan Meeting'}
           </button>
         </div>
 
