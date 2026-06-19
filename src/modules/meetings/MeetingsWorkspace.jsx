@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react'
+import { ChevronLeft } from 'lucide-react'
 import { useMeetings } from './MeetingsContext'
 import MeetingRecordTabs from './MeetingRecordTabs'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
+import { useMediaQuery } from '../../hooks/useMediaQuery'
 
 const TYPE_CHIP_COLORS = {
   general: '#4C2A92',
@@ -20,7 +22,7 @@ function groupMeetingsByCategory(meetings) {
   return groups
 }
 
-function RecordPane({ selectedMeeting, canManage, onStartLive }) {
+function RecordPane({ selectedMeeting, canManage, onStartLive, isMobile, onBack }) {
   if (!selectedMeeting) {
     return (
       <div
@@ -42,23 +44,50 @@ function RecordPane({ selectedMeeting, canManage, onStartLive }) {
 
   return (
     <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>
-            {selectedMeeting.title}
-          </h2>
-          <div style={{ marginTop: 4, fontSize: 13, color: '#7E7D78' }}>
-            {new Date(selectedMeeting.date).toLocaleDateString('en-CA', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric',
-            })}
-            {' • '}
-            {selectedMeeting.meeting_type}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, paddingLeft: isMobile ? 12 : 0, paddingRight: isMobile ? 12 : 0, paddingTop: isMobile ? 12 : 0, borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+          {isMobile && onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: 44,
+                height: 44,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#1C1C1C',
+                padding: 0,
+              }}
+              title="Back to list"
+            >
+              <ChevronLeft size={24} />
+            </button>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>
+              {selectedMeeting.title}
+            </h2>
+            <div style={{ marginTop: 4, fontSize: 13, color: '#7E7D78' }}>
+              {new Date(selectedMeeting.date).toLocaleDateString('en-CA', {
+                weekday: isMobile ? 'short' : 'long',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              })}
+              {!isMobile && (
+                <>
+                  {' • '}
+                  {selectedMeeting.meeting_type}
+                </>
+              )}
+            </div>
           </div>
         </div>
-        {canManage && (
+        {canManage && !isMobile && (
           <button
             type="button"
             onClick={() => onStartLive?.(selectedMeeting)}
@@ -77,6 +106,7 @@ function RecordPane({ selectedMeeting, canManage, onStartLive }) {
               fontSize: 13,
               fontWeight: 600,
               color: '#1C1C1C',
+              flexShrink: 0,
             }}
           >
             <span
@@ -92,7 +122,7 @@ function RecordPane({ selectedMeeting, canManage, onStartLive }) {
           </button>
         )}
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', marginTop: 12 }}>
+      <div style={{ flex: 1, overflowY: 'auto', marginTop: 12, paddingLeft: isMobile ? 12 : 0, paddingRight: isMobile ? 12 : 0 }}>
         <MeetingRecordTabs meeting={selectedMeeting} />
       </div>
     </div>
@@ -191,6 +221,8 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
   const { meetings, loading } = useMeetings()
   const [selectedMeeting, setSelectedMeeting] = useState(null)
   const [activeType, setActiveType] = useState('all')
+  const isMobile = useMediaQuery('(max-width: 640px)')
+  const isTablet = useMediaQuery('(max-width: 1024px)')
 
   const grouped = useMemo(() => groupMeetingsByCategory(meetings), [meetings])
   const allTypes = useMemo(() => Object.keys(grouped).sort(), [grouped])
@@ -198,6 +230,10 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
     if (activeType === 'all') return meetings
     return grouped[activeType] || []
   }, [grouped, activeType, meetings])
+
+  // On mobile, show detail view when a meeting is selected
+  const showListPane = !isMobile || !selectedMeeting
+  const showDetailPane = !isMobile || selectedMeeting
 
   if (loading) {
     return (
@@ -212,13 +248,16 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
   return (
     <div style={{ display: 'flex', gap: 0, height: '100%', overflow: 'hidden' }}>
       {/* Left pane - meeting list sidebar */}
+      {showListPane && (
       <div
         style={{
-          flex: '0 0 340px',
+          flex: isMobile ? 1 : '0 0 340px',
           overflowY: 'auto',
-          borderRight: '1px solid var(--border)',
+          borderRight: isMobile ? 'none' : '1px solid var(--border)',
           padding: '16px 0',
           background: 'white',
+          display: showListPane ? 'flex' : 'none',
+          flexDirection: 'column',
         }}
       >
         {/* Category filter buttons */}
@@ -327,9 +366,18 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
           )}
         </div>
       </div>
+      )}
 
       {/* Right pane - meeting record */}
-      <RecordPane selectedMeeting={selectedMeeting} canManage={canManage} onStartLive={onStartLive} />
+      {showDetailPane && (
+      <RecordPane
+        selectedMeeting={selectedMeeting}
+        canManage={canManage}
+        onStartLive={onStartLive}
+        isMobile={isMobile}
+        onBack={() => setSelectedMeeting(null)}
+      />
+      )}
     </div>
   )
 }
