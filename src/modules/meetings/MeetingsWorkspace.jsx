@@ -39,6 +39,85 @@ function groupMeetingsByWeek(meetings) {
   return { thisWeek, lastWeek, older }
 }
 
+function RecordPane({ selectedMeeting, canManage, onStartLive }) {
+  if (!selectedMeeting) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#9E9488',
+          fontSize: 14,
+        }}
+      >
+        Pick a meeting on the left, work the record on the right.
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>
+            {selectedMeeting.title}
+          </h2>
+          <div style={{ marginTop: 4, fontSize: 13, color: '#7E7D78' }}>
+            {new Date(selectedMeeting.date).toLocaleDateString('en-CA', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+            })}
+            {' • '}
+            {selectedMeeting.meeting_type}
+          </div>
+        </div>
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => onStartLive?.(selectedMeeting)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              paddingLeft: '12px',
+              paddingRight: '12px',
+              paddingTop: '8px',
+              paddingBottom: '8px',
+              borderRadius: 8,
+              border: '1px solid #E5E5E4',
+              background: 'white',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+              color: '#1C1C1C',
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: '#DC2626',
+              }}
+            />
+            Start live
+          </button>
+        )}
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', marginTop: 12 }}>
+        <MeetingRecordTabs meeting={selectedMeeting} />
+      </div>
+    </div>
+  )
+}
+
 function MeetingListItem({ meeting, isActive, onSelect, actionCount = 0 }) {
   const meetingDate = new Date(meeting.date)
   const formattedDate = meetingDate.toLocaleDateString('en-CA', {
@@ -249,78 +328,7 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
       </div>
 
       {/* Right pane - meeting record */}
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {!selectedMeeting ? (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              color: '#9E9488',
-              fontSize: 14,
-            }}
-          >
-            Pick a meeting on the left, work the record on the right.
-          </div>
-        ) : (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>
-                  {selectedMeeting.title}
-                </h2>
-                <div style={{ marginTop: 4, fontSize: 13, color: '#7E7D78' }}>
-                  {new Date(selectedMeeting.date).toLocaleDateString('en-CA', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                  {' • '}
-                  {selectedMeeting.meeting_type}
-                </div>
-              </div>
-              {canManage && (
-                <button
-                  type="button"
-                  onClick={() => onStartLive?.(selectedMeeting)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    paddingLeft: '12px',
-                    paddingRight: '12px',
-                    paddingTop: '8px',
-                    paddingBottom: '8px',
-                    borderRadius: 8,
-                    border: '1px solid #E5E5E4',
-                    background: 'white',
-                    cursor: 'pointer',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: '#1C1C1C',
-                  }}
-                >
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: '#DC2626',
-                    }}
-                  />
-                  Start live
-                </button>
-              )}
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', marginTop: 12 }}>
-              <MeetingRecordTabs meeting={selectedMeeting} />
-            </div>
-          </>
-        )}
-      </div>
+      <RecordPane selectedMeeting={selectedMeeting} canManage={canManage} onStartLive={onStartLive} />
     </div>
   )
 }
