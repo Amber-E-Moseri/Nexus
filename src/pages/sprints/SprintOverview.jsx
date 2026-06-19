@@ -144,6 +144,7 @@ export default function SprintOverview() {
   const [tasks, setTasks] = useState([])
   const [calendarEvents, setCalendarEvents] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [savingOverview, setSavingOverview] = useState(false)
   const [goalDraft, setGoalDraft] = useState('')
   const [descriptionDraft, setDescriptionDraft] = useState('')
@@ -157,6 +158,7 @@ export default function SprintOverview() {
 
   async function loadDetail() {
     setLoading(true)
+    setLoadError(null)
     try {
       const [nextDetail, nextTasks] = await Promise.all([getSprintDetail(sprintId), getSprintTasks(sprintId)])
       setDetail(nextDetail)
@@ -167,6 +169,7 @@ export default function SprintOverview() {
       console.error('Failed to load sprint:', error)
       setDetail(null)
       setTasks([])
+      setLoadError('This sprint was deleted.')
     } finally {
       setLoading(false)
     }
@@ -326,6 +329,19 @@ export default function SprintOverview() {
 
   if (loading) {
     return <div style={{ padding: '1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading...</div>
+  }
+
+  if (loadError) {
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+          {loadError}
+        </div>
+        <Link to="/sprints" style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>
+          ← Back to All Sprints
+        </Link>
+      </div>
+    )
   }
 
   if (!detail?.sprint) {

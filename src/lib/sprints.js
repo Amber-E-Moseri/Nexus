@@ -70,7 +70,13 @@ export async function getSprintDetail(sprintId) {
   const [teamsRes, membersRes, reviewRes] = await Promise.all([
     supabase.from('sprint_teams').select(SPRINT_TEAM_SELECT).eq('sprint_id', sprintId).order('created_at'),
     supabase.from('sprint_members').select(SPRINT_MEMBER_SELECT).eq('sprint_id', sprintId).order('joined_at'),
-    supabase.from('sprint_reviews').select(SPRINT_REVIEW_SELECT).eq('sprint_id', sprintId).maybeSingle().catch(() => ({ data: null })),
+    (async () => {
+      try {
+        return await supabase.from('sprint_reviews').select(SPRINT_REVIEW_SELECT).eq('sprint_id', sprintId).maybeSingle()
+      } catch {
+        return { data: null }
+      }
+    })(),
   ])
 
   if (teamsRes.error) throw teamsRes.error
@@ -144,6 +150,11 @@ export async function advanceSprintStatus(sprintId, newStatus) {
   }
 
   return updateSprint(sprintId, updates)
+}
+
+export async function deleteSprint(sprintId) {
+  const { error } = await supabase.from('sprints').delete().eq('id', sprintId)
+  if (error) throw error
 }
 
 export async function restoreSprint(sprintId, departmentId) {

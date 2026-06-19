@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import SprintCard from '../../modules/sprints/SprintCard'
 import SprintModal from '../../modules/sprints/SprintModal'
 import { useAuth } from '../../hooks/useAuth'
-import { duplicateSprint, getAllSprints, getMySprints, restoreSprint } from '../../lib/sprints'
+import { deleteSprint, duplicateSprint, getAllSprints, getMySprints, restoreSprint } from '../../lib/sprints'
 
 const FILTERS = ['all', 'active', 'planning', 'completed', 'review', 'archived']
 const STATUS_ORDER = ['active', 'planning', 'completed', 'review', 'archived']
@@ -83,6 +83,12 @@ export default function SprintsList() {
 
   async function handleRestore(sprintId) {
     await restoreSprint(sprintId)
+    await loadSprints()
+  }
+
+  async function handleDelete(sprintId, sprintName) {
+    if (!window.confirm(`Delete "${sprintName}"? This cannot be undone.`)) return
+    await deleteSprint(sprintId)
     await loadSprints()
   }
 
@@ -174,6 +180,7 @@ export default function SprintsList() {
                           onClick={() => navigate(`/sprints/${sprint.id}`)}
                           onDuplicate={canCreate ? handleDuplicate : undefined}
                           onRestore={canCreate ? handleRestore : undefined}
+                          onDelete={canCreate ? handleDelete : undefined}
                         />
                       ))}
                     </div>
@@ -194,6 +201,7 @@ export default function SprintsList() {
               onClick={() => navigate(`/sprints/${sprint.id}`)}
               onDuplicate={canCreate ? handleDuplicate : undefined}
               onRestore={canCreate ? handleRestore : undefined}
+              onDelete={canCreate ? handleDelete : undefined}
             />
           ))}
         </div>

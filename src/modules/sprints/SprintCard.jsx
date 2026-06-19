@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import Badge from '../../components/ui/Badge'
 import SprintProgressBar from './SprintProgressBar'
 import { shouldAutoStartSprint } from '../../lib/sprints'
@@ -18,7 +19,8 @@ const STATUS_COLORS = {
   archived: '#F3F0EB',
 }
 
-export default function SprintCard({ sprint, onClick, onDuplicate, onRestore }) {
+export default function SprintCard({ sprint, onClick, onDuplicate, onRestore, onDelete }) {
+  const [menuOpen, setMenuOpen] = useState(false)
   const isArchived = sprint.status === 'archived'
   const taskCount = sprint.task_count || 0
   const completedCount = sprint.completed_count || 0
@@ -91,42 +93,60 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore }) 
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid #E9E4D8' }}>
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>📅 {dateRange}</span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          {isArchived && onRestore ? (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onRestore(sprint.id) }}
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: 'var(--accent)',
-                background: 'rgba(75, 42, 146, 0.08)',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '4px 8px',
-                borderRadius: 6,
-              }}
-            >
-              Restore
-            </button>
-          ) : null}
-          {onDuplicate ? (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onDuplicate(sprint.id) }}
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: 'var(--text-secondary)',
-                background: 'transparent',
-                border: '1px solid #E9E4D8',
-                cursor: 'pointer',
-                padding: '4px 8px',
-                borderRadius: 6,
-              }}
-            >
-              Duplicate
-            </button>
+        <div style={{ marginLeft: 'auto', position: 'relative' }}>
+          {onDuplicate || onRestore || onDelete ? (
+            <>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen) }}
+                style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                ⋯
+              </button>
+              {menuOpen ? (
+                <>
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={(e) => { e.stopPropagation(); setMenuOpen(false) }} />
+                  <div style={{ position: 'absolute', top: 28, right: 0, zIndex: 20, minWidth: 150, background: 'white', border: '1px solid var(--border)', borderRadius: 10, boxShadow: 'var(--shadow-lg)', overflow: 'hidden' }}>
+                    {onDuplicate ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onDuplicate(sprint.id); setMenuOpen(false) }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12.5, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
+                      >
+                        Duplicate
+                      </button>
+                    ) : null}
+                    {!isArchived && onRestore ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onRestore(sprint.id); setMenuOpen(false) }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12.5, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
+                      >
+                        Restore
+                      </button>
+                    ) : null}
+                    {isArchived && onRestore ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onRestore(sprint.id); setMenuOpen(false) }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12.5, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
+                      >
+                        Restore
+                      </button>
+                    ) : null}
+                    {onDelete ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onDelete(sprint.id, sprint.name); setMenuOpen(false) }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12.5, background: 'transparent', border: 'none', cursor: 'pointer', color: '#C94830' }}
+                      >
+                        Delete
+                      </button>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
+            </>
           ) : null}
         </div>
       </div>

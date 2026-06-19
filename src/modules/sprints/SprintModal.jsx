@@ -55,9 +55,6 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
       description: description.trim() || null,
       start_date: startDate || null,
       end_date: endDate || null,
-      department_id: mode === 'create'
-        ? (initialDepartmentId ?? profile?.department_id ?? null)
-        : sprint?.department_id ?? null,
     }
 
     try {

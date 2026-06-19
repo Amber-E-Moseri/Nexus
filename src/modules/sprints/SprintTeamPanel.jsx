@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { createSprintTeam, deleteSprintTeam, updateSprintTeam } from '../../lib/sprints'
+import { useEffect, useState } from 'react'
+import { createSprintTeam, deleteSprintTeam, getActiveUsers, updateSprintTeam } from '../../lib/sprints'
 
 export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isArchived, onChanged }) {
   const [name, setName] = useState('')
@@ -10,6 +10,22 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
   const [editingDescription, setEditingDescription] = useState('')
   const [editingLeadUserId, setEditingLeadUserId] = useState('')
   const [saving, setSaving] = useState(false)
+  const [allUsers, setAllUsers] = useState([])
+  const [loadingUsers, setLoadingUsers] = useState(true)
+
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const users = await getActiveUsers()
+        setAllUsers(users)
+      } catch (error) {
+        console.error('Failed to load users:', error)
+      } finally {
+        setLoadingUsers(false)
+      }
+    }
+    loadUsers()
+  }, [])
 
   const memberCountFor = (teamId) =>
     members.filter((member) => (member.sprint_team_ids ?? []).includes(teamId)).length
@@ -76,9 +92,9 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                       className="w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--text-primary)]"
                     >
                       <option value="">No lead assigned</option>
-                      {members.map((member) => (
-                        <option key={member.user?.id} value={member.user?.id}>
-                          {member.user?.name}
+                      {allUsers.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name}
                         </option>
                       ))}
                     </select>
@@ -158,11 +174,12 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
               value={leadUserId}
               onChange={(e) => setLeadUserId(e.target.value)}
               className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--text-primary)]"
+              disabled={loadingUsers}
             >
-              <option value="">No lead assigned</option>
-              {members.map((member) => (
-                <option key={member.user?.id} value={member.user?.id}>
-                  {member.user?.name}
+              <option value="">{loadingUsers ? 'Loading users...' : 'No lead assigned'}</option>
+              {allUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
                 </option>
               ))}
             </select>
