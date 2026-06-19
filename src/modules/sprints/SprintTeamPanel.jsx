@@ -1,4 +1,8 @@
+import { useState } from 'react'
+import { removeSprintMember, updateSprintMemberTeams, addSprintMember } from '../../lib/sprints'
+
 export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isArchived, onChanged }) {
+  const [saving, setSaving] = useState(false)
 
   const getTeamColor = (index) => {
     const colors = ['#5B34C7', '#1C87BE', '#E8A020', '#C94830', '#4A8F6C']
@@ -16,6 +20,54 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
 
   const getTeamMembers = (teamId) => {
     return members.filter((member) => (member.sprint_team_ids ?? []).includes(teamId))
+  }
+
+  async function handleRemoveMember(member, teamId) {
+    if (!window.confirm(`Remove ${member.user?.name} from this team?`)) return
+    setSaving(true)
+    try {
+      const newTeamIds = (member.sprint_team_ids ?? []).filter((id) => id !== teamId)
+      await updateSprintMemberTeams(sprintId, member.user_id, newTeamIds)
+      await onChanged?.()
+    } catch (err) {
+      alert(`Failed to remove member: ${err?.message || String(err)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleAddMember(teamId) {
+    const availableMembers = members.filter(
+      (m) => !(m.sprint_team_ids ?? []).includes(teamId),
+    )
+    if (availableMembers.length === 0) {
+      alert('All team members are already in this team.')
+      return
+    }
+
+    const memberName = prompt(
+      `Add member to team (available: ${availableMembers.map((m) => m.user?.name).join(', ')}):`
+    )
+    if (!memberName) return
+
+    const member = availableMembers.find(
+      (m) => m.user?.name?.toLowerCase().includes(memberName.toLowerCase())
+    )
+    if (!member) {
+      alert('Member not found.')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const newTeamIds = [...(member.sprint_team_ids ?? []), teamId]
+      await updateSprintMemberTeams(sprintId, member.user_id, newTeamIds)
+      await onChanged?.()
+    } catch (err) {
+      alert(`Failed to add member: ${err?.message || String(err)}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -50,10 +102,9 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                   {canEdit && !isArchived ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        /* Remove member handler */
-                      }}
-                      className="ml-1 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+                      onClick={() => handleRemoveMember(member, team.id)}
+                      disabled={saving}
+                      className="ml-1 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] disabled:opacity-50"
                     >
                       ✕
                     </button>
@@ -61,7 +112,12 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                 </div>
               ))}
               {canEdit && !isArchived ? (
-                <button type="button" className="text-xs font-medium text-[var(--accent)]">
+                <button
+                  type="button"
+                  onClick={() => handleAddMember(team.id)}
+                  disabled={saving}
+                  className="text-xs font-medium text-[var(--accent)] disabled:opacity-50"
+                >
                   + Add
                 </button>
               ) : null}

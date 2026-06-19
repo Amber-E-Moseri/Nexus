@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import Badge from '../../components/ui/Badge'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent } from '../../lib/calendar'
-import { advanceSprintStatus, calculateSprintTaskStats, duplicateSprint, getSprintDetail, getSprintTasks, restoreSprint, shouldAutoStartSprint, updateSprint } from '../../lib/sprints'
+import { advanceSprintStatus, calculateSprintTaskStats, createSprintTeam, duplicateSprint, getSprintDetail, getSprintTasks, restoreSprint, shouldAutoStartSprint, updateSprint } from '../../lib/sprints'
 import { supabase } from '../../lib/supabase'
 import { isTaskCompleted } from '../../lib/taskStatuses'
 import SprintProgressBar from '../../modules/sprints/SprintProgressBar'
@@ -155,6 +155,7 @@ export default function SprintOverview() {
   const [showEventModal, setShowEventModal] = useState(false)
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState(null)
   const [calendarDefaultDate, setCalendarDefaultDate] = useState(null)
+  const [savingTeam, setSavingTeam] = useState(false)
 
   const completion = useMemo(() => {
     if (tasks.length === 0) return 0
@@ -332,6 +333,21 @@ export default function SprintOverview() {
     }
   }
 
+  async function handleCreateTeam() {
+    const teamName = prompt('Enter team name:')
+    if (!teamName?.trim()) return
+
+    setSavingTeam(true)
+    try {
+      await createSprintTeam(detail.sprint.id, teamName.trim())
+      await loadDetail()
+    } catch (err) {
+      alert(`Failed to create team: ${err?.message || String(err)}`)
+    } finally {
+      setSavingTeam(false)
+    }
+  }
+
   async function handleExportToGoogleDrive() {
     if (!detail?.sprint || !tasks) return
 
@@ -455,7 +471,14 @@ export default function SprintOverview() {
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">Sprint Teams</h2>
-            <button type="button" className="text-xs text-[var(--accent)]">+ New team</button>
+            <button
+              type="button"
+              onClick={handleCreateTeam}
+              disabled={savingTeam || isArchived}
+              className="text-xs text-[var(--accent)] disabled:opacity-50"
+            >
+              + New team
+            </button>
           </div>
           <p className="mb-4 text-xs text-[var(--text-tertiary)]">Cross-functional squads – name them and pull in members from any department.</p>
           <SprintTeamPanel sprintId={detail.sprint.id} teams={detail.teams} members={detail.members} canEdit={Boolean(canManage)} isArchived={Boolean(isArchived)} onChanged={loadDetail} />
