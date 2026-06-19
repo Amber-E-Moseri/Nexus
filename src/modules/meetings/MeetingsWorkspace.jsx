@@ -190,8 +190,14 @@ function MeetingListItem({ meeting, isActive, onSelect, actionCount = 0 }) {
 export default function MeetingsWorkspace({ onStartLive, canManage }) {
   const { meetings, loading } = useMeetings()
   const [selectedMeeting, setSelectedMeeting] = useState(null)
+  const [activeType, setActiveType] = useState('all')
 
-  const grouped = useMemo(() => groupMeetingsByWeek(meetings), [meetings])
+  const grouped = useMemo(() => groupMeetingsByCategory(meetings), [meetings])
+  const allTypes = useMemo(() => Object.keys(grouped).sort(), [grouped])
+  const filteredMeetings = useMemo(() => {
+    if (activeType === 'all') return meetings
+    return grouped[activeType] || []
+  }, [grouped, activeType, meetings])
 
   if (loading) {
     return (
@@ -201,109 +207,123 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
     )
   }
 
+  const totalCount = filteredMeetings.length
+
   return (
-    <div style={{ display: 'flex', gap: 16, height: '100%', overflow: 'hidden' }}>
-      {/* Left pane - meeting list */}
+    <div style={{ display: 'flex', gap: 0, height: '100%', overflow: 'hidden' }}>
+      {/* Left pane - meeting list sidebar */}
       <div
         style={{
-          flex: '0 0 320px',
+          flex: '0 0 340px',
           overflowY: 'auto',
           borderRight: '1px solid var(--border)',
-          paddingRight: 12,
+          padding: '16px 0',
+          background: 'white',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {grouped.thisWeek.length > 0 && (
-            <div>
-              <div
+        {/* Category filter buttons */}
+        <div style={{ paddingLeft: 16, paddingRight: 16, marginBottom: 16 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+            <button
+              type="button"
+              onClick={() => setActiveType('all')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 999,
+                border: activeType === 'all' ? 'none' : '1px solid var(--border)',
+                background: activeType === 'all' ? 'var(--accent)' : 'white',
+                color: activeType === 'all' ? 'white' : 'var(--text-primary)',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              All
+            </button>
+            {allTypes.map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setActiveType(type)}
                 style={{
-                  paddingLeft: 14,
-                  marginBottom: 8,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: '#9E9488',
+                  padding: '6px 14px',
+                  borderRadius: 999,
+                  border: activeType === type ? 'none' : '1px solid var(--border)',
+                  background: activeType === type ? 'var(--accent)' : 'white',
+                  color: activeType === type ? 'white' : 'var(--text-primary)',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textTransform: 'capitalize',
                 }}
               >
-                This week
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {grouped.thisWeek.map((meeting) => (
-                  <MeetingListItem
-                    key={meeting.id}
-                    meeting={meeting}
-                    isActive={selectedMeeting?.id === meeting.id}
-                    onSelect={setSelectedMeeting}
-                    actionCount={0}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+                {type.charAt(0).toUpperCase() + type.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+            {totalCount} meeting{totalCount !== 1 ? 's' : ''}
+          </div>
+        </div>
 
-          {grouped.lastWeek.length > 0 && (
-            <div>
-              <div
-                style={{
-                  paddingLeft: 14,
-                  marginBottom: 8,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: '#9E9488',
-                }}
-              >
-                Last week
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {grouped.lastWeek.map((meeting) => (
-                  <MeetingListItem
-                    key={meeting.id}
-                    meeting={meeting}
-                    isActive={selectedMeeting?.id === meeting.id}
-                    onSelect={setSelectedMeeting}
-                    actionCount={0}
-                  />
-                ))}
-              </div>
+        {/* Meeting list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {filteredMeetings.length === 0 ? (
+            <div style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+              No meetings in this category
             </div>
-          )}
-
-          {grouped.older.length > 0 && (
-            <div>
-              <div
-                style={{
-                  paddingLeft: 14,
-                  marginBottom: 8,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: '#9E9488',
-                }}
-              >
-                Older
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {grouped.older.map((meeting) => (
-                  <MeetingListItem
-                    key={meeting.id}
-                    meeting={meeting}
-                    isActive={selectedMeeting?.id === meeting.id}
-                    onSelect={setSelectedMeeting}
-                    actionCount={0}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {meetings.length === 0 && (
-            <div style={{ padding: '20px', textAlign: 'center', color: '#9E9488', fontSize: 13 }}>
-              No meetings yet
-            </div>
+          ) : (
+            filteredMeetings
+              .sort((a, b) => new Date(b.date) - new Date(a.date))
+              .map((meeting) => (
+                <button
+                  key={meeting.id}
+                  type="button"
+                  onClick={() => setSelectedMeeting(meeting)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: selectedMeeting?.id === meeting.id ? '#F3E8FF' : 'transparent',
+                    border: selectedMeeting?.id === meeting.id ? '2px solid var(--accent)' : 'none',
+                    borderLeft: selectedMeeting?.id === meeting.id ? 'none' : 'none',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'all 0.12s',
+                    borderBottom: '1px solid var(--border)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (selectedMeeting?.id !== meeting.id) e.currentTarget.style.background = '#FAFAF9'
+                  }}
+                  onMouseLeave={(e) => {
+                    if (selectedMeeting?.id !== meeting.id) e.currentTarget.style.background = 'transparent'
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {meeting.title}
+                  </div>
+                  <div style={{ marginTop: 4, display: 'flex', gap: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        background: TYPE_CHIP_COLORS[meeting.meeting_type] || '#E5E5E4',
+                        color: 'white',
+                        fontSize: 10,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {meeting.meeting_type?.charAt(0).toUpperCase() + meeting.meeting_type?.slice(1) || 'General'}
+                    </span>
+                    <span>
+                      {new Date(meeting.date).toLocaleDateString('en-CA', {
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </span>
+                  </div>
+                </button>
+              ))
           )}
         </div>
       </div>

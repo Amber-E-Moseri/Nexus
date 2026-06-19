@@ -153,7 +153,7 @@ export default function InlineTaskComposer({
         </label>
       </div>
 
-      {!compact && teamMembers.length > 0 && (
+      {!compact && (
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
             Assign to
@@ -161,6 +161,7 @@ export default function InlineTaskComposer({
           <select
             value={assigneeId}
             onChange={(event) => setAssigneeId(event.target.value)}
+            disabled={teamMembers.length === 0}
             style={{
               border: '1px solid var(--border)',
               borderRadius: 10,
@@ -168,9 +169,10 @@ export default function InlineTaskComposer({
               fontSize: 13,
               color: assigneeId ? 'var(--text-primary)' : 'var(--text-secondary)',
               background: '#FFFFFF',
+              opacity: teamMembers.length === 0 ? 0.5 : 1,
             }}
           >
-            <option value="">Unassigned</option>
+            <option value="">{teamMembers.length === 0 ? 'No team members' : 'Unassigned'}</option>
             {teamMembers.map((member) => (
               <option key={member.id} value={member.id}>
                 {member.name ?? member.email}
