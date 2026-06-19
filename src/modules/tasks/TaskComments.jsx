@@ -110,27 +110,14 @@ export default function TaskComments({ taskId }) {
       setComments(commentRows ?? [])
       setTask(taskRow ?? null)
 
-      if (taskRow?.sprint_id) {
-        const { data: sprintMembers } = await supabase
-          .from('sprint_members')
-          .select('user:users(id, name, avatar_url, role, department_id)')
-          .eq('sprint_id', taskRow.sprint_id)
+      // Load all users for @mentions (can mention anyone in any department)
+      const { data: allUsers } = await supabase
+        .from('users')
+        .select('id, name, avatar_url, role, department_id')
+        .order('name')
 
-        if (active) {
-          setMembers((sprintMembers ?? []).map((entry) => entry.user).filter(Boolean))
-        }
-      } else if (taskRow?.department_id) {
-        const { data: deptMembers } = await supabase
-          .from('users')
-          .select('id, name, avatar_url, role, department_id')
-          .eq('department_id', taskRow.department_id)
-          .order('name')
-
-        if (active) {
-          setMembers(deptMembers ?? [])
-        }
-      } else if (active) {
-        setMembers([])
+      if (active) {
+        setMembers(allUsers ?? [])
       }
 
       if (active) setLoading(false)

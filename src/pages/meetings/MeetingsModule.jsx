@@ -38,7 +38,6 @@ function MeetingsModuleFallback() {
   const [departments, setDepartments] = useState([])
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(profile?.department_id ?? '')
   const [showModal, setShowModal] = useState(false)
-  const [viewMode, setViewMode] = useState('log')
   const [liveSession, setLiveSession] = useState(null)
   const [kpiStats, setKpiStats] = useState({ logged30d: null, actionItems: null, withMinutes: null, deptCount: null })
   const isSuperAdmin = role === 'super_admin'
@@ -71,27 +70,36 @@ function MeetingsModuleFallback() {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
       const cutoff = thirtyDaysAgo.toISOString()
 
+      let meetingsQuery = supabase
+        .from('meetings')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', cutoff)
+
+      let actionsQuery = supabase
+        .from('tasks')
+        .select('id')
+        .not('meeting_id', 'is', null)
+
+      let withMinutesQuery = supabase
+        .from('meetings')
+        .select('id', { count: 'exact', head: true })
+        .not('description', 'is', null)
+
+      if (selectedDepartmentId !== 'all') {
+        meetingsQuery = meetingsQuery.eq('department_id', selectedDepartmentId)
+        actionsQuery = actionsQuery.eq('department_id', selectedDepartmentId)
+        withMinutesQuery = withMinutesQuery.eq('department_id', selectedDepartmentId)
+      }
+
       const [
         { count: logged30d },
         { data: actionData },
         { count: withMinutes },
         { data: depts },
       ] = await Promise.all([
-        supabase
-          .from('meetings')
-          .select('id', { count: 'exact', head: true })
-          .eq('department_id', selectedDepartmentId)
-          .gte('created_at', cutoff),
-        supabase
-          .from('tasks')
-          .select('id')
-          .eq('department_id', selectedDepartmentId)
-          .not('meeting_id', 'is', null),
-        supabase
-          .from('meetings')
-          .select('id', { count: 'exact', head: true })
-          .eq('department_id', selectedDepartmentId)
-          .not('description', 'is', null),
+        meetingsQuery,
+        actionsQuery,
+        withMinutesQuery,
         supabase
           .from('departments')
           .select('id'),
@@ -119,7 +127,7 @@ function MeetingsModuleFallback() {
     }
 
     if (!selectedDepartmentId && departments.length > 0) {
-      setSelectedDepartmentId(departments[0].id)
+      setSelectedDepartmentId('all')
     }
   }, [departments, isSuperAdmin, profile?.department_id, selectedDepartmentId])
 
@@ -137,7 +145,7 @@ function MeetingsModuleFallback() {
   }
 
   return (
-    <MeetingsProvider departmentId={selectedDepartmentId}>
+    <MeetingsProvider key={selectedDepartmentId} departmentId={selectedDepartmentId}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, height: '100%' }}>
         <div
           style={{
@@ -156,29 +164,40 @@ function MeetingsModuleFallback() {
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            {isSuperAdmin ? (
-              <select
-                value={selectedDepartmentId}
-                onChange={(event) => setSelectedDepartmentId(event.target.value)}
-                style={{
-                  minWidth: 180,
-                  borderRadius: 10,
-                  border: '1px solid var(--border)',
-                  background: 'white',
-                  padding: '9px 12px',
-                  fontSize: 13,
-                  color: 'var(--text-primary)',
-                }}
-              >
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </select>
-            ) : null}
             {canManage ? (
               <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => navigate('/meetings/wizard')}
+                  style={{
+                    borderRadius: 10,
+                    border: '1px solid var(--border)',
+                    background: 'white',
+                    padding: '9px 14px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📋 Plan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLiveSession({ departmentId: selectedDepartmentId })}
+                  style={{
+                    borderRadius: 10,
+                    border: '1px solid var(--border)',
+                    background: 'white',
+                    padding: '9px 14px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#DC2626',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ● Start live
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowModal(true)}
@@ -195,61 +214,54 @@ function MeetingsModuleFallback() {
                 >
                   + Log meeting
                 </button>
-                <button
-                  type="button"
-                  onClick={() => navigate('/meetings/wizard')}
-                  style={{
-                    borderRadius: 10,
-                    border: '1px solid var(--border)',
-                    background: 'white',
-                    padding: '9px 14px',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: 'var(--accent)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  📋 Plan meeting
-                </button>
               </div>
             ) : null}
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button
-            type="button"
-            onClick={() => setViewMode('log')}
-            style={{
-              borderRadius: 999,
-              padding: '8px 18px',
-              fontSize: 13,
-              fontWeight: 600,
-              border: viewMode === 'log' ? 'none' : '1px solid var(--border)',
-              background: viewMode === 'log' ? 'var(--accent)' : 'white',
-              color: viewMode === 'log' ? 'white' : 'var(--text-secondary)',
-              cursor: 'pointer',
-            }}
-          >
-            Log
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('workspace')}
-            style={{
-              borderRadius: 999,
-              padding: '8px 18px',
-              fontSize: 13,
-              fontWeight: 600,
-              border: viewMode === 'workspace' ? 'none' : '1px solid var(--border)',
-              background: viewMode === 'workspace' ? 'var(--accent)' : 'white',
-              color: viewMode === 'workspace' ? 'white' : 'var(--text-secondary)',
-              cursor: 'pointer',
-            }}
-          >
-            Workspace
-          </button>
-        </div>
+        {isSuperAdmin ? (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', overflowX: 'auto', paddingBottom: 4 }}>
+            <button
+              type="button"
+              onClick={() => setSelectedDepartmentId('all')}
+              style={{
+                flexShrink: 0,
+                borderRadius: 20,
+                padding: '8px 14px',
+                fontSize: 13,
+                fontWeight: 600,
+                border: selectedDepartmentId === 'all' ? 'none' : '1px solid var(--border)',
+                background: selectedDepartmentId === 'all' ? 'var(--accent)' : 'white',
+                color: selectedDepartmentId === 'all' ? 'white' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                transition: 'all 0.12s',
+              }}
+            >
+              All
+            </button>
+            {departments.map((dept) => (
+              <button
+                key={dept.id}
+                type="button"
+                onClick={() => setSelectedDepartmentId(dept.id)}
+                style={{
+                  flexShrink: 0,
+                  borderRadius: 20,
+                  padding: '8px 14px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  border: selectedDepartmentId === dept.id ? 'none' : '1px solid var(--border)',
+                  background: selectedDepartmentId === dept.id ? 'var(--accent)' : 'white',
+                  color: selectedDepartmentId === dept.id ? 'white' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.12s',
+                }}
+              >
+                {dept.name}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <div
           style={{
@@ -314,47 +326,49 @@ function MeetingsModuleFallback() {
           ))}
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            borderRadius: 14,
-            border: '1px solid var(--border)',
-            background: 'white',
-            padding: '14px 16px',
-          }}
-        >
+        {selectedDepartmentId !== 'all' && selectedDepartment ? (
           <div
             style={{
               display: 'flex',
-              height: 36,
-              width: 36,
-              flexShrink: 0,
               alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 12,
-              background: selectedDepartment?.color ? `#${selectedDepartment.color}` : 'var(--accent)',
-              color: 'white',
-              fontSize: 14,
-              fontWeight: 700,
+              gap: 10,
+              borderRadius: 14,
+              border: '1px solid var(--border)',
+              background: 'white',
+              padding: '14px 16px',
             }}
           >
-            {selectedDepartment?.name?.charAt(0) ?? 'M'}
-          </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-              {selectedDepartment?.name ?? 'Department meetings'}
+            <div
+              style={{
+                display: 'flex',
+                height: 36,
+                width: 36,
+                flexShrink: 0,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 12,
+                background: selectedDepartment?.color ? `#${selectedDepartment.color}` : 'var(--accent)',
+                color: 'white',
+                fontSize: 14,
+                fontWeight: 700,
+              }}
+            >
+              {selectedDepartment?.name?.charAt(0) ?? 'M'}
             </div>
-            <div style={{ marginTop: 3, fontSize: 12, color: 'var(--text-secondary)' }}>
-              Meeting records live here. The standalone Meeting OS remains unchanged until an embed URL is configured.
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                {selectedDepartment?.name ?? 'Department meetings'}
+              </div>
+              <div style={{ marginTop: 3, fontSize: 12, color: 'var(--text-secondary)' }}>
+                Meeting records live here. The standalone Meeting OS remains unchanged until an embed URL is configured.
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
 
         <MeetingsContent
           liveSession={liveSession}
-          viewMode={viewMode}
+          viewMode="log"
           canManage={canManage}
           onAddMeeting={() => setShowModal(true)}
           onStartLive={(meeting) => setLiveSession(meeting)}

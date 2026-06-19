@@ -5,7 +5,7 @@ import { recordActivity } from './activityFeed'
 export async function getDeptMeetings(departmentId) {
   if (!departmentId) return []
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('meetings')
     .select(`
       id,
@@ -24,7 +24,12 @@ export async function getDeptMeetings(departmentId) {
       creator:users!created_by(id, name),
       attendance:meeting_attendance(user_id, status)
     `)
-    .eq('department_id', departmentId)
+
+  if (departmentId !== 'all') {
+    query = query.eq('department_id', departmentId)
+  }
+
+  const { data, error } = await query
     .order('date', { ascending: false })
     .limit(50)
 
