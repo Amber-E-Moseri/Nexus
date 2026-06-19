@@ -33,6 +33,7 @@ import SidebarSpaceTree from './SidebarSpaceTree'
 import SpaceModal from '../../modules/spaces/SpaceModal'
 import SprintModal from '../../modules/sprints/SprintModal'
 import { useSprints } from '../../modules/sprints/SprintsContext'
+import { CACHE_KEYS, getItemSafe, setItemSafe } from '../../lib/cacheUtils'
 
 const SECTION_LABEL_STYLE = {
   padding: '4px 9px 5px',
@@ -250,12 +251,8 @@ export default function Sidebar() {
   const [spaceActionsOpenId, setSpaceActionsOpenId] = useState(null)
   const [openSpaceMenuId, setOpenSpaceMenuId] = useState(null)
   const [hiddenSpaceIds, setHiddenSpaceIds] = useState(() => {
-    try {
-      const raw = window.localStorage.getItem('hidden-space-ids')
-      return raw ? JSON.parse(raw) : []
-    } catch {
-      return []
-    }
+    // Defer to profile load, will initialize after
+    return []
   })
   const sidebarRef = useRef(null)
 
@@ -277,12 +274,21 @@ export default function Sidebar() {
   }, [profile?.department_id, profile?.id, role])
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem('hidden-space-ids', JSON.stringify(hiddenSpaceIds))
-    } catch {
-      // ignore local preference persistence failures
+    if (profile?.id) {
+      const cacheKey = CACHE_KEYS.HIDDEN_SPACES(profile.id)
+      const cached = getItemSafe(cacheKey)
+      if (cached && Array.isArray(cached)) {
+        setHiddenSpaceIds(cached)
+      }
     }
-  }, [hiddenSpaceIds])
+  }, [profile?.id])
+
+  useEffect(() => {
+    if (profile?.id) {
+      const cacheKey = CACHE_KEYS.HIDDEN_SPACES(profile.id)
+      setItemSafe(cacheKey, hiddenSpaceIds)
+    }
+  }, [hiddenSpaceIds, profile?.id])
 
   useEffect(() => {
     let active = true

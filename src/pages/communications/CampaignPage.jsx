@@ -104,6 +104,17 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       .then(({ data }) => { if (data) setOrgSignature(data.value || '') })
   }, [])
 
+  useEffect(() => {
+    return () => {
+      // Cleanup: remove draft campaign ID when form is closed (unmounted)
+      try {
+        sessionStorage.removeItem('comm_draft_campaign_id')
+      } catch {
+        // ignore
+      }
+    }
+  }, [])
+
   function convertETtoUTC(date, time) {
     const dt = new Date(`${date}T${time}`)
     return dt.toISOString()

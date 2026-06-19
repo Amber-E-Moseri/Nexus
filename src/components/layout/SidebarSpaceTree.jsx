@@ -2,6 +2,8 @@ import { ChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../hooks/useAuth'
+import { CACHE_KEYS, getItemSafe, setItemSafe } from '../../lib/cacheUtils'
 
 const TREE_ITEM_STYLE = {
   width: '100%',
@@ -21,17 +23,11 @@ const TREE_ITEM_STYLE = {
 
 export default function SidebarSpaceTree({ spaceId, spaceName, isActive }) {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const [folders, setFolders] = useState([])
   const [lists, setLists] = useState([])
   const [loading, setLoading] = useState(true)
-  const [expanded, setExpanded] = useState(() => {
-    try {
-      const raw = window.localStorage.getItem(`space-tree-expanded-${spaceId}`)
-      return raw ? JSON.parse(raw) : {}
-    } catch {
-      return {}
-    }
-  })
+  const [expanded, setExpanded] = useState({})
 
   const listsByFolder = useMemo(
     () => folders.reduce((acc, folder) => ({ ...acc, [folder.id]: lists.filter((list) => list.folder_id === folder.id) }), {}),
@@ -60,12 +56,21 @@ export default function SidebarSpaceTree({ spaceId, spaceName, isActive }) {
   }, [spaceId])
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(`space-tree-expanded-${spaceId}`, JSON.stringify(expanded))
-    } catch {
-      // ignore
+    if (profile?.id) {
+      const cacheKey = CACHE_KEYS.SPACE_TREE_EXPANDED(profile.id, spaceId)
+      const cached = getItemSafe(cacheKey)
+      if (cached && typeof cached === 'object') {
+        setExpanded(cached)
+      }
     }
-  }, [expanded, spaceId])
+  }, [profile?.id, spaceId])
+
+  useEffect(() => {
+    if (profile?.id) {
+      const cacheKey = CACHE_KEYS.SPACE_TREE_EXPANDED(profile.id, spaceId)
+      setItemSafe(cacheKey, expanded)
+    }
+  }, [expanded, profile?.id, spaceId])
 
   function toggleFolder(folderId) {
     setExpanded((current) => ({

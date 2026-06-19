@@ -1,6 +1,7 @@
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import { touchLastActive } from '../lib/people/api'
 import { supabase } from '../lib/supabase'
+import { clearAllAppCache } from '../lib/cacheUtils'
 
 export const AuthContext = createContext(null)
 
@@ -111,6 +112,7 @@ export function AuthProvider({ children }) {
       } else {
         setProfile(null)
         setLoading(false)
+        clearAllAppCache()
       }
     })
 
