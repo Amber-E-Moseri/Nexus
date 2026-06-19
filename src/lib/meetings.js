@@ -181,3 +181,75 @@ export async function getMeetingTasks(meetingId) {
   if (error) throw error
   return normalizeTaskRows(data)
 }
+
+export async function recalculateAttendanceTrends(meetingId) {
+  if (!meetingId) return null
+
+  try {
+    // Get all attendance records for this meeting
+    const { data: attendanceRecords, error: attendanceError } = await supabase
+      .from('meeting_attendance')
+      .select('user_id, status')
+      .eq('meeting_id', meetingId)
+
+    if (attendanceError) throw attendanceError
+
+    // Get all unique user_ids from this meeting
+    const userIds = [...new Set(attendanceRecords?.map((r) => r.user_id) || [])]
+
+    if (userIds.length === 0) return null
+
+    // For each user, calculate attendance percentage across all meetings
+    const trendUpdates = []
+
+    for (const userId of userIds) {
+      const { data: allUserAttendance, error: userAttendanceError } = await supabase
+        .from('meeting_attendance')
+        .select('status')
+        .eq('user_id', userId)
+
+      if (userAttendanceError) throw userAttendanceError
+
+      const total = allUserAttendance?.length || 0
+      if (total === 0) continue
+
+      const presentCount = allUserAttendance.filter((a) => a.status === 'present').length
+      const attendancePercentage = Math.round((presentCount / total) * 100)
+
+      // Track if on watch list (< 75%)
+      const onWatchList = attendancePercentage < 75
+
+      trendUpdates.push({
+        userId,
+        attendancePercentage,
+        onWatchList,
+      })
+    }
+
+    // Update user records with new attendance percentage
+    if (trendUpdates.length > 0) {
+      const { error: updateError } = await supabase.from('users').upsert(
+        trendUpdates.map((update) => ({
+          id: update.userId,
+          attendance_percentage: update.attendancePercentage,
+          on_attendance_watch_list: update.onWatchList,
+        })),
+        { onConflict: 'id' },
+      )
+
+      if (updateError) throw updateError
+    }
+
+    return {
+      usersUpdated: trendUpdates.length,
+      watchListCount: trendUpdates.filter((u) => u.onWatchList).length,
+      avgAttendancePercentage: Math.round(
+        trendUpdates.reduce((sum, u) => sum + u.attendancePercentage, 0) /
+          (trendUpdates.length || 1),
+      ),
+    }
+  } catch (err) {
+    console.error('Failed to recalculate attendance trends:', err)
+    throw err
+  }
+}
