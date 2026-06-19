@@ -156,6 +156,27 @@ export default function SprintOverview() {
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState(null)
   const [calendarDefaultDate, setCalendarDefaultDate] = useState(null)
 
+  const completion = useMemo(() => {
+    if (tasks.length === 0) return 0
+    const done = tasks.filter((task) => isTaskCompleted(task)).length
+    return Math.round((done / tasks.length) * 100)
+  }, [tasks])
+
+  const tasksByStatus = useMemo(() => {
+    const grouped = {}
+    tasks.forEach((task) => {
+      const status = task.status_name || 'Unknown'
+      if (!grouped[status]) grouped[status] = 0
+      grouped[status] += 1
+    })
+    return grouped
+  }, [tasks])
+
+  const canManage = role === 'super_admin' || detail?.members?.some(
+    (member) => member.user?.id === profile?.id && ['owner', 'manager'].includes(member.role),
+  )
+  const canCreateSprint = role === 'super_admin' || role === 'dept_lead'
+
   async function loadDetail() {
     setLoading(true)
     setLoadError(null)
@@ -211,11 +232,6 @@ export default function SprintOverview() {
       .catch(() => setRecentActivity([]))
   }, [sprintId])
 
-  const canManage = role === 'super_admin' || detail?.members?.some(
-    (member) => member.user?.id === profile?.id && ['owner', 'manager'].includes(member.role),
-  )
-  const canCreateSprint = role === 'super_admin' || role === 'dept_lead'
-
   if (loading) {
     return <div style={{ padding: '1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading...</div>
   }
@@ -241,22 +257,6 @@ export default function SprintOverview() {
   const visibleTabs = detail?.sprint?.status === 'completed' || detail?.sprint?.status === 'review' || detail?.sprint?.status === 'archived'
     ? TABS
     : TABS.filter((tab) => tab !== 'Review')
-
-  const completion = useMemo(() => {
-    if (tasks.length === 0) return 0
-    const done = tasks.filter((task) => isTaskCompleted(task)).length
-    return Math.round((done / tasks.length) * 100)
-  }, [tasks])
-
-  const tasksByStatus = useMemo(() => {
-    const grouped = {}
-    tasks.forEach((task) => {
-      const status = task.status_name || 'Unknown'
-      if (!grouped[status]) grouped[status] = 0
-      grouped[status] += 1
-    })
-    return grouped
-  }, [tasks])
 
   const reviewCompleted = Boolean(detail?.review?.reviewed_at ?? detail?.review?.completed_at)
 
