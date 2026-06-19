@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { getMeetingTasks } from '../../lib/meetings'
 import { getTaskStatusColor, isTaskCompleted } from '../../lib/taskStatuses'
 
@@ -8,28 +8,38 @@ export default function MeetingRecordTabs({ meeting }) {
   const [activeTab, setActiveTab] = useState('Summary')
   const [tasks, setTasks] = useState(null)
   const [tasksError, setTasksError] = useState(null)
-  const [attendance, setAttendance] = useState([])
+
+  const attendanceList = useMemo(() => {
+    if (!meeting.attendance) return []
+    const present = meeting.attendance.filter((a) => a.status === 'present')
+    const absent = meeting.attendance.filter((a) => a.status !== 'present')
+    return [...present, ...absent]
+  }, [meeting.attendance])
 
   useEffect(() => {
+    let active = true
+
     async function loadTasks() {
       try {
-        setTasksError(null)
         const data = await getMeetingTasks(meeting.id)
-        setTasks(data)
+        if (active) {
+          setTasksError(null)
+          setTasks(data)
+        }
       } catch (error) {
-        setTasksError(error.message)
-        setTasks([])
+        if (active) {
+          setTasksError(error.message)
+          setTasks([])
+        }
       }
     }
 
     loadTasks()
-  }, [meeting.id])
 
-  useEffect(() => {
-    const present = meeting.attendance?.filter((a) => a.status === 'present') ?? []
-    const absent = meeting.attendance?.filter((a) => a.status !== 'present') ?? []
-    setAttendance([...present, ...absent])
-  }, [meeting.attendance])
+    return () => {
+      active = false
+    }
+  }, [meeting.id])
 
   const completedTasks = tasks?.filter((t) => isTaskCompleted(t)) ?? []
   const actionCount = tasks?.length ?? 0
@@ -182,9 +192,9 @@ export default function MeetingRecordTabs({ meeting }) {
 
         {activeTab === 'Attendance' && (
           <div style={{ paddingLeft: 16, paddingRight: 16 }}>
-            {attendance.length > 0 ? (
+            {attendanceList.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {attendance.map((entry, idx) => (
+                {attendanceList.map((entry, idx) => (
                   <div
                     key={idx}
                     style={{

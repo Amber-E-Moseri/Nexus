@@ -251,7 +251,20 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
 
       {/* Right pane - meeting record */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {selectedMeeting ? (
+        {!selectedMeeting ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              color: '#9E9488',
+              fontSize: 14,
+            }}
+          >
+            Pick a meeting on the left, work the record on the right.
+          </div>
+        ) : (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
               <div>
@@ -277,8 +290,10 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
-                    paddingX: '12px',
-                    paddingY: '8px',
+                    paddingLeft: '12px',
+                    paddingRight: '12px',
+                    paddingTop: '8px',
+                    paddingBottom: '8px',
                     borderRadius: 8,
                     border: '1px solid #E5E5E4',
                     background: 'white',
@@ -305,19 +320,6 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
               <MeetingRecordTabs meeting={selectedMeeting} />
             </div>
           </>
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              color: '#9E9488',
-              fontSize: 14,
-            }}
-          >
-            Pick a meeting on the left, work the record on the right.
-          </div>
         )}
       </div>
     </div>
