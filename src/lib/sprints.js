@@ -2,8 +2,10 @@ import { supabase } from './supabase'
 import { normalizeTaskRows } from './taskStatuses'
 
 const SPRINT_TEAM_SELECT = 'id, sprint_id, name, description, lead_user_id, created_at'
+const SPRINT_TEAM_MEMBERS_SELECT = 'id, team_id, user_id, role, joined_at, users:user_id(id, name, email, department_id, status)'
 const SPRINT_MEMBER_SELECT = 'sprint_id, user_id, role, joined_at'
-const SPRINT_REVIEW_SELECT = 'id, sprint_id, completed_at, completed_by, overall_summary, team_feedback, lessons_learned, goals_achieved, outstanding_items, wins_testimonies, recommendations, final_decisions, final_attachments, reviewed_at, created_at'
+const SPRINT_REVIEW_SELECT = 'id, sprint_id, completed_at, completed_by, lessons_learned, goals_achieved, outstanding_items, wins_testimonies, recommendations, final_decisions, created_at'
+const VALID_SPRINT_STATUSES = ['planning', 'active', 'completed', 'review', 'archived']
 
 function sortByCreatedAtDesc(items = []) {
   return [...items].sort((a, b) => new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0))
@@ -43,7 +45,7 @@ export async function getMySprints() {
 
   return sortByCreatedAtDesc(
     (data ?? [])
-      .filter((member) => member.sprint)
+      .filter((member) => member.sprint && VALID_SPRINT_STATUSES.includes(member.sprint.status))
       .map((member) => ({ ...member.sprint, memberRole: member.role })),
   )
 }
@@ -55,7 +57,7 @@ export async function getAllSprints() {
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return data ?? []
+  return (data ?? []).filter((sprint) => VALID_SPRINT_STATUSES.includes(sprint.status))
 }
 
 export async function getSprintDetail(sprintId) {
@@ -67,10 +69,9 @@ export async function getSprintDetail(sprintId) {
 
   if (sprintRes.error) throw sprintRes.error
 
-  const [teamsRes, membersRes, teamMembersRes, reviewRes] = await Promise.all([
+  const [teamsRes, membersRes, reviewRes] = await Promise.all([
     supabase.from('sprint_teams').select(SPRINT_TEAM_SELECT).eq('sprint_id', sprintId).order('created_at'),
     supabase.from('sprint_members').select(`${SPRINT_MEMBER_SELECT}, user:user_id(id, name)`).eq('sprint_id', sprintId).order('joined_at'),
-    supabase.from('sprint_team_members').select('user_id, sprint_team_id').eq('sprint_id', sprintId),
     (async () => {
       try {
         return await supabase.from('sprint_reviews').select(SPRINT_REVIEW_SELECT).eq('sprint_id', sprintId).maybeSingle()
@@ -82,17 +83,11 @@ export async function getSprintDetail(sprintId) {
 
   if (teamsRes.error) throw teamsRes.error
   if (membersRes.error) throw membersRes.error
-  if (teamMembersRes.error) throw teamMembersRes.error
-
-  const teamMemberMap = {}
-  teamMembersRes.data?.forEach((tm) => {
-    if (!teamMemberMap[tm.user_id]) teamMemberMap[tm.user_id] = []
-    teamMemberMap[tm.user_id].push(tm.sprint_team_id)
-  })
+  if (reviewRes.error && reviewRes.error.code !== 'PGRST116') throw reviewRes.error
 
   const membersWithTeams = (membersRes.data ?? []).map((member) => ({
     ...member,
-    sprint_team_ids: teamMemberMap[member.user_id] ?? [],
+    sprint_team_ids: member.sprint_team_id ? [member.sprint_team_id] : [],
   }))
 
   return {
@@ -256,41 +251,223 @@ export async function deleteSprintTeam(teamId) {
   if (error) throw error
 }
 
+// ─────────────────────────────────────────────────────────────
+// NEW: Independent Teams (decoupled from sprints)
+// ─────────────────────────────────────────────────────────────
+
+export async function createIndependentTeam(
+  name,
+  description = '',
+  leadUserId = null,
+  sprintId = null,
+) {
+  const { data: user } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { data, error } = await supabase
+    .from('sprint_teams')
+    .insert({
+      name,
+      description,
+      lead_user_id: leadUserId,
+      sprint_id: sprintId,
+      is_archived: false,
+      created_by: user.user.id,
+    })
+    .select(
+      'id, name, description, lead_user_id, sprint_id, source_space_id, is_archived, created_by, created_at',
+    )
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function createTeamFromSpace(spaceId, sprintId = null) {
+  const { data: user } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // Get space details
+  const { data: space, error: spaceError } = await supabase
+    .from('spaces')
+    .select('id, title')
+    .eq('id', spaceId)
+    .single()
+  if (spaceError) throw spaceError
+
+  // Get all space members
+  const { data: spaceMembers, error: membersError } = await supabase
+    .from('space_members')
+    .select('user_id')
+    .eq('space_id', spaceId)
+  if (membersError) throw membersError
+
+  // Create team
+  const { data: team, error: teamError } = await supabase
+    .from('sprint_teams')
+    .insert({
+      name: space.title,
+      description: `Team created from space: ${space.title}`,
+      sprint_id: sprintId,
+      source_space_id: spaceId,
+      is_archived: false,
+      created_by: user.user.id,
+    })
+    .select(
+      'id, name, description, lead_user_id, sprint_id, source_space_id, is_archived, created_by, created_at',
+    )
+    .single()
+  if (teamError) throw teamError
+
+  // Add all space members to team
+  if (spaceMembers.length > 0) {
+    const memberInserts = spaceMembers.map((member) => ({
+      team_id: team.id,
+      user_id: member.user_id,
+      joined_at: new Date().toISOString(),
+    }))
+    const { error: insertError } = await supabase
+      .from('sprint_team_members')
+      .insert(memberInserts)
+    if (insertError) throw insertError
+  }
+
+  return team
+}
+
+export async function getTeamDetail(teamId) {
+  const { data, error } = await supabase
+    .from('sprint_teams')
+    .select(
+      `
+      id, name, description, lead_user_id, sprint_id, source_space_id,
+      is_archived, created_by, created_at,
+      sprint_team_members (${SPRINT_TEAM_MEMBERS_SELECT})
+    `,
+    )
+    .eq('id', teamId)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function listAllTeams() {
+  const { data, error } = await supabase
+    .from('sprint_teams')
+    .select(
+      `
+      id, name, description, sprint_id, source_space_id,
+      lead_user_id, is_archived, created_at,
+      sprint_team_members (
+        id, user_id,
+        users:user_id (id, name, email, department_id)
+      )
+    `,
+    )
+    .eq('is_archived', false)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data
+}
+
+export async function listSprintTeamsIndependent(sprintId) {
+  const { data, error } = await supabase
+    .from('sprint_teams')
+    .select(
+      `
+      id, name, description, lead_user_id,
+      sprint_team_members (
+        id, user_id,
+        users:user_id (id, name, email)
+      )
+    `,
+    )
+    .eq('sprint_id', sprintId)
+    .eq('is_archived', false)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data
+}
+
+export async function addTeamMember(teamId, userId, role = null) {
+  const { data, error } = await supabase
+    .from('sprint_team_members')
+    .insert({
+      team_id: teamId,
+      user_id: userId,
+      role,
+    })
+    .select(SPRINT_TEAM_MEMBERS_SELECT)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function removeTeamMember(teamId, userId) {
+  const { error } = await supabase
+    .from('sprint_team_members')
+    .delete()
+    .eq('team_id', teamId)
+    .eq('user_id', userId)
+
+  if (error) throw error
+}
+
+export async function assignTeamToSprint(teamId, sprintId) {
+  const { data, error } = await supabase
+    .from('sprint_teams')
+    .update({ sprint_id: sprintId })
+    .eq('id', teamId)
+    .select('id, name, sprint_id, is_archived, created_at, sprint_team_members (id, user_id)')
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function unassignTeamFromSprint(teamId) {
+  const { data, error } = await supabase
+    .from('sprint_teams')
+    .update({ sprint_id: null })
+    .eq('id', teamId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function archiveTeam(teamId) {
+  const { data, error } = await supabase
+    .from('sprint_teams')
+    .update({ is_archived: true, sprint_id: null })
+    .eq('id', teamId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
 export async function addSprintMember(sprintId, userId, role = 'contributor', teamIds = []) {
   const normalizedTeamIds = uniqueTeamIds(teamIds)
+  const sprintTeamId = normalizedTeamIds.length > 0 ? normalizedTeamIds[0] : null
 
   const { data, error } = await supabase
     .from('sprint_members')
-    .insert({ sprint_id: sprintId, user_id: userId, role })
+    .insert({ sprint_id: sprintId, user_id: userId, role, sprint_team_id: sprintTeamId })
     .select(SPRINT_MEMBER_SELECT)
     .single()
 
   if (error) throw error
-
-  if (normalizedTeamIds.length > 0) {
-    const { error: teamError } = await supabase.from('sprint_team_members').insert(
-      normalizedTeamIds.map((teamId) => ({
-        sprint_id: sprintId,
-        sprint_team_id: teamId,
-        user_id: userId,
-      })),
-    )
-
-    if (teamError) throw teamError
-  }
-
   return data
 }
 
 export async function removeSprintMember(sprintId, userId) {
-  const { error: teamMembershipError } = await supabase
-    .from('sprint_team_members')
-    .delete()
-    .eq('sprint_id', sprintId)
-    .eq('user_id', userId)
-
-  if (teamMembershipError) throw teamMembershipError
-
   const { error } = await supabase
     .from('sprint_members')
     .delete()
@@ -328,27 +505,14 @@ export async function updateSprintMember(sprintId, userId, updates) {
 
 export async function updateSprintMemberTeams(sprintId, userId, teamIds = []) {
   const normalizedTeamIds = uniqueTeamIds(teamIds)
-
-  const { error: deleteError } = await supabase
-    .from('sprint_team_members')
-    .delete()
-    .eq('sprint_id', sprintId)
-    .eq('user_id', userId)
-
-  if (deleteError) throw deleteError
-
-  if (normalizedTeamIds.length === 0) return []
+  const newTeamId = normalizedTeamIds.length > 0 ? normalizedTeamIds[0] : null
 
   const { data, error } = await supabase
-    .from('sprint_team_members')
-    .insert(
-      normalizedTeamIds.map((teamId) => ({
-        sprint_id: sprintId,
-        sprint_team_id: teamId,
-        user_id: userId,
-      })),
-    )
-    .select('id, sprint_id, sprint_team_id, user_id')
+    .from('sprint_members')
+    .update({ sprint_team_id: newTeamId })
+    .eq('sprint_id', sprintId)
+    .eq('user_id', userId)
+    .select('sprint_id, user_id, sprint_team_id')
 
   if (error) throw error
   return data ?? []
