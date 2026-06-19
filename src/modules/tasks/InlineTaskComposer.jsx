@@ -214,29 +214,35 @@ export default function InlineTaskComposer({
       </div>
 
       {!compact && statuses.length > 0 && (
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A', marginBottom: 8 }}>
             Status
-          </span>
-          <select
-            value={statusId}
-            onChange={(event) => setStatusId(event.target.value)}
-            style={{
-              border: '1px solid var(--border)',
-              borderRadius: 10,
-              padding: '9px 11px',
-              fontSize: 13,
-              color: 'var(--text-primary)',
-              background: '#FFFFFF',
-            }}
-          >
-            {statuses.filter(s => s.name !== 'Not Started').map((status) => (
-              <option key={status.id} value={status.id}>
-                {status.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {statuses.filter(s => s.name !== 'Not Started').map((status) => {
+              const active = statusId === status.id
+              return (
+                <button
+                  key={status.id}
+                  type="button"
+                  onClick={() => setStatusId(status.id)}
+                  style={{
+                    border: active ? '1px solid transparent' : '1px solid var(--border)',
+                    borderRadius: 999,
+                    padding: '6px 10px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    background: active ? `#${status.color || '4C2A92'}` : '#FFFFFF',
+                    color: active ? '#FFFFFF' : 'var(--text-secondary)',
+                  }}
+                >
+                  {status.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       )}
 
       {!compact && (
