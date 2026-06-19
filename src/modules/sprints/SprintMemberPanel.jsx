@@ -12,24 +12,36 @@ import {
 
 const ROLE_OPTIONS = ['owner', 'manager', 'contributor', 'viewer']
 
+const TOKENS = {
+  primary: '#4C2A92',
+  accent: '#E8A020',
+  border: '#EDE8DC',
+  background: '#F4F1EA',
+  textPrimary: '#2D2A22',
+  textSecondary: '#7A6F5E',
+  textTertiary: '#9E9488',
+  surfaceTertiary: '#F2EEE6',
+  cardShadow: '0 1px 3px rgba(28,22,16,0.05)',
+}
+
 function selectedValuesFromOptions(options) {
   return Array.from(options)
     .filter((option) => option.selected)
     .map((option) => option.value)
 }
 
-function badgeToneForRole(role) {
-  if (role === 'owner') return 'completed'
-  if (role === 'manager') return 'active'
-  if (role === 'viewer') return 'archived'
-  return 'planning'
+function badgeColorForRole(role) {
+  if (role === 'owner') return '#5B34C7'
+  if (role === 'manager') return '#1B72E8'
+  if (role === 'viewer') return '#9E9488'
+  return '#E8A020'
 }
 
 function EmptyState({ icon, title, subtitle }) {
   return (
-    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>
+    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: TOKENS.textTertiary, fontSize: 13 }}>
       <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>
+      <div style={{ fontWeight: 500, color: TOKENS.textSecondary, marginBottom: 4 }}>
         {title}
       </div>
       <div>{subtitle}</div>
@@ -102,32 +114,48 @@ export default function SprintMemberPanel({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-[20px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-        <div className="mb-4 flex items-center justify-between gap-3">
+    <div style={{ display: 'grid', gap: 16 }}>
+      {/* Existing Members Section */}
+      <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>
+        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div>
-            <div className="text-lg font-semibold text-[var(--text-primary)]">Sprint Members</div>
-            <div className="text-sm text-[var(--text-secondary)]">Cross-functional members assigned to this sprint.</div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: TOKENS.textPrimary, margin: 0 }}>Sprint Members</div>
+            <div style={{ fontSize: 14, color: TOKENS.textSecondary, margin: '6px 0 0' }}>
+              Cross-functional members assigned to this sprint.
+            </div>
           </div>
           <Badge tone={isArchived ? 'archived' : 'active'}>{members.length} members</Badge>
         </div>
 
-        <div className="space-y-3">
+        <div style={{ display: 'grid', gap: 12 }}>
           {members.map((member) => {
-            const hasExpiredMembership = member.team_memberships?.some(
-              (membership) => membership.membership_end_date && new Date(membership.membership_end_date) < new Date()
-            )
             const expiringMemberships = member.team_memberships?.filter(
               (membership) => membership.membership_end_date && new Date(membership.membership_end_date) > new Date()
             ) ?? []
 
             return (
-              <div key={member.user?.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-[var(--text-primary)]">{member.user?.name ?? member.user?.email ?? '—'}</div>
-                  <div className="truncate text-xs text-[var(--text-tertiary)]">{member.user?.email}</div>
+              <div
+                key={member.user?.id}
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 12,
+                  borderRadius: 16,
+                  border: `1px solid ${TOKENS.border}`,
+                  background: TOKENS.surfaceTertiary,
+                  padding: '12px 16px',
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: TOKENS.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {member.user?.name ?? member.user?.email ?? '—'}
+                  </div>
+                  <div style={{ fontSize: 12, color: TOKENS.textTertiary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {member.user?.email}
+                  </div>
                   {expiringMemberships.length > 0 && (
-                    <div className="mt-1 text-xs text-[var(--warning)]">
+                    <div style={{ marginTop: 4, fontSize: 12, color: '#DC2626' }}>
                       Expires: {expiringMemberships.map((m) => new Date(m.membership_end_date).toLocaleDateString()).join(', ')}
                     </div>
                   )}
@@ -138,7 +166,16 @@ export default function SprintMemberPanel({
                     <select
                       value={member.role}
                       onChange={(e) => handleRoleChange(member.user.id, e.target.value)}
-                      className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-primary)]"
+                      style={{
+                        borderRadius: 10,
+                        border: `1px solid ${TOKENS.border}`,
+                        background: 'white',
+                        padding: '8px 12px',
+                        fontSize: 13,
+                        color: TOKENS.textPrimary,
+                        fontFamily: 'DM Sans, system-ui, sans-serif',
+                        cursor: 'pointer',
+                      }}
                     >
                       {ROLE_OPTIONS.map((role) => (
                         <option key={role} value={role}>{role}</option>
@@ -149,7 +186,17 @@ export default function SprintMemberPanel({
                       multiple
                       value={member.sprint_team_ids ?? []}
                       onChange={(e) => handleTeamChange(member.user.id, selectedValuesFromOptions(e.target.options))}
-                      className="min-w-[180px] rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-primary)]"
+                      style={{
+                        minWidth: 140,
+                        borderRadius: 10,
+                        border: `1px solid ${TOKENS.border}`,
+                        background: 'white',
+                        padding: '8px 12px',
+                        fontSize: 13,
+                        color: TOKENS.textPrimary,
+                        fontFamily: 'DM Sans, system-ui, sans-serif',
+                        cursor: 'pointer',
+                      }}
                     >
                       {teams.map((team) => (
                         <option key={team.id} value={team.id}>{team.name}</option>
@@ -159,23 +206,34 @@ export default function SprintMemberPanel({
                     <button
                       type="button"
                       onClick={() => handleRemove(member.user.id)}
-                      className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-secondary)]"
+                      style={{
+                        borderRadius: 10,
+                        border: `1px solid ${TOKENS.border}`,
+                        background: 'white',
+                        padding: '8px 12px',
+                        fontSize: 13,
+                        color: TOKENS.textSecondary,
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        fontFamily: 'DM Sans, system-ui, sans-serif',
+                        transition: 'all 0.12s',
+                      }}
+                      onMouseEnter={(e) => { e.target.style.background = TOKENS.background }}
+                      onMouseLeave={(e) => { e.target.style.background = 'white' }}
                     >
                       Remove
                     </button>
                   </>
                 ) : (
                   <>
-                    <Badge tone={badgeToneForRole(member.role)}>
+                    <Badge tone={member.role === 'owner' ? 'completed' : member.role === 'manager' ? 'active' : 'planning'}>
                       {member.role}
                     </Badge>
-                    <span className="text-xs text-[var(--text-tertiary)]">
+                    <span style={{ fontSize: 12, color: TOKENS.textTertiary }}>
                       {member.sprint_teams?.length ? member.sprint_teams.map((team) => team.name).join(', ') : 'No team'}
                     </span>
                     {expiringMemberships.length > 0 && (
-                      <Badge tone="archived">
-                        Temp member
-                      </Badge>
+                      <Badge tone="archived">Temp member</Badge>
                     )}
                   </>
                 )}
@@ -189,20 +247,29 @@ export default function SprintMemberPanel({
         </div>
       </div>
 
+      {/* Add Member Form */}
       {canEdit && !isArchived ? (
-        <div className="rounded-[20px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <div className="mb-3 text-sm font-semibold text-[var(--text-primary)]">Add member</div>
+        <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>
+          <div style={{ marginBottom: 12, fontSize: 14, fontWeight: 600, color: TOKENS.textPrimary }}>Add member</div>
           {loadingUsers ? (
-            <div style={{ padding: '1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>
-              Loading...
-            </div>
+            <div style={{ padding: '1rem', color: TOKENS.textTertiary, fontSize: 13 }}>Loading...</div>
           ) : null}
-          <div className="space-y-3">
-            <div className="grid gap-3 md:grid-cols-[1.6fr_0.8fr_1fr_auto]">
+          <div style={{ display: 'grid', gap: 12 }}>
+            {/* Add Form Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 0.8fr 1fr auto', gap: 12 }}>
               <select
                 value={selectedUserId}
                 onChange={(e) => setSelectedUserId(e.target.value)}
-                className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--text-primary)]"
+                style={{
+                  borderRadius: 10,
+                  border: `1px solid ${TOKENS.border}`,
+                  background: 'white',
+                  padding: '10px 12px',
+                  fontSize: 13,
+                  color: TOKENS.textPrimary,
+                  fontFamily: 'DM Sans, system-ui, sans-serif',
+                  cursor: 'pointer',
+                }}
               >
                 <option value="">Select active user</option>
                 {addableUsers.map((user) => (
@@ -215,7 +282,16 @@ export default function SprintMemberPanel({
               <select
                 value={selectedRole}
                 onChange={(e) => setSelectedRole(e.target.value)}
-                className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--text-primary)]"
+                style={{
+                  borderRadius: 10,
+                  border: `1px solid ${TOKENS.border}`,
+                  background: 'white',
+                  padding: '10px 12px',
+                  fontSize: 13,
+                  color: TOKENS.textPrimary,
+                  fontFamily: 'DM Sans, system-ui, sans-serif',
+                  cursor: 'pointer',
+                }}
               >
                 {ROLE_OPTIONS.map((role) => (
                   <option key={role} value={role}>{role}</option>
@@ -226,7 +302,17 @@ export default function SprintMemberPanel({
                 multiple
                 value={selectedTeamIds}
                 onChange={(e) => setSelectedTeamIds(selectedValuesFromOptions(e.target.options))}
-                className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--text-primary)]"
+                style={{
+                  borderRadius: 10,
+                  border: `1px solid ${TOKENS.border}`,
+                  background: 'white',
+                  padding: '10px 12px',
+                  fontSize: 13,
+                  color: TOKENS.textPrimary,
+                  fontFamily: 'DM Sans, system-ui, sans-serif',
+                  cursor: 'pointer',
+                  minHeight: 40,
+                }}
               >
                 {teams.map((team) => (
                   <option key={team.id} value={team.id}>{team.name}</option>
@@ -237,30 +323,48 @@ export default function SprintMemberPanel({
                 type="button"
                 onClick={handleAdd}
                 disabled={!selectedUserId || saving}
-                className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                style={{
+                  borderRadius: 10,
+                  border: 'none',
+                  background: !selectedUserId || saving ? `${TOKENS.accent}99` : TOKENS.accent,
+                  padding: '10px 16px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'white',
+                  cursor: !selectedUserId || saving ? 'not-allowed' : 'pointer',
+                  fontFamily: 'DM Sans, system-ui, sans-serif',
+                  transition: 'all 0.12s',
+                  opacity: !selectedUserId || saving ? 0.6 : 1,
+                }}
               >
                 {saving ? 'Adding…' : 'Add'}
               </button>
             </div>
 
+            {/* Membership Expiration (Optional) */}
             {selectedTeamIds.length > 0 && (
-              <div className="pt-2">
-                <label className="text-xs font-medium text-[var(--text-secondary)]">
+              <div style={{ paddingTop: 8 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: TOKENS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Membership expiration (optional)
                 </label>
-                <div className="mt-1.5 flex items-center gap-2">
+                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <input
                     type="date"
                     value={selectedMembershipEndDate}
                     onChange={(e) => setSelectedMembershipEndDate(e.target.value)}
-                    className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-primary)]"
+                    style={{
+                      borderRadius: 10,
+                      border: `1px solid ${TOKENS.border}`,
+                      background: 'white',
+                      padding: '8px 12px',
+                      fontSize: 13,
+                      color: TOKENS.textPrimary,
+                      fontFamily: 'DM Sans, system-ui, sans-serif',
+                      cursor: 'pointer',
+                    }}
                   />
-                  <span className="text-xs text-[var(--text-tertiary)]">
-                    {selectedMembershipEndDate ? (
-                      <>Leave empty for permanent membership</>
-                    ) : (
-                      <>Permanent member</>
-                    )}
+                  <span style={{ fontSize: 12, color: TOKENS.textTertiary }}>
+                    {selectedMembershipEndDate ? 'Leave empty for permanent membership' : 'Permanent member'}
                   </span>
                 </div>
               </div>
