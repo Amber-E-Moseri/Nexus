@@ -465,7 +465,7 @@ export default function ExpectedAttendeesPage() {
   const [search, setSearch] = useState('')
   const [filterSubgroup, setFilterSubgroup] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
-  const [activeOnly, setActiveOnly] = useState(true)
+  const [activeOnly, setActiveOnly] = useState(false)
   const [sortCol, setSortCol] = useState('subgroup')
   const [sortDir, setSortDir] = useState('asc')
 
