@@ -75,11 +75,25 @@ export default function AttendanceImportModal({ meetingId, onClose, onSuccess })
   }
 
   return (
-    <div className="attendance-import-modal-overlay">
-      <div className="attendance-import-modal">
+    <div
+      className="attendance-import-modal-overlay"
+      role="presentation"
+      onClick={(e) => e.currentTarget === e.target && handleClose()}
+    >
+      <div
+        className="attendance-import-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="import-modal-title"
+      >
         <div className="modal-header">
-          <h2>Import Attendance from Elvanto</h2>
-          <button className="close-btn" onClick={handleClose}>
+          <h2 id="import-modal-title">Import Attendance from Elvanto</h2>
+          <button
+            className="close-btn"
+            onClick={handleClose}
+            aria-label="Close import dialog"
+            title="Close (Escape)"
+          >
             ✕
           </button>
         </div>
@@ -111,6 +125,7 @@ Grace M.,person_456,Present,96%`}
                     accept=".csv"
                     onChange={handleFileSelect}
                     className="file-input"
+                    aria-label="Select CSV file from Elvanto"
                   />
                   <span className="file-upload-text">
                     {file ? `📄 ${file.name}` : '📂 Click to select CSV file'}
@@ -272,6 +287,7 @@ Grace M.,person_456,Present,96%`}
             <button
               className="btn btn-secondary"
               onClick={handleClose}
+              aria-label="Cancel import dialog"
             >
               Cancel
             </button>
@@ -279,13 +295,18 @@ Grace M.,person_456,Present,96%`}
 
           {step === 'preview' && (
             <>
-              <button className="btn btn-secondary" onClick={() => setStep('upload')}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setStep('upload')}
+                aria-label="Go back to file selection"
+              >
                 Back
               </button>
               <button
                 className="btn btn-primary"
                 onClick={handleImport}
                 disabled={isLoading || parseResult.summary.valid_records === 0}
+                aria-label={isLoading ? 'Importing attendance records' : 'Import selected attendance records'}
               >
                 {isLoading ? <LoadingSpinner size="small" /> : 'Import'}
               </button>
@@ -293,7 +314,7 @@ Grace M.,person_456,Present,96%`}
           )}
 
           {(step === 'results' || step === 'error') && (
-            <button className="btn btn-primary" onClick={handleClose}>
+            <button className="btn btn-primary" onClick={handleClose} aria-label="Close import dialog">
               Close
             </button>
           )}

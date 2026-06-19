@@ -50,6 +50,7 @@ function RecordPane({ selectedMeeting, canManage, onStartLive, isMobile, onBack 
             <button
               type="button"
               onClick={onBack}
+              aria-label="Back to meetings list"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -62,9 +63,8 @@ function RecordPane({ selectedMeeting, canManage, onStartLive, isMobile, onBack 
                 color: '#1C1C1C',
                 padding: 0,
               }}
-              title="Back to list"
             >
-              <ChevronLeft size={24} />
+              <ChevronLeft size={24} aria-hidden="true" />
             </button>
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -262,10 +262,11 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
       >
         {/* Category filter buttons */}
         <div style={{ paddingLeft: 16, paddingRight: 16, marginBottom: 16 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }} role="group" aria-label="Filter meetings by type">
             <button
               type="button"
               onClick={() => setActiveType('all')}
+              aria-pressed={activeType === 'all'}
               style={{
                 padding: '6px 14px',
                 borderRadius: 999,
@@ -284,6 +285,7 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
                 key={type}
                 type="button"
                 onClick={() => setActiveType(type)}
+                aria-pressed={activeType === type}
                 style={{
                   padding: '6px 14px',
                   borderRadius: 999,
@@ -319,6 +321,8 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
                   key={meeting.id}
                   type="button"
                   onClick={() => setSelectedMeeting(meeting)}
+                  aria-pressed={selectedMeeting?.id === meeting.id}
+                  aria-label={`${meeting.title}, ${new Date(meeting.date).toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}`}
                   style={{
                     width: '100%',
                     padding: '12px 16px',
