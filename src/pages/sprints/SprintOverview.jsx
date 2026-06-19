@@ -216,6 +216,27 @@ export default function SprintOverview() {
   )
   const canCreateSprint = role === 'super_admin' || role === 'dept_lead'
 
+  if (loading) {
+    return <div style={{ padding: '1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading...</div>
+  }
+
+  if (loadError) {
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+          {loadError}
+        </div>
+        <Link to="/sprints" style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>
+          ← Back to All Sprints
+        </Link>
+      </div>
+    )
+  }
+
+  if (!detail?.sprint) {
+    return <div className="rounded-[20px] border border-[var(--border)] bg-white p-8 text-sm text-[var(--text-tertiary)] shadow-[var(--card-shadow)]">Sprint not found.</div>
+  }
+
   const isArchived = detail?.sprint?.status === 'archived'
   const visibleTabs = detail?.sprint?.status === 'completed' || detail?.sprint?.status === 'review' || detail?.sprint?.status === 'archived'
     ? TABS
@@ -226,6 +247,17 @@ export default function SprintOverview() {
     const done = tasks.filter((task) => isTaskCompleted(task)).length
     return Math.round((done / tasks.length) * 100)
   }, [tasks])
+
+  const tasksByStatus = useMemo(() => {
+    const grouped = {}
+    tasks.forEach((task) => {
+      const status = task.status_name || 'Unknown'
+      if (!grouped[status]) grouped[status] = 0
+      grouped[status] += 1
+    })
+    return grouped
+  }, [tasks])
+
   const reviewCompleted = Boolean(detail?.review?.reviewed_at ?? detail?.review?.completed_at)
 
   async function reloadCalendar() {
@@ -330,37 +362,6 @@ export default function SprintOverview() {
       alert(`Export error: ${String(err)}`)
     }
   }
-
-  if (loading) {
-    return <div style={{ padding: '1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading...</div>
-  }
-
-  if (loadError) {
-    return (
-      <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
-          {loadError}
-        </div>
-        <Link to="/sprints" style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>
-          ← Back to All Sprints
-        </Link>
-      </div>
-    )
-  }
-
-  if (!detail?.sprint) {
-    return <div className="rounded-[20px] border border-[var(--border)] bg-white p-8 text-sm text-[var(--text-tertiary)] shadow-[var(--card-shadow)]">Sprint not found.</div>
-  }
-
-  const tasksByStatus = useMemo(() => {
-    const grouped = {}
-    tasks.forEach((task) => {
-      const status = task.status_name || 'Unknown'
-      if (!grouped[status]) grouped[status] = 0
-      grouped[status] += 1
-    })
-    return grouped
-  }, [tasks])
 
   const healthStatus = completion >= 70 ? 'On track' : 'At risk'
 
