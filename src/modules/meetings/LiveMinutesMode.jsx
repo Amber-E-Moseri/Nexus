@@ -431,68 +431,7 @@ function LiveMinutesModeInner({ meeting, onClose }) {
             gap: 20,
           }}
         >
-          {/* Attendance */}
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#999', marginBottom: 8 }}>
-              ATTENDANCE
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {[
-                { name: 'Amara D.', status: 'Here' },
-                { name: 'Grace M.', status: 'Here' },
-                { name: 'James O.', status: 'Here' },
-                { name: 'Sarah E.', status: 'Away' },
-              ].map((person, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '8px 10px',
-                    borderRadius: 6,
-                    background: '#2D1B47',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      background: '#4C2A92',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: 'white',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {person.name.charAt(0)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'white' }}>{person.name}</div>
-                  </div>
-                  <div
-                    style={{
-                      paddingX: '6px',
-                      paddingY: '3px',
-                      borderRadius: 4,
-                      background: person.status === 'Here' ? '#166534' : '#444',
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: person.status === 'Here' ? '#86EFAC' : '#999',
-                    }}
-                  >
-                    {person.status}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Captured Items */}
+{/* Captured Items */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#999', marginBottom: 8 }}>
               CAPTURED THIS MEETING · {capturedItems.length}
