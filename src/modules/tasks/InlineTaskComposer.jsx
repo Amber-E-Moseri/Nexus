@@ -30,7 +30,7 @@ export default function InlineTaskComposer({
   const [priority, setPriority] = useState('medium')
   const [dueDate, setDueDate] = useState('')
   const [assigneeId, setAssigneeId] = useState('')
-  const [statusId, setStatusId] = useState(statuses.find(s => s.category === 'open')?.id ?? '')
+  const [statusId, setStatusId] = useState(statuses.filter(s => s.name !== 'Not Started').find(s => s.category === 'open')?.id ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [subtasks, setSubtasks] = useState([])

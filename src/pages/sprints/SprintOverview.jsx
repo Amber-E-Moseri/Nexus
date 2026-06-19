@@ -169,7 +169,11 @@ export default function SprintOverview() {
       console.error('Failed to load sprint:', error)
       setDetail(null)
       setTasks([])
-      setLoadError('This sprint was deleted.')
+      if (error?.code === 'PGRST116' || error?.message?.includes('no rows')) {
+        setLoadError('This sprint was deleted.')
+      } else {
+        setLoadError(error?.message || 'Failed to load sprint')
+      }
     } finally {
       setLoading(false)
     }
