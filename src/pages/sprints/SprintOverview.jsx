@@ -352,290 +352,108 @@ export default function SprintOverview() {
     return <div className="rounded-[20px] border border-[var(--border)] bg-white p-8 text-sm text-[var(--text-tertiary)] shadow-[var(--card-shadow)]">Sprint not found.</div>
   }
 
+  const tasksByStatus = useMemo(() => {
+    const grouped = {}
+    tasks.forEach((task) => {
+      const status = task.status_name || 'Unknown'
+      if (!grouped[status]) grouped[status] = 0
+      grouped[status] += 1
+    })
+    return grouped
+  }, [tasks])
+
+  const healthStatus = completion >= 70 ? 'On track' : 'At risk'
+
   return (
     <div className="space-y-5">
-      <div className="rounded-[24px] border border-[var(--border)] bg-white p-6 shadow-[var(--card-shadow)]">
+      {/* Header */}
+      <div>
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-3xl">
-            <h1 className="text-[30px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">{detail.sprint.name}</h1>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Badge tone={detail.sprint.status}>{detail.sprint.status}</Badge>
-              <span className="text-sm text-[var(--text-tertiary)]">
-                {detail.sprint.start_date || detail.sprint.end_date
-                  ? `${detail.sprint.start_date ?? 'No start'} → ${detail.sprint.end_date ?? 'No end'}`
-                  : 'No dates set'}
-              </span>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-semibold text-[var(--text-primary)]">{detail.sprint.name}</h1>
+              {detail.sprint.status === 'active' && <Badge tone="success">Active</Badge>}
+              {completion >= 70 && <Badge tone="success">On track</Badge>}
+            </div>
+            <div className="mt-2 text-sm text-[var(--text-tertiary)]">
+              {detail.sprint.start_date && detail.sprint.end_date
+                ? `${new Date(detail.sprint.start_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })} – ${new Date(detail.sprint.end_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })} • ${detail.sprint?.department?.name || 'Space'}`
+                : 'No dates set'}
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
             {getNextAction(detail.sprint) && canManage && !isArchived ? (
-              <button type="button" onClick={handleAdvance} disabled={detail.sprint.status === 'review' && !reviewCompleted} title={detail.sprint.status === 'review' && !reviewCompleted ? 'Complete the sprint review before archiving' : ''} className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={handleAdvance} disabled={detail.sprint.status === 'review' && !reviewCompleted} className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">
                 {getNextAction(detail.sprint).label}
               </button>
             ) : null}
-            {canCreateSprint ? (
-              <button type="button" onClick={handleDuplicate} className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
-                Duplicate
-              </button>
-            ) : null}
             <button type="button" onClick={handleExportToGoogleDrive} className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
-              Export to Drive
+              Archive sprint
+            </button>
+            <button type="button" className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
+              Close
             </button>
           </div>
         </div>
       </div>
 
-      {isArchived && (
-        <ArchivedSprintBanner sprint={detail.sprint} onRestore={handleRestore} userRole={role} />
+      {isArchived && <ArchivedSprintBanner sprint={detail.sprint} onRestore={handleRestore} userRole={role} />}
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-4 gap-4">
+        <Stat label="COMPLETED" value={`${tasks.filter((t) => isTaskCompleted(t)).length}/${tasks.length}`} bg="#5B34C7" textColor="white" />
+        <Stat label="PROGRESS" value={`${completion}%`} bg="#1C1C2E" textColor="white" />
+        <Stat label="REMAINING" value={tasks.length - tasks.filter((t) => isTaskCompleted(t)).length} bg="#E8A020" textColor="white" />
+        <Stat label="TEAMS" value={detail.teams.length} bg="#FEF0ED" textColor="#C94830" border="#F9C4B3" />
+      </div>
+
+      {/* Progress Bar */}
+      {tasks.length > 0 && (
+        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+          <SprintProgressBar tasksCount={calculateSprintTaskStats(tasks)} compact={false} />
+        </div>
       )}
 
-      <div role="tablist" className="flex flex-wrap gap-2">
-        {visibleTabs.map((tab) => {
-          const tabId = tab.toLowerCase().replace(/\s+/g, '-')
-          return (
-            <button
-              key={tab}
-              id={`tab-${tabId}`}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab}
-              aria-controls={`tabpanel-${tabId}`}
-              onClick={() => setActiveTab(tab)}
-              className="rounded-full border px-3 py-1.5 text-sm"
-              style={{
-                borderColor: activeTab === tab ? 'var(--accent)' : 'var(--border)',
-                background: activeTab === tab ? 'var(--accent-light)' : 'white',
-                color: activeTab === tab ? 'var(--accent)' : 'var(--text-secondary)',
-              }}
-            >
-              {tab}
-            </button>
-          )
-        })}
-      </div>
-
-      {activeTab === 'Overview' ? (
-        <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0} className="space-y-5">
-          {tasks.length > 0 && (
-            <div className="rounded-[24px] border border-[var(--border)] bg-white p-6 shadow-[var(--card-shadow)]">
-              <SprintProgressBar tasksCount={calculateSprintTaskStats(tasks)} compact={false} />
-            </div>
-          )}
-          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
-            <Stat
-              label="Tasks Done"
-              value={`${tasks.filter((t) => isTaskCompleted(t)).length}/${tasks.length}`}
-              bg="#4C2A92"
-              textColor="white"
-            />
-            <Stat
-              label="Progress"
-              value={`${completion}%`}
-              bg="#1C1C2E"
-              textColor="white"
-            />
-            <Stat
-              label="Remaining"
-              value={tasks.length - tasks.filter((t) => isTaskCompleted(t)).length}
-              bg="#E8A020"
-              textColor="white"
-            />
-            <Stat
-              label="Teams"
-              value={detail.teams.length}
-              bg="#FEF0ED"
-              textColor="#C94830"
-              border="#F9C4B3"
-            />
-          </section>
-
-          <section className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
-            <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-              <div className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Sprint Overview</div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-secondary)]">Goal</label>
-                  <textarea
-                    rows={3}
-                    value={goalDraft}
-                    disabled={!canManage || isArchived}
-                    onChange={(e) => setGoalDraft(e.target.value)}
-                    className="w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--text-primary)] disabled:bg-[var(--surface-secondary)]"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-secondary)]">Description</label>
-                  <textarea
-                    rows={5}
-                    value={descriptionDraft}
-                    disabled={!canManage || isArchived}
-                    onChange={(e) => setDescriptionDraft(e.target.value)}
-                    className="w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm text-[var(--text-primary)] disabled:bg-[var(--surface-secondary)]"
-                  />
-                </div>
-
-                {canManage && !isArchived ? (
-                  <button
-                    type="button"
-                    onClick={handleOverviewSave}
-                    disabled={savingOverview}
-                    className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
-                  >
-                    {savingOverview ? 'Saving…' : 'Save Overview'}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-              <div className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Recent Activity</div>
-              {recentActivity === null ? (
-                <div style={{ padding: '1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>
-                  Loading...
-                </div>
-              ) : recentActivity.length > 0 ? (
-                <div className="space-y-3">
-                  {recentActivity.map((entry) => (
-                    <div key={entry.id} className="rounded-2xl bg-[var(--surface-tertiary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
-                      <div className="font-medium text-[var(--text-primary)]">{entry.action.replaceAll('_', ' ')}</div>
-                      <div className="mt-1 text-xs text-[var(--text-tertiary)]">
-                        {new Date(entry.created_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState icon="📊" title="No recent activity" subtitle="Activity will appear here as the team works" />
-              )}
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {activeTab === 'Tasks' ? (
-        <div role="tabpanel" id="tabpanel-tasks" aria-labelledby="tab-tasks" tabIndex={0} className="rounded-[24px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)]">
-          <SprintTaskBoard sprintId={detail.sprint.id} canEdit={Boolean(canManage && !isArchived)} />
-        </div>
-      ) : null}
-
-      {activeTab === 'Calendar' ? (
-        <div role="tabpanel" id="tabpanel-calendar" aria-labelledby="tab-calendar" tabIndex={0}>
-          <CalendarView
-            events={calendarEvents}
-            loading={calendarLoading}
-            year={calendarYear}
-            month={calendarMonth}
-            onEventClick={setSelectedCalendarEvent}
-            onDayClick={(day) => {
-              if (!canManage || isArchived) return
-              setCalendarDefaultDate(day)
-              setShowEventModal(true)
-            }}
-            onAddEvent={canManage && !isArchived ? () => setShowEventModal(true) : undefined}
-            onEditEvent={(event) => {
-              setSelectedCalendarEvent(event)
-              setShowEventModal(true)
-            }}
-            onDeleteEvent={async (event) => {
-              await deleteCalendarEvent(event.id)
-              setSelectedCalendarEvent(null)
-              await reloadCalendar()
-            }}
-            onPrevMonth={() => {
-              if (calendarMonth === 0) {
-                setCalendarMonth(11)
-                setCalendarYear((value) => value - 1)
-              } else {
-                setCalendarMonth((value) => value - 1)
-              }
-            }}
-            onNextMonth={() => {
-              if (calendarMonth === 11) {
-                setCalendarMonth(0)
-                setCalendarYear((value) => value + 1)
-              } else {
-                setCalendarMonth((value) => value + 1)
-              }
-            }}
-            onToday={() => {
-              const now = new Date()
-              setCalendarYear(now.getFullYear())
-              setCalendarMonth(now.getMonth())
-            }}
-            readOnly={!canManage || isArchived}
-          />
-        </div>
-      ) : null}
-
-      {activeTab === 'Teams' ? (
-        <div role="tabpanel" id="tabpanel-teams" aria-labelledby="tab-teams" tabIndex={0}>
-          <SprintTeamPanel
-            sprintId={detail.sprint.id}
-            teams={detail.teams}
-            members={detail.members}
-            canEdit={Boolean(canManage)}
-            isArchived={Boolean(isArchived)}
-            onChanged={loadDetail}
-          />
-        </div>
-      ) : null}
-
-      {activeTab === 'Members' ? (
-        <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}>
-          <SprintMemberPanel
-            sprintId={detail.sprint.id}
-            sprintName={detail.sprint.name}
-            members={detail.members}
-            teams={detail.teams}
-            canEdit={Boolean(canManage)}
-            isArchived={Boolean(isArchived)}
-            onChanged={loadDetail}
-          />
-        </div>
-      ) : null}
-
-      {activeTab === 'Files' ? (
-        <div role="tabpanel" id="tabpanel-files" aria-labelledby="tab-files" tabIndex={0}>
-          <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-            <FileList entityType="sprint" entityId={sprintId} showUpload={true} />
+      {/* Tasks & Tabs */}
+      <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">Sprint Tasks</h2>
+          <div className="flex gap-3">
+            <button className="text-sm font-medium text-[var(--accent)]">Board</button>
+            <button className="text-sm font-medium text-[var(--text-secondary)]">List</button>
+            <button className="text-sm font-medium text-[var(--text-secondary)]">Review</button>
           </div>
         </div>
-      ) : null}
 
-      {activeTab === 'Review' ? (
-        <div role="tabpanel" id="tabpanel-review" aria-labelledby="tab-review" tabIndex={0}>
-          {tasks.length > 0 && (
-            <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 20 }}>
-              <Stat
-                label="Completed"
-                value={`${tasks.filter((t) => isTaskCompleted(t)).length}/${tasks.length}`}
-                bg="#4C2A92"
-                textColor="white"
-              />
-              <Stat
-                label="Progress"
-                value={`${completion}%`}
-                bg="#1C1C2E"
-                textColor="white"
-              />
-              <Stat
-                label="Remaining"
-                value={tasks.length - tasks.filter((t) => isTaskCompleted(t)).length}
-                bg="#E8A020"
-                textColor="white"
-              />
-            </section>
-          )}
-          <SprintReview
-            sprint={detail.sprint}
-            canManage={Boolean(canManage)}
-            onSaved={loadDetail}
-          />
+        {activeTab === 'Tasks' || activeTab === 'Overview' ? (
+          <SprintTaskBoard sprintId={detail.sprint.id} canEdit={Boolean(canManage && !isArchived)} />
+        ) : null}
+      </div>
+
+      {/* Review Section */}
+      {detail.sprint.status === 'completed' || detail.sprint.status === 'review' ? (
+        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Sprint Review</h2>
+            <span className="text-xs text-[var(--text-tertiary)]">{reviewCompleted ? 'Completed' : '0 of 6 sections completed'}</span>
+          </div>
+          <SprintReview sprint={detail.sprint} canManage={Boolean(canManage)} onSaved={loadDetail} />
         </div>
       ) : null}
+
+      {/* Teams Section */}
+      {detail.teams.length > 0 && (
+        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Sprint Teams</h2>
+            <button type="button" className="text-xs text-[var(--accent)]">+ New team</button>
+          </div>
+          <p className="mb-4 text-xs text-[var(--text-tertiary)]">Cross-functional squads – name them and pull in members from any department.</p>
+          <SprintTeamPanel sprintId={detail.sprint.id} teams={detail.teams} members={detail.members} canEdit={Boolean(canManage)} isArchived={Boolean(isArchived)} onChanged={loadDetail} />
+        </div>
+      )}
+
 
       {detail.sprint.status === 'archived' ? (
         <div className="text-sm text-[var(--text-secondary)]">

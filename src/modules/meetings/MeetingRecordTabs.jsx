@@ -23,14 +23,13 @@ export default function MeetingRecordTabs({ meeting }) {
     }
 
     loadTasks()
+  }, [meeting.id])
 
-    // Organize attendance
-    if (meeting.attendance) {
-      const present = meeting.attendance.filter((a) => a.status === 'present')
-      const absent = meeting.attendance.filter((a) => a.status !== 'present')
-      setAttendance([...present, ...absent])
-    }
-  }, [meeting])
+  useEffect(() => {
+    const present = meeting.attendance?.filter((a) => a.status === 'present') ?? []
+    const absent = meeting.attendance?.filter((a) => a.status !== 'present') ?? []
+    setAttendance([...present, ...absent])
+  }, [meeting.attendance])
 
   const completedTasks = tasks?.filter((t) => isTaskCompleted(t)) ?? []
   const actionCount = tasks?.length ?? 0

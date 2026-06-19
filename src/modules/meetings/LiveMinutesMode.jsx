@@ -5,7 +5,7 @@ export default function LiveMinutesMode({ meeting, onClose }) {
   const { editMeeting } = useMeetings()
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
-  const [agendaItems, setAgendaItems] = useState(meeting.agenda ? meeting.agenda.split('\n').filter((l) => l.trim()) : [])
+  const [agendaItems, setAgendaItems] = useState([])
   const [currentItemIndex, setCurrentItemIndex] = useState(0)
   const [notes, setNotes] = useState('')
   const [capturedItems, setCapturedItems] = useState([])
@@ -13,6 +13,13 @@ export default function LiveMinutesMode({ meeting, onClose }) {
   const [newItemText, setNewItemText] = useState('')
   const notesRef = useRef(null)
   const timerRef = useRef(null)
+
+  useEffect(() => {
+    if (meeting.agenda) {
+      const items = meeting.agenda.split('\n').filter((l) => l.trim())
+      setAgendaItems(items)
+    }
+  }, [meeting.agenda])
 
   useEffect(() => {
     if (!isPaused) {

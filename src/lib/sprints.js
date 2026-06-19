@@ -2,7 +2,7 @@ import { supabase } from './supabase'
 import { normalizeTaskRows } from './taskStatuses'
 
 const SPRINT_TEAM_SELECT = 'id, sprint_id, name, description, lead_user_id, created_at'
-const SPRINT_MEMBER_SELECT = 'id, sprint_id, user_id, role, joined_at, created_at'
+const SPRINT_MEMBER_SELECT = 'sprint_id, user_id, role, joined_at'
 const SPRINT_REVIEW_SELECT = 'id, sprint_id, completed_at, completed_by, overall_summary, team_feedback, lessons_learned, goals_achieved, outstanding_items, wins_testimonies, recommendations, final_decisions, final_attachments, reviewed_at, created_at'
 
 function sortByCreatedAtDesc(items = []) {

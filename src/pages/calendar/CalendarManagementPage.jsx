@@ -106,8 +106,11 @@ export default function CalendarManagementPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div>
-        <h1 style={{ fontSize: '28px', fontWeight: 600, letterSpacing: '-0.04em', color: 'var(--text-primary)' }}>
-          🎛️ Calendar Management
+        <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
+          BLW Canada OS / Ministry Calendar / Calendar Management
+        </div>
+        <h1 style={{ marginTop: '8px', fontSize: '28px', fontWeight: 600, letterSpacing: '-0.04em', color: 'var(--text-primary)' }}>
+          Calendar Management
         </h1>
         <p style={{ marginTop: '8px', fontSize: '14px', color: 'var(--text-secondary)' }}>
           Configure event types and calendar settings for your organization.
@@ -329,3 +332,4 @@ export default function CalendarManagementPage() {
     </div>
   )
 }
+
