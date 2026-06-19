@@ -24,7 +24,7 @@ import { useTaskFilters } from '../../modules/tasks/useTaskFilters'
 import { mergeTaskFieldSettings, normalizeTaskFieldSettings, TASK_FIELD_OPTIONS } from '../../lib/taskFieldSettings'
 import FileList from '../../components/files/FileList'
 
-const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Sprints', 'Activity', 'Files', 'Automations', 'Members', 'Integrations', 'Settings']
+const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Sprints', 'Meetings', 'Automations', 'Members']
 
 const STATUS_ACCENT = {
   open: '#C9BEAD',
@@ -806,6 +806,8 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
               onTaskStatusChange={canManage ? handleTaskStatusChange : undefined}
               onTaskReorder={canManage ? handleTaskReorder : undefined}
+              people={{}}
+              priorities={{}}
             />
           </div>
         )}
@@ -1182,8 +1184,7 @@ export default function SpaceOverview() {
         </div>
       ) : null}
       {activeTab === 'Sprints' ? <div role="tabpanel" id="tabpanel-sprints" aria-labelledby="tab-sprints" tabIndex={0}><SpaceSprintsTab canManage={canManage} sprints={spaceSprints} spaceColor={space.color} onCreate={() => setShowSprintModal(true)} onOpen={(sprint) => navigate(`/sprints/${sprint.id}`)} /></div> : null}
-      {activeTab === 'Activity' ? <div role="tabpanel" id="tabpanel-activity" aria-labelledby="tab-activity" tabIndex={0}><SpaceActivityTab tasks={spaceTasks} members={spaceMembers} /></div> : null}
-      {activeTab === 'Files' ? <div role="tabpanel" id="tabpanel-files" aria-labelledby="tab-files" tabIndex={0}><div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]"><FileList entityType="space" entityId={spaceId} showUpload={true} /></div></div> : null}
+      {activeTab === 'Meetings' ? <div role="tabpanel" id="tabpanel-meetings" aria-labelledby="tab-meetings" tabIndex={0}><SpaceMeetingsTab meetings={spaceMeetings} spaceId={spaceId} spaceName={space.name} canManage={canManage} onMeetingCreated={async () => { setSpaceMeetings(await getSpaceMeetings(spaceId)) }} /></div> : null}
       {activeTab === 'Automations' ? <div role="tabpanel" id="tabpanel-automations" aria-labelledby="tab-automations" tabIndex={0}><SpaceAutomationsTab space={space} canManage={canManageStatuses} /></div> : null}
       {activeTab === 'Members' ? <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}><SpaceMembersTab members={spaceMembers} /></div> : null}
       {activeTab === 'Integrations' && canManage ? <div role="tabpanel" id="tabpanel-integrations" aria-labelledby="tab-integrations" tabIndex={0}><SpaceIntegrationsTab spaceId={spaceId} canManage={canManage} /></div> : null}
@@ -1220,7 +1221,7 @@ export default function SpaceOverview() {
             type="button"
             onClick={() => setOrganizerOpen((v) => !v)}
             title="Folders & Lists"
-            className="ml-auto flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-sm font-medium transition-colors"
+            className="ml-auto flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium transition-colors hover:bg-[var(--surface-secondary)]"
             style={{ color: organizerOpen ? 'var(--accent)' : 'var(--text-secondary)', borderColor: organizerOpen ? 'var(--accent)' : 'var(--border)', marginRight: 2 }}
           >
             <span style={{ fontSize: 16, letterSpacing: 1 }}>···</span>
@@ -1287,6 +1288,53 @@ export default function SpaceOverview() {
         />
       ) : null}
       <StatusSettingsDialog open={showStatusesModal} onOpenChange={setShowStatusesModal} space={space} />
+    </div>
+  )
+}
+
+function SpaceMeetingsTab({ meetings, spaceId, spaceName, canManage, onMeetingCreated }) {
+  const navigate = useNavigate()
+
+  return (
+    <div className="space-y-4">
+      {canManage ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => navigate('/meetings/wizard', { state: { departmentId: spaceId, departmentName: spaceName } })}
+            className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white"
+          >
+            + Plan a meeting
+          </button>
+        </div>
+      ) : null}
+
+      {meetings.length > 0 ? (
+        <div className="grid gap-4">
+          {meetings.map((meeting) => (
+            <div key={meeting.id} className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg font-semibold text-[var(--text-primary)]">{meeting.title}</h3>
+                  {meeting.description ? <p className="mt-1 text-sm text-[var(--text-secondary)]">{meeting.description}</p> : null}
+                  <div className="mt-3 text-sm text-[var(--text-tertiary)]">
+                    {formatDateTime(meeting.date)}
+                    {meeting.location ? ` • ${meeting.location}` : ''}
+                  </div>
+                </div>
+                <span className="rounded-full bg-[#E7F7EC] px-3 py-1 text-xs font-semibold text-[#2F8C58]">
+                  {meeting.status || 'planned'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-[20px] border border-dashed border-[var(--border)] bg-white p-8 text-center text-sm text-[var(--text-tertiary)] shadow-[var(--card-shadow)]">
+          No meetings planned for this space yet.
+          {canManage ? <div className="mt-2">Create one to get started.</div> : null}
+        </div>
+      )}
     </div>
   )
 }

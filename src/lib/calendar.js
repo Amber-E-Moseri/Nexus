@@ -265,11 +265,10 @@ export async function getEventTypes() {
 
   if (error) {
     console.error('Failed to fetch event types:', error)
-    // Fallback to default types if table doesn't exist or query fails
-    return ['conference', 'program', 'training', 'prayer', 'graduation', 'event', 'deadline']
+    return []
   }
 
-  return (data ?? []).map((type) => type.name)
+  return data ?? []
 }
 
 export async function createEventType(eventType) {

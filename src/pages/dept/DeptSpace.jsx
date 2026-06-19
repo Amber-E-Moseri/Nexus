@@ -292,6 +292,8 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
               statuses={statuses}
               onTaskClick={onTaskClick}
               onTaskStatusChange={handleTaskStatusChange}
+              people={{}}
+              priorities={{}}
             />
           </div>
         ) : (

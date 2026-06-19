@@ -96,6 +96,8 @@ function SprintTasksInner({ sprintId, canEdit }) {
               statuses={statuses}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
               onTaskStatusChange={canEdit ? handleTaskStatusChange : undefined}
+              people={{}}
+              priorities={{}}
             />
           </div>
         )}

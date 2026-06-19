@@ -24,6 +24,8 @@ export default function TaskListView({
   onCreateTask,
   onTaskReorder,
   onTaskStatusChange,
+  people = {},
+  priorities = {},
 }) {
   const [composerStatusId, setComposerStatusId] = useState(null)
   const [activeTaskId, setActiveTaskId] = useState(null)
@@ -131,6 +133,9 @@ export default function TaskListView({
                   <SortableTaskRow
                     key={task.id}
                     task={task}
+                    people={people}
+                    statuses={statuses}
+                    priorities={priorities}
                     onClick={() => onTaskClick(task)}
                   />
                 ))}
@@ -145,12 +150,13 @@ export default function TaskListView({
                     compact
                     departments={departments}
                     defaultDepartmentId={defaultDepartmentId}
+                    statuses={[status]}
                     listId={listId}
                     onCancel={() => setComposerStatusId(null)}
                     onSubmit={async (draft) => {
                       await onCreateTask?.({
                         ...draft,
-                        statusId: status.id,
+                        statusId: draft.statusId || status.id,
                       })
                       setComposerStatusId(null)
                     }}
