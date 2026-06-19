@@ -67,9 +67,10 @@ export async function getSprintDetail(sprintId) {
 
   if (sprintRes.error) throw sprintRes.error
 
-  const [teamsRes, membersRes, reviewRes] = await Promise.all([
+  const [teamsRes, membersRes, teamMembersRes, reviewRes] = await Promise.all([
     supabase.from('sprint_teams').select(SPRINT_TEAM_SELECT).eq('sprint_id', sprintId).order('created_at'),
-    supabase.from('sprint_members').select(SPRINT_MEMBER_SELECT).eq('sprint_id', sprintId).order('joined_at'),
+    supabase.from('sprint_members').select(`${SPRINT_MEMBER_SELECT}, user:user_id(id, name)`).eq('sprint_id', sprintId).order('joined_at'),
+    supabase.from('sprint_team_members').select('user_id, sprint_team_id').eq('sprint_id', sprintId),
     (async () => {
       try {
         return await supabase.from('sprint_reviews').select(SPRINT_REVIEW_SELECT).eq('sprint_id', sprintId).maybeSingle()
@@ -81,11 +82,23 @@ export async function getSprintDetail(sprintId) {
 
   if (teamsRes.error) throw teamsRes.error
   if (membersRes.error) throw membersRes.error
+  if (teamMembersRes.error) throw teamMembersRes.error
+
+  const teamMemberMap = {}
+  teamMembersRes.data?.forEach((tm) => {
+    if (!teamMemberMap[tm.user_id]) teamMemberMap[tm.user_id] = []
+    teamMemberMap[tm.user_id].push(tm.sprint_team_id)
+  })
+
+  const membersWithTeams = (membersRes.data ?? []).map((member) => ({
+    ...member,
+    sprint_team_ids: teamMemberMap[member.user_id] ?? [],
+  }))
 
   return {
     sprint: sprintRes.data,
     teams: teamsRes.data ?? [],
-    members: membersRes.data ?? [],
+    members: membersWithTeams,
     review: reviewRes.data ?? null,
   }
 }
@@ -125,9 +138,9 @@ export async function updateSprint(sprintId, updates) {
 
 export async function advanceSprintStatus(sprintId, newStatus) {
   const validTransitions = {
-    planning: ['active'],
-    active: ['completed'],
-    completed: ['review'],
+    planning: ['active', 'archived'],
+    active: ['completed', 'archived'],
+    completed: ['review', 'archived'],
     review: ['archived'],
     archived: [],
   }

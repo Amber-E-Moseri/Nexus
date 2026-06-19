@@ -279,10 +279,26 @@ export default function SprintOverview() {
   async function handleAdvance() {
     const action = getNextAction(detail.sprint)
     if (!action) return
-    await advanceSprintStatus(detail.sprint.id, action.next)
-    await loadDetail()
-    if (action.next === 'review') {
-      setActiveTab('Review')
+    try {
+      await advanceSprintStatus(detail.sprint.id, action.next)
+      await loadDetail()
+      if (action.next === 'review') {
+        setActiveTab('Review')
+      }
+    } catch (err) {
+      console.error('Failed to advance sprint:', err)
+      alert(`Failed to advance sprint: ${err?.message || String(err)}`)
+    }
+  }
+
+  async function handleArchive() {
+    if (!window.confirm('Archive this sprint? You can restore it later from the sprints list.')) return
+    try {
+      await advanceSprintStatus(detail.sprint.id, 'archived')
+      await loadDetail()
+    } catch (err) {
+      console.error('Failed to archive sprint:', err)
+      alert(`Failed to archive sprint: ${err?.message || String(err)}`)
     }
   }
 
@@ -389,8 +405,8 @@ export default function SprintOverview() {
                 {getNextAction(detail.sprint).label}
               </button>
             ) : null}
-            <button type="button" onClick={handleExportToGoogleDrive} className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
-              Archive sprint
+            <button type="button" onClick={handleArchive} disabled={isArchived} className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] disabled:opacity-50">
+              {isArchived ? 'Archived' : 'Archive sprint'}
             </button>
             <button type="button" className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
               Close
@@ -417,20 +433,11 @@ export default function SprintOverview() {
       )}
 
       {/* Tasks & Tabs */}
-      <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-[var(--text-primary)]">Sprint Tasks</h2>
-          <div className="flex gap-3">
-            <button className="text-sm font-medium text-[var(--accent)]">Board</button>
-            <button className="text-sm font-medium text-[var(--text-secondary)]">List</button>
-            <button className="text-sm font-medium text-[var(--text-secondary)]">Review</button>
-          </div>
-        </div>
-
-        {activeTab === 'Tasks' || activeTab === 'Overview' ? (
+      {activeTab === 'Tasks' || activeTab === 'Overview' ? (
+        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
           <SprintTaskBoard sprintId={detail.sprint.id} canEdit={Boolean(canManage && !isArchived)} />
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {/* Review Section */}
       {detail.sprint.status === 'completed' || detail.sprint.status === 'review' ? (

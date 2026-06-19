@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarRange, Filter, Printer, Users } from 'lucide-react'
+import { CalendarRange, Filter, Link2, Printer, Users } from 'lucide-react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { formatRelativeDate } from '../../lib/dateUtils'
 import { supabase } from '../../lib/supabase'
@@ -64,6 +64,33 @@ function dateStamp(value) {
   return date.toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch (err) {
+    console.warn('Clipboard API failed, falling back to textarea method:', err)
+  }
+
+  // Fallback for older browsers or if clipboard API fails
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    const success = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    return success
+  } catch (err) {
+    console.error('Copy fallback failed:', err)
+    return false
+  }
+}
+
 function ListTable({ title, count, tone, names }) {
   return (
     <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
@@ -105,6 +132,7 @@ export default function MeetingReportPublicPage() {
   const [roster, setRoster] = useState([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -259,6 +287,20 @@ export default function MeetingReportPublicPage() {
           </div>
 
           <div className="public-report-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={async () => {
+                const success = await copyToClipboard(window.location.href)
+                if (success) {
+                  setCopiedLink(true)
+                  setTimeout(() => setCopiedLink(false), 2000)
+                }
+              }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.08)', color: '#FFFFFF', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+            >
+              <Link2 size={14} />
+              {copiedLink ? 'Link Copied' : 'Copy Link'}
+            </button>
             <button
               type="button"
               onClick={() => window.print()}
