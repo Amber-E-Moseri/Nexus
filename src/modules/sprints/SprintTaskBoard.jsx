@@ -8,11 +8,15 @@ import { TasksProvider, useTasks } from '../tasks/TasksContext'
 import { useTaskFilters } from '../tasks/useTaskFilters'
 
 function SprintTasksInner({ sprintId, canEdit }) {
-  const { tasks, loading, error, statuses, defaultStatusId } = useTasks()
+  const { tasks, loading, error, statuses, defaultStatusId, moveTask } = useTasks()
   const [members, setMembers] = useState([])
   const [view, setView] = useState('kanban')
   const [modal, setModal] = useState(null)
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
+
+  function handleTaskStatusChange({ taskId, newStatus }) {
+    moveTask(taskId, newStatus)
+  }
 
   useEffect(() => {
     getSprintMembers(sprintId).then(setMembers).catch(() => setMembers([]))
@@ -89,8 +93,9 @@ function SprintTasksInner({ sprintId, canEdit }) {
           <div className="h-full overflow-hidden rounded-[16px] border border-[var(--border)] bg-white">
             <TaskListView
               tasks={filtered}
+              statuses={statuses}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
-              onAddTask={canEdit ? () => setModal({ mode: 'create', defaultStatus: defaultStatusId }) : undefined}
+              onTaskStatusChange={canEdit ? handleTaskStatusChange : undefined}
             />
           </div>
         )}

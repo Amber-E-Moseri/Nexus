@@ -1,56 +1,13 @@
+import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useMemo, useState } from 'react'
 import { formatDueDate } from '../../lib/dateUtils'
 import { isTaskCompleted } from '../../lib/taskStatuses'
 import { PRIORITY_STYLES } from '../../lib/priorities'
+import { useDndSensors } from '../../dnd'
 import InlineTaskComposer from './InlineTaskComposer'
-
-function Badge({ bg, text, children }) {
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        padding: '2px 8px',
-        borderRadius: 20,
-        fontSize: 11,
-        fontWeight: 500,
-        background: bg,
-        color: text,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {children}
-    </span>
-  )
-}
-
-function Initials({ name }) {
-  const initials = (name ?? '')
-    .split(' ')
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('')
-
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 22,
-        height: 22,
-        borderRadius: '50%',
-        background: 'var(--accent-light)',
-        color: 'var(--accent)',
-        fontSize: 9,
-        fontWeight: 600,
-        flexShrink: 0,
-      }}
-    >
-      {initials || '?'}
-    </span>
-  )
-}
+import SortableTaskRow from '../../dnd/SortableTaskRow'
+import { TaskRowGhost } from '../../dnd/SortableTaskRow'
 
 function taskMatchesStatus(task, status) {
   return task.status_id === status.id || (!task.status_id && task.status === status.legacy_key)
@@ -65,8 +22,12 @@ export default function TaskListView({
   defaultDepartmentId = '',
   listId = null,
   onCreateTask,
+  onTaskReorder,
+  onTaskStatusChange,
 }) {
   const [composerStatusId, setComposerStatusId] = useState(null)
+  const [activeTaskId, setActiveTaskId] = useState(null)
+  const sensors = useDndSensors()
 
   const sorted = useMemo(
     () => [...tasks].sort((a, b) => new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0)),
@@ -92,82 +53,89 @@ export default function TaskListView({
     return groups
   }, [sorted, statuses])
 
+  function handleDragStart({ active }) {
+    setActiveTaskId(active.id)
+  }
+
+  function handleDragEnd({ active, over }) {
+    setActiveTaskId(null)
+    if (!over) return
+
+    const activeTask = tasks.find((t) => t.id === active.id)
+    if (!activeTask) return
+
+    // Find the over task
+    const overTask = tasks.find((t) => t.id === over.id)
+    if (!overTask) return
+
+    const activeStatus = statuses.find((s) => taskMatchesStatus(activeTask, s))
+    const overStatus = statuses.find((s) => taskMatchesStatus(overTask, s))
+
+    // If dropped on a task in a different status, update the status
+    if (activeStatus && overStatus && activeStatus.id !== overStatus.id) {
+      onTaskStatusChange?.({
+        taskId: activeTask.id,
+        newStatus: overStatus,
+      })
+    } else if (activeStatus && overStatus && activeStatus.id === overStatus.id) {
+      // Same status, reorder
+      const statusTasks = grouped.find((g) => g.status.id === activeStatus.id)?.items || []
+      const activeIndex = statusTasks.findIndex((t) => t.id === active.id)
+      const overIndex = statusTasks.findIndex((t) => t.id === over.id)
+
+      if (activeIndex !== -1 && overIndex !== -1) {
+        const reordered = [...statusTasks]
+        const [movedTask] = reordered.splice(activeIndex, 1)
+        reordered.splice(overIndex, 0, movedTask)
+
+        onTaskReorder?.({
+          taskId: activeTask.id,
+          fromIndex: activeIndex,
+          toIndex: overIndex,
+          statusId: activeStatus.id,
+        })
+      }
+    }
+  }
+
+  function handleDragCancel() {
+    setActiveTaskId(null)
+  }
+
+  const activeTask = activeTaskId ? tasks.find((t) => t.id === activeTaskId) : null
+
+  const allTaskIds = useMemo(() => tasks.map((t) => t.id), [tasks])
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      {grouped.map(({ status, items }) => (
-        <section key={status.id} style={{ border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden', background: '#FFFFFF' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 16px', borderBottom: '1px solid var(--border)', background: '#FCFAF6' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: status.color }} />
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>
-              {status.name}
-            </span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-tertiary)' }}>{items.length}</span>
-          </div>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {grouped.map(({ status, items }) => (
+          <section key={status.id} style={{ border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden', background: '#FFFFFF' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 16px', borderBottom: '1px solid var(--border)', background: '#FCFAF6' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: status.color }} />
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>
+                {status.name}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-tertiary)' }}>{items.length}</span>
+            </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {items.map((task) => {
-              const due = formatDueDate(task.due_date)
-              const dueColor = due.status === 'overdue'
-                ? 'var(--coral-dark)'
-                : due.status === 'today'
-                  ? 'var(--accent)'
-                  : due.status === 'soon'
-                    ? 'var(--amber)'
-                    : 'var(--text-secondary)'
-
-              return (
-                <button
-                  key={task.id}
-                  onClick={() => onTaskClick(task)}
-                  type="button"
-                  style={{
-                    cursor: 'pointer',
-                    border: 'none',
-                    borderBottom: '1px solid var(--border)',
-                    background: '#FFFFFF',
-                    padding: '14px 16px',
-                    textAlign: 'left',
-                  }}
-                  onMouseEnter={(event) => { event.currentTarget.style.background = 'var(--surface-secondary)' }}
-                  onMouseLeave={(event) => { event.currentTarget.style.background = '#FFFFFF' }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
-                      {(task.department?.name ?? 'Task').toUpperCase()}
-                    </span>
-                    <Badge {...(PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium)}>
-                      {task.priority}
-                    </Badge>
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: 'var(--text-primary)',
-                      textDecoration: isTaskCompleted(task) ? 'line-through' : 'none',
-                      opacity: isTaskCompleted(task) ? 0.55 : 1,
-                    }}
-                  >
-                    {task.title}
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
-                    {task.assignee ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <Initials name={task.assignee.name} />
-                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{task.assignee.name}</span>
-                      </span>
-                    ) : null}
-                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>□ {task.subtasks?.filter((subtask) => isTaskCompleted(subtask)).length ?? 0}/{task.subtasks?.length ?? 0}</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>💬 {task.comments?.[0]?.count ?? 0}</span>
-                    <span style={{ marginLeft: 'auto', fontSize: 12, color: task.due_date ? dueColor : 'var(--text-tertiary)', fontWeight: due.status === 'normal' ? 400 : 500 }}>
-                      {task.due_date ? due.label : 'No due date'}
-                    </span>
-                  </div>
-                </button>
-              )
-            })}
+            <SortableContext items={items.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {items.map((task) => (
+                  <SortableTaskRow
+                    key={task.id}
+                    task={task}
+                    onClick={() => onTaskClick(task)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
 
             {canAddTask ? (
               composerStatusId === status.id ? (
@@ -210,15 +178,19 @@ export default function TaskListView({
                 </button>
               )
             ) : null}
-          </div>
-        </section>
-      ))}
+          </section>
+        ))}
 
-      {grouped.every((group) => group.items.length === 0) ? (
-        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
-          No tasks match the current filters.
-        </div>
-      ) : null}
-    </div>
+        {grouped.every((group) => group.items.length === 0) ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+            No tasks match the current filters.
+          </div>
+        ) : null}
+      </div>
+
+      <DragOverlay dropAnimation={{ duration: 150, easing: 'ease' }}>
+        {activeTask ? <TaskRowGhost task={activeTask} /> : null}
+      </DragOverlay>
+    </DndContext>
   )
 }

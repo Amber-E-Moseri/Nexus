@@ -238,9 +238,13 @@ function DeptBoardView({ dept, onTaskClick, onAddTask }) {
 }
 
 function DeptListView({ dept, onTaskClick, onAddTask }) {
-  const { tasks, loading, error, statuses, defaultStatusId } = useTasks()
+  const { tasks, loading, error, statuses, defaultStatusId, moveTask } = useTasks()
   const members = useDeptMembers(dept?.id)
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
+
+  function handleTaskStatusChange({ taskId, newStatus }) {
+    moveTask(taskId, newStatus)
+  }
 
   if (loading) return <div style={{ padding: '1rem', color: '#7A6F5E', fontSize: 13 }}>Loading…</div>
   if (error) return <div style={{ padding: '24px', color: '#C94830', fontSize: 13 }}>Failed to load tasks: {error}</div>
@@ -285,8 +289,9 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
           <div style={{ flex: 1, overflow: 'hidden', background: 'white', borderRadius: 12, border: '1px solid var(--border)' }}>
             <TaskListView
               tasks={filtered}
+              statuses={statuses}
               onTaskClick={onTaskClick}
-              onAddTask={() => onAddTask(defaultStatusId)}
+              onTaskStatusChange={handleTaskStatusChange}
             />
           </div>
         ) : (

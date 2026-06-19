@@ -5,7 +5,7 @@ import { SlidersHorizontal } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { getMonthEvents } from '../../lib/calendar'
 import { hasPermission } from '../../lib/permissions'
-import { archiveSpace, canManageSpace, createFolder, createList, deleteFolder, deleteList, getFolders, getLists, getSpaceActivity, getSpaceDetail, getSpaceListsCount, getSpaceMembers, getSpaceMeetings, getSpaceSprints, getSpaceTasks, restoreSpace, SPACE_TYPE_LABELS, updateFolder, updateList, updateSpace, updateTaskDueDate } from '../../lib/spaces'
+import { archiveSpace, canManageSpace, createFolder, createList, deleteFolder, deleteList, getFolders, getLists, getSpaceDetail, getSpaceListsCount, getSpaceMembers, getSpaceMeetings, getSpaceSprints, getSpaceTasks, restoreSpace, SPACE_TYPE_LABELS, updateFolder, updateList, updateSpace, updateTaskDueDate } from '../../lib/spaces'
 import Badge from '../../components/ui/Badge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import CalendarGrid from '../../modules/calendar/CalendarGrid'
@@ -22,14 +22,6 @@ import TaskModal from '../../modules/tasks/TaskModal'
 import { TasksProvider, useTasks } from '../../modules/tasks/TasksContext'
 import { useTaskFilters } from '../../modules/tasks/useTaskFilters'
 import { mergeTaskFieldSettings, normalizeTaskFieldSettings, TASK_FIELD_OPTIONS } from '../../lib/taskFieldSettings'
-import {
-  formatActivityDateTime,
-  formatActivityRelativeTime,
-  getActivityActionLabel,
-  getActivityEntityPath,
-  getActivityEntityText,
-  getActivityInitials,
-} from '../../lib/activityLog'
 import FileList from '../../components/files/FileList'
 
 const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Sprints', 'Activity', 'Files', 'Automations', 'Members', 'Integrations', 'Settings']
@@ -685,7 +677,7 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
 
 function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', spaceFieldSettings = null, selectedListId = null, folders = [], lists = [] }) {
   const { profile } = useAuth()
-  const { tasks, loading, error, statuses, addTask } = useTasks()
+  const { tasks, loading, error, statuses, addTask, moveTask } = useTasks()
   const [modal, setModal] = useState(null)
   const [boardFiltersOpen, setBoardFiltersOpen] = useState(false)
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
@@ -732,6 +724,15 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
       list_id: listId ?? selectedListId ?? null,
       source: 'manual',
     })
+  }
+
+  function handleTaskStatusChange({ taskId, newStatus }) {
+    moveTask(taskId, newStatus)
+  }
+
+  function handleTaskReorder({ taskId }) {
+    // Reordering within same status is handled by sort_order updates
+    // For now, we don't need to do anything here as the UI will reflect the change
   }
 
   if (loading) return <div className="flex justify-center py-16"><LoadingSpinner label="Loading tasks" /></div>
@@ -803,6 +804,8 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
               canAddTask={canManage}
               onCreateTask={handleInlineCreateTask}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
+              onTaskStatusChange={canManage ? handleTaskStatusChange : undefined}
+              onTaskReorder={canManage ? handleTaskReorder : undefined}
             />
           </div>
         )}
@@ -851,75 +854,52 @@ function SpaceMembersTab({ members }) {
   )
 }
 
-function SpaceActivityTab({ departmentId }) {
-  const [activities, setActivities] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    loadActivities()
-  }, [departmentId])
-
-  async function loadActivities() {
-    try {
-      setLoading(true)
-      const activities = await getSpaceActivity(departmentId)
-      setActivities(activities)
-    } catch (err) {
-      console.error('Error loading space activity:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (loading) {
-    return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading...</div>
-  }
+function SpaceActivityTab({ tasks, members }) {
+  const recentActivity = [...(tasks ?? [])]
+    .sort((left, right) => new Date(right.updated_at ?? right.created_at ?? 0) - new Date(left.updated_at ?? left.created_at ?? 0))
 
   return (
     <div className="overflow-hidden rounded-[24px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)]">
       <div className="divide-y divide-[var(--border)]">
-        {activities.length === 0 ? (
+        {recentActivity.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-            No activity in the last 30 days.
+            No recent activity.
           </div>
         ) : (
-          activities.map((log) => (
-            <div key={log.id} style={{ padding: '16px 20px', display: 'flex', gap: 12 }}>
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  background: '#4C2A92',
-                  color: '#FFFFFF',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  flexShrink: 0,
-                }}
-              >
-                {getActivityInitials(log.user?.name ?? '?')}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.45 }}>
-                  <span style={{ fontWeight: 600 }}>{log.user?.name || 'Unknown'}</span>{' '}
-                  <span>{getActivityActionLabel(log.action)}</span>{' '}
-                  {getActivityEntityPath(log) ? (
-                    <Link to={getActivityEntityPath(log)} className="text-[var(--accent)] underline">
-                      {getActivityEntityText(log)}
-                    </Link>
-                  ) : (
-                    <span>{getActivityEntityText(log)}</span>
-                  )}
+          recentActivity.map((task, index) => {
+            const member = members.find((item) => item.id === task.assignee_id) ?? members[index % Math.max(members.length, 1)]
+            return (
+              <div key={task.id} style={{ padding: '16px 20px', display: 'flex', gap: 12 }}>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    background: member?.avatar_color ?? '#5B34C7',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  {getInitials(member?.name ?? task.title)}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
-                  {formatActivityRelativeTime(log.timestamp)} · {formatActivityDateTime(log.timestamp)}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.45 }}>
+                    <span style={{ fontWeight: 600 }}>{member?.name ?? 'Team member'}</span>{' '}
+                    <span>updated</span>{' '}
+                    <span style={{ fontWeight: 500 }}>"{task.title}"</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                    {formatRelativeTime(task.updated_at ?? task.created_at)}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
     </div>
@@ -1040,6 +1020,10 @@ export default function SpaceOverview() {
     if (listId) {
       setSelectedListId(listId)
     }
+    const openOrganizer = params.get('organizer')
+    if (openOrganizer === 'true') {
+      setOrganizerOpen(true)
+    }
   }, [location.search])
 
   async function loadDetail() {
@@ -1139,7 +1123,7 @@ export default function SpaceOverview() {
               <div>Deadlines and scheduled work for this space — {new Date(calendarYear, calendarMonth, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })}.</div>
               <div className="flex flex-wrap items-center gap-4 text-xs">
                 {[
-                  ['Not Started', 'open'],
+                  ['To Do', 'open'],
                   ['In Progress', 'in_progress'],
                   ['Review', 'review'],
                   ['Blocked', 'blocked'],
@@ -1198,7 +1182,7 @@ export default function SpaceOverview() {
         </div>
       ) : null}
       {activeTab === 'Sprints' ? <div role="tabpanel" id="tabpanel-sprints" aria-labelledby="tab-sprints" tabIndex={0}><SpaceSprintsTab canManage={canManage} sprints={spaceSprints} spaceColor={space.color} onCreate={() => setShowSprintModal(true)} onOpen={(sprint) => navigate(`/sprints/${sprint.id}`)} /></div> : null}
-      {activeTab === 'Activity' ? <div role="tabpanel" id="tabpanel-activity" aria-labelledby="tab-activity" tabIndex={0}><SpaceActivityTab departmentId={spaceId} /></div> : null}
+      {activeTab === 'Activity' ? <div role="tabpanel" id="tabpanel-activity" aria-labelledby="tab-activity" tabIndex={0}><SpaceActivityTab tasks={spaceTasks} members={spaceMembers} /></div> : null}
       {activeTab === 'Files' ? <div role="tabpanel" id="tabpanel-files" aria-labelledby="tab-files" tabIndex={0}><div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]"><FileList entityType="space" entityId={spaceId} showUpload={true} /></div></div> : null}
       {activeTab === 'Automations' ? <div role="tabpanel" id="tabpanel-automations" aria-labelledby="tab-automations" tabIndex={0}><SpaceAutomationsTab space={space} canManage={canManageStatuses} /></div> : null}
       {activeTab === 'Members' ? <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}><SpaceMembersTab members={spaceMembers} /></div> : null}
