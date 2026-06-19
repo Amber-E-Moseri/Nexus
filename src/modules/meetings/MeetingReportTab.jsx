@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../context/ToastContext'
+import { logAbsenceFollowup } from '../../lib/meetings/absenceFollowupLib'
 import AbsenceBatchConfirmModal from '../../components/meetings/AbsenceBatchConfirmModal'
 
 const PRINT_STYLES = `
@@ -113,6 +114,33 @@ function displaySubgroup(subgroup) {
 
 function formatSubgroupValue(subgroup) {
   return displaySubgroup(subgroup) ?? '-'
+}
+
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch (err) {
+    console.warn('Clipboard API failed, falling back to textarea method:', err)
+  }
+
+  // Fallback for older browsers or if clipboard API fails
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    const success = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    return success
+  } catch (err) {
+    console.error('Copy fallback failed:', err)
+    return false
+  }
 }
 
 const SKIP_COLS = new Set(['group name', 'group', 'subgroup', 'meeting name'])
@@ -884,6 +912,7 @@ export default function MeetingReportTab() {
 
   const [emailSending, setEmailSending] = useState(false)
   const [emailConfirmation, setEmailConfirmation] = useState(null)
+  const [exportingToDrive, setExportingToDrive] = useState(false)
   const { showToast } = useToast()
 
   useEffect(() => {
@@ -974,7 +1003,7 @@ export default function MeetingReportTab() {
     setRosterError(null)
     const { data, error } = await supabase
       .from('expected_attendees')
-      .select('id, full_name, match_key, subgroup, leadership_category, active')
+      .select('id, full_name, match_key, subgroup, leadership_category, email, active')
       .eq('active', true)
       .order('subgroup')
       .order('full_name')
@@ -1112,7 +1141,7 @@ export default function MeetingReportTab() {
   async function fetchReportRoster() {
     let query = supabase
       .from('expected_attendees')
-      .select('id, full_name, match_key, subgroup, leadership_category, active')
+      .select('id, full_name, match_key, subgroup, leadership_category, email, active')
       .eq('active', true)
       .order('subgroup')
       .order('full_name')
@@ -1321,17 +1350,45 @@ export default function MeetingReportTab() {
 
       if (templateError) throw templateError
 
+      const emailSubject = template?.subject || `We missed you at ${report.label}`
+      const emailBody = template?.body || 'Hi {{name}}, we missed you at {{meeting_label}}. Please review the meeting attendance report.'
+
       const { data, error } = await supabase.functions.invoke('send-absence-emails', {
         body: {
           report_id: report.id,
           recipients: emailConfirmation.recipients,
-          subject: template?.subject || `We missed you at ${report.label}`,
-          body_template: template?.body || 'Hi {{name}}, we missed you at {{meeting_label}}. Please review the meeting attendance report.',
+          subject: emailSubject,
+          body_template: emailBody,
           meeting_label: report.label,
         },
       })
 
       if (error) throw error
+
+      // Log each sent email to absence_follow_ups table
+      const currentUser = auth?.user?.id
+      const sentAt = new Date().toISOString()
+
+      for (const recipient of emailConfirmation.recipients) {
+        try {
+          await logAbsenceFollowup(
+            report.id,
+            recipient.user_id,
+            report.department_id,
+            {
+              subject: emailSubject,
+              body: emailBody,
+              status: 'sent',
+              sentAt,
+              reason: 'absent',
+            },
+            currentUser,
+          )
+        } catch (logErr) {
+          // Log error but don't fail the whole operation
+          console.error(`Failed to log email for ${recipient.name}:`, logErr)
+        }
+      }
 
       let message = `Sent to ${data.sent} member${data.sent !== 1 ? 's' : ''}`
       if (data.skipped > 0) {
@@ -1354,7 +1411,11 @@ export default function MeetingReportTab() {
 
     try {
       // Generate report text content
-      const reportDate = report.reportDate ? new Date(report.reportDate).toLocaleDateString() : new Date().toLocaleDateString()
+      const reportDate = new Date().toLocaleDateString()
+      const presentNames = (report.present || []).map(p => p.name)
+      const absentNames = (report.absent || []).map(p => p.name)
+      const unexpectedNames = (report.unexpected || []).map(p => p.name)
+
       const reportText = `Meeting Report
 Title: ${report.label}
 Date: ${reportDate}
@@ -1369,18 +1430,25 @@ Reach: ${Math.round((report.reachPct || 0) * 100)}%
 
 Present Leaders
 ---------------
-${report.presentNames && report.presentNames.length > 0 ? report.presentNames.join('\n') : 'None'}
+${presentNames.length > 0 ? presentNames.join('\n') : 'None'}
 
 Absent Leaders
 --------------
-${report.absentNames && report.absentNames.length > 0 ? report.absentNames.join('\n') : 'None'}
+${absentNames.length > 0 ? absentNames.join('\n') : 'None'}
 
 New Leaders
 -----------
-${report.unexpectedNames && report.unexpectedNames.length > 0 ? report.unexpectedNames.join('\n') : 'None'}
+${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
 `
 
-      const { data: { session } } = await supabase.auth.getSession()
+      setExportingToDrive(true)
+
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !session) {
+        showToast('Please sign in to save to Google Drive', { tone: 'error' })
+        return
+      }
+
       const fileName = `Meeting Report - ${report.label} - ${reportDate}.txt`
 
       const formData = new FormData()
@@ -1393,7 +1461,7 @@ ${report.unexpectedNames && report.unexpectedNames.length > 0 ? report.unexpecte
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${session?.access_token}`,
+            Authorization: `Bearer ${session.access_token}`,
           },
           body: formData,
         }
@@ -1408,6 +1476,8 @@ ${report.unexpectedNames && report.unexpectedNames.length > 0 ? report.unexpecte
       showToast('Meeting report saved to Google Drive!', { tone: 'success' })
     } catch (err) {
       showToast(`Export error: ${String(err)}`, { tone: 'error' })
+    } finally {
+      setExportingToDrive(false)
     }
   }
 
@@ -1485,11 +1555,11 @@ ${report.unexpectedNames && report.unexpectedNames.length > 0 ? report.unexpecte
                   <button
                     type="button"
                     onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(shareUrl)
+                      const success = await copyToClipboard(shareUrl)
+                      if (success) {
                         setCopiedLink(true)
                         setTimeout(() => setCopiedLink(false), 2000)
-                      } catch {
+                      } else {
                         setSaveError('Failed to copy report link.')
                       }
                     }}
@@ -1531,13 +1601,15 @@ ${report.unexpectedNames && report.unexpectedNames.length > 0 ? report.unexpecte
                 <button
                   type="button"
                   onClick={handleExportToGoogleDrive}
+                  disabled={exportingToDrive}
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                     background: '#2D1B69', color: 'white', border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: exportingToDrive ? 'not-allowed' : 'pointer',
+                    opacity: exportingToDrive ? 0.6 : 1,
                   }}
                 >
-                  <Files size={13} /> Save to Drive
+                  <Files size={13} /> {exportingToDrive ? 'Saving...' : 'Save to Drive'}
                 </button>
                 <button
                   type="button"
@@ -1631,86 +1703,92 @@ ${report.unexpectedNames && report.unexpectedNames.length > 0 ? report.unexpecte
                   )}
                 </>
               ) : (
-                <div className="screen-only" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#2D2A22' }}>Per-Subgroup Reports</div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPrintingSubgroup(null)
-                        setTimeout(() => window.print(), 300)
-                      }}
-                      style={{ border: '1px solid #EDE8DC', background: 'white', color: '#4C2A92', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-                    >
-                      Print All
-                    </button>
-                  </div>
-                  {regionalSubgroups.map((subgroup) => {
-                    const subgroupData = report.bySubgroup?.[subgroup]
-                    if (!subgroupData) return null
-                    const subgroupPct = subgroupData.expected.length > 0 ? Math.round((subgroupData.present.length / subgroupData.expected.length) * 100) : 0
-                    return (
-                      <div key={subgroup} style={{ background: 'white', borderRadius: 12, border: '1px solid #EDE8DC', padding: 16, boxShadow: '0 1px 4px rgba(28,22,16,.06)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-                          <div>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: '#2D2A22' }}>{subgroup}</div>
-                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8, fontSize: 11.5, color: '#6B6560' }}>
-                              <span>Expected {subgroupData.expected.length}</span>
-                              <span>Present {subgroupData.present.length}</span>
-                              <span>Absent {subgroupData.absent.length}</span>
-                              <span style={{ color: subgroupPct >= 65 ? '#166534' : subgroupPct >= 35 ? '#92400E' : '#991B1B', fontWeight: 700 }}>{subgroupPct}%</span>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPrintingSubgroup(subgroup)
-                              setTimeout(() => {
-                                window.print()
-                                setPrintingSubgroup(null)
-                              }, 300)
-                            }}
-                            style={{ border: '1px solid #EDE8DC', background: 'white', color: '#4C2A92', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-                          >
-                            Print This Subgroup
-                          </button>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
-                          {subgroupData.present.length > 0 && (
-                            <div>
-                              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#166534', marginBottom: 6 }}>Present ({subgroupData.present.length})</div>
-                              <div>
-                                {subgroupData.present.map((item, index) => (
-                                  <PersonChip key={item.name + index} person={item} bg="#EEF8F2" color="#1B5E3C" simple={report.fromHistory} />
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {subgroupData.absent.length > 0 && (
-                            <div>
-                              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#991B1B', marginBottom: 6 }}>Absent ({subgroupData.absent.length})</div>
-                              <div>
-                                {subgroupData.absent.map((item, index) => (
-                                  <PersonChip key={item.name + index} person={item} bg="#FEF0ED" color="#7A1C24" simple={report.fromHistory} />
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {report.visitors?.length > 0 && (
-                            <div>
-                              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#92400E', marginBottom: 6 }}>New Leaders ({report.visitors.length})</div>
-                              <div>
-                                {report.visitors.map((name, index) => (
-                                  <PersonChip key={name + index} person={name} bg="#FFF8EC" color="#7A5A00" simple />
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                <>
+                  <SubgroupTabBar subgroups={reportSubgroups} activeSubgroup={activeSubgroup} onChange={setActiveSubgroup} />
+
+                  {activeSubgroup && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '14px 16px', background: 'white', borderRadius: 12, boxShadow: '0 1px 4px rgba(28,22,16,.06)' }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#2D2A22' }}>Viewing: {activeSubgroup}</div>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6, fontSize: 12, color: '#6B6560' }}>
+                          <span>Expected {subgroupBreakdown.find(g => g.subgroup === activeSubgroup)?.expectedCount ?? 0}</span>
+                          <span>Present {subgroupBreakdown.find(g => g.subgroup === activeSubgroup)?.present?.length ?? 0}</span>
+                          <span>Absent {subgroupBreakdown.find(g => g.subgroup === activeSubgroup)?.absent?.length ?? 0}</span>
+                          <span style={{ fontWeight: 700, color: '#4C2A92' }}>{Math.round((subgroupBreakdown.find(g => g.subgroup === activeSubgroup)?.reachPct ?? 0) * 100)}%</span>
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPrintingSubgroup(activeSubgroup)
+                            setTimeout(() => {
+                              window.print()
+                              setPrintingSubgroup(null)
+                            }, 300)
+                          }}
+                          style={{ border: '1px solid #EDE8DC', background: 'white', color: '#4C2A92', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          Print This Subgroup
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPrintingSubgroup(null)
+                            setTimeout(() => window.print(), 300)
+                          }}
+                          style={{ border: '1px solid #EDE8DC', background: 'white', color: '#4C2A92', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          Print All
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <CategoryFilterBar categoryOptions={categoryOptions} activeCategory={activeCategory} onChange={setActiveCategory} />
+
+                  {categoryFilteredPresent.length > 0 && (
+                    <div className="report-name-section screen-only" style={{ background: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(28,22,16,.06)' }}>
+                      <div style={{ background: '#1E1A2E', color: '#E8E0FF', padding: '8px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Present</span>
+                        <span style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 999, padding: '1px 9px', fontWeight: 700 }}>{categoryFilteredPresent.length}</span>
+                      </div>
+                      <div style={{ padding: '12px 14px' }}>
+                        {categoryFilteredPresent.map((item, index) => (
+                          <PersonChip key={item.name + index} person={item} bg="#EEF8F2" color="#1B5E3C" simple={report.fromHistory} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {categoryFilteredAbsent.length > 0 && (
+                    <div className="report-name-section screen-only" style={{ background: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(28,22,16,.06)' }}>
+                      <div style={{ background: '#1E1A2E', color: '#E8E0FF', padding: '8px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Absent</span>
+                        <span style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 999, padding: '1px 9px', fontWeight: 700 }}>{categoryFilteredAbsent.length}</span>
+                      </div>
+                      <div style={{ padding: '12px 14px' }}>
+                        {categoryFilteredAbsent.map((item, index) => (
+                          <PersonChip key={item.name + index} person={item} bg="#FEF0ED" color="#7A1C24" simple={report.fromHistory} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {visibleReport.unexpected.length > 0 && (
+                    <div className="report-name-section screen-only" style={{ background: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(28,22,16,.06)' }}>
+                      <div style={{ background: '#1E1A2E', color: '#E8E0FF', padding: '8px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>New Leaders</span>
+                        <span style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 999, padding: '1px 9px', fontWeight: 700 }}>{visibleReport.unexpected.length}</span>
+                      </div>
+                      <div style={{ padding: '12px 14px' }}>
+                        {visibleReport.unexpected.map((item, index) => (
+                          <PersonChip key={item.name + index} person={item.name} bg="#FFF8EC" color="#7A5A00" simple />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {saveError && (
