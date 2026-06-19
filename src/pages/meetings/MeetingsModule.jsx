@@ -11,11 +11,25 @@ import { MeetingsProvider } from '../../modules/meetings/MeetingsContext'
 import MeetingReportTab from '../../modules/meetings/MeetingReportTab'
 import ExpectedAttendeesPage from './ExpectedAttendeesPage'
 
-function MeetingsContent({ viewMode, canManage, onAddMeeting, onStartLive }) {
+function MeetingsViewContent({ viewMode, canManage, onAddMeeting, onStartLive }) {
   if (viewMode === 'workspace') {
     return <MeetingsWorkspace canManage={canManage} onStartLive={onStartLive} />
   }
   return <MeetingsList canManage={canManage} onAddMeeting={onAddMeeting} />
+}
+
+function MeetingsContent({ liveSession, viewMode, canManage, onAddMeeting, onStartLive, onCloseLive }) {
+  if (liveSession) {
+    return <LiveMinutesMode meeting={liveSession} onClose={onCloseLive} />
+  }
+  return (
+    <MeetingsViewContent
+      viewMode={viewMode}
+      canManage={canManage}
+      onAddMeeting={onAddMeeting}
+      onStartLive={onStartLive}
+    />
+  )
 }
 
 function MeetingsModuleFallback() {
@@ -338,16 +352,14 @@ function MeetingsModuleFallback() {
           </div>
         </div>
 
-        {liveSession ? (
-          <LiveMinutesMode meeting={liveSession} onClose={() => setLiveSession(null)} />
-        ) : (
-          <MeetingsContent
-            viewMode={viewMode}
-            canManage={canManage}
-            onAddMeeting={() => setShowModal(true)}
-            onStartLive={(meeting) => setLiveSession(meeting)}
-          />
-        )}
+        <MeetingsContent
+          liveSession={liveSession}
+          viewMode={viewMode}
+          canManage={canManage}
+          onAddMeeting={() => setShowModal(true)}
+          onStartLive={(meeting) => setLiveSession(meeting)}
+          onCloseLive={() => setLiveSession(null)}
+        />
 
         {showModal ? <MeetingModal departmentId={selectedDepartmentId} onClose={() => setShowModal(false)} /> : null}
       </div>
