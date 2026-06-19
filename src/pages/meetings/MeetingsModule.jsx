@@ -5,11 +5,16 @@ import { getAllDepartments } from '../../lib/automations'
 import { supabase } from '../../lib/supabase'
 import MeetingModal from '../../modules/meetings/MeetingModal'
 import MeetingsList from '../../modules/meetings/MeetingsList'
+import MeetingsWorkspace from '../../modules/meetings/MeetingsWorkspace'
+import LiveMinutesMode from '../../modules/meetings/LiveMinutesMode'
 import { MeetingsProvider } from '../../modules/meetings/MeetingsContext'
 import MeetingReportTab from '../../modules/meetings/MeetingReportTab'
 import ExpectedAttendeesPage from './ExpectedAttendeesPage'
 
-function MeetingsContent({ canManage, onAddMeeting }) {
+function MeetingsContent({ viewMode, canManage, onAddMeeting, onStartLive }) {
+  if (viewMode === 'workspace') {
+    return <MeetingsWorkspace canManage={canManage} onStartLive={onStartLive} />
+  }
   return <MeetingsList canManage={canManage} onAddMeeting={onAddMeeting} />
 }
 
@@ -20,6 +25,7 @@ function MeetingsModuleFallback() {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(profile?.department_id ?? '')
   const [showModal, setShowModal] = useState(false)
   const [viewMode, setViewMode] = useState('log')
+  const [liveSession, setLiveSession] = useState(null)
   const [kpiStats, setKpiStats] = useState({ logged30d: null, actionItems: null, withMinutes: null, deptCount: null })
   const isSuperAdmin = role === 'super_admin'
   const canManage = role !== 'member'
@@ -240,10 +246,10 @@ function MeetingsModuleFallback() {
           }}
         >
           {[
-            { label: 'Logged (30D)', value: kpiStats.logged30d, bg: '#4C2A92', textColor: 'white' },
-            { label: 'Action Items', value: kpiStats.actionItems, bg: '#1C1C2E', textColor: 'white' },
-            { label: 'With Minutes', value: kpiStats.withMinutes, bg: '#E8A020', textColor: 'white' },
-            { label: 'Departments', value: kpiStats.deptCount, bg: '#FEF0ED', textColor: '#C94830', border: '#F9C4B3' },
+            { label: 'Logged', value: kpiStats.logged30d, bg: '#4C2A92', textColor: 'white' },
+            { label: 'Actions', value: kpiStats.actionItems, bg: '#1C1C2E', textColor: 'white' },
+            { label: 'Minutes', value: kpiStats.withMinutes, bg: 'white', textColor: '#E8A020', border: '#E5E5E4', numColor: '#E8A020' },
+            { label: 'Depts', value: kpiStats.deptCount, bg: 'white', textColor: '#16A34A', border: '#DCFCE7', numColor: '#16A34A' },
           ].map((stat, idx) => (
             <div
               key={idx}
@@ -264,7 +270,7 @@ function MeetingsModuleFallback() {
                   width: 80,
                   height: 80,
                   borderRadius: 999,
-                  background: 'rgba(255,255,255,0.1)',
+                  background: stat.bg === 'white' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)',
                 }}
               />
               <div
@@ -285,7 +291,7 @@ function MeetingsModuleFallback() {
                   fontWeight: 800,
                   lineHeight: 1,
                   marginTop: 8,
-                  color: stat.textColor,
+                  color: stat.numColor || stat.textColor,
                 }}
               >
                 {stat.value ?? '—'}
@@ -332,7 +338,16 @@ function MeetingsModuleFallback() {
           </div>
         </div>
 
-        <MeetingsContent canManage={canManage} onAddMeeting={() => setShowModal(true)} />
+        {liveSession ? (
+          <LiveMinutesMode meeting={liveSession} onClose={() => setLiveSession(null)} />
+        ) : (
+          <MeetingsContent
+            viewMode={viewMode}
+            canManage={canManage}
+            onAddMeeting={() => setShowModal(true)}
+            onStartLive={(meeting) => setLiveSession(meeting)}
+          />
+        )}
 
         {showModal ? <MeetingModal departmentId={selectedDepartmentId} onClose={() => setShowModal(false)} /> : null}
       </div>
