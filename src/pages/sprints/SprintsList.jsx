@@ -34,7 +34,6 @@ export default function SprintsList() {
   const [query, setQuery] = useState('')
   const [showModal, setShowModal] = useState(searchParams.get('new') === 'true')
   const [loading, setLoading] = useState(true)
-  const [showArchivedGroup, setShowArchivedGroup] = useState(false)
 
   async function loadSprints() {
     setLoading(true)
@@ -71,10 +70,6 @@ export default function SprintsList() {
     [filter, searched],
   )
 
-  const grouped = useMemo(
-    () => STATUS_ORDER.map((status) => ({ status, items: searched.filter((sprint) => sprint.status === status) })),
-    [searched],
-  )
 
   async function handleDuplicate(sprintId) {
     await duplicateSprint(sprintId, profile.id)
@@ -149,51 +144,8 @@ export default function SprintsList() {
         <div style={{ padding: '1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>
           Loading...
         </div>
-      ) : filter === 'all' ? (
-        hasAnySprints ? (
-          <div className="space-y-6">
-            {grouped.map(({ status, items }) => {
-              if (items.length === 0) return null
-              const collapsed = status === 'archived' && !showArchivedGroup
-              return (
-                <section key={status} className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
-                      {status} {status === 'archived' && items.length > 0 ? `(${items.length})` : ''}
-                    </h2>
-                    {status === 'archived' ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowArchivedGroup((value) => !value)}
-                        className="text-xs text-[var(--accent)]"
-                      >
-                        {collapsed ? '▶ Show archived' : '▼ Hide archived'}
-                      </button>
-                    ) : null}
-                  </div>
-                  {!collapsed ? (
-                    <div className="grid gap-4 xl:grid-cols-2">
-                      {items.map((sprint) => (
-                        <SprintCard
-                          key={sprint.id}
-                          sprint={sprint}
-                          onClick={() => navigate(`/sprints/${sprint.id}`)}
-                          onDuplicate={canCreate ? handleDuplicate : undefined}
-                          onRestore={canCreate ? handleRestore : undefined}
-                          onDelete={canCreate ? handleDelete : undefined}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                </section>
-              )
-            })}
-          </div>
-        ) : (
-          <EmptyState />
-        )
       ) : filtered.length > 0 ? (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-3">
           {filtered.map((sprint) => (
             <SprintCard
               key={sprint.id}
