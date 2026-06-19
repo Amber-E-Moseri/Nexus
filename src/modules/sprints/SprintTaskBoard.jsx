@@ -4,6 +4,7 @@ import KanbanBoard from '../tasks/KanbanBoard'
 import TaskFilters from '../tasks/TaskFilters'
 import TaskListView from '../tasks/TaskListView'
 import TaskModal from '../tasks/TaskModal'
+import SprintReviewView from './SprintReviewView'
 import { TasksProvider, useTasks } from '../tasks/TasksContext'
 import { useTaskFilters } from '../tasks/useTaskFilters'
 
@@ -34,7 +35,7 @@ function SprintTasksInner({ sprintId, canEdit }) {
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
         <div className="flex items-center gap-2 rounded-[10px] bg-[var(--surface-secondary)] p-[3px]">
-          {['kanban', 'list'].map((option) => (
+          {['kanban', 'list', 'review'].map((option) => (
             <button
               key={option}
               type="button"
@@ -51,7 +52,7 @@ function SprintTasksInner({ sprintId, canEdit }) {
                 boxShadow: view === option ? '0 1px 3px rgba(20,20,43,0.1)' : 'none',
               }}
             >
-              {option === 'kanban' ? 'Board' : 'List'}
+              {option === 'kanban' ? 'Board' : option === 'list' ? 'List' : 'Review'}
             </button>
           ))}
         </div>
@@ -89,7 +90,7 @@ function SprintTasksInner({ sprintId, canEdit }) {
               readOnly={!canEdit}
             />
           </div>
-        ) : (
+        ) : view === 'list' ? (
           <div className="h-full overflow-hidden rounded-[16px] border border-[var(--border)] bg-white">
             <TaskListView
               tasks={filtered}
@@ -99,6 +100,10 @@ function SprintTasksInner({ sprintId, canEdit }) {
               people={{}}
               priorities={{}}
             />
+          </div>
+        ) : (
+          <div className="h-full overflow-hidden rounded-[16px] border border-[var(--border)] bg-white">
+            <SprintReviewView sprint={{ id: sprintId }} canEdit={canEdit} />
           </div>
         )}
       </div>
