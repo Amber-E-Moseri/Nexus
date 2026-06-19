@@ -4,9 +4,11 @@ import { ChevronDown, ChevronRight, Plus } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../hooks/useAuth'
+import { useDeptMembers } from '../../hooks/useDeptMembers'
 import { formatDueDate } from '../../lib/dateUtils'
 import { getMyTasks, createTask } from '../../lib/tasks'
 import { listTaskStatuses } from '../../lib/taskStatuses'
+import { getMySpaces } from '../../lib/spaces'
 import TaskModal from '../../modules/tasks/TaskModal'
 import TaskComposerModal from '../../modules/tasks/TaskComposerModal'
 
@@ -353,27 +355,31 @@ function loadViewMode() {
 }
 
 export default function MyTasks() {
-  const { profile } = useAuth()
+  const { profile, role } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [tasks, setTasks] = useState([])
   const [statuses, setStatuses] = useState([])
+  const [departments, setDepartments] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null)
   const [viewMode, setViewMode] = useState(loadViewMode)
   const [collapsed, setCollapsed] = useState(loadCollapsed)
+  const deptMembers = useDeptMembers(profile?.department_id)
 
 
   async function load() {
     if (!profile?.id) return
     setLoading(true)
     try {
-      const [taskData, statusData] = await Promise.all([
+      const [taskData, statusData, spacesData] = await Promise.all([
         getMyTasks(profile.id),
         listTaskStatuses(),
+        getMySpaces(profile.id, role, profile.department_id),
       ])
       setTasks(taskData)
       setStatuses(statusData)
+      setDepartments(spacesData.filter((space) => space.status === 'active'))
     } finally {
       setLoading(false)
     }
@@ -381,7 +387,7 @@ export default function MyTasks() {
 
   useEffect(() => {
     load()
-  }, [profile?.id])
+  }, [profile?.id, role])
 
   useEffect(() => {
     const params = new URLSearchParams(location.search)
@@ -599,7 +605,10 @@ export default function MyTasks() {
         <TaskComposerModal
           open={true}
           onOpenChange={(open) => !open && setModal(null)}
+          departments={departments}
+          defaultDepartmentId={profile?.department_id}
           statuses={statuses}
+          teamMembers={deptMembers}
           onSubmit={async (draft) => {
             await createTask(draft)
             await load()
