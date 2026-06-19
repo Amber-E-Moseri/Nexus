@@ -4,6 +4,8 @@ import { useMeetings } from './MeetingsContext'
 import MeetingRecordTabs from './MeetingRecordTabs'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
+import CardGalleryView from '../../components/meetings/CardGalleryView'
+import ViewToggle from '../../components/meetings/ViewToggle'
 
 const TYPE_CHIP_COLORS = {
   general: '#4C2A92',
@@ -221,6 +223,7 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
   const { meetings, loading } = useMeetings()
   const [selectedMeeting, setSelectedMeeting] = useState(null)
   const [activeType, setActiveType] = useState('all')
+  const [viewMode, setViewMode] = useState('list')
   const isMobile = useMediaQuery('(max-width: 640px)')
   const isTablet = useMediaQuery('(max-width: 1024px)')
 
@@ -260,8 +263,15 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
           flexDirection: 'column',
         }}
       >
-        {/* Category filter buttons */}
+        {/* Header with filters and view toggle */}
         <div style={{ paddingLeft: 16, paddingRight: 16, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#1C1C1C' }}>
+              Filter
+            </h3>
+            {!isMobile && <ViewToggle view={viewMode} onViewChange={setViewMode} />}
+          </div>
+
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }} role="group" aria-label="Filter meetings by type">
             <button
               type="button"
@@ -307,68 +317,78 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
           </div>
         </div>
 
-        {/* Meeting list */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-          {filteredMeetings.length === 0 ? (
-            <div style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
-              No meetings in this category
-            </div>
-          ) : (
-            filteredMeetings
-              .sort((a, b) => new Date(b.date) - new Date(a.date))
-              .map((meeting) => (
-                <button
-                  key={meeting.id}
-                  type="button"
-                  onClick={() => setSelectedMeeting(meeting)}
-                  aria-pressed={selectedMeeting?.id === meeting.id}
-                  aria-label={`${meeting.title}, ${new Date(meeting.date).toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}`}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    background: selectedMeeting?.id === meeting.id ? '#F3E8FF' : 'transparent',
-                    border: selectedMeeting?.id === meeting.id ? '2px solid var(--accent)' : 'none',
-                    borderLeft: selectedMeeting?.id === meeting.id ? 'none' : 'none',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    transition: 'all 0.12s',
-                    borderBottom: '1px solid var(--border)',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (selectedMeeting?.id !== meeting.id) e.currentTarget.style.background = '#FAFAF9'
-                  }}
-                  onMouseLeave={(e) => {
-                    if (selectedMeeting?.id !== meeting.id) e.currentTarget.style.background = 'transparent'
-                  }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                    {meeting.title}
-                  </div>
-                  <div style={{ marginTop: 4, display: 'flex', gap: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
-                    <span
-                      style={{
-                        display: 'inline-block',
-                        padding: '2px 6px',
-                        borderRadius: 4,
-                        background: TYPE_CHIP_COLORS[meeting.meeting_type] || '#E5E5E4',
-                        color: 'white',
-                        fontSize: 10,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {meeting.meeting_type?.charAt(0).toUpperCase() + meeting.meeting_type?.slice(1) || 'General'}
-                    </span>
-                    <span>
-                      {new Date(meeting.date).toLocaleDateString('en-CA', {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </span>
-                  </div>
-                </button>
-              ))
-          )}
-        </div>
+        {/* Meeting list or card gallery */}
+        {viewMode === 'list' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {filteredMeetings.length === 0 ? (
+              <div style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+                No meetings in this category
+              </div>
+            ) : (
+              filteredMeetings
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .map((meeting) => (
+                  <button
+                    key={meeting.id}
+                    type="button"
+                    onClick={() => setSelectedMeeting(meeting)}
+                    aria-pressed={selectedMeeting?.id === meeting.id}
+                    aria-label={`${meeting.title}, ${new Date(meeting.date).toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}`}
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      background: selectedMeeting?.id === meeting.id ? '#F3E8FF' : 'transparent',
+                      border: selectedMeeting?.id === meeting.id ? '2px solid var(--accent)' : 'none',
+                      borderLeft: selectedMeeting?.id === meeting.id ? 'none' : 'none',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      transition: 'all 0.12s',
+                      borderBottom: '1px solid var(--border)',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedMeeting?.id !== meeting.id) e.currentTarget.style.background = '#FAFAF9'
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedMeeting?.id !== meeting.id) e.currentTarget.style.background = 'transparent'
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {meeting.title}
+                    </div>
+                    <div style={{ marginTop: 4, display: 'flex', gap: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          background: TYPE_CHIP_COLORS[meeting.meeting_type] || '#E5E5E4',
+                          color: 'white',
+                          fontSize: 10,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {meeting.meeting_type?.charAt(0).toUpperCase() + meeting.meeting_type?.slice(1) || 'General'}
+                      </span>
+                      <span>
+                        {new Date(meeting.date).toLocaleDateString('en-CA', {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
+                    </div>
+                  </button>
+                ))
+            )}
+          </div>
+        ) : (
+          <CardGalleryView
+            meetings={filteredMeetings.sort((a, b) => new Date(b.date) - new Date(a.date))}
+            selectedMeeting={selectedMeeting}
+            onSelectMeeting={setSelectedMeeting}
+            title=""
+            emptyMessage="No meetings in this category"
+          />
+        )}
       </div>
       )}
 
