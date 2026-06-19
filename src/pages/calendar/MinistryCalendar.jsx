@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
-import { Calendar } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { Calendar, Settings } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingEvents, getEventTypes } from '../../lib/calendar'
 import { hasPermission } from '../../lib/permissions'
@@ -14,6 +14,7 @@ export default function MinistryCalendar() {
   const { effectiveRole, profile } = useAuth()
   const { showToast } = useToast()
   const location = useLocation()
+  const navigate = useNavigate()
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth())
   const [events, setEvents] = useState([])
@@ -185,13 +186,25 @@ export default function MinistryCalendar() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <div>
-        <h1 style={{ fontSize: '28px', fontWeight: 600, letterSpacing: '-0.04em', color: 'var(--text-primary)' }}>
-          Ministry Calendar
-        </h1>
-        <p style={{ marginTop: '8px', fontSize: '14px', color: 'var(--text-secondary)' }}>
-          An org-wide view of programs, training, prayer, deadlines, and major ministry events.
-        </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+        <div>
+          <h1 style={{ fontSize: '28px', fontWeight: 600, letterSpacing: '-0.04em', color: 'var(--text-primary)' }}>
+            Ministry Calendar
+          </h1>
+          <p style={{ marginTop: '8px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+            An org-wide view of programs, training, prayer, deadlines, and major ministry events.
+          </p>
+        </div>
+        {(effectiveRole === 'super_admin' || effectiveRole === 'dept_lead') && (
+          <button
+            type="button"
+            onClick={() => navigate('/calendar-management')}
+            title="Calendar Management"
+            className="p-2 rounded-lg border border-[var(--border)] hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)]"
+          >
+            <Settings size={20} />
+          </button>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '24px', alignItems: 'start' }}>
