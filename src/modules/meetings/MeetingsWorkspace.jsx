@@ -10,33 +10,14 @@ const TYPE_CHIP_COLORS = {
   department: '#16A34A',
 }
 
-function groupMeetingsByWeek(meetings) {
-  const now = new Date()
-  const startOfThisWeek = new Date(now)
-  startOfThisWeek.setDate(now.getDate() - now.getDay())
-  startOfThisWeek.setHours(0, 0, 0, 0)
-
-  const startOfLastWeek = new Date(startOfThisWeek)
-  startOfLastWeek.setDate(startOfThisWeek.getDate() - 7)
-
-  const thisWeek = []
-  const lastWeek = []
-  const older = []
-
+function groupMeetingsByCategory(meetings) {
+  const groups = {}
   meetings.forEach((meeting) => {
-    const meetingDate = new Date(meeting.date)
-    meetingDate.setHours(0, 0, 0, 0)
-
-    if (meetingDate >= startOfThisWeek) {
-      thisWeek.push(meeting)
-    } else if (meetingDate >= startOfLastWeek) {
-      lastWeek.push(meeting)
-    } else {
-      older.push(meeting)
-    }
+    const type = meeting.meeting_type || 'general'
+    if (!groups[type]) groups[type] = []
+    groups[type].push(meeting)
   })
-
-  return { thisWeek, lastWeek, older }
+  return groups
 }
 
 function RecordPane({ selectedMeeting, canManage, onStartLive }) {

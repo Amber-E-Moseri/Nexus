@@ -95,7 +95,6 @@ export default function SprintsList() {
   }
 
   const canCreate = role === 'super_admin' || role === 'dept_lead'
-  const hasAnySprints = grouped.some(({ items }) => items.length > 0)
 
   return (
     <div className="space-y-5">
@@ -115,7 +114,7 @@ export default function SprintsList() {
         ) : null}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2">
         <input
           type="search"
           value={query}
@@ -123,21 +122,17 @@ export default function SprintsList() {
           placeholder="Search sprints"
           className="min-w-[220px] rounded-full border border-[var(--border)] bg-white px-4 py-1.5 text-sm text-[var(--text-primary)]"
         />
-        {FILTERS.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => setFilter(option)}
-            className="rounded-full border px-3 py-1.5 text-sm capitalize"
-            style={{
-              borderColor: filter === option ? 'var(--accent)' : 'var(--border)',
-              background: filter === option ? 'var(--accent-light)' : 'white',
-              color: filter === option ? 'var(--accent)' : 'var(--text-secondary)',
-            }}
-          >
-            {option}
-          </button>
-        ))}
+        <select
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-sm text-[var(--text-primary)]"
+        >
+          {FILTERS.map((option) => (
+            <option key={option} value={option}>
+              {option.charAt(0).toUpperCase() + option.slice(1)}
+            </option>
+          ))}
+        </select>
       </div>
 
       {loading ? (
