@@ -128,7 +128,6 @@ function MeetingListItem({ meeting, isActive, onSelect, actionCount = 0 }) {
 }
 
 export default function MeetingsWorkspace({ onStartLive, canManage }) {
-  const navigate = useNavigate()
   const { meetings, loading } = useMeetings()
   const [selectedMeeting, setSelectedMeeting] = useState(null)
 

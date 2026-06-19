@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { getMeetingTasks } from '../../lib/meetings'
 import { getTaskStatusColor, isTaskCompleted } from '../../lib/taskStatuses'
 
@@ -8,13 +8,6 @@ export default function MeetingRecordTabs({ meeting }) {
   const [activeTab, setActiveTab] = useState('Summary')
   const [tasks, setTasks] = useState(null)
   const [tasksError, setTasksError] = useState(null)
-
-  const attendanceList = useMemo(() => {
-    if (!meeting.attendance) return []
-    const present = meeting.attendance.filter((a) => a.status === 'present')
-    const absent = meeting.attendance.filter((a) => a.status !== 'present')
-    return [...present, ...absent]
-  }, [meeting.attendance])
 
   useEffect(() => {
     let active = true
@@ -192,9 +185,9 @@ export default function MeetingRecordTabs({ meeting }) {
 
         {activeTab === 'Attendance' && (
           <div style={{ paddingLeft: 16, paddingRight: 16 }}>
-            {attendanceList.length > 0 ? (
+            {meeting.attendance && meeting.attendance.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {attendanceList.map((entry, idx) => (
+                {meeting.attendance.map((entry, idx) => (
                   <div
                     key={idx}
                     style={{

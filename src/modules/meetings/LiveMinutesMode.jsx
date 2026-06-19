@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useMeetings } from './MeetingsContext'
 
-export default function LiveMinutesMode({ meeting, onClose }) {
+function LiveMinutesModeInner({ meeting, onClose }) {
   const { editMeeting } = useMeetings()
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
-  const [agendaItems, setAgendaItems] = useState([])
   const [currentItemIndex, setCurrentItemIndex] = useState(0)
   const [notes, setNotes] = useState('')
   const [capturedItems, setCapturedItems] = useState([])
@@ -14,12 +13,7 @@ export default function LiveMinutesMode({ meeting, onClose }) {
   const notesRef = useRef(null)
   const timerRef = useRef(null)
 
-  useEffect(() => {
-    if (meeting.agenda) {
-      const items = meeting.agenda.split('\n').filter((l) => l.trim())
-      setAgendaItems(items)
-    }
-  }, [meeting.agenda])
+  const agendaItems = meeting.agenda ? meeting.agenda.split('\n').filter((l) => l.trim()) : []
 
   useEffect(() => {
     if (!isPaused) {
@@ -567,4 +561,8 @@ export default function LiveMinutesMode({ meeting, onClose }) {
       `}</style>
     </div>
   )
+}
+
+export default function LiveMinutesMode({ meeting, onClose }) {
+  return <LiveMinutesModeInner meeting={meeting} onClose={onClose} />
 }
