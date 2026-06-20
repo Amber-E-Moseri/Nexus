@@ -25,25 +25,6 @@ export default function ResetPassword() {
     let active = true
 
     const resolveRecovery = async () => {
-      // PKCE flow: token_hash + type arrive as query params (safe from email scanners)
-      const params = new URLSearchParams(location.search)
-      const tokenHash = params.get('token_hash')
-      const type = params.get('type')
-
-      if (tokenHash && type === 'recovery') {
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: 'recovery',
-        })
-        if (!active) return
-        if (!verifyError) {
-          setRecoveryReady(true)
-          setChecked(true)
-          return
-        }
-      }
-
-      // Implicit flow fallback: access_token in hash
       const { data: { session } } = await supabase.auth.getSession()
       if (!active) return
       if (session?.user || hasRecoveryFragment(location.hash)) {
@@ -66,7 +47,7 @@ export default function ResetPassword() {
       active = false
       subscription.unsubscribe()
     }
-  }, [location.hash, location.search])
+  }, [location.hash])
 
   const handleSubmit = async (event) => {
     event.preventDefault()
