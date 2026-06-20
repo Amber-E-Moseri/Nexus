@@ -144,6 +144,7 @@ Deno.serve(async (req) => {
       email: cleanEmail,
       email_confirm: true,
       user_metadata: { name: cleanName, is_temporary: true },
+      app_metadata: { provider: 'email', providers: ['email'] },
     })
     if (createError || !newUser?.user) {
       return jsonResponse(502, { error: `Failed to create user: ${createError?.message}` })
