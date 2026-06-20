@@ -94,12 +94,12 @@ as $$
       (count(case when ma.status = 'present' then 1 end)::float / nullif(count(m.id), 0) * 100)::integer,
       0
     ) as attendance_percent,
-    max(m.meeting_date) as last_meeting_date,
+    max(m.date) as last_meeting_date,
     u.status
   from public.pastor_members pm
   join public.users u on pm.member_id = u.id
   left join public.meetings m on m.department_id = u.department_id
-    and m.meeting_date >= current_date - interval '30 days'
+    and m.date >= current_date - interval '30 days'
   left join public.meeting_attendance ma on ma.meeting_id = m.id
     and ma.user_id = u.id
   where pm.pastor_id = p_pastor_id
