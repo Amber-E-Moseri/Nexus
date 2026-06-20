@@ -120,36 +120,41 @@ Deno.serve(async (req) => {
   const cleanName = name?.trim() || cleanEmail.split('@')[0]
 
   // 1. Find or create the auth user via Admin API (ensures generateLink works)
-  // Look up by email in public.users first (avoids paginated listUsers)
+  // First check if user already exists in auth.users (may exist without public profile)
+  let userId: string
+  try {
+    const { data: authUsers } = await adminClient.auth.admin.listUsers({ filters: `email:${cleanEmail}` })
+    if (authUsers?.users && authUsers.users.length > 0) {
+      userId = authUsers.users[0].id
+    } else {
+      // Create new user
+      const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+        email: cleanEmail,
+        email_confirm: true,
+        user_metadata: { name: cleanName, is_temporary: true },
+        app_metadata: { provider: 'email', providers: ['email'] },
+      })
+      if (createError || !newUser?.user) {
+        return jsonResponse(502, { error: `Failed to create user: ${createError?.message}` })
+      }
+      userId = newUser.user.id
+    }
+  } catch (err) {
+    return jsonResponse(502, { error: `Failed to lookup user: ${String(err)}` })
+  }
+
+  // Check if public profile exists and reactivate if inactive
   const { data: existingProfile } = await adminClient
     .from('users')
-    .select('id, status')
-    .eq('email', cleanEmail)
+    .select('status')
+    .eq('id', userId)
     .maybeSingle()
 
-  let userId: string
-  if (existingProfile?.id) {
-    userId = existingProfile.id
-    // Reactivate deactivated users so they can access the sprint
-    if (existingProfile.status === 'inactive') {
-      await adminClient
-        .from('users')
-        .update({ status: 'pending_activation', deactivated_at: null, deactivated_by: null })
-        .eq('id', userId)
-      // Un-ban in Supabase auth if they were banned
-      await adminClient.auth.admin.updateUserById(userId, { ban_duration: 'none' })
-    }
-  } else {
-    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
-      email: cleanEmail,
-      email_confirm: true,
-      user_metadata: { name: cleanName, is_temporary: true },
-      app_metadata: { provider: 'email', providers: ['email'] },
-    })
-    if (createError || !newUser?.user) {
-      return jsonResponse(502, { error: `Failed to create user: ${createError?.message}` })
-    }
-    userId = newUser.user.id
+  if (existingProfile?.status === 'inactive') {
+    await adminClient
+      .from('users')
+      .update({ status: 'pending_activation', deactivated_at: null, deactivated_by: null })
+      .eq('id', userId)
   }
 
   // 2. Add to sprint (upserts public.users profile + sprint_members, no-op if already member)
