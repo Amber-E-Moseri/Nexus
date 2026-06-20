@@ -13,27 +13,18 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   })
 }
 
-function generatePassword(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%'
-  let password = ''
-  for (let i = 0; i < 12; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return password
+function generateToken(): string {
+  return crypto.getRandomValues(new Uint8Array(24)).reduce((a, b) => a + b.toString(16).padStart(2, '0'), '')
 }
 
 function emailHtml({
   name,
   sprintName,
-  email,
-  password,
-  loginUrl,
+  signupUrl,
 }: {
   name: string
   sprintName: string
-  email: string
-  password: string
-  loginUrl: string
+  signupUrl: string
 }) {
   return `
     <!DOCTYPE html>
@@ -54,22 +45,15 @@ function emailHtml({
               You've been invited to join the sprint <strong>"${sprintName}"</strong> on BLW CAN NEXUS.
             </p>
             <p style="margin: 0 0 24px; font-size: 15px;">
-              Your login details are below. Click the button to go to the login page.
+              Click the button below to create your account and get started.
             </p>
-            <div style="background: #f9f7f5; border: 1px solid #ede8dc; border-radius: 12px; padding: 16px; margin: 0 0 24px;">
-              <p style="margin: 0 0 8px; font-size: 13px; color: #7a6f5e; font-weight: 600;">Email</p>
-              <p style="margin: 0 0 16px; font-size: 15px; color: #2d2a22; font-family: monospace;">${email}</p>
-              <p style="margin: 0 0 8px; font-size: 13px; color: #7a6f5e; font-weight: 600;">Password</p>
-              <p style="margin: 0; font-size: 15px; color: #2d2a22; font-family: monospace;">${password}</p>
-            </div>
             <div style="margin: 0 0 28px;">
-              <a href="${loginUrl}" style="display: inline-block; background: #4c2a92; color: #ffffff; text-decoration: none; font-weight: 600; border-radius: 10px; padding: 13px 24px; font-size: 14px;">
-                Log in to BLW CAN NEXUS
+              <a href="${signupUrl}" style="display: inline-block; background: #4c2a92; color: #ffffff; text-decoration: none; font-weight: 600; border-radius: 10px; padding: 13px 24px; font-size: 14px;">
+                Create account & join sprint
               </a>
             </div>
-            <p style="margin: 0; font-size: 12px; color: #9e9488;">
-              💡 Tip: You can change your password after logging in from your account settings.
-            </p>
+            <p style="margin: 0 0 4px; font-size: 13px; color: #7a6f5e;">If the button doesn't work, paste this link into your browser:</p>
+            <p style="margin: 0; font-size: 13px; color: #7a6f5e; word-break: break-all;">${signupUrl}</p>
           </div>
           <div style="background: #f9f7f5; border-top: 1px solid #ede8dc; padding: 16px 32px; font-size: 12px; color: #9e9488; text-align: center;">
             © ${new Date().getFullYear()} BLW CAN NEXUS. All rights reserved.
@@ -140,7 +124,6 @@ Deno.serve(async (req) => {
   const { email, name, sprintId, sprintName, role, membershipEndDate } = body
   const cleanEmail = email.trim().toLowerCase()
   const cleanName = name?.trim() || cleanEmail.split('@')[0]
-  const tempPassword = generatePassword()
 
   // 1. Validate sprint exists
   const { data: sprint, error: sprintError } = await adminClient
@@ -153,36 +136,31 @@ Deno.serve(async (req) => {
     return jsonResponse(400, { error: 'Sprint not found' })
   }
 
-  // 2. Create user with temporary password
-  const { data: { user: newUser }, error: createError } = await adminClient.auth.admin.createUser({
-    email: cleanEmail,
-    password: tempPassword,
-    email_confirm: true,
-    user_metadata: { name: cleanName },
-  }).catch(() => ({ data: { user: null }, error: null }))
-
-  if (createError) {
-    return jsonResponse(502, { error: `Failed to create user: ${createError.message}` })
+  // 2. Generate invite token
+  const token = generateToken()
+  const inviteMetadata = {
+    name: cleanName,
+    sprint_id: sprintId,
+    sprint_name: sprintName,
+    role,
+    membership_end_date: membershipEndDate || null,
   }
-  if (!newUser?.id) {
-    return jsonResponse(502, { error: 'Failed to create user' })
-  }
-  const userId = newUser.id
 
-  // 3. Add to sprint via RPC
-  const { error: rpcError } = await userClient.rpc('add_sprint_member_profile', {
-    p_user_id: userId,
-    p_email: cleanEmail,
-    p_name: cleanName,
-    p_sprint_id: sprintId,
-    p_role: role,
-    p_end_date: membershipEndDate || null,
-  })
+  const { error: tokenError } = await adminClient
+    .from('sprint_invite_tokens')
+    .insert({
+      user_id: null,
+      sprint_id: sprintId,
+      token,
+      email: cleanEmail,
+      created_by: callerId,
+      metadata: inviteMetadata,
+    })
 
-  if (rpcError) return jsonResponse(400, { error: rpcError.message })
+  if (tokenError) return jsonResponse(502, { error: `Failed to create invite token: ${tokenError.message}` })
 
-  // 4. Send email with credentials
-  const loginUrl = `${appUrl.replace(/\/$/, '')}/login`
+  // 3. Send email with signup link
+  const signupUrl = `${appUrl.replace(/\/$/, '')}/signup?invite=${token}&email=${encodeURIComponent(cleanEmail)}`
 
   const resendRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -194,15 +172,15 @@ Deno.serve(async (req) => {
       from: `BLW CAN NEXUS <${fromEmail}>`,
       to: [cleanEmail],
       subject: `You've been invited to the sprint "${sprintName}"`,
-      html: emailHtml({ name: cleanName, sprintName, email: cleanEmail, password: tempPassword, loginUrl }),
+      html: emailHtml({ name: cleanName, sprintName, signupUrl }),
     }),
   })
 
   if (!resendRes.ok) {
     const detail = await resendRes.text()
-    return jsonResponse(502, { error: 'Member added but email failed to send', detail })
+    return jsonResponse(502, { error: 'Invite created but email failed to send', detail })
   }
 
   const resendBody = await resendRes.json().catch(() => ({}))
-  return jsonResponse(200, { sent: true, email_id: resendBody.id, user_id: userId })
+  return jsonResponse(200, { sent: true, email_id: resendBody.id, token })
 })

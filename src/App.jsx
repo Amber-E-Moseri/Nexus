@@ -47,6 +47,7 @@ const AutomationsPage = lazy(() => import('./pages/platform/AutomationsPage'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const ConfirmInvite = lazy(() => import('./pages/auth/ConfirmInvite'))
 const SetPassword = lazy(() => import('./pages/auth/SetPassword'))
+const SignupInvite = lazy(() => import('./pages/auth/SignupInvite'))
 const SpacesList = lazy(() => import('./pages/spaces/SpacesList'))
 const SpaceOverview = lazy(() => import('./pages/spaces/SpaceOverview'))
 const SprintOverview = lazy(() => import('./pages/sprints/SprintOverview'))
@@ -69,6 +70,7 @@ export default function App() {
     <Suspense fallback={<PageSpinner />}>
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<SignupInvite />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/set-password" element={<SetPassword />} />
