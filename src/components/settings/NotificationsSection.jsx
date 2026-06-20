@@ -7,7 +7,8 @@ import { Bell, Mail, Smartphone, AlertCircle, Check } from 'lucide-react'
 
 const NOTIFICATION_CHANNELS = [
   { id: 'in_app', label: 'In-App', icon: Bell, alwaysOn: true, description: 'Bell icon notifications' },
-  { id: 'email', label: 'Email', icon: Mail, description: 'Email notifications' }
+  { id: 'email', label: 'Email', icon: Mail, description: 'Email notifications' },
+  { id: 'mobile', label: 'Mobile Push', icon: Smartphone, description: 'Push notifications on your phone' }
 ]
 
 export default function NotificationsSection({ prefs = {}, role, onTogglePref }) {
