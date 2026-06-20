@@ -140,7 +140,7 @@ Deno.serve(async (req) => {
   const userId = authUser.id
 
   // 2. Add to sprint via RPC
-  const { error: rpcError } = await callerClient.rpc('add_sprint_member_profile', {
+  const { error: rpcError } = await userClient.rpc('add_sprint_member_profile', {
     p_user_id: userId,
     p_email: cleanEmail,
     p_name: cleanName,
