@@ -37,10 +37,10 @@ Deno.serve(async (req) => {
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey)
 
-  // 1. Find the token and user
+  // 1. Find the token with full user data
   const { data: tokenData, error: tokenError } = await adminClient
     .from('sprint_invite_tokens')
-    .select('id, user_id, expires_at, used_at')
+    .select('id, user_id, email, expires_at, used_at')
     .eq('token', token)
     .maybeSingle()
 
@@ -56,13 +56,31 @@ Deno.serve(async (req) => {
     return jsonResponse(400, { error: 'This invitation has expired' })
   }
 
-  // 2. Update user password
-  const { error: updateError } = await adminClient.auth.admin.updateUserById(tokenData.user_id, {
-    password,
-  })
+  // 2. Create or update user with password
+  const { data: { user: existingUser }, error: getUserError } = await adminClient.auth.admin.getUserById(tokenData.user_id)
 
-  if (updateError) {
-    return jsonResponse(502, { error: `Failed to set password: ${updateError.message}` })
+  let userId = tokenData.user_id
+  if (getUserError || !existingUser) {
+    // User doesn't exist, create with password
+    const { data: { user: newUser }, error: createError } = await adminClient.auth.admin.createUser({
+      email: tokenData.email,
+      password,
+      email_confirm: true,
+    })
+
+    if (createError || !newUser?.id) {
+      return jsonResponse(502, { error: `Failed to create user: ${createError?.message || 'Unknown error'}` })
+    }
+    userId = newUser.id
+  } else {
+    // User exists, update password
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {
+      password,
+    })
+
+    if (updateError) {
+      return jsonResponse(502, { error: `Failed to set password: ${updateError.message}` })
+    }
   }
 
   // 3. Mark token as used
@@ -75,5 +93,5 @@ Deno.serve(async (req) => {
     console.error('Failed to mark token as used:', markError)
   }
 
-  return jsonResponse(200, { success: true, user_id: tokenData.user_id })
+  return jsonResponse(200, { success: true, user_id: userId })
 })

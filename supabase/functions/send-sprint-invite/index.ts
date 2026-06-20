@@ -130,23 +130,25 @@ Deno.serve(async (req) => {
   const cleanEmail = email.trim().toLowerCase()
   const cleanName = name?.trim() || cleanEmail.split('@')[0]
 
-  // 1. Create or reuse auth user (with a temporary random password)
-  const tempPassword = crypto.getRandomValues(new Uint8Array(16)).reduce((a, b) => a + b.toString(16).padStart(2, '0'), '')
+  // 1. Create placeholder user or get existing - will be fully set up when password is created
+  const { data: { user: existingUser } } = await adminClient.auth.admin.getUserByEmail(cleanEmail)
 
-  await adminClient.auth.admin.createUser({
-    email: cleanEmail,
-    password: tempPassword,
-    email_confirm: true,
-    user_metadata: { name: cleanName },
-  }).catch(() => null)
+  let userId: string
+  if (existingUser?.id) {
+    userId = existingUser.id
+  } else {
+    // Create placeholder without password - will be finalized in set-sprint-invite-password
+    const { data: { user: newUser }, error: createError } = await adminClient.auth.admin.createUser({
+      email: cleanEmail,
+      email_confirm: true,
+      user_metadata: { name: cleanName },
+    })
 
-  // Get user ID
-  const { data: { users } } = await adminClient.auth.admin.listUsers()
-  const authUser = users?.find((u) => u.email === cleanEmail)
-  if (!authUser?.id) {
-    return jsonResponse(502, { error: 'Failed to find user after creation' })
+    if (createError || !newUser?.id) {
+      return jsonResponse(502, { error: `Failed to create user: ${createError?.message || 'Unknown'}` })
+    }
+    userId = newUser.id
   }
-  const userId = authUser.id
 
   // 2. Add to sprint via RPC (use userClient so auth.uid() is set)
   const { error: rpcError } = await userClient.rpc('add_sprint_member_profile', {
