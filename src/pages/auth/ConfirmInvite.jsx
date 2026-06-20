@@ -1,16 +1,31 @@
 import { useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { supabase } from '../../lib/supabase'
 
 export default function ConfirmInvite() {
   const location = useLocation()
-  const link = new URLSearchParams(location.search).get('link')
-  const [clicked, setClicked] = useState(false)
+  const navigate = useNavigate()
+  const params = new URLSearchParams(location.search)
+  const tokenHash = params.get('token_hash')
+  const type = params.get('type') || 'recovery'
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
 
-  const handleClick = () => {
-    if (link) {
-      setClicked(true)
-      window.location.href = link
+  const handleClick = async () => {
+    if (!tokenHash) return
+    setLoading(true)
+    setError(null)
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type,
+    })
+    if (verifyError) {
+      setError(verifyError.message)
+      setLoading(false)
+      return
     }
+    // Session is now active — go straight to password reset
+    navigate('/reset-password', { replace: true })
   }
 
   return (
@@ -26,19 +41,27 @@ export default function ConfirmInvite() {
           Click the button below to set your password and access your sprint.
         </p>
 
-        {!link ? (
+        {!tokenHash ? (
           <div className="mt-6 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>
             Invalid invite link. Please contact your admin for a new invitation.
           </div>
-        ) : (
+        ) : null}
+
+        {error ? (
+          <div className="mt-6 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>
+            {error}
+          </div>
+        ) : null}
+
+        {tokenHash ? (
           <button
             onClick={handleClick}
-            disabled={clicked}
+            disabled={loading}
             className="mt-8 w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {clicked ? 'Redirecting…' : 'Set my password'}
+            {loading ? 'Verifying…' : 'Set my password'}
           </button>
-        )}
+        ) : null}
       </div>
     </div>
   )
