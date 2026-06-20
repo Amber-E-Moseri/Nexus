@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
       status: 200,
-      headers: corsHeaders,
+      headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
     })
   }
   if (req.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed' })
