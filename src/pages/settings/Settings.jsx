@@ -396,13 +396,13 @@ export default function Settings() {
 
       {activeTab === 'My Tasks' ? (
         <div role="tabpanel" id="tabpanel-my-tasks" aria-labelledby="tab-my-tasks" tabIndex={0}>
-          <MyTasks embedded />
+          <MyTasks />
         </div>
       ) : null}
 
       {activeTab === 'Planner' ? (
         <div role="tabpanel" id="tabpanel-planner" aria-labelledby="tab-planner" tabIndex={0}>
-          <Planner embedded />
+          <Planner />
         </div>
       ) : null}
 
