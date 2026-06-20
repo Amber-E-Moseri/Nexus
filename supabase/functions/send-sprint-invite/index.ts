@@ -95,18 +95,19 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return jsonResponse(401, { error: 'Missing authorization header' })
 
-  // Extract user ID from JWT (Bearer token)
-  let callerId: string
-  try {
-    const token = authHeader.replace('Bearer ', '')
-    const payload = JSON.parse(atob(token.split('.')[1]))
-    callerId = payload.sub
-    if (!callerId) throw new Error('No user ID in token')
-  } catch {
-    return jsonResponse(401, { error: 'Invalid authorization token' })
+  const adminClient = createClient(supabaseUrl, serviceRoleKey)
+
+  // Use service role to get caller info from auth header
+  const userClient = createClient(supabaseUrl, serviceRoleKey, {
+    global: { headers: { Authorization: authHeader } },
+  })
+
+  const { data: { user: caller }, error: callerError } = await userClient.auth.getUser()
+  if (callerError || !caller?.id) {
+    return jsonResponse(401, { error: 'Unable to verify user' })
   }
 
-  const adminClient = createClient(supabaseUrl, serviceRoleKey)
+  const callerId = caller.id
 
   const body = await req.json().catch(() => null) as {
     email: string
