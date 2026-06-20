@@ -175,7 +175,7 @@ export async function getMyTasks(userId) {
 
   const sprintIds = (sprintMemberships ?? []).map((m) => m.sprint_id)
 
-  // Get space tasks (assigned to user, not personal)
+  // Get space tasks (assigned to user, not personal, not in sprint)
   const { data: spaceTasks, error: spaceError } = await supabase
     .from('tasks')
     .select(`
@@ -190,9 +190,29 @@ export async function getMyTasks(userId) {
     `)
     .eq('assignee_id', userId)
     .eq('is_personal', false)
+    .is('sprint_id', null)
     .is('parent_task_id', null)
 
   if (spaceError) throw spaceError
+
+  // Get personal tasks (assigned to user)
+  const { data: personalTasks, error: personalError } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      ${TASK_STATUS_SELECT},
+      ${TASK_LIST_SELECT},
+      department:departments(id, name, color),
+      assignee:users!assignee_id(id, name, avatar_url),
+      subtasks:tasks!parent_task_id(${SUBTASK_SELECT}),
+      comments:task_comments(count),
+      files:task_files(count)
+    `)
+    .eq('assignee_id', userId)
+    .eq('is_personal', true)
+    .is('parent_task_id', null)
+
+  if (personalError) throw personalError
 
   // Get sprint tasks (if user is a sprint member)
   let sprintTasks = []
@@ -217,7 +237,7 @@ export async function getMyTasks(userId) {
   }
 
   // Merge and deduplicate tasks (by ID) and sort by due_date
-  const allTasks = [...(spaceTasks ?? []), ...sprintTasks]
+  const allTasks = [...(spaceTasks ?? []), ...(personalTasks ?? []), ...sprintTasks]
   const uniqueMap = new Map()
   for (const task of allTasks) {
     uniqueMap.set(task.id, task)
