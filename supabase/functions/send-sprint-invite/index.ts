@@ -95,19 +95,23 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return jsonResponse(401, { error: 'Missing authorization header' })
 
-  const adminClient = createClient(supabaseUrl, serviceRoleKey)
+  // Extract user ID from bearer token (JWT payload)
+  const token = authHeader.replace('Bearer ', '')
+  const parts = token.split('.')
+  if (parts.length !== 3) return jsonResponse(401, { error: 'Invalid token format' })
 
-  // Use service role to get caller info from auth header
-  const userClient = createClient(supabaseUrl, serviceRoleKey, {
-    global: { headers: { Authorization: authHeader } },
-  })
-
-  const { data: { user: caller }, error: callerError } = await userClient.auth.getUser()
-  if (callerError || !caller?.id) {
-    return jsonResponse(401, { error: 'Unable to verify user' })
+  let callerId: string
+  try {
+    // Decode base64url JWT payload
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const decoded = JSON.parse(atob(base64))
+    callerId = decoded.sub
+    if (!callerId) throw new Error('No sub in token')
+  } catch (err) {
+    return jsonResponse(401, { error: `Invalid token: ${err.message}` })
   }
 
-  const callerId = caller.id
+  const adminClient = createClient(supabaseUrl, serviceRoleKey)
 
   const body = await req.json().catch(() => null) as {
     email: string
