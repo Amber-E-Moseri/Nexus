@@ -633,6 +633,7 @@ export async function inviteExternalToSprint(payload) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
+  // Creates auth.users + public.users + sprint_members atomically server-side
   const { data: userId, error } = await supabase.rpc('invite_external_sprint_member', {
     p_email: email.trim().toLowerCase(),
     p_name: name?.trim() || '',
@@ -642,6 +643,10 @@ export async function inviteExternalToSprint(payload) {
   })
 
   if (error) throw error
+
+  // Send Supabase's built-in "set your password" email so they can log in
+  const redirectTo = `${import.meta.env.VITE_APP_URL || window.location.origin}/sprints/${sprintId}`
+  await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo })
 
   return { userId, isNewUser: true }
 }

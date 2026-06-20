@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 import { removeSprintMember, updateSprintMemberTeams, updateSprintTeam, deleteSprintTeam } from '../../lib/sprints'
 
 const TEAM_COLORS = ['#5B34C7', '#1C87BE', '#E8A020', '#C94830', '#4A8F6C']
@@ -29,11 +29,23 @@ function avatarColor(userId) {
   return AVATAR_COLORS[hash % AVATAR_COLORS.length]
 }
 
-export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isArchived, onChanged }) {
+export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isArchived, onChanged, onCreateTeam }) {
   const [saving, setSaving] = useState(false)
+  const [newTeamName, setNewTeamName] = useState('')
   const [editingTeamId, setEditingTeamId] = useState(null)
   const [editingName, setEditingName] = useState('')
   const [openDropdown, setOpenDropdown] = useState(null)
+
+  async function handleCreateTeam() {
+    if (!newTeamName.trim()) return
+    setSaving(true)
+    try {
+      await onCreateTeam?.(newTeamName.trim())
+      setNewTeamName('')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const getTeamMembers = (teamId) =>
     members.filter((m) => (m.sprint_team_ids ?? []).includes(teamId))
@@ -92,6 +104,47 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
   }
 
   return (
+    <div>
+      {canEdit && !isArchived && (
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+          <input
+            type="text"
+            value={newTeamName}
+            onChange={(e) => setNewTeamName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCreateTeam()}
+            id="new-team-input"
+            placeholder="Team name — e.g. Curriculum, Logistics..."
+            style={{
+              flex: 1,
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              padding: '9px 14px',
+              fontSize: 13,
+              color: 'var(--text-primary)',
+              background: '#fff',
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleCreateTeam}
+            disabled={saving || !newTeamName.trim()}
+            style={{
+              background: newTeamName.trim() ? 'var(--accent)' : 'var(--accent)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 10,
+              padding: '9px 18px',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: newTeamName.trim() && !saving ? 'pointer' : 'not-allowed',
+              opacity: !newTeamName.trim() || saving ? 0.5 : 1,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Add team
+          </button>
+        </div>
+      )}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
       {teams.map((team, idx) => {
         const teamMembers = getTeamMembers(team.id)
@@ -171,9 +224,9 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                   onClick={() => handleDeleteTeam(team.id)}
                   disabled={saving}
                   title="Delete team"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-tertiary)', display: 'flex', opacity: saving ? 0.4 : 1 }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', color: 'var(--text-tertiary)', opacity: saving ? 0.4 : 1, fontSize: 14, letterSpacing: 2, lineHeight: 1 }}
                 >
-                  <Trash2 size={14} />
+                  ▌▌
                 </button>
               )}
             </div>
@@ -289,6 +342,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
           </div>
         )
       })}
+    </div>
     </div>
   )
 }

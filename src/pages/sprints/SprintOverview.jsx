@@ -13,6 +13,7 @@ import SprintMemberPanel from '../../modules/sprints/SprintMemberPanel'
 import SprintTaskBoard from '../../modules/sprints/SprintTaskBoard'
 import SprintTeamPanel from '../../modules/sprints/SprintTeamPanel'
 import NewTeamModal from '../../modules/sprints/NewTeamModal'
+import InviteExternalModal from '../../modules/sprints/InviteExternalModal'
 import SprintReview from './SprintReview'
 import FileList from '../../components/files/FileList'
 
@@ -158,6 +159,7 @@ export default function SprintOverview() {
   const [calendarDefaultDate, setCalendarDefaultDate] = useState(null)
   const [savingTeam, setSavingTeam] = useState(false)
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false)
+  const [showInviteExternalModal, setShowInviteExternalModal] = useState(false)
   const [temporaryMembers, setTemporaryMembers] = useState([])
 
   const completion = useMemo(() => {
@@ -486,24 +488,62 @@ export default function SprintOverview() {
       ) : null}
 
       {/* Teams Section */}
-      {detail.teams.length > 0 && (
+      {(detail.teams.length > 0 || canManage) && (
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <div className="mb-1 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Sprint Teams</h2>
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">Sprint Teams</h2>
+              <p className="mt-0.5 text-sm text-[var(--text-secondary)]">Cross-functional squads — name them and pull in members from any department.</p>
+            </div>
             {canManage && !isArchived && (
-              <button
-                type="button"
-                onClick={handleCreateTeam}
-                disabled={savingTeam || isArchived}
-                className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors disabled:opacity-50"
-              >
-                + New team
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowInviteExternalModal(true)}
+                  className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity"
+                >
+                  + Invite external
+                </button>
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('new-team-input')?.focus()}
+                  className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+                >
+                  + New team
+                </button>
+              </div>
             )}
           </div>
-          <p className="mb-4 text-sm text-[var(--text-secondary)]">Cross-functional squads — name them and pull in members from any department.</p>
-          <SprintTeamPanel sprintId={detail.sprint.id} teams={detail.teams} members={detail.members} canEdit={Boolean(canManage)} isArchived={Boolean(isArchived)} onChanged={loadDetail} />
+          <SprintTeamPanel
+            sprintId={detail.sprint.id}
+            teams={detail.teams}
+            members={detail.members}
+            canEdit={Boolean(canManage)}
+            isArchived={Boolean(isArchived)}
+            onChanged={loadDetail}
+            onCreateTeam={async (name) => {
+              setSavingTeam(true)
+              try {
+                await createSprintTeam(detail.sprint.id, name)
+                await loadDetail()
+              } catch (err) {
+                alert(`Failed to create team: ${err?.message || String(err)}`)
+              } finally {
+                setSavingTeam(false)
+              }
+            }}
+          />
         </div>
+      )}
+
+      {showInviteExternalModal && (
+        <InviteExternalModal
+          sprintId={detail.sprint.id}
+          sprintName={detail.sprint.name}
+          sprintEndDate={detail.sprint.end_date}
+          onClose={() => setShowInviteExternalModal(false)}
+          onSuccess={() => { setShowInviteExternalModal(false); loadDetail() }}
+        />
       )}
 
       {/* Members Section */}
@@ -546,7 +586,7 @@ export default function SprintOverview() {
         />
       ) : null}
 
-      {showCreateTeamModal && (
+      {false && (
         <NewTeamModal
           onClose={() => setShowCreateTeamModal(false)}
           onSuccess={async () => {

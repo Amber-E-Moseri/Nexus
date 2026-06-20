@@ -34,7 +34,7 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
         membershipEndDate: endDate,
       })
 
-      alert(`Invite sent to ${email}!`)
+      alert(`Invitation sent! They'll receive a set-password email shortly.`)
       setEmail('')
       setName('')
       setRole('contributor')
@@ -162,7 +162,7 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
             }}
           />
           <div style={{ fontSize: '12px', color: TOKENS.textTertiary, marginTop: '4px' }}>
-            Their access will automatically deactivate after this date
+            Their access will automatically deactivate after this date or when the sprint is archived — whichever comes first.
           </div>
         </div>
 
@@ -180,6 +180,10 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
             {error}
           </div>
         )}
+
+        <div style={{ fontSize: '12px', color: TOKENS.textSecondary, marginBottom: '16px', lineHeight: '1.5' }}>
+          They'll receive a "Set your password" email to access the sprint. Their access is automatically revoked when the sprint is archived.
+        </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
