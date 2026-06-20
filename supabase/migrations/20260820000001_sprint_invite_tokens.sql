@@ -1,9 +1,9 @@
 -- Sprint invitation tokens for external users
 -- Bypasses Supabase's invite system to avoid Gmail scanner issues
 
-create table public.sprint_invite_tokens (
+create table if not exists public.sprint_invite_tokens (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade,
   sprint_id uuid not null references public.sprints(id) on delete cascade,
   token text not null unique,
   email text not null,
