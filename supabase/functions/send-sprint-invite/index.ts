@@ -134,8 +134,7 @@ Deno.serve(async (req) => {
   await adminClient.auth.admin.createUser({
     email: cleanEmail,
     email_confirm: true,
-    user_metadata: { name: cleanName, is_temporary: true },
-    app_metadata: { provider: 'email', providers: ['email'] },
+    user_metadata: { name: cleanName },
   }).catch(() => null)
 
   // Get user ID

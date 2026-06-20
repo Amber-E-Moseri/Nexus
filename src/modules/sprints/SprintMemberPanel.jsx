@@ -9,6 +9,7 @@ import {
   updateSprintMemberRole,
   updateSprintMemberTeams,
   reactivateTemporaryMember,
+  getPendingSprintInvitations,
 } from '../../lib/sprints'
 import InviteExternalModal from './InviteExternalModal'
 
@@ -63,6 +64,7 @@ export default function SprintMemberPanel({
 }) {
   const { profile } = useAuth()
   const [orgUsers, setOrgUsers] = useState([])
+  const [pendingInvitations, setPendingInvitations] = useState([])
   const [selectedUserId, setSelectedUserId] = useState('')
   const [selectedRole, setSelectedRole] = useState('contributor')
   const [selectedTeamIds, setSelectedTeamIds] = useState([])
@@ -71,12 +73,21 @@ export default function SprintMemberPanel({
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [reactivating, setReactivating] = useState(null)
+  const [loadingPending, setLoadingPending] = useState(false)
 
   useEffect(() => {
     if (!canEdit || isArchived) return
     setLoadingUsers(true)
     getActiveUsers().then(setOrgUsers).catch(() => setOrgUsers([])).finally(() => setLoadingUsers(false))
   }, [canEdit, isArchived])
+
+  useEffect(() => {
+    setLoadingPending(true)
+    getPendingSprintInvitations(sprintId)
+      .then(setPendingInvitations)
+      .catch(() => setPendingInvitations([]))
+      .finally(() => setLoadingPending(false))
+  }, [sprintId, onChanged])
 
   const existingUserIds = useMemo(() => new Set(members.map((member) => member.user?.id)), [members])
   const addableUsers = orgUsers.filter((user) => !existingUserIds.has(user.id))
@@ -131,6 +142,17 @@ export default function SprintMemberPanel({
     }
   }
 
+  async function handleRemovePendingInvitation(userId) {
+    if (!window.confirm('Cancel this invitation?')) return
+    try {
+      await removeSprintMember(sprintId, userId)
+      setPendingInvitations((prev) => prev.filter((inv) => inv.user_id !== userId))
+      await onChanged?.()
+    } catch (err) {
+      alert(`Error removing invitation: ${err.message}`)
+    }
+  }
+
   function daysUntilExpiration(endDate) {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -141,6 +163,90 @@ export default function SprintMemberPanel({
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
+      {/* Pending Invitations Section */}
+      {pendingInvitations.length > 0 && (
+        <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>
+          <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 600, color: TOKENS.textPrimary, margin: 0 }}>Pending Invitations</div>
+              <div style={{ fontSize: 14, color: TOKENS.textSecondary, margin: '6px 0 0' }}>
+                Awaiting acceptance from invited members.
+              </div>
+            </div>
+            <Badge tone="planning">{pendingInvitations.length} pending</Badge>
+          </div>
+
+          <div style={{ display: 'grid', gap: 12 }}>
+            {pendingInvitations.map((invitation) => (
+              <div
+                key={invitation.user_id}
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 12,
+                  borderRadius: 16,
+                  border: `1px solid ${TOKENS.border}`,
+                  background: TOKENS.surfaceTertiary,
+                  padding: '12px 16px',
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: TOKENS.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {invitation.user?.name ?? invitation.user?.email ?? '—'}
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        padding: '2px 8px',
+                        background: '#FEF3C7',
+                        color: '#92400E',
+                        borderRadius: '999px',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Invitation pending
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: TOKENS.textTertiary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {invitation.user?.email}
+                  </div>
+                  <div style={{ fontSize: 12, color: TOKENS.textTertiary, marginTop: 4 }}>
+                    Invited {new Date(invitation.joined_at).toLocaleDateString()}
+                  </div>
+                </div>
+
+                <Badge tone="planning">{invitation.role}</Badge>
+
+                {canEdit && !isArchived && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePendingInvitation(invitation.user_id)}
+                    style={{
+                      borderRadius: 10,
+                      border: `1px solid ${TOKENS.border}`,
+                      background: 'white',
+                      padding: '8px 12px',
+                      fontSize: 13,
+                      color: TOKENS.textSecondary,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      fontFamily: 'DM Sans, system-ui, sans-serif',
+                      transition: 'all 0.12s',
+                    }}
+                    onMouseEnter={(e) => { e.target.style.background = TOKENS.background }}
+                    onMouseLeave={(e) => { e.target.style.background = 'white' }}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Existing Members Section */}
       <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>
         <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>

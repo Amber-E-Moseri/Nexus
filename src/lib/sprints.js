@@ -663,6 +663,24 @@ export async function getTemporarySprintMembers(sprintId) {
   return data
 }
 
+export async function getPendingSprintInvitations(sprintId) {
+  const { data, error } = await supabase
+    .from('sprint_members')
+    .select(`
+      sprint_id, user_id, role, joined_at, is_temporary, invited_by,
+      user:user_id(id, name, email, status, is_temporary)
+    `)
+    .eq('sprint_id', sprintId)
+    .eq('is_temporary', true)
+    .order('joined_at', { ascending: false })
+
+  if (error) throw error
+
+  return (data ?? []).filter((item) => {
+    return item.user && item.user.status !== 'active'
+  })
+}
+
 export async function updateSprintMembershipEndDate(sprintMemberId, newEndDate) {
   const { data: user } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')

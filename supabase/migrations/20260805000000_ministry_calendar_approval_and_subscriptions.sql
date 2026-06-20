@@ -34,7 +34,7 @@ create policy "view_own_permission" on public.calendar_permissions
 create table if not exists public.calendar_subscriptions (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references public.users(id) on delete cascade,
-  token       text not null unique default encode(gen_random_bytes(32), 'hex'),
+  token       text not null unique default substr(md5(random()::text || clock_timestamp()::text || gen_random_uuid()::text), 1, 64),
   scope       text not null default 'all'
                 check (scope in ('all', 'department')),
   dept_id     uuid references public.departments(id) on delete cascade,
