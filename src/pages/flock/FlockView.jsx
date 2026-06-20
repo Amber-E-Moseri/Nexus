@@ -57,17 +57,22 @@ export default function FlockView() {
   const [allTasks, setAllTasks] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!profile?.id) return
     setLoading(true)
+    setError(null)
     Promise.all([
       getFlockMembers(profile.id),
       getFlockTasks(profile.id),
     ]).then(([m, t]) => {
-      setMembers(m)
-      setAllTasks(t)
-      if (m.length > 0) setSelectedId(m[0].id)
+      setMembers(m ?? [])
+      setAllTasks(t ?? [])
+      if (m?.length > 0) setSelectedId(m[0].id)
+    }).catch((err) => {
+      console.error('Failed to load flock data:', err)
+      setError(err.message || 'Failed to load member information')
     }).finally(() => setLoading(false))
   }, [profile?.id])
 
@@ -82,6 +87,14 @@ export default function FlockView() {
   const selectedMember = members.find((m) => m.id === selectedId) ?? null
   const selectedTasks = selectedId ? (memberTasks[selectedId] ?? []) : []
   const deptGroups = groupByDept(selectedTasks)
+
+  if (error) {
+    return (
+      <div style={{ padding: '1rem', color: '#DC2626', fontSize: 13 }}>
+        Error: {error}
+      </div>
+    )
+  }
 
   if (loading) {
     return (

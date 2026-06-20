@@ -12,8 +12,10 @@ import EmailSignatureSection from './EmailSignatureSection'
 import MembersPanel from '../../components/settings/MembersPanel'
 import ApiDocumentationPage from '../ApiDocumentationPage'
 import ActivityFeedWidget from '../../features/dashboard/components/ActivityFeedWidget'
+import MyTasks from '../personal/MyTasks'
+import Planner from '../Planner'
 
-const TABS = ['Profile', 'Notifications', 'Integrations', 'Automations', 'Members', 'Activity Log', 'Organisation', 'API', 'Danger Zone']
+const TABS = ['Profile', 'Notifications', 'Integrations', 'My Tasks', 'Planner', 'Automations', 'Members', 'Activity Log', 'Organisation', 'API', 'Danger Zone']
 const EXPORT_TABLE_SELECT = {
   profiles: 'id, full_name, email, department_id, role, status, created_at',
   tasks: 'id, title, description, status, status_id, priority, assignee_id, department_id, sprint_id, due_date, completed_at, created_by, created_at',
@@ -62,6 +64,7 @@ export default function Settings() {
   )
 
   const visibleTabs = TABS.filter((tab) => {
+    if (tab === 'My Tasks' || tab === 'Planner') return true
     if (tab === 'Automations') return role === 'super_admin' || role === 'dept_lead'
     if (tab === 'Members') return role === 'super_admin' || role === 'dept_lead'
     if (tab === 'Activity Log') return role === 'super_admin' || role === 'dept_lead'
@@ -388,6 +391,18 @@ export default function Settings() {
       {activeTab === 'Integrations' ? (
         <div role="tabpanel" id="tabpanel-integrations" aria-labelledby="tab-integrations" tabIndex={0}>
           <IntegrationsSection role={role} supabaseClient={supabase} />
+        </div>
+      ) : null}
+
+      {activeTab === 'My Tasks' ? (
+        <div role="tabpanel" id="tabpanel-my-tasks" aria-labelledby="tab-my-tasks" tabIndex={0}>
+          <MyTasks embedded />
+        </div>
+      ) : null}
+
+      {activeTab === 'Planner' ? (
+        <div role="tabpanel" id="tabpanel-planner" aria-labelledby="tab-planner" tabIndex={0}>
+          <Planner embedded />
         </div>
       ) : null}
 
