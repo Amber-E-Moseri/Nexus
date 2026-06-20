@@ -6,19 +6,23 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationsContext'
 import { useAuth } from '../hooks/useAuth'
-import { getUserDashboardPreferences, getRoleDashboardDefaults, upsertDashboardPreferences, deleteDashboardPreferences } from '../lib/dashboards'
+import { getUserDashboardPreferences, getRoleDashboardDefaults, upsertDashboardPreferences, deleteDashboardPreferences } from '../features/dashboard/lib/dashboards'
 import { supabase } from '../lib/supabase'
-import { getMyTasks } from '../lib/tasks'
+import { getMyTasks } from '../features/tasks'
 import { isTaskCompleted } from '../lib/taskStatuses'
-import CompletionRateWidget from '../modules/dashboard/CompletionRateWidget'
-import MemberActivityWidget from '../modules/dashboard/MemberActivityWidget'
-import OverdueByMemberWidget from '../modules/dashboard/OverdueByMemberWidget'
-import SprintProgressWidget from '../modules/dashboard/SprintProgressWidget'
-import UpcomingEventsWidget from '../modules/dashboard/UpcomingEventsWidget'
-import UpcomingMeetingsWidget from '../modules/dashboard/UpcomingMeetingsWidget'
-import AttendanceSummaryWidget from '../modules/dashboard/AttendanceSummaryWidget'
-import ActivityFeedWidget from '../modules/dashboard/ActivityFeedWidget'
-import OrgReportExport from '../modules/dashboard/OrgReportExport'
+import CompletionRateWidget from '../features/dashboard/components/CompletionRateWidget'
+import MemberActivityWidget from '../features/dashboard/components/MemberActivityWidget'
+import OverdueByMemberWidget from '../features/dashboard/components/OverdueByMemberWidget'
+import SprintProgressWidget from '../features/dashboard/components/SprintProgressWidget'
+import UpcomingEventsWidget from '../features/dashboard/components/UpcomingEventsWidget'
+import UpcomingMeetingsWidget from '../features/dashboard/components/UpcomingMeetingsWidget'
+import AttendanceSummaryWidget from '../features/dashboard/components/AttendanceSummaryWidget'
+import ActivityFeedWidget from '../features/dashboard/components/ActivityFeedWidget'
+import OrgReportExport from '../features/dashboard/components/OrgReportExport'
+import ActionItemsWidget from '../features/dashboard/components/ActionItemsWidget'
+import TeamWorkloadWidget from '../features/dashboard/components/TeamWorkloadWidget'
+import PastoralMembersWidget from '../features/dashboard/components/PastoralMembersWidget'
+import { getDashboardPresets } from '../features/dashboard/lib/dashboard-queries'
 
 function greetingForHour() {
   const h = new Date().getHours()
@@ -148,6 +152,7 @@ function QuickActionsWidget({ role }) {
 // ─── Widget registry ──────────────────────────────────────────────────────────
 
 const WIDGET_META = {
+  my_tasks_summary:     { title: 'My Tasks Summary',          Component: MyTasksSummaryWidget },
   upcoming_events:      { title: 'Upcoming Events',           Component: UpcomingEventsWidget },
   upcoming_meetings:    { title: 'Upcoming Meetings',         Component: UpcomingMeetingsWidget },
   sprint_progress:      { title: 'Sprint Progress',           Component: SprintProgressWidget },
@@ -156,7 +161,9 @@ const WIDGET_META = {
   completion_rate:      { title: 'Completion Rate This Week', Component: CompletionRateWidget },
   attendance_summary:   { title: 'Attendance Summary',        Component: AttendanceSummaryWidget },
   activity_feed:        { title: 'Recent Activity',           Component: ActivityFeedWidget },
-  my_tasks_summary:     { title: 'My Tasks Summary',          Component: MyTasksSummaryWidget },
+  action_items:         { title: 'My Action Items',           Component: ActionItemsWidget },
+  team_workload:        { title: 'Team Workload',             Component: TeamWorkloadWidget },
+  pastoral_members:     { title: 'Pastoral Members',          Component: PastoralMembersWidget },
   quick_actions:        { title: 'Quick Actions',             Component: QuickActionsWidget },
 }
 
@@ -451,11 +458,20 @@ export default function Dashboard() {
           return
         }
 
-        const roleDefaults = await getRoleDashboardDefaults(role)
+        // Load role-based presets
+        const rolePreset = await getDashboardPresets(role)
+        const defaultWidgets = rolePreset.widgets || []
 
         if (!active) return
 
-        setPrefs(mergeWithAllKeys(roleDefaults && roleDefaults.length > 0 ? roleDefaults : []))
+        // Convert preset widget IDs to preference objects
+        const defaultPrefs = defaultWidgets.map((key, i) => ({
+          widget_key: key,
+          visible: true,
+          sort_order: i + 1,
+        }))
+
+        setPrefs(mergeWithAllKeys(defaultPrefs))
       } catch {
         if (active) setPrefs(FALLBACK_PREFS)
       } finally {
