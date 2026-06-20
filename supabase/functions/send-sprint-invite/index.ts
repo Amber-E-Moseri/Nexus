@@ -173,25 +173,26 @@ Deno.serve(async (req) => {
     body: JSON.stringify(emailPayload),
   })
 
-  // Log delivery attempt to database
-  const logError = async (status: number, errorMsg: string, resendId?: string) => {
+  // Log delivery attempt to database via RPC (bypasses RLS)
+  const logDelivery = async (status: number, errorMsg: string | null, resendId?: string) => {
     try {
-      await adminClient
-        .from('email_delivery_log')
-        .insert({
-          recipient_email: cleanEmail,
-          sender_email: fromEmail,
-          subject: emailPayload.subject,
-          email_type: 'sprint_invite',
-          related_entity_type: 'sprint',
-          related_entity_id: sprintId,
-          resend_email_id: resendId,
-          status: status >= 200 && status < 300 ? 'sent' : 'failed',
-          http_status: status,
-          error_message: errorMsg,
-        })
+      const { error: logError } = await adminClient.rpc('log_email_delivery', {
+        p_recipient_email: cleanEmail,
+        p_sender_email: fromEmail,
+        p_subject: emailPayload.subject,
+        p_email_type: 'sprint_invite',
+        p_related_entity_type: 'sprint',
+        p_related_entity_id: sprintId,
+        p_resend_email_id: resendId,
+        p_status: status >= 200 && status < 300 ? 'sent' : 'failed',
+        p_http_status: status,
+        p_error_message: errorMsg,
+      })
+      if (logError) {
+        console.error('Failed to log email delivery:', logError)
+      }
     } catch (err) {
-      console.error('Failed to log email delivery:', err)
+      console.error('Failed to call log_email_delivery RPC:', err)
     }
   }
 
@@ -200,12 +201,12 @@ Deno.serve(async (req) => {
     console.error('Resend error status:', resendRes.status)
     console.error('Resend error detail:', detail)
     console.error('Email payload:', JSON.stringify({ ...emailPayload, from: '[redacted]', to: '[redacted]' }))
-    await logError(resendRes.status, detail)
+    await logDelivery(resendRes.status, detail)
     return jsonResponse(resendRes.status, { error: `Email delivery failed: ${detail}` })
   }
 
   const resendBody = await resendRes.json().catch(() => ({}))
   console.log('Email sent successfully. Resend ID:', resendBody.id)
-  await logError(200, null, resendBody.id)
+  await logDelivery(200, null, resendBody.id)
   return jsonResponse(200, { sent: true, email_id: resendBody.id, token })
 })
