@@ -1,4 +1,4 @@
-﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -13,18 +13,20 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   })
 }
 
+function generateToken(): string {
+  return crypto.getRandomValues(new Uint8Array(24)).reduce((a, b) => a + b.toString(16).padStart(2, '0'), '')
+}
+
 function emailHtml({
   name,
   sprintName,
-  role,
-  expiresAt,
   setPasswordUrl,
+  expiresAt,
 }: {
   name: string
   sprintName: string
-  role: string
-  expiresAt: string
   setPasswordUrl: string
+  expiresAt: string
 }) {
   return `
     <!DOCTYPE html>
@@ -42,14 +44,14 @@ function emailHtml({
           <div style="padding: 32px;">
             <p style="margin: 0 0 16px; font-size: 15px;">Hi ${name || 'there'},</p>
             <p style="margin: 0 0 16px; font-size: 15px;">
-              You've been added as a <strong>${role}</strong> to the sprint <strong>"${sprintName}"</strong> on BLW CAN NEXUS.
+              You've been invited to join the sprint <strong>"${sprintName}"</strong> on BLW CAN NEXUS.
             </p>
             <p style="margin: 0 0 24px; font-size: 15px;">
-              Set your password to access the sprint. Your temporary access expires on <strong>${expiresAt}</strong>.
+              Click the button below to set your password and get started. This link expires on <strong>${expiresAt}</strong>.
             </p>
             <div style="margin: 0 0 28px;">
               <a href="${setPasswordUrl}" style="display: inline-block; background: #4c2a92; color: #ffffff; text-decoration: none; font-weight: 600; border-radius: 10px; padding: 13px 24px; font-size: 14px;">
-                Set your password
+                Set my password
               </a>
             </div>
             <p style="margin: 0 0 4px; font-size: 13px; color: #7a6f5e;">If the button doesn't work, paste this link into your browser:</p>
@@ -90,7 +92,6 @@ Deno.serve(async (req) => {
     return jsonResponse(500, { error: `Missing env vars: ${missing.join(', ')}` })
   }
 
-  // Verify caller is authenticated
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return jsonResponse(401, { error: 'Missing authorization header' })
 
@@ -114,21 +115,20 @@ Deno.serve(async (req) => {
   }
 
   const { email, name, sprintId, sprintName, role, membershipEndDate } = body
-
-  const adminClient = createClient(supabaseUrl, serviceRoleKey)
   const cleanEmail = email.trim().toLowerCase()
   const cleanName = name?.trim() || cleanEmail.split('@')[0]
 
-  // 1. Create or reuse auth user — if already exists, that's OK
-  // We just need the user to exist so generateLink can find it
+  const adminClient = createClient(supabaseUrl, serviceRoleKey)
+
+  // 1. Create or reuse auth user
   await adminClient.auth.admin.createUser({
     email: cleanEmail,
     email_confirm: true,
     user_metadata: { name: cleanName, is_temporary: true },
     app_metadata: { provider: 'email', providers: ['email'] },
-  }).catch(() => null) // Ignore "user already exists" errors
+  }).catch(() => null)
 
-  // Get the user ID from auth (needed for RPC call)
+  // Get user ID
   const { data: { users } } = await adminClient.auth.admin.listUsers()
   const authUser = users?.find((u) => u.email === cleanEmail)
   if (!authUser?.id) {
@@ -136,21 +136,7 @@ Deno.serve(async (req) => {
   }
   const userId = authUser.id
 
-  // Reactivate if inactive
-  const { data: existingProfile } = await adminClient
-    .from('users')
-    .select('status')
-    .eq('id', userId)
-    .maybeSingle()
-
-  if (existingProfile?.status === 'inactive') {
-    await adminClient
-      .from('users')
-      .update({ status: 'pending_activation', deactivated_at: null, deactivated_by: null })
-      .eq('id', userId)
-  }
-
-  // 2. Add to sprint (upserts public.users profile + sprint_members, no-op if already member)
+  // 2. Add to sprint via RPC
   const { error: rpcError } = await callerClient.rpc('add_sprint_member_profile', {
     p_user_id: userId,
     p_email: cleanEmail,
@@ -162,37 +148,28 @@ Deno.serve(async (req) => {
 
   if (rpcError) return jsonResponse(400, { error: rpcError.message })
 
-  // 3. Generate invite link via Admin API
-  // Redirect back to confirm-invite so it can wait for session to establish,
-  // then navigate to reset-password programmatically (avoids recovery context loss)
-  const redirectTo = `${appUrl.replace(/\/$/, '')}/confirm-invite`
-  const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
-    type: 'recovery',
-    email: cleanEmail,
-    options: { redirectTo },
-  })
-
-  if (linkError || !linkData?.properties?.action_link) {
-    return jsonResponse(502, { error: `Failed to generate invite link: ${linkError?.message}` })
-  }
-
-  // Store link with short code to avoid email length limits
-  const code = crypto.getRandomValues(new Uint8Array(6)).reduce((a, b) => a + b.toString(16).padStart(2, '0'), '')
-  await adminClient
-    .from('invite_link_codes')
+  // 3. Generate invite token
+  const token = generateToken()
+  const { error: tokenError } = await adminClient
+    .from('sprint_invite_tokens')
     .insert({
-      code,
-      action_link: linkData.properties.action_link,
+      user_id: userId,
+      sprint_id: sprintId,
+      token,
       email: cleanEmail,
+      created_by: caller.id,
     })
 
-  const setPasswordUrl = `${appUrl.replace(/\/$/, '')}/confirm-invite?code=${code}`
+  if (tokenError) return jsonResponse(502, { error: `Failed to create invite token: ${tokenError.message}` })
 
-  const expiresAt = membershipEndDate
-    ? new Date(membershipEndDate).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
-    : 'sprint end'
+  // 4. Send email
+  const setPasswordUrl = `${appUrl.replace(/\/$/, '')}/set-password?token=${token}`
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
 
-  // 3. Send via Resend
   const resendRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -201,9 +178,9 @@ Deno.serve(async (req) => {
     },
     body: JSON.stringify({
       from: `BLW CAN NEXUS <${fromEmail}>`,
-      to: [email.trim().toLowerCase()],
+      to: [cleanEmail],
       subject: `You've been invited to the sprint "${sprintName}"`,
-      html: emailHtml({ name: name || email, sprintName, role, expiresAt, setPasswordUrl }),
+      html: emailHtml({ name: cleanName, sprintName, setPasswordUrl, expiresAt }),
     }),
   })
 
