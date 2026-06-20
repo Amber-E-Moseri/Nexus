@@ -1,15 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { NOTIFICATION_TYPES, setNotificationPref } from '../../lib/notifications'
+import { NOTIFICATION_TYPES, setNotificationPref } from '../../features/notifications'
 import { supabase } from '../../lib/supabase'
 import { requestPushPermission, unsubscribePush, isPushEnabled, getPushStatus } from '../../lib/webPush'
 import { Bell, Mail, Smartphone, AlertCircle, Check } from 'lucide-react'
 
 const NOTIFICATION_CHANNELS = [
   { id: 'in_app', label: 'In-App', icon: Bell, alwaysOn: true, description: 'Bell icon notifications' },
-  { id: 'browser', label: 'Browser Push', icon: Bell, description: 'Desktop alerts' },
-  { id: 'email', label: 'Email', icon: Mail, description: 'Email notifications' },
-  { id: 'mobile', label: 'Mobile Push', icon: Smartphone, description: 'Mobile notifications' }
+  { id: 'email', label: 'Email', icon: Mail, description: 'Email notifications' }
 ]
 
 export default function NotificationsSection({ prefs = {}, role, onTogglePref }) {
