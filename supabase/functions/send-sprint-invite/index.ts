@@ -67,7 +67,12 @@ function emailHtml({
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', {
+      status: 200,
+      headers: corsHeaders,
+    })
+  }
   if (req.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed' })
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
@@ -129,8 +134,6 @@ Deno.serve(async (req) => {
   const { email, name, sprintId, sprintName, role, membershipEndDate } = body
   const cleanEmail = email.trim().toLowerCase()
   const cleanName = name?.trim() || cleanEmail.split('@')[0]
-
-  const adminClient = createClient(supabaseUrl, serviceRoleKey)
 
   // 1. Create or reuse auth user
   await adminClient.auth.admin.createUser({
