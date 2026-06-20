@@ -10,6 +10,11 @@ export default function SignupInvite() {
   const inviteToken = params.get('invite')
   const inviteEmail = params.get('email')
 
+  const [sprintId, setSprintId] = useState(null)
+  const [sprintName, setSprintName] = useState(null)
+  const [role, setRole] = useState(null)
+  const [userName, setUserName] = useState(null)
+
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
@@ -28,7 +33,7 @@ export default function SignupInvite() {
     const validateInvite = async () => {
       const { data, error: fetchError } = await supabase
         .from('sprint_invite_tokens')
-        .select('id, metadata, expires_at, used_at')
+        .select('id, sprint_id, expires_at, used_at')
         .eq('token', inviteToken)
         .eq('email', inviteEmail)
         .maybeSingle()
@@ -58,6 +63,21 @@ export default function SignupInvite() {
       }
 
       setInviteData(data)
+      setSprintId(data.sprint_id)
+
+      // Fetch sprint details
+      const { data: sprint } = await supabase
+        .from('sprints')
+        .select('name, id')
+        .eq('id', data.sprint_id)
+        .single()
+
+      if (sprint) {
+        setSprintName(sprint.name)
+      }
+
+      setUserName(inviteEmail.split('@')[0])
+      setRole('member') // Default role
       setValidating(false)
     }
 
@@ -105,16 +125,15 @@ export default function SignupInvite() {
       }
 
       const userId = authData.user.id
-      const metadata = inviteData?.metadata || {}
 
       // Add user to sprint via RPC
       const { error: rpcError } = await supabase.rpc('add_sprint_member_profile', {
         p_user_id: userId,
         p_email: inviteEmail,
-        p_name: metadata.name || inviteEmail.split('@')[0],
-        p_sprint_id: metadata.sprint_id,
-        p_role: metadata.role,
-        p_end_date: metadata.membership_end_date || null,
+        p_name: userName || inviteEmail.split('@')[0],
+        p_sprint_id: sprintId,
+        p_role: role || 'member',
+        p_end_date: null,
       })
 
       if (rpcError) {
@@ -128,11 +147,11 @@ export default function SignupInvite() {
       await supabase
         .from('sprint_invite_tokens')
         .update({ user_id: userId, used_at: new Date().toISOString() })
-        .eq('id', inviteData.id)
+        .eq('token', inviteToken)
         .catch(() => null)
 
       // Redirect to sprint
-      navigate(`/sprints/${metadata.sprint_id}`, { replace: true })
+      navigate(`/sprints/${sprintId}`, { replace: true })
     } catch (err) {
       setError(err.message || 'An error occurred')
       setLoading(false)
@@ -188,7 +207,7 @@ export default function SignupInvite() {
           Create your account
         </h1>
         <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
-          Join {inviteData?.metadata?.sprint_name || 'the sprint'} by creating your account.
+          Join {sprintName || 'the sprint'} by creating your account.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">

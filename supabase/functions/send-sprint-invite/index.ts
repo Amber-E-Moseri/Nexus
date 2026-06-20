@@ -146,13 +146,6 @@ Deno.serve(async (req) => {
       token,
       email: cleanEmail,
       created_by: callerId,
-      metadata: JSON.stringify({
-        name: cleanName,
-        sprint_id: sprintId,
-        sprint_name: sprintName,
-        role,
-        membership_end_date: membershipEndDate || null,
-      }),
     })
 
   if (tokenError) return jsonResponse(502, { error: `Failed to create invite token: ${tokenError.message}` })
