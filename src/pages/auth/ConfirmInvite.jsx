@@ -16,7 +16,7 @@ export default function ConfirmInvite() {
     if (code) return // Code flow handles separately below
 
     let active = true
-    let timeout: NodeJS.Timeout
+    let timeout
 
     // Set up listener for session establishment
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
