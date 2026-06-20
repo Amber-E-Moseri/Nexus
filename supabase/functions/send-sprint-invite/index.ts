@@ -71,7 +71,6 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed' })
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const resendApiKey = Deno.env.get('RESEND_API_KEY')
   const fromEmail = Deno.env.get('INVITATION_FROM_EMAIL')
@@ -83,7 +82,6 @@ Deno.serve(async (req) => {
 
   const missing = [
     !supabaseUrl && 'SUPABASE_URL',
-    !anonKey && 'SUPABASE_ANON_KEY',
     !serviceRoleKey && 'SUPABASE_SERVICE_ROLE_KEY',
     !resendApiKey && 'RESEND_API_KEY',
     !fromEmail && 'INVITATION_FROM_EMAIL',
@@ -97,12 +95,18 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return jsonResponse(401, { error: 'Missing authorization header' })
 
-  // Validate caller with user's token (use anonKey + user's auth header)
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-  })
-  const { data: { user: caller }, error: callerError } = await userClient.auth.getUser()
-  if (callerError || !caller) return jsonResponse(401, { error: 'Unable to validate caller' })
+  // Extract user ID from JWT (Bearer token)
+  let callerId: string
+  try {
+    const token = authHeader.replace('Bearer ', '')
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    callerId = payload.sub
+    if (!callerId) throw new Error('No user ID in token')
+  } catch {
+    return jsonResponse(401, { error: 'Invalid authorization token' })
+  }
+
+  const adminClient = createClient(supabaseUrl, serviceRoleKey)
 
   const body = await req.json().catch(() => null) as {
     email: string
@@ -140,7 +144,7 @@ Deno.serve(async (req) => {
   const userId = authUser.id
 
   // 2. Add to sprint via RPC
-  const { error: rpcError } = await userClient.rpc('add_sprint_member_profile', {
+  const { error: rpcError } = await adminClient.rpc('add_sprint_member_profile', {
     p_user_id: userId,
     p_email: cleanEmail,
     p_name: cleanName,
@@ -160,7 +164,7 @@ Deno.serve(async (req) => {
       sprint_id: sprintId,
       token,
       email: cleanEmail,
-      created_by: caller.id,
+      created_by: callerId,
     })
 
   if (tokenError) return jsonResponse(502, { error: `Failed to create invite token: ${tokenError.message}` })
