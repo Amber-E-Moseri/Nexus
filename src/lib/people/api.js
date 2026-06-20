@@ -193,3 +193,52 @@ export async function touchLastActive() {
   const { error } = await supabase.rpc('touch_last_active')
   if (error) throw error
 }
+
+export async function requestSprintAccess(sprintId) {
+  const { data, error } = await supabase
+    .from('sprint_access_requests')
+    .insert({
+      sprint_id: sprintId,
+      user_id: (await supabase.auth.getUser()).data.user?.id,
+    })
+    .select()
+
+  if (error) throw error
+  return data?.[0] ?? null
+}
+
+export async function getSprintAccessRequests(sprintId) {
+  const { data, error } = await supabase
+    .from('sprint_access_requests')
+    .select(`
+      id,
+      user_id,
+      status,
+      requested_at,
+      responded_at,
+      response_message,
+      user:users!user_id(id, name, email)
+    `)
+    .eq('sprint_id', sprintId)
+    .order('requested_at', { ascending: false })
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function approveSprintAccessRequest(requestId) {
+  const { error } = await supabase.rpc('approve_sprint_access_request', {
+    p_request_id: requestId,
+  })
+
+  if (error) throw error
+}
+
+export async function rejectSprintAccessRequest(requestId, message = null) {
+  const { error } = await supabase.rpc('reject_sprint_access_request', {
+    p_request_id: requestId,
+    p_message: message,
+  })
+
+  if (error) throw error
+}
