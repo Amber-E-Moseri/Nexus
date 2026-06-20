@@ -146,6 +146,20 @@ Deno.serve(async (req) => {
   }
   userId = newUser.id
 
+  // Ensure identity entry exists (fixes JWT issues on signin)
+  await adminClient
+    .from('auth.identities')
+    .insert({
+      id: crypto.randomUUID(),
+      user_id: userId,
+      identity_data: { sub: userId, email: cleanEmail },
+      provider: 'email',
+      provider_id: cleanEmail,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .catch(() => null)
+
   // 2. Add to sprint via RPC (use userClient so auth.uid() is set)
   const { error: rpcError } = await userClient.rpc('add_sprint_member_profile', {
     p_user_id: userId,
