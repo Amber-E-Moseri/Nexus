@@ -101,11 +101,12 @@ export default function SignupInvite() {
     setLoading(true)
 
     try {
-      // Sign up with Supabase (normal flow)
+      // Sign up with Supabase (skip email confirmation since we use invite tokens)
       const { data: authData, error: signupError } = await supabase.auth.signUp({
         email: inviteEmail,
         password,
         options: {
+          emailRedirectTo: undefined,
           data: {
             name: inviteData?.metadata?.name || inviteEmail.split('@')[0],
           },
