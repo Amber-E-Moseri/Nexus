@@ -630,87 +630,20 @@ export async function inviteExternalToSprint(payload) {
     membershipEndDate,
   } = payload
 
-  const { data: user } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  // Step 1: Check if user exists
-  let existingUser = null
-  try {
-    const { data } = await supabase
-      .from('users')
-      .select('id, status, email')
-      .eq('email', email.toLowerCase())
-      .single()
-    existingUser = data
-  } catch (err) {
-    // User doesn't exist, that's fine
-  }
+  const { data: userId, error } = await supabase.rpc('invite_external_sprint_member', {
+    p_email: email.trim().toLowerCase(),
+    p_name: name?.trim() || '',
+    p_sprint_id: sprintId,
+    p_role: role,
+    p_end_date: membershipEndDate || null,
+  })
 
-  let userId
-  let isNewUser = false
+  if (error) throw error
 
-  if (existingUser) {
-    userId = existingUser.id
-  } else {
-    // Step 2: Create new temp user
-    const { data: newUser, error: userError } = await supabase
-      .from('users')
-      .insert({
-        email: email.toLowerCase(),
-        name: name || email.split('@')[0],
-        status: 'pending_activation',
-        is_temporary: true,
-        created_at: new Date().toISOString(),
-      })
-      .select('id')
-      .single()
-
-    if (userError) throw userError
-    userId = newUser.id
-    isNewUser = true
-  }
-
-  // Step 3: Check if already in sprint
-  const { data: existingMember } = await supabase
-    .from('sprint_members')
-    .select('id')
-    .eq('sprint_id', sprintId)
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  if (existingMember) {
-    throw new Error('User is already a member of this sprint')
-  }
-
-  // Step 4: Add to sprint as temporary member
-  const { data: sprintMember, error: memberError } = await supabase
-    .from('sprint_members')
-    .insert({
-      sprint_id: sprintId,
-      user_id: userId,
-      role,
-      membership_end_date: membershipEndDate,
-      is_temporary: true,
-      invited_by: user.user.id,
-    })
-    .select(SPRINT_MEMBER_WITH_TEMP_SELECT)
-    .single()
-
-  if (memberError) throw memberError
-
-  // Step 5: Send invite email (if new user)
-  if (isNewUser) {
-    await sendSprintInvitationEmail({
-      userId,
-      email,
-      name: name || existingUser?.name,
-      sprintId,
-      membershipEndDate,
-      isNewAccount: true,
-    })
-  }
-
-  return { userId, sprintMember, isNewUser }
+  return { userId, isNewUser: true }
 }
 
 export async function getTemporarySprintMembers(sprintId) {

@@ -488,18 +488,20 @@ export default function SprintOverview() {
       {/* Teams Section */}
       {detail.teams.length > 0 && (
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-1 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">Sprint Teams</h2>
-            <button
-              type="button"
-              onClick={handleCreateTeam}
-              disabled={savingTeam || isArchived}
-              className="text-xs text-[var(--accent)] disabled:opacity-50"
-            >
-              + New team
-            </button>
+            {canManage && !isArchived && (
+              <button
+                type="button"
+                onClick={handleCreateTeam}
+                disabled={savingTeam || isArchived}
+                className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors disabled:opacity-50"
+              >
+                + New team
+              </button>
+            )}
           </div>
-          <p className="mb-4 text-xs text-[var(--text-tertiary)]">Cross-functional squads – name them and pull in members from any department.</p>
+          <p className="mb-4 text-sm text-[var(--text-secondary)]">Cross-functional squads — name them and pull in members from any department.</p>
           <SprintTeamPanel sprintId={detail.sprint.id} teams={detail.teams} members={detail.members} canEdit={Boolean(canManage)} isArchived={Boolean(isArchived)} onChanged={loadDetail} />
         </div>
       )}
