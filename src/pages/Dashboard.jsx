@@ -22,6 +22,9 @@ import OrgReportExport from '../features/dashboard/components/OrgReportExport'
 import ActionItemsWidget from '../features/dashboard/components/ActionItemsWidget'
 import TeamWorkloadWidget from '../features/dashboard/components/TeamWorkloadWidget'
 import PastoralMembersWidget from '../features/dashboard/components/PastoralMembersWidget'
+import AbsentMembersWidget from '../features/dashboard/components/AbsentMembersWidget'
+import TeamActivityHeatmap from '../features/dashboard/components/TeamActivityHeatmap'
+import TeamVelocityWidget from '../features/dashboard/components/TeamVelocityWidget'
 import { getDashboardPresets } from '../features/dashboard/lib/dashboard-queries'
 
 function greetingForHour() {
@@ -152,19 +155,22 @@ function QuickActionsWidget({ role }) {
 // ─── Widget registry ──────────────────────────────────────────────────────────
 
 const WIDGET_META = {
-  my_tasks_summary:     { title: 'My Tasks Summary',          Component: MyTasksSummaryWidget },
-  upcoming_events:      { title: 'Upcoming Events',           Component: UpcomingEventsWidget },
-  upcoming_meetings:    { title: 'Upcoming Meetings',         Component: UpcomingMeetingsWidget },
-  sprint_progress:      { title: 'Sprint Progress',           Component: SprintProgressWidget },
-  overdue_by_member:    { title: 'Overdue Tasks by Member',   Component: OverdueByMemberWidget },
-  member_activity:      { title: 'Member Activity',           Component: MemberActivityWidget },
-  completion_rate:      { title: 'Completion Rate This Week', Component: CompletionRateWidget },
-  attendance_summary:   { title: 'Attendance Summary',        Component: AttendanceSummaryWidget },
-  activity_feed:        { title: 'Recent Activity',           Component: ActivityFeedWidget },
-  action_items:         { title: 'My Action Items',           Component: ActionItemsWidget },
-  team_workload:        { title: 'Team Workload',             Component: TeamWorkloadWidget },
-  pastoral_members:     { title: 'Pastoral Members',          Component: PastoralMembersWidget },
-  quick_actions:        { title: 'Quick Actions',             Component: QuickActionsWidget },
+  my_tasks_summary:       { title: 'My Tasks Summary',          Component: MyTasksSummaryWidget },
+  upcoming_events:        { title: 'Upcoming Events',           Component: UpcomingEventsWidget },
+  upcoming_meetings:      { title: 'Upcoming Meetings',         Component: UpcomingMeetingsWidget },
+  sprint_progress:        { title: 'Sprint Progress',           Component: SprintProgressWidget },
+  overdue_by_member:      { title: 'Overdue Tasks by Member',   Component: OverdueByMemberWidget },
+  member_activity:        { title: 'Member Activity',           Component: MemberActivityWidget },
+  completion_rate:        { title: 'Completion Rate This Week', Component: CompletionRateWidget },
+  attendance_summary:     { title: 'Attendance Summary',        Component: AttendanceSummaryWidget },
+  activity_feed:          { title: 'Recent Activity',           Component: ActivityFeedWidget },
+  action_items:           { title: 'My Action Items',           Component: ActionItemsWidget },
+  team_workload:          { title: 'Team Workload',             Component: TeamWorkloadWidget },
+  pastoral_members:       { title: 'Pastoral Members',          Component: PastoralMembersWidget },
+  absent_members_alert:   { title: 'Absent Members Alert',      Component: AbsentMembersWidget },
+  team_activity_heatmap:  { title: 'Team Activity Heatmap',     Component: TeamActivityHeatmap },
+  team_velocity:          { title: 'Team Velocity Trend',       Component: TeamVelocityWidget },
+  quick_actions:          { title: 'Quick Actions',             Component: QuickActionsWidget },
 }
 
 const ALL_WIDGET_KEYS = Object.keys(WIDGET_META)
