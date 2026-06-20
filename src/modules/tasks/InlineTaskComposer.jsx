@@ -153,34 +153,32 @@ export default function InlineTaskComposer({
         </label>
       </div>
 
-      {!compact && (
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
-            Assign to
-          </span>
-          <select
-            value={assigneeId}
-            onChange={(event) => setAssigneeId(event.target.value)}
-            disabled={teamMembers.length === 0}
-            style={{
-              border: '1px solid var(--border)',
-              borderRadius: 10,
-              padding: '9px 11px',
-              fontSize: 13,
-              color: assigneeId ? 'var(--text-primary)' : 'var(--text-secondary)',
-              background: '#FFFFFF',
-              opacity: teamMembers.length === 0 ? 0.5 : 1,
-            }}
-          >
-            <option value="">{teamMembers.length === 0 ? 'No team members' : 'Unassigned'}</option>
-            {teamMembers.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name ?? member.email}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, gridColumn: compact ? '1 / -1' : undefined }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
+          Assign to
+        </span>
+        <select
+          value={assigneeId}
+          onChange={(event) => setAssigneeId(event.target.value)}
+          disabled={teamMembers.length === 0}
+          style={{
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            padding: '9px 11px',
+            fontSize: 13,
+            color: assigneeId ? 'var(--text-primary)' : 'var(--text-secondary)',
+            background: '#FFFFFF',
+            opacity: teamMembers.length === 0 ? 0.5 : 1,
+          }}
+        >
+          <option value="">{teamMembers.length === 0 ? 'No members' : 'Unassigned'}</option>
+          {teamMembers.map((member) => (
+            <option key={member.id} value={member.id}>
+              {member.name ?? member.email}
+            </option>
+          ))}
+        </select>
+      </label>
 
 
       <div style={{ marginTop: 10 }}>

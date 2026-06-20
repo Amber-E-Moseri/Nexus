@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { getMonthEvents } from '../../lib/calendar'
 import { hasPermission } from '../../lib/permissions'
 import { archiveSpace, canManageSpace, createFolder, createList, deleteFolder, deleteList, getFolders, getLists, getSpaceDetail, getSpaceListsCount, getSpaceMembers, getSpaceMeetings, getSpaceSprints, getSpaceTasks, restoreSpace, SPACE_TYPE_LABELS, updateFolder, updateList, updateSpace, updateTaskDueDate } from '../../lib/spaces'
+import { getTaskById } from '../../lib/tasks'
 import Badge from '../../components/ui/Badge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import CalendarGrid from '../../modules/calendar/CalendarGrid'
@@ -24,7 +25,7 @@ import { useTaskFilters } from '../../modules/tasks/useTaskFilters'
 import { mergeTaskFieldSettings, normalizeTaskFieldSettings, TASK_FIELD_OPTIONS } from '../../lib/taskFieldSettings'
 import FileList from '../../components/files/FileList'
 
-const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Sprints', 'Meetings', 'Automations', 'Members']
+const TABS = ['Overview', 'Browse', 'Board', 'List', 'Calendar', 'Sprints', 'Meetings', 'Automations', 'Members']
 
 const STATUS_ACCENT = {
   open: '#C9BEAD',
@@ -472,6 +473,89 @@ function FolderTree({
   )
 }
 
+function SpaceBrowseTab({ folders, lists, onSelectList }) {
+  const [openFolders, setOpenFolders] = useState(() => {
+    const init = {}
+    for (const f of folders) init[f.id] = true
+    return init
+  })
+
+  const listsByFolder = useMemo(
+    () => folders.reduce((acc, f) => ({ ...acc, [f.id]: lists.filter((l) => l.folder_id === f.id) }), {}),
+    [folders, lists],
+  )
+  const rootLists = useMemo(() => lists.filter((l) => !l.folder_id), [lists])
+
+  if (folders.length === 0 && lists.length === 0) {
+    return (
+      <div className="rounded-[24px] border border-dashed border-[var(--border)] bg-white px-6 py-12 text-center text-sm text-[var(--text-tertiary)] shadow-[var(--card-shadow)]">
+        No folders or lists yet. Use the organizer to create some.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {folders.map((folder) => {
+        const folderLists = listsByFolder[folder.id] ?? []
+        const isOpen = openFolders[folder.id] ?? true
+        return (
+          <div key={folder.id} className="rounded-[20px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)] overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setOpenFolders((prev) => ({ ...prev, [folder.id]: !prev[folder.id] }))}
+              className="flex w-full items-center gap-3 px-5 py-4 text-left"
+            >
+              <span className="text-base">📁</span>
+              <span className="flex-1 text-sm font-semibold text-[var(--text-primary)]">{folder.name}</span>
+              <span className="text-xs text-[var(--text-tertiary)]">{folderLists.length} list{folderLists.length !== 1 ? 's' : ''}</span>
+              <span className="ml-2 text-[var(--text-tertiary)]" style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', display: 'inline-block', transition: 'transform 0.15s' }}>›</span>
+            </button>
+            {isOpen ? (
+              <div className="border-t border-[var(--border)] divide-y divide-[var(--border)]">
+                {folderLists.length === 0 ? (
+                  <div className="px-5 py-3 text-xs text-[var(--text-tertiary)]">No lists in this folder yet.</div>
+                ) : folderLists.map((list) => (
+                  <button
+                    key={list.id}
+                    type="button"
+                    onClick={() => onSelectList(list.id)}
+                    className="flex w-full items-center gap-3 px-5 py-3 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-tertiary)] transition-colors"
+                  >
+                    <span>📋</span>
+                    <span className="flex-1">{list.name}</span>
+                    <span className="text-xs text-[var(--accent)] font-medium">Open →</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        )
+      })}
+
+      {rootLists.length > 0 ? (
+        <div className="rounded-[20px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)] overflow-hidden">
+          <div className="px-5 py-4 text-sm font-semibold text-[var(--text-secondary)]">Unorganized lists</div>
+          <div className="border-t border-[var(--border)] divide-y divide-[var(--border)]">
+            {rootLists.map((list) => (
+              <button
+                key={list.id}
+                type="button"
+                onClick={() => onSelectList(list.id)}
+                className="flex w-full items-center gap-3 px-5 py-3 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-tertiary)] transition-colors"
+              >
+                <span>📋</span>
+                <span className="flex-1">{list.name}</span>
+                <span className="text-xs text-[var(--accent)] font-medium">Open →</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage, onTreeDataChange }) {
   const { effectiveRole, profile } = useAuth()
   const [folders, setFolders] = useState([])
@@ -675,7 +759,7 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
   )
 }
 
-function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', spaceFieldSettings = null, selectedListId = null, folders = [], lists = [] }) {
+function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', spaceFieldSettings = null, selectedListId = null, selectedFolderId = null, folders = [], lists = [], onClearToSpace, onClearToFolder, members = [] }) {
   const { profile } = useAuth()
   const { tasks, loading, error, statuses, addTask, moveTask } = useTasks()
   const [modal, setModal] = useState(null)
@@ -683,15 +767,23 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
 
   const selectedList = useMemo(() => lists.find((list) => list.id === selectedListId) ?? null, [lists, selectedListId])
-  const selectedFolder = useMemo(() => folders.find((folder) => folder.id === selectedList?.folder_id) ?? null, [folders, selectedList])
+  const selectedFolder = useMemo(
+    () => folders.find((folder) => folder.id === (selectedList?.folder_id ?? selectedFolderId)) ?? null,
+    [folders, selectedList, selectedFolderId],
+  )
   const effectiveFieldSettings = useMemo(
     () => mergeTaskFieldSettings(spaceFieldSettings, selectedFolder?.task_field_settings, selectedList?.task_field_settings),
     [selectedFolder, selectedList, spaceFieldSettings],
   )
+  const folderListIds = useMemo(
+    () => selectedFolderId && !selectedListId ? new Set(lists.filter((l) => l.folder_id === selectedFolderId).map((l) => l.id)) : null,
+    [lists, selectedFolderId, selectedListId],
+  )
   const visibleTasks = useMemo(() => {
-    if (!selectedListId) return filtered
-    return filtered.filter((task) => task.list_id === selectedListId)
-  }, [filtered, selectedListId])
+    if (selectedListId) return filtered.filter((task) => task.list_id === selectedListId)
+    if (folderListIds) return filtered.filter((task) => folderListIds.has(task.list_id))
+    return filtered
+  }, [filtered, selectedListId, folderListIds])
   const activeFilterCount = useMemo(() => (
     filters.status.length
     + filters.priority.length
@@ -706,7 +798,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
   const visibleStatuses = statuses
   const departmentOptions = useMemo(() => [{ id: spaceId, name: spaceName }], [spaceId, spaceName])
 
-  async function handleInlineCreateTask({ title, departmentId, priority, dueDate, statusId, listId }) {
+  async function handleInlineCreateTask({ title, departmentId, priority, dueDate, statusId, listId, assigneeId }) {
     if (!profile?.id) {
       throw new Error('You must be signed in to add a task.')
     }
@@ -722,6 +814,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
       department_id: department?.id ?? spaceId,
       department,
       list_id: listId ?? selectedListId ?? null,
+      assignee_id: assigneeId || null,
       source: 'manual',
     })
   }
@@ -741,16 +834,40 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
   return (
     <>
       <div className="space-y-4">
-        {selectedList ? (
-          <div className="rounded-[20px] border border-[var(--border)] bg-white px-5 py-4 text-sm text-[var(--text-secondary)] shadow-[var(--card-shadow)]">
-            {spaceName} → <span className="font-semibold text-[var(--text-primary)]">{selectedFolder?.name ?? 'Folder'}</span> → <span className="font-semibold text-[var(--text-primary)]">{selectedList.name}</span>
+        {(selectedList || selectedFolder) ? (
+          <div className="rounded-[20px] border border-[var(--border)] bg-white px-5 py-4 text-sm shadow-[var(--card-shadow)] flex items-center gap-1 flex-wrap">
+            <button
+              type="button"
+              onClick={onClearToSpace}
+              className="text-[var(--text-secondary)] hover:text-[var(--accent)] hover:underline transition-colors cursor-pointer"
+            >
+              {spaceName}
+            </button>
+            {selectedFolder ? (
+              <>
+                <span className="text-[var(--text-tertiary)] mx-1">→</span>
+                <button
+                  type="button"
+                  onClick={selectedList ? () => onClearToFolder?.(selectedFolder.id) : undefined}
+                  className={selectedList ? 'font-semibold text-[var(--text-primary)] hover:text-[var(--accent)] hover:underline transition-colors cursor-pointer' : 'font-semibold text-[var(--text-primary)]'}
+                >
+                  {selectedFolder.name}
+                </button>
+              </>
+            ) : null}
+            {selectedList ? (
+              <>
+                <span className="text-[var(--text-tertiary)] mx-1">→</span>
+                <span className="font-semibold text-[var(--text-primary)]">{selectedList.name}</span>
+              </>
+            ) : null}
           </div>
         ) : null}
 
         {viewMode !== 'kanban' ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm text-[var(--text-secondary)]">
-              {selectedList ? `${selectedFolder?.name ?? 'Folder'} → ${selectedList.name}` : 'All tasks in this space'}
+              {selectedList ? `${selectedFolder?.name ?? ''} → ${selectedList.name}` : selectedFolder ? `${selectedFolder.name} — filtered` : 'All tasks in this space'}
             </div>
           </div>
         ) : null}
@@ -806,8 +923,9 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
               onTaskStatusChange={canManage ? handleTaskStatusChange : undefined}
               onTaskReorder={canManage ? handleTaskReorder : undefined}
-              people={{}}
+              people={Object.fromEntries(members.map((m) => [m.id, m]))}
               priorities={{}}
+              teamMembers={members}
             />
           </div>
         )}
@@ -999,6 +1117,8 @@ export default function SpaceOverview() {
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth())
   const [calendarLoading, setCalendarLoading] = useState(true)
   const [selectedListId, setSelectedListId] = useState(null)
+  const [selectedFolderId, setSelectedFolderId] = useState(null)
+  const [calendarTaskModal, setCalendarTaskModal] = useState(null)
   const [treeData, setTreeData] = useState({ folders: [], lists: [] })
   const [organizerOpen, setOrganizerOpen] = useState(false)
   const [showStatusesModal, setShowStatusesModal] = useState(false)
@@ -1014,6 +1134,7 @@ export default function SpaceOverview() {
 
   useEffect(() => {
     setSelectedListId(null)
+    setSelectedFolderId(null)
   }, [spaceId])
 
   useEffect(() => {
@@ -1021,6 +1142,10 @@ export default function SpaceOverview() {
     const listId = params.get('list')
     if (listId) {
       setSelectedListId(listId)
+      setSelectedFolderId(null)
+      setActiveTab((current) => (current === 'Overview' ? 'List' : current))
+    } else {
+      setSelectedListId(null)
     }
     const openOrganizer = params.get('organizer')
     if (openOrganizer === 'true') {
@@ -1116,8 +1241,17 @@ export default function SpaceOverview() {
   const tabContent = (
     <>
       {activeTab === 'Overview' ? <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}><SpaceOverviewTab space={space} listsCount={listsCount} members={spaceMembers} tasks={overviewTasks} sprints={spaceSprints} meetings={spaceMeetings} selectedFolder={selectedFolder} selectedList={selectedList} /></div> : null}
-      {activeTab === 'Board' ? <div role="tabpanel" id="tabpanel-board" aria-labelledby="tab-board" tabIndex={0}><TasksProvider departmentId={spaceId}><SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="kanban" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} folders={treeData.folders} lists={treeData.lists} /></TasksProvider></div> : null}
-      {activeTab === 'List' ? <div role="tabpanel" id="tabpanel-list" aria-labelledby="tab-list" tabIndex={0}><TasksProvider departmentId={spaceId}><SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="list" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} folders={treeData.folders} lists={treeData.lists} /></TasksProvider></div> : null}
+      {activeTab === 'Browse' ? (
+        <div role="tabpanel" id="tabpanel-browse" aria-labelledby="tab-browse" tabIndex={0}>
+          <SpaceBrowseTab
+            folders={treeData.folders}
+            lists={treeData.lists}
+            onSelectList={(listId) => { setSelectedListId(listId); setSelectedFolderId(null); setActiveTab('List'); navigate(`/spaces/${spaceId}?list=${listId}`) }}
+          />
+        </div>
+      ) : null}
+      {activeTab === 'Board' ? <div role="tabpanel" id="tabpanel-board" aria-labelledby="tab-board" tabIndex={0}><TasksProvider departmentId={spaceId}><SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="kanban" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} /></TasksProvider></div> : null}
+      {activeTab === 'List' ? <div role="tabpanel" id="tabpanel-list" aria-labelledby="tab-list" tabIndex={0}><TasksProvider departmentId={spaceId}><SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="list" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} /></TasksProvider></div> : null}
       {activeTab === 'Calendar' ? (
         <div role="tabpanel" id="tabpanel-calendar" aria-labelledby="tab-calendar" tabIndex={0}>
           <div className="space-y-4">
@@ -1146,7 +1280,17 @@ export default function SpaceOverview() {
                 year={calendarYear}
                 month={calendarMonth}
                 events={taskCalendarEvents}
-                onEventClick={() => {}}
+                onEventClick={async (event) => {
+                  const local = spaceTasks.find((t) => t.id === event.id)
+                  if (local) {
+                    setCalendarTaskModal(local)
+                  } else {
+                    try {
+                      const full = await getTaskById(event.id)
+                      if (full) setCalendarTaskModal(full)
+                    } catch { /* ignore */ }
+                  }
+                }}
                 onDayClick={undefined}
                 canEdit={canManage}
                 onDateReschedule={canManage ? async (taskId, newDate) => {
@@ -1182,6 +1326,22 @@ export default function SpaceOverview() {
             )}
           </div>
         </div>
+      ) : null}
+      {calendarTaskModal ? (
+        <TaskModal
+          mode="edit"
+          task={calendarTaskModal}
+          departmentId={spaceId}
+          onClose={() => setCalendarTaskModal(null)}
+          onSaved={(updated) => {
+            setSpaceTasks((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t))
+            setCalendarTaskModal(null)
+          }}
+          onDeleted={(taskId) => {
+            setSpaceTasks((prev) => prev.filter((t) => t.id !== taskId))
+            setCalendarTaskModal(null)
+          }}
+        />
       ) : null}
       {activeTab === 'Sprints' ? <div role="tabpanel" id="tabpanel-sprints" aria-labelledby="tab-sprints" tabIndex={0}><SpaceSprintsTab canManage={canManage} sprints={spaceSprints} spaceColor={space.color} onCreate={() => setShowSprintModal(true)} onOpen={(sprint) => navigate(`/sprints/${sprint.id}`)} /></div> : null}
       {activeTab === 'Meetings' ? <div role="tabpanel" id="tabpanel-meetings" aria-labelledby="tab-meetings" tabIndex={0}><SpaceMeetingsTab meetings={spaceMeetings} spaceId={spaceId} spaceName={space.name} canManage={canManage} onMeetingCreated={async () => { setSpaceMeetings(await getSpaceMeetings(spaceId)) }} /></div> : null}
@@ -1242,7 +1402,7 @@ export default function SpaceOverview() {
               <SpaceOrganizerPanel
                 spaceId={spaceId}
                 selectedListId={selectedListId}
-                onSelectList={(id) => { setSelectedListId(id); setOrganizerOpen(false) }}
+                onSelectList={(id) => { setSelectedListId(id); setSelectedFolderId(null); setActiveTab('List'); setOrganizerOpen(false); navigate(`/spaces/${spaceId}?list=${id}`) }}
                 canManage={canManage}
                 onTreeDataChange={(next) => {
                   setTreeData(next)
@@ -1253,6 +1413,16 @@ export default function SpaceOverview() {
           </div>
         ) : null}
       </div>
+
+      {/* DEBUG BANNER — remove after testing */}
+      {(selectedListId || selectedFolderId || calendarTaskModal) ? (
+        <div style={{ position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: '#1C1610', color: '#fff', borderRadius: 12, padding: '10px 20px', fontSize: 13, display: 'flex', gap: 16, alignItems: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
+          {selectedListId ? <span>✅ List: <b>{treeData.lists.find(l => l.id === selectedListId)?.name ?? selectedListId}</b></span> : null}
+          {selectedFolderId && !selectedListId ? <span>📁 Folder: <b>{treeData.folders.find(f => f.id === selectedFolderId)?.name ?? selectedFolderId}</b></span> : null}
+          {calendarTaskModal ? <span>🗓 Modal opened: <b>{calendarTaskModal.title ?? calendarTaskModal.id}</b></span> : null}
+          <button type="button" onClick={() => { setSelectedListId(null); setSelectedFolderId(null); setCalendarTaskModal(null) }} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: 8, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>✕</button>
+        </div>
+      ) : null}
 
       {tabContent}
 

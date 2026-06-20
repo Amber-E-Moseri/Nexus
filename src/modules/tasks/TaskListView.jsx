@@ -26,6 +26,7 @@ export default function TaskListView({
   onTaskStatusChange,
   people = {},
   priorities = {},
+  teamMembers = [],
 }) {
   const [composerStatusId, setComposerStatusId] = useState(null)
   const [activeTaskId, setActiveTaskId] = useState(null)
@@ -152,6 +153,7 @@ export default function TaskListView({
                     defaultDepartmentId={defaultDepartmentId}
                     statuses={[status]}
                     listId={listId}
+                    teamMembers={teamMembers}
                     onCancel={() => setComposerStatusId(null)}
                     onSubmit={async (draft) => {
                       await onCreateTask?.({

@@ -12,7 +12,7 @@ import EventModal from '../../modules/calendar/EventModal'
 import SprintMemberPanel from '../../modules/sprints/SprintMemberPanel'
 import SprintTaskBoard from '../../modules/sprints/SprintTaskBoard'
 import SprintTeamPanel from '../../modules/sprints/SprintTeamPanel'
-import CreateTeamModal from '../../modules/sprints/CreateTeamModal'
+import NewTeamModal from '../../modules/sprints/NewTeamModal'
 import SprintReview from './SprintReview'
 import FileList from '../../components/files/FileList'
 
@@ -544,12 +544,15 @@ export default function SprintOverview() {
         />
       ) : null}
 
-      <CreateTeamModal
-        open={showCreateTeamModal}
-        onClose={() => setShowCreateTeamModal(false)}
-        onSave={handleSaveTeam}
-        saving={savingTeam}
-      />
+      {showCreateTeamModal && (
+        <NewTeamModal
+          onClose={() => setShowCreateTeamModal(false)}
+          onSuccess={async () => {
+            setShowCreateTeamModal(false)
+            await loadDetail()
+          }}
+        />
+      )}
     </div>
   )
 }
