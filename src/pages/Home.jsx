@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { Gem, MailPlus, Plus, SquareCheckBig } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
-import { getUpcomingEvents } from '../lib/calendar'
+import { getUpcomingEvents } from '../features/calendar'
 import { PRIORITY_STYLES } from '../lib/priorities'
-import { getMySpaces } from '../lib/spaces'
-import { getMySprints } from '../lib/sprints'
+import { getMySpaces } from '../features/spaces'
+import { getMySprints } from '../features/sprints/lib/sprints'
 import { supabase } from '../lib/supabase'
-import SpaceModal from '../modules/spaces/SpaceModal'
-import SprintModal from '../modules/sprints/SprintModal'
+import SpaceModal from '../features/spaces/components/SpaceModal'
+import SprintModal from '../features/sprints/components/SprintModal'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function greetingForHour() {
@@ -230,19 +230,54 @@ export default function Home() {
   const [showSpaceModal, setShowSpaceModal] = useState(false)
   const [showSprintModal, setShowSprintModal] = useState(false)
 
-  // My tasks (with sprint + dept context)
+  // My tasks (with sprint + dept context) — includes space and sprint tasks
   useEffect(() => {
     if (!profile?.id) return
+
+    // Get sprint IDs for which user is a member
     supabase
-      .from('tasks')
-      .select('id, title, priority, due_date, department:departments(id, name, color), sprint:sprints(id, name)')
-      .eq('assignee_id', profile.id)
-      .eq('is_personal', false)
-      .is('parent_task_id', null)
-      .is('completed_at', null)
-      .order('due_date', { ascending: true, nullsFirst: false })
-      .limit(6)
-      .then(({ data }) => setMyTasks(data ?? []))
+      .from('sprint_members')
+      .select('sprint_id')
+      .eq('user_id', profile.id)
+      .then(async ({ data: memberships }) => {
+        const sprintIds = (memberships ?? []).map(m => m.sprint_id)
+
+        // Get space tasks
+        const spacePromise = supabase
+          .from('tasks')
+          .select('id, title, priority, due_date, department:departments(id, name, color), sprint:sprints(id, name)')
+          .eq('assignee_id', profile.id)
+          .eq('is_personal', false)
+          .is('parent_task_id', null)
+          .is('completed_at', null)
+
+        // Get sprint tasks
+        const sprintPromise = sprintIds.length > 0
+          ? supabase
+              .from('tasks')
+              .select('id, title, priority, due_date, department:departments(id, name, color), sprint:sprints(id, name)')
+              .in('sprint_id', sprintIds)
+              .is('parent_task_id', null)
+              .is('completed_at', null)
+          : Promise.resolve({ data: [] })
+
+        const [{ data: spaceTasks }, { data: sprintTasks }] = await Promise.all([spacePromise, sprintPromise])
+
+        // Merge, deduplicate, and sort
+        const all = [...(spaceTasks ?? []), ...(sprintTasks ?? [])]
+        const map = new Map()
+        for (const task of all) {
+          map.set(task.id, task)
+        }
+        const unique = Array.from(map.values())
+        unique.sort((a, b) => {
+          const aDate = a.due_date ? new Date(a.due_date).getTime() : Infinity
+          const bDate = b.due_date ? new Date(b.due_date).getTime() : Infinity
+          return aDate - bDate
+        })
+
+        setMyTasks(unique.slice(0, 6))
+      })
       .catch(() => setMyTasks([]))
   }, [profile?.id])
 
