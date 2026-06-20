@@ -160,10 +160,12 @@ Deno.serve(async (req) => {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: fromEmail,
+      from: `BLW CAN NEXUS <${fromEmail}>`,
       to: [cleanEmail],
-      subject: `Invitation: ${sprintName}`,
-      text: `Hi ${cleanName},\n\nYou've been invited to join "${sprintName}" on BLW CAN NEXUS.\n\nClick here to create your account:\n${signupUrl}\n\nThis link expires in 24 hours.`,
+      subject: `You've been invited to join "${sprintName}"`,
+      html: emailHtml({ name: cleanName, sprintName, signupUrl }),
+      text: `Hi ${cleanName},\n\nYou've been invited to join the sprint "${sprintName}" on BLW CAN NEXUS.\n\nClick here to create your account:\n${signupUrl}\n\nThis link expires in 24 hours.`,
+      reply_to: fromEmail,
     }),
   })
 
