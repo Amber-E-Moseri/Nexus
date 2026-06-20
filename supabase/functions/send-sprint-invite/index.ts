@@ -138,23 +138,21 @@ Deno.serve(async (req) => {
 
   // 2. Generate invite token
   const token = generateToken()
-  const inviteMetadata = {
-    name: cleanName,
-    sprint_id: sprintId,
-    sprint_name: sprintName,
-    role,
-    membership_end_date: membershipEndDate || null,
-  }
 
   const { error: tokenError } = await adminClient
     .from('sprint_invite_tokens')
     .insert({
-      user_id: null,
       sprint_id: sprintId,
       token,
       email: cleanEmail,
       created_by: callerId,
-      metadata: inviteMetadata,
+      metadata: JSON.stringify({
+        name: cleanName,
+        sprint_id: sprintId,
+        sprint_name: sprintName,
+        role,
+        membership_end_date: membershipEndDate || null,
+      }),
     })
 
   if (tokenError) return jsonResponse(502, { error: `Failed to create invite token: ${tokenError.message}` })
