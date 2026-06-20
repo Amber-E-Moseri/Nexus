@@ -177,7 +177,7 @@ export default function App() {
           <Route
             path="/people/invitations"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin']}>
                 <InvitationsPage />
               </ProtectedRoute>
             }
@@ -193,7 +193,7 @@ export default function App() {
           <Route
             path="/people/pastoral-assignments"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead', 'pastor']}>
+              <ProtectedRoute roles={['super_admin']}>
                 <PastoralAssignmentsPage />
               </ProtectedRoute>
             }
