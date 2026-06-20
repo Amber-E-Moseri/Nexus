@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
 
   if (tokenError) return jsonResponse(502, { error: `Failed to create invite token: ${tokenError.message}` })
 
-  // 3. Send email with signup link
+  // 3. Send email with signup link (plain text only)
   const signupUrl = `${appUrl.replace(/\/$/, '')}/signup?invite=${token}&email=${encodeURIComponent(cleanEmail)}`
 
   const resendRes = await fetch('https://api.resend.com/emails', {
@@ -160,16 +160,17 @@ Deno.serve(async (req) => {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: `BLW CAN NEXUS <${fromEmail}>`,
+      from: fromEmail,
       to: [cleanEmail],
-      subject: `You've been invited to the sprint "${sprintName}"`,
-      html: emailHtml({ name: cleanName, sprintName, signupUrl }),
+      subject: `Invitation: ${sprintName}`,
+      text: `Hi ${cleanName},\n\nYou've been invited to join "${sprintName}" on BLW CAN NEXUS.\n\nClick here to create your account:\n${signupUrl}\n\nThis link expires in 24 hours.`,
     }),
   })
 
   if (!resendRes.ok) {
     const detail = await resendRes.text()
-    return jsonResponse(502, { error: 'Invite created but email failed to send', detail })
+    console.error('Resend error:', resendRes.status, detail)
+    return jsonResponse(502, { error: `Email send failed (${resendRes.status}): ${detail}` })
   }
 
   const resendBody = await resendRes.json().catch(() => ({}))

@@ -101,31 +101,28 @@ export default function SignupInvite() {
     setLoading(true)
 
     try {
-      // Sign up with Supabase (skip email confirmation since we use invite tokens)
-      const { data: authData, error: signupError } = await supabase.auth.signUp({
-        email: inviteEmail,
-        password,
-        options: {
-          emailRedirectTo: undefined,
-          data: {
-            name: inviteData?.metadata?.name || inviteEmail.split('@')[0],
-          },
+      console.log('[1] Starting signup for', inviteEmail)
+
+      // Create user via edge function (avoids Supabase email sending)
+      const createRes = await supabase.functions.invoke('create-invite-user', {
+        body: {
+          email: inviteEmail,
+          password,
+          name: userName || inviteEmail.split('@')[0],
         },
       })
 
-      if (signupError) {
-        setError(signupError.message || 'Failed to create account')
+      console.log('[2] User created:', createRes)
+
+      if (createRes.error || !createRes.data?.user_id) {
+        setError(createRes.error?.message || 'Failed to create account')
         setLoading(false)
         return
       }
 
-      if (!authData?.user?.id) {
-        setError('Failed to create account')
-        setLoading(false)
-        return
-      }
+      const userId = createRes.data.user_id
 
-      const userId = authData.user.id
+      console.log('[3] Adding to sprint:', sprintId)
 
       // Add user to sprint via edge function (admin context)
       const { data: rpcResult, error: rpcError } = await supabase.functions.invoke('add-sprint-member', {
@@ -139,6 +136,8 @@ export default function SignupInvite() {
         },
       })
 
+      console.log('[4] Sprint add result:', rpcResult, rpcError)
+
       if (rpcError || !rpcResult?.success) {
         console.error('Failed to add to sprint:', rpcError || rpcResult?.error)
         setError('Account created but failed to add to sprint')
@@ -146,12 +145,16 @@ export default function SignupInvite() {
         return
       }
 
+      console.log('[5] Marking token as used')
+
       // Mark invite as used
       await supabase
         .from('sprint_invite_tokens')
         .update({ user_id: userId, used_at: new Date().toISOString() })
         .eq('token', inviteToken)
         .catch(() => null)
+
+      console.log('[6] Redirecting to sprint')
 
       // Redirect to sprint
       navigate(`/sprints/${sprintId}`, { replace: true })

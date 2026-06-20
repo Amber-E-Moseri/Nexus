@@ -30,42 +30,31 @@ Deno.serve(async (req) => {
   }
 
   const body = await req.json().catch(() => null) as {
-    user_id: string
     email: string
+    password: string
     name: string
-    sprint_id: string
-    role: string
-    invite_token: string
   } | null
 
-  if (!body?.user_id || !body?.sprint_id || !body?.invite_token) {
-    return jsonResponse(400, { error: 'Missing required fields' })
+  if (!body?.email || !body?.password) {
+    return jsonResponse(400, { error: 'email and password required' })
   }
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey)
 
-  // Add user to sprint
-  const { error: insertError } = await adminClient
-    .from('sprint_members')
-    .insert({
-      user_id: body.user_id,
-      sprint_id: body.sprint_id,
-      role: body.role || 'member',
-      membership_end_date: null,
-      is_temporary: false,
-    })
+  // Create user via admin API without triggering any emails
+  const { data: { user }, error: createError } = await adminClient.auth.admin.createUser({
+    email: body.email,
+    password: body.password,
+    email_confirm: true,
+    user_metadata: { name: body.name },
+  }, {
+    skipConfirmationEmail: true,
+  })
 
-  if (insertError) {
-    console.error('Failed to add to sprint:', insertError)
-    return jsonResponse(400, { error: `Failed to add to sprint: ${insertError.message}` })
+  if (createError || !user?.id) {
+    console.error('Failed to create user:', createError)
+    return jsonResponse(502, { error: `Failed to create user: ${createError?.message || 'Unknown error'}` })
   }
 
-  // Mark invite token as used
-  await adminClient
-    .from('sprint_invite_tokens')
-    .update({ user_id: body.user_id, used_at: new Date().toISOString() })
-    .eq('token', body.invite_token)
-    .catch(() => null)
-
-  return jsonResponse(200, { success: true })
+  return jsonResponse(200, { user_id: user.id })
 })
