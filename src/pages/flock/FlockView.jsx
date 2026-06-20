@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { getFlockMembers, getFlockTasks } from '../../lib/tasks'
+import { getFlockMembers, getFlockTasks } from '../../features/tasks'
 import { isTaskCompleted, isTaskInProgress } from '../../lib/taskStatuses'
 import { PRIORITY_STYLES } from '../../lib/priorities'
 

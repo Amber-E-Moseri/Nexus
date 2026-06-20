@@ -1,10 +1,10 @@
 import { Bell, Check, Clock3, Mail, MessageSquare, TriangleAlert, UserRoundPlus } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { formatNotificationMessage } from '../lib/notifications'
+import { formatNotificationMessage } from '../features/notifications'
 import { formatRelativeDate } from '../lib/dateUtils'
-import { getTaskById } from '../lib/tasks'
+import { getTaskById } from '../features/tasks/lib/tasks'
 import { supabase } from '../lib/supabase'
-import TaskModal from '../modules/tasks/TaskModal'
+import TaskModal from '../features/tasks/components/TaskModal'
 import { useAuth } from '../hooks/useAuth'
 
 const FILTERS = ['All', 'Unread']

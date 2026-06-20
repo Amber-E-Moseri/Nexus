@@ -2,13 +2,13 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Calendar, Settings } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
-import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingEvents, getEventTypes } from '../../lib/calendar'
+import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingEvents, getEventTypes } from '../../features/calendar'
 import { hasPermission } from '../../lib/permissions'
 import { useToast } from '../../context/ToastContext'
-import CalendarView from '../../modules/calendar/CalendarView'
-import EventModal from '../../modules/calendar/EventModal'
-import { EVENT_COLORS } from '../../modules/calendar/CalendarEventCard'
-import EventSubmitModal from '../../modules/calendar/EventSubmitModal'
+import CalendarView from '../../features/calendar/components/CalendarView'
+import EventModal from '../../features/calendar/components/EventModal'
+import { EVENT_COLORS } from '../../features/calendar/components/CalendarEventCard'
+import EventSubmitModal from '../../features/calendar/components/EventSubmitModal'
 
 export default function MinistryCalendar() {
   const { effectiveRole, profile } = useAuth()

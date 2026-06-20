@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { listAllTeams } from '../../lib/sprints'
-import TeamCard from '../../modules/sprints/TeamCard'
-import NewTeamModal from '../../modules/sprints/NewTeamModal'
-import ImportTeamModal from '../../modules/sprints/ImportTeamModal'
+import { listAllTeams } from '../../features/sprints'
+import TeamCard from '../../features/sprints/components/TeamCard'
+import NewTeamModal from '../../features/sprints/components/NewTeamModal'
+import ImportTeamModal from '../../features/sprints/components/ImportTeamModal'
 
 export default function AllTeamsPage() {
   const [teams, setTeams] = useState([])

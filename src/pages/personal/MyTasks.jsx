@@ -6,11 +6,11 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../hooks/useAuth'
 import { useDeptMembers } from '../../hooks/useDeptMembers'
 import { formatDueDate } from '../../lib/dateUtils'
-import { getMyTasks, createTask } from '../../lib/tasks'
+import { getMyTasks, createTask } from '../../features/tasks'
 import { listTaskStatuses } from '../../lib/taskStatuses'
-import { getMySpaces } from '../../lib/spaces'
-import TaskModal from '../../modules/tasks/TaskModal'
-import TaskComposerModal from '../../modules/tasks/TaskComposerModal'
+import { getMySpaces } from '../../features/spaces'
+import TaskModal from '../../features/tasks/components/TaskModal'
+import TaskComposerModal from '../../features/tasks/components/TaskComposerModal'
 
 const PRIORITY_DOT = {
   urgent: '#C94830',

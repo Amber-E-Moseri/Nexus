@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useNotifications } from '../context/NotificationsContext'
-import { getNotifications, markAsRead, markAllAsRead } from '../lib/notifications'
+import { getNotifications, markAsRead, markAllAsRead } from '../features/notifications'
 import { supabase } from '../lib/supabase'
 import {
   CheckSquare, MessageSquare, Calendar, CalendarCheck, CalendarX, AtSign, Bell,

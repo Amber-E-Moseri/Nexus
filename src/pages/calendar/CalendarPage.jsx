@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { getMonthEvents, getPendingApprovals, approveEvent, rejectEvent } from '../../lib/calendar'
+import { getMonthEvents, getPendingApprovals, approveEvent, rejectEvent } from '../../features/calendar'
 import { hasPermission } from '../../lib/permissions'
-import CalendarView from '../../modules/calendar/CalendarView'
-import EventSubmitModal from '../../modules/calendar/EventSubmitModal'
-import EventDetailModal from '../../modules/calendar/EventDetailModal'
-import SubmissionsPanel from '../../modules/calendar/SubmissionsPanel'
+import CalendarView from '../../features/calendar/components/CalendarView'
+import EventSubmitModal from '../../features/calendar/components/EventSubmitModal'
+import EventDetailModal from '../../features/calendar/components/EventDetailModal'
+import SubmissionsPanel from '../../features/calendar/components/SubmissionsPanel'
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'All Events' },

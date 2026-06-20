@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { getNotifications, getUnreadCount, markAllAsRead, markAsRead } from '../lib/notifications'
+import { getNotifications, getUnreadCount, markAllAsRead, markAsRead } from '../features/notifications'
 import { supabase } from '../lib/supabase'
 
 const NotificationsContext = createContext(null)

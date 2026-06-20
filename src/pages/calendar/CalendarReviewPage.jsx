@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { hasPermission } from '../../lib/permissions'
-import { getMonthEvents, getPendingApprovals, approveEvent, rejectEvent } from '../../lib/calendar'
-import { createNotification } from '../../lib/notifications'
+import { getMonthEvents, getPendingApprovals, approveEvent, rejectEvent } from '../../features/calendar'
+import { createNotification } from '../../features/notifications'
 import { useToast } from '../../context/ToastContext'
-import EventDetailModal from '../../modules/calendar/EventDetailModal'
+import EventDetailModal from '../../features/calendar/components/EventDetailModal'
 
 const TABS = ['pending', 'rejected', 'approved']
 

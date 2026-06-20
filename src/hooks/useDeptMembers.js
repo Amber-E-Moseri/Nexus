@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getDeptMembers } from '../lib/tasks'
+import { getDeptMembers } from '../features/tasks'
 
 export function useDeptMembers(deptId) {
   const [members, setMembers] = useState([])

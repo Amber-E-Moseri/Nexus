@@ -2,7 +2,7 @@
 import { Plus, Trash2, Edit2 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../context/ToastContext'
-import { getEventTypes as fetchEventTypes, createEventType, updateEventType, deleteEventType } from '../../lib/calendar'
+import { getEventTypes as fetchEventTypes, createEventType, updateEventType, deleteEventType } from '../../features/calendar'
 
 const EVENT_TYPE_COLORS = {
   conference: '#6366F1',

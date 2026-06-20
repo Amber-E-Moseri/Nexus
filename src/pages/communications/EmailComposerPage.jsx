@@ -40,7 +40,7 @@ import {
   slugifyLabel,
   stripHtmlToText,
   titleize,
-} from '../../lib/communications'
+} from '../../features/communications'
 import { supabase } from '../../lib/supabase'
 
 const COLORS = ['#4C2A92', '#E8A020', '#2D8653', '#C94830', '#1C7C9C', '#6B6560']

@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { ACTION_LABELS, TRIGGER_LABELS, deleteAutomation, getRecentAutomationRuns, toggleAutomation, getAllDepartments, getAllUsers, getAllAutomations, getAutomationRunLog, getWebhookDeliveryLog } from '../../lib/automations'
+import { ACTION_LABELS, TRIGGER_LABELS, deleteAutomation, getRecentAutomationRuns, toggleAutomation, getAllDepartments, getAllUsers, getAllAutomations, getAutomationRunLog, getWebhookDeliveryLog, AutomationBuilder } from '../../features/automations'
 import { formatLastActive } from '../../lib/dateUtils'
 import { supabase } from '../../lib/supabase'
-import AutomationBuilder from '../../modules/automations/AutomationBuilder'
 
 function getRunTone(status) {
   if (status === 'success' || status === 'ok') {

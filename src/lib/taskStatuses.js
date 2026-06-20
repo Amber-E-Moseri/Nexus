@@ -16,6 +16,7 @@ export const STATUS_CATEGORIES = {
 }
 
 const LEGACY_STATUS_META = {
+  to_do: { label: 'To Do', color: '#7A7D86', category: STATUS_CATEGORIES.OPEN },
   backlog: { label: 'Not Started', color: '#7A7D86', category: STATUS_CATEGORIES.OPEN },
   in_progress: { label: 'In Progress', color: '#378ADD', category: STATUS_CATEGORIES.IN_PROGRESS },
   review: { label: 'Review', color: '#C78512', category: STATUS_CATEGORIES.IN_PROGRESS },

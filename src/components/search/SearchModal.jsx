@@ -3,9 +3,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSearch } from '../../context/SearchContext'
 import { formatDueDate } from '../../lib/dateUtils'
-import { getTaskById } from '../../lib/tasks'
+import { getTaskById } from '../../features/tasks'
 import { supabase } from '../../lib/supabase'
-import TaskModal from '../../modules/tasks/TaskModal'
+import TaskModal from '../../features/tasks/components/TaskModal'
 
 function ResultRow({ result, active, onClick }) {
   const [hov, setHov] = useState(false)

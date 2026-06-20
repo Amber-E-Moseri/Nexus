@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { listDepartments } from '../../lib/people/api'
-import { getNotificationPrefs, setNotificationPref } from '../../lib/notifications'
+import { getNotificationPrefs, setNotificationPref } from '../../features/notifications'
 import { supabase } from '../../lib/supabase'
 import AutomationsPage from '../platform/AutomationsPage'
 import IntegrationsSection from './IntegrationsSection'

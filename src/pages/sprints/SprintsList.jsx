@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import SprintCard from '../../modules/sprints/SprintCard'
-import SprintModal from '../../modules/sprints/SprintModal'
+import SprintCard from '../../features/sprints/components/SprintCard'
+import SprintModal from '../../features/sprints/components/SprintModal'
 import { useAuth } from '../../hooks/useAuth'
-import { deleteSprint, duplicateSprint, getAllSprints, getMySprints, restoreSprint } from '../../lib/sprints'
+import { deleteSprint, duplicateSprint, getAllSprints, getMySprints, restoreSprint } from '../../features/sprints'
 
 const FILTERS = ['all', 'active', 'planning', 'completed', 'review', 'archived']
 const STATUS_ORDER = ['active', 'planning', 'completed', 'review', 'archived']

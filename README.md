@@ -1,92 +1,187 @@
 ﻿# BLW CAN NEXUS
 
-Internal operations platform for BLW CAN NEXUS, built with React, Vite, and Supabase.
+**Internal operations platform for BLW Canada Sub-Region** — centralized task, meeting, sprint, and communication hub replacing ClickUp for 30 members across 5 departments.
 
-## What it is
+## Project Overview
 
-BLW CAN NEXUS is an internal workspace for a 30-person campus ministry organization with five departments. It centralizes day-to-day operations that would otherwise be spread across task managers, spreadsheets, email, and separate internal tools. The application covers task management, people lifecycle management, meetings, sprints, calendar coordination, notifications, and lightweight integrations.
+BLW CAN NEXUS is an internal workspace for BLW Canada Sub-Region's 30-person team organized into five departments (Admin, Media, ORS, Pastors, PFCC). It replaces ClickUp (~$360/month) by centralizing operations: task management, meetings, sprints, communications, calendar coordination, and automations—all in one place, with role-based security enforced at the database layer.
 
-The primary users are ministry leaders, department leads, pastors, and members. Each role sees a different slice of the system through Supabase Row Level Security. Department work stays scoped to the right team, pastor visibility stays limited to assigned members, and elevated workflows like invitations, automations, and communications stay restricted to leadership roles.
+**Key attributes:**
+- Multi-tenant with department-scoped views via Supabase Row Level Security (RLS)
+- Custom role system (super_admin, dept_lead, pastor, member)
+- Real-time collaboration with Supabase subscriptions
+- External integrations: Google Calendar, Google Drive (Apps Script), Slack, Resend
 
-The project is designed as a replacement for ClickUp for this organization's internal operations. For a 30-user team, that removes an estimated ClickUp cost of about $360/month while allowing the platform to model ministry-specific workflows such as pastoral assignments, Meeting OS integration, and CAN Map access.
-
-## Tech stack
+## Tech Stack
 
 | Area | Technology |
 | --- | --- |
-| Frontend | React 18, Vite, React Router, Tailwind CSS v4 |
-| Backend | Supabase Postgres, Row Level Security, Supabase Edge Functions |
-| Auth | Supabase Auth |
-| Email | Resend |
-| Hosting | Vercel or Netlify |
-| AI | Anthropic Claude API and Whisper WASM in `apps/meeting-os/` |
+| **Frontend** | React 18, Vite, React Router, inline styles (no Tailwind) |
+| **Backend** | Supabase PostgreSQL, Row Level Security, Supabase Edge Functions |
+| **Auth** | Supabase Auth + custom token-based invite flow |
+| **Email** | Resend (transactional + campaigns) |
+| **Real-time** | Supabase Realtime subscriptions |
+| **External** | Google Calendar, Google Drive (Apps Script), Slack integration, Resend webhooks |
+| **Hosting** | Vercel |
+| **AI** | Anthropic Claude API, Whisper WASM (Meeting OS) |
 
 ## Features
 
-### Task management
-- Department-scoped kanban boards
-- List view
-- Task CRUD
-- Subtasks
-- Priority labels
-- Due dates
-- Personal tasks
-- Task comments
-- Link-based file attachments
-- Task dependencies
-
-### People management
-- Invitation workflow
-- User lifecycle states
-- Activation flow
-- Department assignment history
-- Pastoral assignments
-- People pages for users, invitations, departments, and pastor-member relationships
-
-### Meetings
-- Meeting OS integration
-- Embedded Meeting OS route with fallback meeting log UI
-- Meeting records
-- Attendance tracking
-- Action item to task bridge
+### Tasks & Lists
+- **Kanban, List, Table views** with drag-and-drop
+- **Status lifecycle**: To Do, In Progress, Review, Done, Blocked (per-space definitions)
+- **Assignee management** with avatars, watchers, dependencies
+- **Priority levels**: Urgent, High, Medium, Low
+- **Attachments** (file links), **comments**, **subtasks**
+- **Space-scoped** with folder → list hierarchy
+- **Filtering** by status, assignee, due date, priority
+- **Optimistic updates** with rollback on error
 
 ### Sprints
-- Cross-functional sprint workspace
-- Sprint lifecycle
-- Sprint member and team management
-- Sprint review
-- Archive, restore, and duplicate flows
+- **Full lifecycle**: create, archive, restore, duplicate, review
+- **Sprint teams** (inline creation, role-based)
+- **Temporary membership** with auto-expiration (external invites)
+- **Custom token flow** for external member invites (avoids Gmail scanner issues)
+- **Sprint board** with drag-and-drop task management
+- **Progress tracking** and sprint review workflows
+- **Auto-deactivation** on sprint archive
 
-### Ministry Calendar
-- Org-wide event calendar
-- Event types for ministry operations
-- Space and sprint linking
-- Zoom link field support
+### Meetings (Meeting OS)
+- **Agenda builder** (3-step wizard, drag-drop reordering)
+- **Minutes capture** with formatting
+- **Attendance tracking** (Service, Group, Both categories)
+- **Meeting reports**: Regional vs Per-Subgroup modes
+- **PDF export** with BLW Canada branding
+- **Action items** → Task bridge (create tasks from action items)
+- **Absence notifications** (email alerts for no-shows)
+- **Attendee management** with RSVP tracking
 
-### Notifications
-- Real-time in-app notifications
-- Per-type notification preferences
-- Email notification support through Edge Functions
+### Communications (Email Campaigns)
+- **Campaign builder** with drag-drop editor
+- **Scheduling** (send now, schedule for later)
+- **A/B testing** with winner selection
+- **Bounce management** (Resend webhooks auto-mark bounced emails)
+- **Subscriber segments** (filter by department, role, custom tags)
+- **Click & open tracking** with analytics dashboard
+- **Unsubscribe management** (CASL compliance)
+- **Performance dashboard** (open rate, click rate, bounces)
 
-### API + Automations
-- Public task API with per-key rate limiting (60 req/min)
-- API key management
-- Automation rule builder
-- Automation run log
-- Apps Script integration support
+### Calendar
+- **Google Calendar integration** (read/write OAuth)
+- **Ministry calendar** (org-wide events)
+- **Event CRUD** with RSVP tracking
+- **Google Drive sync** (auto-attach files to events)
+- **Space & sprint linking**
 
-### Settings
-- Profile editing
-- Password update
-- Notification preferences
-- Integration management (department-scoped)
-- Account and workspace controls
+### Automations
+- **Rule engine**: trigger (task status change, due date, user assignment, etc.) → action (send email, update status, assign user)
+- **Automation history** with audit log
+- **Public task API** (per-key rate limiting: 60 req/min)
+- **API key management** with last-used tracking
 
-### Ecosystem
-- CAN Map embed
-- BLW Mail embed
-- Meeting OS embed
-- Foundation School launch links
+### Birthday Flyer System
+- **Monthly sync** from Google Sheets (Apps Script trigger on 1st of month)
+- **Auto-create tasks** for each birthday with:
+  - Assignee: Ella Ukpabia
+  - Due date + time (birthday at 11:30 AM)
+  - Status: To Do
+  - Description with checklist template
+- **Duplicate prevention** (checks existing tasks)
+- **Time-based execution** (monthly trigger)
+
+### Attendance & Analytics
+- **Event attendance tracking** (per meeting, per member)
+- **Attendance trends** visualization (group/subgroup breakdown)
+- **Excel workbook export** (consolidated attendance data with BLW Canada branding)
+- **Historical reporting** by department and date range
+
+## Database Architecture
+
+**Core tables:**
+- `users` — platform users with role, department, and profile info
+- `spaces` — 5 departments (Admin, Media, ORS, Pastors, PFCC)
+- `folders` — space → folder hierarchy
+- `lists` — folder → list hierarchy
+- `tasks` — task data with space_id, list_id, status, assignee, priority, due_date
+- `task_comments` — comments with author, content, attachments
+- `task_status_definitions` — per-space custom statuses (backfilled for all departments)
+- `sprints` — sprint metadata with team, dates, status
+- `sprint_members` — temporary membership with auto-expiration
+- `meetings` — meeting records with attendee list and action items
+- `communication_campaigns` — email campaigns with bounce tracking
+- `calendar_events` — ministry calendar with RSVP tracking
+- `automation_rules` — rule definitions (trigger + action)
+- `automation_runs` — audit log of automation executions
+
+**RLS policies:**
+- All tables enforced at row level by `current_user_department()` and `current_user_role()`
+- JWT custom claims (`user_role`, `user_department_id`) embedded in every token
+- JWT fallback to direct DB lookup if claims absent (for pre-hook sessions)
+- Cross-department access: super_admin only (except explicit share workflows)
+
+## Edge Functions (18+)
+
+- `send-user-invitation` — transactional invite email via Resend
+- `send-sprint-invite` — external sprint member invite (custom token)
+- `send-agenda-reminder` — meeting prep notification
+- `send-birthday-notification` — birthday flyer reminders
+- `send-campaign` — email campaign dispatch with A/B variant selection
+- `handle-bounces` — Resend webhook: auto-mark bounced emails, suppress future sends
+- `send-notification-email` — automation/system email notifications
+- `automation-engine` — trigger detector and action executor
+- `task-api` — public task API (rate-limited by key)
+- Calendar sync webhooks
+- Slack integration functions (async dispatch)
+- Google Drive file attachment functions
+
+## API & RPC Functions
+
+**Public endpoints:**
+- `GET /functions/v1/task-api/tasks` — fetch tasks (filtered by department, list_id, assignee)
+- `POST /functions/v1/task-api/tasks` — create task (requires API key)
+- `PATCH /functions/v1/task-api/tasks/:id` — update task
+
+**RPC functions:**
+- `create_user_invitation()` — atomic user + invitation row creation
+- `invite_external_sprint_member()` — SECURITY DEFINER (custom token flow, FK constraint safe)
+- `get_space_statuses()` — fetch all task statuses per space
+- `get_space_tasks()` — fetch tasks with list_id support (RLS enforcement)
+- `archive_sprint()` — auto-deactivate sprint members, archive tasks
+- `get_automation_run_log()` — audit log query with filtering
+
+## Authentication & Authorization
+
+**Login flow:**
+1. Supabase Auth (email/password)
+2. JWT issued with custom claims (user_role, user_department_id)
+3. JWT hook embedded on sign-in; fallback to direct DB lookup if absent
+
+**Invite flow (avoids Gmail scanner issues):**
+1. Create invitation row in DB
+2. Generate custom token (not in URL)
+3. Send email with token in body
+4. User clicks activation link → submits form with token
+5. Atomic `invite_external_sprint_member()` RPC creates user + assigns sprint membership
+
+**Roles:**
+- `super_admin` — full access, all departments, user management, platform config
+- `dept_lead` — department + sprint management, people invites, automations, communications
+- `pastor` — view assigned members, read pastoral tasks, meeting attendance
+- `member` — view own department, assigned tasks, sprints
+
+**RLS enforcement:** Every row query filtered by `current_user_department()` and `current_user_role()`
+
+## Architecture Decisions
+
+**Design patterns:**
+- **Feature-first folder structure** (recommended refactor: `/src/features/*`)
+- **Inline styles only** (no Tailwind CSS v4 in production; design tokens: primary #4C2A92, border #EDE8DC, text #2D2A22)
+- **Optimistic updates** with rollback on error (React state → Supabase)
+- **Supabase Realtime** for live collaboration (task updates, sprint changes)
+- **Per-space task statuses** with global fallback (backfilled on migration)
+- **Temporary sprint membership** with auto-expiration (cron job on sprint archive)
+
+See `docs/decision-catalog.md` for 35+ documented decisions with rationale.
 
 ## Local setup
 
@@ -208,6 +303,63 @@ The decoded payload should include:
 ```
 
 If `user_role` is absent, the hook is not attached or the session predates the hook.
+
+## Key Bugs Fixed
+
+- **Task filtering by list_id** — Fixed `getSpaceTasks()` RPC select to filter by list_id (was returning all space tasks regardless)
+- **Status bucketing** — Per-space task status definitions with global fallback; backfill migration for all departments
+- **External invite FK constraint** — Moved user creation into `SECURITY DEFINER` RPC to atomically create user + sprint_member row (avoids race conditions)
+- **Gmail scanner token consumption** — Replaced URL-embedded tokens with custom token flow (token in email body, not URL)
+- **CreateTeamModal rendering** — Fixed state variable gating to prevent modal flash on non-sprint pages
+- **Concurrent sprint updates** — Added optimistic updates with rollback on Supabase write error
+- **RLS policy gaps** — Hardened JWT custom claims, removed deprecated direct DB lookups, added fallback for pre-hook sessions
+
+## Known Limitations & Future Work
+
+**Current limitations:**
+- PKCE flow not available on current Supabase plan (affects future mobile app)
+- Sprint review type selector (team vs unified) — UI ready, backend toggle needed
+- Forgot password system — on roadmap
+- Clickable breadcrumbs for navigation — on roadmap
+- Feature-first folder structure refactor — recommended but deferred
+
+**Planned:**
+- Role-based permission matrix UI (currently hardcoded in RLS)
+- Meeting OS export to Google Drive
+- Advanced automation builder (UI for complex trigger chains)
+- Slack channel creation/sync for sprints
+- Two-factor authentication (Supabase MFA)
+
+## Contributing
+
+**Branch naming:**
+- `feature/*` — new features
+- `fix/*` — bug fixes
+- `docs/*` — documentation
+- `refactor/*` — code cleanup without behavior change
+
+**Commit style:**
+- `feat(module): description` — new feature
+- `fix(module): description` — bug fix
+- `docs: description` — documentation
+- `refactor(module): description` — refactoring
+
+**Testing:**
+- Manual testing on Vercel preview deployments (no automated test suite yet)
+- Smoke test checklist: sign-in, create task, invite user, trigger automation, call task API
+
+**Code style:**
+- Inline styles only (no Tailwind); reuse design tokens from `src/styles/index.css`
+- React hooks (no class components)
+- Async/await for Supabase calls
+- Optimistic updates with error rollback
+
+## Contact & Support
+
+- **Maintainer:** Amber Moseri
+- **Email:** blwcan.elvanto@gmail.com
+- **Repository:** [github.com/Amber-E-Moseri/Nexus](https://github.com/Amber-E-Moseri/Nexus)
+- **Issues & features:** GitHub Issues
 
 ## Migration order
 

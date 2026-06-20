@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { supabase } from '../../lib/supabase'
-import SegmentBuilderAdvanced from '../../modules/communications/SegmentBuilderAdvanced'
+import SegmentBuilderAdvanced from '../../features/communications/components/SegmentBuilderAdvanced'
 import { Eye, Edit2, Trash2 } from 'lucide-react'
 
 const PRIMARY = '#4C2A92'

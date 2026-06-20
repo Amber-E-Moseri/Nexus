@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import SpaceModal from '../../modules/spaces/SpaceModal'
-import { getSpacesByType, SPACE_TYPE_ICONS, SPACE_TYPE_LABELS } from '../../lib/spaces'
+import SpaceModal from '../../features/spaces/components/SpaceModal'
+import { getSpacesByType, SPACE_TYPE_ICONS, SPACE_TYPE_LABELS } from '../../features/spaces'
 
 const GROUP_ORDER = ['department', 'program', 'personal', 'sandbox', 'archived']
 

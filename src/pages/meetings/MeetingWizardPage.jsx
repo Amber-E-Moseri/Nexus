@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AgendaBuilderProvider, AgendaBuilderContext } from '../../context/AgendaBuilderContext'
 import { useAgendaWizard, validateStep1, validateStep2 } from '../../hooks/useAgendaWizard'
-import Step1MeetingSetup from '../../modules/agendas/Step1MeetingSetup'
-import Step2BuildAgenda from '../../modules/agendas/Step2BuildAgenda'
-import Step3PreviewExport from '../../modules/agendas/Step3PreviewExport'
+import Step1MeetingSetup from '../../features/agendas/components/Step1MeetingSetup'
+import Step2BuildAgenda from '../../features/agendas/components/Step2BuildAgenda'
+import Step3PreviewExport from '../../features/agendas/components/Step3PreviewExport'
 
 function WizardContent() {
   const { step, goToStep, reset, agendaData, agendaItems, errors, clearErrors, setError } = useAgendaWizard()

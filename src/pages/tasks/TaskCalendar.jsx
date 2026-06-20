@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { getMyTasks } from '../../lib/tasks'
+import { getMyTasks } from '../../features/tasks'
 import { isTaskCompleted } from '../../lib/taskStatuses'
-import TaskCalendarView from '../../modules/tasks/TaskCalendarView'
-import TaskDetailSidebar from '../../modules/sprints/TaskDetailSidebar'
+import TaskCalendarView from '../../features/tasks/components/TaskCalendarView'
+import TaskDetailSidebar from '../../features/sprints/components/TaskDetailSidebar'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 
 function UpcomingTasksList({ tasks, onTaskClick }) {

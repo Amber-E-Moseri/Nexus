@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { supabase } from '../../lib/supabase'
-import { getEmailTemplates, createEmailTemplate } from '../../lib/communications'
-import TemplateEditor from '../../modules/communications/TemplateEditor'
+import { getEmailTemplates, createEmailTemplate } from '../../features/communications'
+import TemplateEditor from '../../features/communications/components/TemplateEditor'
 import { Search, Palette, Eye, Copy, Edit3, Trash2 } from 'lucide-react'
 
 const PRIMARY = '#4C2A92'
