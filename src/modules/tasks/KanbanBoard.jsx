@@ -38,6 +38,7 @@ export default function KanbanBoard({
   departments = [],
   defaultDepartmentId = '',
   onCreateTask,
+  teamMembers = [],
 }) {
   const { tasks: allTasks, moveTask, statuses } = useTasks()
   const tasks = filteredTasks ?? allTasks
@@ -158,6 +159,7 @@ export default function KanbanBoard({
               departments={departments}
               defaultDepartmentId={defaultDepartmentId}
               listId={listId}
+              teamMembers={teamMembers}
               onCancel={() => setComposerStatusId(null)}
               onSubmit={async (draft) => {
                 await onCreateTask?.({

@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Pencil } from 'lucide-react'
-import { removeSprintMember, updateSprintMemberTeams, updateSprintTeam, deleteSprintTeam } from '../../lib/sprints'
+import { removeSprintMember, updateSprintMemberTeams, updateSprintTeam, deleteSprintTeam, getActiveUsers, addSprintMember } from '../../lib/sprints'
 
 const TEAM_COLORS = ['#5B34C7', '#1C87BE', '#E8A020', '#C94830', '#4A8F6C']
 
@@ -35,6 +35,12 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
   const [editingTeamId, setEditingTeamId] = useState(null)
   const [editingName, setEditingName] = useState('')
   const [openDropdown, setOpenDropdown] = useState(null)
+  const [orgUsers, setOrgUsers] = useState([])
+
+  useEffect(() => {
+    if (!canEdit || isArchived) return
+    getActiveUsers().then(setOrgUsers).catch(() => setOrgUsers([]))
+  }, [canEdit, isArchived])
 
   async function handleCreateTeam() {
     if (!newTeamName.trim()) return
@@ -66,7 +72,12 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
   async function handleAddMember(teamId, member) {
     setSaving(true)
     try {
-      await updateSprintMemberTeams(sprintId, member.user_id, [...(member.sprint_team_ids ?? []), teamId])
+      if (member.isNonSprintUser) {
+        // Add to sprint first, then assign to team
+        await addSprintMember(sprintId, member.user_id, 'contributor', [teamId], null)
+      } else {
+        await updateSprintMemberTeams(sprintId, member.user_id, [...(member.sprint_team_ids ?? []), teamId])
+      }
       setOpenDropdown(null)
       await onChanged?.()
     } catch (err) {
@@ -149,7 +160,12 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
       {teams.map((team, idx) => {
         const teamMembers = getTeamMembers(team.id)
         const teamColor = TEAM_COLORS[idx % TEAM_COLORS.length]
-        const availableMembers = members.filter((m) => !(m.sprint_team_ids ?? []).includes(team.id))
+        const sprintMemberIds = new Set(members.map((m) => m.user_id))
+        const sprintMembersNotInTeam = members.filter((m) => !(m.sprint_team_ids ?? []).includes(team.id))
+        const nonSprintUsers = orgUsers
+          .filter((u) => !sprintMemberIds.has(u.id))
+          .map((u) => ({ user_id: u.id, user: u, sprint_team_ids: [], isNonSprintUser: true }))
+        const availableMembers = [...sprintMembersNotInTeam, ...nonSprintUsers]
         const isEditing = editingTeamId === team.id
 
         return (
@@ -308,10 +324,17 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                       borderRadius: 10,
                       boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
                       zIndex: 20,
-                      minWidth: 180,
+                      minWidth: 200,
                       overflow: 'hidden',
+                      maxHeight: 260,
+                      overflowY: 'auto',
                     }}>
-                      {availableMembers.map((member) => (
+                      {sprintMembersNotInTeam.length > 0 && nonSprintUsers.length > 0 && (
+                        <div style={{ padding: '6px 12px 2px', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                          Sprint members
+                        </div>
+                      )}
+                      {sprintMembersNotInTeam.map((member) => (
                         <button
                           key={member.user_id}
                           type="button"
@@ -334,6 +357,36 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                           {member.user?.name}
                         </button>
                       ))}
+                      {nonSprintUsers.length > 0 && (
+                        <>
+                          <div style={{ padding: '6px 12px 2px', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', borderTop: sprintMembersNotInTeam.length > 0 ? '1px solid var(--border)' : 'none', marginTop: sprintMembersNotInTeam.length > 0 ? 4 : 0 }}>
+                            Add to sprint
+                          </div>
+                          {nonSprintUsers.map((member) => (
+                            <button
+                              key={member.user_id}
+                              type="button"
+                              onClick={() => handleAddMember(team.id, member)}
+                              disabled={saving}
+                              style={{
+                                display: 'block',
+                                width: '100%',
+                                textAlign: 'left',
+                                padding: '8px 12px',
+                                fontSize: 13,
+                                color: 'var(--text-primary)',
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-secondary)'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                            >
+                              {member.user?.name}
+                            </button>
+                          ))}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

@@ -134,7 +134,7 @@ export default function SprintMemberPanel({
   function daysUntilExpiration(endDate) {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const end = new Date(endDate)
+    const end = new Date(`${endDate}T00:00:00`)
     end.setHours(0, 0, 0, 0)
     return Math.ceil((end - today) / (1000 * 60 * 60 * 24))
   }
@@ -221,7 +221,7 @@ export default function SprintMemberPanel({
                   </div>
                   {member.is_temporary && member.membership_end_date && (
                     <div style={{ marginTop: 4, fontSize: 12, color: '#DC2626' }}>
-                      Expires: {new Date(member.membership_end_date).toLocaleDateString()}
+                      Expires: {new Date(`${member.membership_end_date}T00:00:00`).toLocaleDateString()}
                       {daysUntilExpiration(member.membership_end_date) <= 7 && (
                         <span style={{ marginLeft: 4, color: '#C47E0A' }}>
                           ({daysUntilExpiration(member.membership_end_date)} days)
@@ -231,7 +231,7 @@ export default function SprintMemberPanel({
                   )}
                   {expiringMemberships.length > 0 && !member.is_temporary && (
                     <div style={{ marginTop: 4, fontSize: 12, color: '#DC2626' }}>
-                      Expires: {expiringMemberships.map((m) => new Date(m.membership_end_date).toLocaleDateString()).join(', ')}
+                      Expires: {expiringMemberships.map((m) => new Date(`${m.membership_end_date}T00:00:00`).toLocaleDateString()).join(', ')}
                     </div>
                   )}
                 </div>

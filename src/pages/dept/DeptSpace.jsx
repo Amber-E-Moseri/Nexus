@@ -292,7 +292,7 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
               statuses={statuses}
               onTaskClick={onTaskClick}
               onTaskStatusChange={handleTaskStatusChange}
-              people={{}}
+              people={Object.fromEntries(members.map((m) => [m.id, m]))}
               priorities={{}}
             />
           </div>

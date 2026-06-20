@@ -28,9 +28,15 @@ const ROUTE_CRUMBS = {
   '/people/pastoral-assignments': [['People', null], ['Pastoral Assignments', '/people/pastoral-assignments']],
 }
 
-function useBreadcrumbs(pathname) {
+function useBreadcrumbs(pathname, search) {
   const [spaceName, setSpaceName] = useState('')
   const [sprintName, setSprintName] = useState('')
+  const [folderName, setFolderName] = useState('')
+  const [listName, setListName] = useState('')
+
+  const params = useMemo(() => new URLSearchParams(search), [search])
+  const listId = params.get('list')
+  const folderId = params.get('folder')
 
   useEffect(() => {
     let active = true
@@ -51,8 +57,38 @@ function useBreadcrumbs(pathname) {
     return () => { active = false }
   }, [pathname])
 
+  useEffect(() => {
+    let active = true
+    if (listId) {
+      supabase.from('lists').select('name, folder_id').eq('id', listId).maybeSingle()
+        .then(({ data }) => {
+          if (!active) return
+          setListName(data?.name ?? '')
+          if (data?.folder_id) {
+            supabase.from('folders').select('name').eq('id', data.folder_id).maybeSingle()
+              .then(({ data: fd }) => { if (active) setFolderName(fd?.name ?? '') })
+          } else {
+            setFolderName('')
+          }
+        })
+    } else if (folderId) {
+      setListName('')
+      supabase.from('folders').select('name').eq('id', folderId).maybeSingle()
+        .then(({ data }) => { if (active) setFolderName(data?.name ?? '') })
+    } else {
+      setListName('')
+      setFolderName('')
+    }
+    return () => { active = false }
+  }, [listId, folderId])
+
   if (ROUTE_CRUMBS[pathname]) return ROUTE_CRUMBS[pathname]
-  if (pathname.startsWith('/spaces/')) return [['Spaces', '/spaces'], [spaceName || 'Space', pathname]]
+  if (pathname.startsWith('/spaces/')) {
+    const crumbs = [['Spaces', '/spaces'], [spaceName || 'Space', pathname]]
+    if (folderName) crumbs.push([folderName, `${pathname}?folder=${folderId}`])
+    if (listName) crumbs.push([listName, `${pathname}?list=${listId}`])
+    return crumbs
+  }
   if (pathname.startsWith('/sprints/')) return [['Sprints', '/sprints'], [sprintName || 'Sprint', pathname]]
   return [['BLW Canada OS', '/dashboard']]
 }
@@ -75,7 +111,7 @@ export default function TopBar() {
   const { inboxCount } = useInboxCount()
   const location = useLocation()
   const navigate = useNavigate()
-  const crumbs = useBreadcrumbs(location.pathname)
+  const crumbs = useBreadcrumbs(location.pathname, location.search)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState({ tasks: [], spaces: [], sprints: [], events: [] })

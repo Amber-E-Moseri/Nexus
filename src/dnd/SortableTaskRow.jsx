@@ -41,15 +41,17 @@ function PriorityBadge({ priority, priorities }) {
 function AssigneeStack({ task, people }) {
   const assignees = []
 
-  if (task.assignee_id && people?.[task.assignee_id]) assignees.push(people[task.assignee_id])
+  function toInitials(name) {
+    return (name ?? '').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('') || '?'
+  }
+
+  if (task.assignee_id && people?.[task.assignee_id]) {
+    const m = people[task.assignee_id]
+    assignees.push({ ...m, initials: m.initials ?? toInitials(m.name) })
+  }
   if (task.assignee && assignees.length === 0) {
     assignees.push({
-      initials: task.assignee.name
-        ?.split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0]?.toUpperCase() ?? '')
-        .join('') || '?',
+      initials: toInitials(task.assignee.name),
       bg: 'var(--accent)',
       name: task.assignee.name,
     })

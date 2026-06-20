@@ -20,8 +20,12 @@ export default function CalendarDraggableEvent({ event, onClick, isDragging }) {
       {...attributes}
       {...listeners}
       className="w-full"
+      onClick={(e) => {
+        if (!isLocalDragging) onClick?.(event)
+        e.stopPropagation()
+      }}
     >
-      <CalendarEventChip event={event} onClick={onClick} />
+      <CalendarEventChip event={event} />
     </div>
   )
 }

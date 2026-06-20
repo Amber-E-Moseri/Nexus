@@ -546,19 +546,6 @@ export default function SprintOverview() {
         />
       )}
 
-      {/* Members Section */}
-      <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-        <SprintMemberPanel
-          sprintId={detail.sprint.id}
-          sprintName={detail.sprint.name}
-          sprintEndDate={detail.sprint.end_date}
-          members={detail.members || []}
-          teams={detail.teams || []}
-          canEdit={Boolean(canManage && !isArchived)}
-          isArchived={Boolean(isArchived)}
-          onChanged={loadDetail}
-        />
-      </div>
 
 
       {detail.sprint.status === 'archived' ? (

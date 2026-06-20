@@ -17,7 +17,8 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [role, setRole] = useState('contributor')
-  const [endDate, setEndDate] = useState(sprintEndDate)
+  const [expiryMode, setExpiryMode] = useState('on_archive')
+  const [endDate, setEndDate] = useState(sprintEndDate ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -30,15 +31,17 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
         email: email.trim(),
         name: name.trim(),
         sprintId,
+        sprintName,
         role,
-        membershipEndDate: endDate,
+        membershipEndDate: expiryMode === 'on_archive' ? null : endDate || null,
       })
 
       alert(`Invitation sent! They'll receive a set-password email shortly.`)
       setEmail('')
       setName('')
       setRole('contributor')
-      setEndDate(sprintEndDate)
+      setExpiryMode('on_archive')
+      setEndDate(sprintEndDate ?? '')
       onSuccess?.()
     } catch (err) {
       setError(err.message)
@@ -144,26 +147,60 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
         </div>
 
         <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: TOKENS.textPrimary }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: TOKENS.textPrimary }}>
             Access expires
           </label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              border: `1px solid ${TOKENS.border}`,
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontFamily: 'DM Sans, system-ui, sans-serif',
-              boxSizing: 'border-box',
-            }}
-          />
-          <div style={{ fontSize: '12px', color: TOKENS.textTertiary, marginTop: '4px' }}>
-            Their access will automatically deactivate after this date or when the sprint is archived — whichever comes first.
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              { value: 'on_archive', label: 'When sprint is archived', sub: 'Access is revoked automatically when the sprint closes' },
+              { value: 'on_date', label: 'On a specific date', sub: 'Choose an exact expiry date' },
+            ].map((opt) => (
+              <label
+                key={opt.value}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  padding: '10px 12px',
+                  border: `1px solid ${expiryMode === opt.value ? TOKENS.primary : TOKENS.border}`,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  background: expiryMode === opt.value ? '#f5f0ff' : 'white',
+                  transition: 'all 0.12s',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="expiryMode"
+                  value={opt.value}
+                  checked={expiryMode === opt.value}
+                  onChange={() => setExpiryMode(opt.value)}
+                  style={{ marginTop: 2, accentColor: TOKENS.primary }}
+                />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: TOKENS.textPrimary }}>{opt.label}</div>
+                  <div style={{ fontSize: 12, color: TOKENS.textTertiary, marginTop: 2 }}>{opt.sub}</div>
+                </div>
+              </label>
+            ))}
           </div>
+          {expiryMode === 'on_date' && (
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              style={{
+                width: '100%',
+                marginTop: 8,
+                padding: '10px 12px',
+                border: `1px solid ${TOKENS.border}`,
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontFamily: 'DM Sans, system-ui, sans-serif',
+                boxSizing: 'border-box',
+              }}
+            />
+          )}
         </div>
 
         {error && (
@@ -208,12 +245,12 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
           </button>
           <button
             onClick={handleInvite}
-            disabled={loading || !email || !endDate}
+            disabled={loading || !email || (expiryMode === 'on_date' && !endDate)}
             style={{
               flex: 1,
               padding: '10px 16px',
               borderRadius: '8px',
-              background: loading || !email || !endDate ? `${TOKENS.primary}99` : TOKENS.primary,
+              background: loading || !email || (expiryMode === 'on_date' && !endDate) ? `${TOKENS.primary}99` : TOKENS.primary,
               color: 'white',
               border: 'none',
               fontSize: '13px',

@@ -21,6 +21,7 @@ import {
   listTaskStatuses,
   selectDefaultStatus,
 } from '../../lib/taskStatuses'
+import AssigneeSelector from './AssigneeSelector'
 import TaskComments from './TaskComments'
 import TaskDependencies from './TaskDependencies'
 import TaskFiles from './TaskFiles'
@@ -593,61 +594,13 @@ export default function TaskModal({
               </div>
             </div>
 
-            <div style={{ marginBottom: 18 }}>
+            <div style={{ marginBottom: 18, pointerEvents: isReadOnly ? 'none' : 'auto', opacity: isReadOnly ? 0.6 : 1 }}>
               <label style={labelStyle}>Assignees</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, pointerEvents: isReadOnly ? 'none' : 'auto', opacity: isReadOnly ? 0.6 : 1 }}>
-                {members.map((member) => {
-                  const isSelected = assigneeIds.includes(member.id)
-                  return (
-                    <button
-                      key={member.id}
-                      type="button"
-                      onClick={() => {
-                        setAssigneeIds(
-                          isSelected
-                            ? assigneeIds.filter((id) => id !== member.id)
-                            : [...assigneeIds, member.id]
-                        )
-                      }}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '4px 8px',
-                        borderRadius: 20,
-                        fontSize: 12,
-                        fontWeight: 500,
-                        cursor: isReadOnly ? 'default' : 'pointer',
-                        background: isSelected ? 'var(--accent)' : 'white',
-                        color: isSelected ? 'white' : 'var(--text-secondary)',
-                        border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border)',
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: 20,
-                          height: 20,
-                          borderRadius: '50%',
-                          background: isSelected ? 'rgba(255,255,255,0.3)' : '#E5E7EB',
-                          fontSize: 9,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {member.name
-                          .split(' ')
-                          .slice(0, 2)
-                          .map((p) => p[0]?.toUpperCase() ?? '')
-                          .join('')}
-                      </span>
-                      {member.name.split(' ')[0]}
-                      {isSelected && <span>×</span>}
-                    </button>
-                  )
-                })}
-              </div>
+              <AssigneeSelector
+                members={members}
+                selectedIds={assigneeIds}
+                onSelectionChange={setAssigneeIds}
+              />
             </div>
 
             <div style={{ marginBottom: 18 }}>

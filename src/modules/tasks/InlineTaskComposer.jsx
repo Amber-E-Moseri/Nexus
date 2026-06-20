@@ -44,7 +44,7 @@ export default function InlineTaskComposer({
       return
     }
 
-    if (!departmentId) {
+    if (departments.length > 0 && !departmentId) {
       setError('Select a department.')
       return
     }
@@ -106,32 +106,34 @@ export default function InlineTaskComposer({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: compact ? '1fr 1fr' : '1fr',
+          gridTemplateColumns: compact && departments.length > 0 ? '1fr 1fr' : '1fr',
           gap: 10,
           marginTop: 10,
         }}
       >
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
-            Department
-          </span>
-          <select
-            value={departmentId}
-            onChange={(event) => setDepartmentId(event.target.value)}
-            style={{
-              border: '1px solid var(--border)',
-              borderRadius: 10,
-              padding: '9px 11px',
-              fontSize: 13,
-              color: 'var(--text-primary)',
-              background: '#FFFFFF',
-            }}
-          >
-            {departments.map((department) => (
-              <option key={department.id} value={department.id}>{department.name}</option>
-            ))}
-          </select>
-        </label>
+        {departments.length > 0 && (
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
+              Department
+            </span>
+            <select
+              value={departmentId}
+              onChange={(event) => setDepartmentId(event.target.value)}
+              style={{
+                border: '1px solid var(--border)',
+                borderRadius: 10,
+                padding: '9px 11px',
+                fontSize: 13,
+                color: 'var(--text-primary)',
+                background: '#FFFFFF',
+              }}
+            >
+              {departments.map((department) => (
+                <option key={department.id} value={department.id}>{department.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>

@@ -96,6 +96,15 @@ function applyCompletionMetadata(payload, statusCategory, currentCompletedAt = n
 }
 
 export async function getDeptTasks(departmentId) {
+  const { data: listRows } = await supabase
+    .from('lists')
+    .select('id')
+    .eq('department_id', departmentId)
+
+  const listIds = (listRows ?? []).map((l) => l.id)
+  const filters = [`department_id.eq.${departmentId}`]
+  if (listIds.length > 0) filters.push(`list_id.in.(${listIds.join(',')})`)
+
   const { data, error } = await supabase
     .from('tasks')
     .select(`
@@ -109,7 +118,7 @@ export async function getDeptTasks(departmentId) {
       files:task_files(count),
       dependencies:task_dependencies!task_id(count)
     `)
-    .eq('department_id', departmentId)
+    .or(filters.join(','))
     .eq('is_personal', false)
     .is('parent_task_id', null)
     .order('created_at', { ascending: false })

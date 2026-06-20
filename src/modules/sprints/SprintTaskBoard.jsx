@@ -9,7 +9,7 @@ import { TasksProvider, useTasks } from '../tasks/TasksContext'
 import { useTaskFilters } from '../tasks/useTaskFilters'
 
 function SprintTasksInner({ sprintId, canEdit }) {
-  const { tasks, loading, error, statuses, defaultStatusId, moveTask } = useTasks()
+  const { tasks, loading, error, statuses, defaultStatusId, moveTask, addTask } = useTasks()
   const [members, setMembers] = useState([])
   const [view, setView] = useState('kanban')
   const [modal, setModal] = useState(null)
@@ -86,8 +86,9 @@ function SprintTasksInner({ sprintId, canEdit }) {
             <KanbanBoard
               filteredTasks={filtered}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
-              onAddTask={canEdit ? (defaultStatus) => setModal({ mode: 'create', defaultStatus }) : undefined}
+              onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, subtasks: draft.subtasks }) : undefined}
               readOnly={!canEdit}
+              teamMembers={members}
             />
           </div>
         ) : view === 'list' ? (
@@ -97,7 +98,7 @@ function SprintTasksInner({ sprintId, canEdit }) {
               statuses={statuses}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
               onTaskStatusChange={canEdit ? handleTaskStatusChange : undefined}
-              people={{}}
+              people={Object.fromEntries(members.map((m) => [m.id, m]))}
               priorities={{}}
             />
           </div>

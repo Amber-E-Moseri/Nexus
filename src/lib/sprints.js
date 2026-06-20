@@ -5,7 +5,7 @@ import { createNotification } from './notifications'
 const SPRINT_TEAM_SELECT = 'id, sprint_id, name, description, lead_user_id, created_at'
 const SPRINT_TEAM_MEMBERS_SELECT = 'id, team_id, user_id, role, joined_at, users:user_id(id, name, email, department_id, status)'
 const SPRINT_MEMBER_SELECT = 'sprint_id, user_id, role, joined_at'
-const SPRINT_MEMBER_WITH_TEMP_SELECT = 'sprint_id, user_id, role, joined_at, membership_end_date, is_temporary, invited_by'
+const SPRINT_MEMBER_WITH_TEMP_SELECT = 'sprint_id, user_id, role, joined_at, membership_end_date, is_temporary, invited_by, sprint_team_id'
 const TEMP_MEMBER_SELECT = 'id, sprint_id, user_id, role, membership_end_date, is_temporary, invited_by, joined_at, users:user_id(id, name, email, status, is_temporary)'
 const SPRINT_REVIEW_SELECT = 'id, sprint_id, completed_at, completed_by, lessons_learned, goals_achieved, outstanding_items, wins_testimonies, recommendations, final_decisions, created_at'
 const VALID_SPRINT_STATUSES = ['planning', 'active', 'completed', 'review', 'archived']
@@ -46,10 +46,12 @@ export async function getMySprints() {
 
   if (error) throw error
 
+  const seen = new Set()
   return sortByCreatedAtDesc(
     (data ?? [])
       .filter((member) => member.sprint && VALID_SPRINT_STATUSES.includes(member.sprint.status))
-      .map((member) => ({ ...member.sprint, memberRole: member.role })),
+      .map((member) => ({ ...member.sprint, memberRole: member.role }))
+      .filter((sprint) => { if (seen.has(sprint.id)) return false; seen.add(sprint.id); return true }),
   )
 }
 
@@ -626,29 +628,27 @@ export async function inviteExternalToSprint(payload) {
     email,
     name,
     sprintId,
+    sprintName,
     role = 'contributor',
     membershipEndDate,
   } = payload
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
-
-  // Creates auth.users + public.users + sprint_members atomically server-side
-  const { data: userId, error } = await supabase.rpc('invite_external_sprint_member', {
-    p_email: email.trim().toLowerCase(),
-    p_name: name?.trim() || '',
-    p_sprint_id: sprintId,
-    p_role: role,
-    p_end_date: membershipEndDate || null,
+  const { data, error } = await supabase.functions.invoke('send-sprint-invite', {
+    body: { email, name, sprintId, sprintName, role, membershipEndDate },
   })
 
-  if (error) throw error
+  if (error) {
+    // FunctionsHttpError carries the response body in error.context
+    let detail = error.message
+    try {
+      const ctx = await error.context?.json?.()
+      if (ctx?.error) detail = ctx.error
+    } catch {}
+    throw new Error(detail)
+  }
+  if (!data?.sent) throw new Error(data?.error ?? 'Invite failed')
 
-  // Send Supabase's built-in "set your password" email so they can log in
-  const redirectTo = `${import.meta.env.VITE_APP_URL || window.location.origin}/sprints/${sprintId}`
-  await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo })
-
-  return { userId, isNewUser: true }
+  return { isNewUser: true }
 }
 
 export async function getTemporarySprintMembers(sprintId) {
@@ -905,7 +905,7 @@ export async function sendSprintInvitationEmail(payload) {
     ? `${import.meta.env.VITE_APP_URL || 'http://localhost:5173'}/auth/set-password?email=${encodeURIComponent(email)}`
     : `${import.meta.env.VITE_APP_URL || 'http://localhost:5173'}/sprints/${sprintId}`
 
-  const expiresDate = new Date(membershipEndDate).toLocaleDateString()
+  const expiresDate = new Date(`${membershipEndDate}T00:00:00`).toLocaleDateString()
 
   const body = isNewAccount
     ? `You've been invited to join the ${sprint.name} sprint (ends ${expiresDate}).\n\nThis is a temporary invitation. After the sprint ends, your access will be deactivated.\n\nTo get started, click the link below to set up your account:\n${actionUrl}\n\nYour temporary access expires: ${expiresDate}`

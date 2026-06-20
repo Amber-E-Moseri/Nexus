@@ -297,10 +297,20 @@ export async function deleteList(listId) {
 }
 
 export async function getSpaceTasks(departmentId) {
+  const { data: listRows } = await supabase
+    .from('lists')
+    .select('id')
+    .eq('department_id', departmentId)
+
+  const listIds = (listRows ?? []).map((l) => l.id)
+
+  const filters = [`department_id.eq.${departmentId}`]
+  if (listIds.length > 0) filters.push(`list_id.in.(${listIds.join(',')})`)
+
   const { data, error } = await supabase
     .from('tasks')
-    .select('id, title, status, status_id, priority, due_date, assignee_id, department_id, created_at, sprint_id')
-    .eq('department_id', departmentId)
+    .select('id, title, status, status_id, priority, due_date, assignee_id, department_id, list_id, created_at, sprint_id')
+    .or(filters.join(','))
     .is('parent_task_id', null)
 
   if (error) throw error
