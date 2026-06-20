@@ -14,7 +14,7 @@ export async function getMySpaces(userId, role, departmentId) {
 
   return spaces.filter((space) => {
     if (space.space_type === 'personal') return space.owner_id === userId
-    if (space.space_type === 'department') return space.id === departmentId
+    if (space.space_type === 'department') return role === 'super_admin' || space.id === departmentId
     if (isAdmin) return true
     // program / sandbox: enforce visibility for non-admins
     return space.visibility === 'org'
