@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import EmailComposer from './EmailComposer'
@@ -57,7 +57,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   const { profile } = useAuth()
   const [step, setStep] = useState(1)
   const [name, setName] = useState(initial?.name ?? '')
-  const [fromName, setFromName] = useState(import.meta.env.VITE_FROM_NAME ?? 'BLW Canada')
+  const [fromName, setFromName] = useState(import.meta.env.VITE_FROM_NAME ?? 'BLW CAN NEXUS')
   const [subject, setSubject] = useState(initial?.subject ?? '')
   const [body, setBody] = useState(initial?.body ?? '')
   const [scheduleMode, setScheduleMode] = useState('now')
@@ -357,7 +357,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
 
       {showSendConfirm ? (
         <SendConfirmationModal
-          campaign={{ subject, body, from_email: 'noreply@blwcanada.ca', from_name: fromName }}
+          campaign={{ subject, body, from_email: 'noreply@blwcannexus.ca', from_name: fromName }}
           recipientCount={recipientCount}
           suppressedCount={suppressedCount}
           onConfirm={handleConfirmSend}

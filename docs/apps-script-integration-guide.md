@@ -1,7 +1,7 @@
-# BLW Canada OS — Apps Script Integration Guide
+﻿# BLW CAN NEXUS — Apps Script Integration Guide
 
 ## Overview
-Connect Google Sheets workflows to BLW Canada OS through the public Task API.
+Connect Google Sheets workflows to BLW CAN NEXUS through the public Task API.
 
 ## API Endpoint
 `https://[your-project-ref].supabase.co/functions/v1/task-api`

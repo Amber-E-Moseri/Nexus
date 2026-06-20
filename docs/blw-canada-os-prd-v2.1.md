@@ -1,11 +1,11 @@
-# BLW Canada OS - Product Requirements Document v2.1
+﻿# BLW CAN NEXUS - Product Requirements Document v2.1
 # Living document - reflects actual built state as of June 2026
 
 ---
 
 ## Document Purpose
 
-This PRD reflects the **actual current state** of the BLW Canada OS codebase
+This PRD reflects the **actual current state** of the BLW CAN NEXUS codebase
 alongside the full target vision. It replaces PRD v2.0 where the implementation
 has diverged from or extended the spec.
 
@@ -19,7 +19,7 @@ Status key:
 
 ## 1. Product Vision
 
-BLW Canada OS is the operational platform for BLW Canada - a Christ Embassy
+BLW CAN NEXUS is the operational platform for BLW CAN NEXUS - a Christ Embassy
 campus ministry sub-region with 30 members across 5 departments.
 
 It provides:
@@ -52,7 +52,7 @@ clickup/
 ├── apps/
 │   ├── meeting-os/          ← Standalone Meeting OS (fully built)
 │   └── map/                 ← BLW CAN Map Apps Script
-├── src/                     ← BLW Canada OS React app
+├── src/                     ← BLW CAN NEXUS React app
 │   ├── components/layout/   ← Shell, Sidebar, TopBar, ProtectedRoute
 │   ├── context/             ← AuthContext
 │   ├── hooks/               ← useAuth
@@ -412,7 +412,7 @@ Helper functions: `current_user_role()`, `current_user_department()`,
 
 ## 16. Unique Differentiators
 
-These features make BLW Canada OS purpose-built rather than a generic tool:
+These features make BLW CAN NEXUS purpose-built rather than a generic tool:
 
 1. **Pastor shepherd model** - pastors see cross-department task activity for assigned
    members, enforced at RLS level (not just UI)

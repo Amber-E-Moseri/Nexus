@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
@@ -27,7 +27,7 @@ export default function TemplateEditor({ template, onClose, onSaved }) {
   const { profile } = useAuth()
   const [headerBg, setHeaderBg] = useState(template.variables?.headerBg ?? '#4C2A92')
   const [accentColor, setAccentColor] = useState(template.variables?.accentColor ?? '#E8A020')
-  const [footerText, setFooterText] = useState(template.variables?.footerText ?? 'BLW Canada')
+  const [footerText, setFooterText] = useState(template.variables?.footerText ?? 'BLW CAN NEXUS')
   const [previewMode, setPreviewMode] = useState('desktop') // desktop | mobile
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -252,7 +252,7 @@ export default function TemplateEditor({ template, onClose, onSaved }) {
                 value={footerText}
                 onChange={(e) => setFooterText(e.target.value)}
                 style={{ width: '100%', border: `1px solid ${BORDER}`, borderRadius: 6, padding: '8px 10px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
-                placeholder="BLW Canada"
+                placeholder="BLW CAN NEXUS"
               />
             </div>
 

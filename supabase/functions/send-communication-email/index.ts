@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
+﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
 const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN')
 
@@ -154,8 +154,8 @@ async function resolveAllTags(
     .replace(/\{\{leadership_category\}\}/g, recipient.leadership_category ?? '')
     .replace(/\{\{space_name\}\}/g, context.space_name ?? '')
     .replace(/\{\{pastor_name\}\}/g, pastorName)
-    .replace(/\{\{sender_name\}\}/g, context.sender_name ?? 'BLW Canada Team')
-    .replace(/\{\{org_name\}\}/g, 'BLW Canada')
+    .replace(/\{\{sender_name\}\}/g, context.sender_name ?? 'BLW CAN NEXUS Team')
+    .replace(/\{\{org_name\}\}/g, 'BLW CAN NEXUS')
     .replace(/\{\{date_today\}\}/g, today)
     .replace(/\{\{unsubscribe_link\}\}/g, unsubUrl)
     .replace(/\{\{meeting_label\}\}/g, context.space_name ?? '')
@@ -175,14 +175,14 @@ async function renderHtmlShell(bodyHtml: string, previewText: string, recipient:
     </div>
     <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#ffffff;">
       <div style="padding:28px 24px 16px;border-bottom:1px solid #EDE8DC;">
-        <div style="font-size:20px;font-weight:700;color:#4C2A92;">BLW Canada</div>
-        <div style="margin-top:4px;font-size:12px;color:#9E9488;">Sent via BLW Canada OS</div>
+        <div style="font-size:20px;font-weight:700;color:#4C2A92;">BLW CAN NEXUS</div>
+        <div style="margin-top:4px;font-size:12px;color:#9E9488;">Sent via BLW CAN NEXUS</div>
       </div>
       <div style="padding:24px;color:#2D2A22;line-height:1.7;font-size:14px;">
         ${bodyHtml}
       </div>
       <div style="padding:16px 24px;border-top:1px solid #EDE8DC;font-size:11px;color:#9E9488;text-align:center;">
-        BLW Canada |
+        BLW CAN NEXUS |
         <a href="${unsubUrl}" style="color:#9E9488;text-decoration:underline;">Unsubscribe</a>
       </div>
     </div>
@@ -604,7 +604,7 @@ Deno.serve(async (request) => {
         let processedSignature = senderSignature
         processedSignature = processedSignature.replace(/\{\{your_name\}\}/g, senderProfile.name ?? '')
         processedSignature = processedSignature.replace(/\{\{your_role\}\}/g, senderProfile.role ?? '')
-        processedSignature = processedSignature.replace(/\{\{org_name\}\}/g, 'BLW Canada Sub-Region')
+        processedSignature = processedSignature.replace(/\{\{org_name\}\}/g, 'BLW CAN NEXUS')
         personalizedHtmlTemplate += `<hr style="border:none;border-top:1px solid #EDE8DC;margin:24px 0">${processedSignature}`
       }
 

@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
+﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
 const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN')
 
@@ -64,14 +64,14 @@ function bodyToHtml(text: string): string {
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <div style="background: #4C2A92; padding: 20px; border-radius: 8px 8px 0 0; margin-bottom: 24px;">
-        <h2 style="color: white; margin: 0; font-size: 18px;">BLW Canada</h2>
+        <h2 style="color: white; margin: 0; font-size: 18px;">BLW CAN NEXUS</h2>
         <p style="color: rgba(255,255,255,0.7); margin: 4px 0 0; font-size: 13px;">
           Regional Ministry Operations
         </p>
       </div>
       ${paragraphs}
       <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #EDE8DC; color: #9E9488; font-size: 12px;">
-        BLW Canada | Sent via BLW Canada OS
+        BLW CAN NEXUS | Sent via BLW CAN NEXUS
       </div>
     </div>
   `
@@ -100,7 +100,7 @@ Deno.serve(async (request) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const resendApiKey = Deno.env.get('RESEND_API_KEY')
-  const fromEmail = Deno.env.get('FROM_EMAIL') ?? 'BLW Canada <noreply@blwcanada.ca>'
+  const fromEmail = Deno.env.get('FROM_EMAIL') ?? 'BLW CAN NEXUS <noreply@blwcannexus.ca>'
 
   if (!supabaseUrl || !serviceRoleKey || !resendApiKey) {
     return jsonResponse(500, { error: 'Missing required environment variables' })

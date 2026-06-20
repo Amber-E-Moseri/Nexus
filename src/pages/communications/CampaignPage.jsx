@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useWindowWidth } from '../../hooks/useWindowWidth'
@@ -65,7 +65,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   const { profile } = useAuth()
   const [step, setStep]             = useState(1)
   const [name, setName]             = useState(initial?.name ?? '')
-  const [fromName, setFromName]     = useState(import.meta.env.VITE_FROM_NAME ?? 'BLW Canada')
+  const [fromName, setFromName]     = useState(import.meta.env.VITE_FROM_NAME ?? 'BLW CAN NEXUS')
   const [subject, setSubject]       = useState(initial?.subject ?? '')
   const [body, setBody]             = useState(initial?.body ?? '')
   const [scheduleMode, setScheduleMode] = useState('now')
@@ -924,7 +924,7 @@ export default function CampaignPage() {
         recipient_filters: campaign.recipient_filters ?? [],
         status: 'draft',
         segment_id: campaign.segment_id,
-        from_name: campaign.from_name ?? 'BLW Canada',
+        from_name: campaign.from_name ?? 'BLW CAN NEXUS',
         reply_to_email: campaign.reply_to_email ?? null,
         sent_count: 0,
         failed_count: 0,

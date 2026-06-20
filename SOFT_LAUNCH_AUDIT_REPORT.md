@@ -1,4 +1,4 @@
-# BLW Canada OS - Soft Launch Audit Report
+﻿# BLW CAN NEXUS - Soft Launch Audit Report
 **Date:** 2026-06-18  
 **Status:** ✅ READY FOR SOFT LAUNCH  
 **Auditor:** Claude Code

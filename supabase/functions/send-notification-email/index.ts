@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     return jsonResponse(200, { skipped: true, reason: 'no_email' })
   }
 
-  const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://blwcanada.org'
+  const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://blwcannexus.org'
   const currentYear = new Date().getFullYear()
 
   function htmlTemplate(userName: string, body: string, actionUrl?: string, actionLabel?: string): string {
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
         <body>
           <div class="container">
             <div class="header">
-              <h1 style="margin: 0; font-size: 24px;">BLW Canada OS</h1>
+              <h1 style="margin: 0; font-size: 24px;">BLW CAN NEXUS</h1>
             </div>
             <div class="content">
               <div class="section">
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
                 <p>${body}</p>
               </div>
               ${actionUrl ? `<div class="section" style="margin-top: 24px;">
-                <a href="${actionUrl}" class="button">${actionLabel || 'View in BLW Canada OS'}</a>
+                <a href="${actionUrl}" class="button">${actionLabel || 'View in BLW CAN NEXUS'}</a>
               </div>` : ''}
               <div class="section" style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e8dedd;">
                 <p style="font-size: 12px; color: #9e9488; margin: 0;">
@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
               </div>
             </div>
             <div class="footer">
-              <p>© ${currentYear} BLW Canada Sub-Region. All rights reserved.</p>
+              <p>© ${currentYear} BLW CAN NEXUS. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -156,7 +156,7 @@ Deno.serve(async (req) => {
     },
     invitation_accepted: {
       subject: `${payload.user_name ?? 'A user'} activated their account`,
-      body: `Good news! ${payload.user_name ?? 'A user'} accepted their invitation and activated their account on BLW Canada OS.`,
+      body: `Good news! ${payload.user_name ?? 'A user'} accepted their invitation and activated their account on BLW CAN NEXUS.`,
     },
     event_approval_pending: {
       subject: `Calendar event needs your approval: ${payload.event_title ?? 'Event'}`,
@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
   }
 
   const resendApiKey = Deno.env.get('RESEND_API_KEY')
-  const fromEmail = Deno.env.get('INVITATION_FROM_EMAIL') ?? 'notifications@blwcanada.org'
+  const fromEmail = Deno.env.get('INVITATION_FROM_EMAIL') ?? 'notifications@blwcannexus.org'
 
   if (!resendApiKey) {
     return jsonResponse(500, { error: 'Missing RESEND_API_KEY' })
@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: `BLW Canada OS <${fromEmail}>`,
+      from: `BLW CAN NEXUS <${fromEmail}>`,
       to: [user.email],
       subject: message.subject,
       html: htmlContent,

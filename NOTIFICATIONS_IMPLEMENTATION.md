@@ -1,4 +1,4 @@
-# Multi-Channel Notifications Implementation Guide
+﻿# Multi-Channel Notifications Implementation Guide
 
 ## Status: ✅ Phases 1-2 Complete | Phase 3 (Mobile) Ready for Setup
 
@@ -49,7 +49,7 @@ await sendBrowserPushNotification('Task Assigned', {
 ### What's Implemented
 - **Enhanced Email Function** (`supabase/functions/send-notification-email/index.ts`)
   - 8+ notification types with rich HTML templates
-  - Branded email design with BLW Canada OS header/footer
+  - Branded email design with BLW CAN NEXUS header/footer
   - Action buttons that deep-link to relevant pages
   - Responsive design for mobile clients
 
@@ -83,7 +83,7 @@ const response = await fetch('/functions/v1/send-notification-email', {
     payload: {
       task_title: 'Review Q4 Budget',
       assigner_name: 'Sarah Chen',
-      action_url: 'https://app.blwcanada.org/my-tasks'
+      action_url: 'https://app.blwcannexus.org/my-tasks'
     }
   })
 })
@@ -283,8 +283,8 @@ Event → Database Trigger
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 RESEND_API_KEY=
-INVITATION_FROM_EMAIL=notifications@blwcanada.org
-FRONTEND_URL=https://blwcanada.org
+INVITATION_FROM_EMAIL=notifications@blwcannexus.org
+FRONTEND_URL=https://blwcannexus.org
 ```
 
 ### For Mobile Push (Phase 3)

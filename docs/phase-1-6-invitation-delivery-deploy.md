@@ -1,4 +1,4 @@
-# Phase 1.6 — Invitation Email Delivery Deployment
+﻿# Phase 1.6 — Invitation Email Delivery Deployment
 
 This guide covers deployment and verification for the Supabase Edge Function `send-user-invitation`.
 
@@ -13,7 +13,7 @@ Set these secrets in the same Supabase project used by the frontend:
   Used by the Edge Function to send invitation emails through Resend. This must remain server-side only.
 
 - `INVITATION_FROM_EMAIL`
-  The sender address used for invitation emails, for example `BLW Canada OS <noreply@yourdomain.com>`. The domain or sender must be valid in Resend.
+  The sender address used for invitation emails, for example `BLW CAN NEXUS <noreply@yourdomain.com>`. The domain or sender must be valid in Resend.
 
 - `INVITATION_FRONTEND_URL`
   The frontend base URL used to build activation links, for example `https://app.example.com`. The function appends `/activate?token=...`.

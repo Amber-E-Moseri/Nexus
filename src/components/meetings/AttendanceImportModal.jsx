@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+﻿import React, { useState } from 'react'
 import { parseElvantoCSV } from '../../lib/csv/elvanto-attendance-parser'
 import { importElvantoAttendance } from '../../lib/csv/attendanceImportLib'
 import LoadingSpinner from '../ui/LoadingSpinner'
@@ -250,7 +250,7 @@ Grace M.,person_456,Present,96%`}
                       ))}
                     </ul>
                     <p className="mismatches-hint">
-                      Add these people to BLW Canada OS or fix names in Elvanto to match.
+                      Add these people to BLW CAN NEXUS or fix names in Elvanto to match.
                     </p>
                   </div>
                 )}

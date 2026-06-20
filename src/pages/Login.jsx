@@ -1,4 +1,4 @@
-import { ArrowRight, LockKeyhole, Mail } from 'lucide-react'
+﻿import { ArrowRight, LockKeyhole, Mail } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
@@ -42,13 +42,13 @@ export default function Login() {
       <div className="relative z-10 w-full max-w-[500px]">
         <div className="text-center">
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl shadow-[0_18px_40px_rgba(28,22,16,0.12)]" style={{ background: 'linear-gradient(135deg, #4C2A92 0%, #6B4BBE 100%)' }}>
-            <img src="/canada_sr.png" alt="BLW Canada" width="56" height="56" className="h-14 w-14 object-contain filter brightness-0 invert" />
+            <img src="/canada_sr.png" alt="BLW CAN NEXUS" width="56" height="56" className="h-14 w-14 object-contain filter brightness-0 invert" />
           </div>
           <h1 className="mt-6 text-[40px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
             Welcome back!
           </h1>
           <p className="mt-2 text-base text-[var(--text-secondary)]">
-            Sign in to access BLW Canada OS.
+            Sign in to access BLW CAN NEXUS.
           </p>
           {resetMessage ? (
             <div className="mt-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--sage-border)', background: 'var(--sage-light)', color: 'var(--sage)' }}>
@@ -69,7 +69,7 @@ export default function Login() {
                   autoComplete="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@blwcanada.org"
+                  placeholder="you@blwcannexus.org"
                   className="w-full border-0 bg-transparent p-0 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-placeholder)]"
                 />
               </div>

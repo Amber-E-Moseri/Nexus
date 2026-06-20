@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import {
   Body,
   Button,
@@ -33,9 +33,9 @@ export function InvitationEmail({ link, merged }: InvitationEmailProps) {
   const eventDate = merged.date || merged.event_date || ''
   const eventTime = merged.time || merged.event_time || ''
   const venue = merged.venue || ''
-  const hostName = merged.host_name || merged.host || 'BLW Canada'
+  const hostName = merged.host_name || merged.host || 'BLW CAN NEXUS'
   const rsvpBy = merged.rsvp_by || ''
-  const rsvpEmail = merged.rsvp_email || 'invites@blwcanada.ca'
+  const rsvpEmail = merged.rsvp_email || 'invites@blwcannexus.ca'
 
   const previewText = `You're invited to ${eventName}`
 
@@ -51,8 +51,8 @@ export function InvitationEmail({ link, merged }: InvitationEmailProps) {
           {/* Header with BLW Logo */}
           <Section style={{ paddingTop: '32px', paddingBottom: '32px', textAlign: 'center' }}>
             <Img
-              src="https://blwcanada.ca/logo.png"
-              alt="BLW Canada"
+              src="https://blwcannexus.ca/logo.png"
+              alt="BLW CAN NEXUS"
               width="120"
               height="40"
               style={{ display: 'block', margin: '0 auto 16px' }}
@@ -207,7 +207,7 @@ export function InvitationEmail({ link, merged }: InvitationEmailProps) {
                 margin: '0',
               }}
             >
-              © 2026 BLW Canada. All rights reserved.
+              © 2026 BLW CAN NEXUS. All rights reserved.
             </Text>
           </Section>
         </Container>

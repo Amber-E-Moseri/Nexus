@@ -1,4 +1,4 @@
-## BLW Canada OS — Decision Catalog Prompt
+﻿## BLW CAN NEXUS — Decision Catalog Prompt
 
 Run this after every build session to log interview-significant decisions.
 
@@ -6,7 +6,7 @@ Paste this into a Claude conversation (not Claude Code) after each session. Past
 
 ### Instructions for Claude and Codex
 
-You are helping me build a professional decision log for a portfolio project called BLW Canada OS — an internal operations platform built with React, Vite, Supabase, and a connected ecosystem of tools (Meeting OS, BLW CAN Map, Foundation School).
+You are helping me build a professional decision log for a portfolio project called BLW CAN NEXUS — an internal operations platform built with React, Vite, Supabase, and a connected ecosystem of tools (Meeting OS, BLW CAN Map, Foundation School).
 
 I will paste:
 - A summary or output from my latest build session

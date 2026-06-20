@@ -1,4 +1,4 @@
--- ─────────────────────────────────────────────────────────────────────────────
+﻿-- ─────────────────────────────────────────────────────────────────────────────
 -- Attendance Trends system
 --
 -- NOTE: public.meetings / public.meeting_attendance already exist for the
@@ -12,7 +12,7 @@
 --   rate% = (present + late) / (present + absent + late + excused) * 100
 -- "late" counts as attended; "excused" counts as a recorded absence that
 -- does not count against the member (excluded from numerator, included in
--- denominator) — adjust if BLW Canada wants excused fully excluded.
+-- denominator) — adjust if BLW CAN NEXUS wants excused fully excluded.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ─── Lookup tables ──────────────────────────────────────────────────────────

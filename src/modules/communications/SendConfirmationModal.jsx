@@ -1,4 +1,4 @@
-const PRIMARY = '#4C2A92'
+﻿const PRIMARY = '#4C2A92'
 const BORDER = '#EDE8DC'
 const TEXT = '#2D2A22'
 const MUTED = '#9E9488'
@@ -38,7 +38,7 @@ export default function SendConfirmationModal({ campaign, recipientCount, suppre
               From
             </div>
             <div style={{ fontSize: 13, color: TEXT }}>
-              {campaign?.from_name || 'Admin'} &lt;{campaign?.from_email || 'noreply@blwcanada.ca'}&gt;
+              {campaign?.from_name || 'Admin'} &lt;{campaign?.from_email || 'noreply@blwcannexus.ca'}&gt;
             </div>
           </div>
 

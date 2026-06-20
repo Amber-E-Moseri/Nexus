@@ -1,4 +1,4 @@
-export const COMMUNICATION_ROLES = ['super_admin', 'dept_lead', 'pastor', 'member']
+﻿export const COMMUNICATION_ROLES = ['super_admin', 'dept_lead', 'pastor', 'member']
 
 export function normalizeEmail(email = '') {
   return email.trim().toLowerCase()
@@ -60,8 +60,8 @@ export function fillTemplateTags(template = '', recipient = {}, context = {}) {
     leadership_category: recipient.leadership_category ?? '',
     space_name: context.space_name ?? '',
     pastor_name: context.pastor_name ?? '',
-    sender_name: context.sender_name ?? 'BLW Canada Team',
-    org_name: context.org_name ?? 'BLW Canada',
+    sender_name: context.sender_name ?? 'BLW CAN NEXUS Team',
+    org_name: context.org_name ?? 'BLW CAN NEXUS',
     date_today: context.date_today ?? new Date().toLocaleDateString('en-CA', {
       weekday: 'long',
       year: 'numeric',
@@ -437,7 +437,7 @@ export function applyTemplateVariables(htmlContent = '', variables = {}) {
 
   result = result.replace(/\{\{headerBg\}\}/g, vars.headerBg ?? '#4C2A92')
   result = result.replace(/\{\{accentColor\}\}/g, vars.accentColor ?? '#E8A020')
-  result = result.replace(/\{\{footerText\}\}/g, vars.footerText ?? 'BLW Canada')
+  result = result.replace(/\{\{footerText\}\}/g, vars.footerText ?? 'BLW CAN NEXUS')
 
   return result
 }

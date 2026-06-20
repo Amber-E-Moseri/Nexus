@@ -1,4 +1,4 @@
-# BLW Canada Meeting OS — Codex Master Build Spec v5
+﻿# BLW CAN NEXUS Meeting OS — Codex Master Build Spec v5
 
 This file is intended to be handed directly to Codex as the source of truth for implementation.
 
@@ -93,8 +93,8 @@ Only after Phase 0 passes may implementation begin.
 ---
 
 Build a single-page React application called the
-"BLW Canada Meeting OS". This is a complete meeting
-management system for BLW Canada Sub-Region used by
+"BLW CAN NEXUS Meeting OS". This is a complete meeting
+management system for BLW CAN NEXUS used by
 4 people. It has four modules:
 
 1. Agenda Builder
@@ -120,10 +120,10 @@ Accent colours (PDF themes):
   Warm beige: #F5EFE6
   Tan:        #C4956A
 
-Logo: Embed the BLW Canada Sub-Region logo as a
+Logo: Embed the BLW CAN NEXUS logo as a
 base64 PNG string. The logo has a black background,
 red maple leaf merged with a white heart, and
-"BLW CANADA SUB-REGION" text in white below.
+"BLW CAN NEXUS" text in white below.
 Store as const BLW_LOGO_BASE64 at the top of the
 file. Used in PDF headers and app top bar.
 
@@ -576,7 +576,7 @@ Table styles:
 
 Footer (every page):
   Left: "Program Moderator: " + moderator
-  Centre: "BLW Canada Sub-Region"
+  Centre: "BLW CAN NEXUS"
   Right: "Page X of Y"
   All: Inter 8pt, muted
 
@@ -968,7 +968,7 @@ NAVIGATION
 ════════════════════════════════════════════════════
 
 Top header bar:
-  Left: BLW Canada logo (small, 32px height) +
+  Left: BLW CAN NEXUS logo (small, 32px height) +
         "Meeting OS" text
   Right: four tab buttons:
     [📋 Agenda] [📝 Minutes] [📁 Templates] [✅ Actions]

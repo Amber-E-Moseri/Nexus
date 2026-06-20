@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- PHASE 7 - FINAL
 -- ============================================================
 
@@ -32,7 +32,7 @@ insert into public.external_integrations
   (name, type, launch_url, description, icon_emoji, visible_to, sort_order)
 values
   ('Foundation School', 'foundation_school',
-   'https://foundation.blwcanada.org',
+   'https://foundation.blwcannexus.org',
    'Student portal, teacher dashboard, and admin tools',
    '🎓', 'all', 1),
   ('CAN Map', 'custom',

@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.5"
 
 serve(async (req) => {
@@ -96,12 +96,12 @@ function generateICalendar(
 
   let ical = `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//BLW Canada//Ministry Calendar//EN
+PRODID:-//BLW CAN NEXUS//Ministry Calendar//EN
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 X-WR-CALNAME:${calendarName}
 X-WR-TIMEZONE:UTC
-X-WR-CALDESC:${calendarName} from BLW Canada OS
+X-WR-CALDESC:${calendarName} from BLW CAN NEXUS
 BEGIN:VTIMEZONE
 TZID:UTC
 BEGIN:STANDARD
@@ -114,7 +114,7 @@ END:VTIMEZONE
 
   // Add events
   for (const event of events) {
-    const uid = `${event.id}@calendar.blwcanada.org`
+    const uid = `${event.id}@calendar.blwcannexus.org`
     const startDate = new Date(event.start_date)
     const endDate = new Date(event.end_date)
 

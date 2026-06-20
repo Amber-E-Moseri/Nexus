@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { CalendarRange, Files, LayoutGrid, Link2, Mail, Printer, RotateCcw, Users } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
@@ -1529,7 +1529,7 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
                 </div>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 18, fontWeight: 700, color: 'white', letterSpacing: '-0.01em' }}>BLW Canada OS</span>
+                    <span style={{ fontSize: 18, fontWeight: 700, color: 'white', letterSpacing: '-0.01em' }}>BLW CAN NEXUS</span>
                     <span style={{
                       fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em',
                       padding: '2px 10px', borderRadius: 999,
@@ -1875,7 +1875,7 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
               <div style={{ width: '100%', background: '#3D1A78', color: 'white', padding: '20px 22px', boxSizing: 'border-box' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
                   <div>
-                    <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: '0.01em' }}>BLW Canada OS</div>
+                    <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: '0.01em' }}>BLW CAN NEXUS</div>
                     <div style={{ fontSize: 13, marginTop: 5, opacity: 0.92 }}>
                       {printingSubgroup ? `${printingSubgroup} Attendance Report` : 'Regional Attendance Report'}
                     </div>
@@ -2110,7 +2110,7 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
             </div>
 
             <div className="print-footer">
-              <span>BLW Canada OS | {report.label}</span>
+              <span>BLW CAN NEXUS | {report.label}</span>
               <span>Page <span className="print-page-number" /></span>
             </div>
           </div>

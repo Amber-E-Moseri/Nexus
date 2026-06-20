@@ -1,8 +1,8 @@
-# Elvanto Attendance Import Guide
+﻿# Elvanto Attendance Import Guide
 
 ## Overview
 
-Import attendance data from Elvanto CSV exports into BLW Canada OS. This guide explains how to export from Elvanto, import into OS, and troubleshoot common issues.
+Import attendance data from Elvanto CSV exports into BLW CAN NEXUS. This guide explains how to export from Elvanto, import into OS, and troubleshoot common issues.
 
 ## Quick Start
 
@@ -15,7 +15,7 @@ Import attendance data from Elvanto CSV exports into BLW Canada OS. This guide e
 ## Prerequisites
 
 - Access to Elvanto with meeting attendance records
-- Access to BLW Canada OS as admin
+- Access to BLW CAN NEXUS as admin
 - People in Elvanto must have names matching (or similar to) OS user names
 
 ## CSV Format
@@ -59,7 +59,7 @@ Media Production,2024-06-13,10:00,Sarah E.,person_202,Absent,64%
 5. Click **Export as CSV**
 6. Save file (e.g., `meeting_2024-06-16.csv`)
 
-### 2. Open BLW Canada OS
+### 2. Open BLW CAN NEXUS
 
 1. Go to **Meetings** module
 2. Select the meeting matching the Elvanto export

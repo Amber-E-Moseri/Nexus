@@ -1,13 +1,13 @@
-create table if not exists public.org_settings (
+﻿create table if not exists public.org_settings (
   id uuid primary key default gen_random_uuid(),
-  org_name text not null default 'BLW Canada Sub-Region',
+  org_name text not null default 'BLW CAN NEXUS',
   timezone text not null default 'America/Toronto',
   logo_url text,
   updated_at timestamptz default now(),
   updated_by uuid references auth.users(id)
 );
 
-insert into public.org_settings (org_name, timezone) values ('BLW Canada Sub-Region', 'America/Toronto')
+insert into public.org_settings (org_name, timezone) values ('BLW CAN NEXUS', 'America/Toronto')
 on conflict do nothing;
 
 alter table public.org_settings enable row level security;

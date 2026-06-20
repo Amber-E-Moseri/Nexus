@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlignCenter,
   AlignLeft,
@@ -571,14 +571,14 @@ function buildPreviewDocument({ subject, previewText, bodyHtml, context, recipie
     html: `
       <div style="font-family:Arial,sans-serif;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #EDE8DC;">
         <div style="padding:24px 24px 16px;border-bottom:1px solid #EDE8DC;">
-          <div style="font-size:20px;font-weight:700;color:#4C2A92;">BLW Canada</div>
-          <div style="margin-top:4px;font-size:12px;color:#9E9488;">Sent via BLW Canada OS</div>
+          <div style="font-size:20px;font-weight:700;color:#4C2A92;">BLW CAN NEXUS</div>
+          <div style="margin-top:4px;font-size:12px;color:#9E9488;">Sent via BLW CAN NEXUS</div>
         </div>
         <div style="padding:24px;color:#2D2A22;font-size:14px;line-height:1.7;">
           ${safeHtml || `<p style="color:#9E9488;">${escapeHtml('Start writing your email body...')}</p>`}
         </div>
         <div style="padding:16px 24px;border-top:1px solid #EDE8DC;font-size:11px;color:#9E9488;text-align:center;">
-          BLW Canada · <a href="#" style="color:#9E9488;text-decoration:underline;">Unsubscribe</a>
+          BLW CAN NEXUS · <a href="#" style="color:#9E9488;text-decoration:underline;">Unsubscribe</a>
         </div>
       </div>
     `,
@@ -603,7 +603,7 @@ export default function EmailComposerPage() {
   const [previewText, setPreviewText] = useState('')
   const [bodyHtml, setBodyHtml] = useState('<p></p>')
   const [replyTo, setReplyTo] = useState('')
-  const [fromName, setFromName] = useState('BLW Canada')
+  const [fromName, setFromName] = useState('BLW CAN NEXUS')
   const [testEmail, setTestEmail] = useState('')
   const [scheduleMode, setScheduleMode] = useState('now')
   const [scheduledAt, setScheduledAt] = useState('')
@@ -657,7 +657,7 @@ export default function EmailComposerPage() {
           setScheduledAt(data.scheduled_at ? new Date(data.scheduled_at).toISOString().slice(0, 16) : '')
           setScheduleMode(data.status === 'scheduled' ? 'later' : 'now')
           setSelectedSegmentId(data.segment_id ?? '')
-          setFromName(data.from_name ?? 'BLW Canada')
+          setFromName(data.from_name ?? 'BLW CAN NEXUS')
           setReplyTo(data.reply_to_email ?? profile?.email ?? '')
 
           if (Array.isArray(data.recipient_filters) && data.recipient_filters.length > 0) {
@@ -792,8 +792,8 @@ export default function EmailComposerPage() {
       previewText,
       bodyHtml,
       context: {
-        sender_name: fromName || 'BLW Canada',
-        org_name: 'BLW Canada',
+        sender_name: fromName || 'BLW CAN NEXUS',
+        org_name: 'BLW CAN NEXUS',
         unsubscribe_link: '#',
       },
       recipient: previewRecipient,
@@ -864,7 +864,7 @@ export default function EmailComposerPage() {
       status: nextStatus,
       segment_id: selectedSegmentId || null,
       scheduled_at: nextStatus === 'scheduled' && scheduledAt ? new Date(scheduledAt).toISOString() : null,
-      from_name: fromName.trim() || 'BLW Canada',
+      from_name: fromName.trim() || 'BLW CAN NEXUS',
       reply_to_email: replyTo.trim() || null,
       created_by: profile?.id ?? null,
       recipient_count: resolvedRecipients.length,
@@ -960,7 +960,7 @@ export default function EmailComposerPage() {
       const { data, error: invokeError } = await supabase.functions.invoke('send-communication-email', {
         body: {
           campaign_id: savedCampaignId,
-          context: { sender_name: fromName.trim() || 'BLW Canada' },
+          context: { sender_name: fromName.trim() || 'BLW CAN NEXUS' },
         },
       })
 
@@ -995,7 +995,7 @@ export default function EmailComposerPage() {
           body_text: stripHtmlToText(bodyHtml),
           preview_text: previewText,
           reply_to: replyTo.trim() || undefined,
-          context: { sender_name: fromName.trim() || 'BLW Canada' },
+          context: { sender_name: fromName.trim() || 'BLW CAN NEXUS' },
         },
       })
 
@@ -1193,10 +1193,10 @@ export default function EmailComposerPage() {
 
             <Section title="Campaign Settings">
               <Field label="From name">
-                <TextInput value={fromName} onChange={(event) => setFromName(event.target.value)} placeholder="BLW Canada" />
+                <TextInput value={fromName} onChange={(event) => setFromName(event.target.value)} placeholder="BLW CAN NEXUS" />
               </Field>
               <Field label="Reply-to email">
-                <TextInput type="email" value={replyTo} onChange={(event) => setReplyTo(event.target.value)} placeholder="name@blwcanada.ca" />
+                <TextInput type="email" value={replyTo} onChange={(event) => setReplyTo(event.target.value)} placeholder="name@blwcannexus.ca" />
               </Field>
             </Section>
 

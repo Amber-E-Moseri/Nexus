@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { jwtDecode } from 'https://esm.sh/jwt-decode@^4'
 
 const corsHeaders = {
@@ -197,7 +197,7 @@ async function executeAction(
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'noreply@blwcanada.org',
+            from: 'noreply@blwcannexus.org',
             to,
             subject,
             html: body,

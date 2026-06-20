@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Calendar, Settings } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
@@ -125,7 +125,7 @@ export default function MinistryCalendar() {
   const miniCalendarEnd = new Date(year, month + 1, 0)
 
   function generateICS() {
-    let ics = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//BLW Canada OS//EN\n'
+    let ics = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//BLW CAN NEXUS//EN\n'
 
     filteredEvents.forEach((event) => {
       if (event.status === 'approved') {
@@ -143,7 +143,7 @@ export default function MinistryCalendar() {
         }
 
         ics += 'BEGIN:VEVENT\n'
-        ics += `UID:${event.id}@blwcanada.org\n`
+        ics += `UID:${event.id}@blwcannexus.org\n`
         ics += `SUMMARY:${event.title.replace(/"/g, '\\"')}\n`
         ics += `DTSTART:${formatDatetime(startDate)}\n`
         ics += `DTEND:${formatDatetime(endDate)}\n`
@@ -167,7 +167,7 @@ export default function MinistryCalendar() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'blwcanada-calendar.ics'
+    a.download = 'blwcannexus-calendar.ics'
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)

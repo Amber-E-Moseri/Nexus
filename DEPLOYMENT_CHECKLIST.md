@@ -1,4 +1,4 @@
-# BLW Canada OS - Soft Launch Deployment Checklist
+﻿# BLW CAN NEXUS - Soft Launch Deployment Checklist
 
 ## Pre-Deployment (24 hours before)
 
@@ -39,7 +39,7 @@
   curl -X POST "https://api.resend.com/emails" \
     -H "Authorization: Bearer $RESEND_API_KEY" \
     -H "Content-Type: application/json" \
-    -d '{"from":"test@blwcanada.org","to":"pilot@example.com","subject":"Test","html":"<p>Test email</p>"}'
+    -d '{"from":"test@blwcannexus.org","to":"pilot@example.com","subject":"Test","html":"<p>Test email</p>"}'
   ```
 - [ ] Verify Google Drive auth callback URL points to production
 - [ ] Test Zoom integration (if pilot includes meeting features)

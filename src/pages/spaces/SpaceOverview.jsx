@@ -1,4 +1,4 @@
-import * as Dialog from '@radix-ui/react-dialog'
+﻿import * as Dialog from '@radix-ui/react-dialog'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { SlidersHorizontal } from 'lucide-react'
@@ -129,7 +129,7 @@ function SpaceHeader({ space, members, canManage, canManageStatuses, onOpenStatu
     ? [getMediaOverviewMember(members)].filter(Boolean)
     : members.slice(0, 4)
   const description = mediaSpace
-    ? 'Media production, content creation, broadcast and digital publishing for BLW Canada OS.'
+    ? 'Media production, content creation, broadcast and digital publishing for BLW CAN NEXUS.'
     : space.description
 
   return (

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { formatRelativeDate } from '../../lib/dateUtils'
@@ -50,8 +50,8 @@ const SAMPLE_VALUES = {
   '{{leadership_category}}': 'Cell Leader',
   '{{space_name}}': 'Media',
   '{{pastor_name}}': 'Pastor John',
-  '{{sender_name}}': 'BLW Canada Team',
-  '{{org_name}}': 'BLW Canada',
+  '{{sender_name}}': 'BLW CAN NEXUS Team',
+  '{{org_name}}': 'BLW CAN NEXUS',
   '{{date_today}}': new Date().toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
 }
 

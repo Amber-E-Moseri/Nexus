@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
             user_id: userId,
             notification_type: 'system',
             payload: {
-              message: 'Test email notification from BLW Canada OS',
+              message: 'Test email notification from BLW CAN NEXUS',
             },
           }),
         }

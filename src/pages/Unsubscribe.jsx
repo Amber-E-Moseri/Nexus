@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
@@ -69,7 +69,7 @@ export default function UnsubscribePage() {
             padding: '20px 24px',
           }}
         >
-          <div style={{ fontSize: 18, fontWeight: 800, color: '#FFFFFF' }}>BLW Canada OS</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#FFFFFF' }}>BLW CAN NEXUS</div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>
             Regional Ministry Operations
           </div>
@@ -101,7 +101,7 @@ export default function UnsubscribePage() {
                   You're resubscribed
                 </div>
                 <div style={{ fontSize: 13, color: '#9E9488' }}>
-                  {email} will receive emails from BLW Canada OS again.
+                  {email} will receive emails from BLW CAN NEXUS again.
                 </div>
               </>
             ) : (
@@ -126,7 +126,7 @@ export default function UnsubscribePage() {
                 </div>
                 <div style={{ fontSize: 13, color: '#9E9488', marginBottom: 24, lineHeight: 1.6 }}>
                   <strong style={{ color: '#2D2A22' }}>{email}</strong> will no longer receive
-                  emails from BLW Canada OS.
+                  emails from BLW CAN NEXUS.
                 </div>
                 <button
                   type="button"

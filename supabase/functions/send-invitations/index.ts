@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { Resend } from 'https://esm.sh/resend@latest'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
@@ -68,7 +68,7 @@ export default async (req: Request) => {
 
       try {
         await resend.emails.send({
-          from: 'invitations@blwcanada.org',
+          from: 'invitations@blwcannexus.org',
           to: recipient.email,
           subject: emailSubject,
           html: generateEmailHTML({
@@ -175,7 +175,7 @@ function generateEmailHTML(data: {
         </p>
 
         <div class="footer">
-          BLW Canada OS | Invitation Platform
+          BLW CAN NEXUS | Invitation Platform
         </div>
       </div>
     </body>

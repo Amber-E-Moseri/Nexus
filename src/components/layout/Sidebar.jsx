@@ -1,4 +1,4 @@
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+﻿import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   Archive,
   Bell,
@@ -498,7 +498,7 @@ export default function Sidebar() {
         >
           <img
             src="/canada_sr.png"
-            alt="BLW Canada"
+            alt="BLW CAN NEXUS"
             width="24"
             height="24"
             style={{
@@ -521,7 +521,7 @@ export default function Sidebar() {
               textOverflow: 'ellipsis',
             }}
           >
-            BLW Canada OS
+            BLW CAN NEXUS
           </div>
           <div
             style={{

@@ -1,4 +1,4 @@
-# BLW Canada OS â€” Decision Catalog
+﻿# BLW CAN NEXUS â€” Decision Catalog
 
 Use `docs/decision-catalog-prompt.md` after each build session to extend this file.
 
@@ -370,7 +370,7 @@ Interview answer: "Dependencies and files are in their own tables, not JSONB col
 **Follow-up questions this invites:**
 - Why hash instead of encrypt?
 - How do revoke and rotate flows work with a hashed key model?
-**Ecosystem connection:** This decision matters across CAN Map, Apps Script, and any future external connector calling BLW Canada OS APIs.
+**Ecosystem connection:** This decision matters across CAN Map, Apps Script, and any future external connector calling BLW CAN NEXUS APIs.
 
 ### [DECISION-033] â€” Public task API is scope-bound to department or sprint
 **Phase:** Phase 6
@@ -457,14 +457,14 @@ Interview answer: "Dependencies and files are in their own tables, not JSONB col
 ### [DECISION-036] — External tools embedded inside the OS shell
 **Phase:** Phase 7
 **Category:** Architecture / Product
-**What I decided:** Embedded Meeting OS, CAN Map, and BLW Mail inside BLW Canada OS routes using iframe-based shell pages instead of sending users out to separate tabs by default.
+**What I decided:** Embedded Meeting OS, CAN Map, and BLW Mail inside BLW CAN NEXUS routes using iframe-based shell pages instead of sending users out to separate tabs by default.
 **Why I decided it:** Phase 7 was about consolidation. Users should experience one operational workspace, not a collection of disconnected tools. Embedding the tools preserves their independence while making the platform feel unified under one navigation model and one subdomain.
 **What I considered instead:** Keeping all tools as external links only (rejected — breaks flow and weakens the “one OS” goal); fully rewriting those tools into the main React app (rejected — high migration risk and unnecessary when the tools already work independently).
-**Interview answer (30 seconds):** "I consolidated the ecosystem at the shell layer rather than rewriting each tool. Meeting OS, CAN Map, and BLW Mail now open inside BLW Canada OS routes using iframe wrappers with consistent headers and navigation. That gave users one workspace experience without taking on the risk of re-platforming already-working tools."
+**Interview answer (30 seconds):** "I consolidated the ecosystem at the shell layer rather than rewriting each tool. Meeting OS, CAN Map, and BLW Mail now open inside BLW CAN NEXUS routes using iframe wrappers with consistent headers and navigation. That gave users one workspace experience without taking on the risk of re-platforming already-working tools."
 **Follow-up questions this invites:**
 - Why use iframes instead of fully merging the apps?
 - What are the tradeoffs of iframe-based consolidation?
-**Ecosystem connection:** Core ecosystem decision — it directly unifies Meeting OS, CAN Map, and BLW Mail under the BLW Canada OS shell.
+**Ecosystem connection:** Core ecosystem decision — it directly unifies Meeting OS, CAN Map, and BLW Mail under the BLW CAN NEXUS shell.
 
 ### [DECISION-037] — Meeting OS embed keeps a native fallback
 **Phase:** Phase 7
@@ -565,7 +565,7 @@ Interview answer: "Dependencies and files are in their own tables, not JSONB col
 **Follow-up questions this invites:**
 - Why separate config values from true secrets?
 - How would you wire Supabase Vault or another secret manager into this flow?
-**Ecosystem connection:** This governs future Zoom meeting creation inside the BLW Canada OS calendar and keeps external meeting credentials aligned with the platform security model.
+**Ecosystem connection:** This governs future Zoom meeting creation inside the BLW CAN NEXUS calendar and keeps external meeting credentials aligned with the platform security model.
 
 ### [DECISION-043] — BLW Mail is scoped to super admin and department leads
 **Phase:** Phase 7

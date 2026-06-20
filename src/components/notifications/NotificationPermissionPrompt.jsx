@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import { Bell } from 'lucide-react'
@@ -41,7 +41,7 @@ export default function NotificationPermissionPrompt() {
         setShow(false)
         // Show confirmation notification
         new Notification('Notifications Enabled', {
-          body: 'You will now receive browser notifications from BLW Canada OS',
+          body: 'You will now receive browser notifications from BLW CAN NEXUS',
           icon: '/logo.png'
         })
       } else {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { listDepartments } from '../../lib/people/api'
 import { getNotificationPrefs, setNotificationPref } from '../../lib/notifications'
@@ -44,7 +44,7 @@ export default function Settings() {
     confirmPassword: '',
   })
   const [orgSettings, setOrgSettings] = useState({
-    org_name: 'BLW Canada Sub-Region',
+    org_name: 'BLW CAN NEXUS',
     timezone: 'America/Toronto',
     logo_url: '',
   })
@@ -278,7 +278,7 @@ export default function Settings() {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `blwcanada-export-${new Date().toISOString().split('T')[0]}.json`
+      link.download = `blwcannexus-export-${new Date().toISOString().split('T')[0]}.json`
       link.click()
       URL.revokeObjectURL(url)
     } catch (err) {

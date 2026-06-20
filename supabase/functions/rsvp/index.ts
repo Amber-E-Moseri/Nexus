@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
+﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
 const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN')
 
@@ -75,7 +75,7 @@ function renderRsvpNotificationEmail(
             </div>
 
             <div class="footer">
-              <p>This is an automated notification from BLW Canada. Please do not reply to this email.</p>
+              <p>This is an automated notification from BLW CAN NEXUS. Please do not reply to this email.</p>
             </div>
           </div>
         </div>
@@ -102,11 +102,11 @@ async function sendViaResend(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'BLW Canada <invites@blwcanada.ca>',
+        from: 'BLW CAN NEXUS <invites@blwcannexus.ca>',
         to: email,
         subject: subject.trim(),
         html: html,
-        reply_to: 'noreply@blwcanada.ca',
+        reply_to: 'noreply@blwcannexus.ca',
       }),
     })
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { createNotification } from '../lib/notifications'
@@ -123,7 +123,7 @@ export default function ActivateInvitation() {
           Accept your invitation
         </h1>
         <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
-          Create your password to activate your BLW Canada OS access.
+          Create your password to activate your BLW CAN NEXUS access.
         </p>
 
         {error && (

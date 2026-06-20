@@ -1,4 +1,4 @@
-// Service Worker for handling push notifications
+﻿// Service Worker for handling push notifications
 
 self.addEventListener('push', (event) => {
   if (!event.data) return
@@ -8,7 +8,7 @@ self.addEventListener('push', (event) => {
     data = event.data.json()
   } catch (e) {
     data = {
-      title: 'BLW Canada OS',
+      title: 'BLW CAN NEXUS',
       message: event.data.text()
     }
   }
@@ -37,7 +37,7 @@ self.addEventListener('push', (event) => {
   }
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'BLW Canada OS', options)
+    self.registration.showNotification(data.title || 'BLW CAN NEXUS', options)
   )
 })
 

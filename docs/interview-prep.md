@@ -1,4 +1,4 @@
-# BLW Canada OS — Interview Preparation
+﻿# BLW CAN NEXUS — Interview Preparation
 
 ---
 
@@ -342,7 +342,7 @@ The automation execution engine exists as an Edge Function (DECISION-039, Phase 
 
 ### Story 2 — DECISION-011: Deciding not to rewrite working code
 
-**Situation:** BLW Canada OS was being built as the central operations platform. Meeting OS already existed as a standalone app with Whisper WASM transcription, AI meeting summaries, PDF export, and its own local data model. The obvious path was to absorb it so everything lived in one codebase.
+**Situation:** BLW CAN NEXUS was being built as the central operations platform. Meeting OS already existed as a standalone app with Whisper WASM transcription, AI meeting summaries, PDF export, and its own local data model. The obvious path was to absorb it so everything lived in one codebase.
 
 **Task:** Decide whether to migrate Meeting OS into the main codebase — achieving one unified app — or find a way to integrate it while keeping the existing system intact.
 

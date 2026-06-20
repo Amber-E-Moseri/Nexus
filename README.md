@@ -1,10 +1,10 @@
-# BLW Canada OS
+﻿# BLW CAN NEXUS
 
-Internal operations platform for BLW Canada, built with React, Vite, and Supabase.
+Internal operations platform for BLW CAN NEXUS, built with React, Vite, and Supabase.
 
 ## What it is
 
-BLW Canada OS is an internal workspace for a 30-person campus ministry organization with five departments. It centralizes day-to-day operations that would otherwise be spread across task managers, spreadsheets, email, and separate internal tools. The application covers task management, people lifecycle management, meetings, sprints, calendar coordination, notifications, and lightweight integrations.
+BLW CAN NEXUS is an internal workspace for a 30-person campus ministry organization with five departments. It centralizes day-to-day operations that would otherwise be spread across task managers, spreadsheets, email, and separate internal tools. The application covers task management, people lifecycle management, meetings, sprints, calendar coordination, notifications, and lightweight integrations.
 
 The primary users are ministry leaders, department leads, pastors, and members. Each role sees a different slice of the system through Supabase Row Level Security. Department work stays scoped to the right team, pastor visibility stays limited to assigned members, and elevated workflows like invitations, automations, and communications stay restricted to leadership roles.
 
@@ -161,11 +161,11 @@ Required secrets:
 
 ```bash
 supabase secrets set RESEND_API_KEY=your_resend_api_key
-supabase secrets set INVITATION_FROM_EMAIL="BLW Canada OS <notifications@yourdomain.com>"
+supabase secrets set INVITATION_FROM_EMAIL="BLW CAN NEXUS <notifications@yourdomain.com>"
 supabase secrets set INVITATION_FRONTEND_URL=https://your-frontend-url
 supabase secrets set ALLOWED_ORIGIN=https://your-frontend-url
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-supabase secrets set NOTIFICATION_FROM_EMAIL="BLW Canada OS <notifications@yourdomain.com>"
+supabase secrets set NOTIFICATION_FROM_EMAIL="BLW CAN NEXUS <notifications@yourdomain.com>"
 ```
 
 | Secret | Used by | Purpose |
@@ -279,4 +279,4 @@ Replaces ClickUp (~$360/month for 30 users). Running cost: $0/month on free tier
 
 ## License
 
-Internal use — BLW Canada
+Internal use — BLW CAN NEXUS

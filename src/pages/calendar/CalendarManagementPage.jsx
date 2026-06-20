@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Plus, Trash2, Edit2 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../context/ToastContext'
@@ -107,7 +107,7 @@ export default function CalendarManagementPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div>
         <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
-          BLW Canada OS / Ministry Calendar / Calendar Management
+          BLW CAN NEXUS / Ministry Calendar / Calendar Management
         </div>
         <h1 style={{ marginTop: '8px', fontSize: '28px', fontWeight: 600, letterSpacing: '-0.04em', color: 'var(--text-primary)' }}>
           Calendar Management

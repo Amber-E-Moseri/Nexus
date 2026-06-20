@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 
 const PRIMARY = '#4C2A92'
 const BORDER  = '#EDE8DC'
@@ -14,8 +14,8 @@ const SAMPLE = {
   leadership_category: 'Cell Leader',
   space_name:        'Media',
   pastor_name:       'Pastor John',
-  sender_name:       'BLW Canada Team',
-  org_name:          'BLW Canada',
+  sender_name:       'BLW CAN NEXUS Team',
+  org_name:          'BLW CAN NEXUS',
   date_today:        new Date().toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
   unsubscribe_link:  '#unsubscribe',
 }
@@ -48,12 +48,12 @@ function renderHtml(text) {
   return `
     <div style="font-family:sans-serif;max-width:560px;margin:0 auto;">
       <div style="background:linear-gradient(135deg,#4C2A92,#6B3FD4);padding:20px;border-radius:8px 8px 0 0;margin-bottom:24px;">
-        <div style="color:white;font-size:18px;font-weight:800;">BLW Canada</div>
+        <div style="color:white;font-size:18px;font-weight:800;">BLW CAN NEXUS</div>
         <div style="color:rgba(255,255,255,0.7);font-size:12px;margin-top:2px;">Regional Ministry Operations</div>
       </div>
       <div style="color:#2D2A22;font-size:14px;line-height:1.7;padding:0 4px;">${paragraphs}</div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid #EDE8DC;text-align:center;font-size:11px;color:#9E9488;">
-        BLW Canada | Sent via BLW Canada OS<br>
+        BLW CAN NEXUS | Sent via BLW CAN NEXUS<br>
         <a href="#" style="color:#9E9488;text-decoration:underline;">Unsubscribe</a>
         &nbsp;·&nbsp;
         <a href="#" style="color:#9E9488;text-decoration:underline;">View in browser</a>

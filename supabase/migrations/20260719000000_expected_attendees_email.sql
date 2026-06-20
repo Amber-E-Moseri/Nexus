@@ -1,4 +1,4 @@
-alter table public.expected_attendees
+﻿alter table public.expected_attendees
   add column if not exists email text;
 
 create table if not exists public.absence_email_templates (
@@ -44,7 +44,7 @@ hesitate to reach out to your subgroup pastor if you need
 anything at all.
 
 With love,
-BLW Canada Team',
+BLW CAN NEXUS Team',
   true
 where not exists (
   select 1

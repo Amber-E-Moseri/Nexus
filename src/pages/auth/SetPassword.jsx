@@ -76,23 +76,19 @@ export default function SetPassword() {
     setLoading(true)
 
     try {
-      // Set password for the user
-      const { error: updateError } = await supabase.auth.updateUser({ password })
-      if (updateError) {
-        setError(updateError.message)
+      // Call edge function to set password and mark token as used
+      const response = await fetch('/api/set-sprint-invite-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        setError(result.error || 'Failed to set password')
         setLoading(false)
         return
-      }
-
-      // Mark token as used
-      const { error: markError } = await supabase
-        .from('sprint_invite_tokens')
-        .update({ used_at: new Date().toISOString() })
-        .eq('id', tokenData.id)
-
-      if (markError) {
-        console.error('Failed to mark token as used:', markError)
-        // Continue anyway, user is authenticated
       }
 
       // Navigate to the sprint

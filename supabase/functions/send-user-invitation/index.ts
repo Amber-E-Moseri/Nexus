@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
+﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
 type SendMode = 'send' | 'resend'
 
@@ -59,13 +59,13 @@ function invitationEmailHtml({
   return `
     <div style="font-family: Arial, sans-serif; background: #f6f4ff; padding: 32px; color: #14142b;">
       <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 20px; padding: 32px; border: 1px solid #e8e7f2;">
-        <div style="font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: #7b68ee;">BLW Canada OS</div>
+        <div style="font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: #7b68ee;">BLW CAN NEXUS</div>
         <h1 style="margin: 16px 0 12px; font-size: 28px; line-height: 1.2;">Activate your account</h1>
         <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.7;">
           Hello ${recipientName},
         </p>
         <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.7;">
-          You have been invited to join BLW Canada OS as <strong>${roleLabel}</strong> in the
+          You have been invited to join BLW CAN NEXUS as <strong>${roleLabel}</strong> in the
           <strong>${departmentName}</strong> department.
         </p>
         ${
@@ -109,7 +109,7 @@ function invitationEmailText({
   return [
     `Hello ${recipientName},`,
     '',
-    `You have been invited to join BLW Canada OS as ${roleLabel} in the ${departmentName} department.`,
+    `You have been invited to join BLW CAN NEXUS as ${roleLabel} in the ${departmentName} department.`,
     inviteMessage ? inviteMessage : null,
     `Activate your account here: ${activationUrl}`,
     `This invitation expires on ${expiresAt}.`,
@@ -281,7 +281,7 @@ Deno.serve(async (request) => {
   const emailPayload = {
     from: fromEmail,
     to: [invitation.email],
-    subject: 'Activate your BLW Canada OS account',
+    subject: 'Activate your BLW CAN NEXUS account',
     html: invitationEmailHtml({
       recipientName,
       departmentName,

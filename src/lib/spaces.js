@@ -8,7 +8,17 @@ export async function getMySpaces(userId, role, departmentId) {
     .order('name')
 
   if (error) throw error
-  return data ?? []
+  const spaces = data ?? []
+
+  const isAdmin = role === 'super_admin' || role === 'dept_lead'
+
+  return spaces.filter((space) => {
+    if (space.space_type === 'personal') return space.owner_id === userId
+    if (space.space_type === 'department') return space.id === departmentId
+    if (isAdmin) return true
+    // program / sandbox: enforce visibility for non-admins
+    return space.visibility === 'org'
+  })
 }
 
 export async function getSpacesByType(userId, role, departmentId) {

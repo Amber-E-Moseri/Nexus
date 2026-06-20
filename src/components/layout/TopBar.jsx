@@ -1,4 +1,4 @@
-import { Bell, ChevronRight, LoaderCircle, Plus, Search } from 'lucide-react'
+﻿import { Bell, ChevronRight, LoaderCircle, Plus, Search } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
@@ -90,7 +90,7 @@ function useBreadcrumbs(pathname, search) {
     return crumbs
   }
   if (pathname.startsWith('/sprints/')) return [['Sprints', '/sprints'], [sprintName || 'Sprint', pathname]]
-  return [['BLW Canada OS', '/dashboard']]
+  return [['BLW CAN NEXUS', '/dashboard']]
 }
 
 function ResultSection({ title, children }) {
@@ -313,7 +313,7 @@ export default function TopBar() {
               className="cursor-pointer font-semibold text-[var(--text-tertiary)] transition-colors hover:text-[var(--accent)]"
               onClick={() => navigate('/dashboard')}
             >
-              BLW Canada OS
+              BLW CAN NEXUS
             </span>
             {crumbs.map(([label, to], index) => (
               <span key={index} className="flex items-center gap-1">

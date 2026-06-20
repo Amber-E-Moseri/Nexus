@@ -1,4 +1,4 @@
-alter table public.communication_campaigns
+﻿alter table public.communication_campaigns
   add column if not exists preview_text text,
   add column if not exists body_html text,
   add column if not exists body_text text,
@@ -10,7 +10,7 @@ update public.communication_campaigns
 set
   body_text = coalesce(body_text, body),
   body_html = coalesce(body_html, body),
-  from_name = coalesce(from_name, 'BLW Canada'),
+  from_name = coalesce(from_name, 'BLW CAN NEXUS'),
   reply_to_email = coalesce(reply_to_email, '')
 where body_text is null
    or body_html is null

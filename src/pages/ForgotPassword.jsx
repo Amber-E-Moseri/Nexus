@@ -1,4 +1,4 @@
-import { ArrowLeft, Mail } from 'lucide-react'
+﻿import { ArrowLeft, Mail } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
@@ -68,7 +68,7 @@ export default function ForgotPassword() {
                 autoComplete="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@blwcanada.org"
+                placeholder="you@blwcannexus.org"
                 className="w-full border-0 bg-transparent p-0 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-placeholder)]"
               />
             </div>

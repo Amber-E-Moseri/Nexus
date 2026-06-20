@@ -1,4 +1,4 @@
-# Quick Start: Multi-Channel Notifications
+﻿# Quick Start: Multi-Channel Notifications
 
 ## What's Ready Now ✅
 
@@ -61,8 +61,8 @@ curl https://your-app.com/service-worker.js
 ### Environment Variables Needed:
 ```env
 RESEND_API_KEY=<Your Resend API key>
-FRONTEND_URL=https://blwcanada.org
-INVITATION_FROM_EMAIL=notifications@blwcanada.org
+FRONTEND_URL=https://blwcannexus.org
+INVITATION_FROM_EMAIL=notifications@blwcannexus.org
 ```
 
 ## Integration Points

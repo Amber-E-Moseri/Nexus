@@ -1,4 +1,4 @@
-// Register cron job in Supabase SQL Editor with:
+﻿// Register cron job in Supabase SQL Editor with:
 // select cron.schedule(
 //   'email-digest',
 //   '0 12 * * 1',  -- 12:00 UTC every Monday = 8am ET every Monday
@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   )
 
-  const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://app.blwcanada.org'
+  const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://app.blwcannexus.org'
 
   // Get all users
   const { data: users, error: usersError } = await supabase
@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
 
     const emailBody = `Hi ${firstName},
 
-Here's what happened in BLW Canada OS this week:
+Here's what happened in BLW CAN NEXUS this week:
 
 ${notificationsList}
 
@@ -152,7 +152,7 @@ To unsubscribe from weekly digests, update your notification preferences in Sett
 
     // Send email via Resend
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
-    const fromEmail = Deno.env.get('NOTIFICATION_FROM_EMAIL') ?? 'noreply@blwcanada.org'
+    const fromEmail = Deno.env.get('NOTIFICATION_FROM_EMAIL') ?? 'noreply@blwcannexus.org'
 
     if (!resendApiKey) {
       console.error('Missing RESEND_API_KEY')
@@ -166,9 +166,9 @@ To unsubscribe from weekly digests, update your notification preferences in Sett
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: `BLW Canada OS <${fromEmail}>`,
+        from: `BLW CAN NEXUS <${fromEmail}>`,
         to: [user.email],
-        subject: 'Your BLW Canada OS weekly digest',
+        subject: 'Your BLW CAN NEXUS weekly digest',
         text: emailBody,
       }),
     })
