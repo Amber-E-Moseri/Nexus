@@ -626,6 +626,9 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
       setFolderFieldSettings(normalizeTaskFieldSettings({}))
       setFolderModalOpen(false)
       await loadTree()
+    } catch (err) {
+      console.error('Failed to create folder:', err)
+      window.alert(`Failed to create folder: ${err.message}`)
     } finally {
       setTreeSaving(false)
     }
@@ -644,6 +647,9 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
       setListFieldSettings(normalizeTaskFieldSettings({}))
       setListModalFolder(null)
       await loadTree()
+    } catch (err) {
+      console.error('Failed to create list:', err)
+      window.alert(`Failed to create list: ${err.message}`)
     } finally {
       setTreeSaving(false)
     }

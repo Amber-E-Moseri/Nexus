@@ -135,17 +135,12 @@ for all
 to authenticated
 using (
   (auth.jwt() ->> 'user_role') = 'super_admin'
-  or (
-    (auth.jwt() ->> 'user_role') = 'dept_lead'
-    and department_id = nullif(auth.jwt() ->> 'user_department_id', '')::uuid
-  )
+  or (auth.jwt() ->> 'user_role') = 'dept_lead'
+  or created_by = auth.uid()
 )
 with check (
   (auth.jwt() ->> 'user_role') = 'super_admin'
-  or (
-    (auth.jwt() ->> 'user_role') = 'dept_lead'
-    and department_id = nullif(auth.jwt() ->> 'user_department_id', '')::uuid
-  )
+  or (auth.jwt() ->> 'user_role') = 'dept_lead'
 );
 
 drop policy if exists "lists_select" on public.lists;
@@ -163,15 +158,10 @@ for all
 to authenticated
 using (
   (auth.jwt() ->> 'user_role') = 'super_admin'
-  or (
-    (auth.jwt() ->> 'user_role') = 'dept_lead'
-    and department_id = nullif(auth.jwt() ->> 'user_department_id', '')::uuid
-  )
+  or (auth.jwt() ->> 'user_role') = 'dept_lead'
+  or created_by = auth.uid()
 )
 with check (
   (auth.jwt() ->> 'user_role') = 'super_admin'
-  or (
-    (auth.jwt() ->> 'user_role') = 'dept_lead'
-    and department_id = nullif(auth.jwt() ->> 'user_department_id', '')::uuid
-  )
+  or (auth.jwt() ->> 'user_role') = 'dept_lead'
 );
