@@ -41,7 +41,7 @@ begin
     raise exception 'Invitation cannot issue a new link while %', v_invitation.status;
   end if;
 
-  v_token := encode(gen_random_bytes(24), 'hex');
+  v_token := substr(md5(random()::text || clock_timestamp()::text || gen_random_uuid()::text), 1, 48);
   v_hash := md5(v_token);
 
   update public.user_invitations

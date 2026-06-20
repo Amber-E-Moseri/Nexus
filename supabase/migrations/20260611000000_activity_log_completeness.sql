@@ -94,7 +94,7 @@ begin
     p_role,
     p_assigned_pastor_id,
     auth.uid(),
-    encode(gen_random_bytes(24), 'hex'),
+    substr(md5(random()::text || clock_timestamp()::text || gen_random_uuid()::text), 1, 48),
     'pending'
   )
   returning *

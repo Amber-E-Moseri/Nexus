@@ -351,7 +351,7 @@ begin
     p_role,
     p_assigned_pastor_id,
     auth.uid(),
-    encode(gen_random_bytes(24), 'hex'),
+    substr(md5(random()::text || clock_timestamp()::text || gen_random_uuid()::text), 1, 48),
     'pending'
   )
   returning *
@@ -395,7 +395,7 @@ begin
 
   update public.user_invitations
   set
-    invitation_token = encode(gen_random_bytes(24), 'hex'),
+    invitation_token = substr(md5(random()::text || clock_timestamp()::text || gen_random_uuid()::text), 1, 48),
     resent_at = now(),
     expires_at = now() + interval '7 days',
     status = 'pending'

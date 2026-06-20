@@ -12,3 +12,4 @@ apps/meeting-os/ors-report-suite-main.zip
 .supabase/
 supabase/supabase/
 **/.temp/
+.vercel

@@ -78,7 +78,7 @@ begin
     end if;
   end if;
 
-  v_token := encode(gen_random_bytes(24), 'hex');
+  v_token := substr(md5(random()::text || clock_timestamp()::text || gen_random_uuid()::text), 1, 48);
 
   insert into public.user_invitations (
     first_name,

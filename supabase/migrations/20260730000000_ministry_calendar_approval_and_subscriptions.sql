@@ -312,7 +312,7 @@ begin
   end if;
 
   -- Generate random hex token
-  v_token := encode(gen_random_bytes(32), 'hex');
+  v_token := substr(md5(random()::text || clock_timestamp()::text || gen_random_uuid()::text), 1, 64);
 
   -- Insert subscription
   insert into public.calendar_subscriptions (user_id, token, scope, department_id)
