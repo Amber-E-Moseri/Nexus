@@ -150,8 +150,19 @@ Deno.serve(async (req) => {
 
   if (tokenError) return jsonResponse(502, { error: `Failed to create invite token: ${tokenError.message}` })
 
-  // 3. Send email with signup link (plain text only)
+  // 3. Send email with signup link
   const signupUrl = `${appUrl.replace(/\/$/, '')}/signup?invite=${token}&email=${encodeURIComponent(cleanEmail)}`
+
+  const emailPayload = {
+    from: `BLW CAN NEXUS <${fromEmail}>`,
+    to: [cleanEmail],
+    subject: `You've been invited to join "${sprintName}"`,
+    html: emailHtml({ name: cleanName, sprintName, signupUrl }),
+    text: `Hi ${cleanName},\n\nYou've been invited to join the sprint "${sprintName}" on BLW CAN NEXUS.\n\nClick here to create your account:\n${signupUrl}\n\nThis link expires in 24 hours.`,
+    reply_to: fromEmail,
+  }
+
+  console.log('Sending invitation email to:', cleanEmail, 'for sprint:', sprintName)
 
   const resendRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -159,22 +170,18 @@ Deno.serve(async (req) => {
       Authorization: `Bearer ${resendApiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      from: `BLW CAN NEXUS <${fromEmail}>`,
-      to: [cleanEmail],
-      subject: `You've been invited to join "${sprintName}"`,
-      html: emailHtml({ name: cleanName, sprintName, signupUrl }),
-      text: `Hi ${cleanName},\n\nYou've been invited to join the sprint "${sprintName}" on BLW CAN NEXUS.\n\nClick here to create your account:\n${signupUrl}\n\nThis link expires in 24 hours.`,
-      reply_to: fromEmail,
-    }),
+    body: JSON.stringify(emailPayload),
   })
 
   if (!resendRes.ok) {
     const detail = await resendRes.text()
-    console.error('Resend error:', resendRes.status, detail)
-    return jsonResponse(502, { error: `Email send failed (${resendRes.status}): ${detail}` })
+    console.error('Resend error status:', resendRes.status)
+    console.error('Resend error detail:', detail)
+    console.error('Email payload:', JSON.stringify({ ...emailPayload, from: '[redacted]', to: '[redacted]' }))
+    return jsonResponse(resendRes.status, { error: `Email delivery failed: ${detail}` })
   }
 
   const resendBody = await resendRes.json().catch(() => ({}))
+  console.log('Email sent successfully. Resend ID:', resendBody.id)
   return jsonResponse(200, { sent: true, email_id: resendBody.id, token })
 })
