@@ -119,31 +119,24 @@ Deno.serve(async (req) => {
   const cleanEmail = email.trim().toLowerCase()
   const cleanName = name?.trim() || cleanEmail.split('@')[0]
 
-  // 1. Find or create the auth user via Admin API (ensures generateLink works)
-  // First check if user already exists in auth.users (may exist without public profile)
-  let userId: string
-  try {
-    const { data: authUsers } = await adminClient.auth.admin.listUsers({ filters: `email:${cleanEmail}` })
-    if (authUsers?.users && authUsers.users.length > 0) {
-      userId = authUsers.users[0].id
-    } else {
-      // Create new user
-      const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
-        email: cleanEmail,
-        email_confirm: true,
-        user_metadata: { name: cleanName, is_temporary: true },
-        app_metadata: { provider: 'email', providers: ['email'] },
-      })
-      if (createError || !newUser?.user) {
-        return jsonResponse(502, { error: `Failed to create user: ${createError?.message}` })
-      }
-      userId = newUser.user.id
-    }
-  } catch (err) {
-    return jsonResponse(502, { error: `Failed to lookup user: ${String(err)}` })
-  }
+  // 1. Create or reuse auth user — if already exists, that's OK
+  // We just need the user to exist so generateLink can find it
+  await adminClient.auth.admin.createUser({
+    email: cleanEmail,
+    email_confirm: true,
+    user_metadata: { name: cleanName, is_temporary: true },
+    app_metadata: { provider: 'email', providers: ['email'] },
+  }).catch(() => null) // Ignore "user already exists" errors
 
-  // Check if public profile exists and reactivate if inactive
+  // Get the user ID from auth (needed for RPC call)
+  const { data: { users } } = await adminClient.auth.admin.listUsers()
+  const authUser = users?.find((u) => u.email === cleanEmail)
+  if (!authUser?.id) {
+    return jsonResponse(502, { error: 'Failed to find user after creation' })
+  }
+  const userId = authUser.id
+
+  // Reactivate if inactive
   const { data: existingProfile } = await adminClient
     .from('users')
     .select('status')
