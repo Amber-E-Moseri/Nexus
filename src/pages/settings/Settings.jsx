@@ -11,8 +11,9 @@ import SecuritySection from './SecuritySection'
 import EmailSignatureSection from './EmailSignatureSection'
 import MembersPanel from '../../components/settings/MembersPanel'
 import ApiDocumentationPage from '../ApiDocumentationPage'
+import ActivityFeedWidget from '../../features/dashboard/components/ActivityFeedWidget'
 
-const TABS = ['Profile', 'Notifications', 'Integrations', 'Automations', 'Members', 'Organisation', 'API', 'Danger Zone']
+const TABS = ['Profile', 'Notifications', 'Integrations', 'Automations', 'Members', 'Activity Log', 'Organisation', 'API', 'Danger Zone']
 const EXPORT_TABLE_SELECT = {
   profiles: 'id, full_name, email, department_id, role, status, created_at',
   tasks: 'id, title, description, status, status_id, priority, assignee_id, department_id, sprint_id, due_date, completed_at, created_by, created_at',
@@ -63,6 +64,7 @@ export default function Settings() {
   const visibleTabs = TABS.filter((tab) => {
     if (tab === 'Automations') return role === 'super_admin' || role === 'dept_lead'
     if (tab === 'Members') return role === 'super_admin' || role === 'dept_lead'
+    if (tab === 'Activity Log') return role === 'super_admin' || role === 'dept_lead'
     if (tab === 'Organisation' || tab === 'Danger Zone') return role === 'super_admin'
     return true
   })
@@ -398,6 +400,12 @@ export default function Settings() {
       {activeTab === 'Members' && (role === 'super_admin' || role === 'dept_lead') ? (
         <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}>
           <MembersPanel />
+        </div>
+      ) : null}
+
+      {activeTab === 'Activity Log' && (role === 'super_admin' || role === 'dept_lead') ? (
+        <div role="tabpanel" id="tabpanel-activity-log" aria-labelledby="tab-activity-log" tabIndex={0}>
+          <ActivityFeedWidget />
         </div>
       ) : null}
 

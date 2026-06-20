@@ -562,12 +562,6 @@ export default function Sidebar() {
         {role === 'super_admin' || role === 'dept_lead' ? (
           <>
             <SidebarItem
-              active={isPathActive(location.pathname, '/activity-log')}
-              icon={Clock}
-              label="Activity Log"
-              onClick={() => go('/activity-log')}
-            />
-            <SidebarItem
               active={isPathActive(location.pathname, '/files')}
               icon={Folder}
               label="Files"
