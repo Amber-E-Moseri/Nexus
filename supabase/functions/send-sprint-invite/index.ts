@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
+﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -36,13 +36,13 @@ function emailHtml({
       <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #2d2a22; margin: 0; padding: 0; background: #f4f1ea;">
         <div style="max-width: 560px; margin: 32px auto; background: #ffffff; border-radius: 20px; border: 1px solid #ede8dc; overflow: hidden;">
           <div style="background: #4c2a92; padding: 24px 32px;">
-            <div style="font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: #c4a8ff;">BLW Canada OS</div>
+            <div style="font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: #c4a8ff;">BLW CAN NEXUS</div>
             <h1 style="margin: 8px 0 0; font-size: 22px; color: #ffffff; font-weight: 600;">You've been invited to a sprint</h1>
           </div>
           <div style="padding: 32px;">
             <p style="margin: 0 0 16px; font-size: 15px;">Hi ${name || 'there'},</p>
             <p style="margin: 0 0 16px; font-size: 15px;">
-              You've been added as a <strong>${role}</strong> to the sprint <strong>"${sprintName}"</strong> on BLW Canada OS.
+              You've been added as a <strong>${role}</strong> to the sprint <strong>"${sprintName}"</strong> on BLW CAN NEXUS.
             </p>
             <p style="margin: 0 0 24px; font-size: 15px;">
               Set your password to access the sprint. Your temporary access expires on <strong>${expiresAt}</strong>.
@@ -56,7 +56,7 @@ function emailHtml({
             <p style="margin: 0; font-size: 13px; color: #7a6f5e; word-break: break-all;">${setPasswordUrl}</p>
           </div>
           <div style="background: #f9f7f5; border-top: 1px solid #ede8dc; padding: 16px 32px; font-size: 12px; color: #9e9488; text-align: center;">
-            © ${new Date().getFullYear()} BLW Canada Sub-Region. All rights reserved.
+            © ${new Date().getFullYear()} BLW CAN NEXUS. All rights reserved.
           </div>
         </div>
       </body>
@@ -115,13 +115,47 @@ Deno.serve(async (req) => {
 
   const { email, name, sprintId, sprintName, role, membershipEndDate } = body
 
-  // Use service role client for admin operations
   const adminClient = createClient(supabaseUrl, serviceRoleKey)
+  const cleanEmail = email.trim().toLowerCase()
+  const cleanName = name?.trim() || cleanEmail.split('@')[0]
 
-  // 1. Create user + add to sprint atomically via existing RPC
-  const { error: rpcError } = await adminClient.rpc('invite_external_sprint_member', {
-    p_email: email.trim().toLowerCase(),
-    p_name: name?.trim() || '',
+  // 1. Find or create the auth user via Admin API (ensures generateLink works)
+  // Look up by email in public.users first (avoids paginated listUsers)
+  const { data: existingProfile } = await adminClient
+    .from('users')
+    .select('id, status')
+    .eq('email', cleanEmail)
+    .maybeSingle()
+
+  let userId: string
+  if (existingProfile?.id) {
+    userId = existingProfile.id
+    // Reactivate deactivated users so they can access the sprint
+    if (existingProfile.status === 'inactive') {
+      await adminClient
+        .from('users')
+        .update({ status: 'pending_activation', deactivated_at: null, deactivated_by: null })
+        .eq('id', userId)
+      // Un-ban in Supabase auth if they were banned
+      await adminClient.auth.admin.updateUserById(userId, { ban_duration: 'none' })
+    }
+  } else {
+    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+      email: cleanEmail,
+      email_confirm: true,
+      user_metadata: { name: cleanName, is_temporary: true },
+    })
+    if (createError || !newUser?.user) {
+      return jsonResponse(502, { error: `Failed to create user: ${createError?.message}` })
+    }
+    userId = newUser.user.id
+  }
+
+  // 2. Add to sprint (upserts public.users profile + sprint_members, no-op if already member)
+  const { error: rpcError } = await callerClient.rpc('add_sprint_member_profile', {
+    p_user_id: userId,
+    p_email: cleanEmail,
+    p_name: cleanName,
     p_sprint_id: sprintId,
     p_role: role,
     p_end_date: membershipEndDate || null,
@@ -129,11 +163,11 @@ Deno.serve(async (req) => {
 
   if (rpcError) return jsonResponse(400, { error: rpcError.message })
 
-  // 2. Generate a password-reset link via the Admin API (acts as "set your password")
-  const redirectTo = `${appUrl.replace(/\/$/, '')}/sprints/${sprintId}`
+  // 3. Generate invite link via Admin API
+  const redirectTo = `${appUrl.replace(/\/$/, '')}/reset-password`
   const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
     type: 'recovery',
-    email: email.trim().toLowerCase(),
+    email: cleanEmail,
     options: { redirectTo },
   })
 
@@ -141,7 +175,10 @@ Deno.serve(async (req) => {
     return jsonResponse(502, { error: `Failed to generate invite link: ${linkError?.message}` })
   }
 
-  const setPasswordUrl = linkData.properties.action_link
+  // Wrap in our own redirect so email scanners hit our page instead of the
+  // Supabase verify URL directly (which would consume the one-time token)
+  const rawLink = linkData.properties.action_link
+  const setPasswordUrl = `${appUrl.replace(/\/$/, '')}/confirm-invite?link=${encodeURIComponent(rawLink)}`
 
   const expiresAt = membershipEndDate
     ? new Date(membershipEndDate).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
@@ -155,7 +192,7 @@ Deno.serve(async (req) => {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: `BLW Canada OS <${fromEmail}>`,
+      from: `BLW CAN NEXUS <${fromEmail}>`,
       to: [email.trim().toLowerCase()],
       subject: `You've been invited to the sprint "${sprintName}"`,
       html: emailHtml({ name: name || email, sprintName, role, expiresAt, setPasswordUrl }),

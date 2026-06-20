@@ -45,6 +45,7 @@ const PermissionsPage = lazy(() => import('./pages/people/PermissionsPage'))
 const UsersPage = lazy(() => import('./pages/people/UsersPage'))
 const AutomationsPage = lazy(() => import('./pages/platform/AutomationsPage'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const ConfirmInvite = lazy(() => import('./pages/auth/ConfirmInvite'))
 const SpacesList = lazy(() => import('./pages/spaces/SpacesList'))
 const SpaceOverview = lazy(() => import('./pages/spaces/SpaceOverview'))
 const SprintOverview = lazy(() => import('./pages/sprints/SprintOverview'))
@@ -69,6 +70,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/confirm-invite" element={<ConfirmInvite />} />
       <Route path="/activate" element={<ActivateInvitation />} />
       <Route path="/accept-invite" element={<ActivateInvitation />} />
       <Route path="/auth/google-drive/callback" element={<GoogleDriveAuthCallback />} />
