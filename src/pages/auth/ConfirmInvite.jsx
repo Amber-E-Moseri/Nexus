@@ -1,16 +1,51 @@
 import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
 export default function ConfirmInvite() {
   const location = useLocation()
+  const navigate = useNavigate()
   const code = new URLSearchParams(location.search).get('code')
   const [link, setLink] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [sessionReady, setSessionReady] = useState(false)
 
   useEffect(() => {
-    if (!code) return
+    let active = true
+
+    // If coming from Supabase redirect (after verify), check session and navigate
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!active) return
+      if (session?.user) {
+        setSessionReady(true)
+        // Session established, go to reset-password
+        navigate('/reset-password', { replace: true })
+        return
+      }
+    }
+
+    // Set up listener for session changes (from Supabase verify redirect)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return
+      if (session?.user) {
+        setSessionReady(true)
+        navigate('/reset-password', { replace: true })
+      }
+    })
+
+    checkSession()
+
+    return () => {
+      active = false
+      subscription.unsubscribe()
+    }
+  }, [navigate])
+
+  // Original code flow: look up link in database
+  useEffect(() => {
+    if (!code || sessionReady) return
     const fetchLink = async () => {
       const { data, error: fetchError } = await supabase
         .from('invite_link_codes')
@@ -25,7 +60,7 @@ export default function ConfirmInvite() {
       setLink(data.action_link)
     }
     fetchLink()
-  }, [code])
+  }, [code, sessionReady])
 
   const handleClick = () => {
     if (link) {
@@ -34,6 +69,26 @@ export default function ConfirmInvite() {
     }
   }
 
+  // If session is being established by Supabase redirect, show loading
+  if (!code) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] px-6 py-12">
+        <div className="w-full max-w-md rounded-[28px] border border-[var(--border)] bg-white p-8 shadow-[0_24px_80px_rgba(48,40,105,0.12)]">
+          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
+            BLW CAN NEXUS
+          </div>
+          <h1 className="mt-2 text-3xl font-semibold text-[var(--text-primary)]">
+            Setting up your account…
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
+            Verifying your invitation link.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Original code flow: show button to redirect
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] px-6 py-12">
       <div className="w-full max-w-md rounded-[28px] border border-[var(--border)] bg-white p-8 shadow-[0_24px_80px_rgba(48,40,105,0.12)]">
@@ -62,12 +117,6 @@ export default function ConfirmInvite() {
             {loading ? 'Redirecting…' : 'Set my password'}
           </button>
         ) : null}
-
-        {!code && !error && (
-          <div className="mt-6 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>
-            Invalid invite link. Please contact your admin for a new invitation.
-          </div>
-        )}
       </div>
     </div>
   )

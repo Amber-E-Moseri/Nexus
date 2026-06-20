@@ -164,7 +164,9 @@ Deno.serve(async (req) => {
   if (rpcError) return jsonResponse(400, { error: rpcError.message })
 
   // 3. Generate invite link via Admin API
-  const redirectTo = `${appUrl.replace(/\/$/, '')}/reset-password`
+  // Redirect back to confirm-invite so it can wait for session to establish,
+  // then navigate to reset-password programmatically (avoids recovery context loss)
+  const redirectTo = `${appUrl.replace(/\/$/, '')}/confirm-invite`
   const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
     type: 'recovery',
     email: cleanEmail,
