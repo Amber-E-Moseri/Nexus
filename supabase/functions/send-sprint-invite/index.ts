@@ -100,10 +100,18 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return jsonResponse(401, { error: 'Missing authorization header' })
 
-  // For now, use a placeholder caller ID - will be replaced with actual user context
-  const callerId = '00000000-0000-0000-0000-000000000000'
-
+  // Create clients for different permission levels
   const adminClient = createClient(supabaseUrl, serviceRoleKey)
+
+  // Client with user auth for RPC calls that need auth.uid()
+  const userClient = createClient(supabaseUrl, serviceRoleKey, {
+    global: { headers: { Authorization: authHeader } },
+  })
+
+  // Get caller ID from user session
+  const { data: { user: caller } } = await userClient.auth.getUser()
+  if (!caller?.id) return jsonResponse(401, { error: 'Unable to determine caller' })
+  const callerId = caller.id
 
   const body = await req.json().catch(() => null) as {
     email: string
@@ -138,8 +146,8 @@ Deno.serve(async (req) => {
   }
   const userId = authUser.id
 
-  // 2. Add to sprint via RPC
-  const { error: rpcError } = await adminClient.rpc('add_sprint_member_profile', {
+  // 2. Add to sprint via RPC (use userClient so auth.uid() is set)
+  const { error: rpcError } = await userClient.rpc('add_sprint_member_profile', {
     p_user_id: userId,
     p_email: cleanEmail,
     p_name: cleanName,
