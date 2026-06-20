@@ -130,9 +130,12 @@ Deno.serve(async (req) => {
   const cleanEmail = email.trim().toLowerCase()
   const cleanName = name?.trim() || cleanEmail.split('@')[0]
 
-  // 1. Create or reuse auth user
+  // 1. Create or reuse auth user (with a temporary random password)
+  const tempPassword = crypto.getRandomValues(new Uint8Array(16)).reduce((a, b) => a + b.toString(16).padStart(2, '0'), '')
+
   await adminClient.auth.admin.createUser({
     email: cleanEmail,
+    password: tempPassword,
     email_confirm: true,
     user_metadata: { name: cleanName },
   }).catch(() => null)

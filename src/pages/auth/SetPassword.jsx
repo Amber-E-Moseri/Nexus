@@ -88,13 +88,21 @@ export default function SetPassword() {
       }
 
       // Sign in the user with their new password
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: tokenData.email,
         password,
       })
 
       if (signInError) {
+        console.error('SignIn error:', signInError)
         setError(signInError.message || 'Failed to sign in')
+        setLoading(false)
+        return
+      }
+
+      if (!signInData?.session) {
+        console.error('No session returned from signIn')
+        setError('Failed to establish session')
         setLoading(false)
         return
       }
