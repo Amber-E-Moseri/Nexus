@@ -173,15 +173,39 @@ Deno.serve(async (req) => {
     body: JSON.stringify(emailPayload),
   })
 
+  // Log delivery attempt to database
+  const logError = async (status: number, errorMsg: string, resendId?: string) => {
+    try {
+      await adminClient
+        .from('email_delivery_log')
+        .insert({
+          recipient_email: cleanEmail,
+          sender_email: fromEmail,
+          subject: emailPayload.subject,
+          email_type: 'sprint_invite',
+          related_entity_type: 'sprint',
+          related_entity_id: sprintId,
+          resend_email_id: resendId,
+          status: status >= 200 && status < 300 ? 'sent' : 'failed',
+          http_status: status,
+          error_message: errorMsg,
+        })
+    } catch (err) {
+      console.error('Failed to log email delivery:', err)
+    }
+  }
+
   if (!resendRes.ok) {
     const detail = await resendRes.text()
     console.error('Resend error status:', resendRes.status)
     console.error('Resend error detail:', detail)
     console.error('Email payload:', JSON.stringify({ ...emailPayload, from: '[redacted]', to: '[redacted]' }))
+    await logError(resendRes.status, detail)
     return jsonResponse(resendRes.status, { error: `Email delivery failed: ${detail}` })
   }
 
   const resendBody = await resendRes.json().catch(() => ({}))
   console.log('Email sent successfully. Resend ID:', resendBody.id)
+  await logError(200, null, resendBody.id)
   return jsonResponse(200, { sent: true, email_id: resendBody.id, token })
 })
