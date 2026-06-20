@@ -1,31 +1,37 @@
-import { useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
 export default function ConfirmInvite() {
   const location = useLocation()
-  const navigate = useNavigate()
-  const params = new URLSearchParams(location.search)
-  const tokenHash = params.get('token_hash')
-  const type = params.get('type') || 'recovery'
+  const code = new URLSearchParams(location.search).get('code')
+  const [link, setLink] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const handleClick = async () => {
-    if (!tokenHash) return
-    setLoading(true)
-    setError(null)
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type,
-    })
-    if (verifyError) {
-      setError(verifyError.message)
-      setLoading(false)
-      return
+  useEffect(() => {
+    if (!code) return
+    const fetchLink = async () => {
+      const { data, error: fetchError } = await supabase
+        .from('invite_link_codes')
+        .select('action_link')
+        .eq('code', code)
+        .maybeSingle()
+
+      if (fetchError || !data?.action_link) {
+        setError('Invalid or expired invite link')
+        return
+      }
+      setLink(data.action_link)
     }
-    // Session is now active — go straight to password reset
-    navigate('/reset-password', { replace: true })
+    fetchLink()
+  }, [code])
+
+  const handleClick = () => {
+    if (link) {
+      setLoading(true)
+      window.location.href = link
+    }
   }
 
   return (
@@ -41,27 +47,27 @@ export default function ConfirmInvite() {
           Click the button below to set your password and access your sprint.
         </p>
 
-        {!tokenHash ? (
-          <div className="mt-6 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>
-            Invalid invite link. Please contact your admin for a new invitation.
-          </div>
-        ) : null}
-
-        {error ? (
+        {error && (
           <div className="mt-6 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>
             {error}
           </div>
-        ) : null}
+        )}
 
-        {tokenHash ? (
+        {link && !error ? (
           <button
             onClick={handleClick}
             disabled={loading}
             className="mt-8 w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? 'Verifying…' : 'Set my password'}
+            {loading ? 'Redirecting…' : 'Set my password'}
           </button>
         ) : null}
+
+        {!code && !error && (
+          <div className="mt-6 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>
+            Invalid invite link. Please contact your admin for a new invitation.
+          </div>
+        )}
       </div>
     </div>
   )

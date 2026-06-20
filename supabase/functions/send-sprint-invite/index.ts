@@ -175,10 +175,17 @@ Deno.serve(async (req) => {
     return jsonResponse(502, { error: `Failed to generate invite link: ${linkError?.message}` })
   }
 
-  // Send token_hash to our own page — user verifies via verifyOtp() on click,
-  // never exposing the Supabase verify URL to email scanners
-  const tokenHash = linkData.properties.hashed_token
-  const setPasswordUrl = `${appUrl.replace(/\/$/, '')}/confirm-invite?token_hash=${tokenHash}&type=recovery`
+  // Store link with short code to avoid email length limits
+  const code = crypto.getRandomValues(new Uint8Array(6)).reduce((a, b) => a + b.toString(16).padStart(2, '0'), '')
+  await adminClient
+    .from('invite_link_codes')
+    .insert({
+      code,
+      action_link: linkData.properties.action_link,
+      email: cleanEmail,
+    })
+
+  const setPasswordUrl = `${appUrl.replace(/\/$/, '')}/confirm-invite?code=${code}`
 
   const expiresAt = membershipEndDate
     ? new Date(membershipEndDate).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
