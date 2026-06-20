@@ -87,6 +87,18 @@ export default function SetPassword() {
         return
       }
 
+      // Sign in the user with their new password
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: tokenData.email,
+        password,
+      })
+
+      if (signInError) {
+        setError(signInError.message || 'Failed to sign in')
+        setLoading(false)
+        return
+      }
+
       // Navigate to the sprint
       navigate(`/sprints/${tokenData.sprint_id}`, { replace: true })
     } catch (err) {
