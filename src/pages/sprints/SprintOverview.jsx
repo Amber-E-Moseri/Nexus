@@ -573,7 +573,7 @@ export default function SprintOverview() {
         />
       ) : null}
 
-      {false && (
+      {showCreateTeamModal && (
         <NewTeamModal
           onClose={() => setShowCreateTeamModal(false)}
           onSuccess={async () => {
