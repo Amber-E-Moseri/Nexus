@@ -1,13 +1,13 @@
-﻿import { Bell, ChevronRight, LoaderCircle, Plus, Search } from 'lucide-react'
+﻿import { Bell, ChevronRight, LoaderCircle, Plus, Search, Menu } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useInboxCount } from '../../context/InboxCountContext'
 import { formatDueDate } from '../../lib/dateUtils'
-import { getTaskById } from '../../lib/tasks'
+import { getTaskById } from '../../features/tasks'
 import { supabase } from '../../lib/supabase'
-import TaskModal from '../../modules/tasks/TaskModal'
-import NotificationBell from '../../modules/notifications/NotificationBell'
+import TaskModal from '../../features/tasks/components/TaskModal'
+import { NotificationBell } from '../../features/notifications'
 
 const ROUTE_CRUMBS = {
   '/inbox': [['Inbox', '/inbox']],
@@ -106,7 +106,7 @@ function ResultSection({ title, children }) {
   )
 }
 
-export default function TopBar() {
+export default function TopBar({ onOpenMobileMenu }) {
   const { profile, signOut } = useAuth()
   const { inboxCount } = useInboxCount()
   const location = useLocation()
@@ -308,6 +308,15 @@ export default function TopBar() {
         }}
       >
         <div className="flex h-[52px] items-center justify-between gap-4 px-5">
+          {/* Mobile Menu Button */}
+          <button
+            onClick={onOpenMobileMenu}
+            className="md:hidden p-1 hover:bg-[var(--surface-secondary)] rounded-lg transition"
+            aria-label="Open navigation menu"
+          >
+            <Menu size={20} className="text-[var(--text-primary)]" />
+          </button>
+
           <nav className="flex min-w-0 items-center gap-1 text-[12.5px]" aria-label="Breadcrumb">
             <span
               className="cursor-pointer font-semibold text-[var(--text-tertiary)] transition-colors hover:text-[var(--accent)]"
