@@ -126,18 +126,20 @@ export default function SignupInvite() {
 
       const userId = authData.user.id
 
-      // Add user to sprint via RPC
-      const { error: rpcError } = await supabase.rpc('add_sprint_member_profile', {
-        p_user_id: userId,
-        p_email: inviteEmail,
-        p_name: userName || inviteEmail.split('@')[0],
-        p_sprint_id: sprintId,
-        p_role: role || 'member',
-        p_end_date: null,
+      // Add user to sprint via edge function (admin context)
+      const { data: rpcResult, error: rpcError } = await supabase.functions.invoke('add-sprint-member', {
+        body: {
+          user_id: userId,
+          email: inviteEmail,
+          name: userName || inviteEmail.split('@')[0],
+          sprint_id: sprintId,
+          role: role || 'member',
+          invite_token: inviteToken,
+        },
       })
 
-      if (rpcError) {
-        console.error('Failed to add to sprint:', rpcError)
+      if (rpcError || !rpcResult?.success) {
+        console.error('Failed to add to sprint:', rpcError || rpcResult?.error)
         setError('Account created but failed to add to sprint')
         setLoading(false)
         return
