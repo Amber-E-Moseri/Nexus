@@ -204,7 +204,6 @@ export default function PastoralAssignmentsPage() {
             const department = departmentById.get(pastor.department_id)
             const assignedMembers = membersByPastor.get(pastor.id) ?? []
             const availableMembers = members.filter((member) => {
-              if (member.department_id !== pastor.department_id) return false
               return !assignedMemberIds.has(member.id) || assignedMembers.some((assigned) => assigned.id === member.id)
             })
 
