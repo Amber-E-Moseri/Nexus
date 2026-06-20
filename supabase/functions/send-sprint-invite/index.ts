@@ -173,26 +173,31 @@ Deno.serve(async (req) => {
     body: JSON.stringify(emailPayload),
   })
 
-  // Log delivery attempt to database via RPC (bypasses RLS)
+  // Log delivery attempt to database
   const logDelivery = async (status: number, errorMsg: string | null, resendId?: string) => {
     try {
-      const { error: logError } = await adminClient.rpc('log_email_delivery', {
-        p_recipient_email: cleanEmail,
-        p_sender_email: fromEmail,
-        p_subject: emailPayload.subject,
-        p_email_type: 'sprint_invite',
-        p_related_entity_type: 'sprint',
-        p_related_entity_id: sprintId,
-        p_resend_email_id: resendId,
-        p_status: status >= 200 && status < 300 ? 'sent' : 'failed',
-        p_http_status: status,
-        p_error_message: errorMsg,
-      })
+      console.log('Attempting to log email delivery...', { status, resendId })
+      const { error: logError, data } = await adminClient
+        .from('email_delivery_log')
+        .insert({
+          recipient_email: cleanEmail,
+          sender_email: fromEmail,
+          subject: emailPayload.subject,
+          email_type: 'sprint_invite',
+          related_entity_type: 'sprint',
+          related_entity_id: sprintId,
+          resend_email_id: resendId,
+          status: status >= 200 && status < 300 ? 'sent' : 'failed',
+          http_status: status,
+          error_message: errorMsg,
+        })
       if (logError) {
-        console.error('Failed to log email delivery:', logError)
+        console.error('Failed to log email delivery:', JSON.stringify(logError))
+      } else {
+        console.log('Email delivery logged successfully')
       }
     } catch (err) {
-      console.error('Failed to call log_email_delivery RPC:', err)
+      console.error('Exception while logging email:', err)
     }
   }
 
