@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
@@ -11,7 +11,7 @@ export default function ResetPassword() {
   const { user, loading } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const nextPath = new URLSearchParams(location.search).get('next') || '/login'
+  const nextPath = new URLSearchParams(location.search).get('next') || '/dashboard'
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
@@ -25,24 +25,36 @@ export default function ResetPassword() {
     let active = true
 
     const resolveRecovery = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
+      // PKCE flow: token_hash + type arrive as query params (safe from email scanners)
+      const params = new URLSearchParams(location.search)
+      const tokenHash = params.get('token_hash')
+      const type = params.get('type')
 
+      if (tokenHash && type === 'recovery') {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: 'recovery',
+        })
+        if (!active) return
+        if (!verifyError) {
+          setRecoveryReady(true)
+          setChecked(true)
+          return
+        }
+      }
+
+      // Implicit flow fallback: access_token in hash
+      const { data: { session } } = await supabase.auth.getSession()
       if (!active) return
-
       if (session?.user || hasRecoveryFragment(location.hash)) {
         setRecoveryReady(true)
       }
-
       setChecked(true)
     }
 
     resolveRecovery()
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return
       if (event === 'PASSWORD_RECOVERY' || session?.user) {
         setRecoveryReady(true)
@@ -54,7 +66,7 @@ export default function ResetPassword() {
       active = false
       subscription.unsubscribe()
     }
-  }, [location.hash])
+  }, [location.hash, location.search])
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -96,7 +108,7 @@ export default function ResetPassword() {
         </div>
         <h1 className="mt-2 text-3xl font-semibold text-[var(--text-primary)]">Set a new password</h1>
         <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
-          Create a new password for your BLW Canada OS account.
+          Create a new password for your BLW CAN NEXUS account.
         </p>
 
         {invalidLink ? (

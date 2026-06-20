@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { inviteExternalToSprint } from '../../lib/sprints'
+import { useToast } from '../../context/ToastContext'
 
 const TOKENS = {
   primary: '#4C2A92',
@@ -14,6 +15,7 @@ const TOKENS = {
 }
 
 export default function InviteExternalModal({ sprintId, sprintEndDate, sprintName, onClose, onSuccess }) {
+  const { showToast } = useToast()
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [role, setRole] = useState('contributor')
@@ -36,7 +38,7 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
         membershipEndDate: expiryMode === 'on_archive' ? null : endDate || null,
       })
 
-      alert(`Invitation sent! They'll receive a set-password email shortly.`)
+      showToast(`Invitation sent to ${email.trim()}. They'll receive a set-password email shortly.`, { tone: 'success' })
       setEmail('')
       setName('')
       setRole('contributor')
