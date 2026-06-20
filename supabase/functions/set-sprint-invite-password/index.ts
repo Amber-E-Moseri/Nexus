@@ -37,10 +37,10 @@ Deno.serve(async (req) => {
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey)
 
-  // 1. Find the token with full user data
+  // 1. Find the token with sprint data
   const { data: tokenData, error: tokenError } = await adminClient
     .from('sprint_invite_tokens')
-    .select('id, user_id, email, expires_at, used_at')
+    .select('id, email, expires_at, used_at, sprint_id, metadata')
     .eq('token', token)
     .maybeSingle()
 
@@ -56,34 +56,52 @@ Deno.serve(async (req) => {
     return jsonResponse(400, { error: 'This invitation has expired' })
   }
 
-  // 2. Create or update user with password
-  const { data: { user: existingUser }, error: getUserError } = await adminClient.auth.admin.getUserById(tokenData.user_id)
+  const metadata = tokenData.metadata || {}
 
-  let userId = tokenData.user_id
-  if (getUserError || !existingUser) {
-    // User doesn't exist, create with password
-    const { data: { user: newUser }, error: createError } = await adminClient.auth.admin.createUser({
-      email: tokenData.email,
-      password,
-      email_confirm: true,
-    })
+  // 2. Create user with password and proper metadata
+  const { data: { user: newUser }, error: createError } = await adminClient.auth.admin.createUser({
+    email: tokenData.email,
+    password,
+    email_confirm: true,
+    user_metadata: { name: metadata.name },
+    app_metadata: {
+      provider: 'email',
+      providers: ['email']
+    },
+  })
 
-    if (createError || !newUser?.id) {
-      return jsonResponse(502, { error: `Failed to create user: ${createError?.message || 'Unknown error'}` })
-    }
-    userId = newUser.id
-  } else {
-    // User exists, update password
-    const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {
-      password,
-    })
+  if (createError || !newUser?.id) {
+    return jsonResponse(502, { error: `Failed to create user: ${createError?.message || 'Unknown error'}` })
+  }
+  const userId = newUser.id
 
-    if (updateError) {
-      return jsonResponse(502, { error: `Failed to set password: ${updateError.message}` })
-    }
+  // 3. Add user to sprint via RPC
+  const { error: rpcError } = await adminClient.rpc('add_sprint_member_profile', {
+    p_user_id: userId,
+    p_email: tokenData.email,
+    p_name: metadata.name,
+    p_sprint_id: tokenData.sprint_id,
+    p_role: metadata.role,
+    p_end_date: metadata.membership_end_date || null,
+  })
+
+  if (rpcError) {
+    return jsonResponse(400, { error: `Failed to add to sprint: ${rpcError.message}` })
   }
 
-  // 3. Mark token as used
+  // 4. Update token with user_id
+  await adminClient
+    .from('sprint_invite_tokens')
+    .update({ user_id: userId })
+    .eq('id', tokenData.id)
+    .catch(() => null)
+
+  // 5. Generate session for immediate login
+  const { data: { session }, error: sessionError } = await adminClient.auth.admin.createSession({
+    user_id: userId,
+  })
+
+  // 6. Mark token as used
   const { error: markError } = await adminClient
     .from('sprint_invite_tokens')
     .update({ used_at: new Date().toISOString() })
@@ -93,5 +111,14 @@ Deno.serve(async (req) => {
     console.error('Failed to mark token as used:', markError)
   }
 
-  return jsonResponse(200, { success: true, user_id: userId })
+  return jsonResponse(200, {
+    success: true,
+    user_id: userId,
+    session: session ? {
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+      expires_at: session.expires_at,
+    } : null,
+    session_error: sessionError ? sessionError.message : null,
+  })
 })

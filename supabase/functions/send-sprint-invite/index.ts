@@ -13,20 +13,27 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   })
 }
 
-function generateToken(): string {
-  return crypto.getRandomValues(new Uint8Array(24)).reduce((a, b) => a + b.toString(16).padStart(2, '0'), '')
+function generatePassword(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%'
+  let password = ''
+  for (let i = 0; i < 12; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return password
 }
 
 function emailHtml({
   name,
   sprintName,
-  setPasswordUrl,
-  expiresAt,
+  email,
+  password,
+  loginUrl,
 }: {
   name: string
   sprintName: string
-  setPasswordUrl: string
-  expiresAt: string
+  email: string
+  password: string
+  loginUrl: string
 }) {
   return `
     <!DOCTYPE html>
@@ -47,15 +54,22 @@ function emailHtml({
               You've been invited to join the sprint <strong>"${sprintName}"</strong> on BLW CAN NEXUS.
             </p>
             <p style="margin: 0 0 24px; font-size: 15px;">
-              Click the button below to set your password and get started. This link expires on <strong>${expiresAt}</strong>.
+              Your login details are below. Click the button to go to the login page.
             </p>
+            <div style="background: #f9f7f5; border: 1px solid #ede8dc; border-radius: 12px; padding: 16px; margin: 0 0 24px;">
+              <p style="margin: 0 0 8px; font-size: 13px; color: #7a6f5e; font-weight: 600;">Email</p>
+              <p style="margin: 0 0 16px; font-size: 15px; color: #2d2a22; font-family: monospace;">${email}</p>
+              <p style="margin: 0 0 8px; font-size: 13px; color: #7a6f5e; font-weight: 600;">Password</p>
+              <p style="margin: 0; font-size: 15px; color: #2d2a22; font-family: monospace;">${password}</p>
+            </div>
             <div style="margin: 0 0 28px;">
-              <a href="${setPasswordUrl}" style="display: inline-block; background: #4c2a92; color: #ffffff; text-decoration: none; font-weight: 600; border-radius: 10px; padding: 13px 24px; font-size: 14px;">
-                Set my password
+              <a href="${loginUrl}" style="display: inline-block; background: #4c2a92; color: #ffffff; text-decoration: none; font-weight: 600; border-radius: 10px; padding: 13px 24px; font-size: 14px;">
+                Log in to BLW CAN NEXUS
               </a>
             </div>
-            <p style="margin: 0 0 4px; font-size: 13px; color: #7a6f5e;">If the button doesn't work, paste this link into your browser:</p>
-            <p style="margin: 0; font-size: 13px; color: #7a6f5e; word-break: break-all;">${setPasswordUrl}</p>
+            <p style="margin: 0; font-size: 12px; color: #9e9488;">
+              💡 Tip: You can change your password after logging in from your account settings.
+            </p>
           </div>
           <div style="background: #f9f7f5; border-top: 1px solid #ede8dc; padding: 16px 32px; font-size: 12px; color: #9e9488; text-align: center;">
             © ${new Date().getFullYear()} BLW CAN NEXUS. All rights reserved.
@@ -100,15 +114,12 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return jsonResponse(401, { error: 'Missing authorization header' })
 
-  // Create clients for different permission levels
   const adminClient = createClient(supabaseUrl, serviceRoleKey)
 
-  // Client with user auth for RPC calls that need auth.uid()
+  // Get caller ID from user session
   const userClient = createClient(supabaseUrl, serviceRoleKey, {
     global: { headers: { Authorization: authHeader } },
   })
-
-  // Get caller ID from user session
   const { data: { user: caller } } = await userClient.auth.getUser()
   if (!caller?.id) return jsonResponse(401, { error: 'Unable to determine caller' })
   const callerId = caller.id
@@ -129,24 +140,36 @@ Deno.serve(async (req) => {
   const { email, name, sprintId, sprintName, role, membershipEndDate } = body
   const cleanEmail = email.trim().toLowerCase()
   const cleanName = name?.trim() || cleanEmail.split('@')[0]
+  const tempPassword = generatePassword()
 
-  // 1. Create placeholder user (or reuse if exists)
+  // 1. Validate sprint exists
+  const { data: sprint, error: sprintError } = await adminClient
+    .from('sprints')
+    .select('id')
+    .eq('id', sprintId)
+    .single()
+
+  if (sprintError || !sprint) {
+    return jsonResponse(400, { error: 'Sprint not found' })
+  }
+
+  // 2. Create user with temporary password
   const { data: { user: newUser }, error: createError } = await adminClient.auth.admin.createUser({
     email: cleanEmail,
+    password: tempPassword,
     email_confirm: true,
     user_metadata: { name: cleanName },
   }).catch(() => ({ data: { user: null }, error: null }))
 
-  let userId: string
   if (createError) {
     return jsonResponse(502, { error: `Failed to create user: ${createError.message}` })
   }
   if (!newUser?.id) {
     return jsonResponse(502, { error: 'Failed to create user' })
   }
-  userId = newUser.id
+  const userId = newUser.id
 
-  // 2. Add to sprint via RPC (use userClient so auth.uid() is set)
+  // 3. Add to sprint via RPC
   const { error: rpcError } = await userClient.rpc('add_sprint_member_profile', {
     p_user_id: userId,
     p_email: cleanEmail,
@@ -158,27 +181,8 @@ Deno.serve(async (req) => {
 
   if (rpcError) return jsonResponse(400, { error: rpcError.message })
 
-  // 3. Generate invite token
-  const token = generateToken()
-  const { error: tokenError } = await adminClient
-    .from('sprint_invite_tokens')
-    .insert({
-      user_id: userId,
-      sprint_id: sprintId,
-      token,
-      email: cleanEmail,
-      created_by: callerId,
-    })
-
-  if (tokenError) return jsonResponse(502, { error: `Failed to create invite token: ${tokenError.message}` })
-
-  // 4. Send email
-  const setPasswordUrl = `${appUrl.replace(/\/$/, '')}/set-password?token=${token}`
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  // 4. Send email with credentials
+  const loginUrl = `${appUrl.replace(/\/$/, '')}/login`
 
   const resendRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -190,7 +194,7 @@ Deno.serve(async (req) => {
       from: `BLW CAN NEXUS <${fromEmail}>`,
       to: [cleanEmail],
       subject: `You've been invited to the sprint "${sprintName}"`,
-      html: emailHtml({ name: cleanName, sprintName, setPasswordUrl, expiresAt }),
+      html: emailHtml({ name: cleanName, sprintName, email: cleanEmail, password: tempPassword, loginUrl }),
     }),
   })
 
@@ -200,5 +204,5 @@ Deno.serve(async (req) => {
   }
 
   const resendBody = await resendRes.json().catch(() => ({}))
-  return jsonResponse(200, { sent: true, email_id: resendBody.id })
+  return jsonResponse(200, { sent: true, email_id: resendBody.id, user_id: userId })
 })

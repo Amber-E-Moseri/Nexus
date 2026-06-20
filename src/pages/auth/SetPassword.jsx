@@ -87,8 +87,18 @@ export default function SetPassword() {
         return
       }
 
-      // Password set successfully—redirect to login
-      navigate('/login', { replace: true, state: { email: tokenData.email, message: 'Password set! Please log in.' } })
+      // Use session from edge function if available
+      if (data?.session?.access_token) {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        })
+        // Redirect to sprint
+        navigate(`/sprints/${tokenData.sprint_id}`, { replace: true })
+      } else {
+        // Fallback: redirect to login
+        navigate('/login', { replace: true, state: { email: tokenData.email, message: 'Password set! Please log in.' } })
+      }
     } catch (err) {
       setError(err.message || 'An error occurred')
       setLoading(false)
