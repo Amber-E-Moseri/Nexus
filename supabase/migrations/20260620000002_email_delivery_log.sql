@@ -17,12 +17,11 @@ create table if not exists public.email_delivery_log (
 
 alter table public.email_delivery_log enable row level security;
 
--- Only the user who received the email or super admins can read their own logs
-create policy "users_can_read_own_email_logs"
+-- Super admins can read all email logs
+create policy "super_admin_reads_email_logs"
   on public.email_delivery_log for select
   using (
     exists (select 1 from public.users where public.users.id = auth.uid() and role = 'super_admin')
-    or recipient_email = (select email from auth.users where id = auth.uid())
   );
 
 create index idx_email_delivery_log_recipient_email on public.email_delivery_log(recipient_email);
