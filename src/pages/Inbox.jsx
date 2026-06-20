@@ -151,49 +151,58 @@ export default function Inbox() {
     async function loadInbox() {
       setLoading(true)
 
-      const [
-        { data: assignedRows },
-        { data: activityRows },
-        { data: notificationRows },
-      ] = await Promise.all([
-        supabase
-          .from('task_comments')
-          .select(`
-            id,
-            body,
-            assigned_at,
-            created_at,
-            task:tasks!task_id(id, title, department_id, assignee_id, created_by, sprint_id),
-            author:users!author_id(id, name)
-          `)
-          .eq('assigned_to', profile.id)
-          .is('resolved_at', null)
-          .order('assigned_at', { ascending: false }),
-        supabase
-          .from('activity_feed')
-          .select('id, user_id, action, payload, read, created_at')
-          .eq('user_id', profile.id)
-          .order('created_at', { ascending: false })
-          .limit(50),
-        supabase
-          .from('notifications')
-          .select('id, user_id, type, payload, read, created_at')
-          .eq('user_id', profile.id)
-          .order('created_at', { ascending: false })
-          .limit(50),
-      ])
+      try {
+        const [
+          assignedResult,
+          activityResult,
+          notificationResult,
+        ] = await Promise.all([
+          supabase
+            .from('task_comments')
+            .select(`
+              id,
+              body,
+              assigned_at,
+              created_at,
+              task:tasks!task_id(id, title, department_id, assignee_id, created_by, sprint_id),
+              author:users!author_id(id, name)
+            `)
+            .eq('assigned_to', profile.id)
+            .is('resolved_at', null)
+            .order('assigned_at', { ascending: false }),
+          supabase
+            .from('activity_feed')
+            .select('id, user_id, action, payload, read, created_at')
+            .eq('user_id', profile.id)
+            .order('created_at', { ascending: false })
+            .limit(50),
+          supabase
+            .from('notifications')
+            .select('id, user_id, type, payload, read, created_at')
+            .eq('user_id', profile.id)
+            .order('created_at', { ascending: false })
+            .limit(50),
+        ])
 
-      if (!active) return
+        if (!active) return
 
-      setAssignedComments(assignedRows ?? [])
-      setActivityItems(activityRows ?? [])
-      setNotifications(notificationRows ?? [])
-      setLoading(false)
+        if (assignedResult.error) throw assignedResult.error
+        if (activityResult.error) throw activityResult.error
+        if (notificationResult.error) {
+          console.error('Notifications error:', notificationResult.error)
+        }
+
+        setAssignedComments(assignedResult.data ?? [])
+        setActivityItems(activityResult.data ?? [])
+        setNotifications(notificationResult.data ?? [])
+      } catch (err) {
+        console.error('Failed to load inbox:', err)
+      } finally {
+        if (active) setLoading(false)
+      }
     }
 
-    loadInbox().catch(() => {
-      if (active) setLoading(false)
-    })
+    loadInbox()
 
     return () => {
       active = false
