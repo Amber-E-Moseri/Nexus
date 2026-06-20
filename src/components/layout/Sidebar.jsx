@@ -985,14 +985,15 @@ export default function Sidebar() {
         />
 
         <SidebarSectionLabel>Platform</SidebarSectionLabel>
-        <button
-          type="button"
-          onClick={() => go('/meetings')}
+        <div
           style={{
             ...ITEM_BASE_STYLE,
             borderLeft: isPathActive(location.pathname, '/meetings') ? '3px solid #4C2A92' : '3px solid transparent',
             background: isPathActive(location.pathname, '/meetings') ? '#EDE8F8' : 'transparent',
             color: isPathActive(location.pathname, '/meetings') ? '#4C2A92' : '#1C1610',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
           }}
           onMouseEnter={(e) => {
             if (!isPathActive(location.pathname, '/meetings')) e.currentTarget.style.background = '#F2EEE6'
@@ -1001,17 +1002,24 @@ export default function Sidebar() {
             if (!isPathActive(location.pathname, '/meetings')) e.currentTarget.style.background = 'transparent'
           }}
         >
-          <span style={{ flex: 1 }}>Meetings</span>
-          <div
+          <button
+            type="button"
+            onClick={() => go('/meetings')}
+            style={{ flex: 1, border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'inherit', fontSize: 'inherit' }}
+          >
+            Meetings
+          </button>
+          <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation()
               setMeetingsExpanded(!meetingsExpanded)
             }}
-            style={{ border: 'none', background: 'none', padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+            style={{ border: 'none', background: 'none', padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'inherit' }}
           >
             <ChevronDown size={15} style={{ opacity: 0.85, transform: meetingsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
-          </div>
-        </button>
+          </button>
+        </div>
         {meetingsExpanded ? (
           <>
             {showAdminPlatform ? (
@@ -1040,13 +1048,15 @@ export default function Sidebar() {
             />
           </>
         ) : null}
-        <button
-          type="button"
+        <div
           style={{
             ...ITEM_BASE_STYLE,
             borderLeft: isPathActive(location.pathname, '/communications') ? '3px solid #4C2A92' : '3px solid transparent',
             background: isPathActive(location.pathname, '/communications') ? '#EDE8F8' : 'transparent',
             color: isPathActive(location.pathname, '/communications') ? '#4C2A92' : '#1C1610',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
           }}
           onMouseEnter={(e) => {
             if (!isPathActive(location.pathname, '/communications')) e.currentTarget.style.background = '#F2EEE6'
@@ -1055,17 +1065,24 @@ export default function Sidebar() {
             if (!isPathActive(location.pathname, '/communications')) e.currentTarget.style.background = 'transparent'
           }}
         >
-          <span style={{ flex: 1 }}>Communications</span>
-          <div
+          <button
+            type="button"
+            onClick={() => go('/communications')}
+            style={{ flex: 1, border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'inherit', fontSize: 'inherit' }}
+          >
+            Communications
+          </button>
+          <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation()
               setCommunicationsExpanded(!communicationsExpanded)
             }}
-            style={{ border: 'none', background: 'none', padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+            style={{ border: 'none', background: 'none', padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'inherit' }}
           >
             <ChevronDown size={15} style={{ opacity: 0.85, transform: communicationsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
-          </div>
-        </button>
+          </button>
+        </div>
         {communicationsExpanded && showAdminPlatform ? (
           <>
             <SidebarItem
