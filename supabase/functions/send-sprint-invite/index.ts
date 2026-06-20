@@ -71,6 +71,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed' })
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const resendApiKey = Deno.env.get('RESEND_API_KEY')
   const fromEmail = Deno.env.get('INVITATION_FROM_EMAIL')
@@ -82,6 +83,7 @@ Deno.serve(async (req) => {
 
   const missing = [
     !supabaseUrl && 'SUPABASE_URL',
+    !anonKey && 'SUPABASE_ANON_KEY',
     !serviceRoleKey && 'SUPABASE_SERVICE_ROLE_KEY',
     !resendApiKey && 'RESEND_API_KEY',
     !fromEmail && 'INVITATION_FROM_EMAIL',
@@ -95,10 +97,11 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return jsonResponse(401, { error: 'Missing authorization header' })
 
-  const callerClient = createClient(supabaseUrl, serviceRoleKey, {
+  // Validate caller with user's token (use anonKey + user's auth header)
+  const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
   })
-  const { data: { user: caller }, error: callerError } = await callerClient.auth.getUser()
+  const { data: { user: caller }, error: callerError } = await userClient.auth.getUser()
   if (callerError || !caller) return jsonResponse(401, { error: 'Unable to validate caller' })
 
   const body = await req.json().catch(() => null) as {
