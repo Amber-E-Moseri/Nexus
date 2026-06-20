@@ -25,19 +25,6 @@ export default function NotificationPermissionPrompt() {
       localStorage.setItem('notification-permission-asked', 'true')
 
       if (permission === 'granted') {
-        // Store preference in database
-        if (user?.id) {
-          await supabase
-            .from('user_notification_prefs')
-            .upsert(
-              {
-                user_id: user.id,
-                notification_type: 'browser_push',
-                enabled: true
-              },
-              { onConflict: 'user_id,notification_type' }
-            )
-        }
         setShow(false)
         // Show confirmation notification
         new Notification('Notifications Enabled', {
