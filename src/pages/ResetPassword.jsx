@@ -11,6 +11,7 @@ export default function ResetPassword() {
   const { user, loading } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
+  const nextPath = new URLSearchParams(location.search).get('next') || '/login'
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
@@ -80,12 +81,7 @@ export default function ResetPassword() {
       return
     }
 
-    navigate('/login', {
-      replace: true,
-      state: {
-        message: 'Password updated. Sign in with your new password.',
-      },
-    })
+    navigate(nextPath, { replace: true })
   }
 
   if (!loading && user && !recoveryReady) {
