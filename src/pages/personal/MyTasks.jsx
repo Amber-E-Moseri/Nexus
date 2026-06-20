@@ -11,6 +11,8 @@ import TaskModal from '../../features/tasks/components/TaskModal'
 import KanbanBoard from '../../features/tasks/components/KanbanBoard'
 import TaskListView from '../../features/tasks/components/TaskListView'
 import TaskFilters from '../../features/tasks/components/TaskFilters'
+import { useTaskSyncAll } from '../../features/tasks/hooks/useTaskSync'
+import { getTaskTypeInfo } from '../../features/tasks/lib/task-types'
 
 function loadViewMode() {
   return localStorage.getItem('blw_mytasks_view') ?? 'list'
@@ -29,6 +31,15 @@ export default function MyTasks() {
   const [filters, setFilters] = useState({})
   const [boardFiltersOpen, setBoardFiltersOpen] = useState(false)
   const deptMembers = useDeptMembers(profile?.department_id)
+
+  // Real-time sync for task updates
+  useTaskSyncAll(profile?.id, (updatedTask) => {
+    setTasks((prev) =>
+      prev.some((t) => t.id === updatedTask.id)
+        ? prev.map((t) => (t.id === updatedTask.id ? { ...t, ...updatedTask } : t))
+        : [updatedTask, ...prev],
+    )
+  })
 
   async function load() {
     if (!profile?.id) return
@@ -148,6 +159,7 @@ export default function MyTasks() {
                 canAddTask={true}
                 onCreateTask={() => setModal({ mode: 'create' })}
                 readOnly={false}
+                showTaskTypes={true}
               />
             </div>
           </>
