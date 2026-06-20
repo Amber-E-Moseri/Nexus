@@ -257,7 +257,7 @@ export async function getFlockTasks(pastorId) {
     .from('pastor_members')
     .select(`
       member:users!member_id(
-        tasks:actionable_tasks!assignee_id(
+        tasks:tasks!assignee_id(
           *,
           ${TASK_STATUS_SELECT},
           ${TASK_LIST_SELECT},
