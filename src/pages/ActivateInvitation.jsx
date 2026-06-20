@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { createNotification } from '../lib/notifications'
+import { createNotification } from '../features/notifications'
 import { acceptInvitation, previewInvitation } from '../lib/people/api'
 import { supabase } from '../lib/supabase'
 
@@ -80,6 +80,9 @@ export default function ActivateInvitation() {
         const { error: signUpError } = await supabase.auth.signUp({
           email: invitation.email,
           password,
+          options: {
+            emailRedirectTo: undefined, // Skip email confirmation
+          }
         })
 
         if (signUpError && !signUpError.message.toLowerCase().includes('already')) {
