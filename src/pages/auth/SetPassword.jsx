@@ -77,16 +77,12 @@ export default function SetPassword() {
 
     try {
       // Call edge function to set password and mark token as used
-      const response = await fetch('/api/set-sprint-invite-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, password }),
+      const { data, error: fnError } = await supabase.functions.invoke('set-sprint-invite-password', {
+        body: { token, password },
       })
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        setError(result.error || 'Failed to set password')
+      if (fnError) {
+        setError(fnError.message || 'Failed to set password')
         setLoading(false)
         return
       }
