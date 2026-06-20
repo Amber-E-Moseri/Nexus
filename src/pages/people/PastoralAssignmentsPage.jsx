@@ -98,11 +98,10 @@ export default function PastoralAssignmentsPage() {
       return selectDepartmentUsers(users, profile?.department_id)
     }
     if (role === 'pastor') {
-      const members = selectPastorMembers(users, assignments, profile?.id)
-      return [profile, ...members].filter(Boolean).map((entry) => users.find((user) => user.id === entry.id) ?? entry)
+      return users
     }
     return users
-  }, [assignments, profile, role, users])
+  }, [users, role])
 
   const userById = useMemo(() => new Map(users.map((user) => [user.id, user])), [users])
   const departmentById = useMemo(
