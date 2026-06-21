@@ -370,38 +370,55 @@ export default function MeetingReportPublicPage() {
                 type="button"
                 onClick={() => {
                   const text = window.location.href
+                  console.log('Copy button clicked, attempting to copy:', text)
 
-                  const performCopy = async () => {
-                    try {
-                      // Try Clipboard API first (modern browsers)
-                      if (navigator.clipboard && navigator.clipboard.writeText) {
-                        await navigator.clipboard.writeText(text)
-                        console.log('Copied via Clipboard API')
-                      } else {
-                        // Fallback: select and copy with execCommand
-                        const textarea = document.createElement('textarea')
-                        textarea.value = text
-                        textarea.style.position = 'fixed'
-                        textarea.style.left = '-999999px'
-                        textarea.style.top = '-999999px'
-                        document.body.appendChild(textarea)
-                        textarea.focus()
-                        textarea.select()
-                        document.execCommand('copy')
-                        document.body.removeChild(textarea)
-                        console.log('Copied via fallback method')
-                      }
+                  try {
+                    // Try execCommand first - most reliable
+                    const textarea = document.createElement('textarea')
+                    textarea.value = text
+                    textarea.style.position = 'fixed'
+                    textarea.style.left = '0'
+                    textarea.style.top = '0'
+                    textarea.style.opacity = '0'
+                    textarea.style.pointerEvents = 'none'
+                    document.body.appendChild(textarea)
 
+                    textarea.focus()
+                    textarea.select()
+
+                    const successful = document.execCommand('copy')
+                    document.body.removeChild(textarea)
+
+                    console.log('execCommand result:', successful)
+
+                    if (successful) {
+                      console.log('Copy succeeded!')
                       setCopiedLink(true)
                       setTimeout(() => setCopiedLink(false), 2000)
                       setShowLinkModal(false)
-                    } catch (err) {
-                      console.error('Copy failed:', err)
-                      alert('Copy failed. Link is displayed above - you can select and copy it manually.')
+                    } else {
+                      throw new Error('execCommand failed')
+                    }
+                  } catch (err) {
+                    console.error('execCommand failed, trying Clipboard API:', err)
+
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                      navigator.clipboard.writeText(text)
+                        .then(() => {
+                          console.log('Clipboard API copy succeeded!')
+                          setCopiedLink(true)
+                          setTimeout(() => setCopiedLink(false), 2000)
+                          setShowLinkModal(false)
+                        })
+                        .catch(clipErr => {
+                          console.error('Clipboard API also failed:', clipErr)
+                          alert('Unable to copy automatically. The link is shown above - please select and copy it manually.')
+                        })
+                    } else {
+                      console.error('Clipboard API not available')
+                      alert('Unable to copy automatically. The link is shown above - please select and copy it manually.')
                     }
                   }
-
-                  performCopy()
                 }}
                 style={{ padding: '10px 16px', borderRadius: 8, border: 'none', background: '#4C2A92', color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
               >
