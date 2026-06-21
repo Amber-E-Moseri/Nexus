@@ -160,15 +160,20 @@ export default function MeetingReportPublicPage() {
 
   // Sync activeSubgroup with URL query parameter using navigate
   useEffect(() => {
-    if (isInitialMount.current) return
+    console.log('useEffect fired. isInitialMount:', isInitialMount.current, 'activeSubgroup:', activeSubgroup)
+    if (isInitialMount.current) {
+      console.log('Skipping - still on initial mount')
+      return
+    }
 
-    console.log('activeSubgroup changed to:', activeSubgroup)
+    console.log('✓ activeSubgroup changed to:', activeSubgroup)
     const currentPath = `/reports/${share_token}`
     if (activeSubgroup) {
-      console.log('Updating URL to:', currentPath + '?subgroup=' + activeSubgroup)
-      navigate(`${currentPath}?subgroup=${encodeURIComponent(activeSubgroup)}`, { replace: true })
+      const newUrl = `${currentPath}?subgroup=${encodeURIComponent(activeSubgroup)}`
+      console.log('✓ Updating URL to:', newUrl)
+      navigate(newUrl, { replace: true })
     } else {
-      console.log('Clearing URL params')
+      console.log('✓ Clearing URL params')
       navigate(currentPath, { replace: true })
     }
   }, [activeSubgroup, share_token, navigate])
