@@ -152,9 +152,12 @@ export default function MeetingReportPublicPage() {
 
   // Sync activeSubgroup with URL query parameter
   useEffect(() => {
+    console.log('activeSubgroup changed to:', activeSubgroup)
     if (activeSubgroup) {
+      console.log('Setting URL param: subgroup=', activeSubgroup)
       setSearchParams({ subgroup: activeSubgroup })
     } else {
+      console.log('Clearing URL params')
       setSearchParams({})
     }
   }, [activeSubgroup, setSearchParams])
@@ -456,7 +459,6 @@ export default function MeetingReportPublicPage() {
             <KpiTile label="Expected" value={expectedTotal} bg="#F4F1EA" bd="#EDE8DC" circle="rgba(76,42,146,.12)" labelColor="#9E9488" valueColor="#2D2A22" />
             <KpiTile label="Attended" value={presentTotal} detail={`${attendancePct}%`} bg="#EEF6F1" bd="#C3E0CC" circle="rgba(45,134,83,.15)" labelColor="#2D8653" valueColor="#1B5E3C" />
             <KpiTile label="Absent" value={absentTotal} bg="#FEF0ED" bd="#F5C4B8" circle="rgba(201,72,48,.15)" labelColor="#C94830" valueColor="#7A1C24" />
-            <KpiTile label="Reach %" value={`${reachPct}%`} bg={band.bg} bd={band.border} circle="transparent" labelColor={band.fg} valueColor={band.fg} />
             <KpiTile label="Attendance %" value={`${attendancePct}%`} bg="#FFF4CC" bd="#EDD88A" circle="rgba(232,160,32,.15)" labelColor="#7A5A00" valueColor="#7A5A00" />
             <KpiTile label="Unexpected" value={unexpectedTotal} bg="#FFF8EC" bd="#EDD88A" circle="rgba(232,160,32,.15)" labelColor="#E8A020" valueColor="#7A5A00" />
           </div>
