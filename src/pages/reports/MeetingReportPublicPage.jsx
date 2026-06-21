@@ -370,53 +370,53 @@ export default function MeetingReportPublicPage() {
                 type="button"
                 onClick={() => {
                   const text = window.location.href
-                  console.log('Copy button clicked, attempting to copy:', text)
+                  console.log('Copy button clicked, URL:', text)
 
-                  try {
-                    // Try execCommand first - most reliable
-                    const textarea = document.createElement('textarea')
-                    textarea.value = text
-                    textarea.style.position = 'fixed'
-                    textarea.style.left = '0'
-                    textarea.style.top = '0'
-                    textarea.style.opacity = '0'
-                    textarea.style.pointerEvents = 'none'
-                    document.body.appendChild(textarea)
+                  // Try Clipboard API first if available
+                  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    console.log('Attempting Clipboard API...')
+                    navigator.clipboard.writeText(text)
+                      .then(() => {
+                        console.log('✓ Clipboard API succeeded')
+                        setCopiedLink(true)
+                        setTimeout(() => setCopiedLink(false), 2000)
+                        setShowLinkModal(false)
+                      })
+                      .catch(err => {
+                        console.error('✗ Clipboard API failed:', err)
+                        // Fall back to execCommand
+                        fallbackCopy(text)
+                      })
+                  } else {
+                    console.log('Clipboard API not available, using fallback')
+                    fallbackCopy(text)
+                  }
 
-                    textarea.focus()
-                    textarea.select()
-
-                    const successful = document.execCommand('copy')
-                    document.body.removeChild(textarea)
-
-                    console.log('execCommand result:', successful)
-
-                    if (successful) {
-                      console.log('Copy succeeded!')
-                      setCopiedLink(true)
-                      setTimeout(() => setCopiedLink(false), 2000)
-                      setShowLinkModal(false)
-                    } else {
-                      throw new Error('execCommand failed')
-                    }
-                  } catch (err) {
-                    console.error('execCommand failed, trying Clipboard API:', err)
-
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                      navigator.clipboard.writeText(text)
-                        .then(() => {
-                          console.log('Clipboard API copy succeeded!')
-                          setCopiedLink(true)
-                          setTimeout(() => setCopiedLink(false), 2000)
-                          setShowLinkModal(false)
-                        })
-                        .catch(clipErr => {
-                          console.error('Clipboard API also failed:', clipErr)
-                          alert('Unable to copy automatically. The link is shown above - please select and copy it manually.')
-                        })
-                    } else {
-                      console.error('Clipboard API not available')
-                      alert('Unable to copy automatically. The link is shown above - please select and copy it manually.')
+                  function fallbackCopy(str) {
+                    try {
+                      console.log('Attempting execCommand fallback...')
+                      const el = document.createElement('textarea')
+                      el.value = str
+                      el.style.position = 'absolute'
+                      el.style.left = '-9999px'
+                      el.style.opacity = '0'
+                      document.body.appendChild(el)
+                      el.select()
+                      el.setSelectionRange(0, 99999)
+                      const result = document.execCommand('copy')
+                      document.body.removeChild(el)
+                      console.log('execCommand result:', result)
+                      if (result) {
+                        console.log('✓ Fallback copy succeeded')
+                        setCopiedLink(true)
+                        setTimeout(() => setCopiedLink(false), 2000)
+                        setShowLinkModal(false)
+                      } else {
+                        throw new Error('execCommand returned false')
+                      }
+                    } catch (fallbackErr) {
+                      console.error('✗ Fallback copy failed:', fallbackErr)
+                      alert('Copy failed. Please select the link above and use Ctrl+C (or Cmd+C on Mac) to copy.')
                     }
                   }
                 }}
