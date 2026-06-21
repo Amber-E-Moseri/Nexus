@@ -152,13 +152,11 @@ export default function MeetingReportPublicPage() {
 
   // Sync activeSubgroup with URL query parameter
   useEffect(() => {
-    const newParams = new URLSearchParams(searchParams)
     if (activeSubgroup) {
-      newParams.set('subgroup', activeSubgroup)
+      setSearchParams({ subgroup: activeSubgroup })
     } else {
-      newParams.delete('subgroup')
+      setSearchParams({})
     }
-    setSearchParams(newParams)
   }, [activeSubgroup, setSearchParams])
 
   useEffect(() => {
