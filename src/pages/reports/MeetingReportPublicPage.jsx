@@ -157,22 +157,44 @@ export default function MeetingReportPublicPage() {
         .select(`
           id, meeting_id, attended_count, absent_count, expected_count, unexpected_count,
           report_date, label, share_token, subgroup_filter, reach_pct,
-          present_names, absent_names, unexpected_names,
-          meetings(id, title, date, description)
+          present_names, absent_names, unexpected_names
         `)
         .eq('share_token', share_token)
         .single()
 
+      // Fetch meeting details separately if meeting_id exists
+      let meetingData = null
+      if (data?.meeting_id) {
+        const { data: mData } = await supabase
+          .from('meetings')
+          .select('id, title, date, description')
+          .eq('id', data.meeting_id)
+          .single()
+        meetingData = mData
+      }
+
       if (!active) return
 
       if (error || !data) {
+        console.error('Report lookup error:', error)
+        console.error('Data:', data)
+        console.log('Looking for share_token:', share_token)
         setReport(null)
         setNotFound(true)
         setLoading(false)
         return
       }
 
-      setReport(data)
+      console.log('Report found:', data)
+      console.log('Meeting data:', meetingData)
+
+      // Combine report and meeting data
+      const reportWithMeeting = {
+        ...data,
+        meetings: meetingData || {}
+      }
+
+      setReport(reportWithMeeting)
       setLoading(false)
     }
 
