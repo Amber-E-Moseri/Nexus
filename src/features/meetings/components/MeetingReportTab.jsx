@@ -1568,7 +1568,13 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
                 {report.id && report.share_token ? (
                   <button
                     type="button"
-                    onClick={() => setShowShareModal(true)}
+                    onClick={() => {
+                      console.log('Share Report button clicked')
+                      console.log('report.id:', report.id)
+                      console.log('report.share_token:', report.share_token)
+                      console.log('shareUrl:', shareUrl)
+                      setShowShareModal(true)
+                    }}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 6,
                       background: 'rgba(255,255,255,0.10)', color: '#DCE9F8',
@@ -2109,6 +2115,84 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
             </div>
           </div>
         </div>
+
+        {/* Share Report Link Modal */}
+        {showShareModal && shareUrl && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+            <div style={{ background: 'white', borderRadius: 12, padding: 24, maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+              <h2 style={{ margin: '0 0 16px 0', fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>Share Report</h2>
+              <p style={{ margin: '0 0 12px 0', fontSize: 13, color: '#7E7D78', lineHeight: 1.5 }}>Copy this link to share the report with others:</p>
+              <div style={{ background: '#F9F8F6', border: '1px solid #EDE8DC', borderRadius: 8, padding: 12, marginBottom: 16, wordBreak: 'break-all', fontSize: 12, fontFamily: 'monospace', color: '#2C2C2A', lineHeight: 1.4 }}>
+                {shareUrl}
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowShareModal(false)}
+                  style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #EDE8DC', background: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#1C1C1C' }}
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = shareUrl
+                    console.log('Copy button clicked, URL:', text)
+
+                    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                      console.log('Attempting Clipboard API...')
+                      navigator.clipboard.writeText(text)
+                        .then(() => {
+                          console.log('✓ Clipboard API succeeded')
+                          setCopiedLink(true)
+                          setTimeout(() => setCopiedLink(false), 2000)
+                          setShowShareModal(false)
+                        })
+                        .catch(err => {
+                          console.error('✗ Clipboard API failed:', err)
+                          fallbackCopy(text)
+                        })
+                    } else {
+                      console.log('Clipboard API not available, using fallback')
+                      fallbackCopy(text)
+                    }
+
+                    function fallbackCopy(str) {
+                      try {
+                        console.log('Attempting execCommand fallback...')
+                        const el = document.createElement('textarea')
+                        el.value = str
+                        el.style.position = 'absolute'
+                        el.style.left = '-9999px'
+                        el.style.opacity = '0'
+                        document.body.appendChild(el)
+                        el.select()
+                        el.setSelectionRange(0, 99999)
+                        const result = document.execCommand('copy')
+                        document.body.removeChild(el)
+                        console.log('execCommand result:', result)
+                        if (result) {
+                          console.log('✓ Fallback copy succeeded')
+                          setCopiedLink(true)
+                          setTimeout(() => setCopiedLink(false), 2000)
+                          setShowShareModal(false)
+                        } else {
+                          throw new Error('execCommand returned false')
+                        }
+                      } catch (fallbackErr) {
+                        console.error('✗ Fallback copy failed:', fallbackErr)
+                        alert('Copy failed. Please select the link above and use Ctrl+C (or Cmd+C on Mac) to copy.')
+                      }
+                    }
+                  }}
+                  style={{ padding: '10px 16px', borderRadius: 8, border: 'none', background: '#4C2A92', color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {copiedLink ? 'Copied!' : 'Copy Link'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </>
     )
   }
@@ -2246,83 +2330,6 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
         />
       )}
 
-      {/* Share Report Link Modal */}
-      {showShareModal && shareUrl && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
-          <div style={{ background: 'white', borderRadius: 12, padding: 24, maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <h2 style={{ margin: '0 0 16px 0', fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>Share Report</h2>
-            <p style={{ margin: '0 0 12px 0', fontSize: 13, color: '#7E7D78', lineHeight: 1.5 }}>Copy this link to share the report with others:</p>
-            <div style={{ background: '#F9F8F6', border: '1px solid #EDE8DC', borderRadius: 8, padding: 12, marginBottom: 16, wordBreak: 'break-all', fontSize: 12, fontFamily: 'monospace', color: '#2C2C2A', lineHeight: 1.4 }}>
-              {shareUrl}
-            </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={() => setShowShareModal(false)}
-                style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #EDE8DC', background: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#1C1C1C' }}
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const text = shareUrl
-                  console.log('Copy button clicked, URL:', text)
-
-                  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-                    console.log('Attempting Clipboard API...')
-                    navigator.clipboard.writeText(text)
-                      .then(() => {
-                        console.log('✓ Clipboard API succeeded')
-                        setCopiedLink(true)
-                        setTimeout(() => setCopiedLink(false), 2000)
-                        setShowShareModal(false)
-                      })
-                      .catch(err => {
-                        console.error('✗ Clipboard API failed:', err)
-                        fallbackCopy(text)
-                      })
-                  } else {
-                    console.log('Clipboard API not available, using fallback')
-                    fallbackCopy(text)
-                  }
-
-                  function fallbackCopy(str) {
-                    try {
-                      console.log('Attempting execCommand fallback...')
-                      const el = document.createElement('textarea')
-                      el.value = str
-                      el.style.position = 'absolute'
-                      el.style.left = '-9999px'
-                      el.style.opacity = '0'
-                      document.body.appendChild(el)
-                      el.select()
-                      el.setSelectionRange(0, 99999)
-                      const result = document.execCommand('copy')
-                      document.body.removeChild(el)
-                      console.log('execCommand result:', result)
-                      if (result) {
-                        console.log('✓ Fallback copy succeeded')
-                        setCopiedLink(true)
-                        setTimeout(() => setCopiedLink(false), 2000)
-                        setShowShareModal(false)
-                      } else {
-                        throw new Error('execCommand returned false')
-                      }
-                    } catch (fallbackErr) {
-                      console.error('✗ Fallback copy failed:', fallbackErr)
-                      alert('Copy failed. Please select the link above and use Ctrl+C (or Cmd+C on Mac) to copy.')
-                    }
-                  }
-                }}
-                style={{ padding: '10px 16px', borderRadius: 8, border: 'none', background: '#4C2A92', color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-              >
-                {copiedLink ? 'Copied!' : 'Copy Link'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
