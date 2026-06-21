@@ -243,23 +243,27 @@ export default function MeetingReportPublicPage() {
         presentNames: report.present_names || [],
         absentNames: report.absent_names || [],
         unexpectedNames: report.unexpected_names || [],
-        reachPct: report.reach_pct,
+        reachPct: report.reach_pct, // Already 0-100 from database
       }
     }
 
     // Show data for selected subgroup
     const subgroupData = report.bySubgroup[activeSubgroup]
+    const subgroupExpected = subgroupData.expected?.length || 0
+    const subgroupPresent = subgroupData.present?.length || 0
+    const subgroupReachPct = subgroupExpected > 0
+      ? (subgroupPresent / subgroupExpected) * 100
+      : 0
+
     return {
-      expectedCount: subgroupData.expected?.length || 0,
-      attendedCount: subgroupData.present?.length || 0,
+      expectedCount: subgroupExpected,
+      attendedCount: subgroupPresent,
       absentCount: subgroupData.absent?.length || 0,
       unexpectedCount: subgroupData.unexpected?.length || 0,
       presentNames: subgroupData.present?.map(p => p.name) || [],
       absentNames: subgroupData.absent?.map(p => p.name) || [],
       unexpectedNames: subgroupData.unexpected?.map(p => p.name) || [],
-      reachPct: subgroupData.expected?.length > 0
-        ? (subgroupData.present?.length || 0) / subgroupData.expected.length
-        : 0,
+      reachPct: subgroupReachPct, // Now 0-100 to match database format
     }
   }, [report, activeSubgroup])
 
@@ -281,8 +285,8 @@ export default function MeetingReportPublicPage() {
   const absentTotal = visibleReport?.absentCount ?? 0
   const unexpectedTotal = visibleReport?.unexpectedCount ?? 0
   const attendancePct = expectedTotal > 0 ? Math.round((presentTotal / expectedTotal) * 100) : 0
-  const reachPct = Math.round((visibleReport?.reachPct ?? 0) * 100)
-  const band = reachBand((visibleReport?.reachPct ?? 0))
+  const reachPct = Math.round(visibleReport?.reachPct ?? 0) // Now already 0-100
+  const band = reachBand((visibleReport?.reachPct ?? 0) / 100) // Convert 0-100 to 0-1 for band calculation
 
   const meeting = report?.meetings ?? {}
   const meetingTitle = meeting.title || report?.label || 'Meeting Report'
