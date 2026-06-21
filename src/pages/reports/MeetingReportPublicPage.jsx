@@ -146,7 +146,7 @@ export default function MeetingReportPublicPage() {
   const [copiedLink, setCopiedLink] = useState(false)
   const [showLinkModal, setShowLinkModal] = useState(false)
   const [activeSubgroup, setActiveSubgroup] = useState('')
-  const [syncingToUrl, setSyncingToUrl] = useState(false)
+  const isInitialMount = useRef(true)
 
   // Read activeSubgroup from URL params on mount
   useEffect(() => {
@@ -155,25 +155,21 @@ export default function MeetingReportPublicPage() {
     if (subgroupFromUrl !== activeSubgroup) {
       setActiveSubgroup(subgroupFromUrl)
     }
-  }, []) // Only run on mount
+    isInitialMount.current = false
+  }, [])
 
   // Sync activeSubgroup with URL query parameter using navigate
   useEffect(() => {
-    // Skip if we're in the initial read from URL
-    if (syncingToUrl) return
+    if (isInitialMount.current) return
 
     console.log('activeSubgroup changed to:', activeSubgroup)
     const currentPath = `/reports/${share_token}`
     if (activeSubgroup) {
       console.log('Updating URL to:', currentPath + '?subgroup=' + activeSubgroup)
-      setSyncingToUrl(true)
       navigate(`${currentPath}?subgroup=${encodeURIComponent(activeSubgroup)}`, { replace: true })
-      setSyncingToUrl(false)
     } else {
       console.log('Clearing URL params')
-      setSyncingToUrl(true)
       navigate(currentPath, { replace: true })
-      setSyncingToUrl(false)
     }
   }, [activeSubgroup, share_token, navigate])
 
