@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { CalendarRange, Filter, Link2, Printer, Users } from 'lucide-react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { formatRelativeDate } from '../../lib/dateUtils'
 import { supabase } from '../../lib/supabase'
 
@@ -137,14 +137,29 @@ function ListTable({ title, count, tone, names }) {
 
 export default function MeetingReportPublicPage() {
   const { share_token } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
 
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
   const [showLinkModal, setShowLinkModal] = useState(false)
-  const [activeSubgroup, setActiveSubgroup] = useState('')
+  const [activeSubgroup, setActiveSubgroup] = useState(() => {
+    // Initialize from URL query parameter
+    return searchParams.get('subgroup') || ''
+  })
+
+  // Sync activeSubgroup with URL query parameter
+  useEffect(() => {
+    const newParams = new URLSearchParams(searchParams)
+    if (activeSubgroup) {
+      newParams.set('subgroup', activeSubgroup)
+    } else {
+      newParams.delete('subgroup')
+    }
+    setSearchParams(newParams)
+  }, [activeSubgroup, setSearchParams])
 
   useEffect(() => {
     let active = true
