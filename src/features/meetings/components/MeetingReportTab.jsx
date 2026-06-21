@@ -1240,6 +1240,7 @@ export default function MeetingReportTab() {
             absent_names: result.absent.map((person) => person.name),
             unexpected_names: result.unexpected.map((person) => person.name),
             subgroup_filter: result.subgroupFilter,
+            by_subgroup: result.bySubgroup || null, // Store per-subgroup breakdown
             created_by: profile?.id ?? null,
           })
           .select('id, share_token')

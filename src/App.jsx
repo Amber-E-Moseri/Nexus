@@ -59,6 +59,7 @@ const GoogleDriveAuthCallback = lazy(() => import('./pages/auth/GoogleDriveAuthC
 const ApiDocumentationPage = lazy(() => import('./pages/ApiDocumentationPage'))
 const ActivityLogPage = lazy(() => import('./pages/ActivityLogPage'))
 const FilesPage = lazy(() => import('./pages/FilesPage'))
+const MeetingReportPublicPage = lazy(() => import('./pages/reports/MeetingReportPublicPage'))
 
 function onError(error, errorInfo) {
   console.error('[AppErrorBoundary]', error, errorInfo)
@@ -78,6 +79,7 @@ export default function App() {
       <Route path="/activate" element={<ActivateInvitation />} />
       <Route path="/accept-invite" element={<ActivateInvitation />} />
       <Route path="/auth/google-drive/callback" element={<GoogleDriveAuthCallback />} />
+      <Route path="/reports/:share_token" element={<MeetingReportPublicPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>

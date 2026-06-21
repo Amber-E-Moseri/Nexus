@@ -175,7 +175,7 @@ export default function MeetingReportPublicPage() {
         .select(`
           id, meeting_id, attended_count, absent_count, expected_count, unexpected_count,
           report_date, label, share_token, subgroup_filter, reach_pct,
-          present_names, absent_names, unexpected_names
+          present_names, absent_names, unexpected_names, by_subgroup
         `)
         .eq('share_token', share_token)
         .single()
@@ -206,10 +206,11 @@ export default function MeetingReportPublicPage() {
       console.log('Report found:', data)
       console.log('Meeting data:', meetingData)
 
-      // Combine report and meeting data
+      // Combine report and meeting data, rename by_subgroup to bySubgroup for consistency
       const reportWithMeeting = {
         ...data,
-        meetings: meetingData || {}
+        meetings: meetingData || {},
+        bySubgroup: data.by_subgroup || null,
       }
 
       setReport(reportWithMeeting)

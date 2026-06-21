@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { getMeetingTasks } from '../lib/meetings'
 import { getTaskStatusColor, isTaskCompleted } from '../../../lib/taskStatuses'
 
-const TABS = ['Summary', 'Agenda', 'Attendance', 'Actions', 'Minutes']
+const TABS = ['Summary', 'Agenda', 'Actions', 'Minutes']
 
 export default function MeetingRecordTabs({ meeting }) {
   const [activeTab, setActiveTab] = useState('Summary')
@@ -40,7 +40,6 @@ export default function MeetingRecordTabs({ meeting }) {
   const tabLabels = {
     Summary: 'Summary',
     Agenda: 'Agenda',
-    Attendance: 'Attendance',
     Actions: `Actions ${actionCount > 0 ? `(${actionCount})` : ''}`,
     Minutes: 'Minutes',
   }
@@ -205,68 +204,6 @@ export default function MeetingRecordTabs({ meeting }) {
               </div>
             ) : (
               <p style={{ margin: 0, fontSize: 13, color: '#9E9488' }}>No agenda logged yet.</p>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'Attendance' && (
-          <div style={{ paddingLeft: 16, paddingRight: 16 }}>
-            {meeting.attendance && meeting.attendance.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {meeting.attendance.map((entry, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '10px 12px',
-                      borderRadius: 8,
-                      background: '#FAFAF9',
-                      border: '1px solid var(--border)',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: '50%',
-                        background: '#E5E5E4',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: '#7E7D78',
-                      }}
-                    >
-                      {entry.user_id?.charAt(0) ?? 'U'}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1C1C' }}>
-                        {entry.name ?? `User ${entry.user_id}`}
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        paddingLeft: '8px',
-                        paddingRight: '8px',
-                        paddingTop: '4px',
-                        paddingBottom: '4px',
-                        borderRadius: 4,
-                        background: entry.status === 'present' ? '#DBEAFE' : '#E5E5E4',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: entry.status === 'present' ? '#0369A1' : '#7E7D78',
-                      }}
-                    >
-                      {entry.status === 'present' ? 'Here' : 'Away'}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={{ margin: 0, fontSize: 13, color: '#9E9488' }}>No attendance logged yet.</p>
             )}
           </div>
         )}

@@ -124,19 +124,19 @@ as $$
     u.id as member_id,
     u.name,
     count(distinct m.id)::integer as meetings_missed,
-    max(m.meeting_date)::date as last_meeting_date
+    max(m.date)::date as last_meeting_date
   from public.users u
   cross join lateral (
-    select id, meeting_date
+    select id, date
     from public.meetings
     where department_id = p_dept_id
-      and meeting_date >= current_date - (p_days || ' days')::interval
+      and date >= current_date - (p_days || ' days')::interval
   ) m
   left join public.meeting_attendance ma on ma.meeting_id = m.id
     and ma.user_id = u.id
   where u.department_id = p_dept_id
     and u.status = 'active'
-    and (ma.id is null or ma.status = 'absent')
+    and (ma.meeting_id is null or ma.status = 'absent')
   group by u.id, u.name
   having count(distinct m.id) > 0
   order by meetings_missed desc, u.name asc;

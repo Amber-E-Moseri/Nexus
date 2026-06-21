@@ -124,6 +124,41 @@ export async function updateMeeting(meetingId, updates) {
   return data
 }
 
+export async function deleteMeeting(meetingId) {
+  if (!meetingId) throw new Error('Meeting ID is required')
+
+  // Delete related records first (cascade cleanup)
+  const { error: attendanceError } = await supabase
+    .from('meeting_attendance')
+    .delete()
+    .eq('meeting_id', meetingId)
+
+  if (attendanceError) throw new Error(`Failed to delete attendance records: ${attendanceError.message}`)
+
+  // Delete related agendas
+  const { error: agendaError } = await supabase
+    .from('agendas')
+    .delete()
+    .eq('meeting_id', meetingId)
+
+  if (agendaError) throw new Error(`Failed to delete agenda: ${agendaError.message}`)
+
+  // Delete the meeting itself
+  const { error: meetingError } = await supabase
+    .from('meetings')
+    .delete()
+    .eq('id', meetingId)
+
+  if (meetingError) throw new Error(`Failed to delete meeting: ${meetingError.message}`)
+
+  recordActivity('meeting_deleted', {
+    entity_type: 'meeting',
+    entity_id: meetingId,
+  })
+
+  return { success: true, deletedMeetingId: meetingId }
+}
+
 export async function createTasksFromActionItems(meetingId, departmentId, actionItems, createdBy) {
   if (!actionItems.length) return []
   const defaultStatusId = await getDefaultTaskStatusId({ departmentId })
