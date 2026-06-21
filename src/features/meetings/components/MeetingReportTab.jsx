@@ -864,6 +864,7 @@ function buildReportFromHistoryRecord(record, rosterRows) {
 
   return {
     id: record.id,
+    share_token: record.share_token,
     label: record.label,
     subgroupFilter: record.subgroup_filter,
     expectedCount: record.expected_count,
@@ -906,6 +907,7 @@ export default function MeetingReportTab() {
   const [printingSubgroup, setPrintingSubgroup] = useState(null)
   const [restoredFromSession, setRestoredFromSession] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
 
@@ -959,7 +961,7 @@ export default function MeetingReportTab() {
       try {
         const { data, error } = await supabase
           .from('meeting_attendance_reports')
-          .select('id, label, report_date, reach_pct, expected_count, attended_count, absent_count, unexpected_count, present_names, absent_names, unexpected_names, subgroup_filter')
+          .select('id, share_token, label, report_date, reach_pct, expected_count, attended_count, absent_count, unexpected_count, present_names, absent_names, unexpected_names, subgroup_filter')
           .eq('id', reportId)
           .single()
 
@@ -1026,7 +1028,7 @@ export default function MeetingReportTab() {
     try {
       const { data } = await supabase
         .from('meeting_attendance_reports')
-        .select('id, label, report_date, reach_pct, expected_count, attended_count, absent_count, unexpected_count, present_names, absent_names, unexpected_names, subgroup_filter')
+        .select('id, share_token, label, report_date, reach_pct, expected_count, attended_count, absent_count, unexpected_count, present_names, absent_names, unexpected_names, subgroup_filter')
         .order('created_at', { ascending: false })
         .limit(10)
       setHistory(data ?? [])
@@ -1240,11 +1242,11 @@ export default function MeetingReportTab() {
             subgroup_filter: result.subgroupFilter,
             created_by: profile?.id ?? null,
           })
-          .select('id')
+          .select('id, share_token')
           .single()
         if (error) setSaveError(error.message)
         else {
-          const nextReport = { ...result, id: data.id }
+          const nextReport = { ...result, id: data.id, share_token: data.share_token }
           setReport(nextReport)
           sessionStorage.setItem(
             'meeting_report_state',
@@ -1503,7 +1505,7 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
     const regionalSubgroups = report.subgroups ?? subgroupBreakdown.map((group) => group.subgroup)
     const printedSubgroupData = printingSubgroup ? report.bySubgroup?.[printingSubgroup] ?? null : null
     const printSubgroupList = printingSubgroup ? [printingSubgroup] : regionalSubgroups
-    const shareUrl = report.id ? `${window.location.origin}/meetings?report=${report.id}` : ''
+    const shareUrl = report.share_token ? `${window.location.origin}/reports/${report.share_token}` : ''
 
     return (
       <>
@@ -1563,18 +1565,10 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
               </div>
 
               <div className="report-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {report.id ? (
+                {report.id && report.share_token ? (
                   <button
                     type="button"
-                    onClick={async () => {
-                      const success = await copyToClipboard(shareUrl)
-                      if (success) {
-                        setCopiedLink(true)
-                        setTimeout(() => setCopiedLink(false), 2000)
-                      } else {
-                        setSaveError('Failed to copy report link.')
-                      }
-                    }}
+                    onClick={() => setShowShareModal(true)}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 6,
                       background: 'rgba(255,255,255,0.10)', color: '#DCE9F8',
@@ -1582,7 +1576,7 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
                       borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
                     }}
                   >
-                    <Link2 size={13} /> {copiedLink ? 'Link Copied' : 'Copy Report Link'}
+                    <Link2 size={13} /> {copiedLink ? 'Link Copied!' : 'Share Report'}
                   </button>
                 ) : null}
                 <button
@@ -2250,6 +2244,84 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
           onConfirm={handleConfirmEmail}
           onCancel={() => setEmailConfirmation(null)}
         />
+      )}
+
+      {/* Share Report Link Modal */}
+      {showShareModal && shareUrl && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+          <div style={{ background: 'white', borderRadius: 12, padding: 24, maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <h2 style={{ margin: '0 0 16px 0', fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>Share Report</h2>
+            <p style={{ margin: '0 0 12px 0', fontSize: 13, color: '#7E7D78', lineHeight: 1.5 }}>Copy this link to share the report with others:</p>
+            <div style={{ background: '#F9F8F6', border: '1px solid #EDE8DC', borderRadius: 8, padding: 12, marginBottom: 16, wordBreak: 'break-all', fontSize: 12, fontFamily: 'monospace', color: '#2C2C2A', lineHeight: 1.4 }}>
+              {shareUrl}
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setShowShareModal(false)}
+                style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #EDE8DC', background: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#1C1C1C' }}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const text = shareUrl
+                  console.log('Copy button clicked, URL:', text)
+
+                  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    console.log('Attempting Clipboard API...')
+                    navigator.clipboard.writeText(text)
+                      .then(() => {
+                        console.log('✓ Clipboard API succeeded')
+                        setCopiedLink(true)
+                        setTimeout(() => setCopiedLink(false), 2000)
+                        setShowShareModal(false)
+                      })
+                      .catch(err => {
+                        console.error('✗ Clipboard API failed:', err)
+                        fallbackCopy(text)
+                      })
+                  } else {
+                    console.log('Clipboard API not available, using fallback')
+                    fallbackCopy(text)
+                  }
+
+                  function fallbackCopy(str) {
+                    try {
+                      console.log('Attempting execCommand fallback...')
+                      const el = document.createElement('textarea')
+                      el.value = str
+                      el.style.position = 'absolute'
+                      el.style.left = '-9999px'
+                      el.style.opacity = '0'
+                      document.body.appendChild(el)
+                      el.select()
+                      el.setSelectionRange(0, 99999)
+                      const result = document.execCommand('copy')
+                      document.body.removeChild(el)
+                      console.log('execCommand result:', result)
+                      if (result) {
+                        console.log('✓ Fallback copy succeeded')
+                        setCopiedLink(true)
+                        setTimeout(() => setCopiedLink(false), 2000)
+                        setShowShareModal(false)
+                      } else {
+                        throw new Error('execCommand returned false')
+                      }
+                    } catch (fallbackErr) {
+                      console.error('✗ Fallback copy failed:', fallbackErr)
+                      alert('Copy failed. Please select the link above and use Ctrl+C (or Cmd+C on Mac) to copy.')
+                    }
+                  }
+                }}
+                style={{ padding: '10px 16px', borderRadius: 8, border: 'none', background: '#4C2A92', color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+              >
+                {copiedLink ? 'Copied!' : 'Copy Link'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
