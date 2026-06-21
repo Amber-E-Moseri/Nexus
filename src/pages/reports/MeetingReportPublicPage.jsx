@@ -144,6 +144,7 @@ export default function MeetingReportPublicPage() {
   const [notFound, setNotFound] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
   const [showLinkModal, setShowLinkModal] = useState(false)
+  const [activeSubgroup, setActiveSubgroup] = useState('')
 
   useEffect(() => {
     let active = true
@@ -205,26 +206,70 @@ export default function MeetingReportPublicPage() {
     }
   }, [share_token])
 
+  // Extract available subgroups from report data
+  const availableSubgroups = useMemo(() => {
+    if (!report) return []
+    // If report has bySubgroup data (regional mode), extract subgroup names
+    if (report.bySubgroup && typeof report.bySubgroup === 'object') {
+      return Object.keys(report.bySubgroup).sort()
+    }
+    return []
+  }, [report])
+
+  // Get current view data (filtered by activeSubgroup if available)
+  const visibleReport = useMemo(() => {
+    if (!report) return null
+
+    // If no subgroup filtering or activeSubgroup not set, show all data
+    if (!activeSubgroup || !report.bySubgroup || !report.bySubgroup[activeSubgroup]) {
+      return {
+        expectedCount: report.expected_count,
+        attendedCount: report.attended_count,
+        absentCount: report.absent_count,
+        unexpectedCount: report.unexpected_count,
+        presentNames: report.present_names || [],
+        absentNames: report.absent_names || [],
+        unexpectedNames: report.unexpected_names || [],
+        reachPct: report.reach_pct,
+      }
+    }
+
+    // Show data for selected subgroup
+    const subgroupData = report.bySubgroup[activeSubgroup]
+    return {
+      expectedCount: subgroupData.expected?.length || 0,
+      attendedCount: subgroupData.present?.length || 0,
+      absentCount: subgroupData.absent?.length || 0,
+      unexpectedCount: subgroupData.unexpected?.length || 0,
+      presentNames: subgroupData.present?.map(p => p.name) || [],
+      absentNames: subgroupData.absent?.map(p => p.name) || [],
+      unexpectedNames: subgroupData.unexpected?.map(p => p.name) || [],
+      reachPct: subgroupData.expected?.length > 0
+        ? (subgroupData.present?.length || 0) / subgroupData.expected.length
+        : 0,
+    }
+  }, [report, activeSubgroup])
+
   const presentNames = useMemo(
-    () => buildListRows(report?.present_names ?? []),
-    [report],
+    () => buildListRows(visibleReport?.presentNames ?? []),
+    [visibleReport],
   )
   const absentNames = useMemo(
-    () => buildListRows(report?.absent_names ?? []),
-    [report],
+    () => buildListRows(visibleReport?.absentNames ?? []),
+    [visibleReport],
   )
   const unexpectedNames = useMemo(
-    () => buildListRows(report?.unexpected_names ?? []),
-    [report],
+    () => buildListRows(visibleReport?.unexpectedNames ?? []),
+    [visibleReport],
   )
 
-  const expectedTotal = report?.expected_count ?? 0
-  const presentTotal = report?.attended_count ?? 0
-  const absentTotal = report?.absent_count ?? 0
-  const unexpectedTotal = report?.unexpected_count ?? 0
+  const expectedTotal = visibleReport?.expectedCount ?? 0
+  const presentTotal = visibleReport?.attendedCount ?? 0
+  const absentTotal = visibleReport?.absentCount ?? 0
+  const unexpectedTotal = visibleReport?.unexpectedCount ?? 0
   const attendancePct = expectedTotal > 0 ? Math.round((presentTotal / expectedTotal) * 100) : 0
-  const reachPct = Math.round(report?.reach_pct ?? 0)
-  const band = reachBand((report?.reach_pct ?? 0) / 100)
+  const reachPct = Math.round((visibleReport?.reachPct ?? 0) * 100)
+  const band = reachBand((visibleReport?.reachPct ?? 0))
 
   const meeting = report?.meetings ?? {}
   const meetingTitle = meeting.title || report?.label || 'Meeting Report'
@@ -340,6 +385,49 @@ export default function MeetingReportPublicPage() {
           {subgroupFilter && (
             <div style={{ fontSize: 12, color: '#B8D4FF', display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 6, padding: '6px 12px' }}>
               {subgroupFilter}
+            </div>
+          )}
+
+          {/* Subgroup Navigation Tabs */}
+          {availableSubgroups.length > 1 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setActiveSubgroup('')}
+                style={{
+                  border: activeSubgroup ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.4)',
+                  background: activeSubgroup ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.12)',
+                  color: activeSubgroup ? '#B8D4FF' : '#FFFFFF',
+                  borderRadius: 999,
+                  padding: '6px 14px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                All Subgroups
+              </button>
+              {availableSubgroups.map((subgroup) => (
+                <button
+                  key={subgroup}
+                  type="button"
+                  onClick={() => setActiveSubgroup(subgroup)}
+                  style={{
+                    border: activeSubgroup === subgroup ? '1px solid rgba(255,255,255,0.4)' : '1px solid rgba(255,255,255,0.2)',
+                    background: activeSubgroup === subgroup ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
+                    color: activeSubgroup === subgroup ? '#FFFFFF' : '#B8D4FF',
+                    borderRadius: 999,
+                    padding: '6px 14px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {subgroup}
+                </button>
+              ))}
             </div>
           )}
         </div>
