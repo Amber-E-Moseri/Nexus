@@ -150,17 +150,18 @@ export default function MeetingReportPublicPage() {
     return searchParams.get('subgroup') || ''
   })
 
-  // Sync activeSubgroup with URL query parameter
+  // Sync activeSubgroup with URL query parameter using navigate
   useEffect(() => {
     console.log('activeSubgroup changed to:', activeSubgroup)
+    const currentPath = `/reports/${share_token}`
     if (activeSubgroup) {
-      console.log('Setting URL param: subgroup=', activeSubgroup)
-      setSearchParams({ subgroup: activeSubgroup })
+      console.log('Updating URL to:', currentPath + '?subgroup=' + activeSubgroup)
+      navigate(`${currentPath}?subgroup=${encodeURIComponent(activeSubgroup)}`, { replace: true })
     } else {
       console.log('Clearing URL params')
-      setSearchParams({})
+      navigate(currentPath, { replace: true })
     }
-  }, [activeSubgroup, setSearchParams])
+  }, [activeSubgroup, share_token, navigate])
 
   useEffect(() => {
     let active = true
