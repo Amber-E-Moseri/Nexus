@@ -295,7 +295,7 @@ export default function Sidebar() {
 
     supabase
       .from('external_integrations')
-      .select('id, name, type, enabled, show_in_sidebar, sort_order, config, icon_url')
+      .select('id, name, type, enabled, show_in_sidebar, sort_order, icon_url')
       .eq('enabled', true)
       .eq('show_in_sidebar', true)
       .order('sort_order')

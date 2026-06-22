@@ -29,8 +29,7 @@ export default function ActivityFeedWidget({ role, userId, departmentId }) {
           { count: 'exact' }
         )
         .order('timestamp', { ascending: false })
-        .limit(16)
-        .offset(startOffset)
+        .range(startOffset, startOffset + 15)
 
       // ROLE-BASED FILTERING
       if (role === 'dept_lead' && departmentId) {
