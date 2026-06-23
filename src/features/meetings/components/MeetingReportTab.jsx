@@ -175,8 +175,45 @@ function splitCSVLine(line) {
   return cells
 }
 
+function splitCSVRows(text) {
+  const rows = []
+  let currentRow = ''
+  let inQuotes = false
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    const nextChar = text[i + 1]
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentRow += '""'
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+      currentRow += char
+    } else if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (currentRow.trim()) {
+        rows.push(currentRow)
+      }
+      currentRow = ''
+      if (char === '\r' && nextChar === '\n') {
+        i++
+      }
+    } else {
+      currentRow += char
+    }
+  }
+
+  if (currentRow.trim()) {
+    rows.push(currentRow)
+  }
+
+  return rows
+}
+
 function parseCSVText(text) {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim())
+  const lines = splitCSVRows(text)
   if (lines.length < 2) return { names: [], error: 'CSV has no data rows.' }
   const headers = splitCSVLine(lines[0]).map((h) => h.replace(/^"|"$/g, '').trim())
   const nameCol = findNameColumn(headers)
