@@ -188,12 +188,57 @@ function KpiTile({ label, value, accent }) {
 }
 
 export default function Planner() {
-  const { profile } = useAuth()
+  const { profile, role } = useAuth()
   const { showToast } = useToast()
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
-  const { tasks: allTasks, milestones, isLoading } = useMyTasks(profile?.id || '')
+
+  // Filter state with localStorage persistence
+  const [filters, setFilters] = useState(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('planner_filters') : null
+    return saved
+      ? JSON.parse(saved)
+      : { space: null, status: null, assignee: null, tag: null, dateRange: null }
+  })
+
+  useEffect(() => {
+    localStorage.setItem('planner_filters', JSON.stringify(filters))
+  }, [filters])
+
+  const { tasks: allTasks, milestones, isLoading } = useMyTasks(profile?.id || '', filters)
   const [activeId, setActiveId] = useState(null)
   const [modalTask, setModalTask] = useState(null)
+  const [filtersPanelOpen, setFiltersPanelOpen] = useState(false)
+
+  // Fetch filter options
+  const [spaces, setSpaces] = useState([])
+  const [statuses, setStatuses] = useState([])
+  const [members, setMembers] = useState([])
+
+  useEffect(() => {
+    if (profile?.id && role) {
+      Promise.all([
+        getMySpaces(profile.id, role, profile.department_id),
+        listTaskStatuses(),
+      ])
+        .then(([spacesData, statusesData]) => {
+          setSpaces(spacesData.filter((s) => s.status === 'active'))
+          setStatuses(statusesData)
+        })
+        .catch(console.error)
+    }
+  }, [profile?.id, role, profile?.department_id])
+
+  useEffect(() => {
+    supabase
+      .from('users')
+      .select('id, name')
+      .then(({ data }) => setMembers(data || []))
+      .catch(console.error)
+  }, [])
+
+  const clearFilters = useCallback(() => {
+    setFilters({ space: null, status: null, assignee: null, tag: null, dateRange: null })
+  }, [])
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -276,8 +321,92 @@ export default function Planner() {
           <span style={{ fontSize: 13, fontWeight: 700, color: TEXT, minWidth: 130, textAlign: 'center' }}>{formatRange(weekStart)}</span>
           <button type="button" onClick={() => setWeekStart((w) => addDays(w, 7))} aria-label="Next week" style={navBtn}><ChevronRight size={16} /></button>
           <button type="button" onClick={() => setWeekStart(startOfWeek(new Date()))} aria-label="Go to current week" style={{ ...navBtn, width: 'auto', padding: '0 12px', fontSize: 12, fontWeight: 700 }}>Today</button>
+          <button type="button" onClick={() => setFiltersPanelOpen(!filtersPanelOpen)} style={{ ...navBtn, background: Object.values(filters).some((v) => v) ? 'var(--accent-light)' : undefined }} title="Filter tasks">
+            <SlidersHorizontal size={16} />
+            {Object.values(filters).some((v) => v) && (
+              <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 4, color: 'var(--accent)' }}>
+                {Object.values(filters).filter((v) => v).length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
+
+      {/* Filter Panel */}
+      {filtersPanelOpen && (
+        <div style={{ background: 'var(--surface-secondary)', borderRadius: 12, padding: 16, border: '1px solid var(--border)', marginBottom: 12 }}>
+          <TaskFilters
+            filters={filters}
+            setFilters={setFilters}
+            clearFilters={clearFilters}
+            hasActiveFilters={Object.values(filters).some((v) => v)}
+            members={members}
+            statuses={statuses}
+            tasks={allTasks}
+          />
+        </div>
+      )}
+
+      {/* Active Filters Display */}
+      {Object.values(filters).some((v) => v) && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+          {filters.space && (
+            <span style={{ fontSize: 12, background: '#DBEAFE', color: '#1E40AF', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Space: {spaces.find((s) => s.id === filters.space)?.name}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, space: null })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {filters.status && (
+            <span style={{ fontSize: 12, background: '#DCFCE7', color: '#166534', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Status: {statuses.find((s) => s.id === filters.status)?.name}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, status: null })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {filters.assignee && (
+            <span style={{ fontSize: 12, background: '#F3E8FF', color: '#6B21A8', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Assignee: {members.find((m) => m.id === filters.assignee)?.name}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, assignee: null })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {filters.tag && (
+            <span style={{ fontSize: 12, background: '#FEF3C7', color: '#92400E', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Tag: {filters.tag}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, tag: null })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
+              >
+                ×
+              </button>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={clearFilters}
+            style={{ fontSize: 12, color: TEXT, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            Clear all
+          </button>
+        </div>
+      )}
 
       {/* KPI row */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
