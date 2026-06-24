@@ -215,7 +215,7 @@ export default function MeetingReportPublicPage() {
       if (data?.meeting_id) {
         const { data: mData } = await supabase
           .from('meetings')
-          .select('id, title, date, description')
+          .select('id, title, date')
           .eq('id', data.meeting_id)
           .single()
         meetingData = mData
