@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
-import { createSprint, updateSprint } from '../lib/sprints'
+import { createSprint, updateSprint, getDepartments, createSprintTeam } from '../lib/sprints'
 
 const inputStyle = {
   width: '100%',
@@ -33,16 +33,38 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
   const [endDate, setEndDate] = useState(sprint?.end_date ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [template, setTemplate] = useState('custom')
+  const [selectedDepts, setSelectedDepts] = useState([])
+  const [depts, setDepts] = useState([])
+  const [deptsLoading, setDeptsLoading] = useState(false)
   const titleRef = useRef(null)
 
   useEffect(() => {
     titleRef.current?.focus()
   }, [])
 
+  useEffect(() => {
+    if (mode === 'create') {
+      setDeptsLoading(true)
+      getDepartments()
+        .then(setDepts)
+        .catch((err) => {
+          console.error('Failed to load departments:', err)
+          setDepts([])
+        })
+        .finally(() => setDeptsLoading(false))
+    }
+  }, [mode])
+
   async function handleSave() {
     if (!name.trim()) {
       setError('Sprint name is required.')
       titleRef.current?.focus()
+      return
+    }
+
+    if ((template === 'single' || template === 'multi') && selectedDepts.length === 0) {
+      setError('Please select at least one department')
       return
     }
 
@@ -55,12 +77,37 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
       description: description.trim() || null,
       start_date: startDate || null,
       end_date: endDate || null,
+      department_id: template === 'single' ? selectedDepts[0] : null,
     }
 
     try {
-      const saved = mode === 'create'
-        ? await createSprint(payload, profile.id)
-        : await updateSprint(sprint.id, payload)
+      let saved
+      if (mode === 'create') {
+        saved = await createSprint(payload, profile.id)
+
+        // Auto-create teams based on template
+        if (template === 'single' && selectedDepts.length > 0) {
+          const deptName = depts.find((d) => d.id === selectedDepts[0])?.name
+          await createSprintTeam(
+            saved.id,
+            deptName,
+            `${deptName} team for ${name.trim()}`,
+            profile.id,
+          )
+        } else if (template === 'multi' && selectedDepts.length > 0) {
+          for (const deptId of selectedDepts) {
+            const deptName = depts.find((d) => d.id === deptId)?.name
+            await createSprintTeam(
+              saved.id,
+              deptName,
+              `${deptName} team for ${name.trim()}`,
+              profile.id,
+            )
+          }
+        }
+      } else {
+        saved = await updateSprint(sprint.id, payload)
+      }
 
       onSaved?.(saved)
       onClose()
@@ -118,6 +165,108 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
               <div style={{ marginBottom: 14, padding: '8px 12px', borderRadius: 8, background: 'var(--coral-light)', color: 'var(--coral-dark)', fontSize: 13 }}>
                 {error}
               </div>
+            ) : null}
+
+            {mode === 'create' ? (
+              <>
+                <fieldset style={{ marginBottom: 14, border: '1px solid var(--border)', borderRadius: 8, padding: '12px' }}>
+                  <legend style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: 2, paddingRight: 6 }}>
+                    Sprint Scope
+                  </legend>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                      <input
+                        type="radio"
+                        name="template"
+                        value="single"
+                        checked={template === 'single'}
+                        onChange={(e) => {
+                          setTemplate(e.target.value)
+                          setSelectedDepts([])
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span>Single Department</span>
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                      <input
+                        type="radio"
+                        name="template"
+                        value="multi"
+                        checked={template === 'multi'}
+                        onChange={(e) => {
+                          setTemplate(e.target.value)
+                          setSelectedDepts([])
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span>Multi-Dept Collaboration</span>
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                      <input
+                        type="radio"
+                        name="template"
+                        value="custom"
+                        checked={template === 'custom'}
+                        onChange={(e) => {
+                          setTemplate(e.target.value)
+                          setSelectedDepts([])
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span>Custom (no auto-teams)</span>
+                    </label>
+                  </div>
+                </fieldset>
+
+                {(template === 'single' || template === 'multi') && (
+                  <div style={{ marginBottom: 14, background: 'var(--surface-secondary)', borderRadius: 8, padding: 12, border: '1px solid var(--border)' }}>
+                    <label style={labelStyle}>
+                      {template === 'single' ? 'Select Department' : 'Select Departments'}
+                    </label>
+
+                    {deptsLoading ? (
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Loading departments…</div>
+                    ) : template === 'single' ? (
+                      <select
+                        value={selectedDepts[0] || ''}
+                        onChange={(e) => setSelectedDepts(e.target.value ? [e.target.value] : [])}
+                        style={inputStyle}
+                      >
+                        <option value="">-- Choose department --</option>
+                        {depts.map((dept) => (
+                          <option key={dept.id} value={dept.id}>
+                            {dept.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {depts.map((dept) => (
+                          <label key={dept.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedDepts.includes(dept.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedDepts([...selectedDepts, dept.id])
+                                } else {
+                                  setSelectedDepts(selectedDepts.filter((id) => id !== dept.id))
+                                }
+                              }}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            <span>{dept.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             ) : null}
 
             <div style={{ marginBottom: 14 }}>

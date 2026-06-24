@@ -295,7 +295,7 @@ export default function Sidebar() {
 
     supabase
       .from('external_integrations')
-      .select('id, name, type, enabled, show_in_sidebar, sort_order, icon_url')
+      .select('id, name, type, enabled, show_in_sidebar, sort_order, icon_emoji')
       .eq('enabled', true)
       .eq('show_in_sidebar', true)
       .order('sort_order')
@@ -559,16 +559,6 @@ export default function Sidebar() {
           label="Home"
           onClick={() => go('/')}
         />
-        {role === 'super_admin' || role === 'dept_lead' ? (
-          <>
-            <SidebarItem
-              active={isPathActive(location.pathname, '/files')}
-              icon={Folder}
-              label="Files"
-              onClick={() => go('/files')}
-            />
-          </>
-        ) : null}
         <SidebarItem
           active={isPathActive(location.pathname, '/my-tasks')}
           icon={Check}

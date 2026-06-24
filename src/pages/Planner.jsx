@@ -64,13 +64,33 @@ function SpaceChip({ space }) {
 }
 
 function TaskCardBody({ task }) {
+  const hasMilestone = task.milestone && task.milestone.milestone_date !== task.due_date
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
         <SpaceChip space={task.space} />
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: PRIORITY_DOT[task.priority] ?? PRIORITY_DOT.medium, flexShrink: 0 }} />
       </div>
-      <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, lineHeight: 1.35 }}>{task.title}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, lineHeight: 1.35, flex: 1, minWidth: 0 }}>{task.title}</div>
+        {hasMilestone && (
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              background: '#4C2A92',
+              color: 'white',
+              padding: '2px 6px',
+              borderRadius: 4,
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+            title={`Personal target: ${new Date(task.milestone.milestone_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+          >
+            Target
+          </span>
+        )}
+      </div>
     </>
   )
 }

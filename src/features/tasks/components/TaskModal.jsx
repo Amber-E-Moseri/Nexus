@@ -22,6 +22,7 @@ import {
   selectDefaultStatus,
 } from '../../../lib/taskStatuses'
 import AssigneeSelector from './AssigneeSelector'
+import MilestoneCreator from './MilestoneCreator'
 import TaskComments from './TaskComments'
 import TaskDependencies from './TaskDependencies'
 import TaskFiles from './TaskFiles'
@@ -231,6 +232,7 @@ export default function TaskModal({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState(null)
   const [blockers, setBlockers] = useState([])
+  const [taskMilestone, setTaskMilestone] = useState(task?.milestone || null)
 
   const titleRef = useRef(null)
 
@@ -298,6 +300,10 @@ export default function TaskModal({
       setBlockers([])
     }
   }, [mode, task?.id])
+
+  useEffect(() => {
+    setTaskMilestone(task?.milestone || null)
+  }, [task?.milestone])
 
   async function handleSave() {
     if (!title.trim()) {
@@ -621,6 +627,19 @@ export default function TaskModal({
                 <label htmlFor="is-personal" style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: isReadOnly ? 'default' : 'pointer' }}>
                   Private task (visible only to me)
                 </label>
+              </div>
+            ) : null}
+
+            {mode === 'edit' && task?.id && profile?.id ? (
+              <div style={{ marginBottom: 18, paddingBottom: 18, borderBottom: '1px solid var(--border)' }}>
+                <label style={labelStyle}>Personal Target Date</label>
+                <MilestoneCreator
+                  task={task}
+                  userId={profile.id}
+                  currentMilestone={taskMilestone}
+                  onSave={(milestone) => setTaskMilestone(milestone)}
+                  readOnly={isReadOnly}
+                />
               </div>
             ) : null}
 

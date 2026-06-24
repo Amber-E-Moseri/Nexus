@@ -105,7 +105,14 @@ async function copyToClipboard(text) {
   }
 }
 
-function ListTable({ title, count, tone, names }) {
+function ListTable({ title, count, tone, data }) {
+  // Support both legacy string array and new object array format
+  const personList = Array.isArray(data) && data.length > 0
+    ? typeof data[0] === 'string'
+      ? data.map(name => ({ name }))
+      : data
+    : data || []
+
   return (
     <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
       <div style={{ background: tone.bg, color: tone.fg, padding: '10px 14px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em' }}>
@@ -115,18 +122,26 @@ function ListTable({ title, count, tone, names }) {
         <thead>
           <tr>
             <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, color: MUTED, textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: `1px solid ${PANEL_BORDER}` }}>Name</th>
-            <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, color: MUTED, textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: `1px solid ${PANEL_BORDER}` }}>-</th>
+            {personList.some(p => p.leadership_category) && (
+              <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, color: MUTED, textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: `1px solid ${PANEL_BORDER}` }}>Category</th>
+            )}
           </tr>
         </thead>
         <tbody>
-          {names.length === 0 ? (
+          {personList.length === 0 ? (
             <tr>
               <td colSpan={2} style={{ padding: '18px 14px', fontSize: 13, color: MUTED }}>No names listed.</td>
             </tr>
-          ) : names.map((name, index) => (
-            <tr key={`${name}-${index}`}>
-              <td style={{ padding: '10px 14px', borderBottom: index < names.length - 1 ? '1px solid #ECE8DE' : 'none', fontSize: 13, color: TEXT, fontWeight: 600 }}>{name}</td>
-              <td style={{ padding: '10px 14px', borderBottom: index < names.length - 1 ? '1px solid #ECE8DE' : 'none', fontSize: 13, color: '#C8C1B4' }}>-</td>
+          ) : personList.map((person, index) => (
+            <tr key={`${typeof person === 'string' ? person : person.name}-${index}`}>
+              <td style={{ padding: '10px 14px', borderBottom: index < personList.length - 1 ? '1px solid #ECE8DE' : 'none', fontSize: 13, color: TEXT, fontWeight: 600 }}>
+                {typeof person === 'string' ? person : person.name}
+              </td>
+              {personList.some(p => p.leadership_category) && (
+                <td style={{ padding: '10px 14px', borderBottom: index < personList.length - 1 ? '1px solid #ECE8DE' : 'none', fontSize: 12, color: MUTED }}>
+                  {typeof person === 'string' ? '-' : (person.leadership_category || '-')}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -260,6 +275,9 @@ export default function MeetingReportPublicPage() {
         attendedCount: report.attended_count,
         absentCount: report.absent_count,
         unexpectedCount: report.unexpected_count,
+        presentData: (report.present_names || []).map(name => ({ name })),
+        absentData: (report.absent_names || []).map(name => ({ name })),
+        unexpectedData: (report.unexpected_names || []).map(name => ({ name })),
         presentNames: report.present_names || [],
         absentNames: report.absent_names || [],
         unexpectedNames: report.unexpected_names || [],
@@ -267,7 +285,7 @@ export default function MeetingReportPublicPage() {
       }
     }
 
-    // Show data for selected subgroup
+    // Show data for selected subgroup with detailed person objects
     const subgroupData = report.bySubgroup[activeSubgroup]
     const subgroupExpected = subgroupData.expected?.length || 0
     const subgroupPresent = subgroupData.present?.length || 0
@@ -280,6 +298,9 @@ export default function MeetingReportPublicPage() {
       attendedCount: subgroupPresent,
       absentCount: subgroupData.absent?.length || 0,
       unexpectedCount: subgroupData.unexpected?.length || 0,
+      presentData: subgroupData.present || [],
+      absentData: subgroupData.absent || [],
+      unexpectedData: subgroupData.unexpected || [],
       presentNames: subgroupData.present?.map(p => p.name) || [],
       absentNames: subgroupData.absent?.map(p => p.name) || [],
       unexpectedNames: subgroupData.unexpected?.map(p => p.name) || [],
@@ -480,17 +501,33 @@ export default function MeetingReportPublicPage() {
             <KpiTile label="Unexpected" value={unexpectedTotal} bg="#FFF8EC" bd="#EDD88A" circle="rgba(232,160,32,.15)" labelColor="#E8A020" valueColor="#7A5A00" />
           </div>
 
+          {activeSubgroup && (
+            <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, padding: '16px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 6 }}>{activeSubgroup}</div>
+                <div style={{ display: 'flex', gap: 14, fontSize: 12, color: MUTED, flexWrap: 'wrap' }}>
+                  <span>Expected {expectedTotal}</span>
+                  <span>Present {presentTotal}</span>
+                  <span>Absent {absentTotal}</span>
+                </div>
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: band.fg, background: band.bg, borderRadius: 12, padding: '8px 12px' }}>
+                {reachPct}%
+              </div>
+            </div>
+          )}
+
           <div className="report-list-section">
-            <ListTable title="Who Attended" count={presentNames.length} tone={{ bg: '#EEF6F1', fg: '#1B5E3C' }} names={presentNames} />
+            <ListTable title="Who Attended" count={presentNames.length} tone={{ bg: '#EEF6F1', fg: '#1B5E3C' }} data={visibleReport?.presentData || presentNames} />
           </div>
 
           <div className="report-list-section">
-            <ListTable title="Who Was Absent" count={absentNames.length} tone={{ bg: '#FEF0ED', fg: '#7A1C24' }} names={absentNames} />
+            <ListTable title="Who Was Absent" count={absentNames.length} tone={{ bg: '#FEF0ED', fg: '#7A1C24' }} data={visibleReport?.absentData || absentNames} />
           </div>
 
           {unexpectedTotal > 0 && (
             <div className="report-list-section">
-              <ListTable title="Unexpected Attendees" count={unexpectedNames.length} tone={{ bg: '#FFF8EC', fg: '#7A5A00' }} names={unexpectedNames} />
+              <ListTable title="Unexpected Attendees" count={unexpectedNames.length} tone={{ bg: '#FFF8EC', fg: '#7A5A00' }} data={visibleReport?.unexpectedData || unexpectedNames} />
             </div>
           )}
         </div>

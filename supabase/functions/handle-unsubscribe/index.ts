@@ -14,13 +14,28 @@ function json(status: number, body: Record<string, unknown>) {
   })
 }
 
-async function generateToken(email: string): Promise<string> {
-  const key  = Deno.env.get('UNSUBSCRIBE_SECRET') ?? 'default'
+// Generate a cryptographically random 32-byte token (64-char hex)
+async function generateRandomToken(): Promise<string> {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+// Hash a token using SHA-256 (for storage)
+async function hashToken(token: string): Promise<string> {
+  const data = new TextEncoder().encode(token)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+// Legacy: Verify deterministic token (for backwards compatibility during migration)
+async function verifyLegacyToken(email: string, token: string): Promise<boolean> {
+  const key = Deno.env.get('UNSUBSCRIBE_SECRET') ?? 'default'
   const data = new TextEncoder().encode(email + key)
   const hash = await crypto.subtle.digest('SHA-256', data)
-  return btoa(String.fromCharCode(...new Uint8Array(hash)))
+  const expected = btoa(String.fromCharCode(...new Uint8Array(hash)))
     .replace(/[+/=]/g, '')
     .slice(0, 32)
+  return token === expected
 }
 
 Deno.serve(async (request) => {
@@ -50,30 +65,77 @@ Deno.serve(async (request) => {
     action?: string
   }
 
-  if (!email || !token) {
-    return json(400, { error: 'email and token are required' })
+  if (!token) {
+    return json(400, { error: 'token is required' })
   }
 
-  // Verify token
-  const expectedToken = await generateToken(email.toLowerCase())
-  if (token !== expectedToken) {
-    return json(200, { success: false, error: 'invalid_token' })
+  const normalizedEmail = email?.toLowerCase() ?? ''
+
+  // Verify token: support both new random tokens and legacy deterministic tokens
+  let tokenValid = false
+  let storedRecord: { email: string; token_expires_at: string | null } | null = null
+
+  // Try new random token system first
+  const tokenHash = await hashToken(token)
+  const { data: record } = await supabase
+    .from('communication_unsubscribes')
+    .select('email, token_expires_at')
+    .eq('unsubscribe_token', tokenHash)
+    .maybeSingle()
+
+  if (record) {
+    // Check if token is not expired
+    if (record.token_expires_at && new Date(record.token_expires_at) > new Date()) {
+      tokenValid = true
+      storedRecord = record
+    } else if (!record.token_expires_at) {
+      // Expired or no expiration set (migrate from old system)
+      return json(401, { error: 'Token expired. Request a new unsubscribe link.' })
+    }
+  }
+
+  // Fallback: verify legacy deterministic token (for backwards compatibility)
+  if (!tokenValid && normalizedEmail) {
+    tokenValid = await verifyLegacyToken(normalizedEmail, token)
+    if (tokenValid && !record) {
+      // Old token is valid but no DB record yet; allow the unsubscribe
+      storedRecord = { email: normalizedEmail, token_expires_at: null }
+    }
+  }
+
+  if (!tokenValid) {
+    return json(401, { error: 'Invalid or expired token' })
+  }
+
+  const finalEmail = storedRecord?.email || normalizedEmail
+  if (!finalEmail) {
+    return json(400, { error: 'Could not determine email from token' })
   }
 
   if (action === 'resubscribe') {
     const { error } = await supabase
       .from('communication_unsubscribes')
       .delete()
-      .eq('email', email.toLowerCase())
+      .eq('email', finalEmail)
 
     if (error) return json(500, { error: error.message })
     return json(200, { success: true })
   }
 
   // Default: unsubscribe
+  const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
   const { error } = await supabase
     .from('communication_unsubscribes')
-    .upsert({ email: email.toLowerCase(), unsubscribed_via: 'link' }, { onConflict: 'email' })
+    .upsert(
+      {
+        email: finalEmail,
+        unsubscribed_via: 'link',
+        unsubscribe_token: tokenHash,
+        token_created_at: new Date().toISOString(),
+        token_expires_at: tokenExpiresAt,
+      },
+      { onConflict: 'email' }
+    )
 
   if (error) return json(500, { error: error.message })
   return json(200, { success: true })

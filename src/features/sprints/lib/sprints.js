@@ -2,6 +2,16 @@ import { supabase } from '../../../lib/supabase.js'
 import { normalizeTaskRows } from '../../../lib/taskStatuses.js'
 import { createNotification } from '../../notifications/lib/notifications.js'
 
+export async function getDepartments() {
+  const { data, error } = await supabase
+    .from('departments')
+    .select('id, name')
+    .order('name', { ascending: true })
+
+  if (error) throw error
+  return data || []
+}
+
 const SPRINT_TEAM_SELECT = 'id, sprint_id, name, description, lead_user_id, created_at'
 const SPRINT_TEAM_MEMBERS_SELECT = 'id, team_id, user_id, role, joined_at, users:user_id(id, name, email, department_id, status)'
 const SPRINT_MEMBER_SELECT = 'sprint_id, user_id, role, joined_at'
@@ -228,10 +238,11 @@ export async function duplicateSprint(sprintId, createdBy) {
   return newSprint
 }
 
-export async function createSprintTeam(sprintId, name, description, leadUserId = null) {
+export async function createSprintTeam(sprintId, options) {
+  const { name, description, lead_user_id } = options
   const { data, error } = await supabase
     .from('sprint_teams')
-    .insert({ sprint_id: sprintId, name, description, lead_user_id: leadUserId })
+    .insert({ sprint_id: sprintId, name, description, lead_user_id })
     .select(SPRINT_TEAM_SELECT)
     .single()
 

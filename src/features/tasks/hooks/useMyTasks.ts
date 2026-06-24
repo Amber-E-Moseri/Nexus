@@ -86,8 +86,17 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
       // Normalize task rows (status handling, etc.)
       const normalizedTasks = normalizeTaskRows(tasksData || [])
 
+      // Attach milestone data to each task for easier access
+      const milestoneMap = Object.fromEntries(
+        (milestonesData || []).map((m) => [m.task_id, m])
+      )
+      const tasksWithMilestones = normalizedTasks.map((task) => ({
+        ...task,
+        milestone: milestoneMap[task.id] || null,
+      }))
+
       // Apply client-side filters if needed
-      let filtered = normalizedTasks
+      let filtered = tasksWithMilestones
       if (filters?.status) {
         filtered = filtered.filter((t) => t.status === filters.status)
       }

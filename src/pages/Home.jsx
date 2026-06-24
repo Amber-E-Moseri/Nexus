@@ -111,7 +111,7 @@ function ActivityRow({ entry }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-[12.5px] text-[var(--text-primary)] leading-[1.4]">{entry.action}</div>
-        <div className="mt-0.5 text-[11px] text-[var(--text-tertiary)]">{timeAgo(entry.created_at)}</div>
+        <div className="mt-0.5 text-[11px] text-[var(--text-tertiary)]">{timeAgo(entry.timestamp)}</div>
       </div>
     </div>
   )
@@ -319,8 +319,8 @@ export default function Home() {
   useEffect(() => {
     supabase
       .from('activity_log')
-      .select('id, action, created_at')
-      .order('created_at', { ascending: false })
+      .select('id, action, timestamp')
+      .order('timestamp', { ascending: false })
       .limit(6)
       .then(({ data }) => setActivity(data ?? []))
       .catch(() => setActivity([]))

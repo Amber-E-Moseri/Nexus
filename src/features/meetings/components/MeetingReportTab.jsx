@@ -554,6 +554,165 @@ function SubgroupPillBar({ subgroupOptions, selectedSubgroups, onToggle }) {
   )
 }
 
+function CategoryPillBar({ categoryOptions, selectedCategories, onToggle }) {
+  if (categoryOptions.length === 0) return null
+  return (
+    <div className="screen-only category-filter-bar" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: '#2D2A22' }}>Filter by leadership category:</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <button
+          type="button"
+          onClick={() => onToggle(null)}
+          style={{
+            background: selectedCategories.length === 0 ? '#4C2A92' : 'white',
+            color: selectedCategories.length === 0 ? 'white' : '#2D2A22',
+            border: `1px solid ${selectedCategories.length === 0 ? '#4C2A92' : '#EDE8DC'}`,
+            borderRadius: 999,
+            padding: '4px 12px',
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          All
+        </button>
+        {categoryOptions.map((category) => {
+          const selected = selectedCategories.includes(category)
+          return (
+            <button
+              key={category}
+              type="button"
+              onClick={() => onToggle(category)}
+              style={{
+                background: selected ? '#4C2A92' : 'white',
+                color: selected ? 'white' : '#2D2A22',
+                border: `1px solid ${selected ? '#4C2A92' : '#EDE8DC'}`,
+                borderRadius: 999,
+                padding: '4px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {category}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function SubgroupShareLinksPanel({ report, onClose }) {
+  const [copiedIndex, setCopiedIndex] = useState(null)
+
+  if (!report || !report.subgroups || report.subgroups.length === 0) return null
+
+  const baseUrl = `${window.location.origin}/reports/${report.share_token}`
+  const fullReportUrl = baseUrl
+
+  async function copyLink(url, index) {
+    const success = await copyToClipboard(url)
+    if (success) {
+      setCopiedIndex(index)
+      setTimeout(() => setCopiedIndex(null), 2000)
+    }
+  }
+
+  async function copyAllLinks() {
+    const links = [
+      `Full Report:\n${fullReportUrl}`,
+      ...report.subgroups.map((sg) => `${sg}:\n${baseUrl}?subgroup=${encodeURIComponent(sg)}`),
+    ].join('\n\n')
+    const success = await copyToClipboard(links)
+    if (success) {
+      setCopiedIndex('all')
+      setTimeout(() => setCopiedIndex(null), 2000)
+    }
+  }
+
+  return (
+    <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 12, padding: '16px', marginTop: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#2D2A22' }}>Share Links by Subgroup</div>
+        <button
+          type="button"
+          onClick={copyAllLinks}
+          style={{
+            background: copiedIndex === 'all' ? '#2D8653' : '#4C2A92',
+            color: 'white',
+            border: 'none',
+            borderRadius: 7,
+            padding: '6px 12px',
+            fontSize: 11.5,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          {copiedIndex === 'all' ? '✓ All Copied' : 'Copy All'}
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ background: '#F9F7F3', border: '1px solid #EDE8DC', borderRadius: 10, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: '#2D2A22', marginBottom: 4 }}>Full Report</div>
+            <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all' }}>{fullReportUrl}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => copyLink(fullReportUrl, 'full')}
+            style={{
+              background: copiedIndex === 'full' ? '#2D8653' : '#EDE8DC',
+              color: copiedIndex === 'full' ? 'white' : '#4C2A92',
+              border: 'none',
+              borderRadius: 7,
+              padding: '6px 12px',
+              fontSize: 11.5,
+              fontWeight: 600,
+              cursor: 'pointer',
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {copiedIndex === 'full' ? '✓' : 'Copy'}
+          </button>
+        </div>
+
+        {report.subgroups.map((subgroup, index) => {
+          const linkUrl = `${baseUrl}?subgroup=${encodeURIComponent(subgroup)}`
+          return (
+            <div key={subgroup} style={{ background: '#F9F7F3', border: '1px solid #EDE8DC', borderRadius: 10, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: '#2D2A22', marginBottom: 4 }}>{subgroup}</div>
+                <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all' }}>{linkUrl}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => copyLink(linkUrl, index)}
+                style={{
+                  background: copiedIndex === index ? '#2D8653' : '#EDE8DC',
+                  color: copiedIndex === index ? 'white' : '#4C2A92',
+                  border: 'none',
+                  borderRadius: 7,
+                  padding: '6px 12px',
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {copiedIndex === index ? '✓' : 'Copy'}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function ReportModeSelector({ reportMode, onChange }) {
   const modes = [
     {
@@ -932,6 +1091,7 @@ export default function MeetingReportTab() {
   const [meetingLabel, setMeetingLabel] = useState('')
   const [reportMode, setReportMode] = useState('regional')
   const [selectedSubgroups, setSelectedSubgroups] = useState([])
+  const [selectedCategories, setSelectedCategories] = useState([])
   const [attendedFile, setAttendedFile] = useState(null)
   const [attendedNames, setAttendedNames] = useState([])
   const [attendedRawCount, setAttendedRawCount] = useState(0)
@@ -976,6 +1136,7 @@ export default function MeetingReportTab() {
         setReport(parsed.report)
         setReportMode(parsed.reportMode ?? 'regional')
         setSelectedSubgroups(parsed.selectedSubgroups ?? [])
+        setSelectedCategories(parsed.selectedCategories ?? [])
         setAttendedRawCount(parsed.attendedRawCount ?? 0)
         setMeetingLabel(parsed.label ?? '')
         setRestoredFromSession(true)
@@ -1023,6 +1184,7 @@ export default function MeetingReportTab() {
             report: hydratedReport,
             reportMode: 'regional',
             selectedSubgroups: [],
+            selectedCategories: [],
             attendedRawCount: data.attended_count ?? 0,
             label: data.label ?? '',
             savedAt: new Date().toISOString(),
@@ -1091,9 +1253,15 @@ export default function MeetingReportTab() {
   )
 
   const filteredRoster = useMemo(() => {
-    if (selectedSubgroups.length === 0) return roster
-    return roster.filter((row) => selectedSubgroups.includes(row.subgroup))
-  }, [roster, selectedSubgroups])
+    let filtered = roster
+    if (selectedSubgroups.length > 0) {
+      filtered = filtered.filter((row) => selectedSubgroups.includes(row.subgroup))
+    }
+    if (selectedCategories.length > 0) {
+      filtered = filtered.filter((row) => selectedCategories.includes(row.leadership_category?.trim()))
+    }
+    return filtered
+  }, [roster, selectedSubgroups, selectedCategories])
 
   const reportSubgroups = useMemo(() => {
     if (!report) return []
@@ -1181,6 +1349,18 @@ export default function MeetingReportTab() {
     })
   }
 
+  function handleToggleCategory(category) {
+    if (!category) {
+      setSelectedCategories([])
+      return
+    }
+    setSelectedCategories((prev) => {
+      if (prev.length === 0) return [category]
+      if (prev.includes(category)) return prev.filter((value) => value !== category)
+      return [...prev, category]
+    })
+  }
+
   function handleAttendedFile(file, text) {
     const { names, error } = parseCSVText(text)
     setAttendedFile(file)
@@ -1254,6 +1434,7 @@ export default function MeetingReportTab() {
         report: result,
         reportMode,
         selectedSubgroups,
+        selectedCategories,
         attendedRawCount,
         label,
         savedAt: new Date().toISOString(),
@@ -1293,6 +1474,7 @@ export default function MeetingReportTab() {
               report: nextReport,
               reportMode,
               selectedSubgroups,
+              selectedCategories,
               attendedRawCount,
               label,
               savedAt: new Date().toISOString(),
@@ -1321,6 +1503,7 @@ export default function MeetingReportTab() {
     setMeetingLabel('')
     setReportMode('regional')
     setSelectedSubgroups([])
+    setSelectedCategories([])
     setAttendedFile(null)
     setAttendedNames([])
     setAttendedRawCount(0)
@@ -1339,6 +1522,7 @@ export default function MeetingReportTab() {
     setMeetingLabel(record.label ?? '')
     setReportMode('regional')
     setSelectedSubgroups([])
+    setSelectedCategories([])
     setAttendedRawCount(record.attended_count ?? 0)
     setRestoredFromSession(false)
     sessionStorage.setItem(
@@ -1348,6 +1532,7 @@ export default function MeetingReportTab() {
         report: nextReport,
         reportMode: 'regional',
         selectedSubgroups: [],
+        selectedCategories: [],
         attendedRawCount: record.attended_count ?? 0,
         label: record.label ?? '',
         savedAt: new Date().toISOString(),
@@ -1699,6 +1884,10 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
                 </div>
               </div>
             </div>
+
+              {report.share_token && (
+                <SubgroupShareLinksPanel report={report} />
+              )}
 
               {reportMode === 'regional' ? (
                 <>
@@ -2278,6 +2467,8 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
         <ReportModeSelector reportMode={reportMode} onChange={setReportMode} />
 
         <SubgroupPillBar subgroupOptions={subgroupOptions} selectedSubgroups={selectedSubgroups} onToggle={handleToggleSubgroup} />
+
+        <CategoryPillBar categoryOptions={leadershipCategoryOptions} selectedCategories={selectedCategories} onToggle={handleToggleCategory} />
 
         {filteredRoster.length === 0 && !rosterLoading && !rosterError && (
           <div style={{ marginTop: -6, fontSize: 11.5, color: '#E8A020' }}>
