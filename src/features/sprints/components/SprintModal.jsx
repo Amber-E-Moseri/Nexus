@@ -88,21 +88,19 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
         // Auto-create teams based on template
         if (template === 'single' && selectedDepts.length > 0) {
           const deptName = depts.find((d) => d.id === selectedDepts[0])?.name
-          await createSprintTeam(
-            saved.id,
-            deptName,
-            `${deptName} team for ${name.trim()}`,
-            profile.id,
-          )
+          await createSprintTeam(saved.id, {
+            name: deptName,
+            description: `${deptName} team for ${name.trim()}`,
+            lead_user_id: profile.id,
+          })
         } else if (template === 'multi' && selectedDepts.length > 0) {
           for (const deptId of selectedDepts) {
             const deptName = depts.find((d) => d.id === deptId)?.name
-            await createSprintTeam(
-              saved.id,
-              deptName,
-              `${deptName} team for ${name.trim()}`,
-              profile.id,
-            )
+            await createSprintTeam(saved.id, {
+              name: deptName,
+              description: `${deptName} team for ${name.trim()}`,
+              lead_user_id: profile.id,
+            })
           }
         }
       } else {
