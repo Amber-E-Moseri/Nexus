@@ -133,6 +133,15 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
           return true
         })
       }
+      if (filters?.dateRange?.startDate || filters?.dateRange?.endDate) {
+        const startISO = filters.dateRange.startDate || '0000-01-01'
+        const endISO = filters.dateRange.endDate || '9999-12-31'
+        filtered = filtered.filter((t) => {
+          if (!t.due_date) return false
+          const dueDateStr = t.due_date.slice(0, 10)
+          return dueDateStr >= startISO && dueDateStr <= endISO
+        })
+      }
       if (filters?.showDone === false) {
         filtered = filtered.filter((t) => !isTaskCompleted(t))
       }
