@@ -312,5 +312,19 @@ export async function saveMilestone(
   ).select().single()
 
   if (error) throw error
+
+  // Create reminders for the milestone
+  if (data?.id) {
+    try {
+      await supabase.rpc('create_milestone_reminders', {
+        p_task_milestone_id: data.id,
+        p_user_id: userId,
+      })
+    } catch (reminderError) {
+      console.error('Failed to create milestone reminders:', reminderError)
+      // Don't throw - milestone was saved successfully
+    }
+  }
+
   return data
 }
