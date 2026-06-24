@@ -19,12 +19,22 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react':   ['react', 'react-dom', 'react-router-dom'],
-          'vendor-supabase':['@supabase/supabase-js'],
-          'vendor-dnd':     ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
-          'vendor-radix':   ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-dropdown-menu'],
-          'vendor-ui':      ['lucide-react', 'date-fns'],
+        manualChunks(id) {
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router-dom')) {
+            return 'vendor-react'
+          }
+          if (id.includes('node_modules/@supabase/supabase-js')) {
+            return 'vendor-supabase'
+          }
+          if (id.includes('node_modules/@dnd-kit')) {
+            return 'vendor-dnd'
+          }
+          if (id.includes('node_modules/@radix-ui')) {
+            return 'vendor-radix'
+          }
+          if (id.includes('node_modules/lucide-react') || id.includes('node_modules/date-fns')) {
+            return 'vendor-ui'
+          }
         },
       },
     },

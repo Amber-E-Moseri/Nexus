@@ -6,8 +6,10 @@ import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabase'
 import { createTask } from '../features/tasks/lib/tasks'
-import { isTaskCancelled, isTaskCompleted, normalizeTaskRows } from '../lib/taskStatuses'
+import { isTaskCancelled, isTaskCompleted } from '../lib/taskStatuses'
+import { useMyTasks, getMilestoneForTask, saveMilestone } from '../features/tasks/hooks/useMyTasks'
 import TaskModal from '../features/tasks/components/TaskModal'
+import MilestoneCreator from '../features/tasks/components/MilestoneCreator'
 
 const PRIMARY = '#4C2A92'
 const BORDER = '#EDE8DC'
@@ -167,8 +169,7 @@ export default function Planner() {
   const { profile } = useAuth()
   const { showToast } = useToast()
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
-  const [tasks, setTasks] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { tasks: allTasks, milestones, isLoading } = useMyTasks(profile?.id || '')
   const [activeId, setActiveId] = useState(null)
   const [modalTask, setModalTask] = useState(null)
 
@@ -181,62 +182,35 @@ export default function Planner() {
   const weekEndISO = toISODate(addDays(weekStart, 6))
   const todayISO = toISODate(new Date())
 
-  const load = useCallback(async () => {
-    if (!profile?.id) return
-    setLoading(true)
-    try {
-      const orFilter = `created_by.eq.${profile.id},assignee_id.eq.${profile.id}`
-      const [backlogRes, weekRes] = await Promise.all([
-        supabase.from('tasks').select(TASK_SELECT).eq('created_by', profile.id).is('due_date', null).is('parent_task_id', null).limit(100),
-        supabase.from('tasks').select(TASK_SELECT).or(orFilter).gte('due_date', weekStartISO).lte('due_date', weekEndISO).is('parent_task_id', null).limit(200),
-      ])
-      if (backlogRes.error) throw backlogRes.error
-      if (weekRes.error) throw weekRes.error
-      // De-dupe (a task can match both created_by and assignee in the OR query).
-      const byId = new Map()
-      for (const row of [...(backlogRes.data ?? []), ...(weekRes.data ?? [])]) byId.set(row.id, row)
-      setTasks(normalizeTaskRows([...byId.values()]))
-    } catch (err) {
-      console.error('[planner] load failed', err)
-      showToast('Couldn’t load your planner.', { tone: 'error' })
-    } finally {
-      setLoading(false)
-    }
-  }, [profile?.id, weekStartISO, weekEndISO, showToast])
-
-  useEffect(() => { load() }, [load])
-
-  const backlog = useMemo(() => tasks.filter((t) => !t.due_date && isActionable(t)), [tasks])
+  const backlog = useMemo(() => allTasks.filter((t) => !t.due_date && isActionable(t)), [allTasks])
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
   const tasksByDay = useMemo(() => {
     const map = {}
-    for (const t of tasks) {
+    for (const t of allTasks) {
       if (!t.due_date || !isActionable(t)) continue
       const key = t.due_date.slice(0, 10)
       ;(map[key] ??= []).push(t)
     }
     return map
-  }, [tasks])
+  }, [allTasks])
 
   const kpis = useMemo(() => {
-    const inWeek = tasks.filter((t) => t.due_date && t.due_date.slice(0, 10) >= weekStartISO && t.due_date.slice(0, 10) <= weekEndISO)
+    const inWeek = allTasks.filter((t) => t.due_date && t.due_date.slice(0, 10) >= weekStartISO && t.due_date.slice(0, 10) <= weekEndISO)
     return {
       dueThisWeek: inWeek.filter(isActionable).length,
-      overdue: tasks.filter((t) => t.due_date && t.due_date.slice(0, 10) < todayISO && isActionable(t)).length,
+      overdue: allTasks.filter((t) => t.due_date && t.due_date.slice(0, 10) < todayISO && isActionable(t)).length,
       completedThisWeek: inWeek.filter((t) => isTaskCompleted(t)).length,
       noDate: backlog.length,
     }
-  }, [tasks, backlog, weekStartISO, weekEndISO, todayISO])
+  }, [allTasks, backlog, weekStartISO, weekEndISO, todayISO])
 
   async function rescheduleTask(taskId, newDue) {
-    const snapshot = tasks
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, due_date: newDue } : t)))
     const { error } = await supabase.from('tasks').update({ due_date: newDue }).eq('id', taskId)
     if (error) {
       console.error('[planner] reschedule failed', error)
-      setTasks(snapshot)
-      showToast('Couldn’t move that task. Reverted.', { tone: 'error' })
+      showToast("Couldn't move that task.", { tone: 'error' })
     }
+    // Real-time sync from hook will update the UI
   }
 
   function handleDragEnd({ active, over }) {
@@ -261,14 +235,14 @@ export default function Planner() {
         task_type: 'personal',
         source: 'manual',
       })
-      await load()
+      // Real-time sync from hook will update the UI
     } catch (err) {
       console.error('[planner] create failed', err)
-      showToast('Couldn’t create that task.', { tone: 'error' })
+      showToast("Couldn't create that task.", { tone: 'error' })
     }
   }
 
-  const activeTask = activeId ? tasks.find((t) => t.id === activeId) : null
+  const activeTask = activeId ? allTasks.find((t) => t.id === activeId) : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -299,7 +273,7 @@ export default function Planner() {
             style={{ flex: '0 0 280px', width: 280, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, padding: 12, maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}
           >
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>Backlog · No date</div>
-            {loading ? <div style={{ fontSize: 12, color: MUTED }}>Loading…</div> : backlog.length === 0 ? (
+            {isLoading ? <div style={{ fontSize: 12, color: MUTED }}>Loading…</div> : backlog.length === 0 ? (
               <div style={{ fontSize: 12, color: MUTED, padding: '8px 0' }}>Nothing in your backlog.</div>
             ) : backlog.map((t) => <DraggableTask key={t.id} task={t} onClick={setModalTask} />)}
           </DroppableColumn>
@@ -343,11 +317,12 @@ export default function Planner() {
         <TaskModal
           mode="edit"
           task={modalTask}
+          isReadOnly={true}
           departmentId={modalTask.department_id}
           sprintId={modalTask.sprint_id}
           onClose={() => setModalTask(null)}
-          onSaved={() => { setModalTask(null); load() }}
-          onDeleted={() => { setModalTask(null); load() }}
+          onSaved={() => { setModalTask(null) }}
+          onDeleted={() => { setModalTask(null) }}
         />
       ) : null}
     </div>
