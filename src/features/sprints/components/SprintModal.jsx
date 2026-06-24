@@ -320,50 +320,52 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
             )}
 
             {!success && (
-            <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>Name *</label>
-              <input
-                ref={titleRef}
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Healing Streams"
-                style={{ ...inputStyle, fontSize: 15, padding: '10px 12px' }}
-              />
-            </div>
+              <>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={labelStyle}>Name *</label>
+                  <input
+                    ref={titleRef}
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Healing Streams"
+                    style={{ ...inputStyle, fontSize: 15, padding: '10px 12px' }}
+                  />
+                </div>
 
-            <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>Goal</label>
-              <textarea
-                value={goal}
-                onChange={(e) => setGoal(e.target.value)}
-                rows={3}
-                placeholder="What is this sprint trying to achieve?"
-                style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
-              />
-            </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={labelStyle}>Goal</label>
+                  <textarea
+                    value={goal}
+                    onChange={(e) => setGoal(e.target.value)}
+                    rows={3}
+                    placeholder="What is this sprint trying to achieve?"
+                    style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
+                  />
+                </div>
 
-            <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>Description</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={4}
-                placeholder="Context, scope, and operating notes"
-                style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
-              />
-            </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={labelStyle}>Description</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={4}
+                    placeholder="Context, scope, and operating notes"
+                    style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
+                  />
+                </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={labelStyle}>Start date</label>
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>End date</label>
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={inputStyle} />
-              </div>
-            </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Start date</label>
+                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>End date</label>
+                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={inputStyle} />
+                  </div>
+                </div>
+              </>
             )}
           </div>
 

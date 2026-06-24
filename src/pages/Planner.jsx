@@ -305,7 +305,7 @@ export default function Planner() {
     if (!over) return
     const taskId = active.id
     const overId = String(over.id)
-    const current = tasks.find((t) => t.id === taskId)
+    const current = allTasks.find((t) => t.id === taskId)
     const newDue = overId === 'backlog' ? null : overId.startsWith('day:') ? overId.slice(4) : undefined
     if (newDue === undefined) return
     if ((current?.due_date?.slice(0, 10) ?? null) === newDue) return
@@ -341,11 +341,11 @@ export default function Planner() {
           <span style={{ fontSize: 13, fontWeight: 700, color: TEXT, minWidth: 130, textAlign: 'center' }}>{formatRange(weekStart)}</span>
           <button type="button" onClick={() => setWeekStart((w) => addDays(w, 7))} aria-label="Next week" style={navBtn}><ChevronRight size={16} /></button>
           <button type="button" onClick={() => setWeekStart(startOfWeek(new Date()))} aria-label="Go to current week" style={{ ...navBtn, width: 'auto', padding: '0 12px', fontSize: 12, fontWeight: 700 }}>Today</button>
-          <button type="button" onClick={() => setFiltersPanelOpen(!filtersPanelOpen)} style={{ ...navBtn, background: Object.values(filters).some((v) => v) ? 'var(--accent-light)' : undefined }} title="Filter tasks">
+          <button type="button" onClick={() => setFiltersPanelOpen(!filtersPanelOpen)} style={{ ...navBtn, background: (filters.status.length > 0 || filters.priority.length > 0 || filters.dueDateRange || filters.assigneeId || filters.taskType.length > 0 || filters.source.length > 0 || filters.showDone || filters.hasComments || filters.hasDependencies) ? 'var(--accent-light)' : undefined }} title="Filter tasks">
             <SlidersHorizontal size={16} />
-            {Object.values(filters).some((v) => v) && (
+            {(filters.status.length > 0 || filters.priority.length > 0 || filters.dueDateRange || filters.assigneeId || filters.taskType.length > 0 || filters.source.length > 0 || filters.showDone || filters.hasComments || filters.hasDependencies) && (
               <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 4, color: 'var(--accent)' }}>
-                {Object.values(filters).filter((v) => v).length}
+                {filters.status.length + filters.priority.length + (filters.dueDateRange ? 1 : 0) + (filters.assigneeId ? 1 : 0) + filters.taskType.length + filters.source.length + (filters.showDone ? 1 : 0) + (filters.hasComments ? 1 : 0) + (filters.hasDependencies ? 1 : 0)}
               </span>
             )}
           </button>
@@ -368,56 +368,80 @@ export default function Planner() {
       )}
 
       {/* Active Filters Display */}
-      {Object.values(filters).some((v) => v) && (
+      {(filters.status.length > 0 || filters.priority.length > 0 || filters.dueDateRange || filters.assigneeId || filters.taskType.length > 0 || filters.source.length > 0 || filters.showDone || filters.hasComments || filters.hasDependencies) && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12, alignItems: 'center' }}>
-          {filters.space && (
+          {filters.status.length > 0 && filters.status.map((statusId) => (
+            <span key={statusId} style={{ fontSize: 12, background: '#DCFCE7', color: '#166534', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Status: {statuses.find((s) => s.id === statusId)?.name}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, status: filters.status.filter((s) => s !== statusId) })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {filters.priority.length > 0 && filters.priority.map((priority) => (
+            <span key={priority} style={{ fontSize: 12, background: '#FEE2E2', color: '#991B1B', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Priority: {priority}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, priority: filters.priority.filter((p) => p !== priority) })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {filters.dueDateRange && (
             <span style={{ fontSize: 12, background: '#DBEAFE', color: '#1E40AF', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-              Space: {spaces.find((s) => s.id === filters.space)?.name}
+              Due: {filters.dueDateRange}
               <button
                 type="button"
-                onClick={() => setFilters({ ...filters, space: null })}
+                onClick={() => setFilters({ ...filters, dueDateRange: null })}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
               >
                 ×
               </button>
             </span>
           )}
-          {filters.status && (
-            <span style={{ fontSize: 12, background: '#DCFCE7', color: '#166534', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-              Status: {statuses.find((s) => s.id === filters.status)?.name}
-              <button
-                type="button"
-                onClick={() => setFilters({ ...filters, status: null })}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
-              >
-                ×
-              </button>
-            </span>
-          )}
-          {filters.assignee && (
+          {filters.assigneeId && (
             <span style={{ fontSize: 12, background: '#F3E8FF', color: '#6B21A8', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-              Assignee: {members.find((m) => m.id === filters.assignee)?.name}
+              Assignee: {members.find((m) => m.id === filters.assigneeId)?.name}
               <button
                 type="button"
-                onClick={() => setFilters({ ...filters, assignee: null })}
+                onClick={() => setFilters({ ...filters, assigneeId: null })}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
               >
                 ×
               </button>
             </span>
           )}
-          {filters.tag && (
-            <span style={{ fontSize: 12, background: '#FEF3C7', color: '#92400E', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-              Tag: {filters.tag}
+          {filters.taskType.length > 0 && filters.taskType.map((type) => (
+            <span key={type} style={{ fontSize: 12, background: '#FEF3C7', color: '#92400E', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Type: {type}
               <button
                 type="button"
-                onClick={() => setFilters({ ...filters, tag: null })}
+                onClick={() => setFilters({ ...filters, taskType: filters.taskType.filter((t) => t !== type) })}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
               >
                 ×
               </button>
             </span>
-          )}
+          ))}
+          {filters.source.length > 0 && filters.source.map((source) => (
+            <span key={source} style={{ fontSize: 12, background: '#E0E7FF', color: '#3730A3', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Source: {source}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, source: filters.source.filter((s) => s !== source) })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
           <button
             type="button"
             onClick={clearFilters}

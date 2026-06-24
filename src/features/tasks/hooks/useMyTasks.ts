@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { useToast } from '../../../context/ToastContext'
 import { supabase } from '../../../lib/supabase'
-import { normalizeTaskRows } from '../../../lib/taskStatuses'
+import { normalizeTaskRows, isTaskCompleted } from '../../../lib/taskStatuses'
 
 interface UseMyTasksFilter {
   space?: string | null
@@ -97,14 +97,50 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
 
       // Apply client-side filters if needed
       let filtered = tasksWithMilestones
-      if (filters?.status) {
-        filtered = filtered.filter((t) => t.status === filters.status)
+
+      if (filters?.status && filters.status.length > 0) {
+        filtered = filtered.filter((t) => filters.status.includes(t.status_id))
       }
-      if (filters?.assignee) {
-        filtered = filtered.filter((t) => t.assignee_id === filters.assignee)
+      if (filters?.priority && filters.priority.length > 0) {
+        filtered = filtered.filter((t) => filters.priority.includes(t.priority))
       }
-      if (filters?.space) {
-        filtered = filtered.filter((t) => t.department_id === filters.space)
+      if (filters?.assigneeId) {
+        filtered = filtered.filter((t) => t.assignee_id === filters.assigneeId)
+      }
+      if (filters?.taskType && filters.taskType.length > 0) {
+        filtered = filtered.filter((t) => filters.taskType.includes(t.task_type))
+      }
+      if (filters?.source && filters.source.length > 0) {
+        filtered = filtered.filter((t) => filters.source.includes(t.source ?? 'manual'))
+      }
+      if (filters?.dueDateRange) {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const todayISO = today.toISOString().split('T')[0]
+        const weekStart = new Date(today)
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay())
+        const weekStartISO = weekStart.toISOString().split('T')[0]
+        const weekEndISO = new Date(weekStart)
+        weekEndISO.setDate(weekEndISO.getDate() + 6)
+        const weekEndDateISO = weekEndISO.toISOString().split('T')[0]
+
+        filtered = filtered.filter((t) => {
+          if (!t.due_date) return false
+          const dueDateStr = t.due_date.slice(0, 10)
+          if (filters.dueDateRange === 'overdue') return dueDateStr < todayISO && !isTaskCompleted(t)
+          if (filters.dueDateRange === 'today') return dueDateStr === todayISO
+          if (filters.dueDateRange === 'this_week') return dueDateStr >= weekStartISO && dueDateStr <= weekEndDateISO
+          return true
+        })
+      }
+      if (filters?.showDone === false) {
+        filtered = filtered.filter((t) => !isTaskCompleted(t))
+      }
+      if (filters?.hasComments) {
+        filtered = filtered.filter((t) => t.comments?.count > 0)
+      }
+      if (filters?.hasDependencies) {
+        filtered = filtered.filter((t) => t.dependencies?.count > 0)
       }
 
       setTasks(filtered)

@@ -21,6 +21,47 @@ const SOURCE_LABELS = {
   zoom: 'Zoom',
 }
 
+function formatDate(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function getThisWeekDates() {
+  const today = new Date()
+  const dayOfWeek = today.getDay()
+  const startOfWeek = new Date(today)
+  startOfWeek.setDate(today.getDate() - dayOfWeek)
+  const endOfWeek = new Date(startOfWeek)
+  endOfWeek.setDate(startOfWeek.getDate() + 6)
+  return { start: formatDate(startOfWeek), end: formatDate(endOfWeek) }
+}
+
+function getNextWeekDates() {
+  const today = new Date()
+  const dayOfWeek = today.getDay()
+  const startOfWeek = new Date(today)
+  startOfWeek.setDate(today.getDate() - dayOfWeek + 7)
+  const endOfWeek = new Date(startOfWeek)
+  endOfWeek.setDate(startOfWeek.getDate() + 6)
+  return { start: formatDate(startOfWeek), end: formatDate(endOfWeek) }
+}
+
+function getThisMonthDates() {
+  const today = new Date()
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+  return { start: formatDate(startOfMonth), end: formatDate(endOfMonth) }
+}
+
+function getNext30DaysDates() {
+  const today = new Date()
+  const in30Days = new Date(today)
+  in30Days.setDate(today.getDate() + 30)
+  return { start: formatDate(today), end: formatDate(in30Days) }
+}
+
 const PILL_BASE = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -175,6 +216,116 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
                   onRemove={() => toggleDueRange(range.value)}
                 />
               ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: 10 }}>
+            <SectionTitle>Date Range</SectionTitle>
+            <div style={{ display: 'grid', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>From</label>
+                  <input
+                    type="date"
+                    value={filters.dateRange?.startDate ?? ''}
+                    onChange={(e) => setFilters((prev) => ({
+                      ...prev,
+                      dateRange: { ...prev.dateRange, startDate: e.target.value || null }
+                    }))}
+                    style={{
+                      width: '100%',
+                      fontSize: 12,
+                      padding: '6px 8px',
+                      border: '1px solid var(--border)',
+                      borderRadius: 6,
+                      background: filters.dateRange?.startDate ? 'var(--accent-light)' : 'white',
+                      color: filters.dateRange?.startDate ? 'var(--accent)' : 'var(--text-primary)',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>To</label>
+                  <input
+                    type="date"
+                    value={filters.dateRange?.endDate ?? ''}
+                    onChange={(e) => setFilters((prev) => ({
+                      ...prev,
+                      dateRange: { ...prev.dateRange, endDate: e.target.value || null }
+                    }))}
+                    style={{
+                      width: '100%',
+                      fontSize: 12,
+                      padding: '6px 8px',
+                      border: '1px solid var(--border)',
+                      borderRadius: 6,
+                      background: filters.dateRange?.endDate ? 'var(--accent-light)' : 'white',
+                      color: filters.dateRange?.endDate ? 'var(--accent)' : 'var(--text-primary)',
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {[
+                  { label: 'This Week', fn: () => getThisWeekDates() },
+                  { label: 'Next Week', fn: () => getNextWeekDates() },
+                  { label: 'This Month', fn: () => getThisMonthDates() },
+                  { label: 'Next 30 Days', fn: () => getNext30DaysDates() },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      const { start, end } = preset.fn()
+                      setFilters((prev) => ({
+                        ...prev,
+                        dateRange: { startDate: start, endDate: end }
+                      }))
+                    }}
+                    style={{
+                      fontSize: 11,
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      border: '1px solid var(--border)',
+                      background: 'white',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = 'var(--accent-light)'
+                      e.target.style.color = 'var(--accent)'
+                      e.target.style.borderColor = 'var(--accent)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = 'white'
+                      e.target.style.color = 'var(--text-secondary)'
+                      e.target.style.borderColor = 'var(--border)'
+                    }}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+                {(filters.dateRange?.startDate || filters.dateRange?.endDate) && (
+                  <button
+                    type="button"
+                    onClick={() => setFilters((prev) => ({
+                      ...prev,
+                      dateRange: { startDate: null, endDate: null }
+                    }))}
+                    style={{
+                      fontSize: 11,
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      border: '1px solid var(--border)',
+                      background: 'white',
+                      color: 'var(--text-tertiary)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
