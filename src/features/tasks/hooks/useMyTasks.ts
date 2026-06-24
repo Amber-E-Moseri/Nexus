@@ -6,10 +6,18 @@ import { normalizeTaskRows, isTaskCompleted } from '../../../lib/taskStatuses'
 
 interface UseMyTasksFilter {
   space?: string | null
-  status?: string | null
+  status?: string[] | null
   assignee?: string | null
   tag?: string | null
-  dateRange?: [Date, Date] | null
+  priority?: string[] | null
+  dateRange?: { startDate: string | null; endDate: string | null } | null
+  dueDateRange?: string | null
+  taskType?: string[] | null
+  source?: string[] | null
+  milestoneStatus?: string[] | null
+  showDone?: boolean
+  hasComments?: boolean
+  hasDependencies?: boolean
 }
 
 interface UseMyTasksReturn {
@@ -150,6 +158,31 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
       }
       if (filters?.hasDependencies) {
         filtered = filtered.filter((t) => t.dependencies?.count > 0)
+      }
+      if (filters?.milestoneStatus && filters.milestoneStatus.length > 0) {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const todayISO = today.toISOString().split('T')[0]
+
+        filtered = filtered.filter((t) => {
+          const milestone = t.milestone
+          for (const statusFilter of filters.milestoneStatus) {
+            if (statusFilter === 'no_milestone' && !milestone) return true
+            if (statusFilter === 'milestone_overdue' && milestone) {
+              const milestoneDate = milestone.milestone_date.slice(0, 10)
+              if (milestoneDate < todayISO && !isTaskCompleted(t)) return true
+            }
+            if (statusFilter === 'milestone_today' && milestone) {
+              const milestoneDate = milestone.milestone_date.slice(0, 10)
+              if (milestoneDate === todayISO) return true
+            }
+            if (statusFilter === 'milestone_upcoming' && milestone) {
+              const milestoneDate = milestone.milestone_date.slice(0, 10)
+              if (milestoneDate > todayISO) return true
+            }
+          }
+          return false
+        })
       }
 
       setTasks(filtered)

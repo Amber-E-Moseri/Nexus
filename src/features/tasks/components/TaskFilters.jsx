@@ -403,6 +403,26 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
           ) : null}
 
           <div style={{ display: 'grid', gap: 10 }}>
+            <SectionTitle>Milestone</SectionTitle>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {[
+                { value: 'no_milestone', label: 'No milestone' },
+                { value: 'milestone_overdue', label: 'Milestone overdue' },
+                { value: 'milestone_today', label: 'Milestone due today' },
+                { value: 'milestone_upcoming', label: 'Milestone upcoming' },
+              ].map((option) => (
+                <FilterPill
+                  key={option.value}
+                  label={option.label}
+                  active={filters.milestoneStatus?.includes(option.value)}
+                  onClick={() => toggleMulti('milestoneStatus', option.value)}
+                  onRemove={() => toggleMulti('milestoneStatus', option.value)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: 10 }}>
             <SectionTitle>More</SectionTitle>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               <FilterPill

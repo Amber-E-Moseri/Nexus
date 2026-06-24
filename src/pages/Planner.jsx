@@ -205,6 +205,7 @@ export default function Planner() {
           assigneeId: null,
           taskType: [],
           source: [],
+          milestoneStatus: [],
           showDone: false,
           hasComments: false,
           hasDependencies: false,
@@ -279,7 +280,7 @@ export default function Planner() {
   }, [])
 
   const hasActiveFilters = useCallback(() => {
-    return filters.status.length > 0 || filters.priority.length > 0 || filters.dueDateRange || (filters.dateRange?.startDate || filters.dateRange?.endDate) || filters.assigneeId || filters.taskType.length > 0 || filters.source.length > 0 || filters.showDone || filters.hasComments || filters.hasDependencies
+    return filters.status.length > 0 || filters.priority.length > 0 || filters.dueDateRange || (filters.dateRange?.startDate || filters.dateRange?.endDate) || filters.assigneeId || filters.taskType.length > 0 || filters.source.length > 0 || filters.milestoneStatus?.length > 0 || filters.showDone || filters.hasComments || filters.hasDependencies
   }, [filters])
 
   const clearFilters = useCallback(() => {
@@ -291,6 +292,7 @@ export default function Planner() {
       assigneeId: null,
       taskType: [],
       source: [],
+      milestoneStatus: [],
       showDone: false,
       hasComments: false,
       hasDependencies: false,
