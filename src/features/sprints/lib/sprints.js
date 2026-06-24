@@ -134,6 +134,31 @@ export async function createSprint(data, createdBy) {
   return sprint
 }
 
+export async function createSprintWithTemplate(p_name, p_goal, p_description, p_start_date, p_end_date, p_template_type, p_selected_dept_ids, p_created_by) {
+  const { data, error } = await supabase.rpc('create_sprint_with_template', {
+    p_name,
+    p_goal,
+    p_description,
+    p_start_date,
+    p_end_date,
+    p_template_type,
+    p_selected_dept_ids,
+    p_created_by,
+  })
+
+  if (error) throw error
+  return data && data.length > 0 ? data[0] : null
+}
+
+export async function getActiveSprintsForSidebar(userId) {
+  const { data, error } = await supabase.rpc('get_active_sprints_for_sidebar', {
+    p_user_id: userId,
+  })
+
+  if (error) throw error
+  return data || []
+}
+
 export async function updateSprint(sprintId, updates) {
   const { data, error } = await supabase
     .from('sprints')

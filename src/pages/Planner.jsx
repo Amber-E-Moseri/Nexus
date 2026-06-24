@@ -197,7 +197,17 @@ export default function Planner() {
     const saved = typeof window !== 'undefined' ? localStorage.getItem('planner_filters') : null
     return saved
       ? JSON.parse(saved)
-      : { space: null, status: null, assignee: null, tag: null, dateRange: null }
+      : {
+          status: [],
+          priority: [],
+          dueDateRange: null,
+          assigneeId: null,
+          taskType: [],
+          source: [],
+          showDone: false,
+          hasComments: false,
+          hasDependencies: false,
+        }
   })
 
   useEffect(() => {
@@ -237,7 +247,17 @@ export default function Planner() {
   }, [])
 
   const clearFilters = useCallback(() => {
-    setFilters({ space: null, status: null, assignee: null, tag: null, dateRange: null })
+    setFilters({
+      status: [],
+      priority: [],
+      dueDateRange: null,
+      assigneeId: null,
+      taskType: [],
+      source: [],
+      showDone: false,
+      hasComments: false,
+      hasDependencies: false,
+    })
   }, [])
 
   const sensors = useSensors(

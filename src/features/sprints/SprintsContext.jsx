@@ -1,28 +1,35 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { getMySprints } from './lib/sprints'
+import { getMySprints, getActiveSprintsForSidebar } from './lib/sprints'
 
 export const SprintsContext = createContext(null)
 
 export function SprintsProvider({ children }) {
   const { user } = useAuth()
   const [sprints, setSprints] = useState([])
+  const [sidebarSprints, setSidebarSprints] = useState([])
   const [loading, setLoading] = useState(true)
 
   const loadSprints = useCallback(async () => {
     if (!user) {
       setSprints([])
+      setSidebarSprints([])
       setLoading(false)
       return
     }
 
     try {
       setLoading(true)
-      const data = await getMySprints()
-      setSprints(data)
+      const [allSprints, activeSidebarSprints] = await Promise.all([
+        getMySprints(),
+        getActiveSprintsForSidebar(user.id),
+      ])
+      setSprints(allSprints)
+      setSidebarSprints(activeSidebarSprints)
     } catch (err) {
       console.error('Failed to load sprints:', err)
       setSprints([])
+      setSidebarSprints([])
     } finally {
       setLoading(false)
     }
@@ -32,8 +39,9 @@ export function SprintsProvider({ children }) {
     loadSprints()
   }, [loadSprints])
 
-  const activeSprints = sprints.filter((sprint) => sprint.status === 'active')
-  const planningSprints = sprints.filter((sprint) => sprint.status === 'planning')
+  // For sidebar: use filtered active sprints
+  const activeSprints = sidebarSprints.filter((sprint) => sprint.status === 'active')
+  const planningSprints = sidebarSprints.filter((sprint) => sprint.status === 'planning')
 
   return (
     <SprintsContext.Provider

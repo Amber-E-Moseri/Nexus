@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
-import { createSprint, updateSprint, getDepartments, createSprintTeam } from '../lib/sprints'
+import { createSprint, createSprintWithTemplate, updateSprint, getDepartments, createSprintTeam } from '../lib/sprints'
 
 const inputStyle = {
   width: '100%',
@@ -37,6 +37,8 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
   const [selectedDepts, setSelectedDepts] = useState([])
   const [depts, setDepts] = useState([])
   const [deptsLoading, setDeptsLoading] = useState(false)
+  const [createdTeams, setCreatedTeams] = useState(null)
+  const [success, setSuccess] = useState(false)
   const titleRef = useRef(null)
 
   useEffect(() => {
@@ -70,48 +72,73 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
 
     setSaving(true)
     setError(null)
-
-    const payload = {
-      name: name.trim(),
-      goal: goal.trim() || null,
-      description: description.trim() || null,
-      start_date: startDate || null,
-      end_date: endDate || null,
-      department_id: template === 'single' ? selectedDepts[0] : null,
-    }
+    setSuccess(false)
 
     try {
       let saved
       if (mode === 'create') {
-        saved = await createSprint(payload, profile.id)
+        if ((template === 'single' || template === 'multi') && selectedDepts.length > 0) {
+          // Use new RPC that auto-populates members
+          const result = await createSprintWithTemplate(
+            name.trim(),
+            goal.trim() || null,
+            description.trim() || null,
+            startDate || null,
+            endDate || null,
+            template === 'single' ? 'single_dept' : 'multi_dept',
+            selectedDepts,
+            profile.id
+          )
 
-        // Auto-create teams based on template
-        if (template === 'single' && selectedDepts.length > 0) {
-          const deptName = depts.find((d) => d.id === selectedDepts[0])?.name
-          await createSprintTeam(saved.id, {
-            name: deptName,
-            description: `${deptName} team for ${name.trim()}`,
-            lead_user_id: profile.id,
-          })
-        } else if (template === 'multi' && selectedDepts.length > 0) {
-          for (const deptId of selectedDepts) {
-            const deptName = depts.find((d) => d.id === deptId)?.name
-            await createSprintTeam(saved.id, {
-              name: deptName,
-              description: `${deptName} team for ${name.trim()}`,
-              lead_user_id: profile.id,
-            })
+          if (result) {
+            saved = {
+              id: result.sprint_id,
+              name: name.trim(),
+              goal: goal.trim() || null,
+              description: description.trim() || null,
+              start_date: startDate || null,
+              end_date: endDate || null,
+              status: 'planning',
+              is_archived: false,
+              created_by: profile.id,
+              created_at: new Date().toISOString(),
+              department_id: template === 'single' ? selectedDepts[0] : null,
+            }
+            setCreatedTeams(result.created_teams || [])
+            setSuccess(true)
           }
+        } else {
+          // Custom template - no auto-creation
+          const payload = {
+            name: name.trim(),
+            goal: goal.trim() || null,
+            description: description.trim() || null,
+            start_date: startDate || null,
+            end_date: endDate || null,
+            department_id: null,
+          }
+          saved = await createSprint(payload, profile.id)
+          setSuccess(true)
         }
       } else {
+        const payload = {
+          name: name.trim(),
+          goal: goal.trim() || null,
+          description: description.trim() || null,
+          start_date: startDate || null,
+          end_date: endDate || null,
+        }
         saved = await updateSprint(sprint.id, payload)
+        setSuccess(true)
       }
 
-      onSaved?.(saved)
-      onClose()
+      // Close modal after showing success message
+      setTimeout(() => {
+        onSaved?.(saved)
+        onClose()
+      }, 1500)
     } catch (err) {
       setError(err.message)
-    } finally {
       setSaving(false)
     }
   }
@@ -159,13 +186,36 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-            {error ? (
-              <div style={{ marginBottom: 14, padding: '8px 12px', borderRadius: 8, background: 'var(--coral-light)', color: 'var(--coral-dark)', fontSize: 13 }}>
-                {error}
+            {success && createdTeams ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', justifyContent: 'center', minHeight: '300px' }}>
+                <div style={{ fontSize: 32, color: '#2D8653' }}>✓</div>
+                <div style={{ textAlign: 'center' }}>
+                  <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+                    {name} created with {createdTeams.length} team{createdTeams.length !== 1 ? 's' : ''}
+                  </h2>
+                  {createdTeams.length > 0 && (
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                      {createdTeams.map((team) => (
+                        <div key={team.id} style={{ marginBottom: 6 }}>
+                          • <strong>{team.name}</strong> ({team.member_count} member{team.member_count !== 1 ? 's' : ''} auto-added)
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 12 }}>
+                    You can adjust members in the Teams panel.
+                  </p>
+                </div>
               </div>
-            ) : null}
+            ) : (
+              <>
+                {error ? (
+                  <div style={{ marginBottom: 14, padding: '8px 12px', borderRadius: 8, background: 'var(--coral-light)', color: 'var(--coral-dark)', fontSize: 13 }}>
+                    {error}
+                  </div>
+                ) : null}
 
-            {mode === 'create' ? (
+                {mode === 'create' ? (
               <>
                 <fieldset style={{ marginBottom: 14, border: '1px solid var(--border)', borderRadius: 8, padding: '12px' }}>
                   <legend style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: 2, paddingRight: 6 }}>
@@ -265,8 +315,11 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
                   </div>
                 )}
               </>
-            ) : null}
+                ) : null}
+              </>
+            )}
 
+            {!success && (
             <div style={{ marginBottom: 14 }}>
               <label style={labelStyle}>Name *</label>
               <input
@@ -311,8 +364,10 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
                 <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={inputStyle} />
               </div>
             </div>
+            )}
           </div>
 
+          {!success && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface-secondary)' }}>
             <Dialog.Close
               style={{ fontSize: 13, padding: '7px 16px', borderRadius: 8, cursor: 'pointer', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
@@ -328,6 +383,7 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
               {saving ? 'Saving…' : mode === 'create' ? 'Create sprint' : 'Save changes'}
             </button>
           </div>
+          )}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
