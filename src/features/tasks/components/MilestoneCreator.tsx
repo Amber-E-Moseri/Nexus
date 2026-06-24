@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Calendar, X } from 'lucide-react'
 import { saveMilestone } from '../hooks/useMyTasks'
 import { useToast } from '../../../context/ToastContext'
+import MilestoneTemplateManager from './MilestoneTemplateManager'
 
 interface MilestoneCreatorProps {
   task: {
@@ -127,6 +128,17 @@ export default function MilestoneCreator({
     )
   }
 
+  function applyTemplate(template: any) {
+    if (task.due_date) {
+      const dueDate = new Date(task.due_date)
+      const milestoneDate = new Date(dueDate)
+      milestoneDate.setDate(milestoneDate.getDate() + template.offset_days)
+      const isoDate = milestoneDate.toISOString().split('T')[0]
+      setMilestoneDate(isoDate)
+      setLabel(template.name)
+    }
+  }
+
   return (
     <div style={{ marginTop: 12, padding: 12, background: 'var(--surface-secondary)', borderRadius: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -140,6 +152,13 @@ export default function MilestoneCreator({
         >
           <X size={16} color="var(--text-tertiary)" />
         </button>
+      </div>
+
+      <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+        <MilestoneTemplateManager
+          userId={userId}
+          onTemplateSelected={applyTemplate}
+        />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
