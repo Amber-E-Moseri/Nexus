@@ -1,0 +1,229 @@
+import { useCallback, useEffect, useState } from 'react'
+import { useAuth } from '../../../hooks/useAuth'
+import { useToast } from '../../../context/ToastContext'
+import { supabase } from '../../../lib/supabase'
+import { normalizeTaskRows } from '../../../lib/taskStatuses'
+
+interface UseMyTasksFilter {
+  space?: string | null
+  status?: string | null
+  assignee?: string | null
+  tag?: string | null
+  dateRange?: [Date, Date] | null
+}
+
+interface UseMyTasksReturn {
+  tasks: any[]
+  milestones: any[]
+  isLoading: boolean
+  error: Error | null
+  refetch: () => Promise<void>
+}
+
+/**
+ * Unified hook for My Tasks and Planner pages
+ * Fetches all personal tasks: created_by, assigned_to, or owned spaces
+ * Includes real-time sync for both tasks and milestones
+ */
+export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange?: [Date, Date]): UseMyTasksReturn {
+  const { showToast } = useToast()
+  const [tasks, setTasks] = useState<any[]>([])
+  const [milestones, setMilestones] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+
+  const TASK_SELECT = `
+    id, title, description, priority, status, status_id, due_date, created_at,
+    department_id, assignee_id, created_by, task_type, sprint_id, list_id,
+    status_definition:task_status_definitions!status_id(
+      id, name, color, category, legacy_key, department_id
+    ),
+    assignee:users!assignee_id(id, name, avatar_url),
+    creator:users!created_by(id, name),
+    space:departments(id, name, color),
+    comments:task_comments(count),
+    files:task_files(count),
+    dependencies:task_dependencies!task_id(count)
+  `
+
+  // Fetch tasks and milestones
+  const load = useCallback(async () => {
+    if (!userId) return
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      // Build base query: created_by OR assigned_to OR space owner
+      let query = supabase.from('tasks').select(TASK_SELECT)
+
+      // Filter by user
+      query = query.or(`created_by.eq.${userId},assignee_id.eq.${userId}`)
+
+      // Filter by date range if provided
+      const actualDateRange = dateRange || filters?.dateRange
+      if (actualDateRange) {
+        const [start, end] = actualDateRange
+        const startISO = start.toISOString().split('T')[0]
+        const endISO = end.toISOString().split('T')[0]
+        query = query.gte('due_date', startISO).lte('due_date', endISO)
+      }
+
+      // Order by due date, then creation
+      query = query.order('due_date', { ascending: true }).order('created_at', { ascending: false })
+
+      const { data: tasksData, error: tasksError } = await query
+
+      if (tasksError) throw tasksError
+
+      // Fetch milestones for this user
+      const { data: milestonesData, error: milestonesError } = await supabase
+        .from('task_milestones')
+        .select('id, task_id, user_id, milestone_date, label, created_at, updated_at')
+        .eq('user_id', userId)
+
+      if (milestonesError) throw milestonesError
+
+      // Normalize task rows (status handling, etc.)
+      const normalizedTasks = normalizeTaskRows(tasksData || [])
+
+      // Apply client-side filters if needed
+      let filtered = normalizedTasks
+      if (filters?.status) {
+        filtered = filtered.filter((t) => t.status === filters.status)
+      }
+      if (filters?.assignee) {
+        filtered = filtered.filter((t) => t.assignee_id === filters.assignee)
+      }
+      if (filters?.space) {
+        filtered = filtered.filter((t) => t.department_id === filters.space)
+      }
+
+      setTasks(filtered)
+      setMilestones(milestonesData || [])
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Failed to load tasks')
+      setError(error)
+      showToast(error.message, { tone: 'error' })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [userId, filters?.status, filters?.assignee, filters?.space, dateRange, filters?.dateRange, showToast])
+
+  // Initial load
+  useEffect(() => {
+    load()
+  }, [load])
+
+  // Real-time sync for tasks
+  useEffect(() => {
+    if (!userId) return
+
+    const taskSubscription = supabase
+      .channel(`tasks:user:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks',
+          filter: `or(created_by.eq.${userId},assignee_id.eq.${userId})`,
+        },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            setTasks((prev) => prev.filter((t) => t.id !== payload.old.id))
+          } else {
+            // Refetch to get full normalized data
+            load()
+          }
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(taskSubscription)
+    }
+  }, [userId, load])
+
+  // Real-time sync for milestones
+  useEffect(() => {
+    if (!userId) return
+
+    const milestoneSubscription = supabase
+      .channel(`task_milestones:user:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'task_milestones',
+          filter: `user_id.eq.${userId}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            setMilestones((prev) => prev.filter((m) => m.id !== payload.old.id))
+          } else if (payload.eventType === 'INSERT') {
+            setMilestones((prev) => [...prev, payload.new])
+          } else {
+            setMilestones((prev) =>
+              prev.map((m) => (m.id === payload.new.id ? payload.new : m)),
+            )
+          }
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(milestoneSubscription)
+    }
+  }, [userId])
+
+  return {
+    tasks,
+    milestones,
+    isLoading,
+    error,
+    refetch: load,
+  }
+}
+
+/**
+ * Helper to get milestone for a specific task
+ */
+export function getMilestoneForTask(milestones: any[], taskId: string) {
+  return milestones.find((m) => m.task_id === taskId)
+}
+
+/**
+ * Save or update milestone
+ */
+export async function saveMilestone(
+  taskId: string,
+  userId: string,
+  milestoneDate: string | null,
+  label?: string,
+) {
+  if (!milestoneDate) {
+    // Delete milestone
+    const { error } = await supabase
+      .from('task_milestones')
+      .delete()
+      .eq('task_id', taskId)
+      .eq('user_id', userId)
+    if (error) throw error
+    return null
+  }
+
+  // Upsert milestone
+  const { data, error } = await supabase.from('task_milestones').upsert(
+    {
+      task_id: taskId,
+      user_id: userId,
+      milestone_date: milestoneDate,
+      label: label || null,
+    },
+    { onConflict: 'task_id,user_id' },
+  ).select().single()
+
+  if (error) throw error
+  return data
+}
