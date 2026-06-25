@@ -6,3 +6,4 @@ export { GoogleCalendarConnect } from './GoogleCalendarConnect.jsx';
 export { SubscriptionManager } from './SubscriptionManager.jsx';
 export { CalendarEventList } from './CalendarEventList.jsx';
 export { ApprovalQueue } from './ApprovalQueue.jsx';
+export { CalendarGrid } from './CalendarGrid.jsx';
