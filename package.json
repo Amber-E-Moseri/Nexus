@@ -22,6 +22,8 @@
     "esbuild": "^0.28.1",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
+    "leaflet": "^1.9.4",
+    "leaflet.markercluster": "^1.5.3",
     "lucide-react": "^0.525.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -35,5 +37,8 @@
     "vite": "^7.3.5",
     "vite-bundle-visualizer": "^1.2.1",
     "vitest": "^4.1.9"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   }
 }

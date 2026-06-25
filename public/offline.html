@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#4C2A92" />
+  <title>Offline — BLW Nexus</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #4C2A92 0%, #667eea 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #2D2A22;
+    }
+
+    .offline-container {
+      background: white;
+      border-radius: 24px;
+      padding: 40px 32px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 20px 40px rgba(28, 22, 16, 0.15);
+      text-align: center;
+    }
+
+    .offline-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 24px;
+      background: #F3E8FF;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #2D2A22;
+    }
+
+    .status-message {
+      font-size: 14px;
+      color: #6B6360;
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+
+    .status-details {
+      font-size: 12px;
+      color: #9E9488;
+      margin-bottom: 24px;
+      padding: 12px;
+      background: #F4F1EA;
+      border-radius: 8px;
+      border-left: 3px solid #4C2A92;
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .btn-retry {
+      background: #4C2A92;
+      color: white;
+    }
+
+    .btn-retry:hover {
+      background: #3a1f6e;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(76, 42, 146, 0.3);
+    }
+
+    .btn-home {
+      background: transparent;
+      color: #4C2A92;
+      border: 1px solid #4C2A92;
+    }
+
+    .btn-home:hover {
+      background: #F3E8FF;
+    }
+
+    .offline-tips {
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid #EDE8DC;
+      text-align: left;
+    }
+
+    .offline-tips h3 {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #9E9488;
+      margin-bottom: 12px;
+      letter-spacing: 0.04em;
+    }
+
+    .offline-tips ul {
+      list-style: none;
+      font-size: 12px;
+      color: #6B6360;
+      line-height: 1.6;
+    }
+
+    .offline-tips li {
+      margin-bottom: 8px;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .offline-tips li:before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #4C2A92;
+      font-weight: 600;
+    }
+
+    .connection-status {
+      font-size: 11px;
+      color: #9E9488;
+      margin-top: 16px;
+    }
+
+    .status-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #DC2626;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .offline-container {
+        padding: 32px 24px;
+      }
+
+      h1 {
+        font-size: 20px;
+      }
+
+      .offline-tips {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="offline-container">
+    <div class="offline-icon">📡</div>
+    <h1>You're Offline</h1>
+    <p class="status-message">
+      BLW Nexus requires an internet connection. Check your connection and try again.
+    </p>
+
+    <div class="status-details">
+      <span class="status-indicator"></span>
+      <span>No internet connection detected</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn-retry" onclick="retryConnection()">
+        Retry
+      </button>
+      <button class="btn-home" onclick="goHome()">
+        Go to Home
+      </button>
+    </div>
+
+    <div class="offline-tips">
+      <h3>While Offline</h3>
+      <ul>
+        <li>Previously cached pages will load</li>
+        <li>Real-time updates will pause</li>
+        <li>New data won't sync until online</li>
+        <li>Check your WiFi or mobile data</li>
+      </ul>
+    </div>
+
+    <div class="connection-status">
+      Waiting for connection... <span id="retry-count"></span>
+    </div>
+  </div>
+
+  <script>
+    let retryCount = 0;
+
+    function retryConnection() {
+      retryCount++;
+      document.getElementById('retry-count').textContent = `(attempt ${retryCount})`;
+
+      // Try to load the page
+      fetch('/', { method: 'HEAD' })
+        .then(() => {
+          // Connection restored, reload
+          window.location.href = '/';
+        })
+        .catch(() => {
+          // Still offline
+          alert('Still offline. Please check your connection and try again.');
+        });
+    }
+
+    function goHome() {
+      window.location.href = '/';
+    }
+
+    // Monitor connection status
+    window.addEventListener('online', () => {
+      window.location.href = '/';
+    });
+
+    // Automatically retry every 5 seconds
+    setInterval(() => {
+      fetch('/', { method: 'HEAD' })
+        .then(() => {
+          window.location.href = '/';
+        })
+        .catch(() => {
+          // Still offline
+        });
+    }, 5000);
+  </script>
+</body>
+</html>

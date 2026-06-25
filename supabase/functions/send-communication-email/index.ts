@@ -76,6 +76,19 @@ function escapeHtml(value: string): string {
     .replaceAll('"', '&quot;')
 }
 
+// Generate a cryptographically random 32-byte token (64-char hex)
+function generateRandomToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+// Hash a token using SHA-256 (for storage)
+async function hashToken(token: string): Promise<string> {
+  const data = new TextEncoder().encode(token)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 function stripHtmlToText(html = ''): string {
   return html
     .replace(/<style[\s\S]*?<\/style>/gi, '')
@@ -102,20 +115,13 @@ function sanitizeEmailHtml(html = ''): string {
   return safe
 }
 
-async function generateToken(email: string): Promise<string> {
-  const key = Deno.env.get('UNSUBSCRIBE_SECRET') ?? 'default'
-  const data = new TextEncoder().encode(email + key)
-  const hash = await crypto.subtle.digest('SHA-256', data)
-  return btoa(String.fromCharCode(...new Uint8Array(hash)))
-    .replace(/[+/=]/g, '')
-    .slice(0, 32)
-}
 
 async function resolveAllTags(
   template: string,
   recipient: Recipient,
   context: { space_name?: string; sender_name?: string },
   supabase: ReturnType<typeof createClient>,
+  unsubscribeToken: string,
 ): Promise<string> {
   let pastorName = 'your subgroup pastor'
 
@@ -145,8 +151,7 @@ async function resolveAllTags(
   })
 
   const frontendUrl = Deno.env.get('FRONTEND_URL') ?? ''
-  const token = await generateToken(recipient.email)
-  const unsubUrl = `${frontendUrl}/unsubscribe?email=${encodeURIComponent(recipient.email)}&token=${token}`
+  const unsubUrl = `${frontendUrl}/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`
 
   return template
     .replace(/\{\{name\}\}/g, recipient.name ?? '')
@@ -163,10 +168,9 @@ async function resolveAllTags(
     .replace(/\{\{recap\}\}/g, '')
 }
 
-async function renderHtmlShell(bodyHtml: string, previewText: string, recipient: Recipient) {
+function renderHtmlShell(bodyHtml: string, previewText: string, unsubscribeToken: string) {
   const frontendUrl = Deno.env.get('FRONTEND_URL') ?? ''
-  const token = await generateToken(recipient.email)
-  const unsubUrl = `${frontendUrl}/unsubscribe?email=${encodeURIComponent(recipient.email)}&token=${token}`
+  const unsubUrl = `${frontendUrl}/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`
   const safePreview = escapeHtml(previewText || ' ')
 
   return `
@@ -584,6 +588,10 @@ Deno.serve(async (request) => {
     const batch = filteredRecipients.slice(batchStart, batchStart + batchSize)
 
     const batchResults = await Promise.all(batch.map(async (recipient, batchIndex) => {
+      // Generate secure random unsubscribe token
+      const unsubscribeToken = generateRandomToken()
+      const unsubscribeTokenHash = await hashToken(unsubscribeToken)
+
       // Assign A/B test variant if applicable
       let subjectVariant: 'a' | 'b' | null = null
       let personalizedSubject = subject.trim()
@@ -595,9 +603,9 @@ Deno.serve(async (request) => {
         personalizedSubject = subjectVariant === 'a' ? abTest.subject_a : abTest.subject_b
       }
 
-      personalizedSubject = await resolveAllTags(personalizedSubject, recipient, context, supabase)
-      const personalizedText = await resolveAllTags(plainTextTemplate.trim(), recipient, context, supabase)
-      let personalizedHtmlTemplate = await resolveAllTags(safeHtmlTemplate.trim(), recipient, context, supabase)
+      personalizedSubject = await resolveAllTags(personalizedSubject, recipient, context, supabase, unsubscribeToken)
+      const personalizedText = await resolveAllTags(plainTextTemplate.trim(), recipient, context, supabase, unsubscribeToken)
+      let personalizedHtmlTemplate = await resolveAllTags(safeHtmlTemplate.trim(), recipient, context, supabase, unsubscribeToken)
 
       // Append signature if present
       if (senderSignature && senderProfile) {
@@ -613,10 +621,26 @@ Deno.serve(async (request) => {
         personalizedHtmlTemplate = rewriteLinksForTracking(personalizedHtmlTemplate, campaignId, recipient.email, frontendUrl)
       }
 
-      const renderedHtml = await renderHtmlShell(personalizedHtmlTemplate, previewText, recipient)
+      const renderedHtml = renderHtmlShell(personalizedHtmlTemplate, previewText, unsubscribeToken)
 
-      const token = await generateToken(recipient.email)
-      const unsubUrl = `${frontendUrl}/unsubscribe?email=${encodeURIComponent(recipient.email)}&token=${token}`
+      // Store the unsubscribe token in the database (upsert to handle existing records)
+      const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      await supabase
+        .from('communication_unsubscribes')
+        .upsert(
+          {
+            email: normalizeEmail(recipient.email),
+            unsubscribe_token: unsubscribeTokenHash,
+            token_created_at: new Date().toISOString(),
+            token_expires_at: tokenExpiresAt,
+          },
+          { onConflict: 'email' }
+        )
+        .then(({ error }) => {
+          if (error) console.error('Failed to store unsubscribe token:', error)
+        })
+
+      const unsubUrl = `${frontendUrl}/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`
 
       let resendEmailId: string | null = null
       let status: 'sent' | 'failed' = 'sent'

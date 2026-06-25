@@ -3,8 +3,96 @@ import { safeHref } from '../../lib/urlUtils'
 
 const INTEGRATION_TYPES = ['foundation_school', 'zoom', 'canva', 'google_drive', 'custom']
 const VISIBILITY_OPTIONS = ['all', 'super_admin', 'dept_lead']
+const SCOPE_OPTIONS = ['global', 'departments', 'users']
 
-function DeptSelect({ value, onChange, departments }) {
+function UserSelect({ value, onChange, users, multiple = false }) {
+  if (multiple) {
+    const selectedIds = Array.isArray(value) ? value : (value ? [value] : [])
+
+    return (
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+          <input
+            type="checkbox"
+            checked={selectedIds.length === 0}
+            onChange={() => onChange([])}
+            className="rounded"
+          />
+          All users (global)
+        </label>
+        {users.map((user) => (
+          <label key={user.id} className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+            <input
+              type="checkbox"
+              checked={selectedIds.includes(user.id)}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  onChange([...selectedIds, user.id])
+                } else {
+                  onChange(selectedIds.filter((id) => id !== user.id))
+                }
+              }}
+              className="rounded"
+            />
+            {user.display_name || user.email}
+          </label>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <select
+      className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value || null)}
+    >
+      <option value="">All users (global)</option>
+      {users.map((user) => (
+        <option key={user.id} value={user.id}>
+          {user.display_name || user.email}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function DeptSelect({ value, onChange, departments, multiple = false }) {
+  if (multiple) {
+    const selectedIds = Array.isArray(value) ? value : (value ? [value] : [])
+
+    return (
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+          <input
+            type="checkbox"
+            checked={selectedIds.length === 0}
+            onChange={() => onChange([])}
+            className="rounded"
+          />
+          All departments (global)
+        </label>
+        {departments.map((dept) => (
+          <label key={dept.id} className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+            <input
+              type="checkbox"
+              checked={selectedIds.includes(dept.id)}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  onChange([...selectedIds, dept.id])
+                } else {
+                  onChange(selectedIds.filter((id) => id !== dept.id))
+                }
+              }}
+              className="rounded"
+            />
+            {dept.name}
+          </label>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <select
       className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
@@ -56,6 +144,7 @@ function EditableIntegrationCard({
   onSave,
   saving,
   departments,
+  users,
 }) {
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
@@ -122,13 +211,46 @@ function EditableIntegrationCard({
           </select>
         </label>
         <label className="space-y-1">
-          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">Department</span>
-          <DeptSelect
-            value={integration.department_id}
-            onChange={(value) => onChange({ ...integration, department_id: value })}
-            departments={departments}
-          />
+          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">Scope</span>
+          <select
+            className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+            value={integration.scope ?? 'global'}
+            onChange={(e) => onChange({ ...integration, scope: e.target.value })}
+          >
+            <option value="global">Global (all users)</option>
+            <option value="departments">Department(s)</option>
+            <option value="users">Individual User(s)</option>
+          </select>
         </label>
+
+        {integration.scope === 'departments' && (
+          <label className="space-y-1 md:col-span-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">Departments</span>
+            <DeptSelect
+              value={integration.department_ids}
+              onChange={(value) => onChange({ ...integration, department_ids: value })}
+              departments={departments}
+              multiple={true}
+            />
+          </label>
+        )}
+
+        {integration.scope === 'users' && (
+          <label className="space-y-1 md:col-span-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+              👤 Individual Users (Admin Only)
+            </span>
+            <p className="text-xs text-[var(--text-secondary)] mb-2">
+              Assign this integration to specific team members. Leave empty for all users.
+            </p>
+            <UserSelect
+              value={integration.user_ids}
+              onChange={(value) => onChange({ ...integration, user_ids: value })}
+              users={users}
+              multiple={true}
+            />
+          </label>
+        )}
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -177,7 +299,9 @@ const EMPTY_INTEGRATION = {
   description: '',
   icon_emoji: '🔗',
   visible_to: 'all',
-  department_id: null,
+  scope: 'global', // global, departments, or users
+  department_ids: [],
+  user_ids: [],
   enabled: true,
   show_in_sidebar: false,
   sort_order: 99,
@@ -191,25 +315,47 @@ export default function IntegrationsSection({ role, supabaseClient }) {
   const [newIntegration, setNewIntegration] = useState(EMPTY_INTEGRATION)
   const [integrationSavingId, setIntegrationSavingId] = useState(null)
   const [departments, setDepartments] = useState([])
+  const [users, setUsers] = useState([])
+
+  const isSuperAdmin = role === 'super_admin'
 
   async function loadIntegrations() {
     setLoading(true)
-    const { data, error } = await supabaseClient
-      .from('external_integrations')
-      .select('id, name, type, launch_url, description, icon_emoji, visible_to, department_id, enabled, show_in_sidebar, sort_order')
-      .order('sort_order')
+    try {
+      const { data, error } = await supabaseClient
+        .from('external_integrations')
+        .select('id, name, type, launch_url, description, icon_emoji, visible_to, enabled, show_in_sidebar, sort_order, department_id')
+        .order('sort_order')
 
-    if (error) {
-      console.error('Failed to load integrations', error)
+      if (error) {
+        console.error('Failed to load integrations', error)
+        console.error('Error details:', { code: error.code, message: error.message, hint: error.hint, details: error.details })
+        setIntegrations([])
+        setIntegrationDrafts([])
+        setLoading(false)
+        return
+      }
+
+      console.log('Loaded integrations:', data?.length ?? 0, 'items')
+
+      // Transform data - add default values for new fields
+      const migratedData = (data ?? []).map((integration) => ({
+        ...integration,
+        scope: 'global',
+        department_ids: [],
+        user_ids: [],
+      }))
+
+      console.log('Migrated integrations:', migratedData.length, 'items')
+      setIntegrations(migratedData)
+      setIntegrationDrafts(migratedData)
+    } catch (err) {
+      console.error('Exception loading integrations:', err)
       setIntegrations([])
       setIntegrationDrafts([])
+    } finally {
       setLoading(false)
-      return
     }
-
-    setIntegrations(data ?? [])
-    setIntegrationDrafts(data ?? [])
-    setLoading(false)
   }
 
   useEffect(() => {
@@ -217,11 +363,19 @@ export default function IntegrationsSection({ role, supabaseClient }) {
   }, [])
 
   useEffect(() => {
-    supabaseClient
-      .from('departments')
-      .select('id, name')
-      .order('name')
-      .then(({ data }) => setDepartments(data ?? []))
+    Promise.all([
+      supabaseClient
+        .from('departments')
+        .select('id, name')
+        .order('name'),
+      supabaseClient
+        .from('users')
+        .select('id, display_name, email')
+        .order('display_name'),
+    ]).then(([{ data: deptData }, { data: userData }]) => {
+      setDepartments(deptData ?? [])
+      setUsers(userData ?? [])
+    })
   }, [])
 
   async function saveIntegration(integration) {
@@ -234,26 +388,35 @@ export default function IntegrationsSection({ role, supabaseClient }) {
       description: integration.description?.trim() || null,
       icon_emoji: integration.icon_emoji?.trim() || null,
       visible_to: integration.visible_to,
-      department_id: integration.department_id ?? null,
       enabled: Boolean(integration.enabled),
       show_in_sidebar: Boolean(integration.show_in_sidebar),
       sort_order: integration.sort_order ?? 0,
     }
 
-    const query = integration.id
-      ? supabaseClient.from('external_integrations').update(payload).eq('id', integration.id)
-      : supabaseClient.from('external_integrations').insert(payload)
+    try {
+      console.log('Saving integration:', { id: integration.id, payload })
 
-    const { error } = await query
-    setIntegrationSavingId(null)
+      const query = integration.id
+        ? supabaseClient.from('external_integrations').update(payload).eq('id', integration.id)
+        : supabaseClient.from('external_integrations').insert(payload)
 
-    if (error) {
-      window.alert(error.message)
-      return
+      const { data, error } = await query
+      setIntegrationSavingId(null)
+
+      if (error) {
+        console.error('Save error:', error)
+        window.alert(`Failed to save: ${error.message}`)
+        return
+      }
+
+      console.log('Save successful:', data)
+      await loadIntegrations()
+      setNewIntegration(EMPTY_INTEGRATION)
+    } catch (err) {
+      console.error('Exception saving integration:', err)
+      setIntegrationSavingId(null)
+      window.alert(`Error saving integration: ${err.message}`)
     }
-
-    await loadIntegrations()
-    setNewIntegration(EMPTY_INTEGRATION)
   }
 
   async function deleteIntegration(id) {
@@ -315,6 +478,18 @@ export default function IntegrationsSection({ role, supabaseClient }) {
         </div>
       ) : null}
 
+      {!loading && isSuperAdmin && (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+          <p className="font-medium">👤 Admin Control</p>
+          <p className="mt-1 text-xs">You can create integrations and assign them to:</p>
+          <ul className="mt-2 space-y-1 text-xs">
+            <li>✓ All users (global)</li>
+            <li>✓ Specific departments</li>
+            <li>✓ Individual users (assign custom integrations to specific team members)</li>
+          </ul>
+        </div>
+      )}
+
       {!loading && manageIntegrations && role === 'super_admin' ? (
         <>
           <div className="grid gap-4">
@@ -334,6 +509,7 @@ export default function IntegrationsSection({ role, supabaseClient }) {
                 }}
                 saving={integrationSavingId === integration.id}
                 departments={departments}
+                users={users}
               />
             ))}
           </div>
@@ -355,14 +531,47 @@ export default function IntegrationsSection({ role, supabaseClient }) {
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">Department</label>
-                <DeptSelect
-                  value={newIntegration.department_id}
-                  onChange={(value) => setNewIntegration((prev) => ({ ...prev, department_id: value }))}
-                  departments={departments}
-                />
-              </div>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">Scope</span>
+                <select
+                  className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+                  value={newIntegration.scope ?? 'global'}
+                  onChange={(e) => setNewIntegration((prev) => ({ ...prev, scope: e.target.value }))}
+                >
+                  <option value="global">Global (all users)</option>
+                  <option value="departments">Department(s)</option>
+                  <option value="users">Individual User(s)</option>
+                </select>
+              </label>
+
+              {newIntegration.scope === 'departments' && (
+                <div className="md:col-span-2">
+                  <label className="mb-3 block text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">Departments</label>
+                  <DeptSelect
+                    value={newIntegration.department_ids}
+                    onChange={(value) => setNewIntegration((prev) => ({ ...prev, department_ids: value }))}
+                    departments={departments}
+                    multiple={true}
+                  />
+                </div>
+              )}
+
+              {newIntegration.scope === 'users' && (
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                    👤 Individual Users (Admin Only)
+                  </label>
+                  <p className="text-xs text-[var(--text-secondary)] mb-3">
+                    Assign this integration to specific team members. Leave empty for all users.
+                  </p>
+                  <UserSelect
+                    value={newIntegration.user_ids}
+                    onChange={(value) => setNewIntegration((prev) => ({ ...prev, user_ids: value }))}
+                    users={users}
+                    multiple={true}
+                  />
+                </div>
+              )}
             </div>
             <button type="button" className="mt-4 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white" onClick={() => saveIntegration(newIntegration)}>
               Add integration

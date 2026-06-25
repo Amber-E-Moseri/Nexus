@@ -1,4 +1,5 @@
 ﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
+import { checkRateLimit, extractClientIp, type RateLimitConfig } from '../_shared/rateLimit.ts'
 
 const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN')
 
@@ -15,10 +16,10 @@ const corsHeaders: Record<string, string> = ALLOWED_ORIGIN
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
     }
 
-function jsonResponse(status: number, body: Record<string, unknown>) {
+function jsonResponse(status: number, body: Record<string, unknown>, customHeaders?: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', ...customHeaders },
   })
 }
 
@@ -131,6 +132,7 @@ async function handleRequest(req: Request, supabase: ReturnType<typeof createCli
   }
 
   try {
+    const ipAddress = extractClientIp(req)
     const { token, response: rsvpResponse } = await req.json()
 
     if (!token) {
@@ -141,7 +143,14 @@ async function handleRequest(req: Request, supabase: ReturnType<typeof createCli
       return jsonResponse(400, { error: 'response must be rsvp_yes or rsvp_no' })
     }
 
-    // Fetch recipient by token (this is public, no auth check needed)
+    // Rate limit check (before DB query to prevent enumeration)
+    // IP: 10 requests per minute, Email: 20 requests per hour
+    const rateLimitConfig: RateLimitConfig = {
+      ipPerMinute: 10,
+      endpoint: 'rsvp',
+    }
+
+    // Fetch recipient first to get email for email-based rate limiting
     const { data: recipient, error: recipientError } = await supabase
       .from('invitation_recipients')
       .select('*')
@@ -149,7 +158,28 @@ async function handleRequest(req: Request, supabase: ReturnType<typeof createCli
       .single()
 
     if (recipientError || !recipient) {
+      // Don't expose whether token is valid to prevent enumeration
+      // Apply generic rate limiting even for invalid tokens
+      rateLimitConfig.emailPerHour = 20
+      const limitResult = await checkRateLimit(supabase, ipAddress, '', rateLimitConfig)
+      if (!limitResult.allowed) {
+        return jsonResponse(429,
+          { error: 'Too many requests' },
+          { 'Retry-After': String(limitResult.retryAfterSeconds || 60) }
+        )
+      }
       return jsonResponse(404, { error: 'Invitation not found' })
+    }
+
+    // Rate limit check with email (20 requests per hour per email)
+    rateLimitConfig.emailPerHour = 20
+    const limitResult = await checkRateLimit(supabase, ipAddress, recipient.email, rateLimitConfig)
+    if (!limitResult.allowed) {
+      console.warn(`Rate limit exceeded for ${limitResult.limitType} from IP ${ipAddress}${recipient.email ? ' email ' + recipient.email : ''}`)
+      return jsonResponse(429,
+        { error: 'Too many requests. Please try again later.' },
+        { 'Retry-After': String(limitResult.retryAfterSeconds || 60) }
+      )
     }
 
     // Update RSVP status (only update if not already responded)

@@ -22,6 +22,7 @@ import {
   selectDefaultStatus,
 } from '../../../lib/taskStatuses'
 import AssigneeSelector from './AssigneeSelector'
+import MilestoneCreator from './MilestoneCreator'
 import TaskComments from './TaskComments'
 import TaskDependencies from './TaskDependencies'
 import TaskFiles from './TaskFiles'
@@ -48,6 +49,40 @@ const labelStyle = {
   textTransform: 'uppercase',
   letterSpacing: '0.08em',
   marginBottom: 6,
+}
+
+function getMilestoneCountdown(milestoneDate) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const milestone = new Date(milestoneDate)
+  milestone.setHours(0, 0, 0, 0)
+
+  const daysDiff = Math.floor((milestone - today) / (1000 * 60 * 60 * 24))
+
+  if (daysDiff < 0) return `${Math.abs(daysDiff)} days overdue`
+  if (daysDiff === 0) return 'Due today'
+  if (daysDiff === 1) return '1 day remaining'
+  return `${daysDiff} days remaining`
+}
+
+function getMilestoneStatusColor(milestoneDate) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const milestone = new Date(milestoneDate)
+  milestone.setHours(0, 0, 0, 0)
+
+  const daysDiff = Math.floor((milestone - today) / (1000 * 60 * 60 * 24))
+
+  if (daysDiff < 0) {
+    return { bg: '#FEE2E2', border: '#FCA5A5', text: '#991B1B' } // Red for overdue
+  }
+  if (daysDiff === 0) {
+    return { bg: '#FEF3C7', border: '#FCD34D', text: '#92400E' } // Yellow for today
+  }
+  if (daysDiff <= 3) {
+    return { bg: '#FEF3C7', border: '#FCD34D', text: '#92400E' } // Yellow for soon
+  }
+  return { bg: '#DBEAFE', border: '#93C5FD', text: '#1E40AF' } // Blue for upcoming
 }
 
 function TaskActivityLog({ taskId }) {
@@ -231,6 +266,7 @@ export default function TaskModal({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState(null)
   const [blockers, setBlockers] = useState([])
+  const [taskMilestone, setTaskMilestone] = useState(task?.milestone || null)
 
   const titleRef = useRef(null)
 
@@ -298,6 +334,10 @@ export default function TaskModal({
       setBlockers([])
     }
   }, [mode, task?.id])
+
+  useEffect(() => {
+    setTaskMilestone(task?.milestone || null)
+  }, [task?.milestone])
 
   async function handleSave() {
     if (!title.trim()) {
@@ -621,6 +661,44 @@ export default function TaskModal({
                 <label htmlFor="is-personal" style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: isReadOnly ? 'default' : 'pointer' }}>
                   Private task (visible only to me)
                 </label>
+              </div>
+            ) : null}
+
+            {mode === 'edit' && task?.id && profile?.id ? (
+              <div style={{ marginBottom: 18, paddingBottom: 18, borderBottom: '1px solid var(--border)' }}>
+                <label style={labelStyle}>Personal Target Date</label>
+
+                {taskMilestone && (
+                  <div
+                    style={{
+                      marginBottom: 12,
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      background: getMilestoneStatusColor(taskMilestone.milestone_date).bg,
+                      border: `1px solid ${getMilestoneStatusColor(taskMilestone.milestone_date).border}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: getMilestoneStatusColor(taskMilestone.milestone_date).text, marginBottom: 2 }}>
+                        {getMilestoneCountdown(taskMilestone.milestone_date)}
+                      </div>
+                      <div style={{ fontSize: 12, color: getMilestoneStatusColor(taskMilestone.milestone_date).text }}>
+                        {taskMilestone.label} • {new Date(taskMilestone.milestone_date).toLocaleDateString('en-CA')}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <MilestoneCreator
+                  task={task}
+                  userId={profile.id}
+                  currentMilestone={taskMilestone}
+                  onSave={(milestone) => setTaskMilestone(milestone)}
+                  readOnly={isReadOnly}
+                />
               </div>
             ) : null}
 

@@ -308,3 +308,205 @@ export async function deleteEventType(id) {
 
   if (error) throw error
 }
+
+// ---- Admin/Programs Direct Creation (Bypass Approval) ----
+
+export async function createEventDirectly(eventData, createdBy, userRole) {
+  // Super admin and Programs managers can create approved events directly
+  const isAuthorized = userRole === 'super_admin' || userRole === 'dept_lead'
+
+  const payload = {
+    ...eventData,
+    created_by: createdBy,
+    status: isAuthorized ? 'approved' : 'pending',
+    approved_by: isAuthorized ? createdBy : null,
+    approved_at: isAuthorized ? new Date().toISOString() : null,
+    is_admin_created: isAuthorized,
+  }
+
+  const { data, error } = await supabase
+    .from('calendar_events')
+    .insert(payload)
+    .select()
+    .single()
+
+  if (error) throw error
+
+  // If admin created and should sync to Google, trigger sync
+  if (isAuthorized && eventData.space_id) {
+    try {
+      await triggerSpaceSync(eventData.space_id)
+    } catch (e) {
+      console.warn('Could not trigger sync:', e)
+    }
+  }
+
+  return data
+}
+
+// ---- Regional Ministry Calendar Integration ----
+
+export async function createRegionalCalendarSync(payload) {
+  const {
+    org_id,
+    regional_calendar_name,
+    regional_calendar_url,
+    sync_direction = 'from_google', // Regional → BLW (read-only by default)
+    color = '#FF6B6B',
+    description = '',
+  } = payload
+
+  const { data, error } = await supabase
+    .from('regional_calendar_syncs')
+    .insert({
+      org_id,
+      regional_calendar_name,
+      regional_calendar_url,
+      sync_direction,
+      color,
+      description,
+      is_active: true,
+      connected_by: (await supabase.auth.getUser()).data.user.id,
+      connected_at: new Date().toISOString(),
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function getRegionalCalendarSyncs(orgId) {
+  const { data, error } = await supabase
+    .from('regional_calendar_syncs')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('is_active', true)
+    .order('connected_at', { ascending: false })
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function syncRegionalCalendar(syncId) {
+  // Fetch events from regional calendar URL (iCal format)
+  // Parse and import into local calendar with regional tag
+  const { data: sync, error: fetchError } = await supabase
+    .from('regional_calendar_syncs')
+    .select('*')
+    .eq('id', syncId)
+    .single()
+
+  if (fetchError) throw fetchError
+
+  try {
+    // Fetch regional calendar (iCal format)
+    const response = await fetch(sync.regional_calendar_url)
+    const icalText = await response.text()
+
+    // Parse iCal and create events (simplified - full parser would be more complex)
+    const events = parseICalEvents(icalText, sync.org_id)
+
+    // Bulk insert with regional tag
+    const { error: insertError } = await supabase
+      .from('calendar_events')
+      .insert(
+        events.map((e) => ({
+          ...e,
+          status: 'approved', // Regional events auto-approved
+          is_regional: true,
+          regional_sync_id: syncId,
+          color: sync.color,
+        }))
+      )
+
+    if (insertError) throw insertError
+
+    // Update last sync timestamp
+    await supabase
+      .from('regional_calendar_syncs')
+      .update({ last_synced_at: new Date().toISOString(), synced_count: events.length })
+      .eq('id', syncId)
+
+    return { synced: events.length, events }
+  } catch (err) {
+    throw new Error(`Failed to sync regional calendar: ${err.message}`)
+  }
+}
+
+export async function disconnectRegionalCalendar(syncId) {
+  // Soft delete + remove associated events
+  const { data: sync } = await supabase
+    .from('regional_calendar_syncs')
+    .select('id')
+    .eq('id', syncId)
+    .single()
+
+  if (!sync) throw new Error('Sync not found')
+
+  // Remove regional events from this sync
+  await supabase
+    .from('calendar_events')
+    .delete()
+    .eq('regional_sync_id', syncId)
+    .eq('is_regional', true)
+
+  // Deactivate sync
+  const { error } = await supabase
+    .from('regional_calendar_syncs')
+    .update({ is_active: false, disconnected_at: new Date().toISOString() })
+    .eq('id', syncId)
+
+  if (error) throw error
+}
+
+// Helper: Parse iCal format (basic parser - use library in production)
+function parseICalEvents(icalText, orgId) {
+  const events = []
+  const lines = icalText.split('\n')
+  let currentEvent = {}
+
+  lines.forEach((line) => {
+    if (line.startsWith('BEGIN:VEVENT')) {
+      currentEvent = {}
+    } else if (line.startsWith('END:VEVENT')) {
+      if (currentEvent.summary) {
+        events.push({
+          title: currentEvent.summary,
+          description: currentEvent.description || '',
+          start_date: currentEvent.dtstart,
+          end_date: currentEvent.dtend,
+          location: currentEvent.location || '',
+          all_day: !currentEvent.dtstart?.includes('T'),
+          department_id: null, // Regional events are org-wide
+          is_org_wide: true,
+          created_at: new Date().toISOString(),
+        })
+      }
+      currentEvent = {}
+    } else if (line.startsWith('SUMMARY:')) {
+      currentEvent.summary = line.replace('SUMMARY:', '')
+    } else if (line.startsWith('DESCRIPTION:')) {
+      currentEvent.description = line.replace('DESCRIPTION:', '')
+    } else if (line.startsWith('DTSTART:')) {
+      currentEvent.dtstart = line.replace('DTSTART:', '')
+    } else if (line.startsWith('DTEND:')) {
+      currentEvent.dtend = line.replace('DTEND:', '')
+    } else if (line.startsWith('LOCATION:')) {
+      currentEvent.location = line.replace('LOCATION:', '')
+    }
+  })
+
+  return events
+}
+
+async function triggerSpaceSync(spaceId) {
+  // Trigger manual sync for this space if Google Calendar is connected
+  try {
+    await supabase.functions.invoke('sync-google-calendar', {
+      body: { space_id: spaceId },
+    })
+  } catch (e) {
+    console.warn('Sync trigger failed:', e)
+  }
+}

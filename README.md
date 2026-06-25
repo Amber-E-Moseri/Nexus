@@ -1,5 +1,7 @@
 ﻿# BLW CAN NEXUS
 
+[![CI/CD Pipeline](https://github.com/blwcanada/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/blwcanada/nexus/actions/workflows/ci.yml)
+
 **Internal operations platform for BLW Canada Sub-Region** — centralized task, meeting, sprint, and communication hub replacing ClickUp for 30 members across 5 departments.
 
 ## Project Overview

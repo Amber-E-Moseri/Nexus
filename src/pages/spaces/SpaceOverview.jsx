@@ -1,7 +1,8 @@
 ﻿import * as Dialog from '@radix-ui/react-dialog'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { SlidersHorizontal } from 'lucide-react'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { SlidersHorizontal, Settings } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { getMonthEvents } from '../../features/calendar'
 import { hasPermission } from '../../lib/permissions'
@@ -123,7 +124,7 @@ function StatusSettingsDialog({ open, onOpenChange, space }) {
   )
 }
 
-function SpaceHeader({ space, members, canManage, canManageStatuses, onOpenStatuses, onEdit, onArchive, onRestore }) {
+function SpaceHeader({ space, members, canManage, canManageStatuses, onOpenStatuses, onOpenAutomations, onEdit, onArchive, onRestore }) {
   const mediaSpace = isMediaDepartment(space)
   const visibleMembers = mediaSpace
     ? [getMediaOverviewMember(members)].filter(Boolean)
@@ -164,32 +165,77 @@ function SpaceHeader({ space, members, canManage, canManageStatuses, onOpenStatu
             ))}
           </div>
 
-          {canManageStatuses ? (
-            <button
-              type="button"
-              onClick={onOpenStatuses}
-              className="rounded-xl border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium text-[var(--text-primary)]"
-            >
-              <span className="mr-2" aria-hidden="true">⚙</span>
-              Statuses
-            </button>
-          ) : null}
+          {(canManageStatuses || canManage) ? (
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button
+                  type="button"
+                  className="rounded-xl border border-[var(--border)] bg-white p-2 text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
+                  aria-label="Settings menu"
+                >
+                  <Settings size={20} />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  side="bottom"
+                  align="end"
+                  sideOffset={8}
+                  collisionPadding={8}
+                  className="min-w-[180px] rounded-xl border border-[var(--border)] bg-white shadow-lg"
+                  style={{ zIndex: 50 }}
+                >
+                  {canManageStatuses ? (
+                    <>
+                      <DropdownMenu.Item
+                        onSelect={onOpenStatuses}
+                        className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
+                      >
+                        <span>⚙</span>
+                        <span>Statuses</span>
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
+                        onSelect={onOpenAutomations}
+                        className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
+                      >
+                        <span>⚡</span>
+                        <span>Automations</span>
+                      </DropdownMenu.Item>
+                    </>
+                  ) : null}
 
-          {canManage ? (
-            <>
-              <button type="button" onClick={onEdit} className="rounded-xl border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium text-[var(--text-primary)]">
-                Edit
-              </button>
-              {space.status === 'archived' ? (
-                <button type="button" onClick={onRestore} className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white">
-                  Restore
-                </button>
-              ) : (
-                <button type="button" onClick={onArchive} className="rounded-xl border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium text-[var(--text-primary)]">
-                  Archive
-                </button>
-              )}
-            </>
+                  {canManage ? (
+                    <>
+                      <DropdownMenu.Item
+                        onSelect={onEdit}
+                        className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
+                      >
+                        <span>✏️</span>
+                        <span>Edit</span>
+                      </DropdownMenu.Item>
+
+                      {space.status === 'archived' ? (
+                        <DropdownMenu.Item
+                          onSelect={onRestore}
+                          className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--accent)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
+                        >
+                          <span>↩️</span>
+                          <span>Restore</span>
+                        </DropdownMenu.Item>
+                      ) : (
+                        <DropdownMenu.Item
+                          onSelect={onArchive}
+                          className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
+                        >
+                          <span>📦</span>
+                          <span>Archive</span>
+                        </DropdownMenu.Item>
+                      )}
+                    </>
+                  ) : null}
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
           ) : null}
         </div>
       </div>
@@ -603,7 +649,7 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
 
   useEffect(() => {
     onTreeDataChange?.({ folders, lists })
-  }, [folders, lists, onTreeDataChange])
+  }, [folders, lists])
 
   function canEditFolderSettings(folder) {
     return effectiveRole === 'super_admin' || effectiveRole === 'dept_lead' || folder.created_by === profile?.id
@@ -1103,6 +1149,7 @@ export default function SpaceOverview() {
   const { spaceId } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState('Overview')
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -1208,6 +1255,17 @@ export default function SpaceOverview() {
   useEffect(() => {
     canManageSpace(spaceId).then(setCanManage).catch(() => setCanManage(false))
   }, [spaceId])
+
+  useEffect(() => {
+    const action = searchParams.get('action')
+    if (action === 'statuses') {
+      setShowStatusesModal(true)
+    } else if (action === 'automations') {
+      setActiveTab('Automations')
+    } else if (action === 'edit') {
+      setShowSpaceModal(true)
+    }
+  }, [searchParams])
 
   async function reloadCalendar() {
     setCalendarLoading(true)
@@ -1366,6 +1424,7 @@ export default function SpaceOverview() {
         canManage={canManage}
         canManageStatuses={canManageStatuses}
         onOpenStatuses={() => setShowStatusesModal(true)}
+        onOpenAutomations={() => setActiveTab('Automations')}
         onEdit={() => setShowSpaceModal(true)}
         onArchive={async () => { await archiveSpace(spaceId); await loadDetail() }}
         onRestore={async () => { await restoreSpace(spaceId); await loadDetail() }}

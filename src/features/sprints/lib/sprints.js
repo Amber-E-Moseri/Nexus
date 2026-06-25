@@ -2,6 +2,16 @@ import { supabase } from '../../../lib/supabase.js'
 import { normalizeTaskRows } from '../../../lib/taskStatuses.js'
 import { createNotification } from '../../notifications/lib/notifications.js'
 
+export async function getDepartments() {
+  const { data, error } = await supabase
+    .from('departments')
+    .select('id, name')
+    .order('name', { ascending: true })
+
+  if (error) throw error
+  return data || []
+}
+
 const SPRINT_TEAM_SELECT = 'id, sprint_id, name, description, lead_user_id, created_at'
 const SPRINT_TEAM_MEMBERS_SELECT = 'id, team_id, user_id, role, joined_at, users:user_id(id, name, email, department_id, status)'
 const SPRINT_MEMBER_SELECT = 'sprint_id, user_id, role, joined_at'
@@ -124,6 +134,31 @@ export async function createSprint(data, createdBy) {
   return sprint
 }
 
+export async function createSprintWithTemplate(p_name, p_goal, p_description, p_start_date, p_end_date, p_template_type, p_selected_dept_ids, p_created_by) {
+  const { data, error } = await supabase.rpc('create_sprint_with_template', {
+    p_name,
+    p_goal,
+    p_description,
+    p_start_date,
+    p_end_date,
+    p_template_type,
+    p_selected_dept_ids,
+    p_created_by,
+  })
+
+  if (error) throw error
+  return data && data.length > 0 ? data[0] : null
+}
+
+export async function getActiveSprintsForSidebar(userId) {
+  const { data, error } = await supabase.rpc('get_active_sprints_for_sidebar', {
+    p_user_id: userId,
+  })
+
+  if (error) throw error
+  return data || []
+}
+
 export async function updateSprint(sprintId, updates) {
   const { data, error } = await supabase
     .from('sprints')
@@ -228,10 +263,11 @@ export async function duplicateSprint(sprintId, createdBy) {
   return newSprint
 }
 
-export async function createSprintTeam(sprintId, name, description, leadUserId = null) {
+export async function createSprintTeam(sprintId, options) {
+  const { name, description, lead_user_id } = options
   const { data, error } = await supabase
     .from('sprint_teams')
-    .insert({ sprint_id: sprintId, name, description, lead_user_id: leadUserId })
+    .insert({ sprint_id: sprintId, name, description, lead_user_id })
     .select(SPRINT_TEAM_SELECT)
     .single()
 

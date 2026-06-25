@@ -12,10 +12,9 @@ import EmailSignatureSection from './EmailSignatureSection'
 import MembersPanel from '../../components/settings/MembersPanel'
 import ApiDocumentationPage from '../ApiDocumentationPage'
 import ActivityFeedWidget from '../../features/dashboard/components/ActivityFeedWidget'
-import MyTasks from '../personal/MyTasks'
-import Planner from '../Planner'
+import ApiPermissionsSection from './ApiPermissionsSection'
 
-const TABS = ['Profile', 'Notifications', 'Integrations', 'My Tasks', 'Planner', 'Automations', 'Members', 'Activity Log', 'Organisation', 'API', 'Danger Zone']
+const TABS = ['Profile', 'Notifications', 'Integrations', 'Automations', 'Members', 'Activity Log', 'API Permissions', 'Organisation', 'API', 'Danger Zone']
 const EXPORT_TABLE_SELECT = {
   profiles: 'id, full_name, email, department_id, role, status, created_at',
   tasks: 'id, title, description, status, status_id, priority, assignee_id, department_id, sprint_id, due_date, completed_at, created_by, created_at',
@@ -64,10 +63,10 @@ export default function Settings() {
   )
 
   const visibleTabs = TABS.filter((tab) => {
-    if (tab === 'My Tasks' || tab === 'Planner') return true
     if (tab === 'Automations') return role === 'super_admin' || role === 'dept_lead'
     if (tab === 'Members') return role === 'super_admin' || role === 'dept_lead'
     if (tab === 'Activity Log') return role === 'super_admin' || role === 'dept_lead'
+    if (tab === 'API Permissions') return role === 'super_admin'
     if (tab === 'Organisation' || tab === 'Danger Zone') return role === 'super_admin'
     return true
   })
@@ -394,18 +393,6 @@ export default function Settings() {
         </div>
       ) : null}
 
-      {activeTab === 'My Tasks' ? (
-        <div role="tabpanel" id="tabpanel-my-tasks" aria-labelledby="tab-my-tasks" tabIndex={0}>
-          <MyTasks />
-        </div>
-      ) : null}
-
-      {activeTab === 'Planner' ? (
-        <div role="tabpanel" id="tabpanel-planner" aria-labelledby="tab-planner" tabIndex={0}>
-          <Planner />
-        </div>
-      ) : null}
-
       {activeTab === 'Automations' && (role === 'super_admin' || role === 'dept_lead') ? (
         <div role="tabpanel" id="tabpanel-automations" aria-labelledby="tab-automations" tabIndex={0}>
           <AutomationsPage embedded />
@@ -421,6 +408,12 @@ export default function Settings() {
       {activeTab === 'Activity Log' && (role === 'super_admin' || role === 'dept_lead') ? (
         <div role="tabpanel" id="tabpanel-activity-log" aria-labelledby="tab-activity-log" tabIndex={0}>
           <ActivityFeedWidget />
+        </div>
+      ) : null}
+
+      {activeTab === 'API Permissions' && role === 'super_admin' ? (
+        <div role="tabpanel" id="tabpanel-api-permissions" aria-labelledby="tab-api-permissions" tabIndex={0}>
+          <ApiPermissionsSection />
         </div>
       ) : null}
 

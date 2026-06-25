@@ -1,0 +1,13 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Purple background -->
+  <rect width="512" height="512" fill="#4C2A92"/>
+
+  <!-- White leaf/heart design centered -->
+  <g transform="translate(256, 256)">
+    <!-- Stylized leaf/heart shape in white -->
+    <path d="M 0 -120 C -45 -120 -80 -85 -80 -40 C -80 0 -40 40 0 100 C 40 40 80 0 80 -40 C 80 -85 45 -120 0 -120 Z" fill="#FFFFFF" opacity="0.95"/>
+
+    <!-- Additional leaf accent -->
+    <path d="M -30 -80 Q -40 -60 -50 -30" stroke="#FFFFFF" stroke-width="8" fill="none" stroke-linecap="round" opacity="0.9"/>
+  </g>
+</svg>

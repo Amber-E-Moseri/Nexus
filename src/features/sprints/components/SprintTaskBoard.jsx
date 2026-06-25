@@ -1,23 +1,68 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../../../hooks/useAuth'
 import { getSprintMembers } from '../lib/sprints'
 import KanbanBoard from '../../tasks/components/KanbanBoard'
 import TaskFilters from '../../tasks/components/TaskFilters'
 import TaskListView from '../../tasks/components/TaskListView'
 import TaskModal from '../../tasks/components/TaskModal'
 import SprintReviewView from './SprintReviewView'
+import AllTeamsBoard from './AllTeamsBoard'
 import { TasksProvider, useTasks } from '../../tasks/TasksContext'
 import { useTaskFilters } from '../../tasks/hooks/useTaskFilters'
 
-function SprintTasksInner({ sprintId, canEdit }) {
+function SprintTasksInner({ sprintId, sprint, canEdit }) {
+  const { profile } = useAuth()
   const { tasks, loading, error, statuses, defaultStatusId, moveTask, addTask } = useTasks()
   const [members, setMembers] = useState([])
   const [view, setView] = useState('kanban')
+  const [teamView, setTeamView] = useState('all')
   const [modal, setModal] = useState(null)
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
 
   function handleTaskStatusChange({ taskId, newStatus }) {
     moveTask(taskId, newStatus)
   }
+
+  // Get current user's teams in this sprint
+  const getMyTeams = useCallback(() => {
+    if (!sprint?.teams) return []
+    return sprint.teams.filter((team) =>
+      team.sprint_team_members?.some((member) => member.user_id === profile?.id),
+    )
+  }, [sprint, profile?.id])
+
+  // Filter tasks for "My Team" view
+  const getMyTeamTasks = useCallback(() => {
+    if (!filtered) return []
+    const myTeams = getMyTeams()
+    const myTeamIds = myTeams.map((t) => t.id)
+
+    return filtered.filter((task) => {
+      // Show if: 1) Task assigned to me, OR 2) Task assigned to someone in my team
+      return (
+        task.assignee_id === profile?.id ||
+        myTeamIds.some((teamId) =>
+          sprint?.teams?.find((t) => t.id === teamId)?.sprint_team_members?.some((m) => m.user_id === task.assignee_id),
+        )
+      )
+    })
+  }, [filtered, sprint, profile?.id, getMyTeams])
+
+  // Group tasks by team for "All Teams" view
+  const getTasksByTeam = useMemo(() => {
+    if (!filtered || !sprint?.teams) return {}
+
+    const grouped = {}
+
+    sprint.teams.forEach((team) => {
+      grouped[team.id] = {
+        team,
+        tasks: filtered.filter((task) => team.sprint_team_members?.some((m) => m.user_id === task.assignee_id)),
+      }
+    })
+
+    return grouped
+  }, [filtered, sprint])
 
   useEffect(() => {
     getSprintMembers(sprintId).then(setMembers).catch(() => setMembers([]))
@@ -81,7 +126,68 @@ function SprintTasksInner({ sprintId, canEdit }) {
       </div>
 
       <div className="flex-1 overflow-hidden px-5 pb-5 pt-4">
-        {view === 'kanban' ? (
+        {view === 'kanban' && sprint?.teams && sprint.teams.length > 0 ? (
+          <div className="flex flex-1 flex-col overflow-hidden">
+            {/* Team View Tabs */}
+            <div className="mb-4 flex gap-2 border-b border-[var(--border)]">
+              <button
+                onClick={() => setTeamView('my')}
+                style={{
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: teamView === 'my' ? '2px solid var(--accent)' : 'none',
+                  color: teamView === 'my' ? 'var(--accent)' : 'var(--text-tertiary)',
+                  cursor: 'pointer',
+                }}
+              >
+                My Team
+              </button>
+              <button
+                onClick={() => setTeamView('all')}
+                style={{
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: teamView === 'all' ? '2px solid var(--accent)' : 'none',
+                  color: teamView === 'all' ? 'var(--accent)' : 'var(--text-tertiary)',
+                  cursor: 'pointer',
+                }}
+              >
+                All Teams
+              </button>
+            </div>
+
+            {/* Board Content */}
+            <div className="flex-1 overflow-hidden">
+              {teamView === 'my' ? (
+                <KanbanBoard
+                  filteredTasks={getMyTeamTasks()}
+                  onTaskClick={(task) => setModal({ mode: 'edit', task })}
+                  onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, subtasks: draft.subtasks }) : undefined}
+                  readOnly={!canEdit}
+                  teamMembers={members}
+                />
+              ) : (
+                <AllTeamsBoard
+                  tasks={filtered}
+                  tasksByTeam={getTasksByTeam}
+                  sprint={sprint}
+                  currentUser={profile}
+                  onTaskClick={(task) => setModal({ mode: 'edit', task })}
+                  onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, subtasks: draft.subtasks }) : undefined}
+                  readOnly={!canEdit}
+                  teamMembers={members}
+                  statuses={statuses}
+                />
+              )}
+            </div>
+          </div>
+        ) : view === 'kanban' ? (
           <div className="h-full overflow-hidden">
             <KanbanBoard
               filteredTasks={filtered}
@@ -123,10 +229,10 @@ function SprintTasksInner({ sprintId, canEdit }) {
   )
 }
 
-export default function SprintTaskBoard({ sprintId, canEdit }) {
+export default function SprintTaskBoard({ sprintId, sprint, canEdit }) {
   return (
     <TasksProvider sprintId={sprintId}>
-      <SprintTasksInner sprintId={sprintId} canEdit={canEdit} />
+      <SprintTasksInner sprintId={sprintId} sprint={sprint} canEdit={canEdit} />
     </TasksProvider>
   )
 }

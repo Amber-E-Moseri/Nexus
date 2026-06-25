@@ -209,7 +209,9 @@ as $$
     and t.parent_task_id is null
   where s.start_date is not null
     and s.end_date is not null
-    and (select count(distinct department_id) from public.sprint_members where sprint_id = s.id) > 0
+    and (select count(distinct u2.department_id) from public.sprint_members sm2
+         join public.users u2 on sm2.user_id = u2.id
+         where sm2.sprint_id = s.id and u2.department_id = p_dept_id) > 0
   group by s.id, s.name, s.start_date, s.end_date
   order by s.start_date desc
   limit p_sprint_count;

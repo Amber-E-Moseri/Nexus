@@ -472,7 +472,7 @@ export default function SprintOverview() {
       {/* Tasks & Tabs */}
       {activeTab === 'Tasks' || activeTab === 'Overview' ? (
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <SprintTaskBoard sprintId={detail.sprint.id} canEdit={Boolean(canManage && !isArchived)} />
+          <SprintTaskBoard sprintId={detail.sprint.id} sprint={detail} canEdit={Boolean(canManage && !isArchived)} />
         </div>
       ) : null}
 
@@ -524,7 +524,7 @@ export default function SprintOverview() {
             onCreateTeam={async (name) => {
               setSavingTeam(true)
               try {
-                await createSprintTeam(detail.sprint.id, name)
+                await createSprintTeam(detail.sprint.id, { name, description: '', lead_user_id: null })
                 await loadDetail()
               } catch (err) {
                 alert(`Failed to create team: ${err?.message || String(err)}`)

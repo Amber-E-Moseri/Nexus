@@ -1,0 +1,84 @@
+{
+  "name": "BLW Canada Nexus",
+  "short_name": "BLW Nexus",
+  "description": "BLW Canada Operations System — Ministry management platform for planning, coordinating, and tracking ministry activities.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#4C2A92",
+  "background_color": "#FFFFFF",
+  "icons": [
+    {
+      "src": "/logo-purple-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-purple-192.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-purple-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/logo-purple-192.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "screenshots": [
+    {
+      "src": "/canada_sr.png",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/canada_sr.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "My Tasks",
+      "url": "/my-tasks",
+      "icons": [
+        {
+          "src": "/logo.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Planner",
+      "url": "/planner",
+      "icons": [
+        {
+          "src": "/logo.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Calendar",
+      "url": "/calendar",
+      "icons": [
+        {
+          "src": "/logo.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

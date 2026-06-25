@@ -5,11 +5,14 @@ import AppError from './components/layout/AppError'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import Shell from './components/layout/Shell'
 import PageSpinner from './components/ui/PageSpinner'
+import { PWAInstallPrompt } from './components/PWAInstallPrompt'
+import { OfflineIndicator } from './components/OfflineIndicator'
 
-// Register service worker for push notifications
+// Register service worker for PWA (offline support, caching, push notifications)
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js')
-    .catch(err => console.warn('Service Worker registration failed:', err))
+    .then(registration => console.log('[PWA] Service Worker registered successfully'))
+    .catch(err => console.warn('[PWA] Service Worker registration failed:', err))
 }
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -56,10 +59,16 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
 const Settings = lazy(() => import('./pages/settings/Settings'))
 const IntegrationStatusPage = lazy(() => import('./pages/settings/IntegrationStatusPage'))
 const GoogleDriveAuthCallback = lazy(() => import('./pages/auth/GoogleDriveAuthCallback'))
+const GoogleCalendarCallback = lazy(() => import('./pages/auth/GoogleCalendarCallback'))
+const SlackCallback = lazy(() => import('./pages/auth/SlackCallback'))
+const OutlookCalendarCallback = lazy(() => import('./pages/auth/OutlookCalendarCallback'))
+const TeamsCallback = lazy(() => import('./pages/auth/TeamsCallback'))
 const ApiDocumentationPage = lazy(() => import('./pages/ApiDocumentationPage'))
 const ActivityLogPage = lazy(() => import('./pages/ActivityLogPage'))
 const FilesPage = lazy(() => import('./pages/FilesPage'))
 const MeetingReportPublicPage = lazy(() => import('./pages/reports/MeetingReportPublicPage'))
+const PersonalIntegrationsPage = lazy(() => import('./pages/settings/PersonalIntegrationsPage'))
+const CampusEditsPage = lazy(() => import('./pages/admin/CampusEditsPage'))
 
 function onError(error, errorInfo) {
   console.error('[AppErrorBoundary]', error, errorInfo)
@@ -68,8 +77,10 @@ function onError(error, errorInfo) {
 export default function App() {
   return (
     <ErrorBoundary FallbackComponent={AppError} onError={onError}>
-    <Suspense fallback={<PageSpinner />}>
-    <Routes>
+      <OfflineIndicator />
+      <PWAInstallPrompt />
+      <Suspense fallback={<PageSpinner />}>
+        <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<SignupInvite />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -79,6 +90,10 @@ export default function App() {
       <Route path="/activate" element={<ActivateInvitation />} />
       <Route path="/accept-invite" element={<ActivateInvitation />} />
       <Route path="/auth/google-drive/callback" element={<GoogleDriveAuthCallback />} />
+      <Route path="/auth/google_calendar-callback" element={<GoogleCalendarCallback />} />
+      <Route path="/auth/slack-callback" element={<SlackCallback />} />
+      <Route path="/auth/outlook_calendar-callback" element={<OutlookCalendarCallback />} />
+      <Route path="/auth/teams-callback" element={<TeamsCallback />} />
       <Route path="/reports/:share_token" element={<MeetingReportPublicPage />} />
 
       <Route element={<ProtectedRoute />}>
@@ -116,6 +131,14 @@ export default function App() {
           />
           <Route path="/calendar/review" element={<CalendarReviewPage />} />
           <Route path="/map" element={<CanMapPage />} />
+          <Route
+            path="/admin/campus-edits"
+            element={
+              <ProtectedRoute roles={['super_admin', 'ors']}>
+                <CampusEditsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/spaces" element={<SpacesList />} />
           <Route path="/spaces/:spaceId" element={<SpaceOverview />} />
           <Route path="/sprints" element={<SprintsList />} />
@@ -257,6 +280,7 @@ export default function App() {
             }
           />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/personal-integrations" element={<PersonalIntegrationsPage />} />
           <Route
             path="/settings/integrations"
             element={
@@ -275,3 +299,4 @@ export default function App() {
     </ErrorBoundary>
   )
 }
+// Test comment

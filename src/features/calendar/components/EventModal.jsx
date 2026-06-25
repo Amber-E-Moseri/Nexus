@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
-import { createCalendarEvent, deleteCalendarEvent, updateCalendarEvent, getEventTypes } from '..'
+import { createEventDirectly, deleteCalendarEvent, updateCalendarEvent, getEventTypes } from '..'
 import { listDepartments } from '../../../lib/people/api'
 import { getMySprints } from '../../sprints'
 import { EVENT_COLORS } from './CalendarEventCard'
@@ -114,7 +114,7 @@ export default function EventModal({
 
       const saved = event
         ? await updateCalendarEvent(event.id, payload)
-        : await createCalendarEvent(payload, profile.id)
+        : await createEventDirectly(payload, profile.id, role)
 
       onSaved?.(saved)
       onClose()

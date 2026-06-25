@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, DragOverlay, MouseSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabase'
 import { createTask } from '../features/tasks/lib/tasks'
-import { isTaskCancelled, isTaskCompleted } from '../lib/taskStatuses'
+import { isTaskCancelled, isTaskCompleted, listTaskStatuses } from '../lib/taskStatuses'
 import { useMyTasks, getMilestoneForTask, saveMilestone } from '../features/tasks/hooks/useMyTasks'
+import { getMySpaces } from '../features/spaces'
 import TaskModal from '../features/tasks/components/TaskModal'
+import TaskFilters from '../features/tasks/components/TaskFilters'
 import MilestoneCreator from '../features/tasks/components/MilestoneCreator'
 
 const PRIMARY = '#4C2A92'
@@ -64,13 +66,33 @@ function SpaceChip({ space }) {
 }
 
 function TaskCardBody({ task }) {
+  const hasMilestone = task.milestone && task.milestone.milestone_date !== task.due_date
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
         <SpaceChip space={task.space} />
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: PRIORITY_DOT[task.priority] ?? PRIORITY_DOT.medium, flexShrink: 0 }} />
       </div>
-      <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, lineHeight: 1.35 }}>{task.title}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, lineHeight: 1.35, flex: 1, minWidth: 0 }}>{task.title}</div>
+        {hasMilestone && (
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              background: '#4C2A92',
+              color: 'white',
+              padding: '2px 6px',
+              borderRadius: 4,
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+            title={`Personal target: ${new Date(task.milestone.milestone_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+          >
+            Target
+          </span>
+        )}
+      </div>
     </>
   )
 }
@@ -166,12 +188,116 @@ function KpiTile({ label, value, accent }) {
 }
 
 export default function Planner() {
-  const { profile } = useAuth()
+  const { profile, role } = useAuth()
   const { showToast } = useToast()
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
-  const { tasks: allTasks, milestones, isLoading } = useMyTasks(profile?.id || '')
+
+  // Filter state with localStorage persistence
+  const [filters, setFilters] = useState(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('planner_filters') : null
+    return saved
+      ? JSON.parse(saved)
+      : {
+          status: [],
+          priority: [],
+          dueDateRange: null,
+          dateRange: { startDate: null, endDate: null },
+          assigneeId: null,
+          taskType: [],
+          source: [],
+          milestoneStatus: [],
+          showDone: false,
+          hasComments: false,
+          hasDependencies: false,
+        }
+  })
+
+  useEffect(() => {
+    localStorage.setItem('planner_filters', JSON.stringify(filters))
+  }, [filters])
+
+  // Saved filter presets
+  const [presets, setPresets] = useState(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('planner_presets') : null
+    return saved ? JSON.parse(saved) : []
+  })
+
+  const [presetName, setPresetName] = useState('')
+
+  useEffect(() => {
+    localStorage.setItem('planner_presets', JSON.stringify(presets))
+  }, [presets])
+
+  const savePreset = useCallback(() => {
+    if (!presetName.trim()) return
+    const newPreset = {
+      id: Date.now().toString(),
+      name: presetName.trim(),
+      filters: JSON.parse(JSON.stringify(filters))
+    }
+    setPresets((prev) => [...prev, newPreset])
+    setPresetName('')
+  }, [presetName, filters])
+
+  const loadPreset = useCallback((preset) => {
+    setFilters(JSON.parse(JSON.stringify(preset.filters)))
+  }, [])
+
+  const deletePreset = useCallback((presetId) => {
+    setPresets((prev) => prev.filter((p) => p.id !== presetId))
+  }, [])
+
+  const { tasks: allTasks, milestones, isLoading } = useMyTasks(profile?.id || '', filters)
   const [activeId, setActiveId] = useState(null)
   const [modalTask, setModalTask] = useState(null)
+  const [filtersPanelOpen, setFiltersPanelOpen] = useState(false)
+
+  // Fetch filter options
+  const [spaces, setSpaces] = useState([])
+  const [statuses, setStatuses] = useState([])
+  const [members, setMembers] = useState([])
+
+  useEffect(() => {
+    if (profile?.id && role) {
+      Promise.all([
+        getMySpaces(profile.id, role, profile.department_id),
+        listTaskStatuses(),
+      ])
+        .then(([spacesData, statusesData]) => {
+          setSpaces(spacesData.filter((s) => s.status === 'active'))
+          setStatuses(statusesData)
+        })
+        .catch(console.error)
+    }
+  }, [profile?.id, role, profile?.department_id])
+
+  useEffect(() => {
+    supabase
+      .from('users')
+      .select('id, name')
+      .then(({ data }) => setMembers(data || []))
+      .catch(console.error)
+  }, [])
+
+  const hasActiveFilters = useCallback(() => {
+    return filters.status.length > 0 || filters.priority.length > 0 || filters.dueDateRange || (filters.dateRange?.startDate || filters.dateRange?.endDate) || filters.assigneeId || filters.taskType.length > 0 || filters.source.length > 0 || filters.milestoneStatus?.length > 0 || filters.showDone || filters.hasComments || filters.hasDependencies
+  }, [filters])
+
+  const clearFilters = useCallback(() => {
+    setFilters({
+      status: [],
+      priority: [],
+      dueDateRange: null,
+      dateRange: { startDate: null, endDate: null },
+      assigneeId: null,
+      taskType: [],
+      source: [],
+      milestoneStatus: [],
+      showDone: false,
+      hasComments: false,
+      hasDependencies: false,
+    })
+  }, [])
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -218,7 +344,7 @@ export default function Planner() {
     if (!over) return
     const taskId = active.id
     const overId = String(over.id)
-    const current = tasks.find((t) => t.id === taskId)
+    const current = allTasks.find((t) => t.id === taskId)
     const newDue = overId === 'backlog' ? null : overId.startsWith('day:') ? overId.slice(4) : undefined
     if (newDue === undefined) return
     if ((current?.due_date?.slice(0, 10) ?? null) === newDue) return
@@ -254,8 +380,213 @@ export default function Planner() {
           <span style={{ fontSize: 13, fontWeight: 700, color: TEXT, minWidth: 130, textAlign: 'center' }}>{formatRange(weekStart)}</span>
           <button type="button" onClick={() => setWeekStart((w) => addDays(w, 7))} aria-label="Next week" style={navBtn}><ChevronRight size={16} /></button>
           <button type="button" onClick={() => setWeekStart(startOfWeek(new Date()))} aria-label="Go to current week" style={{ ...navBtn, width: 'auto', padding: '0 12px', fontSize: 12, fontWeight: 700 }}>Today</button>
+          <button type="button" onClick={() => setFiltersPanelOpen(!filtersPanelOpen)} style={{ ...navBtn, background: hasActiveFilters() ? 'var(--accent-light)' : undefined }} title="Filter tasks">
+            <SlidersHorizontal size={16} />
+            {hasActiveFilters() && (
+              <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 4, color: 'var(--accent)' }}>
+                {filters.status.length + filters.priority.length + (filters.dueDateRange ? 1 : 0) + ((filters.dateRange?.startDate || filters.dateRange?.endDate) ? 1 : 0) + (filters.assigneeId ? 1 : 0) + filters.taskType.length + filters.source.length + (filters.showDone ? 1 : 0) + (filters.hasComments ? 1 : 0) + (filters.hasDependencies ? 1 : 0)}
+              </span>
+            )}
+          </button>
         </div>
       </div>
+
+      {/* Filter Panel */}
+      {filtersPanelOpen && (
+        <div style={{ background: 'var(--surface-secondary)', borderRadius: 12, padding: 16, border: '1px solid var(--border)', marginBottom: 12 }}>
+          <TaskFilters
+            filters={filters}
+            setFilters={setFilters}
+            clearFilters={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            members={members}
+            statuses={statuses}
+            tasks={allTasks}
+          />
+
+          {/* Preset Management */}
+          <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+              Save Filter as Preset
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <input
+                type="text"
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                placeholder="Preset name (e.g., 'My Priority Tasks')"
+                onKeyPress={(e) => e.key === 'Enter' && savePreset()}
+                style={{
+                  flex: 1,
+                  fontSize: 12,
+                  padding: '8px 10px',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={savePreset}
+                disabled={!presetName.trim()}
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  background: presetName.trim() ? 'var(--accent)' : '#E5E7EB',
+                  color: presetName.trim() ? 'white' : 'var(--text-tertiary)',
+                  border: 'none',
+                  cursor: presetName.trim() ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Save
+              </button>
+            </div>
+
+            {presets.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+                  Saved Presets
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {presets.map((preset) => (
+                    <div
+                      key={preset.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        fontSize: 12,
+                        background: '#E0E7FF',
+                        color: '#3730A3',
+                        padding: '6px 10px',
+                        borderRadius: 6,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => loadPreset(preset)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'inherit',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          padding: 0,
+                        }}
+                      >
+                        {preset.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deletePreset(preset.id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'inherit',
+                          fontSize: 14,
+                          padding: 0,
+                          opacity: 0.6,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Active Filters Display */}
+      {hasActiveFilters() && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+          {filters.status.length > 0 && filters.status.map((statusId) => (
+            <span key={statusId} style={{ fontSize: 12, background: '#DCFCE7', color: '#166534', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Status: {statuses.find((s) => s.id === statusId)?.name}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, status: filters.status.filter((s) => s !== statusId) })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {filters.priority.length > 0 && filters.priority.map((priority) => (
+            <span key={priority} style={{ fontSize: 12, background: '#FEE2E2', color: '#991B1B', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Priority: {priority}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, priority: filters.priority.filter((p) => p !== priority) })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {filters.dueDateRange && (
+            <span style={{ fontSize: 12, background: '#DBEAFE', color: '#1E40AF', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Due: {filters.dueDateRange}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, dueDateRange: null })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {filters.assigneeId && (
+            <span style={{ fontSize: 12, background: '#F3E8FF', color: '#6B21A8', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Assignee: {members.find((m) => m.id === filters.assigneeId)?.name}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, assigneeId: null })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {filters.taskType.length > 0 && filters.taskType.map((type) => (
+            <span key={type} style={{ fontSize: 12, background: '#FEF3C7', color: '#92400E', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Type: {type}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, taskType: filters.taskType.filter((t) => t !== type) })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {filters.source.length > 0 && filters.source.map((source) => (
+            <span key={source} style={{ fontSize: 12, background: '#E0E7FF', color: '#3730A3', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Source: {source}
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, source: filters.source.filter((s) => s !== source) })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0, color: 'inherit' }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <button
+            type="button"
+            onClick={clearFilters}
+            style={{ fontSize: 12, color: TEXT, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            Clear all
+          </button>
+        </div>
+      )}
 
       {/* KPI row */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>

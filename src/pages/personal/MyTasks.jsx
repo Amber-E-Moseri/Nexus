@@ -4,14 +4,13 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../hooks/useAuth'
 import { useDeptMembers } from '../../hooks/useDeptMembers'
-import { getMyTasks } from '../../features/tasks'
+import { useMyTasks } from '../../features/tasks/hooks/useMyTasks'
 import { listTaskStatuses } from '../../lib/taskStatuses'
 import { getMySpaces } from '../../features/spaces'
 import TaskModal from '../../features/tasks/components/TaskModal'
 import KanbanBoard from '../../features/tasks/components/KanbanBoard'
 import TaskListView from '../../features/tasks/components/TaskListView'
 import TaskFilters from '../../features/tasks/components/TaskFilters'
-import { useTaskSyncAll } from '../../features/tasks/hooks/useTaskSync'
 import { getTaskTypeInfo } from '../../features/tasks/lib/task-types'
 
 function loadViewMode() {
@@ -22,44 +21,31 @@ export default function MyTasks() {
   const { profile, role } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const [tasks, setTasks] = useState([])
+  const { tasks, isLoading, refetch } = useMyTasks(profile?.id || '')
   const [statuses, setStatuses] = useState([])
   const [departments, setDepartments] = useState([])
-  const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null)
   const [viewMode, setViewMode] = useState(loadViewMode)
   const [filters, setFilters] = useState({})
   const [boardFiltersOpen, setBoardFiltersOpen] = useState(false)
   const deptMembers = useDeptMembers(profile?.department_id)
 
-  // Real-time sync for task updates
-  useTaskSyncAll(profile?.id, (updatedTask) => {
-    setTasks((prev) =>
-      prev.some((t) => t.id === updatedTask.id)
-        ? prev.map((t) => (t.id === updatedTask.id ? { ...t, ...updatedTask } : t))
-        : [updatedTask, ...prev],
-    )
-  })
-
-  async function load() {
+  async function loadMetadata() {
     if (!profile?.id) return
-    setLoading(true)
     try {
-      const [taskData, statusData, spacesData] = await Promise.all([
-        getMyTasks(profile.id),
+      const [statusData, spacesData] = await Promise.all([
         listTaskStatuses(),
         getMySpaces(profile.id, role, profile.department_id),
       ])
-      setTasks(taskData)
       setStatuses(statusData)
       setDepartments(spacesData.filter((space) => space.status === 'active'))
-    } finally {
-      setLoading(false)
+    } catch (err) {
+      console.error('[MyTasks] Failed to load metadata:', err)
     }
   }
 
   useEffect(() => {
-    load()
+    loadMetadata()
   }, [profile?.id, role])
 
   useEffect(() => {
@@ -87,7 +73,7 @@ export default function MyTasks() {
     setTasks((prev) => prev.filter((t) => t.id !== taskId))
   }
 
-  const hasActiveFilters = Object.values(filters).some((v) => v !== undefined && v !== null && v !== false && (!Array.isArray(v) || v.length > 0))
+  const hasActiveFilters = () => Object.values(filters).some((v) => v !== undefined && v !== null && v !== false && (!Array.isArray(v) || v.length > 0))
 
   function clearFilters() {
     setFilters({})
@@ -124,7 +110,7 @@ export default function MyTasks() {
           </div>
         </div>
 
-        {loading ? (
+        {isLoading ? (
           <div className="flex justify-center py-16">
             <LoadingSpinner label="Loading tasks" />
           </div>
