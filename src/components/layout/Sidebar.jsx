@@ -336,7 +336,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     function handleDocumentClick(event) {
-      if (!sidebarRef.current?.contains(event.target)) {
+      if (!sidebarRef.current?.contains(event.target) && !openSpaceMenuId) {
         setSpaceActionsOpenId(null)
         setQuickAddSpaceId(null)
       }
@@ -344,7 +344,7 @@ export default function Sidebar() {
 
     document.addEventListener('mousedown', handleDocumentClick)
     return () => document.removeEventListener('mousedown', handleDocumentClick)
-  }, [])
+  }, [openSpaceMenuId])
 
   async function handleArchiveSpace(space) {
     const { error } = await supabase.from('departments').update({ status: 'archived' }).eq('id', space.id)
