@@ -182,6 +182,8 @@ export default function InvitationDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [resending, setResending] = useState(false)
+  const [tab, setTab] = useState('recipients') // recipients | rsvp-guests | analytics
+  const [rsvpSummary, setRsvpSummary] = useState(null)
 
   useEffect(() => {
     async function loadData() {
@@ -189,9 +191,10 @@ export default function InvitationDetailPage() {
         setLoading(true)
         setError(null)
 
-        const [campaignRes, recipientsRes] = await Promise.all([
+        const [campaignRes, recipientsRes, rsvpRes] = await Promise.all([
           supabase.from('invitation_campaigns').select(CAMPAIGN_SELECT).eq('id', campaignId).single(),
           supabase.from('invitation_recipients').select(RECIPIENT_SELECT).eq('campaign_id', campaignId).order('created_at'),
+          supabase.rpc('get_campaign_rsvp_summary', { p_campaign_id: campaignId }).then(r => ({ data: r.data?.[0], error: r.error })),
         ])
 
         if (campaignRes.error) throw campaignRes.error
@@ -199,6 +202,7 @@ export default function InvitationDetailPage() {
 
         setCampaign(campaignRes.data)
         setRecipients(recipientsRes.data ?? [])
+        setRsvpSummary(rsvpRes.data || {})
       } catch (err) {
         setError(err.message)
       } finally {
@@ -307,6 +311,58 @@ export default function InvitationDetailPage() {
         </div>
       )}
 
+      {/* Tabs */}
+      <div style={{ display: 'flex', borderBottom: `1px solid ${BORDER}`, marginBottom: 24, gap: 24 }}>
+        <button
+          onClick={() => setTab('recipients')}
+          style={{
+            padding: '12px 0',
+            border: 'none',
+            background: 'none',
+            fontWeight: tab === 'recipients' ? 700 : 500,
+            fontSize: 14,
+            color: tab === 'recipients' ? PRIMARY : MUTED,
+            cursor: 'pointer',
+            borderBottom: tab === 'recipients' ? `2px solid ${PRIMARY}` : 'none',
+            marginBottom: '-1px',
+          }}
+        >
+          Delivery & Opens
+        </button>
+        <button
+          onClick={() => setTab('rsvp-guests')}
+          style={{
+            padding: '12px 0',
+            border: 'none',
+            background: 'none',
+            fontWeight: tab === 'rsvp-guests' ? 700 : 500,
+            fontSize: 14,
+            color: tab === 'rsvp-guests' ? PRIMARY : MUTED,
+            cursor: 'pointer',
+            borderBottom: tab === 'rsvp-guests' ? `2px solid ${PRIMARY}` : 'none',
+            marginBottom: '-1px',
+          }}
+        >
+          RSVP Responses
+        </button>
+        <button
+          onClick={() => setTab('analytics')}
+          style={{
+            padding: '12px 0',
+            border: 'none',
+            background: 'none',
+            fontWeight: tab === 'analytics' ? 700 : 500,
+            fontSize: 14,
+            color: tab === 'analytics' ? PRIMARY : MUTED,
+            cursor: 'pointer',
+            borderBottom: tab === 'analytics' ? `2px solid ${PRIMARY}` : 'none',
+            marginBottom: '-1px',
+          }}
+        >
+          Analytics
+        </button>
+      </div>
+
       {/* Metrics */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
         <StatCard label="Sent" value={metrics.sent} percentage={`${metrics.sentPct}% of total`} />
@@ -338,13 +394,142 @@ export default function InvitationDetailPage() {
         </button>
       </div>
 
-      {/* Recipients Table */}
-      <div>
-        <h2 style={{ fontSize: 18, fontWeight: 800, color: TEXT, marginBottom: 16, margin: '0 0 16px 0' }}>
-          Recipients
-        </h2>
-        <RecipientTable recipients={recipients} onRowClick={setSelectedRecipient} />
-      </div>
+      {/* TAB: Recipients (Delivery & Opens) */}
+      {tab === 'recipients' && (
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: TEXT, marginBottom: 16, margin: '0 0 16px 0' }}>
+            Recipients
+          </h2>
+          <RecipientTable recipients={recipients} onRowClick={setSelectedRecipient} />
+        </div>
+      )}
+
+      {/* TAB: RSVP Guests */}
+      {tab === 'rsvp-guests' && rsvpSummary && (
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: TEXT, marginBottom: 16, margin: '0 0 16px 0' }}>
+            RSVP Responses
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+            <StatCard label="Total Invited" value={rsvpSummary.total_sent || 0} />
+            <StatCard label="Yes (Confirmed)" value={rsvpSummary.rsvp_yes || 0} color={SUCCESS} />
+            <StatCard label="Maybe" value={rsvpSummary.rsvp_maybe || 0} color={WARNING} />
+            <StatCard label="No (Declined)" value={rsvpSummary.rsvp_no || 0} color={ERROR} />
+          </div>
+          <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+              <thead>
+                <tr style={{ background: BG, borderBottom: `1px solid ${BORDER}` }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: TEXT }}>Name</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: TEXT }}>Email</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: TEXT }}>RSVP</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: TEXT }}>Responded</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: TEXT }}>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recipients.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" style={{ padding: 40, textAlign: 'center', color: MUTED }}>
+                      No guests yet
+                    </td>
+                  </tr>
+                ) : (
+                  recipients.map((r) => (
+                    <tr key={r.id} style={{ borderBottom: `1px solid ${BORDER}`, background: '#FFFFFF' }}>
+                      <td style={{ padding: '12px 16px', color: TEXT, fontWeight: 500 }}>{r.full_name || r.email}</td>
+                      <td style={{ padding: '12px 16px', color: MUTED, fontSize: 13 }}>{r.email}</td>
+                      <td style={{ padding: '12px 16px' }}>
+                        {r.status?.startsWith('rsvp_') ? (
+                          <StatusBadge status={r.status} />
+                        ) : (
+                          <span style={{ display: 'inline-block', borderRadius: 999, padding: '4px 12px', fontSize: 11, fontWeight: 600, background: BG, color: MUTED }}>
+                            Pending
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '12px 16px', color: MUTED, fontSize: 13 }}>
+                        {r.rsvp_at ? new Date(r.rsvp_at).toLocaleDateString('en-CA') : '—'}
+                      </td>
+                      <td style={{ padding: '12px 16px', color: MUTED, fontSize: 13, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        —
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: Analytics */}
+      {tab === 'analytics' && rsvpSummary && (
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: TEXT, marginBottom: 16, margin: '0 0 16px 0' }}>
+            RSVP Analytics
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+            {/* Response Rate */}
+            <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: TEXT, marginBottom: 16 }}>Response Rate</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ flex: 1, background: '#F0F0F0', borderRadius: 999, height: 24, overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      background: PRIMARY,
+                      height: '100%',
+                      width: `${rsvpSummary.response_rate || 0}%`,
+                      transition: 'width 0.3s ease',
+                    }}
+                  />
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: PRIMARY, minWidth: 60 }}>
+                  {Math.round(rsvpSummary.response_rate || 0)}%
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: MUTED, marginTop: 12 }}>
+                {rsvpSummary.responded} of {rsvpSummary.total_sent} responded
+              </div>
+            </div>
+
+            {/* RSVP Breakdown */}
+            <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: TEXT, marginBottom: 16 }}>RSVP Breakdown</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: SUCCESS }} />
+                    <span style={{ fontSize: 13, color: TEXT }}>Yes (Attending)</span>
+                  </div>
+                  <span style={{ fontWeight: 700, color: SUCCESS }}>{rsvpSummary.rsvp_yes}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: WARNING }} />
+                    <span style={{ fontSize: 13, color: TEXT }}>Maybe</span>
+                  </div>
+                  <span style={{ fontWeight: 700, color: WARNING }}>{rsvpSummary.rsvp_maybe}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: ERROR }} />
+                    <span style={{ fontSize: 13, color: TEXT }}>No (Declined)</span>
+                  </div>
+                  <span style={{ fontWeight: 700, color: ERROR }}>{rsvpSummary.rsvp_no}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${BORDER}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: MUTED }} />
+                    <span style={{ fontSize: 13, color: TEXT }}>Pending</span>
+                  </div>
+                  <span style={{ fontWeight: 700, color: MUTED }}>{(rsvpSummary.total_sent || 0) - (rsvpSummary.responded || 0)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedRecipient && <RecipientDrawer recipient={selectedRecipient} onClose={() => setSelectedRecipient(null)} />}
     </div>

@@ -71,6 +71,7 @@ const MeetingReportPublicPage = lazy(() => import('./pages/reports/MeetingReport
 const PersonalIntegrationsPage = lazy(() => import('./pages/settings/PersonalIntegrationsPage'))
 const CampusEditsPage = lazy(() => import('./pages/admin/CampusEditsPage'))
 const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
+const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
 
 function onError(error, errorInfo) {
   console.error('[AppErrorBoundary]', error, errorInfo)
@@ -97,6 +98,7 @@ export default function App() {
       <Route path="/auth/outlook_calendar-callback" element={<OutlookCalendarCallback />} />
       <Route path="/auth/teams-callback" element={<TeamsCallback />} />
       <Route path="/reports/:share_token" element={<MeetingReportPublicPage />} />
+      <Route path="/rsvp" element={<RSVPPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>
