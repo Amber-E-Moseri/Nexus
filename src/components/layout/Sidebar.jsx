@@ -248,6 +248,9 @@ export default function Sidebar() {
   const [quickAddSpaceId, setQuickAddSpaceId] = useState(null)
   const [quickAddListName, setQuickAddListName] = useState('')
   const [quickAddSaving, setQuickAddSaving] = useState(false)
+  const [quickAddType, setQuickAddType] = useState(null)
+  const [quickAddFolderName, setQuickAddFolderName] = useState('')
+  const [openQuickAddMenuId, setOpenQuickAddMenuId] = useState(null)
   const [spaceActionsOpenId, setSpaceActionsOpenId] = useState(null)
   const [openSpaceMenuId, setOpenSpaceMenuId] = useState(null)
   const [hiddenSpaceIds, setHiddenSpaceIds] = useState(() => {
@@ -336,7 +339,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     function handleDocumentClick(event) {
-      if (!sidebarRef.current?.contains(event.target) && !openSpaceMenuId) {
+      if (!sidebarRef.current?.contains(event.target) && !openSpaceMenuId && !openQuickAddMenuId) {
         setSpaceActionsOpenId(null)
         setQuickAddSpaceId(null)
       }
@@ -344,7 +347,7 @@ export default function Sidebar() {
 
     document.addEventListener('mousedown', handleDocumentClick)
     return () => document.removeEventListener('mousedown', handleDocumentClick)
-  }, [openSpaceMenuId])
+  }, [openSpaceMenuId, openQuickAddMenuId])
 
   async function handleArchiveSpace(space) {
     const { error } = await supabase.from('departments').update({ status: 'archived' }).eq('id', space.id)
@@ -402,6 +405,39 @@ export default function Sidebar() {
     await loadSpaces()
   }
 
+  async function handleQuickAddFolder(space) {
+    const name = quickAddFolderName.trim()
+    if (!name) return
+    setQuickAddSaving(true)
+    try {
+      const { data: maxOrder } = await supabase
+        .from('folders')
+        .select('sort_order')
+        .eq('department_id', space.id)
+        .order('sort_order', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      const { error: folderError } = await supabase
+        .from('folders')
+        .insert({
+          name,
+          department_id: space.id,
+          sort_order: (maxOrder?.sort_order ?? -1) + 1,
+          created_by: profile?.id ?? null,
+        })
+
+      if (folderError) throw folderError
+
+      setQuickAddFolderName('')
+      setQuickAddType(null)
+      setQuickAddSpaceId(null)
+      navigate(`/spaces/${space.id}`)
+    } finally {
+      setQuickAddSaving(false)
+    }
+  }
+
   async function handleQuickAddList(space) {
     const name = quickAddListName.trim()
     if (!name) return
@@ -454,6 +490,7 @@ export default function Sidebar() {
       if (listError) throw listError
 
       setQuickAddListName('')
+      setQuickAddType(null)
       setQuickAddSpaceId(null)
       navigate(`/spaces/${space.id}`)
     } finally {
@@ -631,32 +668,73 @@ export default function Sidebar() {
                 />
               ) : space.name}
               glyph={<SpaceGlyph color={space.color} label={space.name?.charAt(0)?.toUpperCase() ?? '?'} />}
-              trailing={canManageSpaces && (hoveredSpaceId === space.id || quickAddSpaceId === space.id) ? (
+              trailing={canManageSpaces && (hoveredSpaceId === space.id || quickAddSpaceId === space.id || openSpaceMenuId === space.id || openQuickAddMenuId === space.id) ? (
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      setQuickAddSpaceId((current) => current === space.id ? null : space.id)
-                      setQuickAddListName('')
-                    }}
-                    aria-label={`Add list to ${space.name}`}
-                    style={{
-                      width: 22,
-                      height: 22,
-                      border: 'none',
-                      background: quickAddSpaceId === space.id ? '#F2EEE6' : 'transparent',
-                      borderRadius: 6,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#B0A696',
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Plus size={14} />
-                  </button>
+                  <DropdownMenu.Root open={openQuickAddMenuId === space.id} onOpenChange={(open) => setOpenQuickAddMenuId(open ? space.id : null)}>
+                    <DropdownMenu.Trigger asChild>
+                      <button
+                        type="button"
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label={`Add to ${space.name}`}
+                        style={{
+                          width: 22,
+                          height: 22,
+                          border: 'none',
+                          background: openQuickAddMenuId === space.id ? '#F2EEE6' : 'transparent',
+                          borderRadius: 6,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: openQuickAddMenuId === space.id ? '#4C2A92' : '#B0A696',
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.Content
+                        side="right"
+                        align="start"
+                        sideOffset={8}
+                        collisionPadding={8}
+                        onCloseAutoFocus={(event) => event.preventDefault()}
+                        style={{
+                          minWidth: 180,
+                          background: '#FFFFFF',
+                          border: '1px solid #E9E4D8',
+                          borderRadius: 12,
+                          boxShadow: '0 8px 28px rgba(28,22,16,.14)',
+                          padding: 6,
+                          zIndex: 60,
+                        }}
+                      >
+                        <DropdownMenu.Item
+                          onSelect={() => {
+                            setQuickAddSpaceId(space.id)
+                            setQuickAddType('folder')
+                            setQuickAddFolderName('')
+                          }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                        >
+                          <Folder size={14} />
+                          <span>Create folder</span>
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          onSelect={() => {
+                            setQuickAddSpaceId(space.id)
+                            setQuickAddType('list')
+                            setQuickAddListName('')
+                          }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                        >
+                          <LayoutGrid size={14} />
+                          <span>Create list</span>
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
                   <DropdownMenu.Root open={openSpaceMenuId === space.id} onOpenChange={(open) => setOpenSpaceMenuId(open ? space.id : null)}>
                     <DropdownMenu.Trigger asChild>
                       <button
@@ -708,7 +786,7 @@ export default function Sidebar() {
                           <span>Rename</span>
                         </DropdownMenu.Item>
                         <DropdownMenu.Item
-                          onSelect={() => navigate(`/dept/${slugifySpaceName(space.slug ?? space.name)}?openStatuses=true`)}
+                          onSelect={() => navigate(`/dept/${slugifySpaceName(space.slug ?? space.name)}`)}
                           style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                         >
                           <Settings size={14} />
@@ -765,22 +843,30 @@ export default function Sidebar() {
                   boxShadow: '0 8px 28px rgba(28,22,16,.10)',
                 }}
               >
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#7A6F5E', marginBottom: 6 }}>New list in {space.name}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#7A6F5E', marginBottom: 6 }}>
+                  {quickAddType === 'folder' ? `New folder in ${space.name}` : `New list in ${space.name}`}
+                </div>
                 <input
                   autoFocus
-                  value={quickAddListName}
-                  onChange={(event) => setQuickAddListName(event.target.value)}
+                  value={quickAddType === 'folder' ? quickAddFolderName : quickAddListName}
+                  onChange={(event) => quickAddType === 'folder' ? setQuickAddFolderName(event.target.value) : setQuickAddListName(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
                       event.preventDefault()
-                      handleQuickAddList(space).catch(console.error)
+                      if (quickAddType === 'folder') {
+                        handleQuickAddFolder(space).catch(console.error)
+                      } else {
+                        handleQuickAddList(space).catch(console.error)
+                      }
                     }
                     if (event.key === 'Escape') {
                       setQuickAddSpaceId(null)
                       setQuickAddListName('')
+                      setQuickAddFolderName('')
+                      setQuickAddType(null)
                     }
                   }}
-                  placeholder="List name"
+                  placeholder={quickAddType === 'folder' ? 'Folder name' : 'List name'}
                   style={{
                     width: '100%',
                     border: '1px solid #D9D1C3',

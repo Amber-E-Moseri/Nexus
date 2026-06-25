@@ -14,7 +14,7 @@ export { default as PlainKanbanBoard } from './components/PlainKanbanBoard'
 export { default as TaskFilters } from './components/TaskFilters'
 export { default as TaskCalendarView } from './components/TaskCalendarView'
 // export { default as TaskTimeline } from './components/TaskTimeline' // Check if exists
-export { TasksProvider, TasksContext } from './TasksContext'
+export { TasksProvider, TasksContext, useTasks } from './TasksContext'
 
 // Export hooks
 export { useMyTasks, getMilestoneForTask, saveMilestone } from './hooks/useMyTasks'

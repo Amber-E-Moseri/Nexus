@@ -4,6 +4,9 @@ import { supabase } from '../../lib/supabase'
 import { OverviewTab } from './tabs/OverviewTab'
 import { PrayerRequestsTab } from './tabs/PrayerRequestsTab'
 import { PrayerActivityTab } from './tabs/PrayerActivityTab'
+import CampusEditForm from './CampusEditForm'
+import { useCanEditCampus } from '../../hooks/useCanEditCampus'
+import { useToast } from '../../context/ToastContext'
 
 const TAB_ICONS = {
   overview: '📊',
@@ -19,6 +22,7 @@ const TABS = [
 
 export function CampusDetailModal({ campus, isOpen, onClose }) {
   const [activeTab, setActiveTab] = useState('overview')
+  const [isEditing, setIsEditing] = useState(false)
   const [stats, setStats] = useState({
     totalPrayers: 0,
     activeRequests: 0,
@@ -27,6 +31,8 @@ export function CampusDetailModal({ campus, isOpen, onClose }) {
   const [prayerRequests, setPrayerRequests] = useState([])
   const [prayerLogs, setPrayerLogs] = useState([])
   const [loading, setLoading] = useState(false)
+  const canEdit = useCanEditCampus()
+  const { showToast } = useToast()
 
   // Load campus data
   useEffect(() => {
@@ -137,50 +143,100 @@ export function CampusDetailModal({ campus, isOpen, onClose }) {
         {/* Header */}
         <div className="blw-modal-header">
           <div className="blw-modal-header-content">
-            <h2 className="blw-modal-title">{campus.name || campus.institution}</h2>
-            {campus.institution && campus.name !== campus.institution && (
-              <p className="blw-modal-subtitle">{campus.institution}</p>
+            <h2 className="blw-modal-title">
+              {isEditing ? 'Edit Campus' : campus.name || campus.institution}
+            </h2>
+            {!isEditing && (
+              <>
+                {campus.institution && campus.name !== campus.institution && (
+                  <p className="blw-modal-subtitle">{campus.institution}</p>
+                )}
+                {campus.hub && <p className="blw-modal-hub">📍 {campus.hub}</p>}
+              </>
             )}
-            {campus.hub && <p className="blw-modal-hub">📍 {campus.hub}</p>}
           </div>
-          <button
-            className="blw-modal-close"
-            onClick={onClose}
-            aria-label="Close modal"
-          >
-            <X size={24} />
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {canEdit && !isEditing && (
+              <button
+                onClick={() => setIsEditing(true)}
+                style={{
+                  padding: '8px 12px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  background: '#667eea',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#5568d3')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = '#667eea')}
+              >
+                ✏️ Edit
+              </button>
+            )}
+            <button
+              className="blw-modal-close"
+              onClick={() => {
+                if (isEditing) {
+                  setIsEditing(false)
+                } else {
+                  onClose()
+                }
+              }}
+              aria-label={isEditing ? 'Cancel edit' : 'Close modal'}
+            >
+              <X size={24} />
+            </button>
+          </div>
         </div>
 
-        {/* Tabs */}
-        <div className="blw-modal-tabs">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              className={`blw-modal-tab ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-              aria-selected={activeTab === tab.id}
-            >
-              <span className="blw-modal-tab-icon">{tab.icon}</span>
-              <span className="blw-modal-tab-label">{tab.label}</span>
-            </button>
-          ))}
-        </div>
+        {/* Tabs - only show when not editing */}
+        {!isEditing && (
+          <div className="blw-modal-tabs">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                className={`blw-modal-tab ${activeTab === tab.id ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+                aria-selected={activeTab === tab.id}
+              >
+                <span className="blw-modal-tab-icon">{tab.icon}</span>
+                <span className="blw-modal-tab-label">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Content */}
         <div className="blw-modal-body">
-          {loading && <div className="blw-modal-loading">Loading...</div>}
+          {isEditing ? (
+            <CampusEditForm
+              campus={campus}
+              onSave={() => {
+                setIsEditing(false)
+                showToast('Edit submitted for review', { tone: 'success' })
+              }}
+              onCancel={() => setIsEditing(false)}
+              isLoading={false}
+            />
+          ) : (
+            <>
+              {loading && <div className="blw-modal-loading">Loading...</div>}
 
-          {!loading && activeTab === 'overview' && (
-            <OverviewTab stats={stats} campus={campus} />
-          )}
+              {!loading && activeTab === 'overview' && (
+                <OverviewTab stats={stats} campus={campus} />
+              )}
 
-          {!loading && activeTab === 'requests' && (
-            <PrayerRequestsTab campusId={campus.id} requests={prayerRequests} onRequestsChange={setPrayerRequests} />
-          )}
+              {!loading && activeTab === 'requests' && (
+                <PrayerRequestsTab campusId={campus.id} requests={prayerRequests} onRequestsChange={setPrayerRequests} />
+              )}
 
-          {!loading && activeTab === 'activity' && (
-            <PrayerActivityTab logs={prayerLogs} />
+              {!loading && activeTab === 'activity' && (
+                <PrayerActivityTab logs={prayerLogs} />
+              )}
+            </>
           )}
         </div>
       </div>

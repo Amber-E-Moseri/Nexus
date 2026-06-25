@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { MoreVertical } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { createTeamFromSpace, getAllSprints } from '../lib/sprints'
 
@@ -78,6 +80,10 @@ export default function ImportTeamModal({ onClose, onSuccess }) {
     )
   }
 
+  function handleOpenSpace(spaceId) {
+    window.open(`/spaces/${spaceId}`, '_blank')
+  }
+
   return (
     <div
       style={{
@@ -115,26 +121,40 @@ export default function ImportTeamModal({ onClose, onSuccess }) {
           <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 500 }}>
             Select Space <span style={{ color: 'var(--coral)' }}>*</span>
           </label>
-          <select
-            value={selectedSpaceId || ''}
-            onChange={(e) => setSelectedSpaceId(e.target.value || null)}
+          <div
             style={{
-              width: '100%',
-              padding: '10px 12px',
               border: '1px solid var(--border)',
               borderRadius: '8px',
-              fontSize: '14px',
-              fontFamily: 'inherit',
-              boxSizing: 'border-box',
+              maxHeight: '200px',
+              overflowY: 'auto',
+              background: 'white',
             }}
           >
-            <option value="">Choose a space...</option>
-            {spaces.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.title}
-              </option>
-            ))}
-          </select>
+            {spaces.length === 0 ? (
+              <div style={{ padding: '12px', color: 'var(--text-tertiary)', fontSize: '13px' }}>
+                No spaces available
+              </div>
+            ) : (
+              spaces.map((s) => (
+                <div
+                  key={s.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 12px',
+                    borderBottom: '1px solid var(--border)',
+                    cursor: 'pointer',
+                    background: selectedSpaceId === s.id ? 'var(--surface-hover)' : 'white',
+                  }}
+                  onClick={() => setSelectedSpaceId(s.id)}
+                >
+                  <span style={{ fontSize: '14px', flex: 1 }}>{s.title}</span>
+                  <SpaceContextMenu space={s} />
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         <div style={{ marginBottom: '24px' }}>
@@ -198,5 +218,65 @@ export default function ImportTeamModal({ onClose, onSuccess }) {
         </div>
       </div>
     </div>
+  )
+}
+
+function SpaceContextMenu({ space }) {
+  const handleSpaceAction = (action) => {
+    // Navigate to space page with query parameter for the action
+    const queryParam = action === 'view' ? '' : `?action=${action}`
+    window.open(`/spaces/${space.id}${queryParam}`, '_blank')
+  }
+
+  const menuItems = [
+    { icon: '👁️', label: 'View Space', action: 'view' },
+    { icon: '⚙', label: 'Statuses', action: 'statuses' },
+    { icon: '⚡', label: 'Automations', action: 'automations' },
+    { icon: '✏️', label: 'Edit', action: 'edit' },
+  ]
+
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            padding: '4px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-secondary)',
+          }}
+          aria-label="Space options"
+        >
+          <MoreVertical size={16} />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          side="bottom"
+          align="end"
+          sideOffset={4}
+          collisionPadding={8}
+          className="min-w-[180px] rounded-lg border border-[var(--border)] bg-white shadow-lg"
+          style={{ zIndex: 1001 }}
+        >
+          {menuItems.map(({ icon, label, action }) => (
+            <DropdownMenu.Item
+              key={action}
+              onSelect={() => handleSpaceAction(action)}
+              className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
+            >
+              <span>{icon}</span>
+              <span>{label}</span>
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   )
 }

@@ -1,6 +1,5 @@
-import { Bell, Check, Clock3, Mail, MessageSquare, TriangleAlert, UserRoundPlus } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import { formatNotificationMessage } from '../features/notifications'
+import { Bell, Mail } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { formatRelativeDate } from '../lib/dateUtils'
 import { getTaskById } from '../features/tasks/lib/tasks'
 import { supabase } from '../lib/supabase'
@@ -9,136 +8,9 @@ import { useAuth } from '../hooks/useAuth'
 
 const FILTERS = ['All', 'Unread']
 
-function initials(name = '') {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('') || '?'
-}
-
-function activityDescription(item) {
-  const actor = item.payload?.actor_name ?? 'Someone'
-  const taskTitle = item.payload?.task_title ?? 'a task'
-
-  switch (item.action) {
-    case 'task_assigned':
-      return `${actor} assigned you ${taskTitle}`
-    case 'task_status_changed':
-      return `${actor} updated ${taskTitle}`
-    case 'task_due_changed':
-      return `System is due today ${taskTitle}`
-    case 'comment_added':
-      return `${actor} commented on ${taskTitle}`
-    case 'comment_assigned':
-      return `${actor} assigned you ${taskTitle}`
-    case 'dependency_added':
-      return `${actor} flagged as blocked ${taskTitle}`
-    default:
-      return `${actor} updated ${taskTitle}`
-  }
-}
-
-function getFeedMeta(item) {
-  if (item.kind === 'notification') {
-    return {
-      icon: Mail,
-      iconClassName: 'bg-[#F1ECFF] text-[#5B33B6]',
-      title: formatNotificationMessage(item),
-      actor: item.payload?.actor_name ?? 'System',
-    }
-  }
-
-  if (item.action === 'comment_added') {
-    return {
-      icon: MessageSquare,
-      iconClassName: 'bg-[#F7F1E8] text-[#8C6331]',
-      title: activityDescription(item),
-      actor: item.payload?.actor_name ?? 'Someone',
-    }
-  }
-
-  if (item.action === 'dependency_added' || item.payload?.new_status === 'blocked') {
-    return {
-      icon: TriangleAlert,
-      iconClassName: 'bg-[#FFF0EC] text-[#D14F38]',
-      title: activityDescription(item),
-      actor: item.payload?.actor_name ?? 'Someone',
-    }
-  }
-
-  if (item.action === 'task_due_changed') {
-    return {
-      icon: Clock3,
-      iconClassName: 'bg-[#FFF8E8] text-[#D38A12]',
-      title: activityDescription(item),
-      actor: 'System',
-    }
-  }
-
-  if (item.action === 'task_assigned' || item.action === 'comment_assigned') {
-    return {
-      icon: UserRoundPlus,
-      iconClassName: 'bg-[#F1ECFF] text-[#6A42C7]',
-      title: activityDescription(item),
-      actor: item.payload?.actor_name ?? 'Someone',
-    }
-  }
-
-  if (item.action === 'task_status_changed' && ['done', 'completed'].includes(item.payload?.new_status)) {
-    return {
-      icon: Check,
-      iconClassName: 'bg-[#ECF9F1] text-[#3F8E63]',
-      title: activityDescription(item),
-      actor: item.payload?.actor_name ?? 'Someone',
-    }
-  }
-
-  return {
-    icon: Bell,
-    iconClassName: 'bg-[#F4F0EA] text-[#77624A]',
-    title: activityDescription(item),
-    actor: item.payload?.actor_name ?? 'Someone',
-  }
-}
-
-function combineFeedItems({ assignedComments, activityItems, notifications }) {
-  const assigned = assignedComments.map((comment) => ({
-    id: `assigned-${comment.id}`,
-    kind: 'assigned',
-    unread: true,
-    created_at: comment.assigned_at ?? comment.created_at,
-    payload: {
-      actor_name: comment.author?.name ?? 'Someone',
-      task_id: comment.task?.id ?? null,
-      task_title: comment.task?.title ?? 'a task',
-    },
-    title: `${comment.author?.name ?? 'Someone'} assigned you ${comment.task?.title ?? 'a task'}`,
-    comment,
-  }))
-
-  const activity = activityItems.map((item) => ({
-    ...item,
-    kind: 'activity',
-    unread: !item.read,
-  }))
-
-  const inboxNotifications = notifications.map((item) => ({
-    ...item,
-    kind: 'notification',
-    unread: !item.read,
-  }))
-
-  return [...assigned, ...activity, ...inboxNotifications].sort(
-    (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
-  )
-}
-
 export default function Inbox() {
   const { profile } = useAuth()
   const [filter, setFilter] = useState('All')
-  const [assignedComments, setAssignedComments] = useState([])
-  const [activityItems, setActivityItems] = useState([])
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [taskModal, setTaskModal] = useState(null)
@@ -152,51 +24,23 @@ export default function Inbox() {
       setLoading(true)
 
       try {
-        const [
-          assignedResult,
-          activityResult,
-          notificationResult,
-        ] = await Promise.all([
-          supabase
-            .from('task_comments')
-            .select(`
-              id,
-              body,
-              assigned_at,
-              created_at,
-              task:tasks!task_id(id, title, department_id, assignee_id, created_by, sprint_id),
-              author:users!author_id(id, name)
-            `)
-            .eq('assigned_to', profile.id)
-            .is('resolved_at', null)
-            .order('assigned_at', { ascending: false }),
-          supabase
-            .from('activity_feed')
-            .select('id, user_id, action, payload, read, created_at')
-            .eq('user_id', profile.id)
-            .order('created_at', { ascending: false })
-            .limit(50),
-          supabase
-            .from('notifications')
-            .select('id, user_id, type, payload, read, created_at')
-            .eq('user_id', profile.id)
-            .order('created_at', { ascending: false })
-            .limit(50),
-        ])
+        const { data: notificationResult, error: notificationError } = await supabase
+          .from('notifications')
+          .select('id, user_id, type, payload, read, created_at, title, description')
+          .eq('user_id', profile.id)
+          .order('created_at', { ascending: false })
+          .limit(100)
 
         if (!active) return
 
-        if (assignedResult.error) throw assignedResult.error
-        if (activityResult.error) throw activityResult.error
-        if (notificationResult.error) {
-          console.error('Notifications error:', notificationResult.error)
+        if (notificationError) {
+          console.error('Notifications error:', notificationError)
+          throw notificationError
         }
 
-        setAssignedComments(assignedResult.data ?? [])
-        setActivityItems(activityResult.data ?? [])
-        setNotifications(notificationResult.data ?? [])
+        setNotifications(notificationResult ?? [])
       } catch (err) {
-        console.error('Failed to load inbox:', err)
+        console.error('Failed to load notifications:', err)
       } finally {
         if (active) setLoading(false)
       }
@@ -209,62 +53,34 @@ export default function Inbox() {
     }
   }, [profile?.id])
 
-  const combinedFeed = useMemo(
-    () => combineFeedItems({ assignedComments, activityItems, notifications }),
-    [assignedComments, activityItems, notifications],
-  )
-
-  const unreadCount = combinedFeed.filter((item) => item.unread).length
+  const unreadCount = notifications.filter((item) => !item.read).length
   const filteredFeed = filter === 'Unread'
-    ? combinedFeed.filter((item) => item.unread)
-    : combinedFeed
-
-  async function openTask(taskId) {
-    if (!taskId) return
-    const task = await getTaskById(taskId)
-    setTaskModal(task)
-  }
+    ? notifications.filter((item) => !item.read)
+    : notifications
 
   async function markAllRead() {
-    const unreadActivityIds = activityItems.filter((item) => !item.read).map((item) => item.id)
-    const unreadNotificationIds = notifications.filter((item) => !item.read).map((item) => item.id)
+    const unreadIds = notifications.filter((item) => !item.read).map((item) => item.id)
 
-    setActivityItems((prev) => prev.map((item) => ({ ...item, read: true })))
+    if (unreadIds.length === 0) return
+
     setNotifications((prev) => prev.map((item) => ({ ...item, read: true })))
 
-    await Promise.all([
-      unreadActivityIds.length
-        ? supabase.from('activity_feed').update({ read: true }).in('id', unreadActivityIds)
-        : Promise.resolve(),
-      unreadNotificationIds.length
-        ? supabase.from('notifications').update({ read: true }).in('id', unreadNotificationIds)
-        : Promise.resolve(),
-    ])
+    await supabase.from('notifications').update({ read: true }).in('id', unreadIds)
   }
 
   async function handleItemClick(item) {
-    if (item.kind === 'assigned') {
-      await openTask(item.comment?.task?.id)
-      return
-    }
-
-    if (item.kind === 'activity') {
-      if (!item.read) {
-        setActivityItems((prev) => prev.map((entry) => (
-          entry.id === item.id ? { ...entry, read: true } : entry
-        )))
-        await supabase.from('activity_feed').update({ read: true }).eq('id', item.id)
-      }
-
-      await openTask(item.payload?.task_id)
-      return
-    }
-
+    // Mark as read
     if (!item.read) {
       setNotifications((prev) => prev.map((entry) => (
         entry.id === item.id ? { ...entry, read: true } : entry
       )))
       await supabase.from('notifications').update({ read: true }).eq('id', item.id)
+    }
+
+    // Navigate or perform action based on notification type
+    if (item.payload?.task_id) {
+      const task = await getTaskById(item.payload.task_id)
+      setTaskModal(task)
     }
   }
 
@@ -316,53 +132,42 @@ export default function Inbox() {
         {!loading ? (
           filteredFeed.length === 0 ? (
             <div className="rounded-[24px] border border-dashed border-[var(--border)] bg-white px-6 py-10 text-center text-sm text-[var(--text-secondary)] shadow-[var(--card-shadow)]">
-              No inbox items.
+              <Bell className="mx-auto mb-3 h-8 w-8 opacity-30" />
+              No notifications yet
             </div>
           ) : (
             <div className="overflow-hidden rounded-[24px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)]">
-              {filteredFeed.map((item, index) => {
-                const meta = item.kind === 'assigned'
-                  ? {
-                    icon: UserRoundPlus,
-                    iconClassName: 'bg-[#F1ECFF] text-[#6A42C7]',
-                    title: item.title,
-                    actor: item.payload?.actor_name ?? 'Someone',
-                  }
-                  : getFeedMeta(item)
+              {filteredFeed.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleItemClick(item)}
+                  className={[
+                    'flex w-full items-center gap-4 px-4 py-4 text-left transition hover:bg-[var(--surface-secondary)]',
+                    index < filteredFeed.length - 1 ? 'border-b border-[var(--border)]' : '',
+                  ].join(' ')}
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#F1ECFF] text-[#6A42C7]">
+                    <Mail size={14} />
+                  </div>
 
-                const Icon = meta.icon
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleItemClick(item)}
-                    className={[
-                      'flex w-full items-center gap-4 px-4 py-4 text-left transition hover:bg-[var(--surface-secondary)]',
-                      index < filteredFeed.length - 1 ? 'border-b border-[var(--border)]' : '',
-                    ].join(' ')}
-                  >
-                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${meta.iconClassName}`}>
-                      {item.kind === 'activity' && !['task_due_changed'].includes(item.action) ? (
-                        <span className="text-[11px] font-bold">{initials(meta.actor)}</span>
-                      ) : (
-                        <Icon size={14} />
-                      )}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[15px] text-[var(--text-primary)]">
+                      <span className="font-semibold">{item.title}</span>
                     </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[15px] text-[var(--text-primary)]">
-                        <span className="font-semibold">{meta.title}</span>
+                    {item.description && (
+                      <div className="mt-1 truncate text-sm text-[var(--text-secondary)]">
+                        {item.description}
                       </div>
-                      <div className="mt-1 text-sm text-[var(--text-tertiary)]">
-                        {formatRelativeDate(item.created_at, { includeTime: true })}
-                      </div>
+                    )}
+                    <div className="mt-1 text-sm text-[var(--text-tertiary)]">
+                      {formatRelativeDate(item.created_at, { includeTime: true })}
                     </div>
+                  </div>
 
-                    {item.unread ? <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#F26B55]" /> : null}
-                  </button>
-                )
-              })}
+                  {!item.read ? <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#F26B55]" /> : null}
+                </button>
+              ))}
             </div>
           )
         ) : null}
