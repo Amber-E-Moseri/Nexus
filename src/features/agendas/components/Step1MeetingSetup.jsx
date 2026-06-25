@@ -1,7 +1,9 @@
+import { useHasPermission } from '../../../hooks/useHasPermission'
 import { useAgendaWizard, validateStep1 } from '../../../hooks/useAgendaWizard'
 import { MEETING_TYPES, THEME_OPTIONS } from '../../../data/agendaTemplates'
 
 export default function Step1MeetingSetup() {
+  const { hasPermission, loading: checkingPermissions } = useHasPermission('meetings:manage')
   const { agendaData, updateAgendaData, setError, errors, goToStep } = useAgendaWizard()
 
   function handleNext() {
@@ -13,6 +15,25 @@ export default function Step1MeetingSetup() {
       return
     }
     goToStep(2)
+  }
+
+  // Permission guard
+  if (!checkingPermissions && !hasPermission) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <h2 style={{ color: '#DC3545', marginBottom: 16 }}>Access Denied</h2>
+        <p style={{ color: '#9E9488', marginBottom: 20 }}>
+          You don't have permission to create agendas. Only ORS members can plan meetings.
+        </p>
+        <p style={{ fontSize: 12, color: '#999' }}>
+          Contact your administrator if you believe this is an error.
+        </p>
+      </div>
+    )
+  }
+
+  if (checkingPermissions) {
+    return <div style={{ padding: '40px', textAlign: 'center' }}>Checking permissions...</div>
   }
 
   return (

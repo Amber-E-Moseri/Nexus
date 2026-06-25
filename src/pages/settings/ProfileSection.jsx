@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import Avatar from '../../components/ui/Avatar'
 import { deleteAvatar, uploadAvatar } from '../../lib/users'
 import { useToast } from '../../context/ToastContext'
@@ -31,6 +31,60 @@ export default function ProfileSection({
   const fileInputRef = useRef(null)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState('')
+  const [deferredPrompt, setDeferredPrompt] = useState(null)
+  const [canInstall, setCanInstall] = useState(false)
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      console.log('[PWA] beforeinstallprompt event fired')
+      e.preventDefault()
+      setDeferredPrompt(e)
+      setCanInstall(true)
+    }
+
+    const handleAppInstalled = () => {
+      console.log('[PWA] App installed')
+      setDeferredPrompt(null)
+      setCanInstall(false)
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    window.addEventListener('appinstalled', handleAppInstalled)
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', handleAppInstalled)
+    }
+  }, [])
+
+  const handleInstallApp = async () => {
+    console.log('[PWA] Download app clicked, deferredPrompt:', !!deferredPrompt)
+
+    if (!deferredPrompt) {
+      console.log('[PWA] No deferred prompt available')
+      showToast('App not ready for installation yet. Try again in a moment.', { tone: 'info' })
+      return
+    }
+
+    try {
+      console.log('[PWA] Showing install prompt')
+      deferredPrompt.prompt()
+      const { outcome } = await deferredPrompt.userChoice
+      console.log('[PWA] User choice:', outcome)
+
+      if (outcome === 'accepted') {
+        showToast('App installed successfully!', { tone: 'success' })
+      } else {
+        showToast('Installation cancelled', { tone: 'info' })
+      }
+
+      setDeferredPrompt(null)
+      setCanInstall(false)
+    } catch (err) {
+      console.error('[PWA] Error:', err)
+      showToast('Error installing app: ' + err.message, { tone: 'error' })
+    }
+  }
 
   const handleChangePhotoClick = () => {
     fileInputRef.current?.click()
@@ -236,6 +290,18 @@ export default function ProfileSection({
             className="flex w-full items-center justify-between rounded-2xl border border-[var(--border)] px-4 py-4 text-left text-sm font-semibold text-[var(--text-primary)]"
           >
             <span>Two-factor authentication</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              console.log('BUTTON CLICKED')
+              handleInstallApp()
+            }}
+            className="flex w-full items-center justify-center rounded-2xl border border-[var(--accent)] bg-[var(--accent-light)] px-4 py-4 text-sm font-semibold text-[var(--accent)]"
+            style={{ cursor: 'pointer' }}
+          >
+            Download app
           </button>
 
           <button

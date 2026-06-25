@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabase'
+import { userHasPermission } from '../../../lib/permissions/api'
 
 // ============================================================================
 // Agenda CRUD Operations
@@ -283,36 +284,59 @@ export async function deleteTemplate(templateId) {
 // ============================================================================
 
 export async function createMeetingWithAgenda(meetingData, agendaData, agendaItems) {
-  // First create the agenda
-  const agenda = await createAgenda(agendaData, agendaItems)
+  try {
+    // Check permission
+    const { data: user, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      throw new Error('User not authenticated')
+    }
 
-  // Then create the meeting linked to the agenda
-  const { data: meeting, error: meetingError } = await supabase
-    .from('meetings')
-    .insert([
-      {
-        title: meetingData.title || agendaData.title,
-        department_id: agendaData.departmentId,
-        date: new Date(agendaData.date).toISOString(),
-        meeting_type: agendaData.meetingType,
-        summary: meetingData.summary || null,
-        minutes: meetingData.minutes || null,
-        created_by: agendaData.createdBy,
-        zoom_join_url: meetingData.zoomJoinUrl || null,
-        drive_url: meetingData.driveUrl || null,
-      },
-    ])
-    .select()
-    .single()
+    const hasPermission = await userHasPermission(user.id, 'meetings:manage')
+    if (!hasPermission) {
+      throw new Error('You do not have permission to create meetings. Contact your administrator.')
+    }
 
-  if (meetingError) {
-    // Clean up agenda if meeting creation fails
-    await deleteAgenda(agenda.id)
-    throw new Error(`Failed to create meeting: ${meetingError.message}`)
+    // Ensure department_id is set
+    if (!agendaData.departmentId) {
+      throw new Error('Department ID is required')
+    }
+
+    // Create the agenda
+    const agenda = await createAgenda(agendaData, agendaItems)
+
+    // Create the meeting linked to the agenda
+    const { data: meeting, error: meetingError } = await supabase
+      .from('meetings')
+      .insert([
+        {
+          title: meetingData.title || agendaData.title,
+          department_id: agendaData.departmentId,
+          date: new Date(agendaData.date).toISOString(),
+          meeting_type: agendaData.meetingType,
+          summary: meetingData.summary || null,
+          minutes: meetingData.minutes || null,
+          created_by: agendaData.createdBy,
+          zoom_join_url: meetingData.zoomJoinUrl || null,
+          drive_url: meetingData.driveUrl || null,
+        },
+      ])
+      .select()
+      .single()
+
+    if (meetingError) {
+      await deleteAgenda(agenda.id)
+      throw new Error(`Failed to create meeting: ${meetingError.message}`)
+    }
+
+    // Link agenda to meeting
+    await updateAgenda(agenda.id, { meeting_id: meeting.id })
+
+    // Set agenda status to 'finalized'
+    await updateAgenda(agenda.id, { status: 'finalized' })
+
+    return { meeting, agenda }
+  } catch (error) {
+    console.error('createMeetingWithAgenda error:', error)
+    throw error
   }
-
-  // Link agenda to meeting
-  await updateAgenda(agenda.id, { meeting_id: meeting.id })
-
-  return { meeting, agenda }
 }

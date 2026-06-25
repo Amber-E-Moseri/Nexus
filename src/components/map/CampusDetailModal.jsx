@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import * as Dialog from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { OverviewTab } from './tabs/OverviewTab'
@@ -7,6 +8,7 @@ import { PrayerActivityTab } from './tabs/PrayerActivityTab'
 import CampusEditForm from './CampusEditForm'
 import { useCanEditCampus } from '../../hooks/useCanEditCampus'
 import { useToast } from '../../context/ToastContext'
+import '../../../styles/campus-detail-modal.css'
 
 const TAB_ICONS = {
   overview: '📊',
@@ -135,111 +137,97 @@ export function CampusDetailModal({ campus, isOpen, onClose }) {
     }
   }, [isOpen, campus?.id])
 
-  if (!isOpen || !campus) return null
-
   return (
-    <div className="blw-modal-overlay" onClick={onClose}>
-      <div className="blw-modal-content" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="blw-modal-header">
-          <div className="blw-modal-header-content">
-            <h2 className="blw-modal-title">
-              {isEditing ? 'Edit Campus' : campus.name || campus.institution}
-            </h2>
-            {!isEditing && (
+    <Dialog.Root open={isOpen} onOpenChange={onClose}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="campus-modal-overlay" />
+        <Dialog.Content className="campus-modal-content">
+          {/* Header */}
+          <div className="campus-modal-header">
+            <div className="campus-modal-header-content">
+              <Dialog.Title className="campus-modal-title">
+                {isEditing ? 'Edit Campus' : campus?.name || campus?.institution}
+              </Dialog.Title>
+              {!isEditing && campus && (
+                <>
+                  {campus.institution && campus.name !== campus.institution && (
+                    <p className="campus-modal-subtitle">{campus.institution}</p>
+                  )}
+                  {campus.hub && <p className="campus-modal-hub">📍 {campus.hub}</p>}
+                </>
+              )}
+            </div>
+            <div className="campus-modal-actions">
+              {canEdit && !isEditing && (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="campus-modal-edit-btn"
+                  aria-label="Edit campus"
+                >
+                  ✏️ Edit
+                </button>
+              )}
+              <Dialog.Close asChild>
+                <button
+                  className="campus-modal-close"
+                  onClick={() => setIsEditing(false)}
+                  aria-label={isEditing ? 'Cancel edit' : 'Close modal'}
+                >
+                  <X size={20} />
+                </button>
+              </Dialog.Close>
+            </div>
+          </div>
+
+          {/* Tabs - only show when not editing */}
+          {!isEditing && (
+            <div className="campus-modal-tabs">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  className={`campus-modal-tab ${activeTab === tab.id ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                  aria-selected={activeTab === tab.id}
+                >
+                  <span className="campus-modal-tab-icon">{tab.icon}</span>
+                  <span className="campus-modal-tab-label">{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Content */}
+          <div className="campus-modal-body">
+            {isEditing ? (
+              <CampusEditForm
+                campus={campus}
+                onSave={() => {
+                  setIsEditing(false)
+                  showToast('Edit submitted for review', { tone: 'success' })
+                }}
+                onCancel={() => setIsEditing(false)}
+                isLoading={false}
+              />
+            ) : (
               <>
-                {campus.institution && campus.name !== campus.institution && (
-                  <p className="blw-modal-subtitle">{campus.institution}</p>
+                {loading && <div className="campus-modal-loading">Loading...</div>}
+
+                {!loading && campus && activeTab === 'overview' && (
+                  <OverviewTab stats={stats} campus={campus} />
                 )}
-                {campus.hub && <p className="blw-modal-hub">📍 {campus.hub}</p>}
+
+                {!loading && campus && activeTab === 'requests' && (
+                  <PrayerRequestsTab campusId={campus.id} requests={prayerRequests} onRequestsChange={setPrayerRequests} />
+                )}
+
+                {!loading && campus && activeTab === 'activity' && (
+                  <PrayerActivityTab logs={prayerLogs} />
+                )}
               </>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {canEdit && !isEditing && (
-              <button
-                onClick={() => setIsEditing(true)}
-                style={{
-                  padding: '8px 12px',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  background: '#667eea',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = '#5568d3')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = '#667eea')}
-              >
-                ✏️ Edit
-              </button>
-            )}
-            <button
-              className="blw-modal-close"
-              onClick={() => {
-                if (isEditing) {
-                  setIsEditing(false)
-                } else {
-                  onClose()
-                }
-              }}
-              aria-label={isEditing ? 'Cancel edit' : 'Close modal'}
-            >
-              <X size={24} />
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs - only show when not editing */}
-        {!isEditing && (
-          <div className="blw-modal-tabs">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                className={`blw-modal-tab ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-                aria-selected={activeTab === tab.id}
-              >
-                <span className="blw-modal-tab-icon">{tab.icon}</span>
-                <span className="blw-modal-tab-label">{tab.label}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Content */}
-        <div className="blw-modal-body">
-          {isEditing ? (
-            <CampusEditForm
-              campus={campus}
-              onSave={() => {
-                setIsEditing(false)
-                showToast('Edit submitted for review', { tone: 'success' })
-              }}
-              onCancel={() => setIsEditing(false)}
-              isLoading={false}
-            />
-          ) : (
-            <>
-              {loading && <div className="blw-modal-loading">Loading...</div>}
-
-              {!loading && activeTab === 'overview' && (
-                <OverviewTab stats={stats} campus={campus} />
-              )}
-
-              {!loading && activeTab === 'requests' && (
-                <PrayerRequestsTab campusId={campus.id} requests={prayerRequests} onRequestsChange={setPrayerRequests} />
-              )}
-
-              {!loading && activeTab === 'activity' && (
-                <PrayerActivityTab logs={prayerLogs} />
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }

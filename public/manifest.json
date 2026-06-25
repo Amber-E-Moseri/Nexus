@@ -10,45 +10,19 @@
   "background_color": "#FFFFFF",
   "icons": [
     {
-      "src": "/logo-purple-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
+      "src": "/logo-purple.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/logo-purple-192.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/logo-purple-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/logo-purple-192.png",
-      "sizes": "512x512",
-      "type": "image/png",
+      "src": "/logo-purple.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "maskable"
     }
   ],
   "categories": ["productivity", "business"],
-  "screenshots": [
-    {
-      "src": "/canada_sr.png",
-      "sizes": "540x720",
-      "type": "image/png",
-      "form_factor": "narrow"
-    },
-    {
-      "src": "/canada_sr.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide"
-    }
-  ],
   "shortcuts": [
     {
       "name": "My Tasks",

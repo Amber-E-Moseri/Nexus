@@ -6,10 +6,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationsContext'
 import { useAuth } from '../hooks/useAuth'
+import { canAccessFlockCRM } from '../lib/permissions'
 import { getUserDashboardPreferences, getRoleDashboardDefaults, upsertDashboardPreferences, deleteDashboardPreferences } from '../features/dashboard/lib/dashboards'
 import { supabase } from '../lib/supabase'
 import { getMyTasks } from '../features/tasks'
 import { isTaskCompleted } from '../lib/taskStatuses'
+import FlockDashboardSection from '../components/flock/FlockDashboardSection'
 import CompletionRateWidget from '../features/dashboard/components/CompletionRateWidget'
 import MemberActivityWidget from '../features/dashboard/components/MemberActivityWidget'
 import OverdueByMemberWidget from '../features/dashboard/components/OverdueByMemberWidget'
@@ -612,6 +614,11 @@ export default function Dashboard() {
             ))}
           </div>
         )}
+
+        {/* ════════════════════════════════════════════════════════════ */}
+        {/* FLOCK CRM SECTION — REGIONAL SECRETARY ONLY                  */}
+        {/* ════════════════════════════════════════════════════════════ */}
+        {canAccessFlockCRM(role) && <FlockDashboardSection />}
       </div>
 
       {showCustomize ? (

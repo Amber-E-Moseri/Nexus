@@ -27,7 +27,7 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(28, 22, 16, 0.4)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -38,14 +38,14 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
     >
       <div
         style={{
-          backgroundColor: 'white',
+          backgroundColor: 'var(--surface)',
           padding: '24px',
           borderRadius: '12px',
           maxWidth: '500px',
           width: '100%',
           maxHeight: '90vh',
           overflow: 'auto',
-          boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)',
+          boxShadow: 'var(--shadow-lg)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -62,7 +62,7 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
             style={{
               fontSize: 18,
               fontWeight: 700,
-              color: '#2c2c2a',
+              color: 'var(--text-primary)',
               margin: 0,
             }}
           >
@@ -74,7 +74,7 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
             style={{
               background: 'none',
               border: 'none',
-              color: '#999',
+              color: 'var(--text-secondary)',
               cursor: isLoading ? 'not-allowed' : 'pointer',
               padding: 0,
               display: 'flex',
@@ -95,30 +95,30 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
           style={{
             margin: '16px 0',
             padding: '16px',
-            backgroundColor: '#f9f7f3',
+            backgroundColor: 'var(--surface-secondary)',
             borderRadius: '8px',
-            border: '1px solid #e0d5c8',
+            border: '1px solid var(--border)',
           }}
         >
           <div style={{ marginBottom: '12px' }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#999', textTransform: 'uppercase' }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
               Campus
             </label>
-            <p style={{ margin: '4px 0 0 0', fontSize: 14, fontWeight: 600, color: '#2c2c2a' }}>
+            <p style={{ margin: '4px 0 0 0', fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
               {edit.campuses?.name || 'Unknown'}
             </p>
             {edit.campuses?.institution && (
-              <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#666' }}>
+              <p style={{ margin: '2px 0 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
                 {edit.campuses.institution}
               </p>
             )}
           </div>
 
           <div style={{ marginBottom: '12px' }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#999', textTransform: 'uppercase' }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
               Field
             </label>
-            <p style={{ margin: '4px 0 0 0', fontSize: 13, fontFamily: 'Monaco, monospace', color: '#2c2c2a' }}>
+            <p style={{ margin: '4px 0 0 0', fontSize: 13, fontFamily: 'Monaco, monospace', color: 'var(--text-primary)' }}>
               {edit.field_name}
             </p>
           </div>
@@ -131,7 +131,7 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
             }}
           >
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#999', textTransform: 'uppercase' }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
                 Old Value
               </label>
               <p
@@ -139,11 +139,11 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
                   margin: '4px 0 0 0',
                   fontSize: 12,
                   fontFamily: 'Monaco, monospace',
-                  color: '#666',
-                  backgroundColor: 'white',
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'var(--surface)',
                   padding: '8px',
                   borderRadius: 4,
-                  border: '1px solid #e0d5c8',
+                  border: '1px solid var(--border)',
                   wordBreak: 'break-word',
                 }}
               >
@@ -151,7 +151,7 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
               </p>
             </div>
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#667eea', textTransform: 'uppercase' }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase' }}>
                 New Value
               </label>
               <p
@@ -160,11 +160,11 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
                   fontSize: 12,
                   fontFamily: 'Monaco, monospace',
                   fontWeight: 600,
-                  color: '#2c2c2a',
-                  backgroundColor: '#e8f4ff',
+                  color: 'var(--text-primary)',
+                  backgroundColor: 'var(--info-bg)',
                   padding: '8px',
                   borderRadius: 4,
-                  border: '1px solid #667eea',
+                  border: '1px solid var(--accent)',
                   wordBreak: 'break-word',
                 }}
               >
@@ -181,13 +181,13 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
               display: 'block',
               fontSize: 11,
               fontWeight: 600,
-              color: '#999',
+              color: 'var(--text-secondary)',
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
               marginBottom: '6px',
             }}
           >
-            {isApprove ? 'Optional Notes' : 'Rejection Reason'} {!isApprove && <span style={{ color: '#ef4444' }}>*</span>}
+            {isApprove ? 'Optional Notes' : 'Rejection Reason'} {!isApprove && <span style={{ color: 'var(--coral)' }}>*</span>}
           </label>
           <textarea
             placeholder={
@@ -204,12 +204,12 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
               minHeight: '100px',
               fontFamily: 'inherit',
               fontSize: 13,
-              color: '#2c2c2a',
-              border: '1px solid #e0d5c8',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border)',
               borderRadius: '8px',
               outline: 'none',
               resize: 'vertical',
-              backgroundColor: isLoading ? '#f5f5f5' : 'white',
+              backgroundColor: isLoading ? 'var(--surface-secondary)' : 'var(--surface)',
               opacity: isLoading ? 0.6 : 1,
               cursor: isLoading ? 'not-allowed' : 'auto',
               transition: 'all 0.2s',
@@ -232,19 +232,19 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
               padding: '10px 16px',
               fontSize: 13,
               fontWeight: 600,
-              background: '#f0f0f0',
-              color: '#2c2c2a',
-              border: '1px solid #d0d0d0',
+              background: 'var(--surface-secondary)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border)',
               borderRadius: '6px',
               cursor: isLoading ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s',
               opacity: isLoading ? 0.6 : 1,
             }}
             onMouseEnter={(e) => {
-              if (!isLoading) e.currentTarget.style.background = '#e0e0e0'
+              if (!isLoading) e.currentTarget.style.background = 'var(--border-light)'
             }}
             onMouseLeave={(e) => {
-              if (!isLoading) e.currentTarget.style.background = '#f0f0f0'
+              if (!isLoading) e.currentTarget.style.background = 'var(--surface-secondary)'
             }}
           >
             Cancel
@@ -256,7 +256,7 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
               padding: '10px 16px',
               fontSize: 13,
               fontWeight: 600,
-              background: isApprove ? '#10b981' : '#ef4444',
+              background: isApprove ? 'var(--sage)' : 'var(--coral)',
               color: 'white',
               border: 'none',
               borderRadius: '6px',
@@ -268,7 +268,7 @@ export default function ApprovalModal({ edit, action, isOpen, onClose, onSubmit,
             onMouseEnter={(e) => {
               if (!isLoading && !(action === 'reject' && !notes.trim())) {
                 e.currentTarget.style.transform = 'translateY(-1px)'
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)'
+                e.currentTarget.style.boxShadow = 'var(--shadow)'
               }
             }}
             onMouseLeave={(e) => {

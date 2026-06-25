@@ -1,4 +1,4 @@
-import { createContext, useCallback, useState } from 'react'
+import { createContext, useCallback, useState, useEffect, useRef } from 'react'
 
 export const AgendaBuilderContext = createContext(null)
 
@@ -18,6 +18,9 @@ export function AgendaBuilderProvider({ children }) {
   const [selectedTemplate, setSelectedTemplate] = useState('tpl-sunday-service')
   const [errors, setErrors] = useState({})
   const [isSaving, setIsSaving] = useState(false)
+  const [autoSaveStatus, setAutoSaveStatus] = useState('idle') // 'idle', 'saving', 'saved', 'error'
+  const autoSaveTimerRef = useRef(null)
+  const draftIdRef = useRef(null) // Track which draft we're saving
 
   const goToStep = useCallback((nextStep) => {
     setStep(nextStep)
@@ -92,7 +95,57 @@ export function AgendaBuilderProvider({ children }) {
     setSelectedTemplate('tpl-sunday-service')
     setErrors({})
     setIsSaving(false)
+    draftIdRef.current = null
   }, [])
+
+  // Auto-save effect (every 30 seconds)
+  useEffect(() => {
+    const shouldAutoSave = agendaData.title && agendaItems.length > 0 && !isSaving
+
+    if (shouldAutoSave) {
+      // Clear previous timer
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
+      }
+
+      // Set new timer
+      autoSaveTimerRef.current = setTimeout(async () => {
+        try {
+          setAutoSaveStatus('saving')
+
+          // Lazy import to avoid circular dependencies
+          const { createAgenda, updateAgenda } = await import('../features/agendas/lib/agendas')
+
+          // If no draft ID yet, create the agenda
+          if (!draftIdRef.current) {
+            const agenda = await createAgenda(agendaData, agendaItems)
+            draftIdRef.current = agenda.id
+            setAutoSaveStatus('saved')
+          } else {
+            // Otherwise, update existing draft
+            await updateAgenda(draftIdRef.current, agendaData)
+            setAutoSaveStatus('saved')
+          }
+
+          // Clear "saved" status after 3 seconds
+          setTimeout(() => {
+            setAutoSaveStatus('idle')
+          }, 3000)
+        } catch (err) {
+          console.error('Auto-save failed:', err)
+          setAutoSaveStatus('error')
+          // Retry after 10 seconds
+          setTimeout(() => setAutoSaveStatus('idle'), 10000)
+        }
+      }, 30000) // 30 second interval
+    }
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
+      }
+    }
+  }, [agendaData, agendaItems, isSaving])
 
   const value = {
     step,
@@ -113,6 +166,8 @@ export function AgendaBuilderProvider({ children }) {
     clearErrors,
     isSaving,
     setIsSaving,
+    autoSaveStatus,
+    draftAgendaId: draftIdRef.current,
   }
 
   return (

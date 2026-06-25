@@ -6,11 +6,11 @@ const inputStyle = {
   width: '100%',
   fontSize: 13,
   padding: '10px 12px',
-  border: '1px solid #e0d5c8',
+  border: '1px solid var(--border)',
   borderRadius: 8,
   outline: 'none',
-  background: 'white',
-  color: '#2c2c2a',
+  background: 'var(--surface)',
+  color: 'var(--text-primary)',
   fontFamily: 'inherit',
   boxSizing: 'border-box',
 }
@@ -19,9 +19,9 @@ const labelStyle = {
   display: 'block',
   fontSize: 11,
   fontWeight: 600,
-  color: '#999',
+  color: 'var(--text-secondary)',
   textTransform: 'uppercase',
-  letterSpacing: '0.05em',
+  letterSpacing: '0.08em',
   marginBottom: 6,
 }
 
@@ -48,15 +48,15 @@ const buttonStyle = {
 
 const saveButtonStyle = {
   ...buttonStyle,
-  background: '#667eea',
+  background: 'var(--accent)',
   color: 'white',
 }
 
 const cancelButtonStyle = {
   ...buttonStyle,
-  background: '#f0f0f0',
-  color: '#2c2c2a',
-  border: '1px solid #e0e0e0',
+  background: 'var(--surface-secondary)',
+  color: 'var(--text-primary)',
+  border: '1px solid var(--border)',
 }
 
 export default function CampusEditForm({ campus, onSave, onCancel, isLoading }) {
@@ -113,10 +113,10 @@ export default function CampusEditForm({ campus, onSave, onCancel, isLoading }) 
           style={{
             marginBottom: 16,
             padding: '10px 12px',
-            background: '#fce8e6',
-            border: '1px solid #f3d0c8',
+            background: 'var(--fs-danger-bg)',
+            border: '1px solid var(--fs-danger-bd)',
             borderRadius: 8,
-            color: '#c94830',
+            color: 'var(--fs-danger)',
             fontSize: 12,
           }}
         >

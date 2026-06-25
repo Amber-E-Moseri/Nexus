@@ -1,6 +1,7 @@
 ﻿import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
+import { useHasPermission } from '../../../hooks/useHasPermission'
 import { useAgendaWizard, calculateTimings } from '../../../hooks/useAgendaWizard'
 import { THEME_OPTIONS } from '../../../data/agendaTemplates'
 import { generateAgendaPdf } from '../../../lib/agendaPdfGenerator'
@@ -9,12 +10,32 @@ import { createAgenda, createMeetingWithAgenda } from '..'
 export default function Step3PreviewExport() {
   const navigate = useNavigate()
   const { profile } = useAuth()
+  const { hasPermission: canCreateMeetings, loading: checkingPermissions } = useHasPermission('meetings:manage')
   const { agendaData, agendaItems, isSaving, setIsSaving, reset } = useAgendaWizard()
   const [exportError, setExportError] = useState(null)
 
   const timings = calculateTimings(agendaData.startTime, agendaItems)
   const selectedTheme = THEME_OPTIONS.find((t) => t.id === agendaData.theme) || THEME_OPTIONS[0]
   const totalMinutes = timings.reduce((sum, item) => sum + item.duration, 0)
+
+  // Permission guard
+  if (!checkingPermissions && !canCreateMeetings) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center', background: '#FCFAF6', borderRadius: 12 }}>
+        <h2 style={{ color: '#DC3545', marginBottom: 16 }}>Cannot Finalize</h2>
+        <p style={{ color: '#9E9488', marginBottom: 20 }}>
+          You don't have permission to finalize agendas. Only ORS members can publish meetings.
+        </p>
+        <p style={{ fontSize: 12, color: '#999' }}>
+          Contact your administrator if you believe this is an error.
+        </p>
+      </div>
+    )
+  }
+
+  if (checkingPermissions) {
+    return <div style={{ padding: '40px', textAlign: 'center' }}>Verifying permissions...</div>
+  }
 
   async function handleExportPdf() {
     setExportError(null)
@@ -64,11 +85,14 @@ export default function Step3PreviewExport() {
         agendaItems
       )
 
-      alert(`✓ Meeting planned! (ID: ${meeting.id.slice(0, 8)})`)
+      const successMsg = `✓ Meeting finalized! ID: ${meeting.id.slice(0, 8)} | Agenda: ${agenda.id.slice(0, 8)}`
+      setExportError(null)
+      alert(successMsg)
       reset()
       navigate('/meetings')
     } catch (err) {
-      setExportError(err.message || 'Failed to save agenda')
+      const errorMessage = err.message || 'Failed to finalize meeting'
+      setExportError(errorMessage)
       console.error(err)
     } finally {
       setIsSaving(false)

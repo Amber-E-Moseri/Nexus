@@ -25,7 +25,7 @@ export default function CampusEditsPage() {
         style={{
           padding: '2rem',
           textAlign: 'center',
-          color: '#c94830',
+          color: 'var(--coral)',
         }}
       >
         <h2>Unauthorized</h2>
@@ -103,8 +103,8 @@ export default function CampusEditsPage() {
     padding: '10px 16px',
     fontSize: 13,
     fontWeight: isActive ? '700' : '600',
-    background: isActive ? '#667eea' : '#f0f0f0',
-    color: isActive ? 'white' : '#2c2c2a',
+    background: isActive ? 'var(--accent)' : 'var(--surface-secondary)',
+    color: isActive ? 'white' : 'var(--text-primary)',
     border: 'none',
     borderRadius: 6,
     cursor: 'pointer',
@@ -123,7 +123,7 @@ export default function CampusEditsPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700, color: '#2c2c2a', marginBottom: '1rem' }}>
+      <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginBottom: '1rem' }}>
         Campus Edit Approvals
       </h1>
 
@@ -133,10 +133,10 @@ export default function CampusEditsPage() {
           onClick={() => setTab('pending')}
           style={tabButtonStyle(tab === 'pending')}
           onMouseEnter={(e) => {
-            if (tab !== 'pending') e.currentTarget.style.background = '#e8e8e8'
+            if (tab !== 'pending') e.currentTarget.style.background = 'var(--border-light)'
           }}
           onMouseLeave={(e) => {
-            if (tab !== 'pending') e.currentTarget.style.background = '#f0f0f0'
+            if (tab !== 'pending') e.currentTarget.style.background = 'var(--surface-secondary)'
           }}
         >
           ⏳ Pending {pendingCount > 0 && `(${pendingCount})`}
@@ -145,10 +145,10 @@ export default function CampusEditsPage() {
           onClick={() => setTab('approved')}
           style={tabButtonStyle(tab === 'approved')}
           onMouseEnter={(e) => {
-            if (tab !== 'approved') e.currentTarget.style.background = '#e8e8e8'
+            if (tab !== 'approved') e.currentTarget.style.background = 'var(--border-light)'
           }}
           onMouseLeave={(e) => {
-            if (tab !== 'approved') e.currentTarget.style.background = '#f0f0f0'
+            if (tab !== 'approved') e.currentTarget.style.background = 'var(--surface-secondary)'
           }}
         >
           ✅ Approved
@@ -169,7 +169,7 @@ export default function CampusEditsPage() {
 
       {/* Content */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: '#999' }}>
+        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
           <p>Loading edits...</p>
         </div>
       ) : edits.length === 0 ? (

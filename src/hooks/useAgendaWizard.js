@@ -10,17 +10,30 @@ export function useAgendaWizard() {
 }
 
 export function calculateTimings(startTime, agendaItems) {
+  if (!agendaItems || agendaItems.length === 0) return []
+
   const [hours, minutes] = startTime.split(':').map(Number)
   let currentDate = new Date()
   currentDate.setHours(hours, minutes, 0)
 
   return agendaItems.map((item) => {
+    // For pinned items (intro music), show "Pre-start" and don't advance time
+    if (item.isPinned) {
+      return {
+        ...item,
+        timing: 'Pre-start',
+        startTime: 'Pre-start',
+        endTime: 'Pre-start',
+      }
+    }
+
+    // For non-pinned items, calculate the chain
     const startTimeObj = new Date(currentDate)
     const endTimeObj = new Date(startTimeObj.getTime() + (item.duration || 0) * 60_000)
 
     const timing = `${formatTime(startTimeObj)} - ${formatTime(endTimeObj)}`
 
-    currentDate = endTimeObj
+    currentDate = endTimeObj // Advance for next item
 
     return {
       ...item,

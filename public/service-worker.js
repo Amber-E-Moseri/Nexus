@@ -1,7 +1,7 @@
 // Service Worker for PWA: offline support, caching, and push notifications
 // Version: 1.0.0 (increment on deploy for cache busting)
 
-const CACHE_VERSION = 'v1.0.0';
+const CACHE_VERSION = 'v1.0.3';
 const STATIC_CACHE = `nexus-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `nexus-dynamic-${CACHE_VERSION}`;
 const API_CACHE = `nexus-api-${CACHE_VERSION}`;
@@ -12,6 +12,8 @@ const STATIC_ASSETS = [
   '/index.html',
   '/offline.html',
   '/manifest.json',
+  '/logo-purple.svg',
+  '/logo-purple-192.png',
   '/logo.png',
   '/canada_sr.png',
 ];
@@ -188,8 +190,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body || data.message || 'You have a new notification',
-    icon: '/logo.png',
-    badge: '/logo.png',
+    icon: '/logo-purple-192.png',
+    badge: '/logo-purple-192.png',
     tag: data.type || 'notification',
     requireInteraction: data.requireInteraction || false,
     vibrate: [200, 100, 200],

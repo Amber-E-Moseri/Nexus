@@ -14,6 +14,7 @@ import {
   MailPlus,
   Map,
   MoreHorizontal,
+  Phone,
   Pencil,
   Plus,
   Settings,
@@ -29,6 +30,7 @@ import { useInboxCount } from '../../context/InboxCountContext'
 import { useAuth } from '../../hooks/useAuth'
 import { archiveSpace, getSpacesByType, restoreSpace, updateSpace } from '../../features/spaces'
 import { supabase } from '../../lib/supabase'
+import { FLOCK_CRM_CONFIG } from '../../lib/permissions'
 import SidebarSpaceTree from './SidebarSpaceTree'
 import SpaceModal from '../../features/spaces/components/SpaceModal'
 import SprintModal from '../../features/sprints/components/SprintModal'
@@ -298,7 +300,7 @@ export default function Sidebar() {
 
     supabase
       .from('external_integrations')
-      .select('id, name, type, enabled, show_in_sidebar, sort_order, icon_emoji')
+      .select('id, name, type, enabled, show_in_sidebar, sort_order, icon_emoji, launch_url')
       .eq('enabled', true)
       .eq('show_in_sidebar', true)
       .order('sort_order')
@@ -1183,6 +1185,17 @@ export default function Sidebar() {
           label="CAN Map"
           onClick={() => openExternal('/apps/map/index.html')}
         />
+        {FLOCK_CRM_CONFIG.enabled && FLOCK_CRM_CONFIG.checkAccess(role) ? (
+          <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12 }}>
+            <div style={{ ...SECTION_LABEL_STYLE }}>Confidential</div>
+            <SidebarItem
+              active={isPathActive(location.pathname, '/flock-crm')}
+              icon={Phone}
+              label="Flock CRM"
+              onClick={() => go('/flock-crm')}
+            />
+          </div>
+        ) : null}
         <SidebarItem
           active={isPathActive(location.pathname, '/settings')}
           icon={Settings}

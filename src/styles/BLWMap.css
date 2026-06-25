@@ -1,4 +1,4 @@
-/* BLW CAN Map Styling */
+/* BLW CAN Map Styling — Nexus Design System Aligned */
 
 /* ── Map Container ─────────────────────────────────────────────────────── */
 .blw-map-container {
@@ -7,7 +7,8 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f5f5f5;
+  background: var(--fs-bg);
+  font-family: var(--fs-font-body);
 }
 
 .blw-map {
@@ -23,7 +24,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f5f5;
+  background: var(--fs-bg);
 }
 
 .blw-map-loading-content {
@@ -37,33 +38,33 @@
 
 .blw-map-loading-content p {
   font-size: 16px;
-  color: #666;
+  color: var(--text-secondary);
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--fs-font-body);
 }
 
 /* ── Leaflet Popup Overrides ───────────────────────────────────────────── */
 .leaflet-popup-content-wrapper {
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
   padding: 0;
   border: none;
-  background: white;
+  background: var(--surface);
 }
 
 .leaflet-popup-content {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--fs-font-body);
 }
 
 .leaflet-popup-tip {
-  background: white;
+  background: var(--surface);
   border: none;
 }
 
 .leaflet-popup .leaflet-popup-close-button {
-  color: #999;
+  color: var(--text-secondary);
   font-size: 24px;
   top: 8px;
   right: 8px;
@@ -73,13 +74,13 @@
 }
 
 .leaflet-popup .leaflet-popup-close-button:hover {
-  color: #666;
+  color: var(--text-primary);
 }
 
 /* ── Popup Content Styling ─────────────────────────────────────────────── */
 .blw-popup-content {
   padding: 16px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--fs-font-body);
 }
 
 .blw-popup-header {
@@ -90,21 +91,21 @@
   margin: 0 0 4px 0;
   font-size: 16px;
   font-weight: 700;
-  color: #2c2c2a;
+  color: var(--text-primary);
   line-height: 1.2;
 }
 
 .blw-popup-subtitle {
   margin: 0 0 4px 0;
   font-size: 12px;
-  color: #999;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .blw-popup-hub {
   margin: 0;
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
@@ -121,7 +122,7 @@
 .blw-popup-button {
   width: 100%;
   padding: 12px;
-  background: #667eea;
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: 8px;
@@ -133,9 +134,9 @@
 }
 
 .blw-popup-button:hover {
-  background: #5568d3;
+  background: var(--accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.2);
+  box-shadow: 0 4px 8px rgba(76, 42, 146, 0.2);
 }
 
 .blw-popup-button:active {
@@ -144,195 +145,6 @@
 
 .campus-popup {
   max-width: 320px !important;
-}
-
-/* ── Prayer Timer Modal ────────────────────────────────────────────────── */
-.blw-prayer-modal {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  background: white;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-  max-width: 320px;
-  max-height: 80vh;
-  overflow-y: auto;
-  animation: slideUp 0.3s ease-out;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.blw-prayer-modal-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #999;
-  cursor: pointer;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.2s;
-  line-height: 1;
-}
-
-.blw-prayer-modal-close:hover {
-  color: #666;
-}
-
-.blw-prayer-modal-title {
-  margin: 0 0 8px 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: #2c2c2a;
-  word-break: break-word;
-}
-
-/* ── Prayer Timer Component ────────────────────────────────────────────── */
-.blw-prayer-timer {
-  background: #f9f7f3;
-  padding: 20px;
-  border-radius: 12px;
-  text-align: center;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
-
-.blw-prayer-timer-display {
-  font-size: 52px;
-  font-weight: 800;
-  color: #667eea;
-  margin-bottom: 20px;
-  font-family: 'Monaco', 'Courier New', monospace;
-  letter-spacing: 2px;
-  line-height: 1;
-}
-
-.blw-prayer-timer-success {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: #10b981;
-  color: white;
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  font-size: 13px;
-  font-weight: 600;
-  animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.blw-prayer-timer-controls {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.blw-prayer-timer-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 12px 8px;
-  border: 1px solid #e0e0e0;
-  background: white;
-  color: #2c2c2a;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-
-.blw-prayer-timer-btn:hover:not(:disabled) {
-  background: #f5f5f5;
-  border-color: #d0d0d0;
-  transform: translateY(-1px);
-}
-
-.blw-prayer-timer-btn:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.blw-prayer-timer-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.blw-prayer-timer-btn-start {
-  color: white;
-  background: #667eea;
-  border-color: #667eea;
-}
-
-.blw-prayer-timer-btn-start:hover:not(:disabled) {
-  background: #5568d3;
-  border-color: #5568d3;
-}
-
-.blw-prayer-timer-btn-save {
-  color: white;
-  background: #10b981;
-  border-color: #10b981;
-}
-
-.blw-prayer-timer-btn-save:hover:not(:disabled) {
-  background: #059669;
-  border-color: #059669;
-}
-
-.blw-prayer-timer-btn-reset {
-  color: white;
-  background: #ef4444;
-  border-color: #ef4444;
-}
-
-.blw-prayer-timer-btn-reset:hover:not(:disabled) {
-  background: #dc2626;
-  border-color: #dc2626;
-}
-
-.blw-prayer-timer-btn svg {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
-
-.blw-prayer-timer-note {
-  font-size: 11px;
-  color: #999;
-  margin: 0;
 }
 
 /* ── Cluster Styling ───────────────────────────────────────────────────── */
@@ -344,148 +156,11 @@
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
 }
 
-/* ── Mobile Responsive ─────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .leaflet-popup {
-    width: 90vw !important;
-    margin-left: -45vw;
-  }
-
-  .leaflet-popup-content-wrapper {
-    border-radius: 16px 16px 0 0;
-  }
-
-  .blw-popup-content {
-    padding: 14px;
-  }
-
-  .blw-popup-spotify iframe {
-    height: 220px !important;
-  }
-
-  .blw-popup-button {
-    font-size: 12px;
-    padding: 10px;
-  }
-
-  .blw-prayer-modal {
-    bottom: 16px;
-    right: 16px;
-    left: 16px;
-    max-width: none;
-    width: auto;
-  }
-
-  .blw-prayer-timer-controls {
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 6px;
-  }
-
-  .blw-prayer-timer-btn {
-    padding: 10px 6px;
-    font-size: 11px;
-  }
-
-  .blw-prayer-timer-display {
-    font-size: 40px;
-  }
-}
-
-@media (max-width: 480px) {
-  .leaflet-popup {
-    width: 95vw !important;
-    margin-left: -47.5vw;
-  }
-
-  .blw-popup-content {
-    padding: 12px;
-  }
-
-  .blw-popup-spotify iframe {
-    height: 200px !important;
-  }
-
-  .blw-popup-title {
-    font-size: 14px;
-  }
-
-  .blw-prayer-modal {
-    bottom: 12px;
-    right: 12px;
-    left: 12px;
-    padding: 16px;
-    border-radius: 12px;
-  }
-
-  .blw-prayer-modal-title {
-    font-size: 14px;
-  }
-
-  .blw-prayer-timer {
-    padding: 16px;
-  }
-
-  .blw-prayer-timer-display {
-    font-size: 36px;
-  }
-
-  .blw-prayer-timer-controls {
-    gap: 4px;
-  }
-
-  .blw-prayer-timer-btn {
-    padding: 8px 4px;
-    font-size: 10px;
-  }
-
-  .blw-prayer-timer-btn svg {
-    width: 16px;
-    height: 16px;
-  }
-
-  /* Ensure cluster touch targets are at least 44px */
-  .leaflet-marker-icon {
-    width: 44px !important;
-    height: 44px !important;
-    margin-left: -22px !important;
-    margin-top: -44px !important;
-  }
-}
-
-/* ── Accessibility ─────────────────────────────────────────────────────── */
-button:focus-visible {
-  outline: 2px solid #667eea;
-  outline-offset: 2px;
-}
-
-.blw-prayer-timer-btn:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 1px;
-}
-
-/* ── Scrollbar styling ─────────────────────────────────────────────────── */
-.blw-prayer-modal::-webkit-scrollbar {
-  width: 6px;
-}
-
-.blw-prayer-modal::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.blw-prayer-modal::-webkit-scrollbar-thumb {
-  background: #ddd;
-  border-radius: 3px;
-}
-
-.blw-prayer-modal::-webkit-scrollbar-thumb:hover {
-  background: #999;
-}
-
-/* ── Campus Detail Modal ───────────────────────────────────────────────── */
+/* ── Modal Styling (Legacy — Use campus-detail-modal.css) ───────────────── */
 .blw-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 22, 16, 0.4);
   display: flex;
   align-items: flex-end;
   z-index: 1001;
@@ -503,16 +178,16 @@ button:focus-visible {
 }
 
 .blw-modal-content {
-  background: white;
+  background: var(--surface);
   border-radius: 20px 20px 0 0;
   max-height: 85vh;
   width: 100%;
   max-width: 600px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
   animation: slideUp 0.3s ease-out;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--fs-font-body);
 }
 
 @keyframes slideUp {
@@ -529,7 +204,7 @@ button:focus-visible {
   align-items: flex-start;
   justify-content: space-between;
   padding: 24px 24px 16px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -540,20 +215,20 @@ button:focus-visible {
 .blw-modal-title {
   font-size: 20px;
   font-weight: 700;
-  color: #2c2c2a;
+  color: var(--text-primary);
   margin: 0;
   line-height: 1.2;
 }
 
 .blw-modal-subtitle {
   font-size: 13px;
-  color: #999;
+  color: var(--text-secondary);
   margin: 4px 0 0;
 }
 
 .blw-modal-hub {
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
   margin: 6px 0 0;
   font-weight: 500;
 }
@@ -561,7 +236,7 @@ button:focus-visible {
 .blw-modal-close {
   background: none;
   border: none;
-  color: #999;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0;
   display: flex;
@@ -574,13 +249,13 @@ button:focus-visible {
 }
 
 .blw-modal-close:hover {
-  color: #666;
+  color: var(--text-primary);
 }
 
 .blw-modal-tabs {
   display: flex;
   gap: 0;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border);
   padding: 0;
   flex-shrink: 0;
   overflow-x: auto;
@@ -593,7 +268,7 @@ button:focus-visible {
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: #999;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -606,12 +281,12 @@ button:focus-visible {
 }
 
 .blw-modal-tab:hover {
-  color: #666;
+  color: var(--text-primary);
 }
 
 .blw-modal-tab.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 .blw-modal-tab-icon {
@@ -634,7 +309,7 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #999;
+  color: var(--text-secondary);
 }
 
 /* ── Overview Tab ──────────────────────────────────────────────────────── */
@@ -653,13 +328,13 @@ button:focus-visible {
 .blw-overview-header h3 {
   font-size: 16px;
   font-weight: 700;
-  color: #2c2c2a;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .blw-overview-status {
-  background: #e6f4ea;
-  color: #1e8e3e;
+  background: var(--status-done-bg);
+  color: var(--status-done-text);
   padding: 4px 10px;
   border-radius: 20px;
   font-size: 11px;
@@ -675,8 +350,8 @@ button:focus-visible {
 }
 
 .blw-stat-card {
-  background: #f9f7f3;
-  border: 1px solid #e0d5c8;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
   text-align: center;
@@ -685,7 +360,7 @@ button:focus-visible {
 .blw-stat-label {
   font-size: 11px;
   font-weight: 600;
-  color: #999;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 8px;
@@ -694,14 +369,14 @@ button:focus-visible {
 .blw-stat-value {
   font-size: 28px;
   font-weight: 800;
-  color: #667eea;
+  color: var(--accent);
   line-height: 1;
   margin-bottom: 4px;
 }
 
 .blw-stat-detail {
   font-size: 11px;
-  color: #999;
+  color: var(--text-secondary);
 }
 
 .blw-overview-section {
@@ -711,7 +386,7 @@ button:focus-visible {
 .blw-overview-section h4 {
   font-size: 12px;
   font-weight: 700;
-  color: #2c2c2a;
+  color: var(--text-primary);
   margin: 0 0 12px 0;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -727,18 +402,18 @@ button:focus-visible {
   display: flex;
   justify-content: space-between;
   padding: 8px 12px;
-  background: #f9f7f3;
+  background: var(--surface-secondary);
   border-radius: 8px;
   font-size: 12px;
 }
 
 .blw-info-label {
   font-weight: 600;
-  color: #999;
+  color: var(--text-secondary);
 }
 
 .blw-info-value {
-  color: #2c2c2a;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -759,12 +434,12 @@ button:focus-visible {
 .blw-requests-header h3 {
   font-size: 16px;
   font-weight: 700;
-  color: #2c2c2a;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .blw-requests-btn-new {
-  background: #667eea;
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: 8px;
@@ -776,7 +451,7 @@ button:focus-visible {
 }
 
 .blw-requests-btn-new:hover {
-  background: #5568d3;
+  background: var(--accent-hover);
   transform: translateY(-1px);
 }
 
@@ -785,41 +460,43 @@ button:focus-visible {
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  background: #f9f7f3;
+  background: var(--surface-secondary);
   border-radius: 12px;
   margin-bottom: 8px;
 }
 
 .blw-request-input-title {
   padding: 10px 12px;
-  border: 1px solid #e0d5c8;
+  border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 13px;
   font-family: inherit;
-  color: #2c2c2a;
+  color: var(--text-primary);
+  background: var(--surface);
 }
 
 .blw-request-input-title::placeholder {
-  color: #bbb;
+  color: var(--text-placeholder);
 }
 
 .blw-request-input-desc {
   padding: 10px 12px;
-  border: 1px solid #e0d5c8;
+  border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 12px;
   font-family: inherit;
-  color: #2c2c2a;
+  color: var(--text-primary);
+  background: var(--surface);
   resize: vertical;
 }
 
 .blw-request-input-desc::placeholder {
-  color: #bbb;
+  color: var(--text-placeholder);
 }
 
 .blw-request-btn-submit {
   padding: 10px;
-  background: #667eea;
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: 8px;
@@ -830,7 +507,7 @@ button:focus-visible {
 }
 
 .blw-request-btn-submit:hover:not(:disabled) {
-  background: #5568d3;
+  background: var(--accent-hover);
 }
 
 .blw-request-btn-submit:disabled {
@@ -845,7 +522,7 @@ button:focus-visible {
 .blw-requests-section-title {
   font-size: 12px;
   font-weight: 700;
-  color: #2c2c2a;
+  color: var(--text-primary);
   margin: 0 0 10px 0;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -859,20 +536,20 @@ button:focus-visible {
 
 .blw-request-card {
   padding: 12px;
-  background: #f9f7f3;
-  border: 1px solid #e0d5c8;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
   border-radius: 8px;
   transition: all 0.2s;
 }
 
 .blw-request-card:hover {
-  border-color: #d0c5b8;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-color: var(--border-strong);
+  box-shadow: var(--card-shadow);
 }
 
 .blw-request-card-resolved {
   opacity: 0.6;
-  background: #f0f0f0;
+  background: var(--surface);
 }
 
 .blw-request-card-header {
@@ -886,14 +563,14 @@ button:focus-visible {
 .blw-request-title {
   font-size: 13px;
   font-weight: 600;
-  color: #2c2c2a;
+  color: var(--text-primary);
   margin: 0;
   flex: 1;
 }
 
 .blw-request-badge-active {
-  background: #e6f4ea;
-  color: #1e8e3e;
+  background: var(--status-done-bg);
+  color: var(--status-done-text);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 10px;
@@ -902,8 +579,8 @@ button:focus-visible {
 }
 
 .blw-request-badge-resolved {
-  background: #e8f0fe;
-  color: #1a73e8;
+  background: var(--info-bg);
+  color: var(--info);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 10px;
@@ -913,7 +590,7 @@ button:focus-visible {
 
 .blw-request-description {
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
   margin: 6px 0;
   line-height: 1.4;
 }
@@ -927,7 +604,7 @@ button:focus-visible {
 
 .blw-request-date {
   font-size: 11px;
-  color: #999;
+  color: var(--text-secondary);
 }
 
 .blw-request-actions {
@@ -936,8 +613,8 @@ button:focus-visible {
 }
 
 .blw-request-btn-small {
-  background: white;
-  border: 1px solid #d0c5b8;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 4px 6px;
   cursor: pointer;
@@ -949,30 +626,30 @@ button:focus-visible {
 }
 
 .blw-request-btn-resolve {
-  color: #1e8e3e;
+  color: var(--status-done-text);
 }
 
 .blw-request-btn-resolve:hover {
-  background: #e6f4ea;
-  border-color: #1e8e3e;
+  background: var(--status-done-bg);
+  border-color: var(--status-done-text);
 }
 
 .blw-request-btn-unresolve {
-  color: #1a73e8;
+  color: var(--info);
 }
 
 .blw-request-btn-unresolve:hover {
-  background: #e8f0fe;
-  border-color: #1a73e8;
+  background: var(--info-bg);
+  border-color: var(--info);
 }
 
 .blw-request-btn-delete {
-  color: #c94830;
+  color: var(--coral);
 }
 
 .blw-request-btn-delete:hover {
-  background: #fce8e6;
-  border-color: #c94830;
+  background: var(--fs-danger-bg);
+  border-color: var(--coral);
 }
 
 /* ── Prayer Activity Tab ───────────────────────────────────────────────── */
@@ -985,7 +662,7 @@ button:focus-visible {
 .blw-activity-tab h3 {
   font-size: 16px;
   font-weight: 700;
-  color: #2c2c2a;
+  color: var(--text-primary);
   margin: 0 0 12px 0;
 }
 
@@ -1014,16 +691,16 @@ button:focus-visible {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #667eea;
-  border: 2px solid white;
-  box-shadow: 0 0 0 2px #667eea;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 2px var(--accent);
   margin-top: 4px;
 }
 
 .blw-activity-line {
   flex: 1;
   width: 2px;
-  background: #e0e0e0;
+  background: var(--border);
   margin: 8px 0;
 }
 
@@ -1035,12 +712,12 @@ button:focus-visible {
 .blw-activity-time {
   font-size: 12px;
   font-weight: 600;
-  color: #2c2c2a;
+  color: var(--text-primary);
 }
 
 .blw-activity-detail {
   font-size: 12px;
-  color: #999;
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
@@ -1049,7 +726,7 @@ button:focus-visible {
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   padding-top: 12px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border);
 }
 
 .blw-activity-stat {
@@ -1062,7 +739,7 @@ button:focus-visible {
 .blw-activity-stat-label {
   font-size: 10px;
   font-weight: 600;
-  color: #999;
+  color: var(--text-secondary);
   text-transform: uppercase;
   margin-bottom: 4px;
 }
@@ -1070,13 +747,13 @@ button:focus-visible {
 .blw-activity-stat-value {
   font-size: 18px;
   font-weight: 700;
-  color: #667eea;
+  color: var(--accent);
 }
 
 .blw-empty-state {
   text-align: center;
   padding: 32px 16px;
-  color: #999;
+  color: var(--text-secondary);
 }
 
 .blw-empty-state p {
@@ -1090,7 +767,30 @@ button:focus-visible {
 }
 
 /* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
 @media (max-width: 768px) {
+  .leaflet-popup {
+    width: 90vw !important;
+    margin-left: -45vw;
+  }
+
+  .leaflet-popup-content-wrapper {
+    border-radius: 16px 16px 0 0;
+  }
+
+  .blw-popup-content {
+    padding: 14px;
+  }
+
+  .blw-popup-spotify iframe {
+    height: 220px !important;
+  }
+
+  .blw-popup-button {
+    font-size: 12px;
+    padding: 10px;
+  }
+
   .blw-modal-content {
     border-radius: 16px 16px 0 0;
     max-height: 90vh;
@@ -1132,6 +832,23 @@ button:focus-visible {
 }
 
 @media (max-width: 480px) {
+  .leaflet-popup {
+    width: 95vw !important;
+    margin-left: -47.5vw;
+  }
+
+  .blw-popup-content {
+    padding: 12px;
+  }
+
+  .blw-popup-spotify iframe {
+    height: 200px !important;
+  }
+
+  .blw-popup-title {
+    font-size: 14px;
+  }
+
   .blw-modal-overlay {
     padding: 0;
   }
@@ -1188,4 +905,36 @@ button:focus-visible {
   .blw-activity-timeline {
     padding-left: 20px;
   }
+
+  /* Ensure cluster touch targets are at least 44px */
+  .leaflet-marker-icon {
+    width: 44px !important;
+    height: 44px !important;
+    margin-left: -22px !important;
+    margin-top: -44px !important;
+  }
+}
+
+/* ── Accessibility ─────────────────────────────────────────────────────── */
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Scrollbar styling ─────────────────────────────────────────────────── */
+.blw-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.blw-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.blw-modal-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.blw-modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
 }

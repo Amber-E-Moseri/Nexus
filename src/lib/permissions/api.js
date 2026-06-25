@@ -1,4 +1,33 @@
-﻿import { supabase } from '../../services/supabase';
+﻿import { supabase } from '../supabase';
+
+// Permission types available in the system
+export const PERMISSION_TYPES = {
+  EXPORT_DATA: 'export_data',
+  MANAGE_AUTOMATIONS: 'manage_automations',
+  VIEW_ANALYTICS: 'view_analytics',
+  MANAGE_INTEGRATIONS: 'manage_integrations',
+  MANAGE_USERS: 'manage_users',
+  CREATE_TEAMS: 'create_teams',
+  MANAGE_SPRINTS: 'manage_sprints',
+  MANAGE_MEETINGS: 'manage_meetings',
+  API_ACCESS: 'api_access',
+}
+
+const PERMISSION_LABELS = {
+  export_data: 'Export Data',
+  manage_automations: 'Manage Automations',
+  view_analytics: 'View Analytics',
+  manage_integrations: 'Manage Integrations',
+  manage_users: 'Manage Users',
+  create_teams: 'Create Teams',
+  manage_sprints: 'Manage Sprints',
+  manage_meetings: 'Manage Meetings',
+  api_access: 'API Access',
+}
+
+export function getPermissionLabel(permission) {
+  return PERMISSION_LABELS[permission] || permission
+}
 
 /**
  * Check if a user has a specific permission
@@ -83,4 +112,100 @@ export async function getPermissionCategories() {
 
   const categories = [...new Set(data.map(p => p.category))];
   return categories;
+}
+
+/**
+ * Get all permissions for a specific user
+ */
+export async function getUserPermissions(userId) {
+  const { data, error } = await supabase
+    .from('user_permissions')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('getUserPermissions error:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Grant a permission to a user
+ */
+export async function grantPermission(userId, permissionKey, expiresAt = null) {
+  const { error } = await supabase
+    .from('user_permissions')
+    .insert([
+      {
+        user_id: userId,
+        permission: permissionKey,
+        expires_at: expiresAt,
+      },
+    ]);
+
+  if (error) {
+    console.error('grantPermission error:', error);
+    throw new Error(`Failed to grant permission: ${error.message}`);
+  }
+
+  return true;
+}
+
+/**
+ * Revoke a permission from a user
+ */
+export async function revokePermission(userId, permissionKey) {
+  const { error } = await supabase
+    .from('user_permissions')
+    .delete()
+    .eq('user_id', userId)
+    .eq('permission', permissionKey);
+
+  if (error) {
+    console.error('revokePermission error:', error);
+    throw new Error(`Failed to revoke permission: ${error.message}`);
+  }
+
+  return true;
+}
+
+/**
+ * Get audit log for permission changes
+ */
+export async function getPermissionAuditLog(filters = {}) {
+  let query = supabase.from('permission_audit_log').select('*');
+
+  if (filters.userId) {
+    query = query.eq('user_id', filters.userId);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('getPermissionAuditLog error:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Search for users by name or email
+ */
+export async function getUsers(searchTerm) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, name, email')
+    .or(`name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`)
+    .limit(10);
+
+  if (error) {
+    console.error('getUsers error:', error);
+    return [];
+  }
+
+  return data || [];
 }

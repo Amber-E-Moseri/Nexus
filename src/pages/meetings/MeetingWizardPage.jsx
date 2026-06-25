@@ -7,7 +7,7 @@ import Step2BuildAgenda from '../../features/agendas/components/Step2BuildAgenda
 import Step3PreviewExport from '../../features/agendas/components/Step3PreviewExport'
 
 function WizardContent() {
-  const { step, goToStep, reset, agendaData, agendaItems, errors, clearErrors, setError } = useAgendaWizard()
+  const { step, goToStep, reset, agendaData, agendaItems, errors, clearErrors, setError, autoSaveStatus } = useAgendaWizard()
   const navigate = useNavigate()
   const [unsavedChanges, setUnsavedChanges] = useState(false)
 
@@ -67,9 +67,20 @@ function WizardContent() {
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0C0E18' }}>
               Plan Meeting
             </h1>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9E9488' }}>
-              Step {step} of 3
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+              <p style={{ margin: 0, fontSize: 12, color: '#9E9488' }}>
+                Step {step} of 3
+              </p>
+              {autoSaveStatus === 'saving' && (
+                <span style={{ fontSize: 11, color: '#9E9488' }}>💾 Saving...</span>
+              )}
+              {autoSaveStatus === 'saved' && (
+                <span style={{ fontSize: 11, color: '#27AE60' }}>✓ Saved</span>
+              )}
+              {autoSaveStatus === 'error' && (
+                <span style={{ fontSize: 11, color: '#DC3545' }}>⚠ Save failed — retrying...</span>
+              )}
+            </div>
           </div>
           <button
             type="button"

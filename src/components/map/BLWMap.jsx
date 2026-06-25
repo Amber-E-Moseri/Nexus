@@ -108,14 +108,14 @@ export function BLWMap({ mode = 'default' }) {
       iconCreateFunction: (cluster) => {
         const count = cluster.getChildCount()
         let size = 'small'
-        let color = '#667eea'
+        let color = '#4C2A92' // var(--accent)
 
         if (count > 100) {
           size = 'large'
-          color = '#f97316'
+          color = '#F06449' // var(--coral)
         } else if (count > 20) {
           size = 'medium'
-          color = '#764ba2'
+          color = '#3A1F75' // var(--accent-dark)
         }
 
         return L.divIcon({
@@ -152,7 +152,7 @@ export function BLWMap({ mode = 'default' }) {
 
       const marker = L.marker([lat, lng], {
         icon: L.icon({
-          iconUrl: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2232%22 height=%2232%22 viewBox=%220 0 32 32%22%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%2215%22 fill=%22%23667eea%22 stroke=%22white%22 stroke-width=%222%22/%3E%3Ctext x=%2216%22 y=%2220%22 font-size=%2216%22 fill=%22white%22 text-anchor=%22middle%22 dominant-baseline=%22central%22 font-weight=%22bold%22%3E🙏%3C/text%3E%3C/svg%3E',
+          iconUrl: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2232%22 height=%2232%22 viewBox=%220 0 32 32%22%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%2215%22 fill=%22%234C2A92%22 stroke=%22white%22 stroke-width=%222%22/%3E%3Ctext x=%2216%22 y=%2220%22 font-size=%2216%22 fill=%22white%22 text-anchor=%22middle%22 dominant-baseline=%22central%22 font-weight=%22bold%22%3E🙏%3C/text%3E%3C/svg%3E',
           iconSize: [32, 32],
           popupAnchor: [0, -16],
         }),
