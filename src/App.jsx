@@ -31,6 +31,7 @@ const CampaignPage = lazy(() => import('./pages/communications/CampaignPage'))
 const SegmentsPage = lazy(() => import('./pages/communications/SegmentsPage'))
 const DeptSpace = lazy(() => import('./pages/dept/DeptSpace'))
 const FlockView = lazy(() => import('./pages/flock/FlockView'))
+const FlockCRMPage = lazy(() => import('./pages/flock/FlockCRMPage'))
 const Login = lazy(() => import('./pages/Login'))
 const CanMapPage = lazy(() => import('./pages/map/CanMapPage'))
 const MeetingsModule = lazy(() => import('./pages/meetings/MeetingsModule'))
@@ -69,6 +70,7 @@ const FilesPage = lazy(() => import('./pages/FilesPage'))
 const MeetingReportPublicPage = lazy(() => import('./pages/reports/MeetingReportPublicPage'))
 const PersonalIntegrationsPage = lazy(() => import('./pages/settings/PersonalIntegrationsPage'))
 const CampusEditsPage = lazy(() => import('./pages/admin/CampusEditsPage'))
+const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
 
 function onError(error, errorInfo) {
   console.error('[AppErrorBoundary]', error, errorInfo)
@@ -139,6 +141,14 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/admin/permissions"
+            element={
+              <ProtectedRoute roles={['super_admin']}>
+                <AdminPermissionsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/spaces" element={<SpacesList />} />
           <Route path="/spaces/:spaceId" element={<SpaceOverview />} />
           <Route path="/sprints" element={<SprintsList />} />
@@ -149,6 +159,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['pastor']}>
                 <FlockView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/flock-crm"
+            element={
+              <ProtectedRoute roles={['regional_secretary']}>
+                <FlockCRMPage />
               </ProtectedRoute>
             }
           />

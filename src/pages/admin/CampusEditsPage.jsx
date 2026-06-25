@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../context/ToastContext'
+import { useRequirePermission } from '../../hooks/useHasPermission'
 import { supabase } from '../../lib/supabase'
 import CampusEditsTable from '../../components/admin/CampusEditsTable'
 import ApprovalModal from '../../components/admin/ApprovalModal'
@@ -8,6 +9,7 @@ import ApprovalModal from '../../components/admin/ApprovalModal'
 export default function CampusEditsPage() {
   const { profile } = useAuth()
   const { showToast } = useToast()
+  const { hasPermission, loading: authLoading } = useRequirePermission('campus:approve')
   const [tab, setTab] = useState('pending') // 'pending' | 'approved' | 'rejected'
   const [edits, setEdits] = useState([])
   const [loading, setLoading] = useState(true)
@@ -17,7 +19,7 @@ export default function CampusEditsPage() {
   const [submitting, setSubmitting] = useState(false)
 
   // Check authorization
-  if (!['super_admin', 'ors'].includes(profile?.role)) {
+  if (!authLoading && !hasPermission) {
     return (
       <div
         style={{
@@ -27,7 +29,7 @@ export default function CampusEditsPage() {
         }}
       >
         <h2>Unauthorized</h2>
-        <p>ORS or Super Admin role required to access this page.</p>
+        <p>You don't have the 'campus:approve' permission to access this page.</p>
       </div>
     )
   }
@@ -110,6 +112,14 @@ export default function CampusEditsPage() {
   })
 
   const pendingCount = edits.length
+
+  if (authLoading) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
+        <p>Loading permissions...</p>
+      </div>
+    )
+  }
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
