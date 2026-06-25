@@ -46,9 +46,12 @@ export default function Step3PreviewExport() {
         .toLowerCase()
 
       await generateAgendaPdf(agendaData, agendaItems, timings, filename)
+      // Success message (optional)
+      // Could show toast: "✓ PDF exported successfully"
     } catch (err) {
-      setExportError(err.message || 'Failed to export PDF')
-      console.error(err)
+      const errorMsg = err.message || 'Failed to export PDF. Please try again.'
+      setExportError(errorMsg)
+      console.error('PDF export error:', err)
     } finally {
       setIsSaving(false)
     }
@@ -200,8 +203,24 @@ export default function Step3PreviewExport() {
         </h3>
 
         {exportError && (
-          <div style={{ marginBottom: 12, padding: '10px 12px', background: 'rgba(220, 53, 69, 0.1)', border: '1px solid #DC3545', borderRadius: 8, fontSize: 12, color: '#DC3545' }}>
-            {exportError}
+          <div style={{ marginBottom: 12, padding: '12px', background: 'rgba(220, 53, 69, 0.1)', border: '1px solid #DC3545', borderRadius: 8, fontSize: 12, color: '#DC3545' }}>
+            <div style={{ marginBottom: 8 }}>⚠ {exportError}</div>
+            <button
+              type="button"
+              onClick={() => setExportError(null)}
+              style={{
+                padding: '6px 12px',
+                fontSize: 11,
+                background: '#DC3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              Retry
+            </button>
           </div>
         )}
 
