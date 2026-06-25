@@ -2506,82 +2506,114 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
           </div>
         </div>
 
-        {/* Share Report Link Modal */}
-        {showShareModal && shareUrl && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
-            <div style={{ background: 'white', borderRadius: 12, padding: 24, maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-              <h2 style={{ margin: '0 0 16px 0', fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>Share Report</h2>
-              <p style={{ margin: '0 0 12px 0', fontSize: 13, color: '#7E7D78', lineHeight: 1.5 }}>Copy this link to share the report with others:</p>
-              <div style={{ background: '#F9F8F6', border: '1px solid #EDE8DC', borderRadius: 8, padding: 12, marginBottom: 16, wordBreak: 'break-all', fontSize: 12, fontFamily: 'monospace', color: '#2C2C2A', lineHeight: 1.4 }}>
-                {shareUrl}
-              </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        {/* Share Report Link Dropdown */}
+        {showShareModal && report && (
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 999 }} onClick={() => setShowShareModal(false)} />
+            <div style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'white',
+              borderRadius: 12,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              zIndex: 1000,
+              maxWidth: 600,
+              maxHeight: '80vh',
+              overflowY: 'auto',
+              padding: '20px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>Share Report Links</h2>
                 <button
                   type="button"
                   onClick={() => setShowShareModal(false)}
-                  style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #EDE8DC', background: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#1C1C1C' }}
+                  style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#9E9488', padding: 0 }}
                 >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const text = shareUrl
-                    console.log('Copy button clicked, URL:', text)
-
-                    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-                      console.log('Attempting Clipboard API...')
-                      navigator.clipboard.writeText(text)
-                        .then(() => {
-                          console.log('✓ Clipboard API succeeded')
-                          setCopiedLink(true)
-                          setTimeout(() => setCopiedLink(false), 2000)
-                          setShowShareModal(false)
-                        })
-                        .catch(err => {
-                          console.error('✗ Clipboard API failed:', err)
-                          fallbackCopy(text)
-                        })
-                    } else {
-                      console.log('Clipboard API not available, using fallback')
-                      fallbackCopy(text)
-                    }
-
-                    function fallbackCopy(str) {
-                      try {
-                        console.log('Attempting execCommand fallback...')
-                        const el = document.createElement('textarea')
-                        el.value = str
-                        el.style.position = 'absolute'
-                        el.style.left = '-9999px'
-                        el.style.opacity = '0'
-                        document.body.appendChild(el)
-                        el.select()
-                        el.setSelectionRange(0, 99999)
-                        const result = document.execCommand('copy')
-                        document.body.removeChild(el)
-                        console.log('execCommand result:', result)
-                        if (result) {
-                          console.log('✓ Fallback copy succeeded')
-                          setCopiedLink(true)
-                          setTimeout(() => setCopiedLink(false), 2000)
-                          setShowShareModal(false)
-                        } else {
-                          throw new Error('execCommand returned false')
-                        }
-                      } catch (fallbackErr) {
-                        console.error('✗ Fallback copy failed:', fallbackErr)
-                        alert('Copy failed. Please select the link above and use Ctrl+C (or Cmd+C on Mac) to copy.')
-                      }
-                    }
-                  }}
-                  style={{ padding: '10px 16px', borderRadius: 8, border: 'none', background: '#4C2A92', color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-                >
-                  {copiedLink ? 'Copied!' : 'Copy Link'}
+                  ×
                 </button>
               </div>
+              <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#7E7D78', lineHeight: 1.5 }}>Click any link to copy to clipboard:</p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* Full Report Link */}
+                <div style={{ border: '1px solid #EDE8DC', borderRadius: 8, overflow: 'hidden' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = shareUrl
+                      if (navigator.clipboard) {
+                        navigator.clipboard.writeText(url).then(() => {
+                          setCopiedLink(true)
+                          setTimeout(() => setCopiedLink(false), 2000)
+                          setTimeout(() => setShowShareModal(false), 300)
+                        })
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '12px',
+                      background: copiedLink ? '#EEF6F1' : '#F9F7F3',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: '#2D2A22',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => { if (!copiedLink) e.currentTarget.style.background = '#F5F3F0' }}
+                    onMouseLeave={(e) => { if (!copiedLink) e.currentTarget.style.background = '#F9F7F3' }}
+                  >
+                    {copiedLink ? '✓ Full Report (Copied!)' : 'Full Report'}
+                  </button>
+                </div>
+
+                {/* Subgroup Links */}
+                {report.subgroups && report.subgroups.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#9E9488', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.06em' }}>By Subgroup</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {report.subgroups.map((subgroup) => {
+                        const linkUrl = `${baseUrl}?subgroup=${encodeURIComponent(subgroup)}`
+                        return (
+                          <button
+                            key={subgroup}
+                            type="button"
+                            onClick={() => {
+                              if (navigator.clipboard) {
+                                navigator.clipboard.writeText(linkUrl).then(() => {
+                                  setCopiedLink(true)
+                                  setTimeout(() => setCopiedLink(false), 2000)
+                                  setTimeout(() => setShowShareModal(false), 300)
+                                })
+                              }
+                            }}
+                            style={{
+                              textAlign: 'left',
+                              padding: '10px 12px',
+                              background: copiedLink ? '#EEF6F1' : 'white',
+                              border: '1px solid #EDE8DC',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              fontSize: 12,
+                              color: '#2D2A22',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => { if (!copiedLink) e.currentTarget.style.background = '#F9F7F3' }}
+                            onMouseLeave={(e) => { if (!copiedLink) e.currentTarget.style.background = 'white' }}
+                          >
+                            {copiedLink ? '✓ ' : ''}{subgroup}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          </>
         )}
       </>
     )
