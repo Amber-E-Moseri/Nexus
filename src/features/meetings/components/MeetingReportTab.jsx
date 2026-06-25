@@ -603,6 +603,13 @@ function CategoryPillBar({ categoryOptions, selectedCategories, onToggle }) {
   )
 }
 
+function extractRegion(subgroupName) {
+  // Extract region from subgroup name like "Central East Subgroup A"
+  // Returns "Central East" if it matches the pattern
+  const match = subgroupName.match(/^(.+?)\s+Subgroup\s+[A-Z]$/i)
+  return match ? match[1] : subgroupName
+}
+
 function SubgroupShareLinksPanel({ report, onClose }) {
   const [copiedIndex, setCopiedIndex] = useState(null)
 
@@ -610,6 +617,19 @@ function SubgroupShareLinksPanel({ report, onClose }) {
 
   const baseUrl = `${window.location.origin}/reports/${report.share_token}`
   const fullReportUrl = baseUrl
+
+  // Group subgroups by region
+  const subgroupsByRegion = {}
+  report.subgroups.forEach((subgroup) => {
+    const region = extractRegion(subgroup)
+    if (!subgroupsByRegion[region]) {
+      subgroupsByRegion[region] = []
+    }
+    subgroupsByRegion[region].push(subgroup)
+  })
+
+  // Sort regions and subgroups within regions
+  const sortedRegions = Object.keys(subgroupsByRegion).sort()
 
   async function copyLink(url, index) {
     const success = await copyToClipboard(url)
@@ -631,7 +651,19 @@ function SubgroupShareLinksPanel({ report, onClose }) {
     }
   }
 
+  const [expandedFullReport, setExpandedFullReport] = useState(false)
+  const [expandedRegions, setExpandedRegions] = useState(new Set())
   const [expandedSubgroups, setExpandedSubgroups] = useState(new Set())
+
+  const toggleRegion = (region) => {
+    const newSet = new Set(expandedRegions)
+    if (newSet.has(region)) {
+      newSet.delete(region)
+    } else {
+      newSet.add(region)
+    }
+    setExpandedRegions(newSet)
+  }
 
   const toggleSubgroup = (subgroup) => {
     const newSet = new Set(expandedSubgroups)
@@ -669,45 +701,77 @@ function SubgroupShareLinksPanel({ report, onClose }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {/* Full Report - Always Expanded */}
-        <div style={{ background: '#F9F7F3', border: '1px solid #EDE8DC', borderRadius: 10, overflow: 'hidden' }}>
-          <div style={{ padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        {/* Full Report - Collapsible */}
+        <div style={{ border: '1px solid #EDE8DC', borderRadius: 10, overflow: 'hidden' }}>
+          {/* Full Report Header/Toggle */}
+          <button
+            type="button"
+            onClick={() => setExpandedFullReport(!expandedFullReport)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              padding: '12px',
+              background: expandedFullReport ? '#F5F3F0' : '#F9F7F3',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'background 0.2s',
+              textAlign: 'left'
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#F5F3F0' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = expandedFullReport ? '#F5F3F0' : '#F9F7F3' }}
+          >
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#2D2A22', marginBottom: 4 }}>Full Report</div>
-              <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all', fontFamily: 'monospace' }}>{fullReportUrl}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#2D2A22' }}>Full Report</div>
             </div>
-            <button
-              type="button"
-              onClick={() => copyLink(fullReportUrl, 'full')}
-              style={{
-                background: copiedIndex === 'full' ? '#2D8653' : '#EDE8DC',
-                color: copiedIndex === 'full' ? 'white' : '#4C2A92',
-                border: 'none',
-                borderRadius: 6,
-                padding: '6px 12px',
-                fontSize: 11,
-                fontWeight: 600,
-                cursor: 'pointer',
-                flexShrink: 0,
-                whiteSpace: 'nowrap',
-                transition: 'all 0.2s'
-              }}
-            >
-              {copiedIndex === 'full' ? '✓ Copied' : 'Copy'}
-            </button>
-          </div>
-        </div>
+            <div style={{ fontSize: 14, color: '#9E9488', flexShrink: 0, transition: 'transform 0.2s', transform: expandedFullReport ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+              ▼
+            </div>
+          </button>
 
-        {/* Subgroup Links - Collapsible */}
-        {report.subgroups.map((subgroup, index) => {
-          const linkUrl = `${baseUrl}?subgroup=${encodeURIComponent(subgroup)}`
-          const isExpanded = expandedSubgroups.has(subgroup)
-          return (
-            <div key={subgroup} style={{ border: '1px solid #EDE8DC', borderRadius: 10, overflow: 'hidden' }}>
-              {/* Header/Toggle */}
+          {/* Full Report Content - Hidden by default */}
+          {expandedFullReport && (
+            <div style={{ padding: '12px', background: '#FAFAF9', borderTop: '1px solid #EDE8DC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all', fontFamily: 'monospace', background: '#F9F7F3', padding: '8px', borderRadius: 6, border: '1px solid #EDE8DC' }}>
+                  {fullReportUrl}
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => toggleSubgroup(subgroup)}
+                onClick={() => copyLink(fullReportUrl, 'full')}
+                style={{
+                  background: copiedIndex === 'full' ? '#2D8653' : '#EDE8DC',
+                  color: copiedIndex === 'full' ? 'white' : '#4C2A92',
+                  border: 'none',
+                  borderRadius: 6,
+                  padding: '6px 12px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {copiedIndex === 'full' ? '✓ Copied' : 'Copy'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Region Groups - Collapsible */}
+        {sortedRegions.map((region) => {
+          const isRegionExpanded = expandedRegions.has(region)
+          const subgroupsInRegion = subgroupsByRegion[region]
+          return (
+            <div key={region} style={{ border: '1px solid #EDE8DC', borderRadius: 10, overflow: 'hidden' }}>
+              {/* Region Header/Toggle */}
+              <button
+                type="button"
+                onClick={() => toggleRegion(region)}
                 style={{
                   width: '100%',
                   display: 'flex',
@@ -715,50 +779,93 @@ function SubgroupShareLinksPanel({ report, onClose }) {
                   justifyContent: 'space-between',
                   gap: 10,
                   padding: '12px',
-                  background: isExpanded ? '#F5F3F0' : '#F9F7F3',
+                  background: isRegionExpanded ? '#F0EBFC' : '#F9F7F3',
                   border: 'none',
                   cursor: 'pointer',
                   transition: 'background 0.2s',
-                  textAlign: 'left'
+                  textAlign: 'left',
+                  fontWeight: 600,
+                  fontSize: 12,
+                  color: '#2D2A22'
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#F5F3F0' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = isExpanded ? '#F5F3F0' : '#F9F7F3' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#F0EBFC' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = isRegionExpanded ? '#F0EBFC' : '#F9F7F3' }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#2D2A22' }}>{subgroup}</div>
-                </div>
-                <div style={{ fontSize: 14, color: '#9E9488', flexShrink: 0, transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>▼ {region}</div>
+                <div style={{ fontSize: 14, color: '#9E9488', flexShrink: 0, transition: 'transform 0.2s', transform: isRegionExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                   ▼
                 </div>
               </button>
 
-              {/* Content - Hidden by default */}
-              {isExpanded && (
-                <div style={{ padding: '12px', background: '#FAFAF9', borderTop: '1px solid #EDE8DC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all', fontFamily: 'monospace', background: '#F9F7F3', padding: '8px', borderRadius: 6, border: '1px solid #EDE8DC' }}>
-                      {linkUrl}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => copyLink(linkUrl, index)}
-                    style={{
-                      background: copiedIndex === index ? '#2D8653' : '#EDE8DC',
-                      color: copiedIndex === index ? 'white' : '#4C2A92',
-                      border: 'none',
-                      borderRadius: 6,
-                      padding: '6px 12px',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                      whiteSpace: 'nowrap',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {copiedIndex === index ? '✓ Copied' : 'Copy'}
-                  </button>
+              {/* Subgroups in Region - Nested */}
+              {isRegionExpanded && (
+                <div style={{ background: '#FAFAF9', borderTop: '1px solid #EDE8DC', padding: '8px' }}>
+                  {subgroupsInRegion.map((subgroup, idx) => {
+                    const linkUrl = `${baseUrl}?subgroup=${encodeURIComponent(subgroup)}`
+                    const isExpanded = expandedSubgroups.has(subgroup)
+                    return (
+                      <div key={subgroup} style={{ border: '1px solid #EDE8DC', borderRadius: 8, overflow: 'hidden', marginBottom: idx < subgroupsInRegion.length - 1 ? 8 : 0 }}>
+                        {/* Subgroup Header/Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => toggleSubgroup(subgroup)}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 10,
+                            padding: '10px 12px',
+                            background: isExpanded ? '#F5F3F0' : '#FFFFFF',
+                            border: 'none',
+                            cursor: 'pointer',
+                            transition: 'background 0.2s',
+                            textAlign: 'left',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: '#2D2A22'
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#F5F3F0' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = isExpanded ? '#F5F3F0' : '#FFFFFF' }}
+                        >
+                          <div style={{ flex: 1, minWidth: 0 }}>{subgroup}</div>
+                          <div style={{ fontSize: 12, color: '#9E9488', flexShrink: 0, transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                            ▼
+                          </div>
+                        </button>
+
+                        {/* Content - Hidden by default */}
+                        {isExpanded && (
+                          <div style={{ padding: '12px', background: '#FAFAF9', borderTop: '1px solid #EDE8DC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all', fontFamily: 'monospace', background: '#F9F7F3', padding: '8px', borderRadius: 6, border: '1px solid #EDE8DC' }}>
+                                {linkUrl}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => copyLink(linkUrl, index)}
+                              style={{
+                                background: copiedIndex === index ? '#2D8653' : '#EDE8DC',
+                                color: copiedIndex === index ? 'white' : '#4C2A92',
+                                border: 'none',
+                                borderRadius: 6,
+                                padding: '6px 12px',
+                                fontSize: 11,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                flexShrink: 0,
+                                whiteSpace: 'nowrap',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              {copiedIndex === index ? '✓ Copied' : 'Copy'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
