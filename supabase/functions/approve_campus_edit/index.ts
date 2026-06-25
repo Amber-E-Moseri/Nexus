@@ -30,6 +30,31 @@ async function verifyUserRole(authToken: string): Promise<{ userId: string; role
   }
 }
 
+async function userHasPermission(userId: string, permissionKey: string): Promise<boolean> {
+  try {
+    const { data: user } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .single()
+
+    if (!user) return false
+    if (user.role === 'super_admin') return true
+
+    const { data: permission } = await supabase
+      .from('role_permissions')
+      .select('enabled')
+      .eq('role', user.role)
+      .eq('permission_key', permissionKey)
+      .maybeSingle()
+
+    return permission?.enabled || false
+  } catch (err) {
+    console.error('Permission check error:', err)
+    return false
+  }
+}
+
 Deno.serve(async (req) => {
   // Only POST allowed
   if (req.method !== 'POST') {
@@ -72,10 +97,11 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Check if user has required role
-    if (!['super_admin', 'ors'].includes(userInfo.role)) {
+    // Check if user has campus:approve permission
+    const hasPermission = await userHasPermission(userInfo.userId, 'campus:approve')
+    if (!hasPermission) {
       return new Response(
-        JSON.stringify({ error: 'Forbidden: ORS or Super Admin role required' }),
+        JSON.stringify({ error: 'Forbidden: campus:approve permission required' }),
         { status: 403, headers: { 'Content-Type': 'application/json' } }
       )
     }
