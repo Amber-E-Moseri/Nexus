@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { processTranscriptionWithClaude, saveTranscriptionResult } from '../lib/aiProcessing'
+import { canProcessTranscript, getTodayStats } from '../../../lib/meetings/costLimits'
 
 export default function TranscriptionUploadPanel({ meetingId, meeting, onProcessComplete }) {
   const { user } = useAuth()
@@ -9,9 +10,22 @@ export default function TranscriptionUploadPanel({ meetingId, meeting, onProcess
   const [audioFile, setAudioFile] = useState(null)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState(null)
+  const [stats, setStats] = useState(null)
+  const [limitError, setLimitError] = useState(null)
 
   const charCount = transcriptText.length
   const canProcess = (uploadMode === 'transcript' && transcriptText.trim().length > 20) || (uploadMode === 'audio' && audioFile)
+
+  // Load today's stats on mount
+  useEffect(() => {
+    async function loadStats() {
+      if (user?.id) {
+        const todayStats = await getTodayStats(user.id)
+        setStats(todayStats)
+      }
+    }
+    loadStats()
+  }, [user?.id])
 
   async function handleProcess() {
     if (!canProcess) {
@@ -19,8 +33,20 @@ export default function TranscriptionUploadPanel({ meetingId, meeting, onProcess
       return
     }
 
+    // Check limits before processing
+    const limitCheck = await canProcessTranscript(user.id, charCount)
+    if (!limitCheck.allowed) {
+      setLimitError(limitCheck.reason)
+      return
+    }
+
+    if (limitCheck.warnings?.length > 0) {
+      console.warn('Processing warnings:', limitCheck.warnings)
+    }
+
     setProcessing(true)
     setError(null)
+    setLimitError(null)
 
     try {
       const textToProcess = transcriptText
@@ -186,7 +212,24 @@ export default function TranscriptionUploadPanel({ meetingId, meeting, onProcess
         </div>
       )}
 
-      {/* Error Message */}
+      {/* Limit Error Message */}
+      {limitError && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: '12px 14px',
+            fontSize: 13,
+            background: 'rgba(220, 53, 69, 0.1)',
+            border: '1px solid #DC3545',
+            borderRadius: 6,
+            color: '#DC3545',
+          }}
+        >
+          🛑 {limitError}
+        </div>
+      )}
+
+      {/* Processing Error Message */}
       {error && (
         <div
           style={{
@@ -200,6 +243,37 @@ export default function TranscriptionUploadPanel({ meetingId, meeting, onProcess
           }}
         >
           ⚠️ {error}
+        </div>
+      )}
+
+      {/* Daily Stats */}
+      {stats && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: '12px 14px',
+            fontSize: 12,
+            background: '#F9F8F6',
+            border: '1px solid #EDE8DC',
+            borderRadius: 6,
+            color: '#2D2A22',
+          }}
+        >
+          <div style={{ fontWeight: 500, marginBottom: 6 }}>📊 Today's Usage</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12 }}>
+            <div>
+              ✓ {stats.completedProcesses}/{stats.stats?.maxDailyProcesses || 50} transcriptions
+            </div>
+            <div>
+              💰 ${(stats.totalCost / 100).toFixed(2)}/
+              {stats.stats?.maxDailySpend || '$0.50'}
+            </div>
+          </div>
+          {stats.remaining.processes < 10 && (
+            <div style={{ marginTop: 6, color: '#DC3545', fontWeight: 500 }}>
+              ⚠️ {stats.remaining.processes} transcriptions remaining today
+            </div>
+          )}
         </div>
       )}
 
