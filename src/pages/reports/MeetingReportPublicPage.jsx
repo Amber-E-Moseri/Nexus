@@ -174,13 +174,13 @@ export default function MeetingReportPublicPage() {
     isInitialMount.current = false
   }, [])
 
-  // Lock activeSubgroup to subgroup_filter on shared links
+  // Lock activeSubgroup to subgroup_filter on shared links (only if not already set from URL)
   useEffect(() => {
-    if (isSharedLink && report?.subgroup_filter) {
+    if (isSharedLink && report?.subgroup_filter && !activeSubgroup) {
       console.log('Shared link detected - locking to subgroup_filter:', report.subgroup_filter)
       setActiveSubgroup(report.subgroup_filter)
     }
-  }, [report, isSharedLink])
+  }, [report, isSharedLink, activeSubgroup])
 
   // Sync activeSubgroup with URL query parameter using browser history API
   useEffect(() => {
