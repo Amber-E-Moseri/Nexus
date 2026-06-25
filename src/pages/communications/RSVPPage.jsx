@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isValidRsvpTokenFormat } from '@/lib/rsvpTokens';
 
+const MAX_NOTES_LENGTH = 500;
+
 export default function RSVPPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
@@ -11,6 +13,7 @@ export default function RSVPPage() {
   const [campaign, setCampaign] = useState(null);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   // Step 1: Validate token format & fetch campaign details
   useEffect(() => {
@@ -68,6 +71,14 @@ export default function RSVPPage() {
 
   // Step 2: Submit RSVP
   async function handleRsvp(rsvpResponse) {
+    setErrorMessage(null);
+
+    // Validate notes length on frontend
+    if (notes && notes.length > MAX_NOTES_LENGTH) {
+      setErrorMessage(`Notes cannot exceed ${MAX_NOTES_LENGTH} characters.`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const { data, error } = await supabase.rpc('submit_rsvp', {
@@ -82,7 +93,7 @@ export default function RSVPPage() {
       setState('submitted');
     } catch (err) {
       console.error('RSVP submission error:', err);
-      // Show error toast
+      setErrorMessage(err.message || 'Failed to submit RSVP. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -162,14 +173,30 @@ export default function RSVPPage() {
               </button>
             </div>
 
+            {/* Error message (if any) */}
+            {errorMessage && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
+                {errorMessage}
+              </div>
+            )}
+
             {/* Notes (optional) */}
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add optional notes (allergies, plus-one, etc.)"
-              className="w-full border border-gray-300 rounded-lg p-3 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              rows="3"
-            />
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Additional Notes (optional)
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value.slice(0, MAX_NOTES_LENGTH))}
+                placeholder="Add optional notes (allergies, dietary needs, plus-one info, etc.)"
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                rows="3"
+                maxLength={MAX_NOTES_LENGTH}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {notes.length}/{MAX_NOTES_LENGTH} characters
+              </p>
+            </div>
 
             <p className="text-xs text-gray-500">
               Your response will be recorded and visible to the organizer.
