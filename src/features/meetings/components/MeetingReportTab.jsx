@@ -2576,7 +2576,7 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#9E9488', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.06em' }}>By Subgroup</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {report.subgroups.map((subgroup) => {
-                        const linkUrl = `${baseUrl}?subgroup=${encodeURIComponent(subgroup)}`
+                        const linkUrl = `${window.location.origin}/reports/${report.share_token}?subgroup=${encodeURIComponent(subgroup)}`
                         return (
                           <button
                             key={subgroup}
