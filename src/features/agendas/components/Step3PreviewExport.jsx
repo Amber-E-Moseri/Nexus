@@ -5,6 +5,7 @@ import { useHasPermission } from '../../../hooks/useHasPermission'
 import { useAgendaWizard, calculateTimings } from '../../../hooks/useAgendaWizard'
 import { THEME_OPTIONS } from '../../../data/agendaTemplates'
 import { generateAgendaPdf } from '../../../lib/agendaPdfGenerator'
+import { syncMeetingToCalendar } from '../../meetings/lib/calendarSync'
 import { createAgenda, createMeetingWithAgenda } from '..'
 
 export default function Step3PreviewExport() {
@@ -87,6 +88,14 @@ export default function Step3PreviewExport() {
         preparedAgendaData,
         agendaItems
       )
+
+      // Sync to Calendar (fire and forget - don't block finalization)
+      try {
+        await syncMeetingToCalendar(meeting, agendaItems)
+      } catch (calendarErr) {
+        console.warn('Calendar sync failed, but meeting finalized:', calendarErr)
+        // Meeting is finalized regardless of calendar sync
+      }
 
       const successMsg = `✓ Meeting finalized! ID: ${meeting.id.slice(0, 8)} | Agenda: ${agenda.id.slice(0, 8)}`
       setExportError(null)

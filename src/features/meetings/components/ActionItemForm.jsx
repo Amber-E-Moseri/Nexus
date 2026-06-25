@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { createActionItem } from '../lib/minutes'
+import { createTaskFromActionItem } from '../lib/actionItemsBridge'
 
-export default function ActionItemForm({ segmentId, onActionCreated }) {
+export default function ActionItemForm({ segmentId, meetingId, onActionCreated }) {
   const [isOpen, setIsOpen] = useState(false)
   const [description, setDescription] = useState('')
   const [assignedTo, setAssignedTo] = useState('')
@@ -25,12 +26,19 @@ export default function ActionItemForm({ segmentId, onActionCreated }) {
 
     try {
       setSaving(true)
-      await createActionItem(
+      const actionItem = await createActionItem(
         segmentId,
         description,
         assignedTo || null,
         dueDate || null
       )
+
+      // Create linked task (fire and forget - don't block action item creation)
+      try {
+        await createTaskFromActionItem(actionItem, meetingId)
+      } catch (taskErr) {
+        console.warn('Failed to create linked task, but action item saved:', taskErr)
+      }
 
       // Reset form
       setDescription('')
