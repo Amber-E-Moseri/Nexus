@@ -5,11 +5,14 @@ import AppError from './components/layout/AppError'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import Shell from './components/layout/Shell'
 import PageSpinner from './components/ui/PageSpinner'
+import { PWAInstallPrompt } from './components/PWAInstallPrompt'
+import { OfflineIndicator } from './components/OfflineIndicator'
 
-// Register service worker for push notifications
+// Register service worker for PWA (offline support, caching, push notifications)
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js')
-    .catch(err => console.warn('Service Worker registration failed:', err))
+    .then(registration => console.log('[PWA] Service Worker registered successfully'))
+    .catch(err => console.warn('[PWA] Service Worker registration failed:', err))
 }
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -68,8 +71,10 @@ function onError(error, errorInfo) {
 export default function App() {
   return (
     <ErrorBoundary FallbackComponent={AppError} onError={onError}>
-    <Suspense fallback={<PageSpinner />}>
-    <Routes>
+      <OfflineIndicator />
+      <PWAInstallPrompt />
+      <Suspense fallback={<PageSpinner />}>
+        <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<SignupInvite />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />

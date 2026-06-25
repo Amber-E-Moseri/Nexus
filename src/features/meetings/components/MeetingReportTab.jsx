@@ -631,9 +631,21 @@ function SubgroupShareLinksPanel({ report, onClose }) {
     }
   }
 
+  const [expandedSubgroups, setExpandedSubgroups] = useState(new Set())
+
+  const toggleSubgroup = (subgroup) => {
+    const newSet = new Set(expandedSubgroups)
+    if (newSet.has(subgroup)) {
+      newSet.delete(subgroup)
+    } else {
+      newSet.add(subgroup)
+    }
+    setExpandedSubgroups(newSet)
+  }
+
   return (
     <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 12, padding: '16px', marginTop: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#2D2A22' }}>Share Links by Subgroup</div>
         <button
           type="button"
@@ -642,69 +654,113 @@ function SubgroupShareLinksPanel({ report, onClose }) {
             background: copiedIndex === 'all' ? '#2D8653' : '#4C2A92',
             color: 'white',
             border: 'none',
-            borderRadius: 7,
-            padding: '6px 12px',
-            fontSize: 11.5,
+            borderRadius: 8,
+            padding: '7px 14px',
+            fontSize: 12,
             fontWeight: 600,
             cursor: 'pointer',
+            transition: 'all 0.2s'
           }}
+          onMouseEnter={(e) => { if (copiedIndex !== 'all') e.target.style.background = '#5D3BA3' }}
+          onMouseLeave={(e) => { if (copiedIndex !== 'all') e.target.style.background = '#4C2A92' }}
         >
           {copiedIndex === 'all' ? '✓ All Copied' : 'Copy All'}
         </button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ background: '#F9F7F3', border: '1px solid #EDE8DC', borderRadius: 10, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 11.5, fontWeight: 600, color: '#2D2A22', marginBottom: 4 }}>Full Report</div>
-            <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all' }}>{fullReportUrl}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Full Report - Always Expanded */}
+        <div style={{ background: '#F9F7F3', border: '1px solid #EDE8DC', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#2D2A22', marginBottom: 4 }}>Full Report</div>
+              <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all', fontFamily: 'monospace' }}>{fullReportUrl}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => copyLink(fullReportUrl, 'full')}
+              style={{
+                background: copiedIndex === 'full' ? '#2D8653' : '#EDE8DC',
+                color: copiedIndex === 'full' ? 'white' : '#4C2A92',
+                border: 'none',
+                borderRadius: 6,
+                padding: '6px 12px',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+                transition: 'all 0.2s'
+              }}
+            >
+              {copiedIndex === 'full' ? '✓ Copied' : 'Copy'}
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => copyLink(fullReportUrl, 'full')}
-            style={{
-              background: copiedIndex === 'full' ? '#2D8653' : '#EDE8DC',
-              color: copiedIndex === 'full' ? 'white' : '#4C2A92',
-              border: 'none',
-              borderRadius: 7,
-              padding: '6px 12px',
-              fontSize: 11.5,
-              fontWeight: 600,
-              cursor: 'pointer',
-              flexShrink: 0,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {copiedIndex === 'full' ? '✓' : 'Copy'}
-          </button>
         </div>
 
+        {/* Subgroup Links - Collapsible */}
         {report.subgroups.map((subgroup, index) => {
           const linkUrl = `${baseUrl}?subgroup=${encodeURIComponent(subgroup)}`
+          const isExpanded = expandedSubgroups.has(subgroup)
           return (
-            <div key={subgroup} style={{ background: '#F9F7F3', border: '1px solid #EDE8DC', borderRadius: 10, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 600, color: '#2D2A22', marginBottom: 4 }}>{subgroup}</div>
-                <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all' }}>{linkUrl}</div>
-              </div>
+            <div key={subgroup} style={{ border: '1px solid #EDE8DC', borderRadius: 10, overflow: 'hidden' }}>
+              {/* Header/Toggle */}
               <button
                 type="button"
-                onClick={() => copyLink(linkUrl, index)}
+                onClick={() => toggleSubgroup(subgroup)}
                 style={{
-                  background: copiedIndex === index ? '#2D8653' : '#EDE8DC',
-                  color: copiedIndex === index ? 'white' : '#4C2A92',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  padding: '12px',
+                  background: isExpanded ? '#F5F3F0' : '#F9F7F3',
                   border: 'none',
-                  borderRadius: 7,
-                  padding: '6px 12px',
-                  fontSize: 11.5,
-                  fontWeight: 600,
                   cursor: 'pointer',
-                  flexShrink: 0,
-                  whiteSpace: 'nowrap',
+                  transition: 'background 0.2s',
+                  textAlign: 'left'
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#F5F3F0' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = isExpanded ? '#F5F3F0' : '#F9F7F3' }}
               >
-                {copiedIndex === index ? '✓' : 'Copy'}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#2D2A22' }}>{subgroup}</div>
+                </div>
+                <div style={{ fontSize: 14, color: '#9E9488', flexShrink: 0, transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                  ▼
+                </div>
               </button>
+
+              {/* Content - Hidden by default */}
+              {isExpanded && (
+                <div style={{ padding: '12px', background: '#FAFAF9', borderTop: '1px solid #EDE8DC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all', fontFamily: 'monospace', background: '#F9F7F3', padding: '8px', borderRadius: 6, border: '1px solid #EDE8DC' }}>
+                      {linkUrl}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyLink(linkUrl, index)}
+                    style={{
+                      background: copiedIndex === index ? '#2D8653' : '#EDE8DC',
+                      color: copiedIndex === index ? 'white' : '#4C2A92',
+                      border: 'none',
+                      borderRadius: 6,
+                      padding: '6px 12px',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {copiedIndex === index ? '✓ Copied' : 'Copy'}
+                  </button>
+                </div>
+              )}
             </div>
           )
         })}
