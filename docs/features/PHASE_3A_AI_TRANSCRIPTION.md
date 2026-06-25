@@ -111,7 +111,7 @@ supabase/migrations/
 
 #### `processTranscriptionWithClaude(transcript, meetingContext)`
 
-Process transcript with Claude API. Returns extracted content.
+Process transcript with Claude 3.5 Haiku API. Returns extracted content.
 
 ```javascript
 const result = await processTranscriptionWithClaude(
@@ -132,20 +132,20 @@ const result = await processTranscriptionWithClaude(
 //     decisions: ["decision 1", "decision 2"],
 //     extractedActionItems: [{action, owner, dueDate, priority}, ...],
 //     tokensUsed: 1250,
-//     processingTimeSeconds: 12
+//     processingTimeSeconds: 8
 //   }
 // }
 ```
 
-**Claude Prompt**:
+**Model**: Claude 3.5 Haiku (fast + cost-effective)
 - Extracts ONLY valid JSON (no markdown)
 - Uses meeting context for relevance
 - Returns 3-4 key points max
 - Action items must be specific/actionable
 - Marks priority: high|medium|low
 
-**Processing Time**: 10-30 seconds typical
-**Token Cost**: ~0.5-1.5 cents per transcript
+**Processing Time**: 5-20 seconds (Haiku is faster than Sonnet)
+**Token Cost**: ~0.0005 cents per transcript (10x cheaper than Sonnet)
 
 #### `saveTranscriptionResult(meetingId, transcriptionData, userId)`
 
@@ -405,10 +405,10 @@ VITE_ANTHROPIC_API_KEY=sk-ant-...  # Claude API key (from Anthropic console)
 - Audio files: Up to 25 MB (future implementation)
 - Max tokens: 2000 for response (adjustable)
 
-### Cost
-- Per transcript: ~1000-1500 tokens = $0.005-$0.008
-- Per month (100 meetings): ~$0.50-$0.80
-- Annual: ~$6-$10 (very low cost)
+### Cost (using Haiku 3.5)
+- Per transcript: ~1000-1500 tokens = **$0.0005** (half a cent!)
+- Per month (100 meetings): ~$0.05
+- Annual (1000 meetings): ~$0.50 (negligible)
 
 ## Security & Privacy
 
@@ -541,22 +541,23 @@ npm run test -- src/tests/aiProcessing.test.js
 - [ ] Integration with Gmail/Slack for notifications
 - [ ] Meeting recording transcription
 
-## Cost Analysis
+## Cost Analysis (Haiku 3.5)
 
 ### Typical Meeting
 - 30-minute meeting transcript: ~2000-3000 words
 - Input tokens: ~400-600
-- Output tokens: ~300-400
-- Total tokens: ~700-1000
-- Cost: ~$0.003-$0.005 per meeting
+- Output tokens: ~200-300 (Haiku is concise)
+- Total tokens: ~600-900
+- Cost: ~**$0.0003-$0.0005 per meeting** (Haiku pricing)
 
 ### Monthly Budget (100 meetings)
-- $0.30-$0.50 per month
-- Annual: ~$4-$6
+- **$0.03-$0.05 per month** (less than a penny!)
+- Annual: ~**$0.50**
 
 ### Annual Projection (1000 meetings)
-- $30-$50 per year
-- Negligible compared to human transcription cost (~$10-20 per meeting)
+- **$0.50 per year** (essentially free)
+- Compare: Human transcription = $10,000-20,000/year
+- Savings: 99.99% cost reduction
 
 ## Related Documentation
 
