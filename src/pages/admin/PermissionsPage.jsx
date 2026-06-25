@@ -1,34 +1,35 @@
-﻿import { useState, useEffect } from ''react'';
-import { useAuth } from ''../../hooks/useAuth'';
-import { useRequirePermission } from ''../../hooks/useHasPermission'';
+﻿import { useState, useEffect } from 'react';
+import { useAuth } from '../../hooks/useAuth';
+import { useRequirePermission } from '../../hooks/useHasPermission';
 import {
   getRolePermissions,
   toggleRolePermission,
   getPermissionCategories,
-} from ''../../lib/permissions/api'';
-import toast from ''../../context/ToastContext'';
-import ''./PermissionsPage.css'';
+} from '../../lib/permissions/api';
+import { useToast } from '../../context/ToastContext';
+import './PermissionsPage.css';
 
 export default function PermissionsPage() {
   const { profile } = useAuth();
-  const { hasPermission, loading: authLoading } = useRequirePermission(''super_admin'');
+  const { hasPermission, loading: authLoading } = useRequirePermission('super_admin');
+  const toast = useToast();
   
-  const [selectedRole, setSelectedRole] = useState(''ors'');
+  const [selectedRole, setSelectedRole] = useState('ors');
   const [permissions, setPermissions] = useState([]);
   const [allRolePermissions, setAllRolePermissions] = useState({});
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [viewMode, setViewMode] = useState(''role'');
+  const [viewMode, setViewMode] = useState('role');
 
-  const roleOptions = [''super_admin'', ''dept_lead'', ''pastor'', ''ors'', ''reg_sec'', ''member''];
+  const roleOptions = ['super_admin', 'dept_lead', 'pastor', 'ors', 'reg_sec', 'member'];
   const roleLabels = {
-    super_admin: ''Admin'',
-    dept_lead: ''Lead'',
-    pastor: ''Pastor'',
-    ors: ''ORS'',
-    reg_sec: ''Reg Sec'',
-    member: ''Member'',
+    super_admin: 'Admin',
+    dept_lead: 'Lead',
+    pastor: 'Pastor',
+    ors: 'ORS',
+    reg_sec: 'Reg Sec',
+    member: 'Member',
   };
 
   if (!authLoading && !hasPermission) {
@@ -55,7 +56,7 @@ export default function PermissionsPage() {
       const data = await getRolePermissions(selectedRole);
       setPermissions(data);
     } catch (err) {
-      toast.error(''Failed to load permissions'');
+      toast.error('Failed to load permissions');
       console.error(err);
     } finally {
       setLoading(false);
@@ -71,7 +72,7 @@ export default function PermissionsPage() {
       }
       setAllRolePermissions(allPerms);
     } catch (err) {
-      console.error(''Failed to load all permissions:'', err);
+      console.error('Failed to load all permissions:', err);
     }
   };
 
@@ -80,7 +81,7 @@ export default function PermissionsPage() {
       const data = await getPermissionCategories();
       setCategories(data);
     } catch (err) {
-      console.error(''Failed to load categories:'', err);
+      console.error('Failed to load categories:', err);
     }
   };
 
@@ -109,10 +110,10 @@ export default function PermissionsPage() {
       }));
 
       toast.success(
-        `"${permissionKey}" ${!currentEnabled ? ''enabled'' : ''disabled''} for ${roleLabels[role]}`
+        `"${permissionKey}" ${!currentEnabled ? 'enabled' : 'disabled'} for ${roleLabels[role]}`
       );
     } catch (err) {
-      toast.error(err.message || ''Failed to update permission'');
+      toast.error(err.message || 'Failed to update permission');
       console.error(err);
     } finally {
       setIsSaving(false);
@@ -121,7 +122,7 @@ export default function PermissionsPage() {
 
   const groupedPermissions = {};
   permissions.forEach(p => {
-    const cat = p.category || ''other'';
+    const cat = p.category || 'other';
     if (!groupedPermissions[cat]) {
       groupedPermissions[cat] = [];
     }
@@ -154,20 +155,20 @@ export default function PermissionsPage() {
 
       <div className="view-toggle">
         <button
-          className={`toggle-btn ${viewMode === ''role'' ? ''active'' : ''''}`}
-          onClick={() => setViewMode(''role'')}
+          className={`toggle-btn ${viewMode === 'role' ? 'active' : ''}`}
+          onClick={() => setViewMode('role')}
         >
           Role-Focused View
         </button>
         <button
-          className={`toggle-btn ${viewMode === ''matrix'' ? ''active'' : ''''}`}
-          onClick={() => setViewMode(''matrix'')}
+          className={`toggle-btn ${viewMode === 'matrix' ? 'active' : ''}`}
+          onClick={() => setViewMode('matrix')}
         >
           Matrix View
         </button>
       </div>
 
-      {viewMode === ''role'' && (
+      {viewMode === 'role' && (
         <div className="role-view">
           <div className="role-controls">
             <label>
@@ -195,7 +196,7 @@ export default function PermissionsPage() {
               {Object.entries(groupedPermissions).map(([category, perms]) => (
                 <div key={category} className="category-section">
                   <h3 className="category-title">
-                    {category.replace(''_'', '' '').toUpperCase()}
+                    {category.replace('_', ' ').toUpperCase()}
                   </h3>
                   <div className="permission-list">
                     {perms.map(perm => (
@@ -215,8 +216,8 @@ export default function PermissionsPage() {
                               onChange={() =>
                                 handleToggle(selectedRole, perm.permission_key, perm.enabled)
                               }
-                              disabled={isSaving || selectedRole === ''super_admin''}
-                              title={selectedRole === ''super_admin'' ? ''Admin cannot be modified'' : ''''}
+                              disabled={isSaving || selectedRole === 'super_admin'}
+                              title={selectedRole === 'super_admin' ? 'Admin cannot be modified' : ''}
                             />
                             <span className="toggle-slider"></span>
                           </label>
@@ -229,7 +230,7 @@ export default function PermissionsPage() {
             </div>
           )}
 
-          {selectedRole === ''super_admin'' && (
+          {selectedRole === 'super_admin' && (
             <div className="info-box">
               <p>ℹ️ Admin role has all permissions by default and cannot be modified.</p>
             </div>
@@ -237,7 +238,7 @@ export default function PermissionsPage() {
         </div>
       )}
 
-      {viewMode === ''matrix'' && (
+      {viewMode === 'matrix' && (
         <div className="matrix-view">
           <div className="matrix-scroll-container">
             <table className="permission-matrix">
@@ -262,17 +263,17 @@ export default function PermissionsPage() {
                       return (
                         <td
                           key={`${role}-${permissionKey}`}
-                          className={`matrix-cell ${isEnabled ? ''enabled'' : ''disabled''}`}
+                          className={`matrix-cell ${isEnabled ? 'enabled' : 'disabled'}`}
                         >
                           <button
                             className="matrix-toggle"
                             onClick={() =>
                               handleToggle(role, permissionKey, isEnabled)
                             }
-                            disabled={isSaving || role === ''super_admin''}
-                            title={role === ''super_admin'' ? ''Admin cannot be modified'' : ''''}
+                            disabled={isSaving || role === 'super_admin'}
+                            title={role === 'super_admin' ? 'Admin cannot be modified' : ''}
                           >
-                            {isEnabled ? ''✓'' : ''✗''}
+                            {isEnabled ? '✓' : '✗'}
                           </button>
                         </td>
                       );

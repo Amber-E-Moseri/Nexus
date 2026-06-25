@@ -8,7 +8,7 @@ import { PrayerActivityTab } from './tabs/PrayerActivityTab'
 import CampusEditForm from './CampusEditForm'
 import { useCanEditCampus } from '../../hooks/useCanEditCampus'
 import { useToast } from '../../context/ToastContext'
-import '../../../styles/campus-detail-modal.css'
+import '../../styles/campus-detail-modal.css'
 
 const TAB_ICONS = {
   overview: '📊',

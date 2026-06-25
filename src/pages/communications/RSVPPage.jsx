@@ -210,7 +210,7 @@ export default function RSVPPage() {
   // SUBMITTED STATE (thank you)
   if (state === 'submitted' && campaign) {
     const responseText = {
-      yes: '✓ You're Confirmed!',
+      yes: '✓ You\'re Confirmed!',
       maybe: '❓ You said Maybe',
       no: '✗ Thanks for Letting Us Know',
     }[response];
