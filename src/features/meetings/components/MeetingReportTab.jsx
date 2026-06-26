@@ -1558,9 +1558,6 @@ export default function MeetingReportTab() {
   }
 
   function handleEmailAbsentees() {
-    console.log('Email Absentees clicked. Report:', report)
-    console.log('Absent members:', report?.absent)
-
     if (!report?.absent || report.absent.length === 0) {
       showToast('No absent members to email.', { tone: 'warning' })
       return
@@ -1568,11 +1565,8 @@ export default function MeetingReportTab() {
 
     const absentWithEmails = report.absent.filter((person) => {
       const rosterMatch = roster.find((r) => normalizeNameKey(r.full_name) === normalizeNameKey(person.name))
-      console.log(`Looking for "${person.name}" -> Found: ${rosterMatch?.full_name || 'NOT FOUND'}, Email: ${rosterMatch?.email || 'NO EMAIL'}`)
       return rosterMatch?.email
     })
-
-    console.log('Absent with emails:', absentWithEmails)
 
     if (absentWithEmails.length === 0) {
       showToast('No email addresses found for absent members.', { tone: 'warning' })
@@ -1587,13 +1581,8 @@ export default function MeetingReportTab() {
       }
     })
 
-    console.log('Recipients:', recipients)
-
-    // Use default template
     const defaultSubject = `We missed you at ${report.label}`
     const defaultBody = `Hi {{name}}, we missed you at ${report.label}. Please review the meeting attendance report.`
-
-    console.log('Setting email editor with:', { recipients, subject: defaultSubject, body: defaultBody })
 
     setEmailEditor({
       recipients,
@@ -1789,13 +1778,7 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
                 {report.id && report.share_token ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      console.log('Share Report button clicked')
-                      console.log('report.id:', report.id)
-                      console.log('report.share_token:', report.share_token)
-                      console.log('shareUrl:', shareUrl)
-                      setShowShareModal(true)
-                    }}
+                    onClick={() => setShowShareModal(true)}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 6,
                       background: 'rgba(255,255,255,0.10)', color: '#DCE9F8',
