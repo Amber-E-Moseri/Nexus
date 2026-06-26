@@ -68,6 +68,8 @@ function parseImportCSV(text) {
   if (!lines.length) return { rows: [], errors: ['Empty file'] }
 
   const rawHeaders = splitCSVLine(lines[0]).map((h) => h.replace(/^"|"$/g, '').trim().toLowerCase())
+  console.log('CSV Headers found:', rawHeaders)
+
   const idx = {
     full_name: rawHeaders.findIndex((h) => h === 'fullname' || h === 'full name' || h === 'full_name' || h === 'name'),
     subgroup: rawHeaders.findIndex((h) => h === 'subgroup'),
@@ -75,6 +77,8 @@ function parseImportCSV(text) {
     email: rawHeaders.findIndex((h) => h === 'email' || h === 'email address'),
     active: rawHeaders.findIndex((h) => h === 'active'),
   }
+
+  console.log('Column indices:', idx)
 
   if (idx.full_name === -1) return { rows: [], errors: ['Could not find a "Full Name" or "FullName" column.'] }
 
@@ -88,15 +92,18 @@ function parseImportCSV(text) {
     if (!fullName) continue
 
     const activeRaw = idx.active >= 0 ? (cells[idx.active] ?? '').replace(/^"|"$/g, '').trim().toLowerCase() : 'true'
-    rows.push({
+    const row = {
       full_name: fullName,
       subgroup: idx.subgroup >= 0 ? (cells[idx.subgroup] ?? '').replace(/^"|"$/g, '').trim() : '',
       leadership_category: idx.leadership_category >= 0 ? (cells[idx.leadership_category] ?? '').replace(/^"|"$/g, '').trim() : '',
       email: idx.email >= 0 ? (cells[idx.email] ?? '').replace(/^"|"$/g, '').trim() : '',
       active: activeRaw !== 'false' && activeRaw !== '0' && activeRaw !== 'no',
-    })
+    }
+    console.log(`Row ${i}: name="${row.full_name}", email="${row.email}", category="${row.leadership_category}"`)
+    rows.push(row)
   }
 
+  console.log('Parsed rows:', rows)
   return { rows, errors }
 }
 
