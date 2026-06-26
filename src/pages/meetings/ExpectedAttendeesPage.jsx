@@ -71,8 +71,8 @@ function parseImportCSV(text) {
   const idx = {
     full_name: rawHeaders.findIndex((h) => h === 'fullname' || h === 'full name' || h === 'full_name' || h === 'name'),
     subgroup: rawHeaders.findIndex((h) => h === 'subgroup'),
-    leadership_category: rawHeaders.findIndex((h) => h.includes('leadership') || h.includes('category')),
-    email: rawHeaders.findIndex((h) => h === 'email'),
+    leadership_category: rawHeaders.findIndex((h) => h.includes('leadership') || h.includes('category') || h.includes('people')),
+    email: rawHeaders.findIndex((h) => h === 'email' || h === 'email address'),
     active: rawHeaders.findIndex((h) => h === 'active'),
   }
 
