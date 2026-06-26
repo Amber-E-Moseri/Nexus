@@ -4,7 +4,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
 import { useToast } from '../../../context/ToastContext'
-import { logAbsenceFollowup } from '../../../lib/meetings/absenceFollowupLib'
 import AbsenceBatchConfirmModal from '../../../components/meetings/AbsenceBatchConfirmModal'
 
 const PRINT_STYLES = `
@@ -1730,7 +1729,6 @@ export default function MeetingReportTab() {
       return {
         name: person.name,
         email: rosterMatch.email,
-        user_id: rosterMatch?.id,
       }
     })
 
@@ -1766,25 +1764,24 @@ export default function MeetingReportTab() {
 
       if (error) throw error
 
-      // Log each sent email to absence_follow_ups table
-      const currentUser = profile?.id
+      // Log email sent to absence_email_log table
       const sentAt = new Date().toISOString()
+      const currentUser = profile?.id
 
       for (const recipient of emailConfirmation.recipients) {
         try {
-          await logAbsenceFollowup(
-            report.id,
-            recipient.user_id,
-            report.department_id,
-            {
+          await supabase
+            .from('absence_email_log')
+            .insert({
+              report_id: report.id,
+              recipient_name: recipient.name,
+              recipient_email: recipient.email,
               subject: emailSubject,
               body: emailBody,
               status: 'sent',
-              sentAt,
-              reason: 'absent',
-            },
-            currentUser,
-          )
+              sent_by: currentUser,
+              sent_at: sentAt,
+            })
         } catch (logErr) {
           // Log error but don't fail the whole operation
           console.error(`Failed to log email for ${recipient.name}:`, logErr)
