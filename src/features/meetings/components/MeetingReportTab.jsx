@@ -1124,6 +1124,7 @@ export default function MeetingReportTab() {
   const [emailSending, setEmailSending] = useState(false)
   const [emailConfirmation, setEmailConfirmation] = useState(null)
   const [emailEditor, setEmailEditor] = useState(null)
+  const [showEmailEditor, setShowEmailEditor] = useState(false)
   const [exportingToDrive, setExportingToDrive] = useState(false)
   const { showToast } = useToast()
 
@@ -1558,6 +1559,9 @@ export default function MeetingReportTab() {
   }
 
   function handleEmailAbsentees() {
+    console.log('Email Absentees: report.absent =', report?.absent?.length)
+    console.log('Email Absentees: roster =', roster.length)
+
     if (!report?.absent || report.absent.length === 0) {
       showToast('No absent members to email.', { tone: 'warning' })
       return
@@ -1567,6 +1571,8 @@ export default function MeetingReportTab() {
       const rosterMatch = roster.find((r) => normalizeNameKey(r.full_name) === normalizeNameKey(person.name))
       return rosterMatch?.email
     })
+
+    console.log('Email Absentees: absentWithEmails =', absentWithEmails.length)
 
     if (absentWithEmails.length === 0) {
       showToast('No email addresses found for absent members.', { tone: 'warning' })
@@ -1584,11 +1590,13 @@ export default function MeetingReportTab() {
     const defaultSubject = `We missed you at ${report.label}`
     const defaultBody = `Hi {{name}}, we missed you at ${report.label}. Please review the meeting attendance report.`
 
+    console.log('Email Absentees: setEmailEditor with', recipients.length, 'recipients')
     setEmailEditor({
       recipients,
       subject: defaultSubject,
       body: defaultBody,
     })
+    setShowEmailEditor(true)
   }
 
   async function handleSendCustomEmail() {
@@ -1641,6 +1649,7 @@ export default function MeetingReportTab() {
       }
       showToast(message, { tone: 'success' })
       setEmailEditor(null)
+      setShowEmailEditor(false)
       setEmailConfirmation(null)
     } catch (err) {
       showToast(`Failed to send emails: ${err.message}`, { tone: 'error' })
@@ -2488,9 +2497,9 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
       )}
 
       {/* Email Editor Modal */}
-      {emailEditor && (
+      {showEmailEditor && emailEditor && (
         <>
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999 }} onClick={() => !emailSending && setEmailEditor(null)} />
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999 }} onClick={() => !emailSending && setShowEmailEditor(false)} />
           <div style={{
             position: 'fixed',
             top: '50%',
@@ -2512,7 +2521,7 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>Customize Email</h2>
               <button
                 type="button"
-                onClick={() => setEmailEditor(null)}
+                onClick={() => setShowEmailEditor(false)}
                 disabled={emailSending}
                 style={{ background: 'none', border: 'none', fontSize: 24, cursor: emailSending ? 'not-allowed' : 'pointer', color: '#9E9488', padding: 0, opacity: emailSending ? 0.5 : 1 }}
               >
@@ -2590,7 +2599,7 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
             <div style={{ padding: '16px 20px', borderTop: '1px solid #EDE8DC', display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0 }}>
               <button
                 type="button"
-                onClick={() => setEmailEditor(null)}
+                onClick={() => setShowEmailEditor(false)}
                 disabled={emailSending}
                 style={{
                   padding: '10px 16px',
