@@ -1590,7 +1590,6 @@ export default function MeetingReportTab() {
     const defaultSubject = `We missed you at ${report.label}`
     const defaultBody = `Hi {{name}}, we missed you at ${report.label}. Please review the meeting attendance report.`
 
-    console.log('Email Absentees: setEmailEditor with', recipients.length, 'recipients')
     setEmailEditor({
       recipients,
       subject: defaultSubject,
