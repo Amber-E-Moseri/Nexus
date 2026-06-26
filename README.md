@@ -14,6 +14,8 @@ BLW CAN NEXUS is an internal workspace for BLW Canada Sub-Region's 30-person tea
 - Real-time collaboration with Supabase subscriptions
 - External integrations: Google Calendar, Google Drive (Apps Script), Slack, Resend
 
+> **📚 [View Full Documentation](docs/README.md)** — Setup guides, feature docs, deployment procedures, and more
+
 ## Tech Stack
 
 | Area | Technology |
@@ -409,9 +411,19 @@ After first setup, verify the app is working end-to-end:
    ```
    Confirm a JSON response with a `tasks` array is returned and the key's `last_used_at` timestamp updates in the database.
 
-## Architecture decisions
+## Documentation
 
-See `docs/decision-catalog.md` for 35+ documented architecture decisions with interview-ready explanations.
+Complete documentation is available in the `docs/` directory:
+
+- **[docs/README.md](docs/README.md)** — Master documentation index with quick links
+- **[docs/architecture/decision-catalog.md](docs/architecture/decision-catalog.md)** — 35+ documented architecture decisions
+- **[docs/setup/](docs/setup/)** — Environment setup and configuration guides
+- **[docs/features/](docs/features/)** — Feature implementation guides
+- **[docs/deployment/](docs/deployment/)** — Deployment procedures and checklists
+- **[docs/phases/](docs/phases/)** — Phase-specific implementation and validation guides
+- **[docs/audits/](docs/audits/)** — System audits and investigation reports
+- **[docs/guides/](docs/guides/)** — Testing and verification guides
+- **[docs/SECURITY.md](docs/SECURITY.md)** — Security guidelines and best practices
 
 ## Ecosystem
 
