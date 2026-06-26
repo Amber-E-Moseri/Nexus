@@ -609,10 +609,25 @@ function extractRegion(subgroupName) {
   return match ? match[1] : subgroupName
 }
 
-function SubgroupShareLinksPanel({ report, onClose }) {
+function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false }) {
   const [copiedIndex, setCopiedIndex] = useState(null)
 
   if (!report || !report.subgroups || report.subgroups.length === 0) return null
+
+  // Initialize expanded state based on expandedByDefault
+  const getInitialRegions = () => {
+    if (!expandedByDefault) return new Set()
+    const regions = new Set()
+    report.subgroups.forEach((sg) => {
+      const region = extractRegion(sg)
+      regions.add(region)
+    })
+    return regions
+  }
+
+  const [expandedFullReport, setExpandedFullReport] = useState(expandedByDefault)
+  const [expandedRegions, setExpandedRegions] = useState(getInitialRegions())
+  const [expandedSubgroups, setExpandedSubgroups] = useState(expandedByDefault ? new Set(report.subgroups) : new Set())
 
   const baseUrl = `${window.location.origin}/reports/${report.share_token}`
   const fullReportUrl = baseUrl
@@ -649,10 +664,6 @@ function SubgroupShareLinksPanel({ report, onClose }) {
       setTimeout(() => setCopiedIndex(null), 2000)
     }
   }
-
-  const [expandedFullReport, setExpandedFullReport] = useState(false)
-  const [expandedRegions, setExpandedRegions] = useState(new Set())
-  const [expandedSubgroups, setExpandedSubgroups] = useState(new Set())
 
   const toggleRegion = (region) => {
     const newSet = new Set(expandedRegions)
@@ -2523,7 +2534,7 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
 
               {/* Content */}
               <div style={{ padding: '20px', flex: 1, overflowY: 'auto' }}>
-                <SubgroupShareLinksPanel report={report} />
+                <SubgroupShareLinksPanel report={report} expandedByDefault={true} />
               </div>
             </div>
           </>
