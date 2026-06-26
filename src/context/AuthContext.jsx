@@ -84,9 +84,38 @@ export function AuthProvider({ children }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) {
         return
+      }
+
+      // SECURITY FIX: Reject PASSWORD_RECOVERY auto-authentication
+      // Do NOT create a user session from the recovery token
+      // Instead, store recovery token in sessionStorage for use on reset-password page
+      if (event === 'PASSWORD_RECOVERY') {
+        // Extract recovery token from URL hash
+        const hash = window.location.hash
+        const params = new URLSearchParams(hash.substring(1))
+        const accessToken = params.get('access_token')
+        const type = params.get('type')
+
+        if (type === 'recovery' && accessToken) {
+          // Store recovery token in sessionStorage (expires when browser closes)
+          sessionStorage.setItem('recovery_token', accessToken)
+          // 15-minute TTL for the recovery token
+          sessionStorage.setItem('recovery_token_expires', String(Date.now() + 15 * 60 * 1000))
+
+          // CRITICAL: Reject the auto-session from Supabase
+          // This prevents users from gaining access without changing their password
+          await supabase.auth.signOut({ scope: 'local' })
+
+          // Redirect to reset password page (safe - recovery token is in sessionStorage, not exposed in JS)
+          if (mounted) {
+            setLoading(false)
+            window.location.href = '/reset-password'
+          }
+          return
+        }
       }
 
       setUser(session?.user ?? null)
