@@ -1731,6 +1731,7 @@ export default function MeetingReportTab() {
 
     const absentWithEmails = report.absent.filter((person) => {
       const rosterMatch = roster.find((r) => normalizeNameKey(r.full_name) === normalizeNameKey(person.name))
+      console.log(`Looking for "${person.name}" -> Found: ${rosterMatch?.full_name || 'NOT FOUND'}, Email: ${rosterMatch?.email || 'NO EMAIL'}`)
       return rosterMatch?.email
     })
 
