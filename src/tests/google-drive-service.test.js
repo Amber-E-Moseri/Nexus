@@ -271,15 +271,14 @@ describe('Google Drive Service', () => {
       expect(supabase.auth.getSession).toBeDefined()
     })
 
-    test('verifies Google Drive API endpoints are used correctly', () => {
+    test('uses correct Google Drive API endpoints', () => {
       // Export workflow uses these endpoints:
-      const endpoints = [
-        'https://www.googleapis.com/drive/v3/files', // Search for folder
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', // Upload
-      ]
-      expect(endpoints).toHaveLength(2)
-      expect(endpoints[0]).toContain('drive.google.com')
-      expect(endpoints[1]).toContain('upload')
+      const searchEndpoint = 'https://www.googleapis.com/drive/v3/files'
+      const uploadEndpoint = 'https://www.googleapis.com/upload/drive/v3/files'
+
+      expect(searchEndpoint).toContain('googleapis.com')
+      expect(uploadEndpoint).toContain('googleapis.com')
+      expect(uploadEndpoint).toContain('upload')
     })
   })
 })
