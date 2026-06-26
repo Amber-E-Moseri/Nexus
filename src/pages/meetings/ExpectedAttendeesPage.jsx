@@ -373,7 +373,7 @@ function ImportModal({ onImport, onClose, existingMatchKeys }) {
           <button type="button" onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 18, color: '#B0A696', cursor: 'pointer', lineHeight: 1 }}>X</button>
         </div>
         <div style={{ fontSize: 12, color: '#9E9488' }}>
-          Expected columns: <code style={{ background: '#F4F1EA', padding: '1px 5px', borderRadius: 4 }}>Subgroup, FullName (or Full Name), Leadership Category, Active</code>
+          Expected columns: <code style={{ background: '#F4F1EA', padding: '1px 5px', borderRadius: 4 }}>Full Name, Subgroup, Leadership Category, Email, Active</code>
           <br />Rows with empty Full Name are skipped. Existing records (same match_key) are skipped.
         </div>
 
@@ -420,7 +420,7 @@ function ImportModal({ onImport, onClose, existingMatchKeys }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr>
-                    {['Full Name', 'Subgroup', 'Category', 'Active', 'Status'].map((header) => (
+                    {['Full Name', 'Subgroup', 'Category', 'Email', 'Active', 'Status'].map((header) => (
                       <th key={header} style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 700, color: '#9E9488', borderBottom: '1px solid #EDE8DC', background: '#F9F7F3', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>{header}</th>
                     ))}
                   </tr>
@@ -433,6 +433,7 @@ function ImportModal({ onImport, onClose, existingMatchKeys }) {
                         <td style={{ padding: '6px 10px', color: isExisting ? '#9E9488' : '#2D2A22', fontWeight: 600 }}>{row.full_name}</td>
                         <td style={{ padding: '6px 10px', color: '#9E9488' }}>{displaySubgroup(row.subgroup) || '-'}</td>
                         <td style={{ padding: '6px 10px', color: '#9E9488' }}>{row.leadership_category || '-'}</td>
+                        <td style={{ padding: '6px 10px', color: '#9E9488', fontSize: 11 }}>{row.email || '-'}</td>
                         <td style={{ padding: '6px 10px' }}>
                           <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: row.active ? '#EEF6F1' : '#F4F1EA', color: row.active ? '#2D8653' : '#9E9488' }}>
                             {row.active ? 'Yes' : 'No'}
@@ -495,7 +496,7 @@ export default function ExpectedAttendeesPage() {
     setError(null)
     const { data, error: err } = await supabase
       .from('expected_attendees')
-      .select('id, full_name, match_key, subgroup, leadership_category, active, created_at, aliases:expected_attendee_aliases(id, alias_name)')
+      .select('id, full_name, match_key, subgroup, leadership_category, email, active, created_at, aliases:expected_attendee_aliases(id, alias_name)')
       .order('subgroup')
       .order('full_name')
     if (err) setError(err.message)
@@ -622,6 +623,7 @@ export default function ExpectedAttendeesPage() {
           full_name: personFields.full_name,
           subgroup: personFields.subgroup,
           leadership_category: personFields.leadership_category,
+          email: personFields.email,
           active: personFields.active,
         })
         .eq('id', id)
