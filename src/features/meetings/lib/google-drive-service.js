@@ -304,7 +304,6 @@ export async function exportReportToGoogleDrive(report, reportElement, fileName)
       webViewLink: result.webViewLink,
     }
   } catch (err) {
-    console.error('Error exporting to Google Drive:', err)
     throw err
   }
 }

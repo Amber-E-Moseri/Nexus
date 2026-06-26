@@ -61,7 +61,6 @@ export default function RSVPPage() {
           setState('form');
         }
       } catch (err) {
-        console.error('Error loading campaign:', err);
         setState('error');
       }
     }
@@ -92,7 +91,6 @@ export default function RSVPPage() {
       setResponse(rsvpResponse);
       setState('submitted');
     } catch (err) {
-      console.error('RSVP submission error:', err);
       setErrorMessage(err.message || 'Failed to submit RSVP. Please try again.');
     } finally {
       setIsSubmitting(false);
