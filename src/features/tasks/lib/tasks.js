@@ -221,6 +221,7 @@ export async function getMyTasks(userId) {
         files:task_files(count)
       `)
       .in('sprint_id', sprintIds)
+      .eq('assignee_id', userId)
       .is('parent_task_id', null)
 
     if (error2) throw error2
