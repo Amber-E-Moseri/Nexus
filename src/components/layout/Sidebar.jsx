@@ -255,6 +255,7 @@ export default function Sidebar() {
   const [openQuickAddMenuId, setOpenQuickAddMenuId] = useState(null)
   const [spaceActionsOpenId, setSpaceActionsOpenId] = useState(null)
   const [openSpaceMenuId, setOpenSpaceMenuId] = useState(null)
+  const [toolsExpanded, setToolsExpanded] = useState(false)
   const [hiddenSpaceIds, setHiddenSpaceIds] = useState(() => {
     // Defer to profile load, will initialize after
     return []
@@ -300,7 +301,7 @@ export default function Sidebar() {
 
     supabase
       .from('external_integrations')
-      .select('id, name, type, enabled, show_in_sidebar, sort_order, icon_emoji, launch_url')
+      .select('id, name, type, enabled, show_in_sidebar, sort_order, icon_emoji, launch_url, description')
       .eq('enabled', true)
       .eq('show_in_sidebar', true)
       .order('sort_order')
@@ -1196,12 +1197,6 @@ export default function Sidebar() {
             />
           </div>
         ) : null}
-        <SidebarItem
-          active={isPathActive(location.pathname, '/settings')}
-          icon={Settings}
-          label="Settings"
-          onClick={() => go('/settings')}
-        />
         {integrations.map((integration) => (
           <SidebarItem
             key={integration.id}
@@ -1214,30 +1209,102 @@ export default function Sidebar() {
 
         {showPeople ? (
           <>
-            <SidebarSectionLabel>People</SidebarSectionLabel>
+            <SidebarSectionLabel>Settings & Admin</SidebarSectionLabel>
             <SidebarItem
-              active={isPathActive(location.pathname, '/people/users')}
+              active={isPathActive(location.pathname, '/settings')}
+              icon={Settings}
+              label="Settings"
+              onClick={() => go('/settings')}
+            />
+            <SidebarItem
+              active={isPathActive(location.pathname, '/people')}
               icon={Users2}
-              label="Users"
+              label="People Management"
               onClick={() => go('/people/users')}
-            />
-            <SidebarItem
-              active={isPathActive(location.pathname, '/people/invitations')}
-              icon={Mail}
-              label="Invitations"
-              onClick={() => go('/people/invitations')}
-            />
-            <SidebarItem
-              active={isPathActive(location.pathname, '/people/pastoral-assignments')}
-              icon={UserCheck}
-              label="Pastoral"
-              onClick={() => go('/people/pastoral-assignments')}
             />
           </>
         ) : null}
       </div>
 
-      <div style={{ borderTop: '1px solid #EDE8DC', padding: 10 }}>
+      {/* Tools & Resources - SOPs and Tools */}
+      {(() => {
+        const sops = integrations.filter((i) => i.type === 'sop')
+        const colorMap = {
+          default: { bg: '#FDF3DC', bgHover: '#FBE8B8', color: '#B45309' },
+        }
+        const showCollapse = sops.length > 2
+
+        return sops.length > 0 ? (
+          <div style={{ padding: '12px 16px', borderTop: '1px solid #EDE8DC' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                color: '#9E9488',
+                marginBottom: 8,
+                cursor: showCollapse ? 'pointer' : 'default',
+              }}
+              onClick={() => showCollapse && setToolsExpanded(!toolsExpanded)}
+            >
+              <span>Tools & Resources</span>
+              {showCollapse && (
+                <ChevronDown
+                  size={12}
+                  style={{
+                    transform: toolsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.15s',
+                  }}
+                />
+              )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {sops.map((sop, idx) => {
+                const colors = colorMap.default
+                const isHidden = showCollapse && !toolsExpanded && idx >= 2
+                return !isHidden ? (
+                  <a
+                    key={sop.id}
+                    href={sop.launch_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={sop.description || sop.name}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      background: colors.bg,
+                      color: colors.color,
+                      textDecoration: 'none',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = colors.bgHover
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = colors.bg
+                    }}
+                  >
+                    <span style={{ fontSize: 14 }}>{sop.icon_emoji || '📋'}</span>
+                    <span>{sop.name}</span>
+                  </a>
+                ) : null
+              })}
+            </div>
+          </div>
+        ) : null
+      })()}
+
+      <div style={{ borderTop: '1px solid #EDE8DC', padding: 10, marginTop: 'auto' }}>
         <div
           style={{
             display: 'flex',
@@ -1327,40 +1394,6 @@ export default function Sidebar() {
           </button>
         </div>
       </div>
-
-      {/* Foundation School SOP - visible to Admin, ORS, and foundation_school permission holders */}
-      {(role === 'super_admin' || departmentName === 'ORS Projects' || departmentName === 'ORS' || profile?.user_integrations?.some((i) => i.integration_type === 'foundation_school')) && (
-        <div style={{ padding: '12px 16px', borderTop: '1px solid #EDE8DC', marginTop: 'auto' }}>
-          <a
-            href="/foundation-school-sop.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '8px 10px',
-              borderRadius: 6,
-              background: '#FDF3DC',
-              color: '#B45309',
-              textDecoration: 'none',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#FBE8B8'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#FDF3DC'
-            }}
-          >
-            <span style={{ fontSize: 14 }}>📋</span>
-            <span>Foundation School SOP</span>
-          </a>
-        </div>
-      )}
 
       {showSpaceModal ? <SpaceModal onSaved={loadSpaces} onClose={() => setShowSpaceModal(false)} /> : null}
       {editingSpace ? <SpaceModal mode="edit" space={editingSpace} onSaved={async () => { setEditingSpace(null); await loadSpaces() }} onClose={() => setEditingSpace(null)} /> : null}
