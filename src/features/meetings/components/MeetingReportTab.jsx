@@ -1720,7 +1720,7 @@ export default function MeetingReportTab() {
     setHistory((prev) => prev.filter((record) => record.id !== id))
   }
 
-  async function handleEmailAbsentees() {
+  function handleEmailAbsentees() {
     if (!report?.absent || report.absent.length === 0) {
       showToast('No absent members to email.', { tone: 'warning' })
       return
@@ -1744,15 +1744,9 @@ export default function MeetingReportTab() {
       }
     })
 
-    // Fetch default template
-    const { data: template } = await supabase
-      .from('absence_email_templates')
-      .select('subject, body')
-      .eq('is_default', true)
-      .maybeSingle()
-
-    const defaultSubject = template?.subject || `We missed you at ${report.label}`
-    const defaultBody = template?.body || `Hi {{name}}, we missed you at ${report.label}. Please review the meeting attendance report.`
+    // Use default template
+    const defaultSubject = `We missed you at ${report.label}`
+    const defaultBody = `Hi {{name}}, we missed you at ${report.label}. Please review the meeting attendance report.`
 
     setEmailEditor({
       recipients,
