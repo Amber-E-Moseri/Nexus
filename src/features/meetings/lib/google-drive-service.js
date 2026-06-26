@@ -20,7 +20,6 @@ export async function checkGoogleDriveAuth() {
     if (error || !session) return null
     return session.provider_token || null
   } catch (err) {
-    console.error('Error checking Google Drive auth:', err)
     return null
   }
 }
@@ -46,7 +45,6 @@ export async function setupGoogleDriveAuth() {
     if (error) throw error
     return { success: true, data }
   } catch (err) {
-    console.error('Error setting up Google Drive auth:', err)
     throw new Error(`Failed to authorize Google Drive: ${err.message}`)
   }
 }
@@ -99,7 +97,6 @@ export async function ensureNexusReportFolder(accessToken) {
     const createData = await createResponse.json()
     return createData.id
   } catch (err) {
-    console.error('Error ensuring Nexus Reports folder:', err)
     throw new Error(`Failed to access Google Drive folder: ${err.message}`)
   }
 }
@@ -158,7 +155,6 @@ export async function generateReportPdf(report, reportElement) {
 
     return pdf.output('blob')
   } catch (err) {
-    console.error('Error generating PDF:', err)
     throw new Error(`Failed to generate PDF: ${err.message}`)
   }
 }
@@ -273,7 +269,6 @@ export async function uploadReportToDrive(pdfBlob, fileName, accessToken, folder
       webViewLink: result.webViewLink,
     }
   } catch (err) {
-    console.error('Error uploading to Google Drive:', err)
     throw new Error(`Failed to upload report to Google Drive: ${err.message}`)
   }
 }

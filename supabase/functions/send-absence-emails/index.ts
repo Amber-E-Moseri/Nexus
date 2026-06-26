@@ -161,18 +161,42 @@ Deno.serve(async (request) => {
   let skipped = 0
   const errors: Array<{ name: string; email: string; error: string }> = []
 
+  // BATCH-LOAD user preferences once (not per-recipient)
+  // Step 1: Get user IDs by email
+  const recipientEmails = recipients.map(r => r.email.toLowerCase())
+  const { data: usersData } = await supabase
+    .from('users')
+    .select('id, email')
+    .in('email', recipientEmails)
+
+  // Create Map: email → user_id for O(1) lookup
+  const userIdByEmail = new Map(
+    (usersData || []).map(u => [u.email.toLowerCase(), u.id])
+  )
+
+  // Step 2: Load all preferences in ONE query
+  const userIds = Array.from(userIdByEmail.values())
+  const { data: allPrefs } = await supabase
+    .from('user_notification_prefs')
+    .select('user_id, email')
+    .eq('notification_type', 'absent_from_meeting')
+    .in('user_id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000']) // Prevent "in ()" error
+
+  // Create Map: user_id → email_enabled for O(1) lookup
+  const prefsByUserId = new Map(
+    (allPrefs || []).map(p => [p.user_id, p.email])
+  )
+
   for (let i = 0; i < recipients.length; i++) {
     const recipient = recipients[i]
 
     // Check if recipient has notification preference enabled for absence emails
-    const { data: prefData, error: prefError } = await supabase
-      .from('user_notification_prefs')
-      .select('email')
-      .eq('notification_type', 'absent_from_meeting')
-      .maybeSingle()
+    // Look up user_id from email, then check preference in Map (O(1), not DB query)
+    const userId = userIdByEmail.get(recipient.email.toLowerCase())
+    const emailEnabled = userId ? (prefsByUserId.get(userId) ?? true) : true // Default: enabled if no pref found
 
     // If preference is explicitly disabled (email: false), skip this recipient
-    if (!prefError && prefData && prefData.email === false) {
+    if (emailEnabled === false) {
       skipped += 1
       const { error: logError } = await supabase.from('absence_email_log').insert({
         report_id: reportId,
