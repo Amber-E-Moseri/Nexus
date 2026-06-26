@@ -1,0 +1,1933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Rock Solid —  Department Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --navy: #0B1340;
+  --navy2: #162060;
+  --gold: #C8870A;
+  --gold-lt: #FDF3DC;
+  --cream: #F8F6F0;
+  --ink: #111827;
+  --muted: #6B7280;
+  --border: #E5E7EB;
+  --white: #ffffff;
+  --radius: 14px;
+  --shadow: 0 4px 24px rgba(11,19,64,0.10);
+
+  --c-student: #0F766E;
+  --c-cell: #6D28D9;
+  --c-ft: #B45309;
+  --c-admin: #1D4ED8;
+  --c-teacher: #BE185D;
+  --c-principal: #0B1340;
+  --c-group: #0369A1;
+  --c-system: #374151;
+
+  --c-ok: #059669;
+  --c-warn: #D97706;
+  --c-danger: #DC2626;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--ink);min-height:100vh}
+
+/* ── HEADER ── */
+header{background:var(--navy);color:white;padding:0}
+.hdr-inner{max-width:1400px;margin:0 auto;padding:24px 28px;display:flex;gap:20px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.hdr-brand{display:flex;align-items:center;gap:16px}
+.hdr-logo{width:52px;height:52px;border-radius:50%;background:var(--white);border:1px solid var(--border);display:grid;place-items:center;overflow:hidden;flex-shrink:0;padding:4px}
+.hdr-logo img{width:100%;height:100%;object-fit:contain;display:block}
+.hdr-title{font-size:clamp(18px,2.5vw,28px);font-weight:700;letter-spacing:-.04em;line-height:1.1}
+.hdr-sub{margin-top:4px;font-size:13px;color:rgba(255,255,255,0.6)}
+.hdr-mission{max-width:380px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.13);border-radius:12px;padding:13px 16px;font-size:12px;line-height:1.6;color:rgba(255,255,255,0.8)}
+.hdr-mission strong{color:var(--gold);display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+
+/* ── TOOLBAR ── */
+.toolbar{background:var(--white);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:40;box-shadow:0 2px 8px rgba(11,19,64,0.06)}
+.tb-inner{max-width:1400px;margin:0 auto;padding:12px 28px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.tb-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}
+.role-btns-wrap{flex:1;min-width:0}
+.role-btns{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+.rbtn{border:1.5px solid var(--border);background:var(--white);color:var(--muted);border-radius:999px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:.15s;font-family:inherit;white-space:nowrap}
+.rbtn:hover{border-color:var(--navy);color:var(--navy)}
+.rbtn.active{background:var(--navy);border-color:var(--navy);color:white}
+.rbtn[data-role="student"].active{background:var(--c-student);border-color:var(--c-student)}
+.rbtn[data-role="cell"].active{background:var(--c-cell);border-color:var(--c-cell)}
+.rbtn[data-role="ft"].active{background:var(--c-ft);border-color:var(--c-ft)}
+.rbtn[data-role="admin"].active{background:var(--c-admin);border-color:var(--c-admin)}
+.rbtn[data-role="teacher"].active{background:var(--c-teacher);border-color:var(--c-teacher)}
+.rbtn[data-role="principal"].active{background:var(--c-principal);border-color:var(--c-principal)}
+.rbtn[data-role="group"].active{background:var(--c-group);border-color:var(--c-group)}
+.view-btns{display:flex;gap:6px;margin-left:auto}
+.vbtn{border:1.5px solid var(--border);background:var(--white);color:var(--muted);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:.15s;font-family:inherit}
+.vbtn:hover{border-color:var(--navy);color:var(--navy)}
+.vbtn.active{background:var(--gold-lt);border-color:var(--gold);color:var(--gold)}
+
+/* ── LAYOUT ── */
+.app{max-width:1400px;margin:0 auto;padding:24px 28px;display:grid;grid-template-columns:240px 1fr 320px;gap:20px;align-items:start}
+
+/* ── LEFT PANEL ── */
+.left-panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.panel-head{padding:14px 16px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);border-bottom:1px solid var(--border)}
+.role-entry{padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:.15s}
+.role-entry:last-child{border-bottom:none}
+.role-entry:hover{background:#F9FAFB}
+.role-entry.active{background:var(--cream)}
+.re-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.re-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.re-name{font-size:13px;font-weight:700;color:var(--ink)}
+.re-resp{font-size:11px;color:var(--muted);line-height:1.5}
+
+/* ── MAIN BOARD ── */
+.board{display:flex;flex-direction:column;gap:0}
+
+/* phase header */
+.phase-hdr{display:flex;align-items:center;gap:12px;padding:10px 0 8px;margin-top:4px}
+.phase-hdr:first-child{margin-top:0}
+.ph-line{flex:1;height:1px;background:var(--border)}
+.ph-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);white-space:nowrap;background:var(--cream);padding:0 8px}
+
+/* connector */
+.connector{display:flex;justify-content:center;align-items:center;height:24px;position:relative}
+.connector::before{content:'';position:absolute;top:0;bottom:0;left:50%;width:1px;background:#DDD9CC}
+.conn-arrow{width:8px;height:8px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:rotate(45deg);background:var(--cream);position:relative;z-index:1}
+
+/* step card */
+.step{display:grid;grid-template-columns:44px 1fr;gap:0;background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius);box-shadow:0 2px 8px rgba(11,19,64,0.05);cursor:pointer;transition:.18s;overflow:hidden}
+.step:hover{box-shadow:var(--shadow);transform:translateY(-1px)}
+.step.selected{border-color:var(--gold);box-shadow:0 6px 16px rgba(17,21,71,0.08);background:#FFFDF8}
+.step.dim{opacity:.22;filter:grayscale(.7);pointer-events:none}
+.step-num{display:grid;place-items:center;font-size:16px;font-weight:700;font-family:'DM Mono',monospace;color:white;border-right:1px solid rgba(255,255,255,0.2)}
+.step-body{padding:13px 15px}
+.step-phase{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+.step-title{font-size:13px;font-weight:700;color:var(--ink);line-height:1.3;margin-bottom:7px}
+.step-owner{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.step-owner span{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.step-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.tag{font-size:10px;font-weight:600;padding:3px 8px;border-radius:999px}
+.tag-warn{background:#FEF3C7;color:#92400E}
+.tag-danger{background:#FEE2E2;color:#991B1B}
+.tag-ok{background:#D1FAE5;color:#065F46}
+.tag-info{background:#DBEAFE;color:#1E40AF}
+.tag-gray{background:#F3F4F6;color:#374151}
+
+/* escalation strip */
+.esc-strip{background:#FFF5F5;border:1px solid #FCA5A5;border-radius:10px;padding:9px 12px;margin-top:8px;font-size:11px;color:#7F1D1D;line-height:1.5;display:flex;gap:8px;align-items:flex-start}
+.esc-icon{flex-shrink:0;font-size:13px}
+
+/* needs attention flag */
+.na-strip{background:#FFFBEB;border:1px solid #FCD34D;border-radius:10px;padding:9px 12px;margin-top:6px;font-size:11px;color:#78350F;line-height:1.5}
+
+/* parallel block */
+.parallel-block{background:var(--white);border:1.5px dashed var(--border);border-radius:var(--radius);padding:14px 16px;margin:6px 0;cursor:pointer;transition:.18s}
+.parallel-block:hover{border-color:var(--navy)}
+.parallel-block.selected{border-color:var(--gold);background:var(--gold-lt)}
+.pb-tag{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px}
+.pb-title{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:4px}
+.pb-meta{font-size:11px;color:var(--muted)}
+
+/* optional visualization layers */
+.lane-wrap{display:flex;flex-direction:column;gap:12px;position:relative}
+.lane-row{
+  --lane-accent:#9CA3AF;
+  display:grid;
+  grid-template-columns:200px minmax(0,1fr);
+  gap:12px;
+  align-items:start;
+  position:relative;
+}
+.lane-row::before{
+  content:'';
+  position:absolute;
+  left:212px;
+  right:0;
+  top:0;
+  height:1px;
+  background:linear-gradient(90deg, rgba(148,163,184,.35), rgba(148,163,184,.08));
+}
+.lane-head{
+  background:linear-gradient(180deg,#FFF, #FCFBF7);
+  border:1px solid var(--border);
+  border-top:2px solid var(--lane-accent);
+  border-radius:12px;
+  padding:11px 12px;
+  position:sticky;
+  top:74px;
+  z-index:2;
+  box-shadow:0 2px 8px rgba(17,21,71,.04);
+}
+.lane-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--navy)}
+.lane-sub{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.35}
+.lane-stream{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.82), rgba(255,255,255,.7)),
+    repeating-linear-gradient(90deg, rgba(148,163,184,.08) 0 1px, transparent 1px 160px);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  position:relative;
+}
+.lane-step{position:relative}
+.lane-step::after{
+  content:'';
+  position:absolute;
+  left:22px;
+  top:100%;
+  width:1px;
+  height:8px;
+  background:rgba(148,163,184,.32);
+}
+.lane-step:last-of-type::after{display:none}
+.lane-handoff{font-size:10px;color:var(--muted);margin:4px 0 2px 44px}
+.lane-empty{font-size:11px;color:#9CA3AF;padding:8px 10px}
+.lane-to-lane{
+  font-size:10px;
+  color:#64748B;
+  background:#FAFBFC;
+  border:1px solid #E2E8F0;
+  border-radius:999px;
+  padding:2px 8px;
+  display:inline-flex;
+  gap:4px;
+  align-items:center;
+}
+.lane-bridge{
+  margin:4px 0 2px 44px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  color:#64748B;
+  font-size:10px;
+}
+.lane-bridge::before{
+  content:'';
+  width:16px;
+  height:1px;
+  background:rgba(148,163,184,.55);
+}
+.lane-row[data-lane="student"]{--lane-accent:rgba(15,118,110,.52)}
+.lane-row[data-lane="cell"]{--lane-accent:rgba(181,42,42,.52)}
+.lane-row[data-lane="ft"]{--lane-accent:rgba(242,161,27,.56)}
+.lane-row[data-lane="admin"]{--lane-accent:rgba(17,21,71,.56)}
+.lane-row[data-lane="teacher"]{--lane-accent:rgba(109,40,217,.52)}
+.lane-row[data-lane="leaders"]{--lane-accent:rgba(201,115,22,.52)}
+.lane-row[data-lane="system"]{--lane-accent:rgba(75,85,99,.52)}
+.lane-row.is-focus .lane-head,
+.lane-row.is-focus .lane-stream{box-shadow:0 6px 16px rgba(17,21,71,.08)}
+.lane-row.is-focus .lane-stream{border-color:color-mix(in srgb, var(--lane-accent) 40%, #E5E7EB)}
+.lane-row.is-muted{opacity:.38}
+
+.role-focus-note{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#4B5563}
+.role-focus-note strong{color:var(--navy)}
+.focus-primary{opacity:1}
+.focus-related{opacity:.56}
+.focus-fade{opacity:.18;filter:grayscale(.5)}
+.connector.focus-connector::before{background:var(--gold)}
+.connector.focus-connector .conn-arrow{border-color:var(--gold)}
+
+/* ── DETAIL PANEL ── */
+.detail-panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);position:sticky;top:70px;max-height:calc(100vh - 90px);overflow-y:auto}
+.dp-head{padding:16px 18px 12px;border-bottom:1px solid var(--border)}
+.dp-head-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px}
+.dp-title{font-size:17px;font-weight:700;letter-spacing:-.03em;line-height:1.2;color:var(--navy)}
+.dp-owner-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:700;color:white;margin-top:8px}
+.dp-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.dp-body{padding:0 18px 18px}
+.dp-section{padding-top:14px;margin-top:14px;border-top:1px solid var(--border)}
+.dp-section h3{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:8px}
+.dp-section p,.dp-section li{font-size:13px;color:#374151;line-height:1.6}
+.dp-section ul{padding-left:16px}
+.dp-row{background:#F9FAFB;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:6px;line-height:1.5}
+.dp-row strong{color:var(--ink)}
+.dp-empty{padding:24px 18px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
+.dp-kpi{background:var(--cream);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.dp-kpi-label{font-size:12px;color:var(--muted)}
+.dp-kpi-val{font-size:13px;font-weight:700;color:var(--navy)}
+
+/* ── KPI / OPS STRIP ── */
+.ops-strip{grid-column:1/-1;margin-top:4px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.ops-rhythm{grid-column:1/-1}
+.ops-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:0 2px 8px rgba(11,19,64,0.04)}
+.ops-card h3{font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em}
+.ops-card li{font-size:12px;color:#374151;line-height:1.7;margin-left:16px}
+.kpi-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
+.kpi-row:last-child{border-bottom:none}
+.kpi-name{font-size:12px;color:#374151;flex:1;line-height:1.4}
+.kpi-bench{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:#DBEAFE;color:#1E40AF;white-space:nowrap}
+
+/* TODO SECTION */
+.todo-section{grid-column:1/-1;margin-top:8px}
+.todo-wrap{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
+.todo-head{font-size:12px;font-weight:700;color:var(--navy);margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em}
+.todo-group{margin-top:10px}
+.todo-group:first-of-type{margin-top:0}
+.todo-group-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.todo-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.todo-card{background:#F9FAFB;border:1px solid var(--border);border-radius:12px;padding:12px}
+.todo-name{font-size:13px;font-weight:700;color:var(--ink)}
+.todo-role{font-size:11px;color:var(--muted);margin-top:3px;margin-bottom:8px}
+.todo-list{padding-left:16px}
+.todo-list li{font-size:12px;color:#374151;line-height:1.65}
+.todo-subhead{font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.todo-section{
+  max-height:0;
+  opacity:0;
+  overflow:hidden;
+  margin-top:0;
+  transition:max-height .35s ease, opacity .25s ease, margin-top .25s ease;
+  pointer-events:none;
+}
+.todo-section.open{
+  max-height:5000px;
+  opacity:1;
+  margin-top:8px;
+  pointer-events:auto;
+}
+@media(max-width:768px){
+  .todo-section.open{
+    max-height:5000px;
+  }
+}
+
+@media(max-width:980px){
+  .todo-grid{grid-template-columns:1fr}
+}
+
+@media(max-width:768px){
+  /* KPI / OPS strip — single column, contained */
+  .ops-strip{grid-template-columns:1fr;gap:8px}
+  .ops-card{padding:10px 12px;border-radius:10px}
+  .ops-card h3{font-size:10px;margin-bottom:7px;letter-spacing:.04em}
+  .ops-card li{font-size:11px;line-height:1.55;margin-left:14px}
+  .kpi-row{padding:5px 0;gap:8px;flex-wrap:wrap}
+  .kpi-name{font-size:11px;line-height:1.4;flex:1 1 60%}
+  .kpi-bench{font-size:10px;padding:2px 6px;white-space:normal;text-align:right;flex:0 1 auto}
+  /* rhythm table: allow wrapping on mobile */
+  .ops-rhythm{grid-column:auto}
+  .rhythm{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;font-size:11px}
+  .rhythm th{font-size:10px;padding:6px 8px;white-space:nowrap}
+  .rhythm td{font-size:11px;padding:6px 8px;white-space:normal;min-width:80px}
+
+  /* TODO — tight and fully visible */
+  .todo-wrap{padding:10px 12px}
+  .todo-head{font-size:10px;margin-bottom:8px}
+  .todo-group{margin-top:8px}
+  .todo-group-title{font-size:10px;margin-bottom:5px}
+  .todo-grid{grid-template-columns:1fr;gap:7px}
+  .todo-card{padding:9px 10px;border-radius:10px}
+  .todo-name{font-size:11px}
+  .todo-role{font-size:10px;margin-top:2px;margin-bottom:5px}
+  .todo-list{padding-left:14px}
+  .todo-list li{font-size:11px;line-height:1.5}
+  .todo-subhead{font-size:10px;margin-bottom:4px}
+}
+
+/* ── LEGEND STRIP ── */
+.legend-strip{grid-column:1/-1;display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:10px 0 0;border-top:1px solid var(--border);margin-top:8px}
+.lg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.lg-dot{width:9px;height:9px;border-radius:50%}
+
+/* ── RHYTHM TABLE ── */
+.rhythm{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+.rhythm th{text-align:left;padding:8px 10px;background:#F3F4F6;font-weight:700;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)}
+.rhythm td{padding:9px 10px;border-bottom:1px solid var(--border);color:#374151;vertical-align:top;line-height:1.5}
+.rhythm tr:last-child td{border-bottom:none}
+
+/* ── RESPONSIVE ── */
+@media(max-width:1100px){
+  .app{grid-template-columns:1fr}
+  .left-panel,.detail-panel{position:static;max-height:none}
+  .ops-strip{grid-template-columns:1fr 1fr}
+  .detail-panel{order:3}
+}
+
+/* ── MOBILE BOTTOM NAV ── */
+.mobile-bottom-nav{display:none}
+
+@media(max-width:768px){
+  /* ── HEADER ── */
+  .hdr-inner{padding:12px 16px;gap:10px}
+  .hdr-logo{width:36px;height:36px}
+  .hdr-title{font-size:17px}
+  .hdr-sub{font-size:11px;margin-top:2px}
+  .hdr-mission{display:none}
+  .hdr-brand{gap:10px}
+
+  /* ── TOOLBAR: role-only strip ── */
+  .tb-inner{
+    padding:0;
+    gap:0;
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .tb-label{display:none}
+  .view-btns{display:none} /* replaced by bottom nav */
+
+  .role-btns-wrap{
+    width:100%;
+    min-width:0;
+    overflow-x:auto;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+    touch-action:pan-x;
+    scrollbar-width:none;
+    padding:0;
+    mask-image:linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+    -webkit-mask-image:linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+  }
+  .role-btns-wrap::-webkit-scrollbar{height:0}
+  .role-btns{
+    gap:6px;
+    justify-content:flex-start;
+    flex-wrap:nowrap;
+    width:max-content;
+    min-width:max-content;
+    padding:8px 16px 10px;
+  }
+  .rbtn{
+    padding:8px 14px;
+    font-size:12px;
+    flex:0 0 auto;
+    min-height:36px;
+  }
+
+  /* ── BOTTOM NAV ── */
+  .mobile-bottom-nav{
+    display:flex;
+    position:fixed;
+    bottom:0;
+    left:0;
+    right:0;
+    z-index:100;
+    background:rgba(255,255,255,0.97);
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
+    border-top:1px solid var(--border);
+    box-shadow:0 -2px 16px rgba(17,21,71,0.08);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .mbn-btn{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    padding:10px 4px 8px;
+    border:none;
+    background:transparent;
+    color:var(--muted);
+    font-family:inherit;
+    font-size:10px;
+    font-weight:600;
+    cursor:pointer;
+    transition:.15s ease;
+    -webkit-tap-highlight-color:transparent;
+    text-align:center;
+  }
+  .mbn-btn svg{
+    width:20px;
+    height:20px;
+    stroke:currentColor;
+    fill:none;
+    stroke-width:1.8;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+    transition:.15s;
+  }
+  .mbn-btn.active{
+    color:var(--navy);
+  }
+  .mbn-btn.active svg{
+    stroke:var(--gold);
+  }
+  .mbn-btn:active{
+    opacity:0.7;
+    transform:scale(0.93);
+  }
+  /* special buttons */
+  .mbn-todo-btn.todo-on{color:var(--gold)}
+  .mbn-todo-btn.todo-on svg{stroke:var(--gold)}
+  .mbn-reset-btn{color:#9CA3AF}
+
+  /* ── LAYOUT ── */
+  .app{
+    padding:10px 12px;
+    padding-bottom:80px; /* space for bottom nav */
+    gap:10px;
+    max-width:none;
+    width:100%;
+  }
+  .left-panel{display:none} /* hide role legend on mobile, shown via filter buttons */
+  .board,.step,.parallel-block{width:100%}
+  .ops-strip{grid-template-columns:1fr}
+  .detail-panel{order:3;border-radius:14px}
+
+  /* ── STEP CARDS ── */
+  .step{
+    grid-template-columns:42px 1fr;
+    border-radius:12px;
+  }
+  .step-num{font-size:15px}
+  .step-body{padding:12px 13px}
+  .step-phase{font-size:9px;font-weight:700;opacity:.7;margin-bottom:3px;letter-spacing:.07em}
+  .step-title{font-size:13px;line-height:1.35;margin-bottom:6px;font-weight:700}
+  .step-owner{font-size:11px;opacity:.85;gap:5px}
+  .step-tags{margin-top:7px;gap:4px}
+  .tag{font-size:10px;padding:3px 8px}
+  .step.selected{border-color:#E7C27A;background:#FFFDF7;box-shadow:0 4px 14px rgba(17,21,71,0.1)}
+
+  /* ── PARALLEL BLOCKS ── */
+  .parallel-block{padding:12px 13px;margin:4px 0;border-radius:12px}
+  .pb-tag{font-size:9px;opacity:.72}
+  .pb-title{font-size:13px;margin-bottom:3px;font-weight:700}
+  .pb-meta{font-size:11px;opacity:.8}
+
+  /* ── PHASE HEADERS ── */
+  .phase-hdr{padding:8px 0 5px;gap:8px;margin-top:4px}
+  .ph-tag{font-size:9px;font-weight:700;letter-spacing:.07em;opacity:.75;padding:0 6px}
+  .ph-line{opacity:.55}
+  .connector{height:18px}
+  .connector::before{background:#E4E0D4}
+
+  /* ── OPS / KPI ── */
+  .ops-card{padding:14px}
+  .rhythm{display:block;overflow-x:auto;white-space:nowrap}
+
+  /* ── SWIMLANE ── */
+  .lane-row{grid-template-columns:1fr}
+  .lane-row::before{left:0}
+  .lane-head{position:static;padding:10px 11px}
+  .lane-stream{
+    overflow-x:auto;
+    border-color:#ECE9DE;
+    padding:8px;
+    gap:7px;
+  }
+  .lane-stream .step,.lane-stream .parallel-block{min-width:260px}
+  .lane-row.is-muted{opacity:.5}
+  .lane-handoff{margin-left:0}
+  .lane-bridge{margin-left:0}
+}
+
+@media(max-width:480px){
+  .hdr-inner{padding:10px 14px}
+  .app{padding:8px 10px;padding-bottom:80px}
+  .step-title{font-size:13px}
+  .step-body{padding:11px 12px}
+  .rbtn{padding:7px 12px;font-size:11px}
+}
+
+/* ── MOBILE INLINE ACCORDION DETAILS ── */
+@media(max-width:768px){
+  .detail-panel{display:none}
+  .inline-detail{
+    background:var(--white);
+    border:1px solid var(--border);
+    border-radius:12px;
+    margin-top:6px;
+    overflow:hidden;
+    box-shadow:0 4px 16px rgba(11,19,64,0.08);
+    animation:detailReveal .22s ease;
+  }
+  .inline-detail .dp-head{padding:12px 14px 10px;background:#FCFBF7}
+  .inline-detail .dp-body{padding:0 14px 14px}
+  .inline-detail .dp-title{font-size:15px;line-height:1.25;font-weight:700}
+  .inline-detail .dp-section{padding-top:12px;margin-top:12px}
+  .inline-detail .dp-row{margin-bottom:8px;padding:10px 12px;border-radius:8px;font-size:12px}
+  .inline-detail .dp-kpi{margin-bottom:8px}
+  .inline-detail .dp-section p,
+  .inline-detail .dp-section li{font-size:12px;line-height:1.55}
+  .inline-detail .dp-section h3{font-size:10px;letter-spacing:.08em;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:7px}
+  .inline-detail .dp-owner-pill{font-size:11px;padding:4px 10px}
+}
+@keyframes detailReveal{
+  from{opacity:0;transform:translateY(-4px)}
+  to{opacity:1;transform:translateY(0)}
+}
+:root { 
+  /* ─────────────────────────────
+     Dashboard Inspired Palette
+     ───────────────────────────── */
+
+  --navy: #111547;
+  --navy2: #090C2B;
+
+  --gold: #F2A11B;
+  --gold-soft: #FFF3DA;
+
+  --red: #B52A2A;
+  --red-soft: #F5C2CB;
+
+  --pink: #F4B8C4;
+  --pink-soft: #FDECEF;
+
+  --cream: #F6F4E8;
+  --cream-2: #FBFAF4;
+
+  --ink: #161616;
+  --muted: #6B7280;
+
+  --border: #E7E5DD;
+  --white: #FFFFFF;
+
+  --shadow-sm: 0 2px 8px rgba(17, 21, 71, 0.05);
+  --shadow-md: 0 10px 30px rgba(17, 21, 71, 0.08);
+  --shadow-lg: 0 18px 50px rgba(17, 21, 71, 0.12);
+
+  --radius: 18px;
+
+  /* Role Colours */
+  --c-student: #0F766E;
+  --c-cell: #B52A2A;
+  --c-ft: #F2A11B;
+  --c-admin: #111547;
+  --c-teacher: #6D28D9;
+  --c-principal: #090C2B;
+  --c-group: #C97316;
+  --c-system: #4B5563;
+
+  --c-ok: #059669;
+  --c-warn: #F59E0B;
+  --c-danger: #DC2626;
+}
+
+/* ─────────────────────────────
+   Base
+   ───────────────────────────── */
+
+body{
+  font-family:'Nunito',sans-serif;
+  background:var(--cream);
+  color:var(--ink);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+/* ─────────────────────────────
+   Header
+   ───────────────────────────── */
+
+header{
+  background:var(--white);
+  color:var(--ink);
+  border-bottom:1px solid var(--border);
+}
+
+.hdr-inner{
+  max-width:1400px;
+  margin:0 auto;
+  padding:22px 28px;
+}
+
+.hdr-title{
+  color:var(--navy);
+  font-weight:900;
+  letter-spacing:-0.04em;
+}
+
+.hdr-sub{
+  color:var(--muted);
+}
+
+.hdr-mission{
+  background:var(--cream-2);
+  border:1px solid var(--border);
+  color:#374151;
+}
+
+.hdr-mission strong{
+  color:var(--gold);
+}
+
+/* ─────────────────────────────
+   Toolbar
+   ───────────────────────────── */
+
+.toolbar{
+  background:rgba(255,255,255,0.85);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);
+  box-shadow:var(--shadow-sm);
+}
+
+/* ─────────────────────────────
+   Panels / Cards
+   ───────────────────────────── */
+
+.left-panel,
+.detail-panel,
+.step,
+.ops-card,
+.parallel-block{
+  background:var(--white);
+  border:1px solid var(--border);
+  box-shadow:var(--shadow-sm);
+}
+
+.step:hover,
+.ops-card:hover,
+.parallel-block:hover{
+  box-shadow:var(--shadow-md);
+}
+
+/* ─────────────────────────────
+   Buttons
+   ───────────────────────────── */
+
+.rbtn,
+.vbtn{
+  background:var(--white);
+  border:1px solid var(--border);
+  color:var(--muted);
+  transition:.18s ease;
+}
+
+.rbtn:hover,
+.vbtn:hover{
+  border-color:var(--navy);
+  color:var(--navy);
+  transform:translateY(-1px);
+}
+
+.vbtn.active{
+  background:var(--gold);
+  border-color:var(--gold);
+  color:white;
+}
+
+/* ─────────────────────────────
+   Selected States
+   ───────────────────────────── */
+
+.step.selected{
+  border-color:var(--gold);
+  box-shadow:
+    0 0 0 4px rgba(242,161,27,0.12),
+    var(--shadow-md);
+}
+
+/* ─────────────────────────────
+   Number Strip
+   ───────────────────────────── */
+
+.step-num{
+  background:linear-gradient(
+    180deg,
+    var(--navy),
+    var(--navy2)
+  );
+  color:white;
+}
+
+/* ─────────────────────────────
+   Detail Panel
+   ───────────────────────────── */
+
+.dp-head{
+  background:var(--cream-2);
+}
+
+.dp-title{
+  color:var(--navy);
+}
+
+.dp-kpi{
+  background:var(--gold-soft);
+  border:1px solid rgba(242,161,27,0.18);
+}
+
+/* ─────────────────────────────
+   Tags
+   ───────────────────────────── */
+
+.tag{
+  border:none;
+  font-weight:700;
+}
+
+.tag-warn{
+  background:#FEF3C7;
+  color:#92400E;
+}
+
+.tag-danger{
+  background:#FEE2E2;
+  color:#991B1B;
+}
+
+.tag-ok{
+  background:#DCFCE7;
+  color:#166534;
+}
+
+.tag-info{
+  background:#EDE9FE;
+  color:#5B21B6;
+}
+
+.tag-gray{
+  background:#F3F4F6;
+  color:#374151;
+}
+
+/* ─────────────────────────────
+   Escalation / Needs Attention
+   ───────────────────────────── */
+
+.esc-strip{
+  background:#FFF1F2;
+  border:1px solid #FBCFE8;
+}
+
+.na-strip{
+  background:#FFF8E7;
+  border:1px solid #FCD34D;
+}
+
+/* ─────────────────────────────
+   Connectors
+   ───────────────────────────── */
+
+.connector::before{
+  background:#D6D3D1;
+}
+
+.conn-arrow{
+  border-color:#9CA3AF;
+  background:var(--cream);
+}
+
+/* ─────────────────────────────
+   Tables
+   ───────────────────────────── */
+
+.rhythm th{
+  background:#F9FAFB;
+  color:var(--muted);
+}
+
+.rhythm td{
+  background:white;
+}
+
+/* ─────────────────────────────
+   Inputs
+   ───────────────────────────── */
+
+input,
+select,
+textarea{
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:white;
+}
+
+input:focus,
+select:focus,
+textarea:focus{
+  outline:none;
+  border-color:var(--gold);
+  box-shadow:0 0 0 4px rgba(242,161,27,0.12);
+}
+
+/* Final mobile containment guard for KPI cards */
+@media(max-width:768px){
+  .ops-strip,
+  .ops-strip > *{
+    min-width:0;
+  }
+  .ops-card{
+    width:100%;
+    max-width:100%;
+    overflow:hidden;
+  }
+  .kpi-row{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:8px;
+    flex-wrap:nowrap;
+    min-width:0;
+  }
+  .kpi-name{
+    flex:1 1 auto;
+    min-width:0;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+  }
+  .kpi-bench{
+    flex:0 0 auto;
+    max-width:45%;
+    white-space:normal;
+    text-align:right;
+  }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hdr-inner">
+    <div class="hdr-brand">
+      <div class="hdr-logo"><img src="canada_sr.png" alt="canada_sr logo"></div>
+      <div>
+        <div class="hdr-title">Rock Solid</div>
+        <div class="hdr-sub">Interactive Department Flowchart </div>
+      </div>
+    </div>
+    <div class="hdr-mission">
+      <strong>Mission</strong>
+      First Timer → Registered → Trained → Graduated → Placed → Active Workforce: BSCT, Service, Soul Winner, Partner.
+    </div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="tb-inner">
+    <span class="tb-label">Filter by role</span>
+    <div class="role-btns-wrap">
+      <div class="role-btns" id="roleFilters"></div>
+    </div>
+    <div class="view-btns">
+      <button class="vbtn active" id="viewAll">All steps</button>
+      <button class="vbtn" id="viewJourney">Journey only</button>
+      <button class="vbtn" id="viewKPI">KPIs</button>
+      <button class="vbtn" id="viewSwimlane">Swimlane View</button>
+      <button class="vbtn" id="viewRoleMode">Role Mode</button>
+      <button class="vbtn" id="toggleTodo" aria-expanded="false" aria-controls="todoSection">To Do</button>
+      <button class="vbtn" id="resetBtn">Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- MOBILE BOTTOM NAV -->
+<nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="View navigation">
+  <button class="mbn-btn active" id="mbnAll" title="All steps">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    All
+  </button>
+  <button class="mbn-btn" id="mbnJourney" title="Journey">
+    <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    Journey
+  </button>
+  <button class="mbn-btn" id="mbnKPI" title="KPIs">
+    <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    KPIs
+  </button>
+  <button class="mbn-btn" id="mbnSwimlane" title="Swimlane">
+    <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    Lanes
+  </button>
+  <button class="mbn-btn mbn-todo-btn" id="mbnTodo" title="To Do">
+    <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    To Do
+  </button>
+  <button class="mbn-btn mbn-reset-btn" id="mbnReset" title="Reset">
+    <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+    Reset
+  </button>
+</nav>
+
+<div class="app" id="app">
+
+  <!-- LEFT -->
+  <aside class="left-panel" id="leftPanel"></aside>
+
+  <!-- BOARD -->
+  <main class="board" id="board"></main>
+
+  <!-- DETAIL -->
+  <aside class="detail-panel" id="detailPanel">
+    <div class="dp-head"><div class="dp-head-label">Selected step</div></div>
+    <div class="dp-empty">Click any step to see full details — owner, handoff, deadline, escalation, and student experience.</div>
+  </aside>
+
+  <!-- OPS STRIP (hidden until KPI view) -->
+  <section class="ops-strip" id="opsStrip" style="display:none"></section>
+
+  <section class="todo-section" id="todoSection">
+    <div class="todo-wrap">
+      <div class="todo-head">To Do</div>
+      <section class="todo-group" aria-label="Leads">
+        <div class="todo-group-title">Leads</div>
+        <div class="todo-grid">
+          <article class="todo-card">
+            <div class="todo-name">Sister Dorcas</div>
+            <div class="todo-role">Communications + Engagement Lead</div>
+            <ul class="todo-list">
+              <li>Create the Rock Solid milestone journey.</li>
+              <li>Create the supplementary email and communication journey alongside Moodle communication.</li>
+              <li>Develop the social media and promotion plan.</li>
+              <li>Work with the media team on promotional, onboarding, testimonial, and announcement content.</li>
+              <li>Oversee communication structure and media coordination.</li>
+            </ul>
+          </article>
+          <article class="todo-card">
+            <div class="todo-name">Brother David</div>
+            <div class="todo-role">Systems + Reporting Lead</div>
+            <ul class="todo-list">
+              <li>Build the dashboarding and reporting structure.</li>
+              <li>Develop KPI and operational visibility systems.</li>
+              <li>Implement enrollment tracking, attendance tracking, risk flag tracking, graduation tracking, and activation tracking.</li>
+              <li>Work with Sister Amber on dashboard systems.</li>
+            </ul>
+          </article>
+          <article class="todo-card">
+            <div class="todo-name">Sister Amber</div>
+            <div class="todo-role">Automation + Integrations Lead</div>
+            <ul class="todo-list">
+              <li>Connect the registration form to Moodle.</li>
+              <li>Finalize the automated enrollment flow.</li>
+              <li>Build supplementary operational systems with Brother David.</li>
+              <li>Support reporting automation and integrations.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+      <section class="todo-group" aria-label="Operations">
+        <div class="todo-group-title">Operations</div>
+        <div class="todo-grid">
+          <article class="todo-card">
+            <div class="todo-subhead">Remaining Operational Items</div>
+            <ul class="todo-list">
+              <li>Finalize teacher attendance submission flow.</li>
+              <li>Finalize weekly metrics and reporting flow.</li>
+            </ul>
+          </article>
+
+        </div>
+      </section>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const ROLES = [
+  {id:'all',    label:'All roles'},
+  {id:'student',label:'Student',     color:'var(--c-student)'},
+  {id:'ft',     label:'First Timers',color:'var(--c-ft)'},
+  {id:'cell',   label:'Cell Leader', color:'var(--c-cell)'},
+  {id:'admin',  label:'FS Admin',    color:'var(--c-admin)'},
+  {id:'teacher',label:'Teacher',     color:'var(--c-teacher)'},
+  {id:'principal',label:'Principals',color:'var(--c-principal)'},
+  {id:'group',  label:'(Sub) Group Pastors',color:'var(--c-group)'},
+];
+const ROLE_INFO = {
+  ft:       {name:'First Timers Dept', color:'var(--c-ft)',       resp:['Owns (service) first-timer follow-up for month 1','Ensures FS is introducedevery week','Manages warm communication + next-step messaging','Works with Cell Leaders until enrollment/within month 1']},
+  cell:     {name:'Cell Leader',       color:'var(--c-cell)',     resp:['First relational connection on arrival','Stays and supports students involved throughout the process','Bridge between members and FS Admin',]},
+  admin:    {name:'(FS) Admin',          color:'var(--c-admin)',    resp:['Owns member enrollment','Validates registrations','Enforces follow-up and KPI tracking','Facilitates weekly reviews + bi-weekly meetings with Principals', 'Work with media for graduation numbers + testimonies']},
+  teacher:  {name:'Teacher',           color:'var(--c-teacher)',  resp:['Receives class list and acknowledges','Teaches + monitors each student','Logs attendance and progress','Grades assignments with rubric from Regional Principals']},
+  principal:{name:'Regional Principals',color:'var(--c-principal)',resp:['Create + approve term schedules','Review graduation readiness and escalations','Quarterly KPI oversight', "Reviewing course content"]},
+  group:    {name:'Sub-Group Pastors / Principals',     color:'var(--c-group)',    resp:['Support workforce placement after graduation','Report group KPIs quarterly', 'Weekly group review']},
+};
+
+const PHASES = [
+  {id:'p1', label:'Phase 1 — Entry & Awareness'},
+  {id:'p2', label:'Phase 2 — First-Timer Capture'},
+  {id:'p3', label:'Phase 3 — Registration'},
+  {id:'p4', label:'Phase 4 — Pre-Class Engagement'},
+  {id:'p5', label:'Phase 5 — Class Loop (repeats 7×)'},
+  {id:'p6', label:'Phase 6 — Risk & Needs Attention'},
+  {id:'p7', label:'Phase 7 — Make-Up System'},
+  {id:'p8', label:'Phase 8 — Pre-Graduation Verification'},
+  {id:'p9', label:'Phase 9 — Graduation Gate'},
+  {id:'p10',label:'Phase 10 — Post-Graduation Activation'},
+];
+
+const STEPS = [
+  {
+    id:'s1', phase:'p1', num:1, role:'cell',
+    phaseLabel:'Entry',
+    title:'Student attends service or cell',
+    owner:'Cell Leader',
+    ownerRole:'cell',
+    deadline:'Same week',
+    student:'The person attends a meeting and becomes relationally known. Connection happens before any system does.',
+    detail:'The main goal here is not registration yet. It is connection care,and warmth.',
+    Responsible:'Cell Leader + First-Timers Department (',
+    tags:[{label:'Same week',cls:'tag-info'},{label:'Relational',cls:'tag-ok'}],
+    naRule:null,
+  },
+  {
+    id:'s2', phase:'p1', num:2, role:'ft',
+    phaseLabel:'Awareness',
+    title:'Rock Solid introduced',
+    owner:'Cell Leader or First-Timers Dept depending on the meeting they attend.',
+    ownerRole:'ft',
+    deadline:'By end of week 1',
+    student:'By the end of their first week, the student knows what Rock Solidis and why it matters for them.',
+    detail:'Announcement, brochure, video, or QR link. Every new person must leave week 1 knowing what FS is and how to register. This is not optional.',
+    input:'First-timer presence at service or cell',
+    output:'Student is aware of FS and has a clear next step',
+    handoff:'First-Timers Dept coordinates with Regional Principal/VP for QR/registration link readiness',
+    escalation:'If awareness materials are not deployed, this is a First-Timers Dept failure. FS Admin should flag if registration conversion drops.',
+    tags:[{label:'Week 1',cls:'tag-info'},{label:'Awareness',cls:'tag-gray'}],
+    naRule:null,
+  },
+  {
+    id:'s3', phase:'p2', num:3, role:'ft',
+    phaseLabel:'First-Timer Capture',
+    title:'Contact details captured + follow-up begins',
+    owner:'First-Timers Dept + Admin',
+    ownerRole:'ft',
+    deadline:'Within week 1–2',
+    student:'The person is not just welcomed and forgotten. They are added to a system and followed up intentionally.',
+    detail:'First-timers list compiled weekly. Welcome email sent with warm intro + FS registration link. First Timers Dept supports and monitors follow-up for up to one month.',
+    input:'First-timer attendance record',
+    output:'Contact details captured, welcome email sent, registration link shared',
+    handoff:'Admin captures data → First-Timers Dept sends email sequence',
+    escalation:'No data = data capture failure (Admin). No follow-up email = follow-up failure (First-Timers Dept).',
+    tags:[{label:'Wk 1–2 email',cls:'tag-info'},{label:'FT Dept leads',cls:'tag-ok'}],
+   // naRule:'FTs not enrolled by week 3 → auto-flagged as Needs Attention. Cell Leader + FS Admin notified.',
+  },
+  {
+    id:'s4', phase:'p2', num:4, role:'admin',
+    phaseLabel:'Eligible Pool',
+    title:'Eligible pool tracker (members not-yet-in-FS )',
+    owner:'FS Admin',
+    ownerRole:'admin',
+    deadline:'Weekly — ongoing',
+    student:'Not everyone arrives as a first-timer. People already in the church who have not yet enrolled are tracked separately.',
+    detail:'Imported from Elvanto and tracked until they register, graduate, or are confirmed not eligible. Admin is the owner of this list. Cell Leaders assist but do not own it.',
+    input:'Active church/cell members',
+    output:'Eligible pool status updated weekly: Not Started / Registered ',
+    handoff:'FS Admin → Cell Leaders for follow-up when flagged',
+    escalation:'Eligible pool drift (people staying in "Not Started" for too long) is a system leak and a Cell Leader accountability issue.',
+    tags:[{label:'Weekly',cls:'tag-warn'},{label:'Admin owns',cls:'tag-info'},{label:'Parallel track',cls:'tag-gray'}],
+    naRule:'No response after defined attempts → Deferred / Disengaged',
+    isParallel:true,
+  },
+  {
+    id:'s5', phase:'p3', num:5, role:'student',
+    phaseLabel:'Registration',
+    title:'Student registers and selects class',
+    owner:'Student + System',
+    ownerRole:'student',
+    deadline:'Before batch close',
+    student:'The person fills the <a href="https://foundation-school-site.vercel.app/" target="_blank" rel="noopener noreferrer">registration form</a>, selects available class options, and formally enters the FS intake system. This form also enrolls them in moodle and triggers our email, communication sequence.',
+    detail:'A single intake form captures interest and preference. Form submission = registered interest + operational intake. If class times are undecided, the form registers interest only.',
+    input:'Student completes registration form',
+    output:'Student record created, enrollment process begins',
+    handoff:'System → FS Admin for validation, class assignment, and confirmation',
+    escalation:'Incomplete or duplicate registration is flagged to FS Admin. Students without a confirmed class by batch close are escalated.',
+    tags:[{label:'Before batch close',cls:'tag-warn'},{label:'Student action',cls:'tag-ok'}],
+    naRule:null,
+  },
+  {
+    id:'s6', phase:'p3', num:6, role:'admin',
+    phaseLabel:'Assignment',
+    title:'★ Capacity check → class assignment confirmed',
+    owner:'FS Admin + Principals',
+    ownerRole:'admin',
+    deadline:'Before first class',
+    student:'The student is assigned to a specific class, teacher, and time. No ambiguity about where they go.',
+    detail:'FS Admin checks teacher availability and class capacity before confirming assignment. Teacher count per group must be collected in advance. Overloaded teachers must be identified before launch.',
+    input:'Validated registration + available classes + teacher capacity data',
+    output:'Student formally assigned; teacher receives and acknowledges class list',
+    handoff:'FS Admin → Teacher (class list + student details). Teacher must acknowledge receipt.',
+    escalation:'If classes are overloaded or teacher availability is unclear, escalate to Principals before the batch launches.',
+    tags:[{label:'Before class 1',cls:'tag-warn'},{label:'Admin gate',cls:'tag-info'},{label:'Gap: capacity',cls:'tag-danger'}],
+    naRule:null,
+     },
+  {
+    id:'s7', phase:'p4', num:7, role:'teacher',
+    phaseLabel:'Pre-Class',
+    title:'★ Teacher contacts student before Class 1',
+    owner:'Teacher',
+    ownerRole:'teacher',
+    deadline:'Within 3–7 days of enrollment',
+    student:'The teacher reaches out before class starts. The student is not a stranger on day one.',
+    detail:'Teacher sends a welcome message, confirms class time, checks Moodle access, and sets expectations. Optional: short voice note or video. This is strategic — it reduces dropout significantly.',
+    input:'Class list received + acknowledged by teacher',
+    output:'Student confirmed: knows teacher, has access, expects class 1',
+    handoff:'FS Admin confirms teacher acknowledged list → Teacher initiates contact',
+    tags:[{label:'3–7 days pre-class',cls:'tag-warn'},{label:'Teacher owned',cls:'tag-danger'},{label:'Gap: handoff',cls:'tag-danger'}],
+    naRule:null,
+    isGap:true,
+    gapNote:'Admin → Teacher handoff must be a confirmed step. Teacher must acknowledge the class list formally before this step can happen.',
+  },
+  {
+    id:'s8', phase:'p5', num:8, role:'teacher',
+    phaseLabel:'Class Loop',
+    title:'Class held (×7)',
+    owner:'Student + Teacher',
+    ownerRole:'teacher',
+    deadline:'Weekly — per term',
+    student:'The student attends, learns doctrine, participates, and builds consistency across all 7 classes.',
+    detail:'7 classes. Fixed term. No rolling graduation. Each class builds on the last. The teacher is not just delivering content — they should know the state of each student.',
+    input:'Class curriculum + enrolled student list',
+    output:'Attendance, participation, engagement',
+    handoff:'Teacher → FS Admin via attendance + status submissions',
+    escalation:'Missed class triggers immediate logging. Two missed classes trigger Needs Attention.Over 3 missed classes requires a deferal.',
+    tags:[{label:'7 classes',cls:'tag-info'},{label:'Fixed term',cls:'tag-gray'}],
+    naRule:'Missed 2 classes → Teacher + Cell Leader notified.',
+  },
+  {
+    id:'s9', phase:'p5', num:9, role:'teacher',
+    phaseLabel:'Class Loop',
+    title:'Attendance submitted (same day)',
+    owner:'Teacher',
+    ownerRole:'teacher',
+    deadline:'Same day as class',
+    student:'The student\'s attendance is logged immediately — no gaps, no guessing later.',
+    detail:'Teacher submits via Moodle (preferred) or approved external form. Missing submission is flagged the same day by the system. This is non-negotiable.',
+    input:'Class held',
+    output:'Attendance record in system',
+    handoff:'Teacher → System → FS Admin review',
+    escalation:'Missing submission flagged same day. Teacher accountability. System recalculates daily.',
+    tags:[{label:'Same day',cls:'tag-danger'},{label:'Moodle',cls:'tag-info'}],
+    naRule:'Missing attendance submission flagged same day to FS Admin.',
+  },
+  {
+    id:'s10', phase:'p5', num:10, role:'teacher',
+    phaseLabel:'Class Loop',
+    title:'Student completes quiz / assignment',
+    owner:'Student (Teacher monitors)',
+    ownerRole:'student',
+    deadline:'Per class deadline',
+    student:'The student submits required work per class. The teacher confirms compliance before the next class.',
+    detail:'Submissions tracked in Moodle. Spiritual milestones are also tracked per class: Born Again (Class 1), Holy Spirit (Class 2), Evangelism (Class 4), Giving (Classes 5–7).',
+    input:'Class content delivered',
+    output:'Assignment submitted + milestone status updated',
+    handoff:'Teacher monitors + flags gaps to FS Admin weekly',
+    escalation:'Non-submission makes student at-risk. Triggers review in weekly teacher check.',
+    tags:[{label:'Per class',cls:'tag-warn'},{label:'Milestones tracked',cls:'tag-ok'}],
+    naRule:null,
+  },
+  {
+    id:'s11', phase:'p5', num:11, role:'teacher',
+    phaseLabel:'Class Loop',
+    title:'Teacher weekly progress review + status form',
+    owner:'Teacher',
+    ownerRole:'teacher',
+    deadline:'Weekly',
+    student:'The teacher actively checks on each student.',
+    detail:'Teacher reviews attendance, assignments, and participation weekly. Status forms use binary tracking only (0 = incomplete/no, 1 = complete/yes) for  milestones — no subjective opinions or narrative assessments.',
+    input:'Week\'s attendance and assignment data',
+    output:'Status form per student. Needs Attention flags raised.',
+    handoff:'Teacher → FS Admin via status form',
+    escalation:'Failure to submit status form weekly is a teacher accountability issue. FS Admin enforces.',
+    tags:[{label:'Weekly',cls:'tag-warn'},{label:'Transformation tracking',cls:'tag-ok'}],
+    naRule:null,
+  },
+  {
+    id:'s12', phase:'p6', num:12, role:'teacher',
+    phaseLabel:'Risk',
+    title:'Student flagged "Needs Attention"',
+    owner:'System (auto) + FS Admin (review)',
+    ownerRole:'admin',
+    deadline:'Immediately on trigger',
+    student:'When a student misses 2 classes, falls behind on work, or disengages, the system catches it and a person follows up.',
+    detail:'Triggers: 2+ missed classes, incomplete assignments, no spiritual progress near relevant milestones, cell integration missing near graduation, graduate not placed within 3 weeks.',
+    input:'Risk flag from attendance/assignment system',
+    output:'Needs Attention status + owner assigned',
+    handoff:'System flags → FS Admin assigns → Teacher and/or Cell Leader owns follow-up',
+    escalation:'Every flag must have: owner, action, deadline. No open flags without a named owner.',
+    tags:[{label:'Auto-triggered',cls:'tag-danger'},{label:'48-hr window',cls:'tag-warn'}],
+    naRule:'Missed 2 classes → Cell Leader + Teacher. Cell integration missing near grad → FS Admin + CL → T-14 days. Graduate not winning souls or giving FS Admin + Leader → 2 weeks.',
+  },
+  {
+    id:'s13', phase:'p6', num:13, role:'teacher',
+    phaseLabel:'Follow-Up',
+    title:'48-hour follow-up (academic → Teacher leads)',
+    owner:'Teacher leads / Cell Leader supports',
+    ownerRole:'teacher',
+    deadline:'Within 48 hours of flag',
+    student:'The student hears from a real person quickly. They don\'t drift unnoticed.',
+    detail:'Academic issue (missed class, assignment gap) → Teacher leads follow-up. Behavioral / disengagement → Cell Leader leads. Outcome must be logged regardless of who leads.',
+    input:'Needs Attention flag raised',
+    output:'Contact made. Outcome logged. Next action confirmed.',
+    handoff:'Teacher → FS Admin with logged outcome',
+    escalation:'If Teacher does not act within 48 hours. Unresolved cases added to weekly meeting action list.',
+    tags:[{label:'48 hours',cls:'tag-danger'},{label:'Teacher leads',cls:'tag-warn'},{label:'Gap: resolved',cls:'tag-ok'}],
+    naRule:null,
+  },
+  {
+    id:'s14', phase:'p7', num:14, role:'admin',
+    phaseLabel:'Make-Up',
+    title:'Student added to make-up queue',
+    owner:'FS Admin + Teacher',
+    ownerRole:'admin',
+    deadline:'T-14 days before graduation',
+    student:'If the student missed a class, they have a structured path to get back on track before the graduation gate.',
+    detail:'System identifies students with unresolved missed classes 2 weeks before graduation. Make-up options: group class (preferred) or regional online (when group option does not work). Student availability determines the route.',
+    input:'Missed class count + student availability',
+    output:'Make-up route assigned and tracked',
+    handoff:'FS Admin → Group make-up class or Regional online option',
+    escalation:'Unresolved make-up close to graduation escalated to Principals. No route = no graduation.',
+    tags:[{label:'T-14 days',cls:'tag-warn'},{label:'Admin routes',cls:'tag-info'}],
+    naRule:null,
+  },
+  {
+    id:'s15', phase:'p8', num:15, role:'principal',
+    phaseLabel:'Pre-Grad',
+    title:'Pre-graduation verification',
+    owner:'Teacher + Group Principals',
+    ownerRole:'principal',
+    deadline:'Classes 5–7 window',
+    student:'Before the graduation date, every student is checked against all requirements. Nothing is assumed.',
+    detail:'Checks: attendance complete, assignments complete, evangelism done, giving started (Classes 5–7), cell integration confirmed. Status per student: Ready / Close / Not Ready.',
+    input:'All class records + milestone status + cell confirmation',
+    output:'Graduation readiness status per student',
+    handoff:'Teacher + Principals → FS Admin for graduation list preparation',
+    escalation:'"Not Ready" students are sent back to make-up / remedial recovery. "Close" students get a targeted action plan.',
+    tags:[{label:'Classes 5–7',cls:'tag-warn'},{label:'All gates',cls:'tag-info'}],
+    naRule:null,
+  },
+  {
+    id:'s16', phase:'p9', num:16, role:'admin',
+    phaseLabel:'Graduation Gate',
+    title:'Graduation — all 4 gates must be cleared',
+    owner:'FS Admin + Principals',
+    ownerRole:'admin',
+    deadline:'Graduation date (3× per year)',
+    student:'The student crosses the graduation gate. This is a celebration, a milestone, and an achievement — not just a ceremony.',
+    detail:'Gate 1: All 7 classes attended or approved make-up completed. Gate 2: All compulsory assignments submitted and graded. Gate 3: Final exam completed and passed. Gate 4: Active in a cell, giving and winning souls. No exceptions.',
+    input:'Verified: attendance, assignments, exam, cell integration',
+    output:'Graduate status confirmed. Graduation event. Media + invites coordinated.',
+    handoff:'FS Admin → Group Principals/Group Leaders for placement activation',
+    escalation:'Students not meeting all gates cannot graduate. No soft exceptions.',
+    tags:[{label:'3× per year',cls:'tag-info'},{label:'All 4 gates',cls:'tag-danger'},{label:'No exceptions',cls:'tag-gray'}],
+    naRule:null,
+  },
+  
+  {
+    id:'s17', phase:'p10', num:17, role:'group',
+    phaseLabel:'Placement',
+    title:'Graduate placed into department (1–2 weeks)',
+    owner:'Group Principals',
+    ownerRole:'group',
+    deadline:'Within 1–2 weeks of graduation',
+    student:'The graduate is not left waiting. They are placed into a department or service unit before momentum is lost.',
+    detail:'Placement is confirmed.',
+    input:'Graduate list + department capacity + cell assignment',
+    output:'Placement confirmed per graduate',
+    handoff:'Cell Leaders + Department Leaders → status returns to FS Admin for tracking',
+    escalation:'"Graduate not placed" flag if unplaced after 2 weeks. FS Admin + Leader assigned.',
+    tags:[{label:'1–2 weeks',cls:'tag-danger'},{label:'Principals own',cls:'tag-info'}],
+    naRule:'Graduate not placed within 3 weeks → FS Admin + Leader. Confirm placement. Admins Track post graduation integration.',
+  },
+  {
+    id:'s18', phase:'p10', num:18, role:'group',
+    phaseLabel:'Review',
+    title:'Graduate is active — BSCT, service, soul winning, partner',
+    owner:'FS Admin + Group Principals + Regional Principal',
+    ownerRole:'group',
+    deadline:'Quarterly review',
+    student:'The graduate is confirmed active — not just assigned. They are serving, soul winning, in BSCT pipeline, and are partners.',
+    detail:'This is the real measure of success. Placement without participation is false activation. The quarterly review checks whether Rock Solid produced active workforce. Teacher KPIs and Group KPIs are reviewed here.',
+    input:'Post-grad activity data',
+    output:'Activation status confirmed. KPI review completed. Improvement actions assigned.',
+    handoff:'FS Admin → Principals for quarterly KPI review and action planning',
+    escalation:'Low engagement or low retention becomes a quarterly review item.',
+    tags:[{label:'Quarterly',cls:'tag-info'},{label:'KPI review',cls:'tag-warn'},{label:'True activation',cls:'tag-ok'}],
+    naRule:null,
+  },
+];
+
+const PARALLEL = [
+  {
+    id:'par1',
+    tag:'Parallel System',
+    title:'Bi-Weekly Department Operating Meeting',
+    meta:'Owner: FS Admin + Principals (convenes) — every 2 weeks, non-negotiable',
+    detail:'Agenda: (1) Intake conversion rate, (2) Eligible pool, (3) Class attendance + Moodle gaps, (4) At-risk students, (5) Graduation readiness + cell integration. Every meeting produces owners + deadlines.',
+  },
+  {
+    id:'par2',
+    tag:'Parallel System',
+    title:'Weekly System Checks (Daily + Weekly) [SYSTEM IN THE WORKS]',
+    meta:'Owner: System (daily auto) + FS Admin (weekly review)',
+    detail:'Daily: system recalculates attendance, absentees, submission gaps, risk flags, make-up need, eligible-pool drift, Needs Attention flags. Weekly: FS Admin + Principal + Teachers meeting covering intake, eligible pool, attendance, risk, make-up, graduation readiness.',
+  },
+];
+
+const KPIS = [
+  {label:'% of FTs entering FS within 2 weeks',bench:'60% or above'},
+  {label:'% of eligible pool moved into FS',bench:'Improving each term'},
+  {label:'% cell-integrated at graduation',bench:'100%'},
+  {label:'Graduates placed into workforce within 2 weeks',bench:'80% or above'},
+  {label:'Graduates per term',bench:'Growing each term'},
+  {label:'Teacher KPIs: activation, retention, BSCT contribution',bench:'Reviewed quarterly'},
+];
+
+const OPS_CARDS = [
+  {title:'Pre-Launch Controls',items:['Principals + Admin create schedule','Teacher availability collected per group','Forms and emails tested before opening','Eligible pool imported from Elvanto']},
+  {title:'Graduation Gate (All 4 Required)',items:['Attendance: all 7 classes or approved make-up','Assignments: all compulsory work submitted','Exam: final assessment passed','Cell integration, soul winning and partnership']},
+  {title:'Additional Dept structure',items:['FS Dept prayer','Bi weekly meetings','Quaterly trainings and reviews']},
+];
+
+let selectedRole = 'all';
+let selectedItem = null;
+let currentView = 'all';
+let todoOpen = false;
+
+function roleColor(roleId){ const r=ROLES.find(x=>x.id===roleId); return r?r.color:'var(--c-system)'; }
+function roleLabel(roleId){ const ri=ROLE_INFO[roleId]; return ri?ri.name:roleId; }
+
+function renderLeft(){
+  const el=document.getElementById('leftPanel');
+  let html='<div class="panel-head">Roles & Responsibilities</div>';
+  Object.entries(ROLE_INFO).forEach(([id,info])=>{
+    html+=`<div class="role-entry${selectedRole===id?' active':''}" onclick="setRole('${id}')">
+      <div class="re-top"><div class="re-dot" style="background:${info.color}"></div><div class="re-name">${info.name}</div></div>
+      <div class="re-resp"><ul style="margin:0;padding-left:14px;">${info.resp.map(r=>`<li>${r}</li>`).join('')}</ul></div>
+    </div>`;
+  });
+  el.innerHTML=html;
+}
+
+function renderFilters(){
+  const el=document.getElementById('roleFilters');
+  el.innerHTML=ROLES.map(r=>`<button class="rbtn${selectedRole===r.id?' active':''}" data-role="${r.id}" onclick="setRole('${r.id}')">${r.label}</button>`).join('');
+}
+
+function shouldDim(role){ return selectedRole!=='all' && role!==selectedRole; }
+function isMobile(){ return window.innerWidth<=768; }
+function chipPriority(tag){
+  const label=(tag?.label||'').toLowerCase();
+  const cls=tag?.cls||'';
+
+  const dangerCls = cls==='tag-danger';
+  const warnCls = cls==='tag-warn';
+  const infoCls = cls==='tag-info';
+  const okCls = cls==='tag-ok';
+  const grayCls = cls==='tag-gray';
+
+  const hasUrgentText =
+    label.includes('no exceptions') ||
+    label.includes('all 4 gates') ||
+    label.includes('gap:') ||
+    label.includes('same day') ||
+    label.includes('48 hours') ||
+    label.includes('t-') ||
+    label.includes('auto-triggered');
+
+  const hasDeadlineText =
+    label.includes('week') ||
+    label.includes('days') ||
+    label.includes('hours') ||
+    label.includes('class') ||
+    label.includes('quarterly') ||
+    label.includes('per year');
+
+  const hasOwnerActionText =
+    label.includes('admin') ||
+    label.includes('teacher') ||
+    label.includes('principals') ||
+    label.includes('owned') ||
+    label.includes('routes') ||
+    label.includes('leads');
+
+  if(dangerCls || hasUrgentText) return 1;
+  if(warnCls || hasDeadlineText) return 2;
+  if(hasOwnerActionText) return 3;
+  if(infoCls) return 4;
+  if(okCls || grayCls) return 5;
+  return 6;
+}
+
+function visibleTags(tags){
+  if(!Array.isArray(tags)) return [];
+  if(!isMobile()) return tags;
+  return [...tags]
+    .sort((a,b)=>chipPriority(a)-chipPriority(b))
+    .slice(0,2);
+}
+
+// Steps that represent the student's direct journey (shown in Journey view)
+const JOURNEY_STEP_IDS = ['s1','s2','s3','s5','s7','s8','s10','s15','s16','s17','s18'];
+const LANE_DEFS = [
+  {id:'student', label:'Student', hint:'Learner experience'},
+  {id:'cell', label:'Cell Leader', hint:'Connection and support'},
+  {id:'ft', label:'First Timers', hint:'Early activation'},
+  {id:'admin', label:'FS Admin', hint:'System operations'},
+  {id:'teacher', label:'Teacher', hint:'Class execution'},
+  {id:'leaders', label:'Group Principals', hint:'Oversight and placement'},
+  {id:'system', label:'System / Automation', hint:'Automation track'},
+];
+
+function laneForStep(step){
+  if(step.role==='group' || step.ownerRole==='group' || step.ownerRole==='principal') return 'leaders';
+  if(step.role==='principal') return 'leaders';
+  if(step.role==='admin' || step.ownerRole==='admin') return 'admin';
+  if(step.role==='teacher' || step.ownerRole==='teacher') return 'teacher';
+  if(step.role==='ft' || step.ownerRole==='ft') return 'ft';
+  if(step.role==='cell' || step.ownerRole==='cell') return 'cell';
+  if(step.role==='student' || step.ownerRole==='student') return 'student';
+  return 'system';
+}
+
+function laneLabel(laneId){
+  const lane = LANE_DEFS.find(l=>l.id===laneId);
+  return lane ? lane.label : laneId;
+}
+
+function roleNameFromId(roleId){
+  const found = ROLES.find(r=>r.id===roleId);
+  return found ? found.label : roleId;
+}
+
+function stepCardHtml(step, extraClass=''){
+  const dim=shouldDim(step.role);
+  const sel=selectedItem&&selectedItem.id===step.id;
+  const bgColor=roleColor(step.ownerRole);
+  const stepCls = step.isParallel ? 'parallel-block' : 'step';
+  const onclick = `selectStep('${step.id}')`;
+  if(step.isParallel){
+    return `<div class="${stepCls}${dim?' dim':''}${sel?' selected':''} ${extraClass}" data-step-id="${step.id}" onclick="${onclick}">
+      <div class="pb-tag">Parallel track — ${step.phaseLabel}</div>
+      <div class="pb-title">${step.title}</div>
+      <div class="pb-meta">Owner: ${step.owner}</div>
+      ${visibleTags(step.tags).map(t=>`<span class="tag ${t.cls}" style="margin-top:6px;display:inline-block">${t.label}</span>`).join(' ')}
+    </div>${(isMobile() && sel)?buildDetailMarkup(step,true):''}`;
+  }
+  return `<div class="${stepCls}${dim?' dim':''}${sel?' selected':''} ${extraClass}" data-step-id="${step.id}" onclick="${onclick}">
+    <div class="step-num" style="background:${bgColor}">${step.num}</div>
+    <div class="step-body">
+      <div class="step-phase" style="color:${bgColor}">${step.phaseLabel}</div>
+      <div class="step-title">${step.title}</div>
+      <div class="step-owner"><span style="background:${bgColor}"></span>${step.owner}</div>
+      <div class="step-tags">${visibleTags(step.tags).map(t=>`<span class="tag ${t.cls}">${t.label}</span>`).join('')}</div>
+      ${(!isMobile() && step.naRule)?`<div class="na-strip"><strong>Needs Attention rule:</strong> ${step.naRule}</div>`:''}
+      ${(!isMobile() && step.isGap)?`<div class="esc-strip"><span class="esc-icon">★</span><span><strong>Gap:</strong> ${step.gapNote}</span></div>`:''}
+    </div>
+  </div>${(isMobile() && sel)?buildDetailMarkup(step,true):''}`;
+}
+
+function renderSwimlaneBoard(el){
+  const allChrono = [...STEPS].sort((a,b)=>a.num-b.num);
+  const lanes = Object.fromEntries(LANE_DEFS.map(l=>[l.id,[]]));
+  const stepToLane = {};
+  allChrono.forEach(step=>{
+    const laneId = laneForStep(step);
+    stepToLane[step.id] = laneId;
+    lanes[laneId].push(step);
+  });
+
+  let html = `<div class="lane-wrap">`;
+  LANE_DEFS.forEach(lane=>{
+    html += `<div class="lane-row">
+      <div class="lane-head">
+        <div class="lane-title">${lane.label}</div>
+        <div class="lane-sub">${lane.hint}</div>
+      </div>
+      <div class="lane-stream">`;
+    const laneSteps = lanes[lane.id];
+    if(!laneSteps.length){
+      html += `<div class="lane-empty">No primary ownership steps in this lane for current flow.</div>`;
+    } else {
+      laneSteps.forEach(step=>{
+        html += `<div class="lane-step">${stepCardHtml(step)}</div>`;
+        if(step.handoff){
+          html += `<div class="lane-handoff"><span class="lane-to-lane">→ ${step.handoff}</span></div>`;
+        }
+      });
+    }
+    html += `</div></div>`;
+  });
+  html += `</div>`;
+  el.innerHTML = html;
+
+  const rows = el.querySelectorAll('.lane-row');
+  rows.forEach((row, idx)=>{
+    const laneId = LANE_DEFS[idx]?.id || '';
+    row.setAttribute('data-lane', laneId);
+    const laneFocus = selectedRole!=='all' && (
+      (selectedRole==='principal' || selectedRole==='group') ? laneId==='leaders' : laneId===selectedRole
+    );
+    if(selectedRole!=='all' && laneFocus) row.classList.add('is-focus');
+    if(selectedRole!=='all' && !laneFocus) row.classList.add('is-muted');
+  });
+
+  // Soft cross-lane relationship indicators based on chronological handoff sequence.
+  allChrono.forEach((step, idx)=>{
+    const next = allChrono[idx+1];
+    if(!next) return;
+    const fromLane = stepToLane[step.id];
+    const toLane = stepToLane[next.id];
+    if(fromLane===toLane) return;
+    const card = el.querySelector(`[data-step-id="${step.id}"]`);
+    if(!card) return;
+    const bridge = document.createElement('div');
+    bridge.className = 'lane-bridge';
+    bridge.textContent = `→ ${laneLabel(toLane)}`;
+    card.insertAdjacentElement('afterend', bridge);
+  });
+}
+
+function roleFocusClass(step, ordered, ownedIds){
+  if(selectedRole==='all') return '';
+  const idx = ordered.findIndex(s=>s.id===step.id);
+  const isPrimary = step.role===selectedRole || step.ownerRole===selectedRole;
+  if(isPrimary) return 'focus-primary';
+  const related = ownedIds.some(i=>Math.abs(i-idx)<=1);
+  return related ? 'focus-related' : 'focus-fade';
+}
+
+function renderRoleModeBoard(el){
+  const ordered = [...STEPS].sort((a,b)=>a.num-b.num);
+  const ownedIds = ordered.map((s,i)=>(s.role===selectedRole || s.ownerRole===selectedRole)?i:-1).filter(i=>i>=0);
+  let html = '';
+  const roleLabel = selectedRole==='all' ? 'All roles' : roleNameFromId(selectedRole);
+  html += `<div class="role-focus-note"><strong>Role Mode:</strong> ${roleLabel}. Primary ownership is highlighted, adjacent handoffs remain visible, and unrelated regions are softened.</div>`;
+
+  PHASES.forEach(phase=>{
+    const steps=ordered.filter(s=>s.phase===phase.id);
+    if(!steps.length) return;
+    html+=`<div class="phase-hdr"><div class="ph-line"></div><div class="ph-tag">${phase.label}</div><div class="ph-line"></div></div>`;
+    steps.forEach((step,i)=>{
+      if(i>0){
+        const prevStep = steps[i-1];
+        const focused = selectedRole!=='all' && ((prevStep.role===selectedRole || prevStep.ownerRole===selectedRole) || (step.role===selectedRole || step.ownerRole===selectedRole));
+        html += `<div class="connector${focused?' focus-connector':''}"><div class="conn-arrow"></div></div>`;
+      }
+      html += stepCardHtml(step, roleFocusClass(step, ordered, ownedIds));
+    });
+  });
+
+  html+=`<div class="phase-hdr"><div class="ph-line"></div><div class="ph-tag">Parallel Systems — Running Throughout</div><div class="ph-line"></div></div>`;
+  PARALLEL.forEach((p,i)=>{
+    if(i>0) html+=`<div class="connector"><div class="conn-arrow"></div></div>`;
+    const sel=selectedItem&&selectedItem.id===p.id;
+    html+=`<div class="parallel-block${sel?' selected':''}" onclick="selectParallel('${p.id}')">
+      <div class="pb-tag">${p.tag}</div>
+      <div class="pb-title">${p.title}</div>
+      <div class="pb-meta">${p.meta}</div>
+    </div>`;
+    if(isMobile() && sel){ html+=buildDetailMarkup(p,true); }
+  });
+  el.innerHTML = html;
+}
+
+function buildDetailMarkup(item, inlineMode=false){
+  const isParallel=!item.num;
+  const color=isParallel?'var(--c-admin)':roleColor(item.ownerRole);
+  const ownerName=isParallel?item.meta.split('Owner:')[1]?.split('—')[0]?.trim()||'':item.owner;
+  const wrapClass = inlineMode ? 'inline-detail' : '';
+  let html=`<div class="${wrapClass}">
+    <div class="dp-head">
+      <div class="dp-head-label">${isParallel?item.tag:`Step ${item.num} — ${item.phaseLabel}`}</div>
+      <div class="dp-title">${item.title}</div>
+      <div><span class="dp-owner-pill" style="background:${color}">${item.owner||ownerName}</span></div>
+      <div class="dp-tags">${(item.tags||[]).map(t=>`<span class="tag ${t.cls}">${t.label}</span>`).join('')}</div>
+    </div>
+    <div class="dp-body">`;
+
+  if(!isParallel){
+    html+=`<div class="dp-section">
+      <h3>Student Experience</h3>
+      <p>${item.student}</p>
+    </div>
+    <div class="dp-section">
+      <h3>Operational Detail</h3>
+      <p>${item.detail}</p>
+    </div>
+    <div class="dp-section">
+      <h3>Handoffs</h3>
+      <div class="dp-row"><strong>Input:</strong> ${item.input}</div>
+      <div class="dp-row"><strong>Output:</strong> ${item.output}</div>
+      <div class="dp-row"><strong>Movement:</strong> ${item.handoff}</div>
+      <div class="dp-row"><strong>Deadline:</strong> ${item.deadline}</div>
+    </div>
+    <div class="dp-section">
+      <h3>Escalation Path</h3>
+      <p style="color:#7F1D1D;background:#FFF5F5;border:1px solid #FCA5A5;border-radius:8px;padding:10px 12px;">${item.escalation}</p>
+    </div>
+    ${item.naRule?`<div class="dp-section"><h3>Needs Attention Rule</h3><p style="color:#78350F;background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;padding:10px 12px;">${item.naRule}</p></div>`:''}
+    ${item.isGap?`<div class="dp-section"><h3>Gap / New Step</h3><p style="color:#1E40AF;background:#DBEAFE;border:1px solid #93C5FD;border-radius:8px;padding:10px 12px;">★ ${item.gapNote}</p></div>`:''}`;
+  } else {
+    html+=`<div class="dp-section"><h3>Purpose + Agenda</h3><p>${item.detail}</p></div>
+    <div class="dp-section"><h3>Owner + Cadence</h3><p>${item.meta}</p></div>`;
+  }
+
+  html+='</div></div>';
+  return html;
+}
+
+function renderBoard(){
+  const el=document.getElementById('board');
+  if(currentView==='kpi'){ el.innerHTML=''; return; }
+  if(currentView==='swimlane'){ renderSwimlaneBoard(el); return; }
+  if(currentView==='roleMode'){ renderRoleModeBoard(el); return; }
+
+  let html='';
+  const isJourney = currentView==='journey';
+
+  if(isJourney){
+    // Journey view: only show student-facing steps in a clean linear flow
+    html+=`<div class="phase-hdr"><div class="ph-line"></div><div class="ph-tag">Student Journey — Key Steps Only</div><div class="ph-line"></div></div>`;
+    const journeySteps = STEPS.filter(s=>JOURNEY_STEP_IDS.includes(s.id));
+    journeySteps.forEach((step,i)=>{
+      if(i>0) html+=`<div class="connector"><div class="conn-arrow"></div></div>`;
+      const dim=shouldDim(step.role);
+      const sel=selectedItem&&selectedItem.id===step.id;
+      const bgColor=roleColor(step.ownerRole);
+      html+=`<div class="step${dim?' dim':''}${sel?' selected':''}" onclick="selectStep('${step.id}')">
+        <div class="step-num" style="background:${bgColor}">${step.num}</div>
+        <div class="step-body">
+          <div class="step-phase" style="color:${bgColor}">${step.phaseLabel}</div>
+          <div class="step-title">${step.title}</div>
+          <div class="step-owner"><span style="background:${bgColor}"></span>${step.owner}</div>
+          <div class="step-tags">${visibleTags(step.tags).map(t=>`<span class="tag ${t.cls}">${t.label}</span>`).join('')}</div>
+          ${(!isMobile() && step.student)?`<div style="font-size:11px;color:#374151;margin-top:8px;line-height:1.5;padding:8px 10px;background:#F9FAFB;border-radius:8px;border:1px solid var(--border)">🎓 ${step.student}</div>`:''}
+        </div>
+      </div>`;
+      if(isMobile() && sel){ html+=buildDetailMarkup(step,true); }
+    });
+    el.innerHTML=html;
+    return;
+  }
+
+  // All-steps view: full board grouped by phase
+  PHASES.forEach(phase=>{
+    const steps=STEPS.filter(s=>s.phase===phase.id);
+    if(!steps.length) return;
+
+    html+=`<div class="phase-hdr"><div class="ph-line"></div><div class="ph-tag">${phase.label}</div><div class="ph-line"></div></div>`;
+
+    steps.forEach((step,i)=>{
+      if(i>0) html+=`<div class="connector"><div class="conn-arrow"></div></div>`;
+
+      const dim=shouldDim(step.role);
+      const sel=selectedItem&&selectedItem.id===step.id;
+      const bgColor=roleColor(step.ownerRole);
+
+      if(step.isParallel){
+        html+=`<div class="parallel-block${dim?' dim':''}${sel?' selected':''}" onclick="selectStep('${step.id}')">
+          <div class="pb-tag">Parallel track — ${step.phaseLabel}</div>
+          <div class="pb-title">${step.title}</div>
+          <div class="pb-meta">Owner: ${step.owner}</div>
+          ${visibleTags(step.tags).map(t=>`<span class="tag ${t.cls}" style="margin-top:6px;display:inline-block">${t.label}</span>`).join(' ')}
+        </div>`;
+        if(isMobile() && sel){ html+=buildDetailMarkup(step,true); }
+      } else {
+        html+=`<div class="step${dim?' dim':''}${sel?' selected':''}" onclick="selectStep('${step.id}')">
+          <div class="step-num" style="background:${bgColor}">${step.num}</div>
+          <div class="step-body">
+            <div class="step-phase" style="color:${bgColor}">${step.phaseLabel}</div>
+            <div class="step-title">${step.title}</div>
+            <div class="step-owner"><span style="background:${bgColor}"></span>${step.owner}</div>
+            <div class="step-tags">${visibleTags(step.tags).map(t=>`<span class="tag ${t.cls}">${t.label}</span>`).join('')}</div>
+            ${(!isMobile() && step.naRule)?`<div class="na-strip"><strong>Needs Attention rule:</strong> ${step.naRule}</div>`:''}
+            ${(!isMobile() && step.isGap)?`<div class="esc-strip"><span class="esc-icon">★</span><span><strong>Gap:</strong> ${step.gapNote}</span></div>`:''}
+          </div>
+        </div>`;
+        if(isMobile() && sel){ html+=buildDetailMarkup(step,true); }
+      }
+    });
+  });
+
+  // Parallel systems
+  html+=`<div class="phase-hdr"><div class="ph-line"></div><div class="ph-tag">Parallel Systems — Running Throughout</div><div class="ph-line"></div></div>`;
+  PARALLEL.forEach((p,i)=>{
+    if(i>0) html+=`<div class="connector"><div class="conn-arrow"></div></div>`;
+    const sel=selectedItem&&selectedItem.id===p.id;
+    html+=`<div class="parallel-block${sel?' selected':''}" onclick="selectParallel('${p.id}')">
+      <div class="pb-tag">${p.tag}</div>
+      <div class="pb-title">${p.title}</div>
+      <div class="pb-meta">${p.meta}</div>
+    </div>`;
+    if(isMobile() && sel){ html+=buildDetailMarkup(p,true); }
+  });
+
+  el.innerHTML=html;
+}
+
+function renderOps(){
+  const el=document.getElementById('opsStrip');
+  if(currentView!=='kpi'){ el.style.display='none'; return; }
+  el.style.display='grid';
+
+  let html='';
+  // KPI card
+  html+=`<div class="ops-card"><h3>Department KPIs</h3>`;
+  KPIS.forEach(k=>{
+    html+=`<div class="kpi-row"><div class="kpi-name">${k.label}</div><span class="kpi-bench">${k.bench}</span></div>`;
+  });
+  html+=`</div>`;
+
+  OPS_CARDS.forEach(c=>{
+    html+=`<div class="ops-card"><h3>${c.title}</h3><ul>${c.items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`;
+  });
+el.innerHTML=html;
+}
+
+function renderDetail(){
+  if(isMobile()) return;
+  const el=document.getElementById('detailPanel');
+  if(!selectedItem){
+    el.innerHTML=`<div class="dp-head"><div class="dp-head-label">Selected step</div></div><div class="dp-empty">Click any step to see full details — owner, handoff, deadline, escalation, and student experience.</div>`;
+    return;
+  }
+  el.innerHTML=buildDetailMarkup(selectedItem,false);
+}
+
+function selectStep(id){
+  if(selectedItem && selectedItem.id===id){ selectedItem=null; }
+  else { selectedItem=STEPS.find(s=>s.id===id)||null; }
+  renderBoard();
+  if(!isMobile()) renderDetail();
+}
+
+function selectParallel(id){
+  if(selectedItem && selectedItem.id===id){ selectedItem=null; }
+  else { selectedItem=PARALLEL.find(p=>p.id===id)||null; }
+  renderBoard();
+  if(!isMobile()) renderDetail();
+}
+
+function setRole(role){
+  selectedRole=role;
+  renderFilters();
+  renderLeft();
+  renderBoard();
+}
+
+function renderTodo(){
+  const section = document.getElementById('todoSection');
+  const btn = document.getElementById('toggleTodo');
+  if(!section || !btn) return;
+  section.classList.toggle('open', todoOpen);
+  btn.classList.toggle('active', todoOpen);
+  btn.setAttribute('aria-expanded', todoOpen ? 'true' : 'false');
+}
+
+document.getElementById('viewAll').addEventListener('click',()=>{
+  currentView='all';
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('viewAll').classList.add('active');
+  renderBoard();
+  renderOps();
+});
+
+document.getElementById('viewJourney').addEventListener('click',()=>{
+  currentView='journey';
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('viewJourney').classList.add('active');
+  renderBoard();
+  renderOps();
+});
+
+document.getElementById('viewKPI').addEventListener('click',()=>{
+  currentView='kpi';
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('viewKPI').classList.add('active');
+  renderBoard();
+  renderOps();
+});
+
+document.getElementById('viewSwimlane').addEventListener('click',()=>{
+  currentView='swimlane';
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('viewSwimlane').classList.add('active');
+  renderBoard();
+  renderOps();
+});
+
+document.getElementById('viewRoleMode').addEventListener('click',()=>{
+  currentView='roleMode';
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('viewRoleMode').classList.add('active');
+  renderBoard();
+  renderOps();
+});
+
+document.getElementById('toggleTodo').addEventListener('click',()=>{
+  todoOpen=!todoOpen;
+  renderTodo();
+});
+
+document.getElementById('resetBtn').addEventListener('click',()=>{
+  selectedRole='all';
+  selectedItem=null;
+  currentView='all';
+  todoOpen=false;
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('viewAll').classList.add('active');
+  renderFilters();
+  renderLeft();
+  renderBoard();
+  renderOps();
+  renderDetail();
+  renderTodo();
+});
+
+// ── MOBILE BOTTOM NAV ──
+function setMbnActive(id){
+  document.querySelectorAll('.mbn-btn').forEach(b=>b.classList.remove('active'));
+  const btn=document.getElementById(id);
+  if(btn) btn.classList.add('active');
+}
+
+const mbnAll=document.getElementById('mbnAll');
+const mbnJourney=document.getElementById('mbnJourney');
+const mbnKPI=document.getElementById('mbnKPI');
+const mbnSwimlane=document.getElementById('mbnSwimlane');
+const mbnTodo=document.getElementById('mbnTodo');
+const mbnReset=document.getElementById('mbnReset');
+
+if(mbnAll) mbnAll.addEventListener('click',()=>{
+  currentView='all';
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('viewAll').classList.add('active');
+  setMbnActive('mbnAll');
+  renderBoard();renderOps();
+});
+if(mbnJourney) mbnJourney.addEventListener('click',()=>{
+  currentView='journey';
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('viewJourney').classList.add('active');
+  setMbnActive('mbnJourney');
+  renderBoard();renderOps();
+});
+if(mbnKPI) mbnKPI.addEventListener('click',()=>{
+  currentView='kpi';
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('viewKPI').classList.add('active');
+  setMbnActive('mbnKPI');
+  renderBoard();renderOps();
+});
+if(mbnSwimlane) mbnSwimlane.addEventListener('click',()=>{
+  currentView='swimlane';
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('viewSwimlane').classList.add('active');
+  setMbnActive('mbnSwimlane');
+  renderBoard();renderOps();
+});
+if(mbnTodo) mbnTodo.addEventListener('click',()=>{
+  todoOpen=!todoOpen;
+  mbnTodo.classList.toggle('todo-on',todoOpen);
+  renderTodo();
+  if(todoOpen) document.getElementById('todoSection').scrollIntoView({behavior:'smooth',block:'start'});
+});
+if(mbnReset) mbnReset.addEventListener('click',()=>{
+  selectedRole='all';selectedItem=null;currentView='all';todoOpen=false;
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('viewAll').classList.add('active');
+  setMbnActive('mbnAll');
+  mbnTodo&&mbnTodo.classList.remove('todo-on');
+  renderFilters();renderLeft();renderBoard();renderOps();renderDetail();renderTodo();
+});
+
+renderFilters();
+renderLeft();
+renderBoard();
+renderOps();
+renderDetail();
+renderTodo();
+</script>
+</body>
+</html>
+

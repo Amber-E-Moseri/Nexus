@@ -1328,6 +1328,40 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* Foundation School SOP - visible to Admin, ORS, and foundation_school permission holders */}
+      {(role === 'super_admin' || departmentName === 'ORS Projects' || departmentName === 'ORS' || profile?.user_integrations?.some((i) => i.integration_type === 'foundation_school')) && (
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #EDE8DC', marginTop: 'auto' }}>
+          <a
+            href="/foundation-school-sop.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '8px 10px',
+              borderRadius: 6,
+              background: '#FDF3DC',
+              color: '#B45309',
+              textDecoration: 'none',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#FBE8B8'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#FDF3DC'
+            }}
+          >
+            <span style={{ fontSize: 14 }}>📋</span>
+            <span>Foundation School SOP</span>
+          </a>
+        </div>
+      )}
+
       {showSpaceModal ? <SpaceModal onSaved={loadSpaces} onClose={() => setShowSpaceModal(false)} /> : null}
       {editingSpace ? <SpaceModal mode="edit" space={editingSpace} onSaved={async () => { setEditingSpace(null); await loadSpaces() }} onClose={() => setEditingSpace(null)} /> : null}
       {showSprintModal ? (
