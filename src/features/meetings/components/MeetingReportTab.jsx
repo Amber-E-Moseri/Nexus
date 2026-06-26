@@ -2488,10 +2488,10 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
           </div>
         </div>
 
-        {/* Share Report Link Dropdown */}
+        {/* Share Report Link Modal - Full Panel */}
         {showShareModal && report && (
           <>
-            <div style={{ position: 'fixed', inset: 0, zIndex: 999 }} onClick={() => setShowShareModal(false)} />
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999 }} onClick={() => setShowShareModal(false)} />
             <div style={{
               position: 'fixed',
               top: '50%',
@@ -2501,98 +2501,28 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
               borderRadius: 12,
               boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
               zIndex: 1000,
-              maxWidth: 600,
-              maxHeight: '80vh',
+              maxWidth: 700,
+              maxHeight: '85vh',
               overflowY: 'auto',
-              padding: '20px'
+              padding: 0,
+              display: 'flex',
+              flexDirection: 'column'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              {/* Header */}
+              <div style={{ padding: '20px', borderBottom: '1px solid #EDE8DC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                 <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>Share Report Links</h2>
                 <button
                   type="button"
                   onClick={() => setShowShareModal(false)}
-                  style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#9E9488', padding: 0 }}
+                  style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#9E9488', padding: 0, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
                   ×
                 </button>
               </div>
-              <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#7E7D78', lineHeight: 1.5 }}>Click any link to copy to clipboard:</p>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {/* Full Report Link */}
-                <div style={{ border: '1px solid #EDE8DC', borderRadius: 8, overflow: 'hidden' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const url = shareUrl
-                      if (navigator.clipboard) {
-                        navigator.clipboard.writeText(url).then(() => {
-                          setCopiedLink(true)
-                          setTimeout(() => setCopiedLink(false), 2000)
-                          setTimeout(() => setShowShareModal(false), 300)
-                        })
-                      }
-                    }}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '12px',
-                      background: copiedLink ? '#EEF6F1' : '#F9F7F3',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: '#2D2A22',
-                      transition: 'background 0.2s'
-                    }}
-                    onMouseEnter={(e) => { if (!copiedLink) e.currentTarget.style.background = '#F5F3F0' }}
-                    onMouseLeave={(e) => { if (!copiedLink) e.currentTarget.style.background = '#F9F7F3' }}
-                  >
-                    {copiedLink ? '✓ Full Report (Copied!)' : 'Full Report'}
-                  </button>
-                </div>
-
-                {/* Subgroup Links */}
-                {report.subgroups && report.subgroups.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#9E9488', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.06em' }}>By Subgroup</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {report.subgroups.map((subgroup) => {
-                        const linkUrl = `${window.location.origin}/reports/${report.share_token}?subgroup=${encodeURIComponent(subgroup)}`
-                        return (
-                          <button
-                            key={subgroup}
-                            type="button"
-                            onClick={() => {
-                              if (navigator.clipboard) {
-                                navigator.clipboard.writeText(linkUrl).then(() => {
-                                  setCopiedLink(true)
-                                  setTimeout(() => setCopiedLink(false), 2000)
-                                  setTimeout(() => setShowShareModal(false), 300)
-                                })
-                              }
-                            }}
-                            style={{
-                              textAlign: 'left',
-                              padding: '10px 12px',
-                              background: copiedLink ? '#EEF6F1' : 'white',
-                              border: '1px solid #EDE8DC',
-                              borderRadius: 6,
-                              cursor: 'pointer',
-                              fontSize: 12,
-                              color: '#2D2A22',
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={(e) => { if (!copiedLink) e.currentTarget.style.background = '#F9F7F3' }}
-                            onMouseLeave={(e) => { if (!copiedLink) e.currentTarget.style.background = 'white' }}
-                          >
-                            {copiedLink ? '✓ ' : ''}{subgroup}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
+              {/* Content */}
+              <div style={{ padding: '20px', flex: 1, overflowY: 'auto' }}>
+                <SubgroupShareLinksPanel report={report} />
               </div>
             </div>
           </>
