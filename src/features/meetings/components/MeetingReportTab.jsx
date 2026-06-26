@@ -1275,6 +1275,7 @@ export default function MeetingReportTab() {
 
   const [emailSending, setEmailSending] = useState(false)
   const [emailConfirmation, setEmailConfirmation] = useState(null)
+  const [emailEditor, setEmailEditor] = useState(null)
   const [exportingToDrive, setExportingToDrive] = useState(false)
   const { showToast } = useToast()
 
@@ -1732,32 +1733,34 @@ export default function MeetingReportTab() {
       }
     })
 
-    setEmailConfirmation({ recipients, meetingName: report.label })
+    // Fetch default template
+    const { data: template } = await supabase
+      .from('absence_email_templates')
+      .select('subject, body')
+      .eq('is_default', true)
+      .maybeSingle()
+
+    const defaultSubject = template?.subject || `We missed you at ${report.label}`
+    const defaultBody = template?.body || `Hi {{name}}, we missed you at ${report.label}. Please review the meeting attendance report.`
+
+    setEmailEditor({
+      recipients,
+      subject: defaultSubject,
+      body: defaultBody,
+    })
   }
 
-  async function handleConfirmEmail() {
-    if (!emailConfirmation) return
+  async function handleSendCustomEmail() {
+    if (!emailEditor) return
 
     setEmailSending(true)
     try {
-      // Fetch default absence email template
-      const { data: template, error: templateError } = await supabase
-        .from('absence_email_templates')
-        .select('subject, body')
-        .eq('is_default', true)
-        .maybeSingle()
-
-      if (templateError) throw templateError
-
-      const emailSubject = template?.subject || `We missed you at ${report.label}`
-      const emailBody = template?.body || 'Hi {{name}}, we missed you at {{meeting_label}}. Please review the meeting attendance report.'
-
       const { data, error } = await supabase.functions.invoke('send-absence-emails', {
         body: {
           report_id: report.id,
-          recipients: emailConfirmation.recipients,
-          subject: emailSubject,
-          body_template: emailBody,
+          recipients: emailEditor.recipients,
+          subject: emailEditor.subject,
+          body_template: emailEditor.body,
           meeting_label: report.label,
         },
       })
@@ -1768,7 +1771,7 @@ export default function MeetingReportTab() {
       const sentAt = new Date().toISOString()
       const currentUser = profile?.id
 
-      for (const recipient of emailConfirmation.recipients) {
+      for (const recipient of emailEditor.recipients) {
         try {
           await supabase
             .from('absence_email_log')
@@ -1776,8 +1779,8 @@ export default function MeetingReportTab() {
               report_id: report.id,
               recipient_name: recipient.name,
               recipient_email: recipient.email,
-              subject: emailSubject,
-              body: emailBody,
+              subject: emailEditor.subject,
+              body: emailEditor.body,
               status: 'sent',
               sent_by: currentUser,
               sent_at: sentAt,
@@ -1796,6 +1799,7 @@ export default function MeetingReportTab() {
         message += `, ${data.failed} failed`
       }
       showToast(message, { tone: 'success' })
+      setEmailEditor(null)
       setEmailConfirmation(null)
     } catch (err) {
       showToast(`Failed to send emails: ${err.message}`, { tone: 'error' })
@@ -2652,15 +2656,146 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
         </div>
       )}
 
-      {/* Absence Email Confirmation Modal */}
-      {emailConfirmation && (
-        <AbsenceBatchConfirmModal
-          absentees={emailConfirmation.recipients}
-          meetingName={emailConfirmation.meetingName}
-          loading={emailSending}
-          onConfirm={handleConfirmEmail}
-          onCancel={() => setEmailConfirmation(null)}
-        />
+      {/* Email Editor Modal */}
+      {emailEditor && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999 }} onClick={() => !emailSending && setEmailEditor(null)} />
+          <div style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'white',
+            borderRadius: 12,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            zIndex: 1000,
+            maxWidth: 600,
+            maxHeight: '85vh',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            width: '90%'
+          }}>
+            {/* Header */}
+            <div style={{ padding: '20px', borderBottom: '1px solid #EDE8DC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>Customize Email</h2>
+              <button
+                type="button"
+                onClick={() => setEmailEditor(null)}
+                disabled={emailSending}
+                style={{ background: 'none', border: 'none', fontSize: 24, cursor: emailSending ? 'not-allowed' : 'pointer', color: '#9E9488', padding: 0, opacity: emailSending ? 0.5 : 1 }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Recipients Info */}
+            <div style={{ padding: '16px 20px', background: '#F9F7F3', borderBottom: '1px solid #EDE8DC', flexShrink: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#9E9488', marginBottom: 8 }}>
+                Sending to {emailEditor.recipients.length} recipient{emailEditor.recipients.length !== 1 ? 's' : ''}:
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {emailEditor.recipients.map((r) => (
+                  <span key={r.email} style={{ fontSize: 11, background: 'white', border: '1px solid #EDE8DC', borderRadius: 4, padding: '4px 8px', color: '#2D2A22' }}>
+                    {r.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Email Content */}
+            <div style={{ padding: '20px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Subject */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#2D2A22', display: 'block', marginBottom: 6 }}>Subject:</label>
+                <input
+                  type="text"
+                  value={emailEditor.subject}
+                  onChange={(e) => setEmailEditor({ ...emailEditor, subject: e.target.value })}
+                  disabled={emailSending}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '10px 12px',
+                    border: '1px solid #EDE8DC',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontFamily: 'inherit',
+                    color: '#2D2A22',
+                    opacity: emailSending ? 0.6 : 1,
+                  }}
+                />
+              </div>
+
+              {/* Body */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#2D2A22', marginBottom: 6 }}>Message:</label>
+                <textarea
+                  value={emailEditor.body}
+                  onChange={(e) => setEmailEditor({ ...emailEditor, body: e.target.value })}
+                  disabled={emailSending}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    border: '1px solid #EDE8DC',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontFamily: 'inherit',
+                    color: '#2D2A22',
+                    resize: 'none',
+                    opacity: emailSending ? 0.6 : 1,
+                  }}
+                  placeholder="Enter email message..."
+                />
+              </div>
+
+              {/* Help text */}
+              <div style={{ fontSize: 11, color: '#9E9488', background: '#F9F7F3', padding: '12px', borderRadius: 6 }}>
+                <strong>Available variables:</strong> {{name}}, {{meeting_label}}, {{next_date}}, {{recap}}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '16px 20px', borderTop: '1px solid #EDE8DC', display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => setEmailEditor(null)}
+                disabled={emailSending}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: 6,
+                  border: '1px solid #EDE8DC',
+                  background: 'white',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: emailSending ? 'not-allowed' : 'pointer',
+                  color: '#2D2A22',
+                  opacity: emailSending ? 0.6 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSendCustomEmail}
+                disabled={emailSending || !emailEditor.subject.trim() || !emailEditor.body.trim()}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: '#4C2A92',
+                  color: 'white',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: emailSending ? 'not-allowed' : 'pointer',
+                  opacity: emailSending || !emailEditor.subject.trim() || !emailEditor.body.trim() ? 0.6 : 1,
+                }}
+              >
+                {emailSending ? 'Sending...' : 'Send Emails'}
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
     </div>
