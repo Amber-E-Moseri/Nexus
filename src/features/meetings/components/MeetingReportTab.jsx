@@ -2042,10 +2042,6 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
               </div>
             </div>
 
-              {report.share_token && (
-                <SubgroupShareLinksPanel report={report} />
-              )}
-
               {reportMode === 'regional' ? (
                 <>
                   {reportSubgroups.length > 1 && (
