@@ -5,6 +5,7 @@ import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
 import { useToast } from '../../../context/ToastContext'
 import AbsenceBatchConfirmModal from '../../../components/meetings/AbsenceBatchConfirmModal'
+import { exportReportToGoogleDrive, checkGoogleDriveAuth } from '../lib/google-drive-service'
 
 const PRINT_STYLES = `
 @media print {
@@ -124,7 +125,7 @@ async function copyToClipboard(text) {
       return true
     }
   } catch (err) {
-    console.warn('Clipboard API failed, falling back to textarea method:', err)
+    // Clipboard API failed, will fall back to textarea method
   }
 
   // Fallback for older browsers or if clipboard API fails
@@ -139,7 +140,7 @@ async function copyToClipboard(text) {
     document.body.removeChild(textarea)
     return success
   } catch (err) {
-    console.error('Copy fallback failed:', err)
+    // Copy fallback failed - silently return false
     return false
   }
 }
@@ -1559,20 +1560,18 @@ export default function MeetingReportTab() {
   }
 
   function handleEmailAbsentees() {
-    console.log('Email Absentees: report.absent =', report?.absent?.length)
-    console.log('Email Absentees: roster =', roster.length)
-
     if (!report?.absent || report.absent.length === 0) {
       showToast('No absent members to email.', { tone: 'warning' })
       return
     }
 
+    // Use rosterByKey Map for O(1) lookup instead of O(n²) roster.find()
+    const rosterMap = new Map(roster.map((r) => [normalizeNameKey(r.full_name), r]))
+
     const absentWithEmails = report.absent.filter((person) => {
-      const rosterMatch = roster.find((r) => normalizeNameKey(r.full_name) === normalizeNameKey(person.name))
+      const rosterMatch = rosterMap.get(normalizeNameKey(person.name))
       return rosterMatch?.email
     })
-
-    console.log('Email Absentees: absentWithEmails =', absentWithEmails.length)
 
     if (absentWithEmails.length === 0) {
       showToast('No email addresses found for absent members.', { tone: 'warning' })
@@ -1580,7 +1579,7 @@ export default function MeetingReportTab() {
     }
 
     const recipients = absentWithEmails.map((person) => {
-      const rosterMatch = roster.find((r) => normalizeNameKey(r.full_name) === normalizeNameKey(person.name))
+      const rosterMatch = rosterMap.get(normalizeNameKey(person.name))
       return {
         name: person.name,
         email: rosterMatch.email,
@@ -1634,8 +1633,7 @@ export default function MeetingReportTab() {
               sent_at: sentAt,
             })
         } catch (logErr) {
-          // Log error but don't fail the whole operation
-          console.error(`Failed to log email for ${recipient.name}:`, logErr)
+          // Log error but don't fail the whole operation - silently continue
         }
       }
 
@@ -1663,51 +1661,36 @@ export default function MeetingReportTab() {
     try {
       setExportingToDrive(true)
 
-      // Generate report content
-      const reportDate = new Date().toLocaleDateString()
-      const presentNames = (report.present || []).map(p => p.name)
-      const absentNames = (report.absent || []).map(p => p.name)
-      const unexpectedNames = (report.unexpected || []).map(p => p.name)
+      // Check if user has Google Drive auth, request if not
+      const hasAuth = await checkGoogleDriveAuth()
+      if (!hasAuth) {
+        showToast('Authorizing Google Drive access...', { tone: 'info' })
+        // setupGoogleDriveAuth will redirect, so we just return here
+        return
+      }
 
-      const reportText = `Meeting Report
-Title: ${report.label}
-Date: ${reportDate}
+      // Get the report element for PDF generation
+      const reportElement = document.querySelector('#print-report') || null
 
-Summary
--------
-Expected Attendees: ${report.expectedCount}
-Attended: ${report.attendedCount}
-Absent: ${report.absentCount}
-New Leaders: ${report.unexpectedCount}
-Reach: ${Math.round((report.reachPct || 0) * 100)}%
+      // Create filename with date and report title
+      const reportDate = new Date().toISOString().split('T')[0]
+      const sanitizedTitle = (report.label || 'Report').replace(/[^a-z0-9-]/gi, '_')
+      const fileName = `Nexus-Report-${sanitizedTitle}-${reportDate}.pdf`
 
-Present Leaders
----------------
-${presentNames.length > 0 ? presentNames.join('\n') : 'None'}
+      // Export to Google Drive
+      const result = await exportReportToGoogleDrive(report, reportElement, fileName)
 
-Absent Leaders
---------------
-${absentNames.length > 0 ? absentNames.join('\n') : 'None'}
-
-New Leaders
------------
-${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
-`
-
-      // Download as file instead of uploading to Drive
-      const blob = new Blob([reportText], { type: 'text/plain' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `Meeting Report - ${report.label} - ${reportDate}.txt`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-
-      showToast('Meeting report downloaded!', { tone: 'success' })
+      if (result.success) {
+        showToast('Report saved to Google Drive!', { tone: 'success' })
+        // Report saved successfully - link available in success notification
+      }
     } catch (err) {
-      showToast(`Export error: ${String(err)}`, { tone: 'error' })
+      const errorMessage = err.message || String(err)
+      if (errorMessage.includes('authorize')) {
+        showToast('Please authorize Google Drive access and try again', { tone: 'warning' })
+      } else {
+        showToast(`Export error: ${errorMessage}`, { tone: 'error' })
+      }
     } finally {
       setExportingToDrive(false)
     }
@@ -2495,6 +2478,90 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
         </div>
       )}
 
+      {/* Confirmation Modal */}
+      {emailConfirmation && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1001 }} />
+          <div style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'white',
+            borderRadius: 12,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            zIndex: 1002,
+            maxWidth: 500,
+            width: '90%',
+            padding: '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+          }}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#2D1B69' }}>Confirm Email Send</h3>
+            <div style={{ fontSize: 14, color: '#2D2A22', lineHeight: 1.6 }}>
+              <p style={{ margin: '0 0 12px 0' }}>
+                You are about to send an email to <strong>{emailConfirmation.recipientCount} recipient{emailConfirmation.recipientCount !== 1 ? 's' : ''}</strong>:
+              </p>
+              <div style={{
+                background: '#F9F7F3',
+                border: '1px solid #EDE8DC',
+                borderRadius: 6,
+                padding: '12px',
+                marginBottom: 16,
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#9E9488', marginBottom: 4 }}>Subject:</div>
+                <div style={{ fontSize: 13, color: '#2D2A22' }}>{emailConfirmation.subject}</div>
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: '#9E9488', fontStyle: 'italic' }}>
+                ⚠️ This action cannot be undone. All recipients will receive this email.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setEmailConfirmation(null)}
+                disabled={emailSending}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: 6,
+                  border: '1px solid #EDE8DC',
+                  background: 'white',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: emailSending ? 'not-allowed' : 'pointer',
+                  color: '#2D2A22',
+                  opacity: emailSending ? 0.6 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmailConfirmation(null)
+                  handleSendCustomEmail()
+                }}
+                disabled={emailSending}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: '#4C2A92',
+                  color: 'white',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: emailSending ? 'not-allowed' : 'pointer',
+                  opacity: emailSending ? 0.6 : 1,
+                }}
+              >
+                {emailSending ? 'Sending...' : 'Yes, Send Email'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Email Editor Modal */}
       {showEmailEditor && emailEditor && (
         <>
@@ -2616,7 +2683,14 @@ ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
               </button>
               <button
                 type="button"
-                onClick={handleSendCustomEmail}
+                onClick={() => {
+                  // Show confirmation modal before sending
+                  setEmailConfirmation({
+                    recipientCount: emailEditor.recipients.length,
+                    subject: emailEditor.subject,
+                    willProceed: false,
+                  })
+                }}
                 disabled={emailSending || !emailEditor.subject.trim() || !emailEditor.body.trim()}
                 style={{
                   padding: '10px 16px',
