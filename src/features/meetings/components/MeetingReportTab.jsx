@@ -843,10 +843,10 @@ function SubgroupShareLinksPanel({ report, onClose }) {
                             </div>
                             <button
                               type="button"
-                              onClick={() => copyLink(linkUrl, index)}
+                              onClick={() => copyLink(linkUrl, subgroup)}
                               style={{
-                                background: copiedIndex === index ? '#2D8653' : '#EDE8DC',
-                                color: copiedIndex === index ? 'white' : '#4C2A92',
+                                background: copiedIndex === subgroup ? '#2D8653' : '#EDE8DC',
+                                color: copiedIndex === subgroup ? 'white' : '#4C2A92',
                                 border: 'none',
                                 borderRadius: 6,
                                 padding: '6px 12px',
@@ -858,7 +858,7 @@ function SubgroupShareLinksPanel({ report, onClose }) {
                                 transition: 'all 0.2s'
                               }}
                             >
-                              {copiedIndex === index ? '✓ Copied' : 'Copy'}
+                              {copiedIndex === subgroup ? '✓ Copied' : 'Copy'}
                             </button>
                           </div>
                         )}
