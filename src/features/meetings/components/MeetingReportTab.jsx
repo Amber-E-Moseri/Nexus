@@ -1730,6 +1730,7 @@ export default function MeetingReportTab() {
       return {
         name: person.name,
         email: rosterMatch.email,
+        user_id: rosterMatch?.id,
       }
     })
 
@@ -1766,7 +1767,7 @@ export default function MeetingReportTab() {
       if (error) throw error
 
       // Log each sent email to absence_follow_ups table
-      const currentUser = auth?.user?.id
+      const currentUser = profile?.id
       const sentAt = new Date().toISOString()
 
       for (const recipient of emailConfirmation.recipients) {
@@ -1810,7 +1811,9 @@ export default function MeetingReportTab() {
     if (!report) return
 
     try {
-      // Generate report text content
+      setExportingToDrive(true)
+
+      // Generate report content
       const reportDate = new Date().toLocaleDateString()
       const presentNames = (report.present || []).map(p => p.name)
       const absentNames = (report.absent || []).map(p => p.name)
@@ -1841,39 +1844,18 @@ New Leaders
 ${unexpectedNames.length > 0 ? unexpectedNames.join('\n') : 'None'}
 `
 
-      setExportingToDrive(true)
+      // Download as file instead of uploading to Drive
+      const blob = new Blob([reportText], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `Meeting Report - ${report.label} - ${reportDate}.txt`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
 
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError || !session) {
-        showToast('Please sign in to save to Google Drive', { tone: 'error' })
-        return
-      }
-
-      const fileName = `Meeting Report - ${report.label} - ${reportDate}.txt`
-
-      const formData = new FormData()
-      formData.append('file', new Blob([reportText], { type: 'text/plain' }), fileName)
-      formData.append('file_name', fileName)
-      formData.append('meeting_id', report.id)
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-drive-upload`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: formData,
-        }
-      )
-
-      if (!response.ok) {
-        const error = await response.json()
-        showToast(`Failed to export: ${error.error}`, { tone: 'error' })
-        return
-      }
-
-      showToast('Meeting report saved to Google Drive!', { tone: 'success' })
+      showToast('Meeting report downloaded!', { tone: 'success' })
     } catch (err) {
       showToast(`Export error: ${String(err)}`, { tone: 'error' })
     } finally {
