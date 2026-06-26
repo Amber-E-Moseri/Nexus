@@ -72,6 +72,7 @@ function parseImportCSV(text) {
     full_name: rawHeaders.findIndex((h) => h === 'fullname' || h === 'full name' || h === 'full_name' || h === 'name'),
     subgroup: rawHeaders.findIndex((h) => h === 'subgroup'),
     leadership_category: rawHeaders.findIndex((h) => h.includes('leadership') || h.includes('category')),
+    email: rawHeaders.findIndex((h) => h === 'email'),
     active: rawHeaders.findIndex((h) => h === 'active'),
   }
 
@@ -91,6 +92,7 @@ function parseImportCSV(text) {
       full_name: fullName,
       subgroup: idx.subgroup >= 0 ? (cells[idx.subgroup] ?? '').replace(/^"|"$/g, '').trim() : '',
       leadership_category: idx.leadership_category >= 0 ? (cells[idx.leadership_category] ?? '').replace(/^"|"$/g, '').trim() : '',
+      email: idx.email >= 0 ? (cells[idx.email] ?? '').replace(/^"|"$/g, '').trim() : '',
       active: activeRaw !== 'false' && activeRaw !== '0' && activeRaw !== 'no',
     })
   }
@@ -184,7 +186,7 @@ function RowForm({ initial, subgroupOptions, onSave, onCancel, saving, isNew }) 
     <tr style={{ background: '#F4F0FC' }}>
       <td colSpan={5} style={{ padding: '12px 14px', borderBottom: '1px solid #C4B8E8' }}>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
             <div>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#9E9488', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em' }}>
                 Full Name <span style={{ color: '#C94830' }}>*</span>
@@ -230,6 +232,18 @@ function RowForm({ initial, subgroupOptions, onSave, onCancel, saving, isNew }) 
               <datalist id="cat-options">
                 {CATEGORY_LIST.map((category) => <option key={category} value={category} />)}
               </datalist>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#9E9488', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                Email
+              </label>
+              <input
+                style={INPUT}
+                type="email"
+                value={f.email ?? ''}
+                onChange={(e) => set('email', e.target.value)}
+                placeholder="jane@example.com"
+              />
             </div>
           </div>
 
