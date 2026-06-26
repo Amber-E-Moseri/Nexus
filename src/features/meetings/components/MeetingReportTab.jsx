@@ -602,48 +602,13 @@ function CategoryPillBar({ categoryOptions, selectedCategories, onToggle }) {
   )
 }
 
-function extractRegion(subgroupName) {
-  // Extract region from subgroup name like "Central East Subgroup A"
-  // Returns "Central East" if it matches the pattern
-  const match = subgroupName.match(/^(.+?)\s+Subgroup\s+[A-Z]$/i)
-  return match ? match[1] : subgroupName
-}
-
 function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false }) {
   const [copiedIndex, setCopiedIndex] = useState(null)
 
   if (!report || !report.subgroups || report.subgroups.length === 0) return null
 
-  // Initialize expanded state based on expandedByDefault
-  const getInitialRegions = () => {
-    if (!expandedByDefault) return new Set()
-    const regions = new Set()
-    report.subgroups.forEach((sg) => {
-      const region = extractRegion(sg)
-      regions.add(region)
-    })
-    return regions
-  }
-
-  const [expandedFullReport, setExpandedFullReport] = useState(expandedByDefault)
-  const [expandedRegions, setExpandedRegions] = useState(getInitialRegions())
-  const [expandedSubgroups, setExpandedSubgroups] = useState(expandedByDefault ? new Set(report.subgroups) : new Set())
-
   const baseUrl = `${window.location.origin}/reports/${report.share_token}`
   const fullReportUrl = baseUrl
-
-  // Group subgroups by region
-  const subgroupsByRegion = {}
-  report.subgroups.forEach((subgroup) => {
-    const region = extractRegion(subgroup)
-    if (!subgroupsByRegion[region]) {
-      subgroupsByRegion[region] = []
-    }
-    subgroupsByRegion[region].push(subgroup)
-  })
-
-  // Sort regions and subgroups within regions
-  const sortedRegions = Object.keys(subgroupsByRegion).sort()
 
   async function copyLink(url, index) {
     const success = await copyToClipboard(url)
@@ -665,30 +630,10 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
     }
   }
 
-  const toggleRegion = (region) => {
-    const newSet = new Set(expandedRegions)
-    if (newSet.has(region)) {
-      newSet.delete(region)
-    } else {
-      newSet.add(region)
-    }
-    setExpandedRegions(newSet)
-  }
-
-  const toggleSubgroup = (subgroup) => {
-    const newSet = new Set(expandedSubgroups)
-    if (newSet.has(subgroup)) {
-      newSet.delete(subgroup)
-    } else {
-      newSet.add(subgroup)
-    }
-    setExpandedSubgroups(newSet)
-  }
-
   return (
     <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 12, padding: '16px', marginTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#2D2A22' }}>Share Links by Subgroup</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#2D2A22' }}>Share Report</div>
         <button
           type="button"
           onClick={copyAllLinks}
@@ -710,51 +655,53 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
         </button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {/* Full Report - Collapsible */}
-        <div style={{ border: '1px solid #EDE8DC', borderRadius: 10, overflow: 'hidden' }}>
-          {/* Full Report Header/Toggle */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Full Report */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px', background: '#F9F7F3', borderRadius: 10, border: '1px solid #EDE8DC' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#2D2A22', marginBottom: 4 }}>Full Report</div>
+            <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all', fontFamily: 'monospace', background: 'white', padding: '6px', borderRadius: 4, border: '1px solid #EDE8DC' }}>
+              {fullReportUrl}
+            </div>
+          </div>
           <button
             type="button"
-            onClick={() => setExpandedFullReport(!expandedFullReport)}
+            onClick={() => copyLink(fullReportUrl, 'full')}
             style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 10,
-              padding: '12px',
-              background: expandedFullReport ? '#F5F3F0' : '#F9F7F3',
+              background: copiedIndex === 'full' ? '#2D8653' : '#4C2A92',
+              color: 'white',
               border: 'none',
+              borderRadius: 6,
+              padding: '6px 12px',
+              fontSize: 11,
+              fontWeight: 600,
               cursor: 'pointer',
-              transition: 'background 0.2s',
-              textAlign: 'left'
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+              transition: 'all 0.2s'
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#F5F3F0' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = expandedFullReport ? '#F5F3F0' : '#F9F7F3' }}
           >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#2D2A22' }}>Full Report</div>
-            </div>
-            <div style={{ fontSize: 14, color: '#9E9488', flexShrink: 0, transition: 'transform 0.2s', transform: expandedFullReport ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-              ▼
-            </div>
+            {copiedIndex === 'full' ? '✓ Copied' : 'Copy'}
           </button>
+        </div>
 
-          {/* Full Report Content - Hidden by default */}
-          {expandedFullReport && (
-            <div style={{ padding: '12px', background: '#FAFAF9', borderTop: '1px solid #EDE8DC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        {/* Flat list of subgroups */}
+        {report.subgroups.map((subgroup) => {
+          const linkUrl = `${baseUrl}?subgroup=${encodeURIComponent(subgroup)}`
+          return (
+            <div key={subgroup} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px', background: 'white', borderRadius: 10, border: '1px solid #EDE8DC' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all', fontFamily: 'monospace', background: '#F9F7F3', padding: '8px', borderRadius: 6, border: '1px solid #EDE8DC' }}>
-                  {fullReportUrl}
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#2D2A22', marginBottom: 4 }}>{subgroup}</div>
+                <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all', fontFamily: 'monospace', background: '#F9F7F3', padding: '6px', borderRadius: 4, border: '1px solid #EDE8DC' }}>
+                  {linkUrl}
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => copyLink(fullReportUrl, 'full')}
+                onClick={() => copyLink(linkUrl, subgroup)}
                 style={{
-                  background: copiedIndex === 'full' ? '#2D8653' : '#EDE8DC',
-                  color: copiedIndex === 'full' ? 'white' : '#4C2A92',
+                  background: copiedIndex === subgroup ? '#2D8653' : '#4C2A92',
+                  color: 'white',
                   border: 'none',
                   borderRadius: 6,
                   padding: '6px 12px',
@@ -766,118 +713,8 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
                   transition: 'all 0.2s'
                 }}
               >
-                {copiedIndex === 'full' ? '✓ Copied' : 'Copy'}
+                {copiedIndex === subgroup ? '✓ Copied' : 'Copy'}
               </button>
-            </div>
-          )}
-        </div>
-
-        {/* Region Groups - Collapsible */}
-        {sortedRegions.map((region) => {
-          const isRegionExpanded = expandedRegions.has(region)
-          const subgroupsInRegion = subgroupsByRegion[region]
-          return (
-            <div key={region} style={{ border: '1px solid #EDE8DC', borderRadius: 10, overflow: 'hidden' }}>
-              {/* Region Header/Toggle */}
-              <button
-                type="button"
-                onClick={() => toggleRegion(region)}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 10,
-                  padding: '12px',
-                  background: isRegionExpanded ? '#F0EBFC' : '#F9F7F3',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                  textAlign: 'left',
-                  fontWeight: 600,
-                  fontSize: 12,
-                  color: '#2D2A22'
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#F0EBFC' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = isRegionExpanded ? '#F0EBFC' : '#F9F7F3' }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>▼ {region}</div>
-                <div style={{ fontSize: 14, color: '#9E9488', flexShrink: 0, transition: 'transform 0.2s', transform: isRegionExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                  ▼
-                </div>
-              </button>
-
-              {/* Subgroups in Region - Nested */}
-              {isRegionExpanded && (
-                <div style={{ background: '#FAFAF9', borderTop: '1px solid #EDE8DC', padding: '8px' }}>
-                  {subgroupsInRegion.map((subgroup, idx) => {
-                    const linkUrl = `${baseUrl}?subgroup=${encodeURIComponent(subgroup)}`
-                    const isExpanded = expandedSubgroups.has(subgroup)
-                    return (
-                      <div key={subgroup} style={{ border: '1px solid #EDE8DC', borderRadius: 8, overflow: 'hidden', marginBottom: idx < subgroupsInRegion.length - 1 ? 8 : 0 }}>
-                        {/* Subgroup Header/Toggle */}
-                        <button
-                          type="button"
-                          onClick={() => toggleSubgroup(subgroup)}
-                          style={{
-                            width: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 10,
-                            padding: '10px 12px',
-                            background: isExpanded ? '#F5F3F0' : '#FFFFFF',
-                            border: 'none',
-                            cursor: 'pointer',
-                            transition: 'background 0.2s',
-                            textAlign: 'left',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: '#2D2A22'
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = '#F5F3F0' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = isExpanded ? '#F5F3F0' : '#FFFFFF' }}
-                        >
-                          <div style={{ flex: 1, minWidth: 0 }}>{subgroup}</div>
-                          <div style={{ fontSize: 12, color: '#9E9488', flexShrink: 0, transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                            ▼
-                          </div>
-                        </button>
-
-                        {/* Content - Hidden by default */}
-                        {isExpanded && (
-                          <div style={{ padding: '12px', background: '#FAFAF9', borderTop: '1px solid #EDE8DC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all', fontFamily: 'monospace', background: '#F9F7F3', padding: '8px', borderRadius: 6, border: '1px solid #EDE8DC' }}>
-                                {linkUrl}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => copyLink(linkUrl, subgroup)}
-                              style={{
-                                background: copiedIndex === subgroup ? '#2D8653' : '#EDE8DC',
-                                color: copiedIndex === subgroup ? 'white' : '#4C2A92',
-                                border: 'none',
-                                borderRadius: 6,
-                                padding: '6px 12px',
-                                fontSize: 11,
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                flexShrink: 0,
-                                whiteSpace: 'nowrap',
-                                transition: 'all 0.2s'
-                              }}
-                            >
-                              {copiedIndex === subgroup ? '✓ Copied' : 'Copy'}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
             </div>
           )
         })}
