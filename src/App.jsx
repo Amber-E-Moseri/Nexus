@@ -72,6 +72,7 @@ const PersonalIntegrationsPage = lazy(() => import('./pages/settings/PersonalInt
 const CampusEditsPage = lazy(() => import('./pages/admin/CampusEditsPage'))
 const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
 const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
+const InstagramGradingPage = lazy(() => import('./features/instagram/pages/InstagramGradingPage'))
 
 function onError(error, errorInfo) {
   console.error('[AppErrorBoundary]', error, errorInfo)
@@ -310,6 +311,7 @@ export default function App() {
             }
           />
           <Route path="/settings/api-docs" element={<ApiDocumentationPage />} />
+          <Route path="/instagram" element={<InstagramGradingPage />} />
         </Route>
       </Route>
 
