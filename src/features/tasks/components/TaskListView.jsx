@@ -59,6 +59,15 @@ export default function TaskListView({
 
     const ungrouped = sorted.filter((task) => !matchedIds.has(task.id))
     if (ungrouped.length > 0) {
+      console.log('[TaskListView] Ungrouped tasks:', ungrouped.length, 'out of', sorted.length)
+      console.log('[TaskListView] Available statuses:', statuses.map(s => ({ id: s.id, name: s.name, category: s.category, legacy_key: s.legacy_key, dept: s.department_id ? 'DEPT' : 'GLOBAL' })))
+      console.log('[TaskListView] Ungrouped task details:', ungrouped.map(t => ({
+        title: t.title,
+        status: t.status,
+        status_id: t.status_id,
+        status_definition: t.status_definition ? { id: t.status_definition.id, name: t.status_definition.name } : null,
+        department_id: t.department_id
+      })))
       groups.push({
         status: { id: 'ungrouped', name: 'Other', color: '#7A7D86', legacy_key: 'other' },
         items: ungrouped,

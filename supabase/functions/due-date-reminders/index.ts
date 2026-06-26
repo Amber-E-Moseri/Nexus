@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
   const { data: tasks, error: tasksError } = await supabase
     .from('tasks')
     .select('id, title, assigned_to')
-    .eq('status', 'not_done')
+    .neq('status', 'done')
     .like('due_date', `${tomorrowStr}%`)
 
   if (tasksError) {
@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
     .from('user_notification_prefs')
     .select('user_id')
     .in('user_id', uniqueAssigneeIds)
-    .eq('notification_type', 'task_due_date_approaching')
+    .eq('notification_type', 'task_due_soon')
     .eq('in_app', true)
 
   const enabledUserIds = new Set((prefs || []).map((p) => p.user_id))

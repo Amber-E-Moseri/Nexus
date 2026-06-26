@@ -33,12 +33,34 @@ export default function MyTasks() {
   async function loadMetadata() {
     if (!profile?.id) return
     try {
-      const [statusData, spacesData] = await Promise.all([
-        listTaskStatuses(),
+      const [spacesData] = await Promise.all([
         getMySpaces(profile.id, role, profile.department_id),
       ])
-      setStatuses(statusData)
-      setDepartments(spacesData.filter((space) => space.status === 'active'))
+      const activeDepts = spacesData.filter((space) => space.status === 'active')
+      setDepartments(activeDepts)
+
+      // Load global statuses + statuses from user's primary department (if any)
+      const statusPromises = [listTaskStatuses()]
+      if (profile?.department_id) {
+        statusPromises.push(listTaskStatuses({ departmentId: profile.department_id }))
+      }
+
+      const allStatusResults = await Promise.all(statusPromises)
+
+      // Deduplicate by category + legacy_key, preferring dept-specific over global
+      const statusMap = new Map()
+      for (let i = allStatusResults.length - 1; i >= 0; i--) {
+        const statusList = allStatusResults[i]
+        for (const status of statusList) {
+          const key = `${status.category}:${status.legacy_key || status.name}`
+          if (!statusMap.has(key)) {
+            statusMap.set(key, status)
+          }
+        }
+      }
+
+      const allStatuses = Array.from(statusMap.values())
+      setStatuses(allStatuses)
     } catch (err) {
       console.error('[MyTasks] Failed to load metadata:', err)
     }

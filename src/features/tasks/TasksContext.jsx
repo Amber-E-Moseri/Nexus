@@ -11,8 +11,25 @@ export function TasksProvider({ departmentId, sprintId, children }) {
   const [error, setError] = useState(null)
 
   const loadStatuses = useCallback(async () => {
-    const data = await listTaskStatuses({ departmentId: sprintId ? null : departmentId })
-    setStatuses(data)
+    // Load both global and department-specific statuses
+    const statusPromises = [listTaskStatuses()]
+    if (!sprintId && departmentId) {
+      statusPromises.push(listTaskStatuses({ departmentId }))
+    }
+    const allResults = await Promise.all(statusPromises)
+
+    // Deduplicate by category + legacy_key, preferring dept-specific over global
+    const statusMap = new Map()
+    for (let i = allResults.length - 1; i >= 0; i--) {
+      const statusList = allResults[i]
+      for (const status of statusList) {
+        const key = `${status.category}:${status.legacy_key || status.name}`
+        if (!statusMap.has(key)) {
+          statusMap.set(key, status)
+        }
+      }
+    }
+    setStatuses(Array.from(statusMap.values()))
   }, [departmentId, sprintId])
 
   const loadTasks = useCallback(async () => {
@@ -20,13 +37,41 @@ export function TasksProvider({ departmentId, sprintId, children }) {
     try {
       setLoading(true)
       setError(null)
-      const [taskData, statusData] = await Promise.all([
+
+      // Load both global and department-specific statuses
+      const statusPromises = [listTaskStatuses()]
+      if (!sprintId && departmentId) {
+        statusPromises.push(listTaskStatuses({ departmentId }))
+      }
+
+      const [taskData, ...statusResults] = await Promise.all([
         sprintId ? getSprintTasks(sprintId) : getDeptTasks(departmentId),
-        listTaskStatuses({ departmentId: sprintId ? null : departmentId }),
+        ...statusPromises,
       ])
-      const data = taskData
-      setStatuses(statusData)
-      setTasks(data)
+
+      // Deduplicate by category + legacy_key, preferring dept-specific over global
+      const statusMap = new Map()
+      for (let i = statusResults.length - 1; i >= 0; i--) {
+        const statusList = statusResults[i]
+        for (const status of statusList) {
+          const key = `${status.category}:${status.legacy_key || status.name}`
+          if (!statusMap.has(key)) {
+            statusMap.set(key, status)
+          }
+        }
+      }
+
+      const finalStatuses = Array.from(statusMap.values())
+      console.log('[TasksContext] Space/Sprint statuses:', {
+        sprintId,
+        departmentId,
+        globalStatusCount: statusResults[0]?.length || 0,
+        deptStatusCount: statusResults[1]?.length || 0,
+        finalCount: finalStatuses.length,
+        statuses: finalStatuses.map(s => ({ id: s.id, name: s.name, dept: s.department_id ? 'DEPT' : 'GLOBAL' }))
+      })
+      setStatuses(finalStatuses)
+      setTasks(taskData)
     } catch (err) {
       setError(err.message)
     } finally {
