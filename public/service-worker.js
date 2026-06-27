@@ -272,11 +272,13 @@ self.addEventListener('sync', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+    return;
   }
 
   if (event.data && event.data.type === 'CLEAR_CACHE') {
     caches.delete(DYNAMIC_CACHE);
     caches.delete(API_CACHE);
+    return;
   }
 });
 

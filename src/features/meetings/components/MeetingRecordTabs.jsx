@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../../../hooks/useAuth'
 import { getMeetingTasks } from '../lib/meetings'
 import { getTaskStatusColor, isTaskCompleted } from '../../../lib/taskStatuses'
+import AudioTranscriptionPanel from './AudioTranscriptionPanel'
 
-const TABS = ['Summary', 'Agenda', 'Actions', 'Minutes']
+const TABS = ['Summary', 'Agenda', 'Actions', 'Minutes', 'Audio']
 
 export default function MeetingRecordTabs({ meeting }) {
+  const { profile, role } = useAuth()
   const [activeTab, setActiveTab] = useState('Summary')
   const [tasks, setTasks] = useState(null)
   const [tasksError, setTasksError] = useState(null)
+  const [audioItemsAdded, setAudioItemsAdded] = useState(0)
+
+  const canRecord = role && ['super_admin', 'dept_lead', 'ors'].includes(role)
 
   useEffect(() => {
     let active = true
@@ -42,6 +48,7 @@ export default function MeetingRecordTabs({ meeting }) {
     Agenda: 'Agenda',
     Actions: `Actions ${actionCount > 0 ? `(${actionCount})` : ''}`,
     Minutes: 'Minutes',
+    Audio: `Audio ${audioItemsAdded > 0 ? `(+${audioItemsAdded})` : ''}`,
   }
 
   return (
@@ -278,6 +285,20 @@ export default function MeetingRecordTabs({ meeting }) {
             ) : (
               <p style={{ margin: 0, fontSize: 13, color: '#9E9488' }}>No minutes saved yet.</p>
             )}
+          </div>
+        )}
+
+        {activeTab === 'Audio' && (
+          <div style={{ paddingLeft: 16, paddingRight: 16 }}>
+            <AudioTranscriptionPanel
+              meetingId={meeting.id}
+              departmentId={meeting.department_id}
+              canRecord={canRecord}
+              onActionItemsExtracted={(items) => {
+                setAudioItemsAdded((prev) => prev + items.length)
+                setActiveTab('Actions')
+              }}
+            />
           </div>
         )}
       </div>

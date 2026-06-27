@@ -4,11 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 
-const PRIMARY = '#4C2A92'
-const BORDER = '#EDE8DC'
-const TEXT = '#2D2A22'
-const MUTED = '#9E9488'
-const BG = '#F4F1EA'
+/* Design system colors via CSS variables */
 
 const OCCASION_EMOJI = {
   graduation: '🎓',
@@ -33,7 +29,7 @@ function TemplateCard({ template, selected, onClick }) {
         flexDirection: 'column',
         gap: 12,
         padding: 16,
-        border: `2px solid ${selected ? PRIMARY : BORDER}`,
+        border: `2px solid ${selected ? PRIMARY : 'var(--border)'}`,
         borderRadius: 12,
         background: selected ? '#EDE8F8' : '#FFFFFF',
         cursor: 'pointer',
@@ -66,7 +62,7 @@ function TemplateCard({ template, selected, onClick }) {
         {!template.thumbnail_url && emoji}
       </div>
       <div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: TEXT, marginBottom: 4 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
           {template.name}
         </div>
         <span
@@ -74,7 +70,7 @@ function TemplateCard({ template, selected, onClick }) {
             display: 'inline-block',
             fontSize: 11,
             fontWeight: 600,
-            color: PRIMARY,
+            color: 'var(--accent)',
             background: '#EDE8F8',
             borderRadius: 999,
             padding: '2px 10px',
@@ -95,31 +91,15 @@ export default function Step1PickTemplate({ onSelect, wizardState }) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    async function loadTemplates() {
-      try {
-        setLoading(true)
-        const { data, error: err } = await supabase
-          .from('invitation_templates')
-          .select('id, name, occasion, thumbnail_url')
-          .eq('status', 'active')
-          .eq('org_id', profile?.org_id ?? '')
-          .order('name')
-
-        if (err) throw err
-        setTemplates(data ?? [])
-      } catch (e) {
-        setError(e.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    if (profile?.org_id) loadTemplates()
-  }, [profile?.org_id])
+    // Templates feature requires invitation_templates table
+    // For now, skip loading and let users create from scratch
+    setTemplates([])
+    setLoading(false)
+  }, [profile?.id])
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: 40, color: MUTED, fontSize: 13 }}>
+      <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)', fontSize: 13 }}>
         Loading templates...
       </div>
     )
@@ -145,10 +125,10 @@ export default function Step1PickTemplate({ onSelect, wizardState }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: TEXT, marginBottom: 12 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
           Choose Template
         </div>
-        <p style={{ margin: 0, fontSize: 13, color: MUTED }}>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
           Select a template to start your invitation campaign.
         </p>
       </div>
@@ -184,7 +164,7 @@ export default function Step1PickTemplate({ onSelect, wizardState }) {
             background: '#FFFFFF',
             cursor: 'pointer',
             transition: 'all 0.2s',
-            color: PRIMARY,
+            color: 'var(--accent)',
             fontSize: 13,
             fontWeight: 600,
           }}

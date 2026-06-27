@@ -45,7 +45,6 @@ export default async (req: Request) => {
     if (campaignError) throw campaignError
     if (!campaign) throw new Error('Campaign not found')
 
-    const template = campaign.invitation_templates
     const recipients = campaign.invitation_recipients || []
     const pendingRecipients = recipients.filter((r: any) => r.status === 'pending')
 
@@ -54,22 +53,18 @@ export default async (req: Request) => {
     const errors: Array<{ email: string; error: string }> = []
 
     for (const recipient of pendingRecipients) {
-      const invitationLink = `${FRONTEND_URL}/invitations/${recipient.token}`
-      const emailSubject = mergeTokens(template.email_subject || 'You\'re invited!', {
-        ...campaign.content,
-        ...recipient.custom_fields
-      })
+      const invitationLink = `${FRONTEND_URL}/rsvp?token=${recipient.rsvp_token}`
 
       try {
         await resend.emails.send({
           from: 'invitations@blwcannexus.org',
-          to: recipient.email,
-          subject: emailSubject,
+          to: recipient.recipient_email,
+          subject: campaign.subject_line || 'You\'re invited!',
           html: generateEmailHTML({
-            recipientName: recipient.custom_fields?.name || recipient.email,
-            eventName: campaign.content?.event_name || 'Event',
+            recipientName: recipient.recipient_name || recipient.recipient_email,
+            eventName: campaign.title || 'Event',
             invitationLink,
-            templateTheme: template.theme_config
+            templateTheme: campaign.theme_config
           })
         })
 
@@ -83,9 +78,9 @@ export default async (req: Request) => {
 
         sent++
       } catch (err) {
-        console.error(`Failed to send to ${recipient.email}:`, err)
+        console.error(`Failed to send to ${recipient.recipient_email}:`, err)
         errors.push({
-          email: recipient.email,
+          email: recipient.recipient_email,
           error: String(err)
         })
         failed++

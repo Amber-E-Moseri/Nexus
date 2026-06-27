@@ -329,7 +329,14 @@ export default function App() {
             }
           />
           <Route path="/settings/api-docs" element={<ApiDocumentationPage />} />
-          <Route path="/instagram" element={<InstagramGradingPage />} />
+          <Route
+            path="/instagram"
+            element={
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'media']}>
+                <InstagramGradingPage />
+              </ProtectedRoute>
+            }
+          />
         </Route>
       </Route>
 

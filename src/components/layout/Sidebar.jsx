@@ -23,6 +23,7 @@ import {
   UserCheck,
   Users,
   Users2,
+  Image,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -1180,6 +1181,14 @@ export default function Sidebar() {
             />
           </>
         ) : null}
+        {role === 'super_admin' && (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/instagram')}
+            icon={Image}
+            label="Instagram Grading"
+            onClick={() => go('/instagram')}
+          />
+        )}
         <SidebarItem
           active={false}
           icon={Map}

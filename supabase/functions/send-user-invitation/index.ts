@@ -280,7 +280,7 @@ Deno.serve(async (request) => {
 
   const emailPayload = {
     from: fromEmail,
-    to: [invitation.email],
+    to: invitation.email,
     subject: 'Activate your BLW CAN NEXUS account',
     html: invitationEmailHtml({
       recipientName,
