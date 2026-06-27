@@ -72,6 +72,8 @@ const PersonalIntegrationsPage = lazy(() => import('./pages/settings/PersonalInt
 const CampusEditsPage = lazy(() => import('./pages/admin/CampusEditsPage'))
 const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
 const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
+const InvitationWizard = lazy(() => import('./pages/communications/InvitationWizard'))
+const InvitationDetailPage = lazy(() => import('./pages/communications/InvitationDetailPage'))
 const InstagramGradingPage = lazy(() => import('./features/instagram/pages/InstagramGradingPage'))
 
 function onError(error, errorInfo) {
@@ -297,6 +299,22 @@ export default function App() {
             element={
               <ProtectedRoute roles={['super_admin', 'dept_lead']}>
                 <AnalyticsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/communications/invitations/new"
+            element={
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+                <InvitationWizard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/communications/invitations/:id"
+            element={
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+                <InvitationDetailPage />
               </ProtectedRoute>
             }
           />
