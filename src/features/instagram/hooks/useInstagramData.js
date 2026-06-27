@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import { supabase } from '../../../lib/supabase';
 
 export const useInstagramPages = () => {
-  const supabase = useSupabaseClient();
   const [pages, setPages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -32,7 +31,6 @@ export const useInstagramPages = () => {
 };
 
 export const useInstagramMetrics = (pageId) => {
-  const supabase = useSupabaseClient();
   const [metrics, setMetrics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -68,7 +66,6 @@ export const useInstagramMetrics = (pageId) => {
 };
 
 export const useInstagramInsights = (pageId) => {
-  const supabase = useSupabaseClient();
   const [insights, setInsights] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -104,7 +101,6 @@ export const useInstagramInsights = (pageId) => {
 };
 
 export const useCostGuard = () => {
-  const supabase = useSupabaseClient();
   const [costData, setCostData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -151,7 +147,6 @@ export const useCostGuard = () => {
 };
 
 export const useExtractMetrics = () => {
-  const supabase = useSupabaseClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -196,7 +191,6 @@ export const useExtractMetrics = () => {
 };
 
 export const useGradeMetrics = () => {
-  const supabase = useSupabaseClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 

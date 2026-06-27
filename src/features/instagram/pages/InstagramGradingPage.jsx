@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '@supabase/auth-helpers-react';
+import { useAuth } from '../../../hooks/useAuth';
 import InstagramScreenshotUploadWithCostGuard from '../components/InstagramScreenshotUploadWithCostGuard';
 import InstagramPagesGradingDashboard from '../components/InstagramPagesGradingDashboard';
 import CostGuardDashboard from '../components/CostGuardDashboard';

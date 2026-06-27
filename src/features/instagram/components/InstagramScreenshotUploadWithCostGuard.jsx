@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import { supabase } from '../../../lib/supabase';
 
 const InstagramScreenshotUploadWithCostGuard = ({ pageId, onMetricsExtracted, onError }) => {
-  const supabase = useSupabaseClient();
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);

@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import { supabase } from '../../../lib/supabase';
 
 const CostGuardDashboard = () => {
-  const supabase = useSupabaseClient();
   const [costData, setCostData] = useState(null);
   const [apiCalls, setApiCalls] = useState([]);
   const [loading, setLoading] = useState(true);

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import { supabase } from '../../../lib/supabase';
 
 const GradeBar = ({ grade, score }) => {
   const gradeColors = {
@@ -27,7 +27,6 @@ const GradeBar = ({ grade, score }) => {
 };
 
 const InstagramPagesGradingDashboard = () => {
-  const supabase = useSupabaseClient();
   const [pages, setPages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPage, setSelectedPage] = useState(null);
