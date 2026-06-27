@@ -35,6 +35,7 @@ const FlockCRMPage = lazy(() => import('./pages/flock/FlockCRMPage'))
 const Login = lazy(() => import('./pages/Login'))
 const CanMapPage = lazy(() => import('./pages/map/CanMapPage'))
 const MeetingsModule = lazy(() => import('./pages/meetings/MeetingsModule'))
+const MeetingDetailView = lazy(() => import('./pages/meetings/MeetingDetailView'))
 const MeetingWizardPage = lazy(() => import('./pages/meetings/MeetingWizardPage'))
 const ExpectedAttendeesPage = lazy(() => import('./pages/meetings/ExpectedAttendeesPage'))
 const AbsenceEmailLogPage = lazy(() => import('./pages/meetings/AbsenceEmailLogPage'))
@@ -176,6 +177,7 @@ export default function App() {
             }
           />
           <Route path="/meetings" element={<MeetingsModule />} />
+          <Route path="/meetings/:meetingId" element={<MeetingDetailView />} />
           <Route
             path="/meetings/wizard"
             element={
