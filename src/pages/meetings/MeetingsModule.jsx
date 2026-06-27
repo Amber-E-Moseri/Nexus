@@ -205,18 +205,12 @@ export default function MeetingsModule() {
   const [activeTab, setActiveTab] = useState(() => {
     if (searchParams.get('report')) return 'report'
     if (searchParams.get('tab') === 'roster') return 'roster'
-    return 'report'
+    return 'meetings'
   })
 
   useEffect(() => {
-    if (searchParams.get('report')) {
-      setActiveTab('report')
-      return
-    }
-    if (searchParams.get('tab') === 'roster') {
-      setActiveTab('roster')
-      return
-    }
+    if (searchParams.get('report')) { setActiveTab('report'); return }
+    if (searchParams.get('tab') === 'roster') { setActiveTab('roster'); return }
     setActiveTab('meetings')
   }, [searchParams])
 

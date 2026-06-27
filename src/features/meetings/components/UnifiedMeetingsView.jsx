@@ -1,15 +1,13 @@
 import { useState, useMemo, useEffect } from 'react'
-import { ChevronLeft, Trash2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useMeetings } from '../MeetingsContext'
-import MeetingRecordTabs from './MeetingRecordTabs'
 import StatsCards from './StatsCards'
 import DepartmentFilter from './DepartmentFilter'
 import LoadingSpinner from '../../../components/ui/LoadingSpinner'
 import { useMediaQuery } from '../../../hooks/useMediaQuery'
 import CardGalleryView from '../../../components/meetings/CardGalleryView'
 import ViewToggle from '../../../components/meetings/ViewToggle'
-import { deleteMeeting } from '../lib/meetings'
 
 const TYPE_CHIP_COLORS = {
   general: '#4C2A92',
@@ -28,163 +26,6 @@ function groupMeetingsByCategory(meetings) {
   return groups
 }
 
-function RecordPane({ selectedMeeting, canManage, onStartLive, isMobile, onBack, onMeetingDeleted }) {
-  const [deleteConfirm, setDeleteConfirm] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-
-  const handleDelete = async () => {
-    if (!deleteConfirm) {
-      setDeleteConfirm(true)
-      return
-    }
-
-    setIsDeleting(true)
-    try {
-      await deleteMeeting(selectedMeeting.id)
-      onMeetingDeleted?.()
-      setDeleteConfirm(false)
-    } catch (error) {
-      console.error('Failed to delete meeting:', error)
-      alert('Failed to delete meeting: ' + error.message)
-      setDeleteConfirm(false)
-    } finally {
-      setIsDeleting(false)
-    }
-  }
-
-  if (!selectedMeeting) {
-    return (
-      <div
-        style={{
-          flex: 1,
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#9E9488',
-          fontSize: 14,
-        }}
-      >
-        Pick a meeting on the left, work the record on the right.
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, paddingLeft: isMobile ? 12 : 0, paddingRight: isMobile ? 12 : 0, paddingTop: isMobile ? 12 : 0, borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
-          {isMobile && onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              aria-label="Back to meetings list"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minWidth: 44,
-                height: 44,
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                color: '#1C1C1C',
-                padding: 0,
-              }}
-            >
-              <ChevronLeft size={24} aria-hidden="true" />
-            </button>
-          )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>
-              {selectedMeeting.title}
-            </h2>
-            <div style={{ marginTop: 4, fontSize: 13, color: '#7E7D78' }}>
-              {new Date(selectedMeeting.date).toLocaleDateString('en-CA', {
-                weekday: isMobile ? 'short' : 'long',
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-              })}
-              {!isMobile && (
-                <>
-                  {' • '}
-                  {selectedMeeting.meeting_type}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-        {canManage && !isMobile && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button
-              type="button"
-              onClick={() => onStartLive?.(selectedMeeting)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                paddingLeft: '12px',
-                paddingRight: '12px',
-                paddingTop: '8px',
-                paddingBottom: '8px',
-                borderRadius: 8,
-                border: '1px solid #E5E5E4',
-                background: 'white',
-                cursor: 'pointer',
-                fontSize: 13,
-                fontWeight: 600,
-                color: '#1C1C1C',
-                flexShrink: 0,
-              }}
-            >
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: '#DC2626',
-                }}
-              />
-              Start live
-            </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={isDeleting}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                paddingLeft: '12px',
-                paddingRight: '12px',
-                paddingTop: '8px',
-                paddingBottom: '8px',
-                borderRadius: 8,
-                border: deleteConfirm ? '1px solid #DC2626' : '1px solid #E5E5E4',
-                background: deleteConfirm ? '#FEF2F2' : 'white',
-                cursor: isDeleting ? 'not-allowed' : 'pointer',
-                fontSize: 13,
-                fontWeight: 600,
-                color: deleteConfirm ? '#DC2626' : '#7E7D78',
-                flexShrink: 0,
-                opacity: isDeleting ? 0.6 : 1,
-              }}
-            >
-              <Trash2 size={14} />
-              {deleteConfirm ? 'Confirm delete?' : 'Delete'}
-            </button>
-          </div>
-        )}
-      </div>
-      <div style={{ flex: 1, overflowY: 'auto', marginTop: 12, paddingLeft: isMobile ? 12 : 0, paddingRight: isMobile ? 12 : 0 }}>
-        <MeetingRecordTabs meeting={selectedMeeting} />
-      </div>
-    </div>
-  )
-}
 
 export default function UnifiedMeetingsView({
   isSuperAdmin = false,
@@ -194,14 +35,13 @@ export default function UnifiedMeetingsView({
   canManage = false,
   onStartLive,
 }) {
+  const navigate = useNavigate()
   const { meetings, loading } = useMeetings()
-  const [selectedMeeting, setSelectedMeeting] = useState(null)
   const [activeType, setActiveType] = useState('all')
   const [viewMode, setViewMode] = useState('list')
   const [stats, setStats] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const isMobile = useMediaQuery('(max-width: 640px)')
-  const isTablet = useMediaQuery('(max-width: 1024px)')
 
   // Load KPI stats
   useEffect(() => {
@@ -281,10 +121,6 @@ export default function UnifiedMeetingsView({
     return grouped[activeType] || []
   }, [grouped, activeType, filteredByDept])
 
-  // On mobile, show detail view when a meeting is selected
-  const showListPane = !isMobile || !selectedMeeting
-  const showDetailPane = !isMobile || selectedMeeting
-
   if (loading) {
     return (
       <div style={{ display: 'flex', minHeight: 300, alignItems: 'center', justifyContent: 'center' }}>
@@ -319,21 +155,18 @@ export default function UnifiedMeetingsView({
         </div>
       )}
 
-      {/* Main Content Area: Two Lanes */}
+      {/* Meeting List */}
       <div style={{ display: 'flex', gap: 0, height: '100%', overflow: 'hidden', flex: 1 }}>
-        {/* Left pane - meeting list sidebar */}
-        {showListPane && (
-          <div
-            style={{
-              flex: isMobile ? 1 : '0 0 340px',
-              overflowY: 'auto',
-              borderRight: isMobile ? 'none' : '1px solid var(--border)',
-              padding: '16px 0',
-              background: 'white',
-              display: showListPane ? 'flex' : 'none',
-              flexDirection: 'column',
-            }}
-          >
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '16px 0',
+            background: 'white',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
             {/* Header with filters and view toggle */}
             <div style={{ paddingLeft: 16, paddingRight: 16, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
@@ -402,25 +235,20 @@ export default function UnifiedMeetingsView({
                       <button
                         key={meeting.id}
                         type="button"
-                        onClick={() => setSelectedMeeting(meeting)}
-                        aria-pressed={selectedMeeting?.id === meeting.id}
+                        onClick={() => navigate(`/meetings/${meeting.id}`)}
                         aria-label={`${meeting.title}, ${new Date(meeting.date).toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}`}
                         style={{
                           width: '100%',
                           padding: '12px 16px',
-                          background: selectedMeeting?.id === meeting.id ? '#F3E8FF' : 'transparent',
-                          border: selectedMeeting?.id === meeting.id ? '2px solid var(--accent)' : 'none',
+                          background: 'transparent',
+                          border: 'none',
                           textAlign: 'left',
                           cursor: 'pointer',
                           transition: 'all 0.12s',
                           borderBottom: '1px solid var(--border)',
                         }}
-                        onMouseEnter={(e) => {
-                          if (selectedMeeting?.id !== meeting.id) e.currentTarget.style.background = '#FAFAF9'
-                        }}
-                        onMouseLeave={(e) => {
-                          if (selectedMeeting?.id !== meeting.id) e.currentTarget.style.background = 'transparent'
-                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = '#F3E8FF' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                       >
                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
                           {meeting.title}
@@ -453,30 +281,13 @@ export default function UnifiedMeetingsView({
             ) : (
               <CardGalleryView
                 meetings={filteredMeetings.sort((a, b) => new Date(b.date) - new Date(a.date))}
-                selectedMeeting={selectedMeeting}
-                onSelectMeeting={setSelectedMeeting}
+                selectedMeeting={null}
+                onSelectMeeting={(m) => navigate(`/meetings/${m.id}`)}
                 title=""
                 emptyMessage="No meetings in this category"
               />
             )}
           </div>
-        )}
-
-        {/* Right pane - meeting record */}
-        {showDetailPane && (
-          <RecordPane
-            selectedMeeting={selectedMeeting}
-            canManage={canManage}
-            onStartLive={onStartLive}
-            isMobile={isMobile}
-            onBack={() => setSelectedMeeting(null)}
-            onMeetingDeleted={() => {
-              setSelectedMeeting(null)
-              // Trigger reload of meetings via context
-              window.location.reload()
-            }}
-          />
-        )}
       </div>
     </div>
   )
