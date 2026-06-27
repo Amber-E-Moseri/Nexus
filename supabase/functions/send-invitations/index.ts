@@ -26,21 +26,15 @@ export default async (req: Request) => {
       .select(`
         id,
         org_id,
-        template_id,
-        name,
-        content,
-        status,
-        invitation_templates(
-          id,
-          name,
-          email_subject,
-          theme_config,
-          animation_config
-        ),
+        title,
+        subject_line,
+        html_content,
+        theme_config,
         invitation_recipients(
           id,
-          email,
-          token,
+          recipient_email,
+          recipient_name,
+          rsvp_token,
           custom_fields,
           status
         )

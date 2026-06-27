@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import { sendCampaignInvitations } from '../../lib/invitations/sendEmail'
+import { generateRsvpToken } from '../../lib/rsvpTokens'
 
 const PRIMARY = '#4C2A92'
 const BORDER = '#EDE8DC'
@@ -100,6 +101,7 @@ export default function Step4PreviewSend({ template, wizardState, onUpdate }) {
         recipient_email: recipient.email,
         recipient_name: recipient.name,
         custom_fields: recipient.custom_fields,
+        rsvp_token: generateRsvpToken(),
         status: 'pending',
       }))
 

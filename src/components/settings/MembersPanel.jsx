@@ -9,6 +9,7 @@ import {
   resendInvitation,
   sendInvitationEmail,
   updateUserMembership,
+  resetUserPassword,
 } from '../../lib/people/api'
 
 const ROLE_LABELS = {
@@ -346,6 +347,22 @@ export default function MembersPanel() {
     }
   }
 
+  async function handleResetPassword(userId, userEmail) {
+    if (!window.confirm(`Reset password for ${userEmail}? They will receive a password reset email.`)) {
+      return
+    }
+
+    setSaving(true)
+    try {
+      await resetUserPassword(userId)
+      showToast(`Password reset email sent to ${userEmail}.`, { tone: 'success' })
+    } catch (error) {
+      showToast(error.message, { tone: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -481,6 +498,14 @@ export default function MembersPanel() {
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                     {canManage && activeTab === 'Active' ? (
                       <div style={{ display: 'inline-flex', gap: 8 }}>
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => handleResetPassword(entry.id, entry.email)}
+                          style={{ border: '1px solid #EDE8DC', background: '#FFFFFF', color: '#4C2A92', borderRadius: 8, padding: '8px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}
+                        >
+                          Reset password
+                        </button>
                         <button
                           type="button"
                           disabled={saving}
