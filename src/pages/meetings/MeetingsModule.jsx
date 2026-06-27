@@ -96,34 +96,7 @@ function MeetingsModuleFallback() {
               >
                 📋 Plan
               </button>
-              <button
-                type="button"
-                onClick={() => setLiveSession({ departmentId: selectedDepartmentId })}
-                style={{
-                  borderRadius: 10,
-                  border: '1px solid #EF4444',
-                  background: 'white',
-                  padding: '10px 16px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#DC2626',
-                  cursor: 'pointer',
-                  transition: 'all 0.12s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = '#FEF2F2'
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'white'
-                }}
-              >
-                <span style={{ fontSize: 10, color: '#DC2626' }}>●</span>
-                Start live
-              </button>
-              <button
+<button
                 type="button"
                 onClick={() => setShowModal(true)}
                 style={{

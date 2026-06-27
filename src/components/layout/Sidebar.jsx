@@ -606,12 +606,14 @@ export default function Sidebar() {
           label="My Tasks"
           onClick={() => go('/my-tasks')}
         />
-        <SidebarItem
-          active={isPathActive(location.pathname, '/planner')}
-          icon={CalendarDays}
-          label="Planner"
-          onClick={() => go('/planner')}
-        />
+        {role === 'super_admin' && (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/planner')}
+            icon={CalendarDays}
+            label="Planner"
+            onClick={() => go('/planner')}
+          />
+        )}
         <SidebarItem
           active={isPathActive(location.pathname, '/calendar')}
           icon={CalendarDays}
