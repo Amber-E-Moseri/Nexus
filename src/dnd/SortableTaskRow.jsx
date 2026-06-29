@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical } from 'lucide-react'
@@ -195,6 +196,29 @@ function RowContent({
         >
           {task.title}
         </div>
+        {task.source === 'meeting' && task.meeting_id && (
+          <Link
+            to={`/meetings/${task.meeting_id}`}
+            onClick={stopPropagation}
+            onPointerDown={stopPropagation}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              marginTop: 3,
+              fontSize: 10,
+              fontWeight: 600,
+              color: '#4C2A92',
+              background: 'rgba(76,42,146,.08)',
+              borderRadius: 4,
+              padding: '1px 6px',
+              textDecoration: 'none',
+              letterSpacing: '.01em',
+            }}
+          >
+            📋 From meeting →
+          </Link>
+        )}
       </div>
 
       {!isMobile ? (

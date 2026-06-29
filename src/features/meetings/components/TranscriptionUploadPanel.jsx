@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
-import { processTranscriptionWithClaude, saveTranscriptionResult } from '../lib/aiProcessing'
+import { supabase } from '../../../lib/supabase'
 import { canProcessTranscript, getTodayStats } from '../../../lib/meetings/costLimits'
 
 export default function TranscriptionUploadPanel({ meetingId, meeting, onProcessComplete }) {
@@ -55,32 +55,64 @@ export default function TranscriptionUploadPanel({ meetingId, meeting, onProcess
         throw new Error('No transcript to process')
       }
 
-      // Call Claude API
-      const result = await processTranscriptionWithClaude(textToProcess, {
-        meetingType: meeting.meeting_type?.replace(/_/g, ' ') || 'Meeting',
-        date: meeting.date,
-        moderator: meeting.moderator,
+      // Call Edge Function (server-side Claude — keeps the API key off the client)
+      const startTime = Date.now()
+      const { data, error: fnError } = await supabase.functions.invoke('extract-meeting-data', {
+        body: { transcript: textToProcess },
       })
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to process transcript')
+      if (fnError) throw fnError
+
+      const extracted = data?.extracted
+      if (!extracted) {
+        throw new Error(data?.error || 'Failed to process transcript')
+      }
+
+      // Map Edge Function response shape to the structure this view expects
+      const normalizedActionItems = (extracted.action_items || []).map((item) => ({
+        action: item.title || '',
+        owner: item.owner && item.owner !== 'TBD' ? item.owner : null,
+        dueDate: item.due_date || null,
+        priority: item.priority || 'medium',
+      }))
+
+      const resultData = {
+        summary: extracted.summary || '',
+        keyPoints: extracted.key_topics || [],
+        decisions: extracted.decisions || [],
+        extractedActionItems: normalizedActionItems,
+        processingTimeSeconds: Math.round((Date.now() - startTime) / 1000),
       }
 
       // Save to database
-      const savedTranscription = await saveTranscriptionResult(
-        meetingId,
-        {
-          inputType: uploadMode,
-          fileName: audioFile?.name || 'pasted_transcript',
-          fileSize: audioFile?.size || null,
-          ...result.data,
-        },
-        user.id
-      )
+      const { data: savedTranscription, error: saveError } = await supabase
+        .from('meeting_transcriptions')
+        .insert([
+          {
+            meeting_id: meetingId,
+            input_type: uploadMode,
+            input_file_name: audioFile?.name || 'pasted_transcript',
+            input_file_size: audioFile?.size || null,
+            summary: resultData.summary,
+            key_points: resultData.keyPoints,
+            decisions: resultData.decisions,
+            extracted_action_items: resultData.extractedActionItems,
+            status: 'complete',
+            processing_time_seconds: resultData.processingTimeSeconds,
+            created_by: user.id,
+            processed_at: new Date().toISOString(),
+          },
+        ])
+        .select()
+        .single()
+
+      if (saveError) {
+        throw new Error(`Failed to save transcription: ${saveError.message}`)
+      }
 
       // Call parent handler with results
       onProcessComplete({
-        ...result.data,
+        ...resultData,
         transcriptionId: savedTranscription.id,
       })
 

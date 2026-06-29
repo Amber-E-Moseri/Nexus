@@ -2,25 +2,52 @@ import { createContext, useCallback, useState, useEffect, useRef } from 'react'
 
 export const AgendaBuilderContext = createContext(null)
 
+const CACHE_KEY = 'agenda_builder_draft'
+
+const DEFAULT_AGENDA_DATA = {
+  meetingType: 'sunday_service',
+  title: '',
+  date: '',
+  startTime: '10:00',
+  endTime: '11:30',
+  location: '',
+  moderator: '',
+  theme: 'cream_purple',
+}
+
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+function saveDraft(state) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(state))
+  } catch {}
+}
+
+function clearDraft() {
+  localStorage.removeItem(CACHE_KEY)
+}
+
 export function AgendaBuilderProvider({ children }) {
-  const [step, setStep] = useState(1)
-  const [agendaData, setAgendaData] = useState({
-    meetingType: 'sunday_service',
-    title: '',
-    date: '',
-    startTime: '10:00',
-    endTime: '11:30',
-    location: '',
-    moderator: '',
-    theme: 'cream_purple',
-  })
-  const [agendaItems, setAgendaItems] = useState([])
-  const [selectedTemplate, setSelectedTemplate] = useState('tpl-sunday-service')
+  const draft = loadDraft()
+
+  const [step, setStep] = useState(draft?.step ?? 1)
+  const [agendaData, setAgendaData] = useState(draft?.agendaData ?? DEFAULT_AGENDA_DATA)
+  const [agendaItems, setAgendaItems] = useState(draft?.agendaItems ?? [])
+  const [selectedTemplate, setSelectedTemplate] = useState(draft?.selectedTemplate ?? 'tpl-sunday-service')
   const [errors, setErrors] = useState({})
   const [isSaving, setIsSaving] = useState(false)
-  const [autoSaveStatus, setAutoSaveStatus] = useState('idle') // 'idle', 'saving', 'saved', 'error'
+  const [autoSaveStatus, setAutoSaveStatus] = useState('idle')
   const autoSaveTimerRef = useRef(null)
-  const draftIdRef = useRef(null) // Track which draft we're saving
+  const draftIdRef = useRef(draft?.draftId ?? null)
+  const cacheTimerRef = useRef(null)
 
   const goToStep = useCallback((nextStep) => {
     setStep(nextStep)
@@ -80,23 +107,24 @@ export function AgendaBuilderProvider({ children }) {
   }, [])
 
   const reset = useCallback(() => {
+    clearDraft()
     setStep(1)
-    setAgendaData({
-      meetingType: 'sunday_service',
-      title: '',
-      date: '',
-      startTime: '10:00',
-      endTime: '11:30',
-      location: '',
-      moderator: '',
-      theme: 'cream_purple',
-    })
+    setAgendaData(DEFAULT_AGENDA_DATA)
     setAgendaItems([])
     setSelectedTemplate('tpl-sunday-service')
     setErrors({})
     setIsSaving(false)
     draftIdRef.current = null
   }, [])
+
+  // Persist wizard state to localStorage (debounced 400ms)
+  useEffect(() => {
+    clearTimeout(cacheTimerRef.current)
+    cacheTimerRef.current = setTimeout(() => {
+      saveDraft({ step, agendaData, agendaItems, selectedTemplate, draftId: draftIdRef.current })
+    }, 400)
+    return () => clearTimeout(cacheTimerRef.current)
+  }, [step, agendaData, agendaItems, selectedTemplate])
 
   // Auto-save effect (every 30 seconds)
   useEffect(() => {

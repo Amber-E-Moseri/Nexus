@@ -1,162 +1,144 @@
-﻿import html2canvas from 'html2canvas'
+import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import { THEME_OPTIONS } from '../data/agendaTemplates'
 
+// Letter page at 96 DPI = 816px wide. html2canvas must match this.
+const PAGE_PX = 816
+const PADDING_PX = 56 // ~0.58in each side
+
 export async function generateAgendaPdf(agendaData, agendaItems, timings, filename = 'agenda.pdf') {
   try {
-    // Get theme colors
     const theme = THEME_OPTIONS.find((t) => t.id === agendaData.theme) || THEME_OPTIONS[0]
 
-    // Create temporary container for rendering
     const container = document.createElement('div')
-    container.style.position = 'fixed'
-    container.style.left = '-9999px'
-    container.style.width = '8.5in'
-    container.style.background = theme.background
-    container.style.padding = '0.6in'
-    container.style.fontFamily = '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif'
-    container.style.color = '#333'
-    container.style.lineHeight = '1.6'
+    container.style.cssText = `
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      width: ${PAGE_PX}px;
+      background: ${theme.background};
+      padding: ${PADDING_PX}px;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: #333;
+      line-height: 1.6;
+      box-sizing: border-box;
+    `
 
-    // Build HTML content
-    const html = buildPdfHtml(agendaData, timings, theme)
-    container.innerHTML = html
-
+    container.innerHTML = buildPdfHtml(agendaData, timings, theme)
     document.body.appendChild(container)
 
-    // Convert to canvas
     const canvas = await html2canvas(container, {
       scale: 2,
       useCORS: true,
       backgroundColor: theme.background,
       logging: false,
-      width: 612, // 8.5in at 72 DPI
+      // No width override — use the container's natural PAGE_PX width
     })
 
     document.body.removeChild(container)
 
-    // Create PDF
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'pt',
-      format: 'letter',
-    })
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' })
 
-    const imgData = canvas.toDataURL('image/png')
-    const imgWidth = pdf.internal.pageSize.getWidth()
-    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    const pdfWidth  = pdf.internal.pageSize.getWidth()
+    const pdfHeight = pdf.internal.pageSize.getHeight()
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width
 
     let heightLeft = imgHeight
-    let position = 0
+    let position   = 0
 
-    // Add image to PDF with page breaks if needed
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-    heightLeft -= pdf.internal.pageSize.getHeight()
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, pdfWidth, imgHeight)
+    heightLeft -= pdfHeight
 
-    while (heightLeft >= 0) {
+    while (heightLeft > 0) {
       position = heightLeft - imgHeight
       pdf.addPage()
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-      heightLeft -= pdf.internal.pageSize.getHeight()
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, pdfWidth, imgHeight)
+      heightLeft -= pdfHeight
     }
 
-    // Add page numbers
+    // Page numbers
     const pageCount = pdf.internal.pages.length - 1
-    for (let i = 1; i <= pageCount; i += 1) {
+    for (let i = 1; i <= pageCount; i++) {
       pdf.setPage(i)
-      pdf.setFontSize(10)
-      pdf.setTextColor(150, 150, 150)
-      pdf.text(
-        `Page ${i} of ${pageCount}`,
-        pdf.internal.pageSize.getWidth() / 2,
-        pdf.internal.pageSize.getHeight() - 0.4 * 72,
-        { align: 'center' }
-      )
+      pdf.setFontSize(9)
+      pdf.setTextColor(170, 170, 170)
+      pdf.text(`Page ${i} of ${pageCount}`, pdfWidth / 2, pdfHeight - 24, { align: 'center' })
     }
 
-    // Download
     pdf.save(filename)
-
-    return { success: true, message: 'PDF exported successfully' }
+    return { success: true }
   } catch (error) {
-    console.error('PDF generation error:', error)
+    console.error('[agendaPdfGenerator]', error)
     throw new Error(`Failed to generate PDF: ${error.message}`)
   }
 }
 
 function buildPdfHtml(agendaData, timings, theme) {
-  const totalMinutes = timings.reduce((sum, item) => sum + item.duration, 0)
+  const totalMinutes = timings.reduce((sum, t) => sum + t.duration, 0)
+  const contentWidth = PAGE_PX - PADDING_PX * 2 // 704px
+
+  const meetingTypeLabel = (agendaData.meetingType || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+
+  const rows = timings.map((item, i) => `
+    <tr style="background:${i % 2 === 0 ? '#fff' : `${theme.accent}18`};">
+      <td style="padding:9px 12px;font-size:12px;font-weight:700;color:${theme.primary};border-bottom:1px solid #eee;white-space:nowrap;">${i + 1}</td>
+      <td style="padding:9px 12px;font-size:12px;font-weight:600;color:${theme.primary};border-bottom:1px solid #eee;">${escapeHtml(item.segment)}</td>
+      <td style="padding:9px 12px;font-size:11px;color:#666;border-bottom:1px solid #eee;">${escapeHtml(item.notes || '')}</td>
+      <td style="padding:9px 12px;font-size:11px;color:#555;border-bottom:1px solid #eee;text-align:center;white-space:nowrap;">${item.duration} min</td>
+      <td style="padding:9px 12px;font-size:11px;color:${theme.primary};font-weight:500;border-bottom:1px solid #eee;text-align:right;white-space:nowrap;">${item.timing || ''}</td>
+    </tr>
+  `).join('')
 
   return `
-    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; line-height: 1.6;">
+    <div style="width:${contentWidth}px;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;color:#333;">
+
       <!-- Header -->
-      <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 3px solid ${theme.primary};">
-        <h1 style="margin: 0 0 12px 0; font-size: 28px; font-weight: 700; color: ${theme.primary};">
-          ${escapeHtml(agendaData.title)}
-        </h1>
-        <div style="font-size: 13px; color: #666; margin-bottom: 8px;">
-          <strong>Date:</strong> ${formatDate(agendaData.date)} |
-          <strong>Time:</strong> ${agendaData.startTime} - ${agendaData.endTime}
+      <div style="margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid ${theme.primary};">
+        <h1 style="margin:0 0 10px;font-size:26px;font-weight:700;color:${theme.primary};">${escapeHtml(agendaData.title)}</h1>
+        <div style="font-size:13px;color:#555;">
+          <strong>Date:</strong> ${formatDate(agendaData.date)}
+          ${agendaData.startTime ? `&nbsp;|&nbsp;<strong>Time:</strong> ${agendaData.startTime}${agendaData.endTime ? ' – ' + agendaData.endTime : ''}` : ''}
         </div>
-        ${agendaData.location ? `
-          <div style="font-size: 13px; color: #666; margin-bottom: 4px;">
-            <strong>Location:</strong> ${escapeHtml(agendaData.location)}
-          </div>
-        ` : ''}
-        ${agendaData.moderator ? `
-          <div style="font-size: 13px; color: #666;">
-            <strong>Moderator:</strong> ${escapeHtml(agendaData.moderator)}
-          </div>
-        ` : ''}
+        ${agendaData.location ? `<div style="font-size:12px;color:#666;margin-top:4px;"><strong>Location:</strong> ${escapeHtml(agendaData.location)}</div>` : ''}
+        ${agendaData.moderator ? `<div style="font-size:12px;color:#666;margin-top:2px;"><strong>Moderator:</strong> ${escapeHtml(agendaData.moderator)}</div>` : ''}
       </div>
 
       <!-- Agenda Table -->
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;table-layout:fixed;">
+        <colgroup>
+          <col style="width:7%">
+          <col style="width:28%">
+          <col style="width:35%">
+          <col style="width:14%">
+          <col style="width:16%">
+        </colgroup>
         <thead>
-          <tr style="background-color: ${theme.primary}; color: white;">
-            <th style="padding: 12px; text-align: left; font-weight: 700; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; border: 1px solid ${theme.primary}; width: 8%;">S/N</th>
-            <th style="padding: 12px; text-align: left; font-weight: 700; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; border: 1px solid ${theme.primary}; width: 28%;">Segment</th>
-            <th style="padding: 12px; text-align: left; font-weight: 700; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; border: 1px solid ${theme.primary}; width: 32%;">Notes</th>
-            <th style="padding: 12px; text-align: center; font-weight: 700; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; border: 1px solid ${theme.primary}; width: 12%;">Duration</th>
-            <th style="padding: 12px; text-align: right; font-weight: 700; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; border: 1px solid ${theme.primary}; width: 20%;">Timing</th>
+          <tr style="background:${theme.primary};color:#fff;">
+            <th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">S/N</th>
+            <th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">Segment</th>
+            <th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">Notes</th>
+            <th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">Duration</th>
+            <th style="padding:10px 12px;text-align:right;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">Timing</th>
           </tr>
         </thead>
-        <tbody>
-          ${timings.map((item, index) => `
-            <tr style="background-color: ${index % 2 === 0 ? 'white' : `${theme.accent}40`}; border: 1px solid ${theme.primary}20;">
-              <td style="padding: 10px 12px; font-size: 12px; font-weight: 600; color: ${theme.primary}; border: 1px solid ${theme.primary}20;">
-                ${index + 1}
-              </td>
-              <td style="padding: 10px 12px; font-size: 12px; font-weight: 600; color: ${theme.primary}; border: 1px solid ${theme.primary}20;">
-                ${escapeHtml(item.segment)}
-              </td>
-              <td style="padding: 10px 12px; font-size: 11px; color: #666; border: 1px solid ${theme.primary}20;">
-                ${escapeHtml(item.notes || '')}
-              </td>
-              <td style="padding: 10px 12px; font-size: 11px; color: #666; text-align: center; border: 1px solid ${theme.primary}20;">
-                ${item.duration} min
-              </td>
-              <td style="padding: 10px 12px; font-size: 11px; color: ${theme.primary}; font-weight: 500; text-align: right; border: 1px solid ${theme.primary}20;">
-                ${item.timing}
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
+        <tbody>${rows}</tbody>
       </table>
 
       <!-- Summary -->
-      <div style="background-color: ${theme.accent}20; border-left: 4px solid ${theme.primary}; padding: 12px 16px; font-size: 12px; margin-bottom: 16px;">
-        <strong style="color: ${theme.primary};">Meeting Summary</strong>
-        <div style="margin-top: 6px; color: #666; font-size: 11px;">
-          <div>• Total Items: ${timings.length}</div>
-          <div>• Total Duration: ${totalMinutes} minutes</div>
-          <div>• Meeting Type: ${agendaData.meetingType.replace(/_/g, ' ')}</div>
+      <div style="background:${theme.accent}18;border-left:4px solid ${theme.primary};border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:18px;">
+        <div style="font-weight:700;color:${theme.primary};font-size:12px;margin-bottom:6px;">Meeting Summary</div>
+        <div style="font-size:11px;color:#555;display:flex;gap:24px;flex-wrap:wrap;">
+          <span>• <strong>${timings.length}</strong> agenda items</span>
+          <span>• <strong>${totalMinutes} minutes</strong> total</span>
+          ${meetingTypeLabel ? `<span>• ${meetingTypeLabel}</span>` : ''}
         </div>
       </div>
 
       <!-- Footer -->
-      <div style="border-top: 1px solid #ddd; padding-top: 12px; font-size: 10px; color: #999; text-align: center;">
-        Generated by BLW CAN NEXUS Meeting Planner | ${new Date().toLocaleDateString()}
+      <div style="border-top:1px solid #ddd;padding-top:10px;font-size:9px;color:#aaa;text-align:center;">
+        Generated by BLW CAN NEXUS Meeting Planner &nbsp;·&nbsp; ${new Date().toLocaleDateString('en-CA', { year:'numeric', month:'long', day:'numeric' })}
       </div>
     </div>
   `
@@ -164,8 +146,9 @@ function buildPdfHtml(agendaData, timings, theme) {
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  })
 }
 
 function escapeHtml(text) {

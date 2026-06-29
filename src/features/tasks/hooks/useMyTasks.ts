@@ -43,6 +43,7 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
   const TASK_SELECT = `
     id, title, description, priority, status, status_id, due_date, created_at,
     department_id, assignee_id, created_by, task_type, sprint_id, list_id,
+    source, meeting_id,
     status_definition:task_status_definitions!status_id(
       id, name, color, category, legacy_key, department_id
     ),

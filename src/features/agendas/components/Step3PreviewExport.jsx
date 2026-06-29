@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
-import { useHasPermission } from '../../../hooks/useHasPermission'
+import { useRequirePermission } from '../../../hooks/useHasPermission'
 import { useAgendaWizard, calculateTimings } from '../../../hooks/useAgendaWizard'
 import { THEME_OPTIONS } from '../../../data/agendaTemplates'
 import { generateAgendaPdf } from '../../../lib/agendaPdfGenerator'
@@ -11,7 +11,7 @@ import { createAgenda, createMeetingWithAgenda } from '..'
 export default function Step3PreviewExport() {
   const navigate = useNavigate()
   const { profile } = useAuth()
-  const { hasPermission: canCreateMeetings, loading: checkingPermissions } = useHasPermission('meetings:manage')
+  const { hasPermission: canCreateMeetings, loading: checkingPermissions } = useRequirePermission('meetings:manage')
   const { agendaData, agendaItems, isSaving, setIsSaving, reset } = useAgendaWizard()
   const [exportError, setExportError] = useState(null)
 

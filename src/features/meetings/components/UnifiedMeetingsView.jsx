@@ -68,7 +68,7 @@ export default function UnifiedMeetingsView({
         let withMinutesQuery = supabase
           .from('meetings')
           .select('id', { count: 'exact', head: true })
-          .not('description', 'is', null)
+          .not('minutes', 'is', null)
 
         if (selectedDeptId !== 'all') {
           meetingsQuery = meetingsQuery.eq('department_id', selectedDeptId)
@@ -131,18 +131,20 @@ export default function UnifiedMeetingsView({
 
   const totalCount = filteredMeetings.length
 
+  const TYPE_ICONS = { general: '🗓', team: '👥', media: '🎬', department: '🏛' }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#F7F5F0' }}>
       {/* Stats Cards Section */}
       {stats && isSuperAdmin && (
-        <div style={{ padding: '16px', borderBottom: '0.5px solid var(--border)', background: 'white', flexShrink: 0 }}>
+        <div style={{ padding: '16px', borderBottom: '1px solid #EDE8DC', background: '#FBF8F2', flexShrink: 0 }}>
           <StatsCards stats={stats} />
         </div>
       )}
 
       {/* Filters Section */}
       {isSuperAdmin && (
-        <div style={{ padding: '16px', borderBottom: '0.5px solid var(--border)', background: 'white', flexShrink: 0 }}>
+        <div style={{ padding: '16px', borderBottom: '1px solid #EDE8DC', background: '#FBF8F2', flexShrink: 0 }}>
           <label style={{ fontSize: '11px', color: '#9E9488', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px' }}>
             Department
           </label>
@@ -155,139 +157,139 @@ export default function UnifiedMeetingsView({
         </div>
       )}
 
-      {/* Meeting List */}
-      <div style={{ display: 'flex', gap: 0, height: '100%', overflow: 'hidden', flex: 1 }}>
-        <div
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '16px 0',
-            background: 'white',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-            {/* Header with filters and view toggle */}
-            <div style={{ paddingLeft: 16, paddingRight: 16, marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#1C1C1C' }}>
-                  Filter by Type
-                </h3>
-                {!isMobile && <ViewToggle view={viewMode} onViewChange={setViewMode} />}
-              </div>
+      {/* Filter chips + view toggle */}
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid #EDE8DC', background: '#FBF8F2', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }} role="group" aria-label="Filter meetings by type">
+            <button
+              type="button"
+              onClick={() => setActiveType('all')}
+              aria-pressed={activeType === 'all'}
+              style={{
+                padding: '5px 14px',
+                borderRadius: 999,
+                border: activeType === 'all' ? 'none' : '1px solid #D6CEBE',
+                background: activeType === 'all' ? '#4C2A92' : 'white',
+                color: activeType === 'all' ? 'white' : '#7A6F5E',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              All
+            </button>
+            {allTypes.map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setActiveType(type)}
+                aria-pressed={activeType === type}
+                style={{
+                  padding: '5px 14px',
+                  borderRadius: 999,
+                  border: activeType === type ? 'none' : '1px solid #D6CEBE',
+                  background: activeType === type ? '#4C2A92' : 'white',
+                  color: activeType === type ? 'white' : '#7A6F5E',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textTransform: 'capitalize',
+                }}
+              >
+                {type.charAt(0).toUpperCase() + type.slice(1)}
+              </button>
+            ))}
+          </div>
+          {!isMobile && <ViewToggle view={viewMode} onViewChange={setViewMode} />}
+        </div>
+        <div style={{ fontSize: 11, color: '#B0A89A', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          {totalCount} meeting{totalCount !== 1 ? 's' : ''}
+        </div>
+      </div>
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }} role="group" aria-label="Filter meetings by type">
-                <button
-                  type="button"
-                  onClick={() => setActiveType('all')}
-                  aria-pressed={activeType === 'all'}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 999,
-                    border: activeType === 'all' ? 'none' : '1px solid var(--border)',
-                    background: activeType === 'all' ? 'var(--accent)' : 'white',
-                    color: activeType === 'all' ? 'white' : 'var(--text-primary)',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  All
-                </button>
-                {allTypes.map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setActiveType(type)}
-                    aria-pressed={activeType === type}
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: 999,
-                      border: activeType === type ? 'none' : '1px solid var(--border)',
-                      background: activeType === type ? 'var(--accent)' : 'white',
-                      color: activeType === type ? 'white' : 'var(--text-primary)',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      textTransform: 'capitalize',
-                    }}
-                  >
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </button>
-                ))}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
-                {totalCount} meeting{totalCount !== 1 ? 's' : ''}
-              </div>
+      {/* Meeting grid / list */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+        {viewMode === 'list' ? (
+          filteredMeetings.length === 0 ? (
+            <div style={{ padding: '40px 0', textAlign: 'center', color: '#B0A89A', fontSize: 13 }}>
+              No meetings in this category
             </div>
-
-            {/* Meeting list or card gallery */}
-            {viewMode === 'list' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {filteredMeetings.length === 0 ? (
-                  <div style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
-                    No meetings in this category
-                  </div>
-                ) : (
-                  filteredMeetings
-                    .sort((a, b) => new Date(b.date) - new Date(a.date))
-                    .map((meeting) => (
-                      <button
-                        key={meeting.id}
-                        type="button"
-                        onClick={() => navigate(`/meetings/${meeting.id}`)}
-                        aria-label={`${meeting.title}, ${new Date(meeting.date).toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}`}
-                        style={{
-                          width: '100%',
-                          padding: '12px 16px',
-                          background: 'transparent',
-                          border: 'none',
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          transition: 'all 0.12s',
-                          borderBottom: '1px solid var(--border)',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = '#F3E8FF' }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                      >
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {filteredMeetings
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .map((meeting) => {
+                  const typeColor = TYPE_CHIP_COLORS[meeting.meeting_type] || '#7A6F5E'
+                  const icon = TYPE_ICONS[meeting.meeting_type] || '🗓'
+                  return (
+                    <button
+                      key={meeting.id}
+                      type="button"
+                      onClick={() => navigate(`/meetings/${meeting.id}`)}
+                      aria-label={`${meeting.title}, ${new Date(meeting.date).toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}`}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 14,
+                        padding: '14px 16px',
+                        background: 'white',
+                        border: '1px solid #EDE8DC',
+                        borderRadius: 14,
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        transition: 'all 0.14s',
+                        boxShadow: '0 1px 3px rgba(24,18,46,0.04)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#EDE8F8'
+                        e.currentTarget.style.borderColor = '#4C2A92'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'white'
+                        e.currentTarget.style.borderColor = '#EDE8DC'
+                      }}
+                    >
+                      <div style={{
+                        width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+                        background: `${typeColor}18`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 18,
+                      }}>
+                        {icon}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#1C1C1C', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {meeting.title}
                         </div>
-                        <div style={{ marginTop: 4, display: 'flex', gap: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
-                          <span
-                            style={{
-                              display: 'inline-block',
-                              padding: '2px 6px',
-                              borderRadius: 4,
-                              background: TYPE_CHIP_COLORS[meeting.meeting_type] || '#E5E5E4',
-                              color: 'white',
-                              fontSize: 10,
-                              fontWeight: 600,
-                            }}
-                          >
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: '#7A6F5E' }}>
+                          <span style={{
+                            display: 'inline-block', padding: '2px 8px', borderRadius: 6,
+                            background: `${typeColor}20`, color: typeColor,
+                            fontSize: 11, fontWeight: 700,
+                          }}>
                             {meeting.meeting_type?.charAt(0).toUpperCase() + meeting.meeting_type?.slice(1) || 'General'}
                           </span>
                           <span>
-                            {new Date(meeting.date).toLocaleDateString('en-CA', {
-                              month: 'short',
-                              day: 'numeric',
-                            })}
+                            {new Date(meeting.date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </span>
                         </div>
-                      </button>
-                    ))
-                )}
-              </div>
-            ) : (
-              <CardGalleryView
-                meetings={filteredMeetings.sort((a, b) => new Date(b.date) - new Date(a.date))}
-                selectedMeeting={null}
-                onSelectMeeting={(m) => navigate(`/meetings/${m.id}`)}
-                title=""
-                emptyMessage="No meetings in this category"
-              />
-            )}
-          </div>
+                      </div>
+                      <span style={{ color: '#B0A89A', fontSize: 16, flexShrink: 0 }}>›</span>
+                    </button>
+                  )
+                })}
+            </div>
+          )
+        ) : (
+          <CardGalleryView
+            meetings={filteredMeetings.sort((a, b) => new Date(b.date) - new Date(a.date))}
+            selectedMeeting={null}
+            onSelectMeeting={(m) => navigate(`/meetings/${m.id}`)}
+            title=""
+            emptyMessage="No meetings in this category"
+          />
+        )}
       </div>
     </div>
   )

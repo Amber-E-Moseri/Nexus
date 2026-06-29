@@ -3,24 +3,40 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../hooks/useAuth'
 import { createTasksFromActionItems } from '../lib/meetings'
 
-const ALLOWED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/m4a', 'audio/webm']
-const MAX_SIZE = 100 * 1024 * 1024
+// Accept any audio type — browser MIME strings vary (audio/x-m4a, audio/x-mpeg, etc.)
+const isAudioType = (type) => type.startsWith('audio/') || type === 'video/webm'
+const MAX_SIZE = 300 * 1024 * 1024
+const STORAGE_LIMIT = 49 * 1024 * 1024 // 49MB — just under Supabase Storage 50MB limit
+
 
 export default function AudioTranscriptionPanel({
   meetingId,
   departmentId,
   canRecord,
+  startImmediately = false,
+  stopImmediately = false,  // when true while recording → stop the recorder
+  recordOnly = false,       // skip the mode selector, go straight to record UI
+  pasteOnly = false,        // skip the mode selector, go straight to paste UI
+  onRecordingChange,
   onTranscriptionComplete,
   onActionItemsExtracted,
 }) {
   const { profile } = useAuth()
-  const [mode, setMode] = useState(null) // null | 'record' | 'upload'
+  const [mode, setMode] = useState(() => {
+    if (pasteOnly) return 'paste'
+    if (!canRecord) return 'upload'
+    if (recordOnly) return 'record'
+    return null
+  })
+  const [dragOver, setDragOver] = useState(false)
   const [audioFile, setAudioFile] = useState(null)
   const [audioPreview, setAudioPreview] = useState(null)
   const [isRecordingNow, setIsRecordingNow] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
+  const [pastedText, setPastedText] = useState('')
   const [transcribing, setTranscribing] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [chunkStatus, setChunkStatus] = useState('')
   const [error, setError] = useState('')
   const [transcript, setTranscript] = useState('')
   const [extractedData, setExtractedData] = useState(null)
@@ -43,6 +59,29 @@ export default function AudioTranscriptionPanel({
     }
     return () => clearInterval(recordingInterval.current)
   }, [isRecordingNow])
+
+  // Auto-start recording when header button triggers it
+  useEffect(() => {
+    if (startImmediately && canRecord && (mode === null || mode === 'record') && !isRecordingNow) {
+      setMode('record')
+      const t = setTimeout(() => handleStartRecording(), 150)
+      return () => clearTimeout(t)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startImmediately])
+
+  // Auto-stop recording when header Stop button is clicked
+  useEffect(() => {
+    if (stopImmediately && isRecordingNow) {
+      handleStopRecording()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopImmediately])
+
+  // Notify parent when recording state changes
+  useEffect(() => {
+    onRecordingChange?.(isRecordingNow)
+  }, [isRecordingNow, onRecordingChange])
 
   const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
@@ -82,18 +121,28 @@ export default function AudioTranscriptionPanel({
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (file) acceptFile(file)
+  }
+
+  const acceptFile = (file) => {
     setError('')
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      setError('Invalid file type. Allowed: MP3, WAV, M4A, WebM.')
+    if (!isAudioType(file.type)) {
+      setError(`Unsupported file type (${file.type || 'unknown'}). Use MP3, WAV, M4A, or WebM.`)
       return
     }
     if (file.size > MAX_SIZE) {
-      setError('File too large. Maximum 100 MB.')
+      setError('File too large. Maximum 300 MB.')
       return
     }
     setAudioFile(file)
     setAudioPreview(URL.createObjectURL(file))
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) { setMode('upload'); acceptFile(file) }
   }
 
   // ── Transcription ─────────────────────────────────────────────────────────────
@@ -102,69 +151,198 @@ export default function AudioTranscriptionPanel({
     if (!audioFile) { setError('No audio selected.'); return }
     setTranscribing(true)
     setProgress(0)
+    setChunkStatus('')
     setError('')
     setTranscript('')
     setExtractedData(null)
     setMergeSuccess(false)
 
     try {
-      // Step 1: upload to Supabase storage
-      setProgress(20)
-      const fileName = `${meetingId}-${Date.now()}`
-      const { data: upload, error: uploadErr } = await supabase.storage
-        .from('meeting-audio')
-        .upload(fileName, audioFile, { cacheControl: '3600', upsert: false })
-      if (uploadErr) throw uploadErr
+      const originalName = audioFile instanceof File ? audioFile.name : 'recording'
+      const isLarge = audioFile.size > STORAGE_LIMIT
 
-      // Step 2: Deepgram transcription
-      setProgress(40)
-      const { data: deepgramData, error: dgErr } = await supabase.functions.invoke(
-        'transcribe-audio-deepgram',
-        { body: { audioPath: upload.path } }
-      )
-      if (dgErr) throw dgErr
-      if (!deepgramData?.transcript) throw new Error('No speech detected in audio.')
+      let transcript = ''
 
-      setProgress(60)
-      setTranscript(deepgramData.transcript)
+      if (isLarge) {
+        // Large file: stream binary directly to edge function — no storage, no browser decode
+        setChunkStatus('Uploading & transcribing…')
+        setProgress(20)
+        const session = (await supabase.auth.getSession()).data.session
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+        const resp = await fetch(`${supabaseUrl}/functions/v1/transcribe-audio-direct`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+            'x-audio-content-type': audioFile.type || 'audio/octet-stream',
+            'x-meeting-id': meetingId,
+            'x-user-id': profile?.id || '',
+          },
+          body: audioFile,
+        })
+        setProgress(80)
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}))
+          throw new Error(err.error || `Server error ${resp.status}`)
+        }
+        const data = await resp.json()
+        transcript = data.transcript?.trim() ?? ''
+        if (!transcript) throw new Error('No speech detected in audio.')
+      } else {
+        // Small file: existing storage → Deepgram flow
+        setChunkStatus('Uploading…')
+        setProgress(20)
+        const ext = audioFile instanceof File ? (audioFile.name.split('.').pop() || 'webm') : 'webm'
+        const fileName = `private/${meetingId}-${Date.now()}.${ext}`
+        const { data: upload, error: uploadErr } = await supabase.storage
+          .from('meeting-audio')
+          .upload(fileName, audioFile, { cacheControl: '3600', upsert: false })
+        if (uploadErr) throw uploadErr
 
-      // Step 3: Claude extraction (server-side — no API key in browser)
-      setProgress(75)
-      const { data: extractData, error: extractErr } = await supabase.functions.invoke(
-        'extract-meeting-data',
-        { body: { transcript: deepgramData.transcript } }
-      )
-      if (extractErr) throw extractErr
-      const extracted = extractData?.extracted ?? null
-      setExtractedData(extracted)
-
-      // Pre-select all action items for merge
-      if (extracted?.action_items?.length) {
-        setSelectedActionItems(new Set(extracted.action_items.map((_, i) => i)))
+        setChunkStatus('Transcribing…')
+        setProgress(50)
+        const { data: deepgramData, error: dgErr } = await supabase.functions.invoke(
+          'transcribe-audio-deepgram',
+          { body: { audioPath: upload.path } }
+        )
+        if (dgErr) throw dgErr
+        transcript = (deepgramData?.transcript || deepgramData?.data?.transcript || '').trim()
+        if (!transcript) throw new Error('No speech detected in audio.')
+        setProgress(80)
       }
 
-      // Step 4: save transcription record
-      setProgress(90)
+      setTranscript(transcript)
+      setChunkStatus('Saving transcript…')
+      setProgress(85)
+
       const { data: record, error: recErr } = await supabase
         .from('meeting_transcriptions')
         .insert([{
           meeting_id: meetingId,
           input_type: 'audio',
-          input_file_name: audioFile.name ?? fileName,
-          summary: deepgramData.transcript.slice(0, 500),
+          input_file_name: originalName,
+          summary: transcript.slice(0, 500),
           status: 'complete',
-          tokens_used: deepgramData.tokensUsed ?? 0,
+          tokens_used: 0,
           created_by: profile?.id,
           processed_at: new Date().toISOString(),
         }])
         .select()
         .single()
       if (recErr) console.warn('Transcription record save failed:', recErr)
+      await supabase.from('meetings').update({ summary: transcript }).eq('id', meetingId)
+
+      setChunkStatus('Extracting insights…')
+      setProgress(92)
+      let extracted = null
+      try {
+        const { data: extractData, error: extractErr } = await supabase.functions.invoke(
+          'extract-meeting-data',
+          { body: { transcript } }
+        )
+        if (!extractErr) {
+          extracted = extractData?.extracted ?? null
+          setExtractedData(extracted)
+          if (extracted?.action_items?.length) {
+            setSelectedActionItems(new Set(extracted.action_items.map((_, i) => i)))
+          }
+        }
+      } catch {
+        // extraction is optional — transcript already saved above
+      }
 
       setProgress(100)
-      onTranscriptionComplete?.({ transcript: deepgramData.transcript, record, extracted })
+      setChunkStatus('')
+      onTranscriptionComplete?.({ transcript, record, extracted })
     } catch (err) {
       setError(err.message || 'Transcription failed.')
+    } finally {
+      setTranscribing(false)
+    }
+  }
+
+  const saveTranscriptText = async (transcriptText) => {
+    const { data: record, error: recErr } = await supabase
+      .from('meeting_transcriptions')
+      .insert([{
+        meeting_id: meetingId,
+        input_type: 'text',
+        input_file_name: 'pasted-transcript',
+        summary: transcriptText.slice(0, 500),
+        status: 'complete',
+        tokens_used: 0,
+        created_by: profile?.id,
+        processed_at: new Date().toISOString(),
+      }])
+      .select()
+      .single()
+    if (recErr) console.warn('Transcription record save failed:', recErr)
+    await supabase.from('meetings').update({ summary: transcriptText }).eq('id', meetingId)
+    return record
+  }
+
+  const handleSaveTranscript = async () => {
+    if (!pastedText.trim()) { setError('Please enter a transcript.'); return }
+    setTranscribing(true)
+    setProgress(0)
+    setError('')
+    setTranscript('')
+    setExtractedData(null)
+    setMergeSuccess(false)
+    try {
+      const transcriptText = pastedText.trim()
+      setProgress(50)
+      const record = await saveTranscriptText(transcriptText)
+      setProgress(100)
+      setTranscript(transcriptText)
+      onTranscriptionComplete?.({ transcript: transcriptText, record, extracted: null })
+    } catch (err) {
+      setError(err.message || 'Save failed.')
+    } finally {
+      setTranscribing(false)
+    }
+  }
+
+  const handleExtractFromPaste = async () => {
+    if (!pastedText.trim()) { setError('Please paste a transcript.'); return }
+    setTranscribing(true)
+    setProgress(0)
+    setError('')
+    setTranscript('')
+    setExtractedData(null)
+    setMergeSuccess(false)
+
+    try {
+      const transcriptText = pastedText.trim()
+      setProgress(30)
+      setTranscript(transcriptText)
+
+      // Save first so AI Extract always has the text
+      setProgress(60)
+      const record = await saveTranscriptText(transcriptText)
+
+      // Claude extraction — optional, non-blocking
+      setProgress(85)
+      let extracted = null
+      try {
+        const { data: extractData, error: extractErr } = await supabase.functions.invoke(
+          'extract-meeting-data',
+          { body: { transcript: transcriptText } }
+        )
+        if (!extractErr) {
+          extracted = extractData?.extracted ?? null
+          setExtractedData(extracted)
+          if (extracted?.action_items?.length) {
+            setSelectedActionItems(new Set(extracted.action_items.map((_, i) => i)))
+          }
+        }
+      } catch {
+        // extraction is optional
+      }
+
+      setProgress(100)
+      onTranscriptionComplete?.({ transcript: transcriptText, record, extracted })
+    } catch (err) {
+      setError(err.message || 'Extraction failed.')
     } finally {
       setTranscribing(false)
     }
@@ -205,13 +383,15 @@ export default function AudioTranscriptionPanel({
   }
 
   const reset = () => {
-    setMode(null)
+    setMode(recordOnly ? 'record' : canRecord ? null : 'upload')
     setAudioFile(null)
     setAudioPreview(null)
+    setPastedText('')
     setTranscript('')
     setExtractedData(null)
     setRecordingTime(0)
     setProgress(0)
+    setChunkStatus('')
     setError('')
     setMergeSuccess(false)
     setSelectedActionItems(new Set())
@@ -269,12 +449,13 @@ export default function AudioTranscriptionPanel({
   // ── Mode selection ────────────────────────────────────────────────────────────
 
   if (mode === null) {
+    const gridCols = canRecord ? '1fr 1fr 1fr' : '1fr 1fr'
     return (
       <div style={s.container}>
         <div style={s.card}>
           <h3 style={s.title}>Transcribe Meeting Audio</h3>
-          <p style={s.sub}>Upload a recording or record live from your microphone</p>
-          <div style={{ ...s.modeGrid, gridTemplateColumns: canRecord ? '1fr 1fr' : '1fr' }}>
+          <p style={s.sub}>Upload a recording, record live, or paste an existing transcript</p>
+          <div style={{ ...s.modeGrid, gridTemplateColumns: gridCols }}>
             <button
               style={s.modeBtn}
               onClick={() => setMode('upload')}
@@ -283,7 +464,7 @@ export default function AudioTranscriptionPanel({
             >
               <div style={{ fontSize: 28, marginBottom: 8 }}>📁</div>
               <div>Upload file</div>
-              <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 4 }}>MP3, WAV, M4A • max 100 MB</div>
+              <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 4 }}>MP3, WAV, M4A • max 300 MB</div>
             </button>
             {canRecord && (
               <button
@@ -297,6 +478,16 @@ export default function AudioTranscriptionPanel({
                 <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 4 }}>Capture audio now</div>
               </button>
             )}
+            <button
+              style={s.modeBtn}
+              onClick={() => setMode('paste')}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92'; e.currentTarget.style.background = '#F5F2ED' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E9E4D8'; e.currentTarget.style.background = '#fff' }}
+            >
+              <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+              <div>Paste transcript</div>
+              <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 4 }}>Zoom, Teams, etc.</div>
+            </button>
           </div>
         </div>
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }`}</style>
@@ -309,7 +500,7 @@ export default function AudioTranscriptionPanel({
   if (mode === 'record') {
     return (
       <div style={s.container}>
-        <button style={s.backBtn} onClick={reset}>← Back</button>
+        {!recordOnly && <button style={s.backBtn} onClick={reset}>← Back</button>}
         <div style={s.card}>
           <h3 style={s.title}>Record live audio</h3>
           {isRecordingNow && (
@@ -345,7 +536,7 @@ export default function AudioTranscriptionPanel({
               <div style={{ ...s.progressWrap, marginTop: 14 }}>
                 <div style={{ ...s.progressFill, width: `${progress}%` }} />
               </div>
-              <p style={{ ...s.sub, marginTop: 4 }}>{progress}% — {progress < 40 ? 'Uploading...' : progress < 70 ? 'Transcribing...' : 'Extracting data...'}</p>
+              <p style={{ ...s.sub, marginTop: 4 }}>{progress}% — {chunkStatus || (progress < 40 ? 'Uploading...' : progress < 70 ? 'Transcribing...' : 'Extracting data...')}</p>
             </>
           )}
         </div>
@@ -360,18 +551,27 @@ export default function AudioTranscriptionPanel({
   if (mode === 'upload') {
     return (
       <div style={s.container}>
-        <button style={s.backBtn} onClick={reset}>← Back</button>
+        {canRecord && <button style={s.backBtn} onClick={reset}>← Back</button>}
         <div style={s.card}>
           <h3 style={s.title}>Upload audio file</h3>
-          <p style={s.sub}>MP3, WAV, M4A, WebM — max 100 MB</p>
+          <p style={s.sub}>MP3, WAV, M4A, WebM — max 300 MB</p>
           <input type="file" ref={fileInputRef} accept="audio/*" onChange={handleFileSelect} disabled={transcribing} style={{ display: 'none' }} id="audio-file-input" />
           <label
             htmlFor="audio-file-input"
-            style={s.fileLabel}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92'; e.currentTarget.style.background = '#F5F2ED'; e.currentTarget.style.color = '#4C2A92' }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E9E4D8'; e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#7A6F5E' }}
+            style={{
+              ...s.fileLabel,
+              ...(dragOver ? { borderColor: '#4C2A92', background: '#F0EBF8', color: '#4C2A92' } : {}),
+              ...(audioFile ? { borderColor: '#4C2A92', background: '#F5F2FD' } : {}),
+            }}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onMouseEnter={(e) => { if (!dragOver) { e.currentTarget.style.borderColor = '#4C2A92'; e.currentTarget.style.background = '#F5F2ED' } }}
+            onMouseLeave={(e) => { if (!dragOver && !audioFile) { e.currentTarget.style.borderColor = '#E9E4D8'; e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#7A6F5E' } }}
           >
-            {audioFile ? `📁 ${audioFile instanceof File ? audioFile.name : 'recording.webm'}` : '🎵 Choose file or drag & drop'}
+            {audioFile
+              ? `✅ ${audioFile instanceof File ? audioFile.name : 'recording.webm'}`
+              : dragOver ? '📂 Drop to upload' : '🎵 Click to choose or drag & drop audio file'}
           </label>
           {audioFile && (
             <div style={s.fileInfo}>
@@ -380,19 +580,76 @@ export default function AudioTranscriptionPanel({
             </div>
           )}
           {audioPreview && <audio src={audioPreview} controls style={{ width: '100%', marginTop: 12 }} />}
-          {error && <div style={s.error}>{error}</div>}
           {transcribing && (
             <>
               <div style={{ ...s.progressWrap, marginTop: 14 }}>
                 <div style={{ ...s.progressFill, width: `${progress}%` }} />
               </div>
-              <p style={{ ...s.sub, marginTop: 4 }}>{progress}% — {progress < 40 ? 'Uploading...' : progress < 70 ? 'Transcribing...' : 'Extracting data...'}</p>
+              <p style={{ ...s.sub, marginTop: 4 }}>{progress}% — {chunkStatus || (progress < 40 ? 'Uploading...' : progress < 70 ? 'Transcribing...' : 'Extracting data...')}</p>
             </>
           )}
           {audioFile && !transcribing && !transcript && (
             <div style={s.btnGroup}>
               <button style={{ ...s.btn, ...s.btnPrimary }} onClick={handleTranscribe}>✨ Transcribe</button>
               <button style={{ ...s.btn, ...s.btnSecondary }} onClick={reset}>Clear</button>
+            </div>
+          )}
+        </div>
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} />}
+      </div>
+    )
+  }
+
+  // ── Paste transcript mode ─────────────────────────────────────────────────────
+
+  if (mode === 'paste') {
+    return (
+      <div style={s.container}>
+        {!pasteOnly && <button style={s.backBtn} onClick={reset}>← Back</button>}
+        <div style={s.card}>
+          <h3 style={s.title}>Paste transcript</h3>
+          <p style={s.sub}>Copy & paste from Zoom, Teams, Google Meet, or other sources</p>
+          <textarea
+            value={pastedText}
+            onChange={(e) => setPastedText(e.target.value)}
+            disabled={transcribing}
+            placeholder="Paste your transcript text here..."
+            style={{
+              width: '100%',
+              minHeight: 200,
+              padding: 14,
+              fontSize: 13,
+              lineHeight: 1.6,
+              border: '1px solid #E9E4D8',
+              borderRadius: 6,
+              fontFamily: 'monospace',
+              color: '#2D2A22',
+              backgroundColor: '#fff',
+              marginBottom: 12,
+              resize: 'vertical',
+              boxSizing: 'border-box',
+            }}
+          />
+          {error && <div style={s.error}>{error}</div>}
+          {transcribing && (
+            <>
+              <div style={{ ...s.progressWrap, marginTop: 14 }}>
+                <div style={{ ...s.progressFill, width: `${progress}%` }} />
+              </div>
+              <p style={{ ...s.sub, marginTop: 4 }}>{progress}% — {progress < 50 ? 'Processing...' : 'Extracting data...'}</p>
+            </>
+          )}
+          {pastedText && !transcribing && !transcript && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={s.btnGroup}>
+                <button style={{ ...s.btn, ...s.btnPrimary }} onClick={handleSaveTranscript}>
+                  💾 Save transcript
+                </button>
+                <button style={{ ...s.btn, ...s.btnSecondary }} onClick={handleExtractFromPaste}>
+                  ✨ Save + extract insights
+                </button>
+              </div>
+              <button style={{ ...s.btn, ...s.btnSecondary, flex: 'none', width: 'fit-content' }} onClick={reset}>Clear</button>
             </div>
           )}
         </div>

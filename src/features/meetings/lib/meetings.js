@@ -161,21 +161,45 @@ export async function deleteMeeting(meetingId) {
 
 export async function createTasksFromActionItems(meetingId, departmentId, actionItems, createdBy) {
   if (!actionItems.length) return []
-  const defaultStatusId = await getDefaultTaskStatusId({ departmentId })
 
-  const tasks = actionItems.map((item) => ({
-    title: item.title,
-    description: item.description || null,
-    assignee_id: item.assigneeId || null,
-    due_date: item.dueDate || null,
-    department_id: departmentId,
-    meeting_id: meetingId,
-    source: 'meeting',
-    status_id: defaultStatusId,
-    priority: 'medium',
-    created_by: createdBy,
-    is_personal: false,
-  }))
+  // Look up each assignee's department so tasks appear in their own space
+  const assigneeIds = [...new Set(actionItems.map((i) => i.assigneeId).filter(Boolean))]
+  const assigneeDeptMap = {}
+  if (assigneeIds.length > 0) {
+    const { data: userRows } = await supabase
+      .from('users')
+      .select('id, department_id')
+      .in('id', assigneeIds)
+    for (const u of userRows ?? []) {
+      if (u.department_id) assigneeDeptMap[u.id] = u.department_id
+    }
+  }
+
+  // Get default status IDs for each unique destination department
+  const uniqueDeptIds = [...new Set([departmentId, ...Object.values(assigneeDeptMap)])]
+  const statusIdByDept = {}
+  await Promise.all(
+    uniqueDeptIds.map(async (deptId) => {
+      statusIdByDept[deptId] = await getDefaultTaskStatusId({ departmentId: deptId })
+    }),
+  )
+
+  const tasks = actionItems.map((item) => {
+    const destDeptId = item.assigneeId ? (assigneeDeptMap[item.assigneeId] ?? departmentId) : departmentId
+    return {
+      title: item.title,
+      description: item.description || null,
+      assignee_id: item.assigneeId || null,
+      due_date: item.dueDate || null,
+      department_id: destDeptId,
+      meeting_id: meetingId,
+      source: 'meeting',
+      status_id: statusIdByDept[destDeptId] ?? statusIdByDept[departmentId] ?? null,
+      priority: 'medium',
+      created_by: createdBy,
+      is_personal: false,
+    }
+  })
 
   const { data, error } = await supabase
     .from('tasks')
