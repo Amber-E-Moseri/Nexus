@@ -3,7 +3,7 @@ import { useAuth } from '../../hooks/useAuth'
 import LoadingSpinner from '../ui/LoadingSpinner'
 
 export default function ProtectedRoute({ children, roles }) {
-  const { loading, user, effectiveRole } = useAuth()
+  const { loading, user, effectiveRole, isRecoveryMode } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -16,6 +16,11 @@ export default function ProtectedRoute({ children, roles }) {
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location }} />
+  }
+
+  // Recovery mode guard: only allow /reset-password while in recovery
+  if (isRecoveryMode && location.pathname !== '/reset-password') {
+    return <Navigate to="/reset-password" replace />
   }
 
   if (roles && !roles.includes(effectiveRole)) {
