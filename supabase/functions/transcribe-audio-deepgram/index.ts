@@ -42,6 +42,34 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // AUTH: Verify JWT before proceeding
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: jsonHeaders,
+    });
+  }
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  const { data: { user }, error: authErr } = await supabase.auth.getUser(
+    authHeader.substring(7), // Remove "Bearer " prefix (7 chars)
+  );
+
+  if (authErr || !user) {
+    return new Response(JSON.stringify({ error: "Invalid token" }), {
+      status: 401,
+      headers: jsonHeaders,
+    });
+  }
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
   try {
     const { audioPath } = await req.json();
 
@@ -53,7 +81,7 @@ serve(async (req) => {
     }
 
     // Rate limiting check
-    const userId = req.headers.get("x-user-id") || "anonymous";
+    const userId = user.id;
     const rateLimit = await checkTranscriptionRateLimit(userId);
     if (!rateLimit.allowed) {
       return new Response(
@@ -67,12 +95,7 @@ serve(async (req) => {
       );
     }
 
-    // Download audio file from storage
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-
+    // Download audio file from storage (supabase client created during auth above)
     const { data: audioData, error: downloadErr } = await supabase.storage
       .from("meeting-audio")
       .download(audioPath);
@@ -140,9 +163,6 @@ serve(async (req) => {
 
     // Calculate tokens used (estimate: 1 token ≈ 4 characters)
     const tokensUsed = Math.ceil(transcript.length / 4);
-
-    // Get user ID from headers
-    const userId = req.headers.get("x-user-id");
 
     // Extract meeting ID from path: private/{uuid}-{timestamp}.{ext}
     const fileName = audioPath.split("/").pop() || "";
