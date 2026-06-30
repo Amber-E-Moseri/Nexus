@@ -42,43 +42,6 @@ function useMeetingAttendees(meetingId, departmentId) {
   return members
 }
 
-function useMeetingAttendees(meetingId, departmentId) {
-  const [members, setMembers] = useState([])
-
-  useEffect(() => {
-    if (!meetingId && !departmentId) return
-    let active = true
-
-    async function load() {
-      // Prefer meeting attendees so cross-dept people can be assigned
-      if (meetingId) {
-        const { data } = await supabase
-          .from('meeting_attendance')
-          .select('user:users!user_id(id, name, avatar_url, department_id)')
-          .eq('meeting_id', meetingId)
-        if (active && data?.length) {
-          setMembers(data.map((r) => r.user).filter(Boolean))
-          return
-        }
-      }
-      // Fall back to dept members when no attendance records exist yet
-      if (departmentId) {
-        const { data } = await supabase
-          .from('users')
-          .select('id, name, avatar_url, department_id')
-          .eq('department_id', departmentId)
-          .order('name')
-        if (active) setMembers(data ?? [])
-      }
-    }
-
-    load()
-    return () => { active = false }
-  }, [meetingId, departmentId])
-
-  return members
-}
-
 export default function ActionItemBridge({ meetingId, departmentId, onSaved, onCancel }) {
   const { profile } = useAuth()
   const [items, setItems] = useState([emptyItem])
