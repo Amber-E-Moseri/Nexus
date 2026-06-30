@@ -643,10 +643,14 @@ export default function TaskModal({
               />
             </div>
 
-            <div style={{ marginBottom: 18 }}>
-              <label style={labelStyle}>Subtasks</label>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>0</div>
-            </div>
+            {mode === 'create' ? (
+              <div style={{ marginBottom: 18 }}>
+                <label style={labelStyle}>Subtasks</label>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                  Save the task first, then add subtasks.
+                </div>
+              </div>
+            ) : null}
 
             {isPersonal ? (
               <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8, pointerEvents: isReadOnly ? 'none' : 'auto', opacity: isReadOnly ? 0.6 : 1 }}>
@@ -719,6 +723,8 @@ export default function TaskModal({
                   sprintId={sprintId ?? task?.sprint_id}
                   taskType={task?.task_type ?? (sprintId ? 'sprint' : 'space')}
                   createdBy={profile?.id}
+                  statuses={statuses}
+                  members={members}
                   onSubtasksChange={setSubtasks}
                 />
               </div>

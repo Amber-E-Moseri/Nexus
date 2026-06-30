@@ -1,5 +1,6 @@
 // Calendar iCal Feed Generator
-// Generates RFC 5545 format iCal feeds for public subscriptions
+// Generates RFC 5545 format iCal feeds for public subscriptions.
+// Filters events per the subscriber's role using calendar_category_visibility rules.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0';
@@ -13,6 +14,7 @@ interface CalendarEvent {
   all_day: boolean;
   location?: string;
   priority: string;
+  event_type?: string;
   status: string;
   sprint_id?: string;
 }
@@ -23,7 +25,6 @@ interface Sprint {
 }
 
 serve(async (req: Request) => {
-  // Only allow GET requests
   if (req.method !== 'GET') {
     return new Response(
       JSON.stringify({ error: 'Method not allowed' }),
@@ -45,13 +46,11 @@ serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing Supabase environment variables');
-    }
+    if (!supabaseUrl || !supabaseServiceKey) throw new Error('Missing Supabase environment variables');
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch subscription
+    // Resolve subscription
     const { data: subscription, error: subError } = await supabase
       .from('calendar_subscriptions')
       .select('*')
@@ -60,160 +59,125 @@ serve(async (req: Request) => {
       .single();
 
     if (subError || !subscription) {
-      console.error('Subscription not found:', subError);
       return new Response(
         JSON.stringify({ error: 'Subscription not found' }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    // Increment access count
-    await supabase
-      .rpc('increment_subscription_access', { p_token: token })
-      .catch(err => console.error('Failed to increment access count:', err));
+    // Increment access count (non-blocking)
+    supabase.rpc('increment_subscription_access', { p_token: token })
+      .catch((err: Error) => console.error('Failed to increment access count:', err));
 
-    // Build query for events
+    // Resolve subscriber's role for category visibility filtering
+    const subscriberRole = await getSubscriberRole(supabase, subscription.user_id);
+    const hiddenCategories = await getHiddenCategories(supabase, subscription.org_id, subscriberRole);
+
+    // Build event query
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
     let query = supabase
       .from('calendar_events')
       .select('*')
       .eq('space_id', subscription.space_id)
-      .eq('status', 'approved');
+      .eq('status', 'approved')
+      .gte('start_date', thirtyDaysAgo.toISOString());
 
-    // Apply filters from subscription
-    if (subscription.filter_priority) {
-      query = query.eq('priority', subscription.filter_priority);
-    }
+    if (subscription.filter_priority) query = query.eq('priority', subscription.filter_priority);
 
-    if (subscription.filter_status) {
-      query = query.eq('status', subscription.filter_status);
-    }
+    const { data: allEvents, error: eventError } = await query.order('start_date', { ascending: true });
 
-    // Only show future events (last 30 days to future)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    query = query.gte('start_date', thirtyDaysAgo.toISOString());
+    if (eventError) throw eventError;
 
-    const { data: events, error: eventError } = await query.order('start_date', {
-      ascending: true,
-    });
-
-    if (eventError) {
-      console.error('Failed to fetch events:', eventError);
-      throw eventError;
-    }
-
-    // Fetch sprints for linking
-    let sprintMap: Record<string, Sprint> = {};
-    if (events && events.some(e => e.sprint_id)) {
-      const sprintIds = [...new Set(events.filter(e => e.sprint_id).map(e => e.sprint_id))];
-      const { data: sprints } = await supabase
-        .from('sprints')
-        .select('id, name')
-        .in('id', sprintIds);
-
-      if (sprints) {
-        sprints.forEach(s => {
-          sprintMap[s.id] = s;
-        });
-      }
-    }
-
-    // Generate iCal feed
-    const ical = generateICalFeed(
-      subscription,
-      events || [],
-      sprintMap
+    // Apply role-based category visibility (fail open: missing rule = visible)
+    const events = (allEvents || []).filter(
+      (e: CalendarEvent) => !hiddenCategories.has(e.event_type ?? '')
     );
 
-    // Return iCal with correct headers
+    // Fetch sprints for context
+    let sprintMap: Record<string, Sprint> = {};
+    const sprintIds = [...new Set(events.filter((e: CalendarEvent) => e.sprint_id).map((e: CalendarEvent) => e.sprint_id))] as string[];
+    if (sprintIds.length > 0) {
+      const { data: sprints } = await supabase.from('sprints').select('id, name').in('id', sprintIds);
+      (sprints || []).forEach((s: Sprint) => { sprintMap[s.id] = s; });
+    }
+
+    const ical = generateICalFeed(subscription, events, sprintMap);
+
     return new Response(ical, {
       status: 200,
       headers: {
         'Content-Type': 'text/calendar; charset=utf-8',
         'Content-Disposition': `attachment; filename="${subscription.name || 'calendar'}.ics"`,
-        'Cache-Control': 'max-age=900', // 15 minutes
+        'Cache-Control': 'max-age=900',
         'Access-Control-Allow-Origin': '*',
       },
     });
   } catch (error) {
     console.error('iCal generation error:', error);
     return new Response(
-      JSON.stringify({
-        error: 'Feed generation failed',
-        message: error.message,
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }
+      JSON.stringify({ error: 'Feed generation failed', message: error.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 });
 
-/**
- * Generate RFC 5545 iCal feed
- */
-function generateICalFeed(
-  subscription: any,
-  events: CalendarEvent[],
-  sprints: Record<string, Sprint>
-): string {
+async function getSubscriberRole(supabase: any, userId: string): Promise<string> {
+  if (!userId) return 'member';
+  const { data: user } = await supabase.from('users').select('role').eq('id', userId).maybeSingle();
+  return user?.role ?? 'member';
+}
+
+// Returns the Set of event_type values hidden for this role in this org.
+// Missing rule = visible (fail open).
+async function getHiddenCategories(supabase: any, orgId: string, role: string): Promise<Set<string>> {
+  if (!orgId) return new Set();
+  const { data } = await supabase.rpc('get_hidden_categories', { p_org_id: orgId, p_role: role });
+  return new Set((data || []).map((row: { category: string }) => row.category));
+}
+
+function generateICalFeed(subscription: any, events: CalendarEvent[], sprints: Record<string, Sprint>): string {
   const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-  const lines: string[] = [];
+  const lines: string[] = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//BLW Canada//Ministry Calendar//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:${escapeICalValue(subscription.name || 'Ministry Calendar')}`,
+    'X-WR-TIMEZONE:America/Toronto',
+    'X-WR-CALDESC:BLW Canada Ministry Events',
+    'REFRESH-INTERVAL;VALUE=DURATION:PT15M',
+    `LAST-MODIFIED:${now}`,
+  ];
 
-  // iCal header
-  lines.push('BEGIN:VCALENDAR');
-  lines.push('VERSION:2.0');
-  lines.push('PRODID:-//BLW Canada//Ministry Calendar//EN');
-  lines.push('CALSCALE:GREGORIAN');
-  lines.push('METHOD:PUBLISH');
-  lines.push(`X-WR-CALNAME:${escapeICalValue(subscription.name || 'Ministry Calendar')}`);
-  lines.push('X-WR-TIMEZONE:America/Toronto');
-  lines.push('X-WR-CALDESC:BLW Canada Ministry Events');
-  lines.push('REFRESH-INTERVAL;VALUE=DURATION:PT15M');
-  lines.push(`LAST-MODIFIED:${now}`);
-
-  // Events
   for (const event of events) {
     lines.push(generateICalEvent(event, sprints));
   }
 
-  // iCal footer
   lines.push('END:VCALENDAR');
-
   return lines.join('\r\n');
 }
 
-/**
- * Generate single iCal event
- */
 function generateICalEvent(event: CalendarEvent, sprints: Record<string, Sprint>): string {
   const lines: string[] = [];
   const uid = `${event.id}@blwcanada.org`;
   const dtstamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
 
-  // Parse dates
   let dtstart: string;
   let dtend: string;
 
   if (event.all_day) {
-    // For all-day events, use date format (not datetime)
     const startDate = event.start_date.split('T')[0].replace(/-/g, '');
     const endDate = event.end_date
       ? event.end_date.split('T')[0].replace(/-/g, '')
-      : new Date(new Date(event.start_date).getTime() + 86400000)
-          .toISOString()
-          .split('T')[0]
-          .replace(/-/g, '');
-
+      : new Date(new Date(event.start_date).getTime() + 86400000).toISOString().split('T')[0].replace(/-/g, '');
     dtstart = `DTSTART;VALUE=DATE:${startDate}`;
     dtend = `DTEND;VALUE=DATE:${endDate}`;
   } else {
-    // For timed events, use datetime format
     dtstart = `DTSTART:${event.start_date.replace(/[-:]/g, '').split('.')[0]}Z`;
-    dtend = `DTEND:${(event.end_date || event.start_date)
-      .replace(/[-:]/g, '')
-      .split('.')[0]}Z`;
+    dtend = `DTEND:${(event.end_date || event.start_date).replace(/[-:]/g, '').split('.')[0]}Z`;
   }
 
   lines.push('BEGIN:VEVENT');
@@ -223,45 +187,26 @@ function generateICalEvent(event: CalendarEvent, sprints: Record<string, Sprint>
   lines.push(`DTSTAMP:${dtstamp}`);
   lines.push(`SUMMARY:${escapeICalValue(event.title)}`);
 
-  // Description with sprint info
   let description = event.description || '';
   if (event.sprint_id && sprints[event.sprint_id]) {
-    if (description) {
-      description += '\n\n';
-    }
-    description += `Sprint: ${sprints[event.sprint_id].name}`;
+    description += (description ? '\n\n' : '') + `Sprint: ${sprints[event.sprint_id].name}`;
   }
+  if (description) lines.push(`DESCRIPTION:${escapeICalValue(description)}`);
+  if (event.location) lines.push(`LOCATION:${escapeICalValue(event.location)}`);
 
-  if (description) {
-    lines.push(`DESCRIPTION:${escapeICalValue(description)}`);
-  }
-
-  if (event.location) {
-    lines.push(`LOCATION:${escapeICalValue(event.location)}`);
-  }
-
-  // Priority (iCal uses 0-9 scale)
-  const priorityMap = {
-    high: '1',
-    medium: '5',
-    low: '9',
-  };
+  const priorityMap: Record<string, string> = { high: '1', medium: '5', low: '9' };
   lines.push(`PRIORITY:${priorityMap[event.priority] || '5'}`);
 
-  // Status
-  const statusMap = {
-    approved: 'CONFIRMED',
+  const statusMap: Record<string, string> = {
+    approved: 'CONFIRMED', confirmed: 'CONFIRMED',
     pending: 'TENTATIVE',
-    rejected: 'CANCELLED',
-    confirmed: 'CONFIRMED',
-    cancelled: 'CANCELLED',
+    rejected: 'CANCELLED', cancelled: 'CANCELLED',
   };
   lines.push(`STATUS:${statusMap[event.status] || 'CONFIRMED'}`);
 
-  // Categories
-  if (event.priority) {
-    lines.push(`CATEGORIES:${event.priority}`);
-  }
+  // Categories: include both event_type and priority so external apps can filter
+  const categories = [event.event_type, event.priority].filter(Boolean).join(',');
+  if (categories) lines.push(`CATEGORIES:${categories}`);
 
   lines.push(`CREATED:${dtstamp}`);
   lines.push(`LAST-MODIFIED:${dtstamp}`);
@@ -271,16 +216,12 @@ function generateICalEvent(event: CalendarEvent, sprints: Record<string, Sprint>
   return lines.join('\r\n');
 }
 
-/**
- * Escape special characters for iCal format
- */
 function escapeICalValue(value: string): string {
   if (!value) return '';
-
   return value
-    .replace(/\\/g, '\\\\') // Backslash
-    .replace(/,/g, '\\,') // Comma
-    .replace(/;/g, '\\;') // Semicolon
-    .replace(/\n/g, '\\n') // Newline
-    .replace(/\r/g, '\\r'); // Carriage return
+    .replace(/\\/g, '\\\\')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
 }

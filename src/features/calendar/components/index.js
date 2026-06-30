@@ -1,9 +1,9 @@
-// Calendar Components Barrel Export
-// Central import point for all calendar components
-
-export { CalendarEventForm } from './CalendarEventForm.jsx';
-export { GoogleCalendarConnect } from './GoogleCalendarConnect.jsx';
-export { SubscriptionManager } from './SubscriptionManager.jsx';
-export { CalendarEventList } from './CalendarEventList.jsx';
-export { ApprovalQueue } from './ApprovalQueue.jsx';
-export { CalendarGrid } from './CalendarGrid.jsx';
+export { CalendarEventForm } from './CalendarEventForm.jsx'
+export { GoogleCalendarConnect } from './GoogleCalendarConnect.jsx'
+export { SubscriptionManager } from './SubscriptionManager.jsx'
+export { CalendarEventList } from './CalendarEventList.jsx'
+export { ApprovalQueue } from './ApprovalQueue.jsx'
+export { CalendarGrid } from './CalendarGrid.jsx'
+export { default as CalendarSettingsPanel } from './CalendarSettingsPanel.jsx'
+export { default as TaskFeedSubscriptionPanel } from './TaskFeedSubscriptionPanel.jsx'
+export { default as CategoryVisibilityConfig } from './CategoryVisibilityConfig.jsx'

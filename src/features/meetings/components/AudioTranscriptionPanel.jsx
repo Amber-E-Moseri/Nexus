@@ -45,11 +45,19 @@ export default function AudioTranscriptionPanel({
   const [selectedActionItems, setSelectedActionItems] = useState(new Set())
   const [merging, setMerging] = useState(false)
   const [mergeSuccess, setMergeSuccess] = useState(false)
+  // Map of action-item index → { status: 'resolved'|'ambiguous'|'unresolved', userId?, name }
+  const [ownerResolution, setOwnerResolution] = useState({})
 
   const mediaRecorder = useRef(null)
   const audioChunks = useRef([])
   const recordingInterval = useRef(null)
   const fileInputRef = useRef(null)
+
+  // Async transcription watcher handles
+  const channelRef = useRef(null)
+  const pollRef = useRef(null)
+  const timeoutRef = useRef(null)
+  const progressRef = useRef(null)
 
   useEffect(() => {
     if (isRecordingNow) {
@@ -82,6 +90,59 @@ export default function AudioTranscriptionPanel({
   useEffect(() => {
     onRecordingChange?.(isRecordingNow)
   }, [isRecordingNow, onRecordingChange])
+
+  // Cleanup async watcher subscriptions on unmount
+  useEffect(() => {
+    return () => {
+      channelRef.current?.unsubscribe()
+      clearInterval(pollRef.current)
+      clearTimeout(timeoutRef.current)
+      clearInterval(progressRef.current)
+    }
+  }, [])
+
+  // Resolve AI-extracted owner names to real department members so the created
+  // tasks land in someone's My Tasks (and trigger a notification) instead of
+  // being assigned to nobody.
+  useEffect(() => {
+    const actionItems = extractedData?.action_items
+    if (!actionItems?.length || !departmentId) {
+      setOwnerResolution({})
+      return
+    }
+    let active = true
+    ;(async () => {
+      const { data: members } = await supabase
+        .from('users')
+        .select('id, name')
+        .eq('department_id', departmentId)
+      const list = members ?? []
+      const resolution = {}
+      actionItems.forEach((item, i) => {
+        const owner = (item.owner || '').trim()
+        if (!owner || owner.toLowerCase() === 'tbd') {
+          resolution[i] = { status: 'unresolved', name: owner }
+          return
+        }
+        const lc = owner.toLowerCase()
+        const ownerFirst = lc.split(/\s+/)[0]
+        const matches = list.filter((m) => {
+          const n = (m.name || '').toLowerCase()
+          if (!n) return false
+          return n === lc || n.split(/\s+/)[0] === ownerFirst
+        })
+        if (matches.length === 1) {
+          resolution[i] = { status: 'resolved', userId: matches[0].id, name: matches[0].name }
+        } else if (matches.length > 1) {
+          resolution[i] = { status: 'ambiguous', name: owner }
+        } else {
+          resolution[i] = { status: 'unresolved', name: owner }
+        }
+      })
+      if (active) setOwnerResolution(resolution)
+    })()
+    return () => { active = false }
+  }, [extractedData, departmentId])
 
   const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
@@ -145,6 +206,101 @@ export default function AudioTranscriptionPanel({
     if (file) { setMode('upload'); acceptFile(file) }
   }
 
+  // ── Async transcription watcher ──────────────────────────────────────────────
+
+  const cleanupWatcher = () => {
+    channelRef.current?.unsubscribe()
+    clearInterval(pollRef.current)
+    clearTimeout(timeoutRef.current)
+    clearInterval(progressRef.current)
+    channelRef.current = null
+    pollRef.current = null
+    timeoutRef.current = null
+    progressRef.current = null
+  }
+
+  const handleAsyncComplete = async (fullTranscript) => {
+    setTranscript(fullTranscript)
+    setProgress(90)
+    setChunkStatus('Extracting insights…')
+    let extracted = null
+    try {
+      const { data: extractData, error: extractErr } = await supabase.functions.invoke(
+        'extract-meeting-data',
+        { body: { transcript: fullTranscript } }
+      )
+      if (!extractErr) {
+        extracted = extractData?.extracted ?? null
+        setExtractedData(extracted)
+        if (extracted?.action_items?.length) {
+          setSelectedActionItems(new Set(extracted.action_items.map((_, i) => i)))
+        }
+      }
+    } catch {
+      // extraction is optional — transcript is already saved
+    }
+    setProgress(100)
+    setChunkStatus('')
+    setTranscribing(false)
+    onTranscriptionComplete?.({ transcript: fullTranscript, record: null, extracted })
+  }
+
+  const startAsyncWatcher = (transcriptionId) => {
+    // Slowly crawl progress bar while waiting (55 → 78 over ~5 min)
+    let fakeP = 55
+    progressRef.current = setInterval(() => {
+      fakeP = Math.min(fakeP + 0.1, 78)
+      setProgress(Math.round(fakeP))
+    }, 2000)
+
+    // Supabase Realtime — primary notification when webhook updates the row
+    channelRef.current = supabase
+      .channel(`txn_${transcriptionId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'meeting_transcriptions',
+        filter: `id=eq.${transcriptionId}`,
+      }, (payload) => {
+        const row = payload.new
+        if (row.status === 'complete') {
+          cleanupWatcher()
+          handleAsyncComplete(row.full_transcript || '')
+        } else if (row.status === 'failed') {
+          cleanupWatcher()
+          setError(row.error_message || 'Transcription failed on the server.')
+          setTranscribing(false)
+        }
+      })
+      .subscribe()
+
+    // Fallback poll every 4 s in case realtime misses the update
+    pollRef.current = setInterval(async () => {
+      const { data } = await supabase
+        .from('meeting_transcriptions')
+        .select('status, full_transcript, error_message')
+        .eq('id', transcriptionId)
+        .single()
+      if (data?.status === 'complete') {
+        cleanupWatcher()
+        handleAsyncComplete(data.full_transcript || '')
+      } else if (data?.status === 'failed') {
+        cleanupWatcher()
+        setError(data.error_message || 'Transcription failed on the server.')
+        setTranscribing(false)
+      }
+    }, 4000)
+
+    // 10-minute hard timeout — stop showing spinner, let user know
+    timeoutRef.current = setTimeout(() => {
+      cleanupWatcher()
+      setProgress(0)
+      setChunkStatus('')
+      setTranscribing(false)
+      setError('Transcription is taking longer than expected. It may still complete — refresh the page to check.')
+    }, 10 * 60 * 1000)
+  }
+
   // ── Transcription ─────────────────────────────────────────────────────────────
 
   const handleTranscribe = async () => {
@@ -157,6 +313,7 @@ export default function AudioTranscriptionPanel({
     setExtractedData(null)
     setMergeSuccess(false)
 
+    let asyncMode = false
     try {
       const originalName = audioFile instanceof File ? audioFile.name : 'recording'
       const isLarge = audioFile.size > STORAGE_LIMIT
@@ -188,7 +345,7 @@ export default function AudioTranscriptionPanel({
         transcript = data.transcript?.trim() ?? ''
         if (!transcript) throw new Error('No speech detected in audio.')
       } else {
-        // Small file: existing storage → Deepgram flow
+        // Small file: upload to storage → async Deepgram via signed URL → webhook → polling
         setChunkStatus('Uploading…')
         setProgress(20)
         const ext = audioFile instanceof File ? (audioFile.name.split('.').pop() || 'webm') : 'webm'
@@ -198,18 +355,29 @@ export default function AudioTranscriptionPanel({
           .upload(fileName, audioFile, { cacheControl: '3600', upsert: false })
         if (uploadErr) throw uploadErr
 
-        setChunkStatus('Transcribing…')
-        setProgress(50)
-        const { data: deepgramData, error: dgErr } = await supabase.functions.invoke(
-          'transcribe-audio-deepgram',
-          { body: { audioPath: upload.path } }
+        setChunkStatus('Queuing transcription…')
+        setProgress(40)
+        const session = (await supabase.auth.getSession()).data.session
+        const { data: asyncData, error: asyncErr } = await supabase.functions.invoke(
+          'transcribe-audio-async',
+          {
+            body: { audioPath: upload.path, meetingId },
+            headers: { Authorization: `Bearer ${session?.access_token}` },
+          }
         )
-        if (dgErr) throw dgErr
-        transcript = (deepgramData?.transcript || deepgramData?.data?.transcript || '').trim()
-        if (!transcript) throw new Error('No speech detected in audio.')
-        setProgress(80)
+        if (asyncErr || asyncData?.error) {
+          throw new Error(asyncData?.error || asyncErr?.message || 'Failed to queue transcription.')
+        }
+
+        // Transcription is now running in the background — don't block; poll for completion
+        asyncMode = true
+        setChunkStatus('Transcribing… this may take a few minutes')
+        setProgress(55)
+        startAsyncWatcher(asyncData.transcriptionId)
+        return // finally still runs; asyncMode=true skips setTranscribing(false)
       }
 
+      // ── Sync path only (large file streamed via transcribe-audio-direct) ──────
       setTranscript(transcript)
       setChunkStatus('Saving transcript…')
       setProgress(85)
@@ -256,7 +424,7 @@ export default function AudioTranscriptionPanel({
     } catch (err) {
       setError(err.message || 'Transcription failed.')
     } finally {
-      setTranscribing(false)
+      if (!asyncMode) setTranscribing(false)
     }
   }
 
@@ -356,13 +524,19 @@ export default function AudioTranscriptionPanel({
     setError('')
     try {
       const items = extractedData.action_items
-        .filter((_, i) => selectedActionItems.has(i))
-        .map((item) => ({
-          title: item.title,
-          assigneeId: null,
-          dueDate: item.due_date ?? null,
-          description: item.owner && item.owner !== 'TBD' ? `Owner: ${item.owner}` : null,
-        }))
+        .map((item, i) => ({ item, i }))
+        .filter(({ i }) => selectedActionItems.has(i))
+        .map(({ item, i }) => {
+          const resolved = ownerResolution[i]?.status === 'resolved' ? ownerResolution[i] : null
+          return {
+            title: item.title,
+            assigneeId: resolved?.userId ?? null,
+            dueDate: item.due_date ?? null,
+            // Keep the raw owner name in the description only as a fallback when
+            // we couldn't resolve it to a real user.
+            description: !resolved && item.owner && item.owner !== 'TBD' ? `Owner: ${item.owner}` : null,
+          }
+        })
       if (!items.length) { setMerging(false); return }
       await createTasksFromActionItems(meetingId, departmentId, items, profile?.id)
       setMergeSuccess(true)
@@ -383,6 +557,7 @@ export default function AudioTranscriptionPanel({
   }
 
   const reset = () => {
+    cleanupWatcher()
     setMode(recordOnly ? 'record' : canRecord ? null : 'upload')
     setAudioFile(null)
     setAudioPreview(null)
@@ -540,7 +715,7 @@ export default function AudioTranscriptionPanel({
             </>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} ownerResolution={ownerResolution} />}
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }`}</style>
       </div>
     )
@@ -595,7 +770,7 @@ export default function AudioTranscriptionPanel({
             </div>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} ownerResolution={ownerResolution} />}
       </div>
     )
   }
@@ -653,7 +828,7 @@ export default function AudioTranscriptionPanel({
             </div>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} ownerResolution={ownerResolution} />}
       </div>
     )
   }
@@ -662,7 +837,7 @@ export default function AudioTranscriptionPanel({
 }
 
 // ── Transcript + extracted data card ─────────────────────────────────────────────
-function TranscriptCard({ transcript, extractedData, selectedItems, toggleItem, onMerge, merging, mergeSuccess, error, s }) {
+function TranscriptCard({ transcript, extractedData, selectedItems, toggleItem, onMerge, merging, mergeSuccess, error, s, ownerResolution = {} }) {
   return (
     <div style={s.card}>
       <h3 style={s.title}>Transcript</h3>
@@ -691,17 +866,42 @@ function TranscriptCard({ transcript, extractedData, selectedItems, toggleItem, 
           {extractedData.action_items?.length > 0 && (
             <>
               <div style={s.extractLabel}>Action items — select to add to board</div>
-              {extractedData.action_items.map((item, i) => (
-                <label key={i} style={{ ...s.checkRow, borderColor: selectedItems.has(i) ? '#4C2A92' : '#E9E4D8' }} onClick={() => toggleItem(i)}>
-                  <input type="checkbox" checked={selectedItems.has(i)} onChange={() => toggleItem(i)} style={{ marginTop: 2, cursor: 'pointer', accentColor: '#4C2A92' }} />
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{item.title}</div>
-                    <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 2 }}>
-                      Owner: {item.owner || 'TBD'}{item.due_date ? ` · Due ${item.due_date}` : ''}
+              {extractedData.action_items.map((item, i) => {
+                const res = ownerResolution[i]
+                let badge = null
+                if (res?.status === 'resolved') {
+                  badge = { text: `✓ Assign to ${res.name}`, color: '#2E7D32', bg: '#E8F5E9' }
+                } else if (res?.status === 'ambiguous') {
+                  badge = { text: '⚠ Multiple matches — unassigned', color: '#B26A00', bg: '#FEF8E7' }
+                } else if (item.owner && item.owner !== 'TBD') {
+                  badge = { text: '⚠ No match — unassigned', color: '#B26A00', bg: '#FEF8E7' }
+                }
+                return (
+                  <label key={i} style={{ ...s.checkRow, borderColor: selectedItems.has(i) ? '#4C2A92' : '#E9E4D8' }} onClick={() => toggleItem(i)}>
+                    <input type="checkbox" checked={selectedItems.has(i)} onChange={() => toggleItem(i)} style={{ marginTop: 2, cursor: 'pointer', accentColor: '#4C2A92' }} />
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{item.title}</div>
+                      <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 2 }}>
+                        Owner: {item.owner || 'TBD'}{item.due_date ? ` · Due ${item.due_date}` : ''}
+                      </div>
+                      {badge && (
+                        <span style={{
+                          display: 'inline-block',
+                          marginTop: 4,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: '2px 7px',
+                          borderRadius: 4,
+                          background: badge.bg,
+                          color: badge.color,
+                        }}>
+                          {badge.text}
+                        </span>
+                      )}
                     </div>
-                  </div>
-                </label>
-              ))}
+                  </label>
+                )
+              })}
 
               {mergeSuccess ? (
                 <div style={s.success}>✅ {selectedItems.size} task{selectedItems.size !== 1 ? 's' : ''} added to the Actions board.</div>

@@ -238,6 +238,7 @@ function DeptBoardView({ dept, onTaskClick, onAddTask }) {
 }
 
 function DeptListView({ dept, onTaskClick, onAddTask }) {
+  const { profile } = useAuth()
   const { tasks, loading, error, statuses, defaultStatusId, moveTask } = useTasks()
   const members = useDeptMembers(dept?.id)
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
@@ -302,6 +303,8 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
               filteredTasks={filtered}
               onTaskClick={onTaskClick}
               onAddTask={() => onAddTask(defaultStatusId)}
+              spaceId={dept?.id}
+              userId={profile?.id}
             />
           </div>
         )}

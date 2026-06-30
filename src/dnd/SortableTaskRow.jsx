@@ -6,6 +6,7 @@ import { GripVertical } from 'lucide-react'
 import { TaskDragHandle } from '@/dnd/TaskDragHandle.jsx'
 import { formatDueDate } from '@/lib/dateUtils'
 import { PRIORITY_STYLES } from '@/lib/priorities'
+import SubtaskProgress from '@/features/tasks/components/SubtaskProgress'
 
 function stopPropagation(event) {
   event.stopPropagation()
@@ -123,7 +124,9 @@ function RowContent({
   isHovering = false,
   isMobile = false,
 }) {
+  const subtasks = Array.isArray(task.subtasks) ? task.subtasks : null
   const subtaskCount = task.subtask_count ?? task.subtasks?.length ?? 0
+  const parentTitle = task.parent?.title ?? task.parent_task?.title ?? null
 
   return (
     <div
@@ -196,6 +199,21 @@ function RowContent({
         >
           {task.title}
         </div>
+        {parentTitle ? (
+          <div
+            title={`Subtask of: ${parentTitle}`}
+            style={{
+              marginTop: 3,
+              fontSize: 10.5,
+              color: '#9A8E7A',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            ↳ Subtask of: {parentTitle}
+          </div>
+        ) : null}
         {task.source === 'meeting' && task.meeting_id && (
           <Link
             to={`/meetings/${task.meeting_id}`}
@@ -215,8 +233,9 @@ function RowContent({
               textDecoration: 'none',
               letterSpacing: '.01em',
             }}
+            title={task.meeting?.title ? `From meeting: ${task.meeting.title}` : 'From a meeting'}
           >
-            📋 From meeting →
+            📋 {task.meeting?.title ? `From: ${task.meeting.title}` : 'From meeting'} →
           </Link>
         )}
       </div>
@@ -232,8 +251,12 @@ function RowContent({
           <div style={{ minWidth: 0 }}>
             <DueText task={task} />
           </div>
-          <div style={{ fontSize: 12, color: '#7A6F5E', textAlign: 'right' }}>
-            {subtaskCount || '-'}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: 12, color: '#7A6F5E' }}>
+            {subtasks && subtasks.length > 0 ? (
+              <SubtaskProgress subtasks={subtasks} compact />
+            ) : (
+              subtaskCount || '-'
+            )}
           </div>
         </>
       ) : null}

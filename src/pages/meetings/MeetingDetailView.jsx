@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { getCategoryStatusId, STATUS_CATEGORIES } from '../../lib/taskStatuses'
 import { useAuth } from '../../hooks/useAuth'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { MeetingsProvider } from '../../features/meetings/MeetingsContext'
@@ -188,7 +189,7 @@ function MeetingDetailViewInner() {
     try {
       const { data, error } = await supabase
         .from('tasks')
-        .select('id, title, status, due_date, source, assignee:users!assignee_id(id, name)')
+        .select('id, title, status, status_id, department_id, due_date, source, assignee:users!assignee_id(id, name)')
         .eq('meeting_id', meetingId)
         .order('created_at', { ascending: true })
       if (!error && data) {
@@ -703,8 +704,23 @@ function MeetingDetailViewInner() {
                             checked={isDone}
                             onChange={async () => {
                               const newStatus = isDone ? 'open' : 'done'
-                              await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
-                              setActionItems(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t))
+                              const category = isDone ? STATUS_CATEGORIES.OPEN : STATUS_CATEGORIES.COMPLETED
+                              // status_id is the source of truth — a DB trigger derives the
+                              // legacy `status` text from it, so writing `status` alone is
+                              // overwritten. Resolve the right status_id for the task's space.
+                              const deptId = task.department_id ?? meeting?.department_id ?? null
+                              let statusId = null
+                              try {
+                                statusId = await getCategoryStatusId({ departmentId: deptId, category })
+                              } catch (e) {
+                                console.warn('Could not resolve status_id, falling back to legacy status:', e)
+                              }
+                              const updates = statusId ? { status_id: statusId } : { status: newStatus }
+                              const { error: updErr } = await supabase.from('tasks').update(updates).eq('id', task.id)
+                              if (updErr) { console.warn('Failed to update action item status:', updErr); return }
+                              setActionItems(prev => prev.map(t => t.id === task.id
+                                ? { ...t, status: newStatus, status_id: statusId ?? t.status_id }
+                                : t))
                             }}
                             style={{ width:16, height:16, cursor:'pointer', accentColor: FS.purple, flexShrink:0 }}
                           />

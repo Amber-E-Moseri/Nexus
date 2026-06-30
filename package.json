@@ -21,6 +21,7 @@
     "date-fns": "^4.4.0",
     "esbuild": "^0.28.1",
     "html2canvas": "^1.4.1",
+    "ical.js": "^2.2.1",
     "jspdf": "^4.2.1",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
