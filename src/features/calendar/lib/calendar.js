@@ -1,3 +1,4 @@
+import ICAL from 'ical.js'
 import { supabase } from '../../../lib/supabase'
 import { hasPermission } from '../../../lib/permissions'
 import { createNotification } from '../../notifications/lib/notifications'
@@ -76,11 +77,42 @@ export async function deleteCalendarEvent(eventId) {
 
 // ---- Approval workflow ----
 
+// Returns 'approved' for users who bypass the approval queue per the architecture:
+// super_admin, regional_secretary, Programs dept_lead, any Programs space member.
+async function getAutoApproveStatus(userId) {
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('role, department_id')
+    .eq('id', userId)
+    .single()
+
+  if (error || !user) return 'pending'
+
+  if (['super_admin', 'regional_secretary'].includes(user.role)) return 'approved'
+
+  // Programs auto-approval is keyed off a durable department flag, not the display name.
+  const { data: programsDept } = await supabase
+    .from('departments')
+    .select('id')
+    .eq('is_programs', true)
+    .maybeSingle()
+
+  if (!programsDept) return 'pending'
+  if (programsDept && user.department_id === programsDept.id) return 'approved'
+
+  return 'pending'
+}
+
 export async function submitEvent(eventData, userId) {
+  const status = await getAutoApproveStatus(userId)
+
   const eventToInsert = {
     ...eventData,
-    status: 'pending',
+    status,
     created_by: userId,
+    ...(status === 'approved'
+      ? { approved_by: userId, approved_at: new Date().toISOString(), is_admin_created: true }
+      : {}),
   }
 
   const { data, error } = await supabase
@@ -255,6 +287,25 @@ export async function getCalendarPermissions() {
   return data ?? []
 }
 
+// ---- Space Task Feed Subscriptions ----
+
+// Returns the iCal token for a user's task feed in a space (creates one if missing).
+// feed_type: 'my_tasks' | 'followed_tasks'
+export async function getOrCreateTaskFeedToken(userId, spaceId, feedType) {
+  const { data, error } = await supabase.rpc('get_or_create_task_feed_token', {
+    p_user_id: userId,
+    p_space_id: spaceId,
+    p_feed_type: feedType,
+  })
+  if (error) throw error
+  return data // token string
+}
+
+export function getTaskFeedUrl(token) {
+  const base = import.meta.env.VITE_SUPABASE_URL
+  return `${base}/functions/v1/calendar-task-feed/${token}`
+}
+
 // ---- Event Types ----
 
 export async function getEventTypes() {
@@ -311,17 +362,18 @@ export async function deleteEventType(id) {
 
 // ---- Admin/Programs Direct Creation (Bypass Approval) ----
 
-export async function createEventDirectly(eventData, createdBy, userRole) {
-  // Super admin and Programs managers can create approved events directly
-  const isAuthorized = userRole === 'super_admin' || userRole === 'dept_lead'
+// Uses the same auto-approve logic as submitEvent — the userRole param is kept
+// for backwards compatibility but the real check is server-side via getAutoApproveStatus.
+export async function createEventDirectly(eventData, createdBy) {
+  const status = await getAutoApproveStatus(createdBy)
 
   const payload = {
     ...eventData,
     created_by: createdBy,
-    status: isAuthorized ? 'approved' : 'pending',
-    approved_by: isAuthorized ? createdBy : null,
-    approved_at: isAuthorized ? new Date().toISOString() : null,
-    is_admin_created: isAuthorized,
+    status,
+    ...(status === 'approved'
+      ? { approved_by: createdBy, approved_at: new Date().toISOString(), is_admin_created: true }
+      : {}),
   }
 
   const { data, error } = await supabase
@@ -332,8 +384,7 @@ export async function createEventDirectly(eventData, createdBy, userRole) {
 
   if (error) throw error
 
-  // If admin created and should sync to Google, trigger sync
-  if (isAuthorized && eventData.space_id) {
+  if (status === 'approved' && eventData.space_id) {
     try {
       await triggerSpaceSync(eventData.space_id)
     } catch (e) {
@@ -405,7 +456,7 @@ export async function syncRegionalCalendar(syncId) {
     const icalText = await response.text()
 
     // Parse iCal and create events (simplified - full parser would be more complex)
-    const events = parseICalEvents(icalText, sync.org_id)
+    const events = parseICalEvents(icalText)
 
     // Bulk insert with regional tag
     const { error: insertError } = await supabase
@@ -460,50 +511,64 @@ export async function disconnectRegionalCalendar(syncId) {
   if (error) throw error
 }
 
-// Helper: Parse iCal format (basic parser - use library in production)
-function parseICalEvents(icalText, orgId) {
+// Parse iCal text using ical.js — handles line folding, VTIMEZONE, VALARM,
+// recurring events, all-day events, and multi-line values correctly.
+function parseICalEvents(icalText) {
   const events = []
-  const lines = icalText.split('\n')
-  let currentEvent = {}
 
-  lines.forEach((line) => {
-    if (line.startsWith('BEGIN:VEVENT')) {
-      currentEvent = {}
-    } else if (line.startsWith('END:VEVENT')) {
-      if (currentEvent.summary) {
-        events.push({
-          title: currentEvent.summary,
-          description: currentEvent.description || '',
-          start_date: currentEvent.dtstart,
-          end_date: currentEvent.dtend,
-          location: currentEvent.location || '',
-          all_day: !currentEvent.dtstart?.includes('T'),
-          department_id: null, // Regional events are org-wide
-          is_org_wide: true,
-          created_at: new Date().toISOString(),
-        })
-      }
-      currentEvent = {}
-    } else if (line.startsWith('SUMMARY:')) {
-      currentEvent.summary = line.replace('SUMMARY:', '')
-    } else if (line.startsWith('DESCRIPTION:')) {
-      currentEvent.description = line.replace('DESCRIPTION:', '')
-    } else if (line.startsWith('DTSTART:')) {
-      currentEvent.dtstart = line.replace('DTSTART:', '')
-    } else if (line.startsWith('DTEND:')) {
-      currentEvent.dtend = line.replace('DTEND:', '')
-    } else if (line.startsWith('LOCATION:')) {
-      currentEvent.location = line.replace('LOCATION:', '')
+  let jcal
+  try {
+    jcal = ICAL.parse(icalText)
+  } catch (err) {
+    console.error('Failed to parse iCal data:', err)
+    return events
+  }
+
+  const comp = new ICAL.Component(jcal)
+  const vevents = comp.getAllSubcomponents('vevent')
+
+  for (const vevent of vevents) {
+    try {
+      const event = new ICAL.Event(vevent)
+
+      const dtstart = event.startDate
+      const dtend = event.endDate
+
+      // ical.js represents all-day dates as ICAL.Time with isDate=true
+      const allDay = dtstart?.isDate ?? false
+
+      const startIso = allDay
+        ? dtstart.toString() // e.g. "2026-07-15"
+        : dtstart?.toJSDate()?.toISOString() ?? null
+
+      const endIso = allDay
+        ? dtend?.toString() ?? startIso
+        : dtend?.toJSDate()?.toISOString() ?? startIso
+
+      if (!event.summary || !startIso) continue
+
+      events.push({
+        title: event.summary,
+        description: event.description || '',
+        start_date: startIso,
+        end_date: endIso,
+        location: event.location || '',
+        all_day: allDay,
+        department_id: null,
+        is_org_wide: true,
+        created_at: new Date().toISOString(),
+      })
+    } catch (err) {
+      console.warn('Skipped malformed VEVENT:', err)
     }
-  })
+  }
 
   return events
 }
 
 async function triggerSpaceSync(spaceId) {
-  // Trigger manual sync for this space if Google Calendar is connected
   try {
-    await supabase.functions.invoke('sync-google-calendar', {
+    await supabase.functions.invoke('calendar-google-sync', {
       body: { space_id: spaceId },
     })
   } catch (e) {

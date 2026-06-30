@@ -8,6 +8,20 @@ const STATUS_COLORS = {
   on_track: { bg: '#F2EEE6', text: '#7A6F5E', label: 'On Track' },
 }
 
+// Derive a display status from the RPC fields (task_status + overdue flag + due date).
+function deriveStatusKey(item) {
+  const status = (item.status ?? '').toLowerCase()
+  if (status === 'done' || status === 'completed') return 'completed'
+  if (item.is_overdue) return 'overdue'
+  if (item.due_date) {
+    const due = new Date(item.due_date)
+    const soon = new Date()
+    soon.setDate(soon.getDate() + 3)
+    if (due <= soon) return 'due_soon'
+  }
+  return 'on_track'
+}
+
 export default function ActionItemsWidget() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -35,7 +49,7 @@ export default function ActionItemsWidget() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {items.map(item => {
-        const colors = STATUS_COLORS[item.status_text] || STATUS_COLORS.on_track
+        const colors = STATUS_COLORS[deriveStatusKey(item)] || STATUS_COLORS.on_track
         const dueStr = item.due_date ? new Date(item.due_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'
 
         return (
@@ -69,15 +83,20 @@ export default function ActionItemsWidget() {
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
               }}>
-                {item.title}
+                {item.task_title}
               </div>
-              {item.assigned_by_name && (
+              {(item.assigner_name || item.meeting_title) && (
                 <div style={{
                   fontSize: 11,
                   color: '#9E9488',
                   marginTop: 2,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
                 }}>
-                  from {item.assigned_by_name}
+                  {item.assigner_name ? `from ${item.assigner_name}` : ''}
+                  {item.assigner_name && item.meeting_title ? ' · ' : ''}
+                  {item.meeting_title ? `📋 ${item.meeting_title}` : ''}
                 </div>
               )}
             </div>

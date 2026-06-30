@@ -3,7 +3,44 @@ import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
 import { createTasksFromActionItems } from '../lib/meetings'
 
-const emptyItem = { title: '', assigneeId: '', dueDate: '', description: '' }
+const emptyItem = { title: '', assigneeId: '', dueDate: '', priority: 'medium', description: '' }
+
+function useMeetingAttendees(meetingId, departmentId) {
+  const [members, setMembers] = useState([])
+
+  useEffect(() => {
+    if (!meetingId && !departmentId) return
+    let active = true
+
+    async function load() {
+      // Prefer meeting attendees so cross-dept people can be assigned
+      if (meetingId) {
+        const { data } = await supabase
+          .from('meeting_attendance')
+          .select('user:users!user_id(id, name, avatar_url, department_id)')
+          .eq('meeting_id', meetingId)
+        if (active && data?.length) {
+          setMembers(data.map((r) => r.user).filter(Boolean))
+          return
+        }
+      }
+      // Fall back to dept members when no attendance records exist yet
+      if (departmentId) {
+        const { data } = await supabase
+          .from('users')
+          .select('id, name, avatar_url, department_id')
+          .eq('department_id', departmentId)
+          .order('name')
+        if (active) setMembers(data ?? [])
+      }
+    }
+
+    load()
+    return () => { active = false }
+  }, [meetingId, departmentId])
+
+  return members
+}
 
 function useMeetingAttendees(meetingId, departmentId) {
   const [members, setMembers] = useState([])
@@ -69,6 +106,7 @@ export default function ActionItemBridge({ meetingId, departmentId, onSaved, onC
         title: item.title.trim(),
         assigneeId: item.assigneeId || null,
         dueDate: item.dueDate || null,
+        priority: item.priority || 'medium',
         description: item.description.trim() || null,
       }))
       .filter((item) => item.title)
@@ -124,7 +162,7 @@ export default function ActionItemBridge({ meetingId, departmentId, onSaved, onC
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {items.map((item, index) => (
           <div key={index} style={{ borderRadius: 12, background: 'white', padding: 12 }}>
-            <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) 132px auto' }}>
+            <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) 132px 108px auto' }}>
               <input
                 value={item.title}
                 onChange={(event) => updateRow(index, 'title', event.target.value)}
@@ -173,6 +211,25 @@ export default function ActionItemBridge({ meetingId, departmentId, onSaved, onC
                   color: 'var(--text-primary)',
                 }}
               />
+              <select
+                value={item.priority}
+                onChange={(event) => updateRow(index, 'priority', event.target.value)}
+                aria-label="Priority"
+                style={{
+                  minWidth: 0,
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'white',
+                  padding: '8px 10px',
+                  fontSize: 12,
+                  color: 'var(--text-primary)',
+                }}
+              >
+                <option value="urgent">Urgent</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
               {items.length > 1 ? (
                 <button
                   type="button"

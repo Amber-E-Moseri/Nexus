@@ -28,7 +28,9 @@ const TASK_LIST_SELECT = `
 `
 
 const SUBTASK_SELECT = `
-  id, title, status, status_id, priority, due_date, task_type, sprint_id,
+  id, title, description, status, status_id, priority, due_date, task_type, sprint_id,
+  parent_task_id, assignee_id, sort_order,
+  assignee:users!assignee_id(id, name, avatar_url),
   ${TASK_STATUS_SELECT}
 `
 
@@ -105,6 +107,7 @@ export async function getDeptTasks(departmentId) {
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
+      meeting:meetings!meeting_id(id, title),
       subtasks:tasks!parent_task_id(${SUBTASK_SELECT}),
       comments:task_comments(count),
       files:task_files(count),
@@ -442,6 +445,67 @@ export async function updateTask(taskId, updates, actorId = null) {
 export async function deleteTask(taskId) {
   const { error } = await supabase.from('tasks').delete().eq('id', taskId)
   if (error) throw error
+}
+
+// --- Subtasks ----------------------------------------------------------------
+// Subtasks are tasks with parent_task_id set. These helpers give them full
+// property parity with parent tasks (assignee, due date, priority, status,
+// description) while reusing the existing createTask/updateTask paths.
+
+export async function createSubtask(parentTaskId, fields = {}) {
+  const {
+    title,
+    description = null,
+    assignee_id = null,
+    due_date = null,
+    priority = 'medium',
+    statusId = null,
+    statusCategory = STATUS_CATEGORIES.OPEN,
+    departmentId = null,
+    sprintId = null,
+    taskType = 'space',
+    sortOrder = null,
+    createdBy = null,
+  } = fields
+
+  const resolvedStatusId =
+    statusId ??
+    (await getCategoryStatusId({
+      departmentId: sprintId ? null : departmentId,
+      category: STATUS_CATEGORIES.OPEN,
+    }))
+
+  return createTask({
+    title: typeof title === 'string' ? title.trim() : title,
+    description: typeof description === 'string' ? description.trim() || null : description,
+    parent_task_id: parentTaskId,
+    department_id: departmentId ?? null,
+    sprint_id: sprintId ?? null,
+    is_personal: false,
+    task_type: sprintId ? 'sprint' : taskType,
+    statusId: resolvedStatusId,
+    statusCategory,
+    priority: priority ?? 'medium',
+    assignee_id,
+    due_date: due_date || null,
+    sort_order: sortOrder ?? Date.now(),
+    source: 'manual',
+    created_by: createdBy ?? null,
+  })
+}
+
+export async function updateSubtask(subtaskId, fields = {}, actorId = null) {
+  return updateTask(subtaskId, fields, actorId)
+}
+
+export async function reorderSubtasks(orderedIds = []) {
+  if (!orderedIds.length) return
+  const updates = orderedIds.map((id, index) =>
+    supabase.from('tasks').update({ sort_order: index }).eq('id', id),
+  )
+  const results = await Promise.all(updates)
+  const failure = results.find((result) => result.error)
+  if (failure?.error) throw failure.error
 }
 
 export async function getDeptMembers(departmentId) {

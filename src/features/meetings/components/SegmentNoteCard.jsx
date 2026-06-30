@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { upsertSegmentNotes, updateSegmentDecisions } from '../lib/minutes'
 import ActionItemForm from './ActionItemForm'
 
-export default function SegmentNoteCard({ segment, minutesId, isFinalized, onRefresh }) {
+export default function SegmentNoteCard({ segment, minutesId, meetingId, departmentId, isFinalized, onRefresh }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [notes, setNotes] = useState(segment.notes || '')
   const [decisions, setDecisions] = useState(segment.decisions || '')
@@ -161,6 +161,8 @@ export default function SegmentNoteCard({ segment, minutesId, isFinalized, onRef
             {!isFinalized && (
               <ActionItemForm
                 segmentId={segment.id}
+                meetingId={meetingId}
+                departmentId={departmentId}
                 onActionCreated={onRefresh}
               />
             )}

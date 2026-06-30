@@ -24,6 +24,7 @@ const MinistryCalendar = lazy(() => import('./pages/calendar/MinistryCalendar'))
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage'))
 const CalendarManagementPage = lazy(() => import('./pages/calendar/CalendarManagementPage'))
 const CalendarReviewPage = lazy(() => import('./pages/calendar/CalendarReviewPage'))
+const CalendarSettingsPage = lazy(() => import('./pages/calendar/CalendarSettingsPage'))
 const CommunicationsPage = lazy(() => import('./pages/communications/CommunicationsPage'))
 const RecipientsPage = lazy(() => import('./pages/communications/RecipientsPage'))
 const AnalyticsPage = lazy(() => import('./pages/communications/AnalyticsPage'))
@@ -132,12 +133,27 @@ export default function App() {
           <Route
             path="/calendar-management"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin']}>
                 <CalendarManagementPage />
               </ProtectedRoute>
             }
           />
-          <Route path="/calendar/review" element={<CalendarReviewPage />} />
+          <Route
+            path="/calendar/review"
+            element={
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'dept_lead']}>
+                <CalendarReviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/calendar/settings"
+            element={
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+                <CalendarSettingsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/map" element={<CanMapPage />} />
           <Route
             path="/admin/campus-edits"

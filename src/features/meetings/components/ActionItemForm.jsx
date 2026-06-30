@@ -1,21 +1,30 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useAuth } from '../../../hooks/useAuth'
 import { createActionItem } from '../lib/minutes'
-import { createTaskFromActionItem } from '../lib/actionItemsBridge'
+import { createTasksFromActionItems } from '../lib/meetings'
+import { linkActionItemToTask } from '../lib/actionItemsBridge'
+import { getDeptMembers } from '../../tasks/lib/tasks'
+import AssigneeSelector from '../../tasks/components/AssigneeSelector'
 
-export default function ActionItemForm({ segmentId, meetingId, onActionCreated }) {
+export default function ActionItemForm({ segmentId, meetingId, departmentId, onActionCreated }) {
+  const { profile } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [description, setDescription] = useState('')
-  const [assignedTo, setAssignedTo] = useState('')
+  const [assigneeIds, setAssigneeIds] = useState([])
   const [dueDate, setDueDate] = useState('')
+  const [priority, setPriority] = useState('medium')
   const [saving, setSaving] = useState(false)
-  const [users, setUsers] = useState([])
+  const [error, setError] = useState(null)
+  const [members, setMembers] = useState([])
 
-  const handleOpenForm = async () => {
-    if (!isOpen) {
-      // Load users for assignment (simplified - in real app fetch from API)
-      setIsOpen(true)
-    }
-  }
+  useEffect(() => {
+    if (!isOpen || !departmentId) return
+    let cancelled = false
+    getDeptMembers(departmentId)
+      .then((rows) => { if (!cancelled) setMembers(rows) })
+      .catch((err) => console.error('Failed to load members for assignment:', err))
+    return () => { cancelled = true }
+  }, [isOpen, departmentId])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -24,32 +33,52 @@ export default function ActionItemForm({ segmentId, meetingId, onActionCreated }
       return
     }
 
+    setSaving(true)
+    setError(null)
+
+    const assignedTo = assigneeIds[0] ?? null
+
     try {
-      setSaving(true)
+      // 1. Create the action item record (drives the minutes UI + status sync)
       const actionItem = await createActionItem(
         segmentId,
-        description,
-        assignedTo || null,
+        description.trim(),
+        assignedTo,
         dueDate || null
       )
 
-      // Create linked task (fire and forget - don't block action item creation)
-      try {
-        await createTaskFromActionItem(actionItem, meetingId)
-      } catch (taskErr) {
-        console.warn('Failed to create linked task, but action item saved:', taskErr)
+      // 2. Create the linked task in the assignee's space so it shows up in
+      //    their My Tasks / department board (createTasksFromActionItems sets
+      //    department_id, meeting_id, source: 'meeting' and a valid status_id).
+      const [task] = await createTasksFromActionItems(
+        meetingId,
+        departmentId,
+        [{
+          title: description.trim(),
+          assigneeId: assignedTo,
+          dueDate: dueDate || null,
+          priority,
+        }],
+        profile?.id ?? null
+      )
+
+      // 3. Link the action item back to the task for two-way status sync.
+      if (task?.id) {
+        await linkActionItemToTask(actionItem.id, task.id)
       }
 
       // Reset form
       setDescription('')
-      setAssignedTo('')
+      setAssigneeIds([])
       setDueDate('')
+      setPriority('medium')
       setIsOpen(false)
 
       // Refresh parent
       onActionCreated()
     } catch (err) {
       console.error('Failed to create action item:', err)
+      setError(err.message || 'Failed to save action item. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -60,7 +89,7 @@ export default function ActionItemForm({ segmentId, meetingId, onActionCreated }
       {!isOpen ? (
         <button
           type="button"
-          onClick={handleOpenForm}
+          onClick={() => setIsOpen(true)}
           style={{
             padding: '8px 12px',
             fontSize: 12,
@@ -104,20 +133,37 @@ export default function ActionItemForm({ segmentId, meetingId, onActionCreated }
                 fontFamily: 'inherit',
               }}
             />
-            <input
-              type="text"
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              placeholder="Assign to (name or email)"
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              aria-label="Priority"
               style={{
                 padding: '8px 10px',
                 fontSize: 12,
                 border: '1px solid #E5DDD0',
                 borderRadius: 6,
                 fontFamily: 'inherit',
+                background: 'white',
+                color: '#0C0E18',
               }}
-            />
+            >
+              <option value="urgent">Urgent</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
           </div>
+
+          <AssigneeSelector
+            members={members}
+            selectedIds={assigneeIds}
+            onSelectionChange={setAssigneeIds}
+            isMultiSelect={false}
+          />
+
+          {error && (
+            <p style={{ margin: 0, fontSize: 11, color: '#C94830' }}>{error}</p>
+          )}
 
           <div style={{ display: 'flex', gap: 8 }}>
             <button
@@ -143,8 +189,9 @@ export default function ActionItemForm({ segmentId, meetingId, onActionCreated }
               onClick={() => {
                 setIsOpen(false)
                 setDescription('')
-                setAssignedTo('')
+                setAssigneeIds([])
                 setDueDate('')
+                setError(null)
               }}
               style={{
                 flex: 1,

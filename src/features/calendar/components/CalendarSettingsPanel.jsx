@@ -1,97 +1,55 @@
 import { useEffect, useState } from 'react'
-import { Copy, Trash2, Settings, Plus } from 'lucide-react'
-// TODO: Implement iCal subscription functions
-// import { getICalSubscriptions, deleteICalSubscription, generateICalToken } from '..'
+import { Shield, Users, Check, X } from 'lucide-react'
+import { getCalendarPermissions, grantCalendarPermission, revokeCalendarPermission } from '../lib/calendar'
 import { useToast } from '../../../context/ToastContext'
 
-export default function CalendarSettingsPanel({ userId, departments = [] }) {
+// Permissions management for the Ministry Calendar.
+// Shows users who have explicit write access (can_manage=true) and allows
+// super_admin to grant/revoke it. Programs space members get write access
+// automatically via space membership — they appear here as read-only indicators.
+export default function CalendarSettingsPanel({ programsMembers = [] }) {
   const { showToast } = useToast()
-  const [subscriptions, setSubscriptions] = useState([])
+  const [permissions, setPermissions] = useState([])
   const [loading, setLoading] = useState(true)
-  const [generating, setGenerating] = useState(false)
-  const [showNewForm, setShowNewForm] = useState(false)
-  const [newSub, setNewSub] = useState({ scope: 'all', department_id: null })
-  const [copiedId, setCopiedId] = useState(null)
+  const [saving, setSaving] = useState(null)
 
-  async function loadSubscriptions() {
+  async function loadPermissions() {
     setLoading(true)
     try {
-      // TODO: Implement getICalSubscriptions
-      // const data = await getICalSubscriptions(userId)
-      setSubscriptions([])
+      const data = await getCalendarPermissions()
+      setPermissions(data)
     } catch (err) {
-      console.error('Failed to load subscriptions:', err)
-      showToast('Failed to load subscriptions', { tone: 'error' })
+      console.error('Failed to load calendar permissions:', err)
+      showToast('Failed to load permissions', { tone: 'error' })
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadSubscriptions()
-  }, [userId])
+    loadPermissions()
+  }, [])
 
-  async function handleGenerateToken() {
-    if (!userId) return
-    if (newSub.scope === 'department' && !newSub.department_id) {
-      showToast('Please select a department', { tone: 'error' })
-      return
-    }
-
-    setGenerating(true)
+  async function handleToggle(userId, currentlyGranted) {
+    setSaving(userId)
     try {
-      const result = await generateICalToken(userId, newSub.scope, newSub.department_id)
-      showToast('iCal token generated successfully', { tone: 'success' })
-      setShowNewForm(false)
-      setNewSub({ scope: 'all', department_id: null })
-      await loadSubscriptions()
+      if (currentlyGranted) {
+        await revokeCalendarPermission(userId)
+        showToast('Write access revoked', { tone: 'success' })
+      } else {
+        await grantCalendarPermission(userId)
+        showToast('Write access granted', { tone: 'success' })
+      }
+      await loadPermissions()
     } catch (err) {
-      console.error('Failed to generate token:', err)
-      showToast('Failed to generate token', { tone: 'error' })
+      console.error('Failed to update permission:', err)
+      showToast('Failed to update permission', { tone: 'error' })
     } finally {
-      setGenerating(false)
+      setSaving(null)
     }
   }
 
-  async function handleDeleteSubscription(id) {
-    if (!window.confirm('Delete this subscription?')) return
-
-    try {
-      await deleteICalSubscription(id)
-      showToast('Subscription deleted', { tone: 'success' })
-      setSubscriptions(subscriptions.filter((s) => s.id !== id))
-    } catch (err) {
-      console.error('Failed to delete subscription:', err)
-      showToast('Failed to delete subscription', { tone: 'error' })
-    }
-  }
-
-  function copyToClipboard(token) {
-    const url = `${window.location.origin}/calendar-ical?token=${token}`
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiedId(token)
-      showToast('iCal URL copied to clipboard', { tone: 'success' })
-      setTimeout(() => setCopiedId(null), 2000)
-    }).catch(() => {
-      showToast('Failed to copy URL', { tone: 'error' })
-    })
-  }
-
-  if (loading) {
-    return (
-      <div style={{
-        borderRadius: '12px',
-        border: '1px solid var(--border)',
-        backgroundColor: 'white',
-        padding: '16px',
-        textAlign: 'center',
-        color: 'var(--text-secondary)',
-        fontSize: '14px'
-      }}>
-        Loading settings...
-      </div>
-    )
-  }
+  const programsMemberIds = new Set(programsMembers.map((m) => m.id))
 
   return (
     <div style={{
@@ -109,250 +67,122 @@ export default function CalendarSettingsPanel({ userId, departments = [] }) {
         borderBottom: '1px solid var(--border)',
         backgroundColor: 'var(--surface-tertiary)'
       }}>
-        <Settings size={18} style={{ color: 'var(--accent)' }} />
-        <h3 style={{
-          fontSize: '16px',
-          fontWeight: 600,
-          color: 'var(--text-primary)',
-          margin: 0,
-          flex: 1
-        }}>
-          Calendar Settings
-        </h3>
+        <Shield size={18} style={{ color: 'var(--accent)' }} />
+        <div style={{ flex: 1 }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+            Calendar Write Access
+          </h3>
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
+            Programs space members get write access automatically. Grant it to others manually below.
+          </p>
+        </div>
+        <Users size={16} style={{ color: 'var(--text-tertiary)' }} />
       </div>
 
-      <div style={{ padding: '16px' }}>
-        <div style={{ marginBottom: '24px' }}>
-          <h4 style={{
-            fontSize: '14px',
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-            margin: '0 0 12px'
-          }}>
-            iCal Feed Subscriptions
-          </h4>
-          <p style={{
-            fontSize: '12px',
-            color: 'var(--text-secondary)',
-            margin: 0,
-            marginBottom: '12px'
-          }}>
-            Generate tokens to subscribe to your calendar in external apps like Google Calendar, Outlook, or Apple Calendar.
-          </p>
-
-          {subscriptions.length === 0 ? (
-            <div style={{
-              padding: '16px',
-              borderRadius: '8px',
-              backgroundColor: 'var(--surface-tertiary)',
-              textAlign: 'center',
-              color: 'var(--text-secondary)',
-              fontSize: '12px'
-            }}>
-              No subscriptions yet
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-              {subscriptions.map((sub) => (
-                <div key={sub.id} style={{
-                  padding: '12px',
-                  borderRadius: '8px',
-                  backgroundColor: 'var(--surface-tertiary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  fontSize: '12px'
-                }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontWeight: 600,
-                      color: 'var(--text-primary)',
-                      textTransform: 'capitalize',
-                      marginBottom: '2px'
-                    }}>
-                      {sub.scope === 'all' ? 'Org-wide Events' : `${departments.find(d => d.id === sub.department_id)?.name || 'Department'}`}
-                    </div>
-                    <div style={{
-                      color: 'var(--text-secondary)',
-                      fontSize: '11px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      Created {new Date(sub.created_at).toLocaleDateString()}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => copyToClipboard(sub.token)}
-                    title="Copy iCal URL"
-                    style={{
-                      padding: '6px',
-                      backgroundColor: copiedId === sub.token ? 'var(--accent)' : 'white',
-                      border: '1px solid var(--border)',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: copiedId === sub.token ? 'white' : 'var(--text-secondary)',
-                      flexShrink: 0
-                    }}
-                  >
-                    <Copy size={14} />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteSubscription(sub.id)}
-                    title="Delete subscription"
-                    style={{
-                      padding: '6px',
-                      backgroundColor: 'white',
-                      border: '1px solid #f44336',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#f44336',
-                      flexShrink: 0
-                    }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+      {/* Programs members — auto-granted, read-only */}
+      {programsMembers.length > 0 && (
+        <div style={{ padding: '16px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '8px' }}>
+            Programs Space (Auto-Granted)
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {programsMembers.map((member) => (
+              <div key={member.id} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--surface-tertiary)',
+                fontSize: '13px'
+              }}>
+                <div style={{ flex: 1, fontWeight: 500, color: 'var(--text-primary)' }}>
+                  {member.name}
                 </div>
-              ))}
-            </div>
-          )}
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{member.email}</div>
+                <div style={{
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  backgroundColor: '#D1FAE5',
+                  color: '#059669',
+                  fontSize: '11px',
+                  fontWeight: 600
+                }}>
+                  Auto
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Explicitly granted permissions */}
+      <div style={{ padding: '16px' }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '8px' }}>
+          Manually Granted
         </div>
 
-        {!showNewForm ? (
-          <button
-            onClick={() => setShowNewForm(true)}
-            style={{
-              width: '100%',
-              padding: '10px 16px',
-              backgroundColor: 'var(--accent)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '13px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
-          >
-            <Plus size={16} />
-            New Subscription
-          </button>
-        ) : (
+        {loading ? (
+          <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
+            Loading...
+          </div>
+        ) : permissions.filter((p) => !programsMemberIds.has(p.user_id)).length === 0 ? (
           <div style={{
             padding: '16px',
             borderRadius: '8px',
             backgroundColor: 'var(--surface-tertiary)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
+            textAlign: 'center',
+            color: 'var(--text-secondary)',
+            fontSize: '13px'
           }}>
-            <div>
-              <label style={{
-                display: 'block',
-                fontSize: '12px',
-                fontWeight: 600,
-                marginBottom: '6px',
-                color: 'var(--text-primary)'
-              }}>
-                Scope
-              </label>
-              <select
-                value={newSub.scope}
-                onChange={(e) => setNewSub({ ...newSub, scope: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border)',
-                  fontSize: '12px',
-                  boxSizing: 'border-box',
-                  backgroundColor: 'white'
-                }}
-              >
-                <option value="all">Org-wide Events</option>
-                <option value="department">Department Only</option>
-              </select>
-            </div>
-
-            {newSub.scope === 'department' && (
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  marginBottom: '6px',
-                  color: 'var(--text-primary)'
+            No manual grants yet
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {permissions
+              .filter((p) => !programsMemberIds.has(p.user_id))
+              .map((perm) => (
+                <div key={perm.id} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--surface-tertiary)',
+                  fontSize: '13px'
                 }}>
-                  Department
-                </label>
-                <select
-                  value={newSub.department_id || ''}
-                  onChange={(e) => setNewSub({ ...newSub, department_id: e.target.value || null })}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    border: '1px solid var(--border)',
-                    fontSize: '12px',
-                    boxSizing: 'border-box',
-                    backgroundColor: 'white'
-                  }}
-                >
-                  <option value="">Select a department...</option>
-                  {departments.map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={() => setShowNewForm(false)}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  backgroundColor: 'white',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: '12px',
-                  color: 'var(--text-primary)'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleGenerateToken}
-                disabled={generating}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  backgroundColor: 'var(--accent)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: generating ? 'not-allowed' : 'pointer',
-                  fontWeight: 600,
-                  fontSize: '12px',
-                  opacity: generating ? 0.6 : 1
-                }}
-              >
-                {generating ? 'Generating...' : 'Generate'}
-              </button>
-            </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+                      {perm.users?.name ?? 'Unknown'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      {perm.users?.email}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleToggle(perm.user_id, perm.can_manage)}
+                    disabled={saving === perm.user_id}
+                    title={perm.can_manage ? 'Revoke write access' : 'Grant write access'}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      cursor: saving === perm.user_id ? 'not-allowed' : 'pointer',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      opacity: saving === perm.user_id ? 0.6 : 1,
+                      backgroundColor: perm.can_manage ? '#FEE2E2' : '#D1FAE5',
+                      color: perm.can_manage ? '#DC2626' : '#059669',
+                    }}
+                  >
+                    {perm.can_manage ? <X size={12} /> : <Check size={12} />}
+                    {perm.can_manage ? 'Revoke' : 'Grant'}
+                  </button>
+                </div>
+              ))}
           </div>
         )}
       </div>

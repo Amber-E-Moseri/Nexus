@@ -9,7 +9,7 @@ export default function SprintProgressBar({ tasksCount, compact = false }) {
     )
   }
 
-  const { done = 0, total = 0 } = tasksCount
+  const { done = 0, total = 0, subtasksDone = 0, subtasksTotal = 0 } = tasksCount
   const percentage = total > 0 ? Math.round((done / total) * 100) : 0
 
   let fillColor = '#C47E0A'
@@ -48,6 +48,11 @@ export default function SprintProgressBar({ tasksCount, compact = false }) {
         </div>
         <div style={{ marginTop: 6, fontSize: compact ? 11 : 12, color: 'var(--text-tertiary)', fontWeight: 500 }}>
           {done} of {total} task{total !== 1 ? 's' : ''} ({percentage}%)
+          {subtasksTotal > 0 ? (
+            <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>
+              {' '}· {subtasksDone}/{subtasksTotal} subtask{subtasksTotal !== 1 ? 's' : ''} completed
+            </span>
+          ) : null}
         </div>
       </div>
     </div>

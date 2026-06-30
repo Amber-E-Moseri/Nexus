@@ -1,9 +1,11 @@
 import { memo } from 'react'
+import { Link } from 'react-router-dom'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { formatDueDate } from '../../../lib/dateUtils'
 import { PRIORITY_STYLES } from '../../../lib/priorities'
 import { getTaskStatusLabel, isTaskCompleted } from '../../../lib/taskStatuses'
+import SubtaskProgress from './SubtaskProgress'
 
 function Initials({ name }) {
   const initials = (name ?? '')
@@ -63,9 +65,10 @@ function TaskCard({ task, onClick, isDragging = false }) {
   const priority = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium
   const statusLabel = getTaskStatusLabel(task)
   const isBlocked = statusLabel === 'Blocked'
-  const doneCount = task.subtasks?.filter((subtask) => isTaskCompleted(subtask)).length ?? 0
-  const totalSubtasks = task.subtasks?.length ?? 0
+  const subtasks = task.subtasks ?? []
   const commentCount = task.comments?.[0]?.count ?? 0
+  const parentTitle = task.parent?.title ?? task.parent_task?.title ?? null
+  const isFromMeeting = task.source === 'meeting'
   const assignees = Array.isArray(task.assignees)
     ? task.assignees.filter(Boolean)
     : task.assignee
@@ -108,6 +111,46 @@ function TaskCard({ task, onClick, isDragging = false }) {
           {scopeLabel}
         </span>
         <div style={{ display: 'flex', gap: 6 }}>
+          {isFromMeeting && (
+            task.meeting_id ? (
+              <Link
+                to={`/meetings/${task.meeting_id}`}
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                title={task.meeting?.title ? `From meeting: ${task.meeting.title}` : 'Created from a meeting action item'}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  padding: '3px 8px',
+                  borderRadius: 999,
+                  background: '#EDE8F8',
+                  color: '#4C2A92',
+                  whiteSpace: 'nowrap',
+                  maxWidth: 160,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  textDecoration: 'none',
+                }}
+              >
+                📋 {task.meeting?.title ? `From: ${task.meeting.title}` : 'From Meeting'}
+              </Link>
+            ) : (
+              <span
+                title="Created from a meeting action item"
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  padding: '3px 8px',
+                  borderRadius: 999,
+                  background: '#EDE8F8',
+                  color: '#4C2A92',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                📋 From Meeting
+              </span>
+            )
+          )}
           {isBlocked && (
             <span
               style={{
@@ -155,6 +198,23 @@ function TaskCard({ task, onClick, isDragging = false }) {
         {task.title}
       </p>
 
+      {parentTitle ? (
+        <p
+          title={`Subtask of: ${parentTitle}`}
+          style={{
+            fontSize: 11,
+            color: 'var(--text-tertiary)',
+            marginTop: -6,
+            marginBottom: 12,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          ↳ Subtask of: {parentTitle}
+        </p>
+      ) : null}
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         {visibleAssignees.length > 0 ? (
           <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -171,10 +231,7 @@ function TaskCard({ task, onClick, isDragging = false }) {
           </div>
         ) : null}
 
-        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <span aria-hidden="true">□</span>
-          {doneCount}/{totalSubtasks}
-        </span>
+        {subtasks.length > 0 ? <SubtaskProgress subtasks={subtasks} /> : null}
 
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <span aria-hidden="true">💬</span>

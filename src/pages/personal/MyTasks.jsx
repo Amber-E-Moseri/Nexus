@@ -65,16 +65,14 @@ export default function MyTasks() {
     localStorage.setItem('blw_mytasks_view', mode)
   }
 
-  function handleSaved(saved) {
-    setTasks((prev) =>
-      prev.some((task) => task.id === saved.id)
-        ? prev.map((task) => (task.id === saved.id ? saved : task))
-        : [saved, ...prev],
-    )
+  function handleSaved() {
+    // useMyTasks owns the task list (with realtime sync); re-pull after a
+    // modal save rather than mutating a non-existent local setter.
+    refetch()
   }
 
-  function handleDeleted(taskId) {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId))
+  function handleDeleted() {
+    refetch()
   }
 
   const hasActiveFilters = () => Object.values(filters).some((v) => v !== undefined && v !== null && v !== false && (!Array.isArray(v) || v.length > 0))

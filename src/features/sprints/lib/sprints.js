@@ -29,9 +29,24 @@ function uniqueTeamIds(teamIds = []) {
 }
 
 export function calculateSprintTaskStats(tasks = []) {
+  // Burndown counts PARENT tasks only: each parent task is one unit and only
+  // moves to "done" when its own status category is completed. Subtask completion
+  // is surfaced separately (secondary metric) and never affects the burndown total.
   const total = tasks.length
   const done = tasks.filter((task) => task.status_definition?.category === 'completed').length
-  return { done, total }
+
+  let subtasksTotal = 0
+  let subtasksDone = 0
+  for (const task of tasks) {
+    const subtasks = Array.isArray(task.subtasks) ? task.subtasks : []
+    subtasksTotal += subtasks.length
+    subtasksDone += subtasks.filter(
+      (subtask) =>
+        (subtask.status_definition?.category ?? subtask.status_category) === 'completed',
+    ).length
+  }
+
+  return { done, total, subtasksDone, subtasksTotal }
 }
 
 export function shouldAutoStartSprint(sprint) {
