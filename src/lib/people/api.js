@@ -242,3 +242,21 @@ export async function rejectSprintAccessRequest(requestId, message = null) {
 
   if (error) throw error
 }
+
+export async function resetUserPassword(userId) {
+  const { data, error } = await supabase.functions.invoke('reset-user-password', {
+    body: {
+      user_id: userId,
+    },
+  })
+
+  if (error) {
+    throw error
+  }
+
+  if (data?.error) {
+    throw new Error(data.error)
+  }
+
+  return data
+}

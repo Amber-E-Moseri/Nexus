@@ -30,6 +30,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [jwtRole, setJwtRole] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false)
 
   const refreshProfile = useCallback(
     async (userId) => {
@@ -89,33 +90,30 @@ export function AuthProvider({ children }) {
         return
       }
 
-      // SECURITY FIX: Reject PASSWORD_RECOVERY auto-authentication
-      // Do NOT create a user session from the recovery token
-      // Instead, store recovery token in sessionStorage for use on reset-password page
+      // PASSWORD_RECOVERY: keep the recovery session alive so updateUser() can
+      // change the password. Navigation is locked to /reset-password via
+      // isRecoveryMode (enforced in ProtectedRoute) until the password is changed.
       if (event === 'PASSWORD_RECOVERY') {
-        // Extract recovery token from URL hash
-        const hash = window.location.hash
-        const params = new URLSearchParams(hash.substring(1))
-        const accessToken = params.get('access_token')
-        const type = params.get('type')
-
-        if (type === 'recovery' && accessToken) {
-          // Store recovery token in sessionStorage (expires when browser closes)
+        // Retain a token marker in sessionStorage for ResetPassword's presence/expiry gate.
+        const accessToken =
+          session?.access_token ??
+          new URLSearchParams(window.location.hash.substring(1)).get('access_token')
+        if (accessToken) {
           sessionStorage.setItem('recovery_token', accessToken)
           // 15-minute TTL for the recovery token
           sessionStorage.setItem('recovery_token_expires', String(Date.now() + 15 * 60 * 1000))
-
-          // CRITICAL: Reject the auto-session from Supabase
-          // This prevents users from gaining access without changing their password
-          await supabase.auth.signOut({ scope: 'local' })
-
-          // Redirect to reset password page (safe - recovery token is in sessionStorage, not exposed in JS)
-          if (mounted) {
-            setLoading(false)
-            window.location.href = '/reset-password'
-          }
-          return
         }
+
+        if (mounted) {
+          setUser(session?.user ?? null)
+          setJwtRole(getJwtRole(session))
+          setIsRecoveryMode(true)
+          setLoading(false)
+          if (window.location.pathname !== '/reset-password') {
+            window.location.replace('/reset-password')
+          }
+        }
+        return
       }
 
       setUser(session?.user ?? null)
@@ -168,12 +166,18 @@ export function AuthProvider({ children }) {
       role: profile?.role ?? null,
       effectiveRole: jwtRole ?? profile?.role ?? null,
       loading,
+      isRecoveryMode,
+      clearRecoveryMode: () => {
+        setIsRecoveryMode(false)
+        sessionStorage.removeItem('recovery_token')
+        sessionStorage.removeItem('recovery_token_expires')
+      },
       signIn,
       signUp,
       signOut: () => supabase.auth.signOut(),
       refreshProfile,
     }),
-    [jwtRole, loading, profile, user, signIn, signUp],
+    [jwtRole, loading, profile, user, isRecoveryMode, signIn, signUp],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

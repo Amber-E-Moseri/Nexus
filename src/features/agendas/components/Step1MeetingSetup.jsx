@@ -1,9 +1,9 @@
-import { useHasPermission } from '../../../hooks/useHasPermission'
+import { useRequirePermission } from '../../../hooks/useHasPermission'
 import { useAgendaWizard, validateStep1 } from '../../../hooks/useAgendaWizard'
 import { MEETING_TYPES, THEME_OPTIONS } from '../../../data/agendaTemplates'
 
 export default function Step1MeetingSetup() {
-  const { hasPermission, loading: checkingPermissions } = useHasPermission('meetings:manage')
+  const { hasPermission, loading: checkingPermissions } = useRequirePermission('meetings:manage')
   const { agendaData, updateAgendaData, setError, errors, goToStep } = useAgendaWizard()
 
   function handleNext() {

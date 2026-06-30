@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { ChevronLeft } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useMeetings } from '../MeetingsContext'
 import MeetingRecordTabs from './MeetingRecordTabs'
 import LoadingSpinner from '../../../components/ui/LoadingSpinner'
@@ -25,6 +26,7 @@ function groupMeetingsByCategory(meetings) {
 }
 
 function RecordPane({ selectedMeeting, canManage, onStartLive, isMobile, onBack }) {
+  const navigate = useNavigate()
   if (!selectedMeeting) {
     return (
       <div
@@ -89,6 +91,20 @@ function RecordPane({ selectedMeeting, canManage, onStartLive, isMobile, onBack 
             </div>
           </div>
         </div>
+        {!isMobile && (
+          <button
+            type="button"
+            onClick={() => navigate(`/meetings/${selectedMeeting.id}`)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              paddingLeft: '10px', paddingRight: '10px', paddingTop: '6px', paddingBottom: '6px',
+              borderRadius: 8, border: '1px solid var(--border)', background: 'transparent',
+              cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#4C2A92', marginRight: 6,
+            }}
+          >
+            ↗ Full view
+          </button>
+        )}
         {canManage && !isMobile && (
           <button
             type="button"

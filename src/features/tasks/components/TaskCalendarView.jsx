@@ -1,9 +1,10 @@
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CalendarPlus } from 'lucide-react'
 import { useState } from 'react'
 import { useDndSensors } from '@/dnd/index.js'
 import { useTasks } from '../TasksContext'
 import TaskCard from './TaskCard'
+import TaskFeedSubscriptionPanel from '../../calendar/components/TaskFeedSubscriptionPanel'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const PRIORITY_COLORS = {
@@ -55,13 +56,17 @@ function TaskCalendarCard({ task, isDragging, onClick }) {
   )
 }
 
-export default function TaskCalendarView({ filteredTasks, onTaskClick, onAddTask }) {
+export default function TaskCalendarView({ filteredTasks, onTaskClick, onAddTask, spaceId, userId }) {
   const { tasks: allTasks, editTask } = useTasks()
   const tasks = filteredTasks ?? allTasks
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth())
   const [activeTask, setActiveTask] = useState(null)
   const [dragOverDate, setDragOverDate] = useState(null)
+  const [showSubscribe, setShowSubscribe] = useState(false)
+
+  // Task feed subscriptions are space-scoped — only offer them inside a space view.
+  const canSubscribe = Boolean(spaceId && userId)
 
   const sensors = useDndSensors()
 
@@ -158,6 +163,29 @@ export default function TaskCalendarView({ filteredTasks, onTaskClick, onAddTask
         </h2>
 
         <div style={{ display: 'flex', gap: 8 }}>
+          {canSubscribe && (
+            <button
+              type="button"
+              onClick={() => setShowSubscribe(true)}
+              title="Subscribe to task feeds"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                fontSize: 12,
+                fontWeight: 500,
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                background: 'white',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+              }}
+            >
+              <CalendarPlus size={14} />
+              Subscribe
+            </button>
+          )}
           <button
             type="button"
             onClick={handleToday}
@@ -316,6 +344,14 @@ export default function TaskCalendarView({ filteredTasks, onTaskClick, onAddTask
           })}
         </div>
       </div>
+
+      {canSubscribe && showSubscribe && (
+        <TaskFeedSubscriptionPanel
+          spaceId={spaceId}
+          userId={userId}
+          onClose={() => setShowSubscribe(false)}
+        />
+      )}
     </div>
   )
 }

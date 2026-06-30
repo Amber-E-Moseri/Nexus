@@ -1,7 +1,7 @@
-import { useSearchParams } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { isValidRsvpTokenFormat } from '@/lib/rsvpTokens';
+import { useSearchParams } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { supabase } from '../../lib/supabase'
+import { isValidRsvpTokenFormat } from '../../lib/rsvpTokens'
 
 const MAX_NOTES_LENGTH = 500;
 

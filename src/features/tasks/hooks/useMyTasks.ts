@@ -43,12 +43,18 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
   const TASK_SELECT = `
     id, title, description, priority, status, status_id, due_date, created_at,
     department_id, assignee_id, created_by, task_type, sprint_id, list_id,
+    source, meeting_id, parent_task_id,
+    meeting:meetings!meeting_id(id, title),
     status_definition:task_status_definitions!status_id(
       id, name, color, category, legacy_key, department_id
     ),
     assignee:users!assignee_id(id, name, avatar_url),
     creator:users!created_by(id, name),
     space:departments(id, name, color),
+    subtasks:tasks!parent_task_id(
+      id, status_id,
+      status_definition:task_status_definitions!status_id(id, name, category, legacy_key)
+    ),
     comments:task_comments(count),
     files:task_files(count),
     dependencies:task_dependencies!task_id(count)
@@ -94,6 +100,25 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
       // Normalize task rows (status handling, etc.)
       const normalizedTasks = normalizeTaskRows(tasksData || [])
 
+      // Resolve parent titles for any subtasks in the result so My Tasks can show
+      // "Subtask of: …" context. (Fetched separately to avoid an ambiguous
+      // self-referential embed clashing with the subtasks child embed above.)
+      const parentIds = Array.from(
+        new Set(
+          (normalizedTasks as any[])
+            .map((t) => t.parent_task_id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      )
+      let parentMap: Record<string, { id: string; title: string }> = {}
+      if (parentIds.length > 0) {
+        const { data: parents } = await supabase
+          .from('tasks')
+          .select('id, title')
+          .in('id', parentIds)
+        parentMap = Object.fromEntries((parents || []).map((p) => [p.id, p]))
+      }
+
       // Attach milestone data to each task for easier access
       const milestoneMap = Object.fromEntries(
         (milestonesData || []).map((m) => [m.task_id, m])
@@ -101,6 +126,7 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
       const tasksWithMilestones = normalizedTasks.map((task) => ({
         ...task,
         milestone: milestoneMap[task.id] || null,
+        parent: task.parent_task_id ? parentMap[task.parent_task_id] || null : null,
       }))
 
       // Apply client-side filters if needed

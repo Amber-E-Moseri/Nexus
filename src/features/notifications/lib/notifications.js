@@ -151,6 +151,7 @@ export const NOTIFICATION_TYPES = {
   event_rejected: { label: 'Calendar event rejected', icon: '❌', description: 'When your calendar event is rejected' },
   meeting_reminder: { label: 'Meeting reminder', icon: '🔔', description: 'Reminder 1 hour before a meeting' },
   system: { label: 'System notification', icon: '🔔', description: 'Important system-wide announcements' },
+  calendar_sync_failure: { label: 'Calendar sync failed', icon: '⚠️', description: 'When the Google Calendar sync fails for a space you manage' },
 }
 
 export async function sendBrowserPushNotification(title, options = {}) {
@@ -245,6 +246,8 @@ export function formatNotificationMessage(notification) {
       return `Your event "${payload.event_title ?? 'Untitled'}" was approved`
     case 'event_rejected':
       return `Your event "${payload.event_title ?? 'Untitled'}" was rejected`
+    case 'calendar_sync_failure':
+      return `Google Calendar sync failed: ${payload.error_message ?? 'unknown error'}`
     case 'system':
       return payload.message ?? def.label
     default:

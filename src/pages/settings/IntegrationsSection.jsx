@@ -391,6 +391,9 @@ export default function IntegrationsSection({ role, supabaseClient }) {
       enabled: Boolean(integration.enabled),
       show_in_sidebar: Boolean(integration.show_in_sidebar),
       sort_order: integration.sort_order ?? 0,
+      scope: integration.scope ?? 'global',
+      department_ids: integration.department_ids ?? [],
+      user_ids: integration.user_ids ?? [],
     }
 
     try {

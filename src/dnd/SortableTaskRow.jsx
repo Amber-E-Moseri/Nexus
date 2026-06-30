@@ -1,10 +1,12 @@
 import { memo, useEffect, useMemo, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical } from 'lucide-react'
 import { TaskDragHandle } from '@/dnd/TaskDragHandle.jsx'
 import { formatDueDate } from '@/lib/dateUtils'
 import { PRIORITY_STYLES } from '@/lib/priorities'
+import SubtaskProgress from '@/features/tasks/components/SubtaskProgress'
 
 function stopPropagation(event) {
   event.stopPropagation()
@@ -122,7 +124,9 @@ function RowContent({
   isHovering = false,
   isMobile = false,
 }) {
+  const subtasks = Array.isArray(task.subtasks) ? task.subtasks : null
   const subtaskCount = task.subtask_count ?? task.subtasks?.length ?? 0
+  const parentTitle = task.parent?.title ?? task.parent_task?.title ?? null
 
   return (
     <div
@@ -195,6 +199,45 @@ function RowContent({
         >
           {task.title}
         </div>
+        {parentTitle ? (
+          <div
+            title={`Subtask of: ${parentTitle}`}
+            style={{
+              marginTop: 3,
+              fontSize: 10.5,
+              color: '#9A8E7A',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            ↳ Subtask of: {parentTitle}
+          </div>
+        ) : null}
+        {task.source === 'meeting' && task.meeting_id && (
+          <Link
+            to={`/meetings/${task.meeting_id}`}
+            onClick={stopPropagation}
+            onPointerDown={stopPropagation}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              marginTop: 3,
+              fontSize: 10,
+              fontWeight: 600,
+              color: '#4C2A92',
+              background: 'rgba(76,42,146,.08)',
+              borderRadius: 4,
+              padding: '1px 6px',
+              textDecoration: 'none',
+              letterSpacing: '.01em',
+            }}
+            title={task.meeting?.title ? `From meeting: ${task.meeting.title}` : 'From a meeting'}
+          >
+            📋 {task.meeting?.title ? `From: ${task.meeting.title}` : 'From meeting'} →
+          </Link>
+        )}
       </div>
 
       {!isMobile ? (
@@ -208,8 +251,12 @@ function RowContent({
           <div style={{ minWidth: 0 }}>
             <DueText task={task} />
           </div>
-          <div style={{ fontSize: 12, color: '#7A6F5E', textAlign: 'right' }}>
-            {subtaskCount || '-'}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: 12, color: '#7A6F5E' }}>
+            {subtasks && subtasks.length > 0 ? (
+              <SubtaskProgress subtasks={subtasks} compact />
+            ) : (
+              subtaskCount || '-'
+            )}
           </div>
         </>
       ) : null}

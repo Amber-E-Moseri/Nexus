@@ -22,10 +22,11 @@ export default function CalendarReviewPage() {
   const [rejectingEventId, setRejectingEventId] = useState(null)
   const [rejectionNote, setRejectionNote] = useState('')
 
-  // Check authorization
+  // Check authorization: super_admin, regional_secretary, and dept_lead get access
+  // at the route level. Page-level check also covers users with calendar:write permission.
   useEffect(() => {
     let active = true
-    if (['super_admin'].includes(effectiveRole)) {
+    if (['super_admin', 'regional_secretary', 'dept_lead'].includes(effectiveRole)) {
       if (active) setAuthorized(true)
       return () => { active = false }
     }

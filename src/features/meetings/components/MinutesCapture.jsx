@@ -198,6 +198,8 @@ export default function MinutesCapture({ meeting, agendaItems, onClose }) {
               key={segment.id}
               segment={segment}
               minutesId={minutes.id}
+              meetingId={meeting.id}
+              departmentId={meeting.department_id}
               isFinalized={isFinalized}
               onRefresh={loadMinutes}
             />

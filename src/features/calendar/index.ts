@@ -6,7 +6,7 @@ export { default as CalendarDraggableEvent } from './components/CalendarDraggabl
 export { default as EventModal } from './components/EventModal'
 export { default as EventDetailModal } from './components/EventDetailModal'
 export { default as EventSubmitModal } from './components/EventSubmitModal'
-// export { default as CalendarSettingsPanel } from './components/CalendarSettingsPanel' // TODO: Implement iCal functions
+export { default as CalendarSettingsPanel } from './components/CalendarSettingsPanel'
 export { default as SubmissionsPanel } from './components/SubmissionsPanel'
 
 export {
@@ -29,6 +29,8 @@ export {
   grantCalendarPermission,
   revokeCalendarPermission,
   getCalendarPermissions,
+  getOrCreateTaskFeedToken,
+  getTaskFeedUrl,
   getEventTypes,
   createEventType,
   updateEventType,

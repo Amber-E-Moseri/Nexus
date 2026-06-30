@@ -6,11 +6,7 @@ import Step2EventDetails from '../../components/invitations/Step2EventDetails'
 import Step3Recipients from '../../components/invitations/Step3Recipients'
 import Step4PreviewSend from '../../components/invitations/Step4PreviewSend'
 
-const PRIMARY = '#4C2A92'
-const BORDER = '#EDE8DC'
-const TEXT = '#2D2A22'
-const MUTED = '#9E9488'
-const BG = '#F4F1EA'
+/* Design system colors via CSS variables */
 
 function StepIndicator({ currentStep, totalSteps }) {
   return (
@@ -33,7 +29,7 @@ function StepIndicator({ currentStep, totalSteps }) {
                 fontWeight: 700,
                 fontSize: 14,
                 background: isDone ? '#2D8653' : isActive ? PRIMARY : '#E8E3D5',
-                color: isDone || isActive ? 'white' : MUTED,
+                color: isDone || isActive ? 'white' : 'var(--text-secondary)',
               }}
             >
               {isDone ? '✓' : step}
@@ -43,7 +39,7 @@ function StepIndicator({ currentStep, totalSteps }) {
                 style={{
                   width: 20,
                   height: 2,
-                  background: isDone ? '#2D8653' : BORDER,
+                  background: isDone ? '#2D8653' : 'var(--border)',
                 }}
               />
             )}
@@ -97,19 +93,19 @@ export default function InvitationWizard() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: BG }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#F7F5F0' }}>
       <div style={{ padding: '20px 24px', background: '#FFFFFF', borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
         <button
           type="button"
           onClick={() => navigate('/communications')}
-          style={{ border: 'none', background: 'none', color: MUTED, cursor: 'pointer', fontSize: 13, padding: 0, marginBottom: 16 }}
+          style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13, padding: 0, marginBottom: 16 }}
         >
           {'<-'} Communications
         </button>
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: TEXT, marginBottom: 4 }}>
+        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>
           Create Invitation Campaign
         </h1>
-        <p style={{ margin: 0, fontSize: 13, color: MUTED }}>Build and send invitation campaigns step by step.</p>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>Build and send invitation campaigns step by step.</p>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
@@ -173,7 +169,7 @@ export default function InvitationWizard() {
             gap: 8,
             border: `1px solid ${BORDER}`,
             background: '#FFFFFF',
-            color: MUTED,
+            color: 'var(--text-secondary)',
             borderRadius: 8,
             padding: '8px 16px',
             fontSize: 13,
@@ -194,7 +190,7 @@ export default function InvitationWizard() {
             alignItems: 'center',
             gap: 8,
             border: 'none',
-            background: PRIMARY,
+            background: 'var(--accent)',
             color: '#FFFFFF',
             borderRadius: 8,
             padding: '8px 16px',

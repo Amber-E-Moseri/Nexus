@@ -9,23 +9,17 @@ import EmailSignatureEditor from '../../features/communications/components/Email
 import SegmentBuilderAdvanced from '../../features/communications/components/SegmentBuilderAdvanced'
 import { Edit2, BarChart3 } from 'lucide-react'
 
-const PRIMARY = '#4C2A92'
-const BORDER  = '#EDE8DC'
-const TEXT    = '#2D2A22'
-const MUTED   = '#9E9488'
-const BG      = '#F4F1EA'
-const SURFACE = '#FFFFFF'
 const CAMPAIGN_SELECT = 'id, name, status, subject, body, segment_id, recipient_filters, scheduled_at, sent_at, recipient_count, sent_count, open_count, failed_count, created_at, recurring_rule'
 const SEND_SELECT = 'id, campaign_id, recipient_email, recipient_name, status, opened_at, error_message, created_at'
 const AB_TEST_SELECT = 'id, campaign_id, subject_a, subject_b, winner_subject'
 
 const STATUS_STYLE = {
-  draft:     { bg: '#F4F1EA', color: '#9E9488' },
-  scheduled: { bg: '#E8EEFA', color: '#1A56DB' },
-  sending:   { bg: '#FEF3C7', color: '#92400E' },
-  sent:      { bg: '#EBF7F1', color: '#2D8653' },
-  failed:    { bg: '#FEF0ED', color: '#C94830' },
-  cancelled: { bg: '#F4F1EA', color: '#9E9488' },
+  draft:     { bg: 'var(--surface-secondary)', color: 'var(--text-secondary)' },
+  scheduled: { bg: 'var(--info-bg)', color: 'var(--info)' },
+  sending:   { bg: 'var(--status-review-bg)', color: 'var(--status-review-text)' },
+  sent:      { bg: 'var(--sage-light)', color: 'var(--sage)' },
+  failed:    { bg: 'var(--coral-light)', color: 'var(--coral-dark)' },
+  cancelled: { bg: 'var(--surface-secondary)', color: 'var(--text-secondary)' },
 }
 
 const VARIABLE_CHIPS = [
@@ -37,7 +31,7 @@ const VARIABLE_CHIPS = [
 function StatusBadge({ status }) {
   const s = STATUS_STYLE[status] ?? STATUS_STYLE.draft
   return (
-    <span style={{ display: 'inline-block', borderRadius: 999, padding: '2px 10px', fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>
+    <span style={{ display: 'inline-block', borderRadius: 999, padding: '4px 12px', fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, textTransform: 'capitalize' }}>
       {status}
     </span>
   )
@@ -45,15 +39,15 @@ function StatusBadge({ status }) {
 
 function Modal({ title, wide, onClose, children }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(14,14,30,0.45)', padding: 24 }}>
-      <div style={{ width: '100%', maxWidth: wide ? 800 : 560, background: '#FFFFFF', borderRadius: 20, overflow: 'hidden', boxShadow: '0 24px 64px rgba(14,14,30,0.22)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: `1px solid ${BORDER}` }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: TEXT }}>{title}</div>
-          <button type="button" onClick={onClose} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 8, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(28,22,16,0.45)', padding: 20 }}>
+      <div style={{ width: '100%', maxWidth: wide ? 900 : 640, background: 'var(--surface)', borderRadius: 20, overflow: 'hidden', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{title}</div>
+          <button type="button" onClick={onClose} style={{ border: '1px solid var(--border)', background: 'var(--surface-secondary)', color: 'var(--text-secondary)', borderRadius: 8, padding: '6px 12px', fontSize: 13, cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-tertiary)' }} onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--surface-secondary)' }}>
             Close
           </button>
         </div>
-        <div style={{ padding: 20, maxHeight: '80vh', overflowY: 'auto' }}>
+        <div style={{ padding: 24, maxHeight: '80vh', overflowY: 'auto' }}>
           {children}
         </div>
       </div>
@@ -278,7 +272,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {error ? (
-        <div style={{ background: '#FEF0ED', border: '1px solid #F5C4B8', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#C94830' }}>{error}</div>
+        <div style={{ background: 'var(--coral-light)', border: '1px solid var(--coral-light)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: 'var(--coral-dark)' }}>{error}</div>
       ) : null}
 
       {/* Step indicator - horizontal stepper on desktop, text on mobile */}
@@ -316,25 +310,25 @@ function CampaignForm({ initial, onSaved, onCancel }) {
                   {label}
                 </span>
                 {i < stepLabels.length - 1 ? (
-                  <div style={{ width: 16, height: 2, background: getStepStatus(n + 1) === 'upcoming' ? BORDER : PRIMARY, marginLeft: 4 }}></div>
+                  <div style={{ width: 16, height: 2, background: getStepStatus(n + 1) === 'upcoming' ? BORDER : 'var(--accent)', marginLeft: 4 }}></div>
                 ) : null}
               </div>
             )
           })}
         </div>
       ) : (
-        <div style={{ paddingBottom: 16, fontSize: 14, fontWeight: 700, color: PRIMARY }}>
+        <div style={{ paddingBottom: 16, fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>
           Step {step} of 4
         </div>
       )}
 
       {step === 1 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
             Campaign name
             <input value={name} onChange={(e) => setName(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
             From name
             <input value={fromName} onChange={(e) => setFromName(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
           </label>
@@ -346,14 +340,14 @@ function CampaignForm({ initial, onSaved, onCancel }) {
             <button
               type="button"
               onClick={() => setUseCustomFilter(false)}
-              style={{ flex: 1, padding: '9px 0', border: `2px solid ${!useCustomFilter ? PRIMARY : BORDER}`, borderRadius: 9, background: !useCustomFilter ? '#EDE8F8' : '#FFFFFF', color: !useCustomFilter ? PRIMARY : MUTED, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              style={{ flex: 1, padding: '9px 0', border: `2px solid ${!useCustomFilter ? PRIMARY : BORDER}`, borderRadius: 9, background: !useCustomFilter ? 'var(--accent-light)' : '#FFFFFF', color: !useCustomFilter ? PRIMARY : MUTED, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
             >
               Use saved segment
             </button>
             <button
               type="button"
               onClick={() => setUseCustomFilter(true)}
-              style={{ flex: 1, padding: '9px 0', border: `2px solid ${useCustomFilter ? PRIMARY : BORDER}`, borderRadius: 9, background: useCustomFilter ? '#EDE8F8' : '#FFFFFF', color: useCustomFilter ? PRIMARY : MUTED, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              style={{ flex: 1, padding: '9px 0', border: `2px solid ${useCustomFilter ? PRIMARY : BORDER}`, borderRadius: 9, background: useCustomFilter ? 'var(--accent-light)' : '#FFFFFF', color: useCustomFilter ? PRIMARY : MUTED, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
             >
               Build custom filter
             </button>
@@ -361,7 +355,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
 
           {!useCustomFilter ? (
             <>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
                 Segment
                 <select value={segmentId} onChange={(e) => setSegmentId(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }}>
                   <option value="">— No segment (manual recipients) —</option>
@@ -371,17 +365,17 @@ function CampaignForm({ initial, onSaved, onCancel }) {
                 </select>
               </label>
               {segmentId ? (
-                <div style={{ background: '#EDE8F8', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: PRIMARY }}>
+                <div style={{ background: 'var(--accent-light)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: 'var(--accent)' }}>
                   Recipients will be resolved from this segment at send time.
                 </div>
               ) : (
-                <div style={{ fontSize: 12, color: MUTED }}>No segment selected — this campaign will send to 0 recipients. Select a segment to target recipients.</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>No segment selected — this campaign will send to 0 recipients. Select a segment to target recipients.</div>
               )}
             </>
           ) : (
             <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14 }}>
-              <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
-                Define filters inline — estimated reach: <strong style={{ color: PRIMARY }}>{inlineCount}</strong> recipients
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                Define filters inline — estimated reach: <strong style={{ color: 'var(--accent)' }}>{inlineCount}</strong> recipients
               </div>
               <SegmentBuilderAdvanced
                 segment={{ filters: inlineConditions }}
@@ -394,7 +388,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       ) : step === 3 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Template selector */}
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
             Load from template (optional)
             <select
               value={selectedTemplate}
@@ -413,34 +407,34 @@ function CampaignForm({ initial, onSaved, onCancel }) {
           {/* Email signature section */}
           <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: TEXT, cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={useOrgSignature} onChange={(e) => setUseOrgSignature(e.target.checked)} />
                 Use organization signature
               </label>
               <button
                 type="button"
                 onClick={() => setShowSignatureEditor(true)}
-                style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--accent)', borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
               >
                 Edit signature
               </button>
             </div>
             {orgSignature && (
-              <div style={{ fontSize: 11, color: MUTED, background: '#F4F1EA', borderRadius: 8, padding: '8px 10px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: 100, overflow: 'hidden' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', background: '#F4F1EA', borderRadius: 8, padding: '8px 10px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: 100, overflow: 'hidden' }}>
                 {orgSignature}
               </div>
             )}
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: TEXT, cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}>
             <input type="checkbox" checked={abEnabled} onChange={(e) => setAbEnabled(e.target.checked)} />
             Enable A/B subject test
           </label>
 
           {abEnabled ? (
-            <div style={{ background: BG, borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ background: '#F7F5F0', borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
                   Subject A
                   <input value={subjectA} onChange={(e) => setSubjectA(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
                 </label>
@@ -449,7 +443,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
                 </div>
               </div>
               <div>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
                   Subject B
                   <input value={subjectB} onChange={(e) => setSubjectB(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
                 </label>
@@ -458,21 +452,21 @@ function CampaignForm({ initial, onSaved, onCancel }) {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', flexDirection: window.innerWidth <= 768 ? 'column' : 'row' }}>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: window.innerWidth <= 768 ? 'none' : 1 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: window.innerWidth <= 768 ? 'none' : 1 }}>
                   Test group size
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <input type="range" min={10} max={50} value={splitPercent} onChange={(e) => setSplitPercent(Number(e.target.value))} style={{ flex: 1 }} />
-                    <span style={{ fontSize: 13, color: TEXT, fontWeight: 700, minWidth: 32 }}>{splitPercent}%</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 700, minWidth: 32 }}>{splitPercent}%</span>
                   </div>
                 </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: window.innerWidth <= 768 ? 'none' : 1 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: window.innerWidth <= 768 ? 'none' : 1 }}>
                   Metric
                   <select value={abMetric} onChange={(e) => setAbMetric(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '7px 10px', fontSize: 13, fontFamily: 'inherit' }}>
                     <option value="opens">Opens</option>
                     <option value="clicks">Clicks</option>
                   </select>
                 </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: window.innerWidth <= 768 ? 'none' : 1 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: window.innerWidth <= 768 ? 'none' : 1 }}>
                   Pick winner after
                   <select value={abHours} onChange={(e) => setAbHours(Number(e.target.value))} style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: '7px 10px', fontSize: 13, fontFamily: 'inherit' }}>
                     {[1, 2, 4, 8].map((h) => <option key={h} value={h}>{h}h</option>)}
@@ -505,46 +499,46 @@ function CampaignForm({ initial, onSaved, onCancel }) {
           <button
             type="button"
             onClick={() => setPreview(true)}
-            style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 9, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', alignSelf: 'flex-start' }}
+            style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--accent)', borderRadius: 9, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', alignSelf: 'flex-start' }}
           >
             Preview email
           </button>
         </div>
       ) : step === 5 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 4 }}>Review Your Campaign</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Review Your Campaign</div>
 
           {/* Read-only review summary */}
-          <div style={{ background: BG, borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
+          <div style={{ background: '#F7F5F0', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}`, flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 4 : 0 }}>
-              <span style={{ color: MUTED }}>Campaign name</span>
-              <strong style={{ color: TEXT, wordBreak: 'break-word' }}>{name || '—'}</strong>
+              <span style={{ color: 'var(--text-secondary)' }}>Campaign name</span>
+              <strong style={{ color: 'var(--text-primary)', wordBreak: 'break-word' }}>{name || '—'}</strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}`, flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 4 : 0 }}>
-              <span style={{ color: MUTED }}>From name</span>
-              <strong style={{ color: TEXT }}>{fromName || '—'}</strong>
+              <span style={{ color: 'var(--text-secondary)' }}>From name</span>
+              <strong style={{ color: 'var(--text-primary)' }}>{fromName || '—'}</strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}`, flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 4 : 0 }}>
-              <span style={{ color: MUTED }}>Recipients</span>
-              <strong style={{ color: TEXT, wordBreak: 'break-word' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Recipients</span>
+              <strong style={{ color: 'var(--text-primary)', wordBreak: 'break-word' }}>
                 {useCustomFilter ? `Custom filter (~${inlineCount})` : (segments.find((s) => s.id === segmentId)?.name ?? 'None')}
               </strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}`, flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 4 : 0 }}>
-              <span style={{ color: MUTED }}>Subject</span>
-              <strong style={{ color: TEXT, wordBreak: 'break-word' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Subject</span>
+              <strong style={{ color: 'var(--text-primary)', wordBreak: 'break-word' }}>
                 {abEnabled && subjectA && subjectB ? `${subjectA} / ${subjectB}` : subject || '—'}
               </strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${BORDER}`, flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 4 : 0 }}>
-              <span style={{ color: MUTED }}>Send time</span>
-              <strong style={{ color: TEXT }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Send time</span>
+              <strong style={{ color: 'var(--text-primary)' }}>
                 {scheduleMode === 'now' ? 'Now' : scheduledAt ? new Date(scheduledAt).toLocaleString() : '(no date set)'}
               </strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 4 : 0 }}>
-              <span style={{ color: MUTED }}>Recurring</span>
-              <strong style={{ color: TEXT }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Recurring</span>
+              <strong style={{ color: 'var(--text-primary)' }}>
                 {abEnabled ? `A/B test — ${splitPercent}% split, pick winner after ${abHours}h` : 'None'}
               </strong>
             </div>
@@ -553,15 +547,15 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       ) : step === 4 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: TEXT, cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}>
               <input type="radio" name="schedule" value="now" checked={scheduleMode === 'now'} onChange={() => setScheduleMode('now')} />
               Send now
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: TEXT, cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}>
               <input type="radio" name="schedule" value="later" checked={scheduleMode === 'later'} onChange={() => setScheduleMode('later')} />
               Send later
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: TEXT, cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}>
               <input type="radio" name="schedule" value="recurring" checked={scheduleMode === 'recurring'} onChange={() => setScheduleMode('recurring')} />
               Recurring
             </label>
@@ -570,21 +564,21 @@ function CampaignForm({ initial, onSaved, onCancel }) {
           {scheduleMode === 'later' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', flexDirection: window.innerWidth <= 640 ? 'column' : 'row' }}>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: window.innerWidth <= 640 ? 'none' : 1 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: window.innerWidth <= 640 ? 'none' : 1 }}>
                   Date
                   <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
                 </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT, flex: window.innerWidth <= 640 ? 'none' : 1 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: window.innerWidth <= 640 ? 'none' : 1 }}>
                   Time
                   <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
                 </label>
               </div>
-              <div style={{ fontSize: 11, color: MUTED }}>Times are Eastern Time (Toronto, UTC−4/−5)</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Times are Eastern Time (Toronto, UTC−4/−5)</div>
             </div>
           ) : scheduleMode === 'recurring' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: TEXT, marginBottom: 8 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
                   Frequency
                   <select value={recurringFrequency} onChange={(e) => setRecurringFrequency(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit', background: '#FFFFFF' }}>
                     <option value="weekly">Weekly</option>
@@ -596,7 +590,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
 
               {recurringFrequency === 'weekly' || recurringFrequency === 'biweekly' ? (
                 <div>
-                  <label style={{ fontSize: 13, fontWeight: 600, color: TEXT, marginBottom: 8, display: 'block' }}>Day of week</label>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8, display: 'block' }}>Day of week</label>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => (
                       <button
@@ -622,18 +616,18 @@ function CampaignForm({ initial, onSaved, onCancel }) {
               ) : null}
 
               <div>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: TEXT }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
                   Time
                   <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit', maxWidth: 200 }} />
                 </label>
               </div>
 
               <div>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: TEXT }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
                   Run until (optional)
                   <input type="date" value={recurringEndDate} onChange={(e) => setRecurringEndDate(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit', maxWidth: 200 }} />
                 </label>
-                <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>Leave empty for indefinite. Recurring sends create a new campaign record each time they fire.</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Leave empty for indefinite. Recurring sends create a new campaign record each time they fire.</div>
               </div>
             </div>
           ) : null}
@@ -647,20 +641,20 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 4, flexDirection: window.innerWidth <= 640 ? 'column' : 'row', gap: window.innerWidth <= 640 ? 12 : 0 }}>
         <div style={{ display: 'flex', gap: 8, flexDirection: window.innerWidth <= 640 ? 'column' : 'row' }}>
           {step > 1 ? (
-            <button type="button" onClick={() => setStep((s) => s - 1)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: window.innerWidth <= 640 ? '100%' : 'auto' }}>
+            <button type="button" onClick={() => setStep((s) => s - 1)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--text-secondary)', borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: window.innerWidth <= 640 ? '100%' : 'auto' }}>
               {step === 5 ? '← Back to edit' : 'Back'}
             </button>
           ) : null}
-          <button type="button" onClick={onCancel} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: window.innerWidth <= 640 ? '100%' : 'auto' }}>
+          <button type="button" onClick={onCancel} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--text-secondary)', borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: window.innerWidth <= 640 ? '100%' : 'auto' }}>
             Cancel
           </button>
         </div>
         {step < 4 ? (
-          <button type="button" onClick={handleNext} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', width: window.innerWidth <= 640 ? '100%' : 'auto' }}>
+          <button type="button" onClick={handleNext} style={{ border: 'none', background: 'var(--accent)', color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', width: window.innerWidth <= 640 ? '100%' : 'auto' }}>
             Next
           </button>
         ) : step === 4 ? (
-          <button type="button" onClick={handleNext} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', width: window.innerWidth <= 640 ? '100%' : 'auto' }}>
+          <button type="button" onClick={handleNext} style={{ border: 'none', background: 'var(--accent)', color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', width: window.innerWidth <= 640 ? '100%' : 'auto' }}>
             Next
           </button>
         ) : (
@@ -668,7 +662,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
             type="button"
             onClick={handleSubmit}
             disabled={saving}
-            style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1, width: window.innerWidth <= 640 ? '100%' : 'auto' }}
+            style={{ border: 'none', background: 'var(--accent)', color: '#FFFFFF', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1, width: window.innerWidth <= 640 ? '100%' : 'auto' }}
           >
             {saving ? 'Saving...' : 'Confirm and send'}
           </button>
@@ -730,20 +724,20 @@ function CampaignReport({ campaign, onClose }) {
           { label: 'Opened', value: sends.length ? `${opened} (${Math.round((opened / sends.length) * 100)}%)` : 'N/A' },
           { label: 'Failed', value: failedRows },
         ].map((stat) => (
-          <div key={stat.label} style={{ flex: '1 1 140px', background: BG, borderRadius: 12, padding: '14px 16px' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: MUTED }}>{stat.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: TEXT, marginTop: 4 }}>{stat.value}</div>
+          <div key={stat.label} style={{ flex: '1 1 140px', background: '#F7F5F0', borderRadius: 12, padding: '14px 16px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-secondary)' }}>{stat.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4 }}>{stat.value}</div>
           </div>
         ))}
       </div>
 
       {abTest ? (
-        <div style={{ background: '#EDE8F8', borderRadius: 12, padding: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: PRIMARY, marginBottom: 8 }}>A/B Test Results</div>
-          <div style={{ fontSize: 13, color: TEXT }}>
+        <div style={{ background: 'var(--accent-light)', borderRadius: 12, padding: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 8 }}>A/B Test Results</div>
+          <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
             Subject A: <strong>{abTest.subject_a}</strong> ·
             Subject B: <strong>{abTest.subject_b}</strong>
-            {abTest.winner_subject ? <span style={{ marginLeft: 8, color: '#2D8653', fontWeight: 700 }}>Winner: {abTest.winner_subject} ✓</span> : <span style={{ marginLeft: 8, color: MUTED }}>(pending)</span>}
+            {abTest.winner_subject ? <span style={{ marginLeft: 8, color: '#2D8653', fontWeight: 700 }}>Winner: {abTest.winner_subject} ✓</span> : <span style={{ marginLeft: 8, color: 'var(--text-secondary)' }}>(pending)</span>}
           </div>
         </div>
       ) : null}
@@ -754,7 +748,7 @@ function CampaignReport({ campaign, onClose }) {
             key={f}
             type="button"
             onClick={() => setFilterStatus(f)}
-            style={{ border: `1px solid ${filterStatus === f ? PRIMARY : BORDER}`, background: filterStatus === f ? '#EDE8F8' : '#FFFFFF', color: filterStatus === f ? PRIMARY : MUTED, borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            style={{ border: `1px solid ${filterStatus === f ? PRIMARY : BORDER}`, background: filterStatus === f ? 'var(--accent-light)' : '#FFFFFF', color: filterStatus === f ? PRIMARY : MUTED, borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
           >
             {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
           </button>
@@ -762,14 +756,14 @@ function CampaignReport({ campaign, onClose }) {
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 24, color: MUTED, fontSize: 13 }}>Loading...</div>
+        <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)', fontSize: 13 }}>Loading...</div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ background: BG }}>
+              <tr style={{ background: '#F7F5F0' }}>
                 {['Email', 'Name', 'Status', 'Opened At', 'Error'].map((h) => (
-                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: MUTED, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: `1px solid ${BORDER}` }}>
+                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: 'var(--text-secondary)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: `1px solid ${BORDER}` }}>
                     {h}
                   </th>
                 ))}
@@ -778,15 +772,15 @@ function CampaignReport({ campaign, onClose }) {
             <tbody>
               {filtered.map((s) => (
                 <tr key={s.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                  <td style={{ padding: '9px 10px', color: TEXT }}>{s.recipient_email}</td>
-                  <td style={{ padding: '9px 10px', color: TEXT }}>{s.recipient_name}</td>
+                  <td style={{ padding: '9px 10px', color: 'var(--text-primary)' }}>{s.recipient_email}</td>
+                  <td style={{ padding: '9px 10px', color: 'var(--text-primary)' }}>{s.recipient_name}</td>
                   <td style={{ padding: '9px 10px' }}><StatusBadge status={s.status} /></td>
-                  <td style={{ padding: '9px 10px', color: MUTED }}>{s.opened_at ? new Date(s.opened_at).toLocaleString() : '—'}</td>
-                  <td style={{ padding: '9px 10px', color: '#C94830', fontSize: 11 }}>{s.error_message ?? '—'}</td>
+                  <td style={{ padding: '9px 10px', color: 'var(--text-secondary)' }}>{s.opened_at ? new Date(s.opened_at).toLocaleString() : '—'}</td>
+                  <td style={{ padding: '9px 10px', color: 'var(--coral-dark)', fontSize: 11 }}>{s.error_message ?? '—'}</td>
                 </tr>
               ))}
               {filtered.length === 0 ? (
-                <tr><td colSpan={5} style={{ padding: 20, textAlign: 'center', color: MUTED, fontSize: 13 }}>No records.</td></tr>
+                <tr><td colSpan={5} style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>No records.</td></tr>
               ) : null}
             </tbody>
           </table>
@@ -941,24 +935,24 @@ export default function CampaignPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '16px 24px 0', background: '#FFFFFF', borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <button type="button" onClick={() => navigate('/communications')} style={{ border: 'none', background: 'none', color: MUTED, cursor: 'pointer', fontSize: 13, padding: 0 }}>
+          <button type="button" onClick={() => navigate('/communications')} style={{ border: 'none', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13, padding: 0 }}>
             {'<-'} Communications
           </button>
           <span style={{ color: '#D8D3C9' }}>/</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>Campaigns</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Campaigns</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, paddingBottom: 14 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: TEXT }}>Campaigns</h1>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: MUTED }}>Schedule and track bulk email sends.</p>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>Campaigns</h1>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>Schedule and track bulk email sends.</p>
           </div>
-          <button type="button" onClick={() => navigate('/communications/compose')} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          <button type="button" onClick={() => navigate('/communications/compose')} style={{ border: 'none', background: 'var(--accent)', color: '#FFFFFF', borderRadius: 9, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             + New Campaign
           </button>
         </div>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto', padding: '16px 24px', background: BG }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '16px 24px', background: '#F7F5F0' }}>
         {/* Draft banner */}
         {draftCampaignId ? (
           <div style={{ background: '#E8EEFA', border: `1px solid #1A56DB`, borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -982,7 +976,7 @@ export default function CampaignPage() {
                   setDraftCampaignId(null)
                   supabase.from('communication_campaigns').delete().eq('id', draftCampaignId)
                 }}
-                style={{ border: `1px solid #D8D3C9`, background: '#FFFFFF', color: MUTED, borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                style={{ border: `1px solid #D8D3C9`, background: '#FFFFFF', color: 'var(--text-secondary)', borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
               >
                 Discard
               </button>
@@ -1022,7 +1016,7 @@ export default function CampaignPage() {
                     onClick={() => setStatusFilter(statusFilter === status ? null : status)}
                     style={{
                       border: `1px solid ${statusFilter === status ? PRIMARY : BORDER}`,
-                      background: statusFilter === status ? '#EDE8F8' : SURFACE,
+                      background: statusFilter === status ? 'var(--accent-light)' : SURFACE,
                       color: statusFilter === status ? PRIMARY : MUTED,
                       borderRadius: 999,
                       padding: '5px 12px',
@@ -1043,13 +1037,13 @@ export default function CampaignPage() {
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
                 style={{
-                  border: `1px solid ${BORDER}`,
-                  background: SURFACE,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
                   borderRadius: 6,
                   padding: '6px 10px',
                   fontSize: 12,
                   fontWeight: 600,
-                  color: TEXT,
+                  color: 'var(--text-primary)',
                   cursor: 'pointer',
                   outline: 'none',
                 }}
@@ -1063,9 +1057,9 @@ export default function CampaignPage() {
                 type="button"
                 onClick={() => setSortAsc(!sortAsc)}
                 style={{
-                  border: `1px solid ${BORDER}`,
-                  background: SURFACE,
-                  color: TEXT,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text-primary)',
                   borderRadius: 6,
                   width: 38,
                   height: 36,
@@ -1082,9 +1076,9 @@ export default function CampaignPage() {
         )}
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 48, color: MUTED, fontSize: 13 }}>Loading...</div>
+          <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)', fontSize: 13 }}>Loading...</div>
         ) : campaigns.length === 0 ? (
-          <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 16, padding: '36px 24px', textAlign: 'center', color: MUTED, fontSize: 13 }}>
+          <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 16, padding: '36px 24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
             {view === 'scheduled' ? 'No scheduled campaigns.' : statusFilter ? 'No campaigns with this status.' : 'No campaigns yet. Create one to get started.'}
           </div>
         ) : isMobile ? (
@@ -1092,26 +1086,26 @@ export default function CampaignPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {campaigns.map((c) => (
               <div key={c.id} style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ fontWeight: 700, color: TEXT, fontSize: 14 }}>{c.name}</div>
+                <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 14 }}>{c.name}</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <StatusBadge status={c.status} />
-                  <span style={{ fontSize: 12, color: MUTED }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                     {c.status === 'sent' && c.sent_at ? new Date(c.sent_at).toLocaleDateString() : c.scheduled_at ? new Date(c.scheduled_at).toLocaleString() : '—'}
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
                   {c.status === 'draft' ? (
                     <>
-                      <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ flex: 1, minWidth: 60, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Edit2 size={14} /> Edit</button>
-                      <button type="button" onClick={() => handleDelete(c.id)} style={{ flex: 1, minWidth: 60, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+                      <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ flex: 1, minWidth: 60, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--accent)', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Edit2 size={14} /> Edit</button>
+                      <button type="button" onClick={() => handleDelete(c.id)} style={{ flex: 1, minWidth: 60, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
                     </>
                   ) : c.status === 'scheduled' ? (
                     <>
-                      <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ flex: 1, minWidth: 60, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Edit2 size={14} /> Edit</button>
-                      <button type="button" onClick={() => handleCancel(c.id)} style={{ flex: 1, minWidth: 60, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                      <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ flex: 1, minWidth: 60, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--accent)', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Edit2 size={14} /> Edit</button>
+                      <button type="button" onClick={() => handleCancel(c.id)} style={{ flex: 1, minWidth: 60, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
                     </>
                   ) : c.status === 'sent' || c.status === 'sending' ? (
-                    <button type="button" onClick={() => setModal({ mode: 'report', campaign: c })} style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><BarChart3 size={14} /> Report</button>
+                    <button type="button" onClick={() => setModal({ mode: 'report', campaign: c })} style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--accent)', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><BarChart3 size={14} /> Report</button>
                   ) : null}
                 </div>
               </div>
@@ -1121,16 +1115,16 @@ export default function CampaignPage() {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', background: '#FFFFFF', borderRadius: 14, overflow: 'hidden' }}>
               <thead>
-                <tr style={{ background: BG }}>
+                <tr style={{ background: '#F7F5F0' }}>
                   {view === 'scheduled' ? (
                     ['Name', 'Recipients', 'Scheduled for', 'Type', 'Actions'].map((h) => (
-                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${BORDER}` }}>
+                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${BORDER}` }}>
                         {h}
                       </th>
                     ))
                   ) : (
                     ['Name', 'Status', 'Recipients', 'Sent', 'Opens', 'Scheduled / Sent', 'Actions'].map((h) => (
-                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${BORDER}` }}>
+                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${BORDER}` }}>
                         {h}
                       </th>
                     ))
@@ -1142,9 +1136,9 @@ export default function CampaignPage() {
                   <tr key={c.id} style={{ borderBottom: `1px solid ${BORDER}`, position: 'relative' }}>
                     {view === 'scheduled' ? (
                       <>
-                        <td style={{ padding: '12px 14px', fontWeight: 700, color: TEXT, fontSize: 13 }}>{c.name}</td>
-                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.recipient_count ?? '—'}</td>
-                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 12 }}>
+                        <td style={{ padding: '12px 14px', fontWeight: 700, color: 'var(--text-primary)', fontSize: 13 }}>{c.name}</td>
+                        <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', fontSize: 13 }}>{c.recipient_count ?? '—'}</td>
+                        <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', fontSize: 12 }}>
                           {c.scheduled_at ? new Date(c.scheduled_at).toLocaleString() : '—'}
                         </td>
                         <td style={{ padding: '12px 14px' }}>
@@ -1153,52 +1147,52 @@ export default function CampaignPage() {
                               Recurring
                             </span>
                           ) : (
-                            <span style={{ display: 'inline-block', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600, background: BG, color: MUTED }}>
+                            <span style={{ display: 'inline-block', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600, background: '#F7F5F0', color: 'var(--text-secondary)' }}>
                               Once
                             </span>
                           )}
                         </td>
                         <td style={{ padding: '12px 14px' }}>
-                          <button type="button" onClick={() => handleCancel(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                          <button type="button" onClick={() => handleCancel(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                             Cancel
                           </button>
                         </td>
                       </>
                     ) : (
                       <>
-                        <td style={{ padding: '12px 14px', fontWeight: 700, color: TEXT, fontSize: 13 }}>
+                        <td style={{ padding: '12px 14px', fontWeight: 700, color: 'var(--text-primary)', fontSize: 13 }}>
                           {c.name}
                           {c.status === 'sending' ? (
-                            <div style={{ fontSize: 11, color: MUTED, fontWeight: 500, marginTop: 4 }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500, marginTop: 4 }}>
                               Sending… {c.sent_count ?? 0} / {c.recipient_count ?? 0} sent
                             </div>
                           ) : null}
                         </td>
                         <td style={{ padding: '12px 14px' }}><StatusBadge status={c.status} /></td>
-                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.recipient_count ?? '—'}</td>
-                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.sent_count ?? '—'}</td>
-                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.open_count ?? '—'}</td>
-                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 12 }}>
+                        <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', fontSize: 13 }}>{c.recipient_count ?? '—'}</td>
+                        <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', fontSize: 13 }}>{c.sent_count ?? '—'}</td>
+                        <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', fontSize: 13 }}>{c.open_count ?? '—'}</td>
+                        <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', fontSize: 12 }}>
                           {c.status === 'sent' && c.sent_at ? new Date(c.sent_at).toLocaleDateString() : c.scheduled_at ? new Date(c.scheduled_at).toLocaleString() : '—'}
                         </td>
                         <td style={{ padding: '12px 14px' }}>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             {c.status === 'draft' ? (
                               <>
-                                <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
-                                <button type="button" onClick={() => handleDelete(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
-                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
+                                <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--accent)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                                <button type="button" onClick={() => handleDelete(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--text-secondary)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
                               </>
                             ) : c.status === 'scheduled' ? (
                               <>
-                                <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
-                                <button type="button" onClick={() => handleCancel(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
+                                <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--accent)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                                <button type="button" onClick={() => handleCancel(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--text-secondary)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
                               </>
                             ) : c.status === 'sent' || c.status === 'sending' ? (
                               <>
-                                <button type="button" onClick={() => setModal({ mode: 'report', campaign: c })} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>View Report</button>
-                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
+                                <button type="button" onClick={() => setModal({ mode: 'report', campaign: c })} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--accent)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>View Report</button>
+                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--text-secondary)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
                               </>
                             ) : null}
                           </div>
@@ -1213,7 +1207,7 @@ export default function CampaignPage() {
                         left: 0,
                         right: 0,
                         height: 3,
-                        background: PRIMARY,
+                        background: 'var(--accent)',
                         animation: 'progress-bar 2s infinite',
                       }} />
                     ) : null}

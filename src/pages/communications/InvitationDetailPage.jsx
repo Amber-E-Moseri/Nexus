@@ -260,7 +260,7 @@ export default function InvitationDetailPage() {
     setResending(true)
     try {
       const res = await supabase.functions.invoke('send-invitations', {
-        body: { campaign_id: campaignId, filter_unopened: true },
+        body: { campaignId },
       })
       if (res.error) throw res.error
       setError(null)

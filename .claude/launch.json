@@ -7,6 +7,12 @@
       "runtimeArgs": ["run", "dev"],
       "port": 5173,
       "autoPort": false
+    },
+    {
+      "name": "design",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "9877", "--directory", "C:/Users/moser/Downloads"],
+      "port": 9877
     }
   ]
 }

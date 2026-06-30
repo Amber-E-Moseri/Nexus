@@ -24,6 +24,7 @@ const MinistryCalendar = lazy(() => import('./pages/calendar/MinistryCalendar'))
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage'))
 const CalendarManagementPage = lazy(() => import('./pages/calendar/CalendarManagementPage'))
 const CalendarReviewPage = lazy(() => import('./pages/calendar/CalendarReviewPage'))
+const CalendarSettingsPage = lazy(() => import('./pages/calendar/CalendarSettingsPage'))
 const CommunicationsPage = lazy(() => import('./pages/communications/CommunicationsPage'))
 const RecipientsPage = lazy(() => import('./pages/communications/RecipientsPage'))
 const AnalyticsPage = lazy(() => import('./pages/communications/AnalyticsPage'))
@@ -35,6 +36,7 @@ const FlockCRMPage = lazy(() => import('./pages/flock/FlockCRMPage'))
 const Login = lazy(() => import('./pages/Login'))
 const CanMapPage = lazy(() => import('./pages/map/CanMapPage'))
 const MeetingsModule = lazy(() => import('./pages/meetings/MeetingsModule'))
+const MeetingDetailView = lazy(() => import('./pages/meetings/MeetingDetailView'))
 const MeetingWizardPage = lazy(() => import('./pages/meetings/MeetingWizardPage'))
 const ExpectedAttendeesPage = lazy(() => import('./pages/meetings/ExpectedAttendeesPage'))
 const AbsenceEmailLogPage = lazy(() => import('./pages/meetings/AbsenceEmailLogPage'))
@@ -72,6 +74,8 @@ const PersonalIntegrationsPage = lazy(() => import('./pages/settings/PersonalInt
 const CampusEditsPage = lazy(() => import('./pages/admin/CampusEditsPage'))
 const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
 const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
+const InvitationWizard = lazy(() => import('./pages/communications/InvitationWizard'))
+const InvitationDetailPage = lazy(() => import('./pages/communications/InvitationDetailPage'))
 const InstagramGradingPage = lazy(() => import('./features/instagram/pages/InstagramGradingPage'))
 
 function onError(error, errorInfo) {
@@ -129,12 +133,27 @@ export default function App() {
           <Route
             path="/calendar-management"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin']}>
                 <CalendarManagementPage />
               </ProtectedRoute>
             }
           />
-          <Route path="/calendar/review" element={<CalendarReviewPage />} />
+          <Route
+            path="/calendar/review"
+            element={
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'dept_lead']}>
+                <CalendarReviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/calendar/settings"
+            element={
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+                <CalendarSettingsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/map" element={<CanMapPage />} />
           <Route
             path="/admin/campus-edits"
@@ -174,6 +193,7 @@ export default function App() {
             }
           />
           <Route path="/meetings" element={<MeetingsModule />} />
+          <Route path="/meetings/:meetingId" element={<MeetingDetailView />} />
           <Route
             path="/meetings/wizard"
             element={
@@ -300,6 +320,22 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/communications/invitations/new"
+            element={
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+                <InvitationWizard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/communications/invitations/:id"
+            element={
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+                <InvitationDetailPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/personal-integrations" element={<PersonalIntegrationsPage />} />
           <Route
@@ -311,7 +347,14 @@ export default function App() {
             }
           />
           <Route path="/settings/api-docs" element={<ApiDocumentationPage />} />
-          <Route path="/instagram" element={<InstagramGradingPage />} />
+          <Route
+            path="/instagram"
+            element={
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'media']}>
+                <InstagramGradingPage />
+              </ProtectedRoute>
+            }
+          />
         </Route>
       </Route>
 

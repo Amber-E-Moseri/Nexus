@@ -1,8 +1,6 @@
 // Secure RSVP token generator
 // Use before inserting into invitation_recipients
 
-import crypto from 'crypto';
-
 /**
  * Generate a cryptographically secure RSVP token (48 chars, alphanumeric)
  * Safe for URL use (no special chars, base62-like)
@@ -12,11 +10,12 @@ import crypto from 'crypto';
 export function generateRsvpToken() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   const tokenLength = 48;
-  let token = '';
+  const randomValues = new Uint8Array(tokenLength);
+  crypto.getRandomValues(randomValues);
 
+  let token = '';
   for (let i = 0; i < tokenLength; i++) {
-    const randomIndex = crypto.randomInt(0, chars.length);
-    token += chars[randomIndex];
+    token += chars[randomValues[i] % chars.length];
   }
 
   return token;

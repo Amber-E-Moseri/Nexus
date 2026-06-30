@@ -195,11 +195,11 @@ export default function MinistryCalendar() {
             An org-wide view of programs, training, prayer, deadlines, and major ministry events.
           </p>
         </div>
-        {(effectiveRole === 'super_admin' || effectiveRole === 'dept_lead') && (
+        {effectiveRole === 'super_admin' && (
           <button
             type="button"
-            onClick={() => navigate('/calendar-management')}
-            title="Calendar Management"
+            onClick={() => navigate('/calendar/settings')}
+            title="Calendar Settings"
             className="p-2 rounded-lg border border-[var(--border)] hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)]"
           >
             <Settings size={20} />

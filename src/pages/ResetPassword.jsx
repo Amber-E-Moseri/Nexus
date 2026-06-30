@@ -1,9 +1,11 @@
 ﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../hooks/useAuth'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
+  const { clearRecoveryMode } = useAuth()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
@@ -84,20 +86,23 @@ export default function ResetPassword() {
 
       if (updateError) {
         // Token may be invalid, expired, or already used
+        console.error('Password update failed:', updateError)
         setError(updateError.message || 'Failed to reset password. Please request a new reset link.')
         setSaving(false)
         return
       }
 
-      // Success! Password updated
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // SUCCESS: Clear recovery state and sign out
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       setSuccess(true)
+      // Clears isRecoveryMode and removes recovery_token sessionStorage keys
+      clearRecoveryMode()
 
-      // Clear recovery token from sessionStorage immediately
-      sessionStorage.removeItem('recovery_token')
-      sessionStorage.removeItem('recovery_token_expires')
+      // Sign out the recovery session so the new password must be used to log in
+      await supabase.auth.signOut()
 
-      // Redirect to login page after 2 seconds
-      // User must log in with new password to confirm it works
+      // Redirect to login page; user must log in with the new password to confirm it works
       setTimeout(() => {
         navigate('/login', {
           replace: true,
@@ -105,7 +110,7 @@ export default function ResetPassword() {
             message: 'Password reset successful. Please log in with your new password.',
           },
         })
-      }, 2000)
+      }, 1500) // brief delay to show success message
     } catch (err) {
       setError(err.message || 'An unexpected error occurred. Please try again.')
       setSaving(false)

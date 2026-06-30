@@ -23,6 +23,7 @@ import {
   UserCheck,
   Users,
   Users2,
+  Image,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -605,12 +606,14 @@ export default function Sidebar() {
           label="My Tasks"
           onClick={() => go('/my-tasks')}
         />
-        <SidebarItem
-          active={isPathActive(location.pathname, '/planner')}
-          icon={CalendarDays}
-          label="Planner"
-          onClick={() => go('/planner')}
-        />
+        {role === 'super_admin' && (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/planner')}
+            icon={CalendarDays}
+            label="Planner"
+            onClick={() => go('/planner')}
+          />
+        )}
         <SidebarItem
           active={isPathActive(location.pathname, '/calendar')}
           icon={CalendarDays}
@@ -1180,6 +1183,14 @@ export default function Sidebar() {
             />
           </>
         ) : null}
+        {role === 'super_admin' && (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/instagram')}
+            icon={Image}
+            label="Instagram Grading"
+            onClick={() => go('/instagram')}
+          />
+        )}
         <SidebarItem
           active={false}
           icon={Map}

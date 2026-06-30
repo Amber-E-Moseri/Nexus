@@ -62,12 +62,37 @@ export async function createSpace(data, createdBy) {
 
   if (error) throw error
 
-  await supabase.from('space_lists').insert({
-    space_id: space.id,
-    name: 'General',
-    sort_order: 0,
-    created_by: createdBy,
-  })
+  // Create default "General" folder
+  const { data: generalFolder, error: folderError } = await supabase
+    .from('folders')
+    .insert({
+      name: 'General',
+      department_id: space.id,
+      sort_order: 0,
+      created_by: createdBy,
+    })
+    .select()
+    .single()
+
+  if (folderError) {
+    console.warn(`Failed to create General folder for space ${space.id}:`, folderError)
+  }
+
+  // Create default "General" list inside that folder
+  if (generalFolder) {
+    const { error: listError } = await supabase
+      .from('lists')
+      .insert({
+        name: 'General',
+        department_id: space.id,
+        folder_id: generalFolder.id,
+        sort_order: 0,
+        created_by: createdBy,
+      })
+    if (listError) {
+      console.warn(`Failed to create General list for space ${space.id}:`, listError)
+    }
+  }
 
   const { error: statusError } = await supabase.rpc('clone_global_statuses_for_space', {
     p_department_id: space.id,

@@ -4,19 +4,11 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 
-const PRIMARY = '#4C2A92'
-const BORDER = '#EDE8DC'
-const TEXT = '#2D2A22'
-const MUTED = '#9E9488'
-const BG = '#F4F1EA'
-const SURFACE = '#ffffff'
-const GOLD = '#E8A020'
-
 const STATUS_COLORS = {
-  draft: { bg: '#F4F1EA', color: '#9E9488' },
-  sending: { bg: '#E8EEFA', color: '#1A56DB' },
-  sent: { bg: '#EBF7F1', color: '#2D8653' },
-  paused: { bg: '#FEF3C7', color: '#92400E' },
+  draft: { bg: 'var(--surface-secondary)', color: 'var(--text-secondary)' },
+  sending: { bg: 'var(--info-bg)', color: 'var(--info)' },
+  sent: { bg: 'var(--sage-light)', color: 'var(--sage)' },
+  paused: { bg: 'var(--status-review-bg)', color: 'var(--status-review-text)' },
 }
 
 function Spinner() {
@@ -27,7 +19,7 @@ function Spinner() {
           width: 6,
           height: 6,
           borderRadius: '50%',
-          background: PRIMARY,
+          background: 'var(--accent)',
           animation: 'pulse 1.5s ease-in-out infinite',
         }}
       />
@@ -36,7 +28,7 @@ function Spinner() {
           width: 6,
           height: 6,
           borderRadius: '50%',
-          background: PRIMARY,
+          background: 'var(--accent)',
           animation: 'pulse 1.5s ease-in-out infinite 0.2s',
         }}
       />
@@ -45,7 +37,7 @@ function Spinner() {
           width: 6,
           height: 6,
           borderRadius: '50%',
-          background: PRIMARY,
+          background: 'var(--accent)',
           animation: 'pulse 1.5s ease-in-out infinite 0.4s',
         }}
       />
@@ -93,7 +85,7 @@ export default function InvitationsListPage() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    if (!profile?.org_id) return
+    if (!profile?.id) return
 
     async function loadCampaigns() {
       try {
@@ -102,15 +94,8 @@ export default function InvitationsListPage() {
 
         const { data, error: err } = await supabase
           .from('invitation_campaigns')
-          .select(`
-            id,
-            name,
-            status,
-            sent_at,
-            template_id,
-            invitation_templates(name)
-          `)
-          .eq('org_id', profile.org_id)
+          .select('id, name, status, sent_at, created_at')
+          .eq('created_by', profile.id)
           .order('created_at', { ascending: false })
 
         if (err) throw err
@@ -127,28 +112,21 @@ export default function InvitationsListPage() {
 
     // Real-time subscription
     const subscription = supabase
-      .channel(`invitation_campaigns:org_id=eq.${profile.org_id}`)
+      .channel(`invitation_campaigns:created_by=eq.${profile.id}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'invitation_campaigns',
-          filter: `org_id=eq.${profile.org_id}`,
+          filter: `created_by=eq.${profile.id}`,
         },
         async (payload) => {
           // Refetch campaigns when changes occur
           const { data } = await supabase
             .from('invitation_campaigns')
-            .select(`
-              id,
-              name,
-              status,
-              sent_at,
-              template_id,
-              invitation_templates(name)
-            `)
-            .eq('org_id', profile.org_id)
+            .select('id, name, status, sent_at, created_at')
+            .eq('created_by', profile.id)
             .order('created_at', { ascending: false })
           setCampaigns(data ?? [])
         },
@@ -158,7 +136,7 @@ export default function InvitationsListPage() {
     return () => {
       subscription.unsubscribe()
     }
-  }, [profile?.org_id])
+  }, [profile?.id])
 
   if (error) {
     return (
@@ -170,15 +148,15 @@ export default function InvitationsListPage() {
           height: '100%',
           flexDirection: 'column',
           gap: 16,
-          color: MUTED,
+          color: 'var(--text-secondary)',
         }}
       >
-        <div style={{ fontSize: 13.5, fontWeight: 600, color: TEXT }}>{error}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>{error}</div>
         <button
           type="button"
           onClick={() => window.location.reload()}
           style={{
-            background: PRIMARY,
+            background: 'var(--accent)',
             color: 'white',
             border: 'none',
             borderRadius: 8,
@@ -195,7 +173,7 @@ export default function InvitationsListPage() {
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: BG }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#F7F5F0' }}>
       {/* Header */}
       <div
         style={{
@@ -203,14 +181,14 @@ export default function InvitationsListPage() {
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '20px 24px',
-          borderBottom: `1px solid ${BORDER}`,
+          borderBottom: `1px solid ${'var(--border)'}`,
           background: SURFACE,
           flexShrink: 0,
         }}
       >
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: TEXT, margin: 0 }}>Invitations</h1>
-          <p style={{ fontSize: 12, color: MUTED, margin: '4px 0 0 0' }}>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Invitations</h1>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
             {campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''}
           </p>
         </div>
@@ -221,7 +199,7 @@ export default function InvitationsListPage() {
             display: 'inline-flex',
             alignItems: 'center',
             gap: 8,
-            background: PRIMARY,
+            background: 'var(--accent)',
             color: 'white',
             border: 'none',
             borderRadius: 8,
@@ -251,7 +229,7 @@ export default function InvitationsListPage() {
               alignItems: 'center',
               justifyContent: 'center',
               height: '100%',
-              color: MUTED,
+              color: 'var(--text-secondary)',
               gap: 12,
             }}
           >
@@ -267,15 +245,15 @@ export default function InvitationsListPage() {
               height: '100%',
               flexDirection: 'column',
               gap: 12,
-              color: MUTED,
+              color: 'var(--text-secondary)',
             }}
           >
-            <div style={{ fontSize: 13.5, fontWeight: 600, color: TEXT }}>No campaigns yet</div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>No campaigns yet</div>
             <button
               type="button"
               onClick={() => navigate('/communications/invitations/new')}
               style={{
-                background: PRIMARY,
+                background: 'var(--accent)',
                 color: 'white',
                 border: 'none',
                 borderRadius: 8,
@@ -298,14 +276,14 @@ export default function InvitationsListPage() {
             }}
           >
             <thead>
-              <tr style={{ borderBottom: `1px solid ${BORDER}`, background: '#FAFAF7' }}>
+              <tr style={{ borderBottom: `1px solid ${'var(--border)'}`, background: '#FAFAF7' }}>
                 <th
                   style={{
                     padding: '12px 20px',
                     textAlign: 'left',
                     fontSize: 11.5,
                     fontWeight: 700,
-                    color: TEXT,
+                    color: 'var(--text-primary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -318,7 +296,7 @@ export default function InvitationsListPage() {
                     textAlign: 'left',
                     fontSize: 11.5,
                     fontWeight: 700,
-                    color: TEXT,
+                    color: 'var(--text-primary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -331,7 +309,7 @@ export default function InvitationsListPage() {
                     textAlign: 'left',
                     fontSize: 11.5,
                     fontWeight: 700,
-                    color: TEXT,
+                    color: 'var(--text-primary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -344,7 +322,7 @@ export default function InvitationsListPage() {
                     textAlign: 'left',
                     fontSize: 11.5,
                     fontWeight: 700,
-                    color: TEXT,
+                    color: 'var(--text-primary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -357,7 +335,7 @@ export default function InvitationsListPage() {
                     textAlign: 'left',
                     fontSize: 11.5,
                     fontWeight: 700,
-                    color: TEXT,
+                    color: 'var(--text-primary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -370,7 +348,7 @@ export default function InvitationsListPage() {
                     textAlign: 'center',
                     fontSize: 11.5,
                     fontWeight: 700,
-                    color: TEXT,
+                    color: 'var(--text-primary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -384,7 +362,7 @@ export default function InvitationsListPage() {
                 <tr
                   key={campaign.id}
                   style={{
-                    borderBottom: `1px solid ${BORDER}`,
+                    borderBottom: `1px solid ${'var(--border)'}`,
                     cursor: 'pointer',
                     transition: 'background-color 0.15s',
                   }}
@@ -401,7 +379,7 @@ export default function InvitationsListPage() {
                       padding: '14px 20px',
                       fontSize: 13,
                       fontWeight: 600,
-                      color: TEXT,
+                      color: 'var(--text-primary)',
                       maxWidth: 200,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -414,7 +392,7 @@ export default function InvitationsListPage() {
                     style={{
                       padding: '14px 20px',
                       fontSize: 12.5,
-                      color: TEXT,
+                      color: 'var(--text-primary)',
                       maxWidth: 200,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -427,7 +405,7 @@ export default function InvitationsListPage() {
                     style={{
                       padding: '14px 20px',
                       fontSize: 12.5,
-                      color: MUTED,
+                      color: 'var(--text-secondary)',
                     }}
                   >
                     {campaign.recipient_count ?? '-'}
@@ -444,7 +422,7 @@ export default function InvitationsListPage() {
                     style={{
                       padding: '14px 20px',
                       fontSize: 12.5,
-                      color: MUTED,
+                      color: 'var(--text-secondary)',
                     }}
                   >
                     {formatDate(campaign.sent_at)}
@@ -453,7 +431,7 @@ export default function InvitationsListPage() {
                     style={{
                       padding: '14px 20px',
                       textAlign: 'center',
-                      color: PRIMARY,
+                      color: 'var(--accent)',
                     }}
                     onClick={(e) => e.stopPropagation()}
                   >

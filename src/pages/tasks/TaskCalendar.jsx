@@ -168,6 +168,7 @@ export default function TaskCalendarPage() {
               filteredTasks={tasks}
               onTaskClick={(task) => setSelectedTask({ mode: 'edit', task })}
               onAddTask={() => setSelectedTask({ mode: 'create' })}
+              userId={profile?.id}
             />
           </div>
 

@@ -6,13 +6,16 @@ export interface DashboardPreset {
 
 export interface ActionItem {
   task_id: string
-  title: string
-  due_date: string
-  assigned_by_id: string
-  assigned_by_name: string
-  meeting_id: string
-  meeting_title: string
-  status_text: 'completed' | 'overdue' | 'due_soon' | 'on_track'
+  task_title: string
+  due_date: string | null
+  priority: string | null
+  status: string | null
+  status_id: string | null
+  meeting_id: string | null
+  meeting_title: string | null
+  assigner_name: string | null
+  created_at: string
+  is_overdue: boolean
 }
 
 export interface TeamWorkloadMember {

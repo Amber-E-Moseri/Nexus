@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { getAllDepartments } from '../../features/automations'
 import MeetingModal from '../../features/meetings/components/MeetingModal'
 import UnifiedMeetingsView from '../../features/meetings/components/UnifiedMeetingsView'
@@ -12,6 +13,7 @@ import ExpectedAttendeesPage from './ExpectedAttendeesPage'
 function MeetingsModuleFallback() {
   const navigate = useNavigate()
   const { profile, role } = useAuth()
+  const isMobile = useMediaQuery('(max-width: 640px)')
   const [departments, setDepartments] = useState([])
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(profile?.department_id ?? '')
   const [showModal, setShowModal] = useState(false)
@@ -67,88 +69,49 @@ function MeetingsModuleFallback() {
 
   return (
     <MeetingsProvider key={selectedDepartmentId} departmentId={selectedDepartmentId}>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
-        <div style={{ padding: '12px 24px', borderBottom: '0.5px solid var(--border)', background: 'white', flexShrink: 0 }}>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Meetings</h1>
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>Meeting OS records — agenda, attendance, summaries, and action items that flow back to the boards.</p>
-          {canManage && (
-            <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={() => navigate('/meetings/wizard')}
-                style={{
-                  borderRadius: 10,
-                  border: '1px solid #4C2A92',
-                  background: 'white',
-                  padding: '10px 16px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#4C2A92',
-                  cursor: 'pointer',
-                  transition: 'all 0.12s',
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = '#F0EBFC'
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'white'
-                }}
-              >
-                📋 Plan
-              </button>
-              <button
-                type="button"
-                onClick={() => setLiveSession({ departmentId: selectedDepartmentId })}
-                style={{
-                  borderRadius: 10,
-                  border: '1px solid #EF4444',
-                  background: 'white',
-                  padding: '10px 16px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#DC2626',
-                  cursor: 'pointer',
-                  transition: 'all 0.12s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = '#FEF2F2'
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'white'
-                }}
-              >
-                <span style={{ fontSize: 10, color: '#DC2626' }}>●</span>
-                Start live
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowModal(true)}
-                style={{
-                  borderRadius: 10,
-                  border: 'none',
-                  background: '#4C2A92',
-                  padding: '10px 16px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: 'white',
-                  cursor: 'pointer',
-                  transition: 'all 0.12s',
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = '#6B3FAF'
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = '#4C2A92'
-                }}
-              >
-                + Log meeting
-              </button>
-            </div>
-          )}
-        </div>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', gap: 0 }}>
+        {canManage && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: isMobile ? '8px 16px' : '10px 24px', borderBottom: '1px solid #EDE8DC', background: '#FBF8F2', flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => setShowModal(true)}
+              style={{
+                borderRadius: 10,
+                border: 'none',
+                background: '#4C2A92',
+                padding: '9px 16px',
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'white',
+                cursor: 'pointer',
+                transition: 'all 0.12s',
+              }}
+              onMouseOver={(e) => { e.currentTarget.style.background = '#6B3FAF' }}
+              onMouseOut={(e) => { e.currentTarget.style.background = '#4C2A92' }}
+            >
+              + Log meeting
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/meetings/wizard')}
+              style={{
+                borderRadius: 10,
+                border: '1px solid #C4B8E8',
+                background: 'white',
+                padding: '9px 16px',
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#4C2A92',
+                cursor: 'pointer',
+                transition: 'all 0.12s',
+              }}
+              onMouseOver={(e) => { e.currentTarget.style.background = '#F3EEFF' }}
+              onMouseOut={(e) => { e.currentTarget.style.background = 'white' }}
+            >
+              Plan a meeting
+            </button>
+          </div>
+        )}
 
         <UnifiedMeetingsView
           isSuperAdmin={isSuperAdmin}
@@ -172,8 +135,9 @@ const TABS = [
 ]
 
 function TabBar({ active, onChange }) {
+  const isMobile = useMediaQuery('(max-width: 640px)')
   return (
-    <div style={{ display: 'flex', gap: 2, padding: '0 24px', borderBottom: '0.5px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
+    <div style={{ display: 'flex', gap: 0, padding: isMobile ? '0 12px' : '0 20px', background: '#FBF8F2', flexShrink: 0 }}>
       {TABS.map((tab) => (
         <button
           key={tab.key}
@@ -182,14 +146,15 @@ function TabBar({ active, onChange }) {
           style={{
             border: 'none',
             background: 'none',
-            padding: '10px 14px',
+            padding: '10px 16px',
             fontSize: 13,
-            fontWeight: 600,
+            fontWeight: 700,
             cursor: 'pointer',
-            color: active === tab.key ? '#4C2A92' : '#9E9488',
+            color: active === tab.key ? '#4C2A92' : '#B0A89A',
             borderBottom: active === tab.key ? '2px solid #4C2A92' : '2px solid transparent',
             marginBottom: -1,
             transition: 'color .12s',
+            letterSpacing: '-0.1px',
           }}
         >
           {tab.label}
@@ -201,22 +166,17 @@ function TabBar({ active, onChange }) {
 
 export default function MeetingsModule() {
   const meetingOsUrl = import.meta.env.VITE_MEETING_OS_URL
+  const isMobile = useMediaQuery('(max-width: 640px)')
   const [searchParams, setSearchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState(() => {
     if (searchParams.get('report')) return 'report'
     if (searchParams.get('tab') === 'roster') return 'roster'
-    return 'report'
+    return 'meetings'
   })
 
   useEffect(() => {
-    if (searchParams.get('report')) {
-      setActiveTab('report')
-      return
-    }
-    if (searchParams.get('tab') === 'roster') {
-      setActiveTab('roster')
-      return
-    }
+    if (searchParams.get('report')) { setActiveTab('report'); return }
+    if (searchParams.get('tab') === 'roster') { setActiveTab('roster'); return }
     setActiveTab('meetings')
   }, [searchParams])
 
@@ -238,39 +198,43 @@ export default function MeetingsModule() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0, background: '#F7F5F0' }}>
+      {/* Module header */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '12px 24px 0',
-          borderBottom: '0.5px solid var(--border)',
-          background: 'var(--surface)',
+          padding: isMobile ? '10px 16px 0' : '16px 24px 0',
+          background: '#FBF8F2',
           flexShrink: 0,
         }}
       >
-        <div style={{ paddingBottom: 10 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', margin: 0 }}>
+        <div style={{ paddingBottom: isMobile ? 8 : 12 }}>
+          <h1 style={{ fontSize: isMobile ? 17 : 20, fontWeight: 700, color: '#18122E', margin: 0, letterSpacing: '-0.3px' }}>
             Meetings
           </h1>
-          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '2px 0 0' }}>
-            Powered by Meeting OS
-          </p>
+          {!isMobile && (
+            <p style={{ fontSize: 12, color: '#7A6F5E', margin: '2px 0 0' }}>
+              Agenda · Minutes · Actions · Audio
+            </p>
+          )}
         </div>
-        {meetingOsUrl && activeTab === 'meetings' ? (
+        {meetingOsUrl && activeTab === 'meetings' && !isMobile ? (
           <a
             href={meetingOsUrl}
             target="_blank"
             rel="noopener noreferrer"
             style={{
               fontSize: 12,
-              color: 'var(--accent)',
+              color: '#4C2A92',
               textDecoration: 'none',
-              padding: '5px 10px',
-              border: '0.5px solid var(--border)',
+              padding: '6px 12px',
+              border: '1px solid #D6CEBE',
               borderRadius: 8,
-              marginBottom: 10,
+              fontWeight: 600,
+              background: 'white',
+              marginBottom: 12,
             }}
           >
             Open in new tab ↗
@@ -278,6 +242,7 @@ export default function MeetingsModule() {
         ) : null}
       </div>
 
+      <div style={{ borderBottom: '1px solid #EDE8DC', flexShrink: 0 }} />
       <TabBar active={activeTab} onChange={handleTabChange} />
 
       {activeTab === 'report' ? (
@@ -296,11 +261,7 @@ export default function MeetingsModule() {
           allow="microphone; camera"
         />
       ) : (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
-          <div style={{ maxWidth: 1200 }}>
-            <MeetingsModuleFallback />
-          </div>
-        </div>
+        <MeetingsModuleFallback />
       )}
     </div>
   )

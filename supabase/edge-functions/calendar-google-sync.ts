@@ -13,8 +13,12 @@ interface CalendarEvent {
   end_date?: string;
   all_day: boolean;
   location?: string;
+  event_type?: string;
+  priority?: string;
+  recurrence_rule?: string;
   google_event_id?: string;
   last_sync_at?: string;
+  created_at?: string;
 }
 
 interface GoogleEvent {
@@ -24,7 +28,13 @@ interface GoogleEvent {
   start: { dateTime?: string; date?: string };
   end: { dateTime?: string; date?: string };
   location?: string;
+  colorId?: string;
   updated: string;
+  recurrence?: string[];
+  extendedProperties?: {
+    private?: Record<string, string>;
+    shared?: Record<string, string>;
+  };
 }
 
 interface SyncResult {
@@ -35,8 +45,23 @@ interface SyncResult {
   errors: string[];
 }
 
+// Maps Nexus event_type → Google Calendar colorId (1–11)
+const EVENT_TYPE_TO_COLOR_ID: Record<string, string> = {
+  conference: '11', // tomato
+  program:    '9',  // blueberry
+  training:   '5',  // banana
+  prayer:     '3',  // sage
+  graduation: '1',  // lavender
+  deadline:   '6',  // tangerine
+  event:      '7',  // peacock
+};
+
+// Reverse map for inbound sync (colorId → event_type)
+const COLOR_ID_TO_EVENT_TYPE: Record<string, string> = Object.fromEntries(
+  Object.entries(EVENT_TYPE_TO_COLOR_ID).map(([type, colorId]) => [colorId, type])
+);
+
 serve(async (req: Request) => {
-  // Only allow POST requests
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ error: 'Method not allowed' }),
@@ -54,7 +79,6 @@ serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get all active sync configurations
     const { data: syncs, error: syncError } = await supabase
       .from('google_calendar_sync')
       .select('*')
@@ -66,105 +90,61 @@ serve(async (req: Request) => {
 
     const results: Record<string, SyncResult> = {};
 
-    // Process each sync configuration
     for (const sync of syncs || []) {
+      const syncKey = `${sync.org_id}-${sync.space_id}`;
+      const result: SyncResult = { synced_events: 0, created: 0, updated: 0, deleted: 0, errors: [] };
+
       try {
-        const syncKey = `${sync.org_id}-${sync.space_id}`;
         console.log(`Starting sync for ${syncKey}`);
 
-        const result: SyncResult = {
-          synced_events: 0,
-          created: 0,
-          updated: 0,
-          deleted: 0,
-          errors: [],
-        };
-
-        // Sync TO Google (Nexus → Google)
         if (sync.sync_direction === 'to_google' || sync.sync_direction === 'both') {
-          await syncToGoogle(
-            supabase,
-            sync,
-            result
-          );
+          await syncToGoogle(supabase, sync, result);
         }
 
-        // Sync FROM Google (Google → Nexus)
         if (sync.sync_direction === 'from_google' || sync.sync_direction === 'both') {
-          await syncFromGoogle(
-            supabase,
-            sync,
-            result
-          );
+          await syncFromGoogle(supabase, sync, result);
         }
 
-        // Update last_sync_at timestamp
         await supabase
           .from('google_calendar_sync')
-          .update({
-            last_sync_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
+          .update({ last_sync_at: new Date().toISOString(), updated_at: new Date().toISOString() })
           .eq('id', sync.id);
 
         results[syncKey] = result;
         console.log(`Sync completed for ${syncKey}:`, result);
       } catch (error) {
         console.error(`Error syncing ${sync.id}:`, error);
-        results[`${sync.org_id}-${sync.space_id}`] = {
-          synced_events: 0,
-          created: 0,
-          updated: 0,
-          deleted: 0,
-          errors: [error.message],
-        };
+
+        // Notify calendar managers of the failure
+        await supabase.rpc('notify_sync_failure', {
+          p_space_id: sync.space_id,
+          p_error_message: error.message,
+        }).catch(() => {});
+
+        results[syncKey] = { synced_events: 0, created: 0, updated: 0, deleted: 0, errors: [error.message] };
       }
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        timestamp: new Date().toISOString(),
-        syncs_processed: Object.keys(results).length,
-        results,
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }
+      JSON.stringify({ success: true, timestamp: new Date().toISOString(), syncs_processed: Object.keys(results).length, results }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Sync error:', error);
     return new Response(
-      JSON.stringify({
-        error: 'Sync failed',
-        message: error.message,
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }
+      JSON.stringify({ error: 'Sync failed', message: error.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 });
 
-/**
- * Sync events from Nexus to Google Calendar
- */
-async function syncToGoogle(
-  supabase: any,
-  sync: any,
-  result: SyncResult
-): Promise<void> {
-  // Get unsync'd or recently updated events from Nexus
+async function syncToGoogle(supabase: any, sync: any, result: SyncResult): Promise<void> {
   const { data: events, error: eventError } = await supabase
     .from('calendar_events')
     .select('*')
     .eq('space_id', sync.space_id)
     .eq('status', 'approved')
-    .or(
-      `synced_to_google.eq.false,last_sync_at.lt.${sync.last_sync_at || new Date(0).toISOString()}`
-    );
+    .or(`synced_to_google.eq.false,last_sync_at.lt.${sync.last_sync_at || new Date(0).toISOString()}`);
 
   if (eventError) {
     result.errors.push(`Failed to fetch events: ${eventError.message}`);
@@ -174,38 +154,26 @@ async function syncToGoogle(
   for (const event of events || []) {
     try {
       const googleEvent = formatEventForGoogle(event);
-
       let response;
+
       if (event.google_event_id) {
-        // Update existing Google event
-        response = await updateGoogleEvent(
-          sync.google_access_token,
-          sync.google_calendar_id,
-          event.google_event_id,
-          googleEvent
-        );
+        response = await updateGoogleEvent(sync.google_access_token, sync.google_calendar_id, event.google_event_id, googleEvent);
         result.updated++;
       } else {
-        // Create new Google event
-        response = await createGoogleEvent(
-          sync.google_access_token,
-          sync.google_calendar_id,
-          googleEvent
-        );
+        response = await createGoogleEvent(sync.google_access_token, sync.google_calendar_id, googleEvent);
+        result.created++;
+      }
 
-        // Update Nexus event with Google ID
-        if (response.id) {
-          await supabase
-            .from('calendar_events')
-            .update({
-              google_event_id: response.id,
-              synced_to_google: true,
-              last_sync_at: new Date().toISOString(),
-            })
-            .eq('id', event.id);
-
-          result.created++;
-        }
+      // Always stamp the Nexus record after a successful push
+      if (response?.id || event.google_event_id) {
+        await supabase
+          .from('calendar_events')
+          .update({
+            google_event_id: response?.id ?? event.google_event_id,
+            synced_to_google: true,
+            last_sync_at: new Date().toISOString(),
+          })
+          .eq('id', event.id);
       }
 
       result.synced_events++;
@@ -215,20 +183,9 @@ async function syncToGoogle(
   }
 }
 
-/**
- * Sync events from Google Calendar to Nexus
- */
-async function syncFromGoogle(
-  supabase: any,
-  sync: any,
-  result: SyncResult
-): Promise<void> {
+async function syncFromGoogle(supabase: any, sync: any, result: SyncResult): Promise<void> {
   try {
-    const googleEvents = await fetchGoogleCalendarEvents(
-      sync.google_access_token,
-      sync.google_calendar_id,
-      sync.last_sync_at
-    );
+    const googleEvents = await fetchGoogleCalendarEvents(sync.google_access_token, sync.google_calendar_id, sync.last_sync_at);
 
     for (const googleEvent of googleEvents) {
       try {
@@ -236,28 +193,20 @@ async function syncFromGoogle(
           .from('calendar_events')
           .select('*')
           .eq('google_event_id', googleEvent.id)
-          .single();
+          .maybeSingle();
 
         const nexusEvent = formatEventFromGoogle(googleEvent);
 
         if (existingEvent) {
-          // Update existing event if Google version is newer (last-write-wins)
-          if (
-            new Date(googleEvent.updated) >
-            new Date(existingEvent.last_sync_at || existingEvent.created_at)
-          ) {
+          // Last-write-wins: only overwrite if Google's updated timestamp is newer
+          if (new Date(googleEvent.updated) > new Date(existingEvent.last_sync_at || existingEvent.created_at)) {
             await supabase
               .from('calendar_events')
-              .update({
-                ...nexusEvent,
-                last_sync_at: new Date().toISOString(),
-              })
+              .update({ ...nexusEvent, synced_from_google: true, last_sync_at: new Date().toISOString() })
               .eq('id', existingEvent.id);
-
             result.updated++;
           }
         } else {
-          // Create new event
           await supabase
             .from('calendar_events')
             .insert({
@@ -265,9 +214,9 @@ async function syncFromGoogle(
               google_event_id: googleEvent.id,
               synced_from_google: true,
               last_sync_at: new Date().toISOString(),
-              status: 'approved', // Events from Google are considered approved
+              status: 'approved',
+              space_id: sync.space_id,
             });
-
           result.created++;
         }
 
@@ -281,23 +230,12 @@ async function syncFromGoogle(
   }
 }
 
-/**
- * Fetch events from Google Calendar
- */
-async function fetchGoogleCalendarEvents(
-  accessToken: string,
-  calendarId: string,
-  syncToken?: string
-): Promise<GoogleEvent[]> {
-  const params = new URLSearchParams({
-    maxResults: '250',
-    showDeleted: 'false',
-  });
+async function fetchGoogleCalendarEvents(accessToken: string, calendarId: string, syncToken?: string): Promise<GoogleEvent[]> {
+  const params = new URLSearchParams({ maxResults: '250', showDeleted: 'false' });
 
   if (syncToken) {
     params.append('syncToken', syncToken);
   } else {
-    // First sync: get events from last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     params.append('timeMin', thirtyDaysAgo.toISOString());
@@ -305,78 +243,45 @@ async function fetchGoogleCalendarEvents(
 
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    }
+    { headers: { Authorization: `Bearer ${accessToken}` } }
   );
 
-  if (!response.ok) {
-    throw new Error(`Google API error: ${response.statusText}`);
-  }
+  if (!response.ok) throw new Error(`Google API error: ${response.statusText}`);
 
   const data = await response.json();
   return data.items || [];
 }
 
-/**
- * Create event in Google Calendar
- */
-async function createGoogleEvent(
-  accessToken: string,
-  calendarId: string,
-  event: any
-): Promise<{ id: string }> {
+async function createGoogleEvent(accessToken: string, calendarId: string, event: any): Promise<{ id: string }> {
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
     {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(event),
     }
   );
-
-  if (!response.ok) {
-    throw new Error(`Google API error: ${response.statusText}`);
-  }
-
+  if (!response.ok) throw new Error(`Google API error: ${response.statusText}`);
   return response.json();
 }
 
-/**
- * Update event in Google Calendar
- */
-async function updateGoogleEvent(
-  accessToken: string,
-  calendarId: string,
-  eventId: string,
-  event: any
-): Promise<{ id: string }> {
+async function updateGoogleEvent(accessToken: string, calendarId: string, eventId: string, event: any): Promise<{ id: string }> {
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
     {
       method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(event),
     }
   );
-
-  if (!response.ok) {
-    throw new Error(`Google API error: ${response.statusText}`);
-  }
-
+  if (!response.ok) throw new Error(`Google API error: ${response.statusText}`);
   return response.json();
 }
 
 /**
- * Format Nexus event for Google Calendar
+ * Format a Nexus event for the Google Calendar API.
+ * Syncs ALL fields: title, description, location, dates, event_type (as colorId),
+ * priority, recurrence_rule (as RRULE), and Nexus metadata via extendedProperties.
  */
 function formatEventForGoogle(event: CalendarEvent): any {
   const startDateTime = new Date(event.start_date).toISOString();
@@ -384,26 +289,57 @@ function formatEventForGoogle(event: CalendarEvent): any {
     ? new Date(event.end_date).toISOString()
     : new Date(new Date(event.start_date).getTime() + 3600000).toISOString();
 
-  return {
+  const googleEvent: any = {
     summary: event.title,
-    description: event.description,
-    location: event.location,
+    description: event.description ?? null,
+    location: event.location ?? null,
+    colorId: EVENT_TYPE_TO_COLOR_ID[event.event_type ?? ''] ?? '7',
     start: event.all_day
       ? { date: event.start_date.split('T')[0] }
       : { dateTime: startDateTime },
     end: event.all_day
       ? { date: new Date(new Date(event.start_date).getTime() + 86400000).toISOString().split('T')[0] }
       : { dateTime: endDateTime },
+    extendedProperties: {
+      private: {
+        nexus_event_type: event.event_type ?? 'event',
+        nexus_priority: event.priority ?? 'medium',
+      },
+    },
   };
+
+  // RFC 5545 RRULE — Google expects it as "RRULE:<value>" inside a recurrence array
+  if (event.recurrence_rule) {
+    googleEvent.recurrence = [`RRULE:${event.recurrence_rule}`];
+  }
+
+  return googleEvent;
 }
 
 /**
- * Format Google event for Nexus
+ * Parse a Google Calendar event back into Nexus fields.
+ * Prefers extendedProperties for Nexus-specific metadata; falls back to colorId mapping.
  */
-function formatEventFromGoogle(googleEvent: GoogleEvent): any {
-  const start = googleEvent.start.dateTime || googleEvent.start.date;
-  const end = googleEvent.end.dateTime || googleEvent.end.date;
+function formatEventFromGoogle(googleEvent: GoogleEvent): Partial<CalendarEvent> {
+  const start = googleEvent.start.dateTime ?? googleEvent.start.date ?? '';
+  const end = googleEvent.end?.dateTime ?? googleEvent.end?.date ?? start;
   const allDay = !googleEvent.start.dateTime;
+
+  const privateProps = googleEvent.extendedProperties?.private ?? {};
+
+  const eventType =
+    privateProps.nexus_event_type ??
+    (googleEvent.colorId ? COLOR_ID_TO_EVENT_TYPE[googleEvent.colorId] : undefined) ??
+    'event';
+
+  const priority = privateProps.nexus_priority ?? 'medium';
+
+  // Strip "RRULE:" prefix from the Google recurrence array entry
+  let recurrenceRule: string | undefined;
+  if (googleEvent.recurrence?.length) {
+    const rruleLine = googleEvent.recurrence.find((r) => r.startsWith('RRULE:'));
+    if (rruleLine) recurrenceRule = rruleLine.replace('RRULE:', '');
+  }
 
   return {
     title: googleEvent.summary,
@@ -412,7 +348,8 @@ function formatEventFromGoogle(googleEvent: GoogleEvent): any {
     start_date: start,
     end_date: end,
     all_day: allDay,
-    event_type: 'event',
-    priority: 'medium',
+    event_type: eventType,
+    priority,
+    ...(recurrenceRule ? { recurrence_rule: recurrenceRule } : {}),
   };
 }

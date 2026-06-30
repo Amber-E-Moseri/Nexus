@@ -1,6 +1,7 @@
 import { supabase } from '../../../lib/supabase'
 import { getDefaultTaskStatusId, normalizeTaskRows } from '../../../lib/taskStatuses.js'
 import { recordActivity } from '../../../lib/activityFeed'
+import { notifyActionItemAssignees } from './actionItemsBridge'
 
 export async function getDeptMeetings(departmentId) {
   if (!departmentId) return []
@@ -161,21 +162,45 @@ export async function deleteMeeting(meetingId) {
 
 export async function createTasksFromActionItems(meetingId, departmentId, actionItems, createdBy) {
   if (!actionItems.length) return []
-  const defaultStatusId = await getDefaultTaskStatusId({ departmentId })
 
-  const tasks = actionItems.map((item) => ({
-    title: item.title,
-    description: item.description || null,
-    assignee_id: item.assigneeId || null,
-    due_date: item.dueDate || null,
-    department_id: departmentId,
-    meeting_id: meetingId,
-    source: 'meeting',
-    status_id: defaultStatusId,
-    priority: 'medium',
-    created_by: createdBy,
-    is_personal: false,
-  }))
+  // Look up each assignee's department so tasks appear in their own space
+  const assigneeIds = [...new Set(actionItems.map((i) => i.assigneeId).filter(Boolean))]
+  const assigneeDeptMap = {}
+  if (assigneeIds.length > 0) {
+    const { data: userRows } = await supabase
+      .from('users')
+      .select('id, department_id')
+      .in('id', assigneeIds)
+    for (const u of userRows ?? []) {
+      if (u.department_id) assigneeDeptMap[u.id] = u.department_id
+    }
+  }
+
+  // Get default status IDs for each unique destination department
+  const uniqueDeptIds = [...new Set([departmentId, ...Object.values(assigneeDeptMap)])]
+  const statusIdByDept = {}
+  await Promise.all(
+    uniqueDeptIds.map(async (deptId) => {
+      statusIdByDept[deptId] = await getDefaultTaskStatusId({ departmentId: deptId })
+    }),
+  )
+
+  const tasks = actionItems.map((item) => {
+    const destDeptId = item.assigneeId ? (assigneeDeptMap[item.assigneeId] ?? departmentId) : departmentId
+    return {
+      title: item.title,
+      description: item.description || null,
+      assignee_id: item.assigneeId || null,
+      due_date: item.dueDate || null,
+      department_id: destDeptId,
+      meeting_id: meetingId,
+      source: 'meeting',
+      status_id: statusIdByDept[destDeptId] ?? statusIdByDept[departmentId] ?? null,
+      priority: item.priority || 'medium',
+      created_by: createdBy,
+      is_personal: false,
+    }
+  })
 
   const { data, error } = await supabase
     .from('tasks')
@@ -190,7 +215,31 @@ export async function createTasksFromActionItems(meetingId, departmentId, action
     `)
 
   if (error) throw error
-  return normalizeTaskRows(data)
+
+  const normalizedTasks = normalizeTaskRows(data)
+
+  // Look up assigner name once for all notifications
+  const { data: assignerRow } = await supabase
+    .from('users')
+    .select('name')
+    .eq('id', createdBy)
+    .maybeSingle()
+  const assignerName = assignerRow?.name ?? 'Someone'
+
+  // Notify each assignee via the service-role edge function — fire-and-forget,
+  // non-blocking (delivery is best-effort and must not fail the save).
+  notifyActionItemAssignees(
+    normalizedTasks
+      .filter((t) => t.assignee_id)
+      .map((t) => ({
+        task_id: t.id,
+        assignee_id: t.assignee_id,
+        task_title: t.title,
+        assigner_name: assignerName,
+      })),
+  )
+
+  return normalizedTasks
 }
 
 export async function getMeetingTasks(meetingId) {
