@@ -15,7 +15,9 @@
 -- NOTE: the users display-name column is `name` (there is no `full_name`).
 -- =============================================================================
 
-create or replace function public.get_user_action_items()
+drop function if exists public.get_user_action_items();
+
+create function public.get_user_action_items()
 returns table (
   task_id uuid,
   task_title text,
