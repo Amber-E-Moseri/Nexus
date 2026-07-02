@@ -5,6 +5,8 @@ import {
   getTaskStatusCatalog,
   reorderTaskStatuses,
   updateTaskStatusDefinition,
+  selectOrgStatuses,
+  selectDeptStatuses,
 } from '../../lib/taskStatuses'
 
 const CATEGORY_OPTIONS = [
@@ -55,6 +57,7 @@ export default function StatusManagementSection({
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState(null)
   const [message, setMessage] = useState('')
+  const [allStatuses, setAllStatuses] = useState([])
 
   const scopeDepartmentId = selectedScope === '__global__' ? null : selectedScope
   const selectedDepartmentName = selectedScope === '__global__'
@@ -76,6 +79,9 @@ export default function StatusManagementSection({
     setMessage('')
     try {
       const catalog = await getTaskStatusCatalog({ departmentId: scopeDepartmentId, includeInactive: true })
+      // Also fetch all statuses (org + dept) to support hierarchy
+      const allCatalog = await getTaskStatusCatalog({ departmentId: null, includeInactive: false })
+      setAllStatuses(allCatalog.statuses)
       setStatuses(catalog.statuses)
       setDrafts(catalog.statuses)
       setUsageCounts(catalog.usageCounts)
@@ -119,10 +125,19 @@ export default function StatusManagementSection({
           sort_order: status.sort_order,
         })
       } else {
+        // For dept-scoped statuses, automatically map to org parent by category
+        let orgStatusId = null
+        if (scopeDepartmentId) {
+          const orgStatuses = selectOrgStatuses(allStatuses)
+          const matchingOrgStatus = orgStatuses.find((s) => s.category === status.category)
+          orgStatusId = matchingOrgStatus?.id
+        }
+
         await createTaskStatus({
           ...status,
           department_id: scopeDepartmentId,
           sort_order: drafts.length + 1,
+          org_status_id: orgStatusId,
         })
         setNewStatus(EMPTY_DRAFT)
       }

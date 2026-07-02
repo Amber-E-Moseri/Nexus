@@ -50,3 +50,33 @@ export function selectTaskCountsByCategory(tasks = []) {
     { open: 0, in_progress: 0, completed: 0, cancelled: 0 },
   )
 }
+
+// Hierarchy-aware selectors
+
+export function selectOrgStatuses(statuses = []) {
+  return sortTaskStatuses(statuses).filter((status) => status.is_org_status === true)
+}
+
+export function selectDeptStatuses(statuses = []) {
+  return sortTaskStatuses(statuses).filter((status) => status.is_org_status !== true)
+}
+
+export function selectStatusByOrgParent(statuses = [], orgStatusId) {
+  return sortTaskStatuses(statuses).filter(
+    (status) => status.org_status_id === orgStatusId && status.is_org_status !== true,
+  )
+}
+
+export function selectHierarchyMap(statuses = []) {
+  const orgStatuses = selectOrgStatuses(statuses)
+  const deptStatuses = selectDeptStatuses(statuses)
+
+  const map = {}
+  for (const orgStatus of orgStatuses) {
+    map[orgStatus.id] = {
+      org: orgStatus,
+      children: deptStatuses.filter((dept) => dept.org_status_id === orgStatus.id),
+    }
+  }
+  return map
+}

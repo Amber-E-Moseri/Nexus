@@ -189,7 +189,77 @@ export async function getTaskStatusCatalog({ departmentId = null, includeInactiv
   }
 }
 
+export async function getOrgStatusParent(deptStatus) {
+  if (!deptStatus) return null
+  if (deptStatus.is_org_status) return null // Org statuses have no parent
+
+  const { data, error } = await supabase
+    .from('task_status_definitions')
+    .select('*')
+    .eq('id', deptStatus.org_status_id)
+    .single()
+
+  if (error) {
+    console.warn(`[Status Hierarchy] Could not fetch org parent for ${deptStatus.id}:`, error)
+    return null
+  }
+
+  return normalizeTaskStatusDefinition(data)
+}
+
+export async function getStatusHierarchy({ departmentId = null } = {}) {
+  // Fetch org statuses (canonical)
+  const { data: orgStatuses, error: orgError } = await supabase
+    .from('task_status_definitions')
+    .select('*')
+    .eq('is_org_status', true)
+    .eq('active', true)
+    .order('sort_order')
+
+  if (orgError) throw orgError
+
+  // Fetch dept-specific statuses
+  let deptQuery = supabase
+    .from('task_status_definitions')
+    .select('*')
+    .eq('is_org_status', false)
+    .eq('active', true)
+
+  if (departmentId) {
+    deptQuery = deptQuery.eq('department_id', departmentId)
+  }
+
+  const { data: deptStatuses, error: deptError } = await deptQuery.order('sort_order')
+  if (deptError) throw deptError
+
+  // Map dept statuses to their org parents
+  const hierarchy = {
+    orgStatuses: (orgStatuses ?? []).map(normalizeTaskStatusDefinition),
+    deptStatuses: (deptStatuses ?? []).map(normalizeTaskStatusDefinition),
+    byOrgParent: {},
+  }
+
+  // Group dept statuses by their org parent
+  for (const deptStatus of hierarchy.deptStatuses) {
+    const parentId = deptStatus.org_status_id
+    if (!hierarchy.byOrgParent[parentId]) {
+      hierarchy.byOrgParent[parentId] = []
+    }
+    hierarchy.byOrgParent[parentId].push(deptStatus)
+  }
+
+  return hierarchy
+}
+
+export function isOrgStatus(status) {
+  return status?.is_org_status === true
+}
+
 export async function createTaskStatus(definition) {
+  if (!definition.department_id && !definition.is_org_status) {
+    throw new Error('Department-scoped status must specify org_status_id parent (or be org-wide)')
+  }
+
   const payload = {
     name: definition.name?.trim(),
     color: toHex(definition.color ?? '#7A7D86'),
@@ -199,10 +269,18 @@ export async function createTaskStatus(definition) {
     is_default: Boolean(definition.is_default),
     active: definition.active ?? true,
     legacy_key: definition.legacy_key ?? null,
+    is_org_status: Boolean(definition.is_org_status),
+    org_status_id: definition.org_status_id ?? null,
   }
 
+  // CHECK constraint will enforce: org_status_id must be present for non-org statuses
   const { data, error } = await supabase.from('task_status_definitions').insert(payload).select().single()
-  if (error) throw error
+  if (error) {
+    if (error.message?.includes('hierarchy_check')) {
+      throw new Error('All non-org statuses must map to an org status parent. Provide org_status_id.')
+    }
+    throw error
+  }
   return normalizeTaskStatusDefinition(data)
 }
 
@@ -253,4 +331,8 @@ export {
   selectStatusWorkflowPreview,
   selectTaskCountsByCategory,
   selectTaskStatusUsageCounts,
+  selectOrgStatuses,
+  selectDeptStatuses,
+  selectStatusByOrgParent,
+  selectHierarchyMap,
 }
