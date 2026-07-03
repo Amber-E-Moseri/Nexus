@@ -6,11 +6,13 @@ const EMPTY_FILTERS = {
   priority: [],
   assigneeId: null,
   dueDateRange: null, // 'overdue' | 'today' | 'this_week' | null
+  dateRange: { startDate: null, endDate: null },
   taskType: [],
   source: [],
   hasComments: false,
   hasDependencies: false,
   showDone: true,
+  milestoneStatus: [],
 }
 
 function startOfDay(date) {
@@ -50,6 +52,62 @@ export function useTaskFilters(tasks = []) {
         }
       }
 
+      if (filters.dateRange?.startDate || filters.dateRange?.endDate) {
+        const due = task.due_date ? startOfDay(new Date(task.due_date)) : null
+        if (!due) return false
+        if (filters.dateRange.startDate) {
+          const start = startOfDay(new Date(filters.dateRange.startDate))
+          if (due < start) return false
+        }
+        if (filters.dateRange.endDate) {
+          const end = startOfDay(new Date(filters.dateRange.endDate))
+          if (due > end) return false
+        }
+      }
+
+      if (filters.milestoneStatus.length > 0) {
+        let matchesMilestoneFilter = false
+        for (const filter of filters.milestoneStatus) {
+          if (filter === 'no_milestone' && !task.milestone_id) {
+            matchesMilestoneFilter = true
+            break
+          }
+          if (filter === 'milestone_overdue') {
+            const today = startOfDay(new Date())
+            if (task.milestone_due_date) {
+              const due = startOfDay(new Date(task.milestone_due_date))
+              if (due < today) {
+                matchesMilestoneFilter = true
+                break
+              }
+            }
+          }
+          if (filter === 'milestone_today') {
+            const today = startOfDay(new Date())
+            if (task.milestone_due_date) {
+              const due = startOfDay(new Date(task.milestone_due_date))
+              const tomorrow = new Date(today)
+              tomorrow.setDate(tomorrow.getDate() + 1)
+              if (due >= today && due < tomorrow) {
+                matchesMilestoneFilter = true
+                break
+              }
+            }
+          }
+          if (filter === 'milestone_upcoming') {
+            const today = startOfDay(new Date())
+            if (task.milestone_due_date) {
+              const due = startOfDay(new Date(task.milestone_due_date))
+              if (due > today) {
+                matchesMilestoneFilter = true
+                break
+              }
+            }
+          }
+        }
+        if (!matchesMilestoneFilter) return false
+      }
+
       return true
     })
   }, [tasks, filters])
@@ -64,11 +122,13 @@ export function useTaskFilters(tasks = []) {
       filters.priority.length > 0 ||
       filters.assigneeId !== null ||
       filters.dueDateRange !== null ||
+      (filters.dateRange?.startDate !== null || filters.dateRange?.endDate !== null) ||
       filters.taskType.length > 0 ||
       filters.source.length > 0 ||
       filters.hasComments ||
       filters.hasDependencies ||
-      filters.showDone
+      !filters.showDone ||
+      filters.milestoneStatus.length > 0
     )
   }
 
