@@ -19,12 +19,40 @@ const STATUS_COLORS = {
   archived: '#F3F0EB',
 }
 
+function calculateSprintHealth(sprint, progress) {
+  // Only calculate health for active sprints with defined dates
+  if (sprint.status !== 'active' || !sprint.start_date || !sprint.end_date) {
+    return null
+  }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const startDate = new Date(sprint.start_date)
+  startDate.setHours(0, 0, 0, 0)
+  const endDate = new Date(sprint.end_date)
+  endDate.setHours(0, 0, 0, 0)
+
+  if (today < startDate) return null // Sprint hasn't started
+
+  const totalDays = Math.max(1, (endDate - startDate) / (1000 * 60 * 60 * 24))
+  const elapsedDays = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24))
+  const expectedProgress = Math.round((elapsedDays / totalDays) * 100)
+
+  // If actual progress is within 10% of expected, consider it "On track"
+  if (progress >= expectedProgress - 10) {
+    return { status: 'On track', color: '#059669' } // green
+  } else {
+    return { status: 'At risk', color: '#D97706' } // orange
+  }
+}
+
 export default function SprintCard({ sprint, onClick, onDuplicate, onRestore, onDelete }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const isArchived = sprint.status === 'archived'
   const taskCount = sprint.task_count || 0
   const completedCount = sprint.completed_count || 0
   const progress = taskCount > 0 ? Math.round((completedCount / taskCount) * 100) : 0
+  const health = calculateSprintHealth(sprint, progress)
 
   const dateRange = sprint.start_date && sprint.end_date
     ? `${new Date(sprint.start_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })} — ${new Date(sprint.end_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}`
@@ -60,22 +88,12 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore, on
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
             {isArchived ? '📦 ' : shouldAutoStartSprint(sprint) ? '⚡ ' : ''}{sprint.name}
           </div>
-          {sprint.goal && (
-            <div
-              style={{
-                fontSize: 12.5,
-                color: 'var(--text-secondary)',
-                lineHeight: 1.6,
-                overflow: 'hidden',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-              }}
-            >
-              {sprint.goal}
+          {sprint.department_name && (
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+              {sprint.department_name}
             </div>
           )}
         </div>
@@ -91,9 +109,27 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore, on
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid #E9E4D8' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>📅 {dateRange}</span>
-        <div style={{ marginLeft: 'auto', position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid #E9E4D8' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>📅 {dateRange}</span>
+          {taskCount > 0 && (
+            <>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
+                {completedCount}/{taskCount}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
+                {progress}% complete
+              </span>
+            </>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {health && (
+            <span style={{ fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 6, background: health.color, color: 'white' }}>
+              {health.status}
+            </span>
+          )}
+          <div style={{ position: 'relative' }}>
           {onDuplicate || onRestore || onDelete ? (
             <>
               <button
@@ -148,6 +184,7 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore, on
               ) : null}
             </>
           ) : null}
+          </div>
         </div>
       </div>
     </div>
