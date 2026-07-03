@@ -13,7 +13,7 @@ export async function getDepartments() {
 }
 
 const SPRINT_TEAM_SELECT = 'id, sprint_id, name, description, lead_user_id, created_at'
-const SPRINT_TEAM_MEMBERS_SELECT = 'id, team_id, user_id, role, joined_at, users:user_id(id, name, email, department_id, status)'
+const SPRINT_TEAM_MEMBERS_SELECT = 'team_id, user_id, role, joined_at, users:user_id(id, name, email, department_id, status)'
 const SPRINT_MEMBER_SELECT = 'sprint_id, user_id, role, joined_at'
 const SPRINT_MEMBER_WITH_TEMP_SELECT = 'sprint_id, user_id, role, joined_at, membership_end_date, is_temporary, invited_by, sprint_team_id'
 const TEMP_MEMBER_SELECT = 'id, sprint_id, user_id, role, membership_end_date, is_temporary, invited_by, joined_at, users:user_id(id, name, email, status, is_temporary)'
@@ -589,13 +589,13 @@ export async function updateSprintMemberTeams(sprintId, userId, teamIds = []) {
 export async function getSprintMembers(sprintId) {
   const { data, error } = await supabase
     .from('sprint_members')
-    .select('user:users(id, name, avatar_url, role, status)')
+    .select('users:user_id(id, name, avatar_url, status)')
     .eq('sprint_id', sprintId)
 
   if (error) throw error
 
   return (data ?? [])
-    .map((item) => item.user)
+    .map((item) => item.users)
     .filter(Boolean)
     .filter((user) => user.status === 'active' || user.status == null)
 }
@@ -615,8 +615,11 @@ export async function getSprintTasks(sprintId) {
   const { data, error } = await supabase
     .from('tasks')
     .select(`
-      *,
-      status_id,
+      id, title, description, is_personal, status, priority,
+      assignee_id, department_id, parent_task_id, meeting_id, goal_id,
+      source, source_name, source_type, external_unique_key,
+      due_date, completed_at, created_by, created_at,
+      sprint_id, task_type, status_id, list_id, sort_order, deleted_at,
       status_definition:task_status_definitions!status_id(
         id, name, color, category, department_id, sort_order, is_default, active, legacy_key
       ),
