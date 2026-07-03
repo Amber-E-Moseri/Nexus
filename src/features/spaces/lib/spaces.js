@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabase'
+import { normalizeTaskRow } from '../../../lib/taskStatuses'
 
 export async function getMySpaces(userId, role, departmentId) {
   const { data, error } = await supabase
@@ -344,12 +345,15 @@ export async function getSpaceTasks(departmentId) {
 
   const { data, error } = await supabase
     .from('tasks')
-    .select('id, title, status, status_id, priority, due_date, assignee_id, department_id, list_id, created_at, sprint_id')
+    .select(`
+      id, title, status, status_id, priority, due_date, assignee_id, department_id, list_id, created_at, sprint_id,
+      status_definition:task_status_definitions!status_id(id, name, color, category, department_id, sort_order, is_default, active, legacy_key)
+    `)
     .or(filters.join(','))
     .is('parent_task_id', null)
 
   if (error) throw error
-  return data ?? []
+  return (data ?? []).map(normalizeTaskRow)
 }
 
 export async function getSpaceListsCount(departmentId) {
