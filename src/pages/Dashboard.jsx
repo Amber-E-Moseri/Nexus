@@ -6,12 +6,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationsContext'
 import { useAuth } from '../hooks/useAuth'
-import { canAccessFlockCRM } from '../lib/permissions'
 import { getUserDashboardPreferences, getRoleDashboardDefaults, upsertDashboardPreferences, deleteDashboardPreferences } from '../features/dashboard/lib/dashboards'
 import { supabase } from '../lib/supabase'
 import { getMyTasks } from '../features/tasks'
 import { isTaskCompleted } from '../lib/taskStatuses'
-import FlockDashboardSection from '../components/flock/FlockDashboardSection'
 import CompletionRateWidget from '../features/dashboard/components/CompletionRateWidget'
 import MemberActivityWidget from '../features/dashboard/components/MemberActivityWidget'
 import OverdueByMemberWidget from '../features/dashboard/components/OverdueByMemberWidget'
@@ -27,6 +25,7 @@ import PastoralMembersWidget from '../features/dashboard/components/PastoralMemb
 import AbsentMembersWidget from '../features/dashboard/components/AbsentMembersWidget'
 import TeamActivityHeatmap from '../features/dashboard/components/TeamActivityHeatmap'
 import TeamVelocityWidget from '../features/dashboard/components/TeamVelocityWidget'
+import { RegionalUpdateWidget } from '../features/regional-updates/components/RegionalUpdateWidget'
 import { getDashboardPresets } from '../features/dashboard/lib/dashboard-queries'
 
 function greetingForHour() {
@@ -157,6 +156,7 @@ function QuickActionsWidget({ role }) {
 // ─── Widget registry ──────────────────────────────────────────────────────────
 
 const WIDGET_META = {
+  regional_updates:       { title: 'Regional Updates',          Component: RegionalUpdateWidget },
   my_tasks_summary:       { title: 'My Tasks Summary',          Component: MyTasksSummaryWidget },
   upcoming_events:        { title: 'Upcoming Events',           Component: UpcomingEventsWidget },
   upcoming_meetings:      { title: 'Upcoming Meetings',         Component: UpcomingMeetingsWidget },
@@ -618,7 +618,6 @@ export default function Dashboard() {
         {/* ════════════════════════════════════════════════════════════ */}
         {/* FLOCK CRM SECTION — REGIONAL SECRETARY ONLY                  */}
         {/* ════════════════════════════════════════════════════════════ */}
-        {canAccessFlockCRM(role) && <FlockDashboardSection />}
       </div>
 
       {showCustomize ? (

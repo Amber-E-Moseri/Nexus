@@ -64,9 +64,7 @@ serve(async (req) => {
     });
   }
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // AUTH: Verify JWT
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // ── AUTH: Verify JWT ──────────────────────────────────────────────────────
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -90,10 +88,11 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // ─────────────────────────────────────────────────────────────────────────
 
   try {
-    const { transcript } = await req.json();
+    const body = await req.json();
+    const { transcript, context, stream: wantStream } = body;
 
     if (!transcript || typeof transcript !== "string") {
       return new Response(JSON.stringify({ error: "Missing transcript" }), {
@@ -102,19 +101,111 @@ serve(async (req) => {
       });
     }
 
-    // Check cache first
-    const transcriptHash = await hashTranscript(transcript);
+    const contextLine = context
+      ? `Meeting Context: ${context}`
+      : "Meeting Context: No additional context provided";
+
+    const prompt = `${contextLine}
+
+Meeting transcript:
+${transcript.slice(0, 8000)}
+
+Extract and return ONLY valid JSON (no markdown, no extra text):
+{
+  "summary": "2-3 sentence summary",
+  "decisions": ["decision 1", "decision 2"],
+  "action_items": [
+    {"title": "action description", "owner": "name or TBD", "due_date": "YYYY-MM-DD or null"}
+  ],
+  "key_topics": ["topic1", "topic2"]
+}`;
+
+    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!anthropicKey) {
+      throw new Error("ANTHROPIC_API_KEY not configured");
+    }
+
+    // ── STREAMING path (WIN 3) ────────────────────────────────────────────
+    if (wantStream) {
+      const upstreamResp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-beta": "messages-2023-12-15",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1024,
+          stream: true,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+
+      if (!upstreamResp.ok) {
+        const err = await upstreamResp.json();
+        throw new Error(`Claude API error: ${err.error?.message || upstreamResp.status}`);
+      }
+
+      const responseStream = new ReadableStream({
+        async start(controller) {
+          const reader = upstreamResp.body!.getReader();
+          const decoder = new TextDecoder();
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              const chunk = decoder.decode(value);
+              const lines = chunk.split("\n");
+              for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                const raw = line.slice(6).trim();
+                if (raw === "[DONE]") continue;
+                try {
+                  const evt = JSON.parse(raw);
+                  if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+                    const text = evt.delta.text || "";
+                    if (text) {
+                      controller.enqueue(
+                        new TextEncoder().encode(`data: ${JSON.stringify({ text })}\n\n`)
+                      );
+                    }
+                  }
+                } catch {
+                  // skip malformed SSE lines
+                }
+              }
+            }
+            controller.enqueue(
+              new TextEncoder().encode(`data: ${JSON.stringify({ done: true })}\n\n`)
+            );
+          } catch (err) {
+            controller.error(err);
+          } finally {
+            controller.close();
+          }
+        },
+      });
+
+      return new Response(responseStream, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        },
+      });
+    }
+
+    // ── NON-STREAMING path (unchanged + context support) ──────────────────
+    const transcriptHash = await hashTranscript(transcript + (context || ""));
     const cached = await getCachedExtraction(transcriptHash);
     if (cached) {
       return new Response(JSON.stringify({ success: true, extracted: cached, cached: true }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-    }
-
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!anthropicKey) {
-      throw new Error("ANTHROPIC_API_KEY not configured");
     }
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -127,25 +218,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
-        messages: [
-          {
-            role: "user",
-            content: `Extract the following from this meeting transcript. Return ONLY valid JSON with no markdown or extra text.
-
-TRANSCRIPT:
-${transcript.slice(0, 8000)}
-
-Return JSON:
-{
-  "summary": "2-3 sentence summary",
-  "decisions": ["decision 1", "decision 2"],
-  "action_items": [
-    {"title": "action description", "owner": "name or TBD", "due_date": "YYYY-MM-DD or null"}
-  ],
-  "key_topics": ["topic1", "topic2"]
-}`,
-          },
-        ],
+        messages: [{ role: "user", content: prompt }],
       }),
     });
 
@@ -161,12 +234,10 @@ Return JSON:
     try {
       extracted = JSON.parse(text);
     } catch {
-      // Claude sometimes wraps JSON in ```json ... ``` — strip it
       const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
       extracted = match ? JSON.parse(match[1]) : { summary: text, decisions: [], action_items: [], key_topics: [] };
     }
 
-    // Cache the extraction result
     await setCachedExtraction(transcriptHash, extracted);
 
     return new Response(JSON.stringify({ success: true, extracted, cached: false }), {

@@ -442,9 +442,41 @@ export async function updateTask(taskId, updates, actorId = null) {
   return normalized
 }
 
-export async function deleteTask(taskId) {
-  const { error } = await supabase.from('tasks').delete().eq('id', taskId)
-  if (error) throw error
+export async function deleteTask(taskId, permanent = false) {
+  // Get current user's role
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) throw new Error('Not authenticated')
+
+  const { data: userData } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  const userRole = userData?.role
+
+  // Only dept_lead and super_admin can do permanent delete
+  if (permanent && !['dept_lead', 'super_admin'].includes(userRole)) {
+    throw new Error('Only department leads and admins can permanently delete tasks. Your task has been soft-deleted instead.')
+  }
+
+  if (permanent) {
+    // Hard delete - permanently remove from database
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+    if (error) throw error
+  } else {
+    // Soft delete - mark as deleted
+    const { error } = await supabase
+      .from('tasks')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', taskId)
+    if (error) throw error
+  }
+}
+
+export async function hardDeleteTask(taskId) {
+  // Permanently delete a task (requires permission check in deleteTask)
+  return deleteTask(taskId, true)
 }
 
 // --- Subtasks ----------------------------------------------------------------

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster'
@@ -26,7 +26,28 @@ export function BLWMap({ mode = 'default' }) {
   const [loading, setLoading] = useState(true)
   const [selectedCampus, setSelectedCampus] = useState(null)
   const [showModal, setShowModal] = useState(false)
-  const [showTimer, setShowTimer] = useState(false)
+  const [selectedRegion, setSelectedRegion] = useState(null)
+  const [searchTerm, setSearchTerm] = useState('')
+
+  const uniqueRegions = useMemo(() => {
+    const regions = [...new Set(campuses.map((c) => c.group_name).filter(Boolean))]
+    return regions.sort()
+  }, [campuses])
+
+  const filteredCampuses = useMemo(() => {
+    if (!selectedRegion) return campuses
+    return campuses.filter((c) => c.group_name === selectedRegion)
+  }, [campuses, selectedRegion])
+
+  const foundCampus = useMemo(() => {
+    if (!searchTerm.trim()) return null
+    const lower = searchTerm.toLowerCase()
+    return filteredCampuses.find(
+      (c) =>
+        c.name?.toLowerCase().includes(lower) ||
+        c.institution?.toLowerCase().includes(lower)
+    )
+  }, [searchTerm, filteredCampuses])
 
   // Load campuses from Supabase
   useEffect(() => {
@@ -34,7 +55,7 @@ export function BLWMap({ mode = 'default' }) {
       try {
         const { data, error } = await supabase
           .from('campuses')
-          .select('id, name, institution, campus_name_alt, latitude, longitude, hub, spotify_playlist_id, status, group_name')
+          .select('id, name, institution, campus_name_alt, latitude, longitude, hub, spotify_playlist_id, status, group_name, photo_url')
           .order('name')
 
         if (!error && data) {
@@ -49,7 +70,6 @@ export function BLWMap({ mode = 'default' }) {
 
     fetchCampuses()
 
-    // Subscribe to real-time changes
     const subscription = supabase
       .channel('campuses-changes')
       .on(
@@ -79,11 +99,19 @@ export function BLWMap({ mode = 'default' }) {
     }
   }, [])
 
+  // Fly to campus when search finds a match
+  useEffect(() => {
+    if (foundCampus && mapInstanceRef.current) {
+      mapInstanceRef.current.flyTo([foundCampus.latitude, foundCampus.longitude], 14, {
+        duration: 1,
+      })
+    }
+  }, [foundCampus])
+
   // Initialize map and update markers
   useEffect(() => {
-    if (!mapRef.current || campuses.length === 0) return
+    if (!mapRef.current || filteredCampuses.length === 0) return
 
-    // Initialize map if not already done
     if (!mapInstanceRef.current) {
       const map = L.map(mapRef.current).setView([56.1304, -106.3468], 4)
 
@@ -97,25 +125,23 @@ export function BLWMap({ mode = 'default' }) {
 
     const map = mapInstanceRef.current
 
-    // Clear existing cluster group
     if (clusterGroupRef.current) {
       map.removeLayer(clusterGroupRef.current)
     }
 
-    // Create new marker cluster group
     const markerClusterGroup = L.markerClusterGroup({
       maxClusterRadius: 80,
       iconCreateFunction: (cluster) => {
         const count = cluster.getChildCount()
         let size = 'small'
-        let color = '#4C2A92' // var(--accent)
+        let color = '#4C2A92'
 
         if (count > 100) {
           size = 'large'
-          color = '#F06449' // var(--coral)
+          color = '#F06449'
         } else if (count > 20) {
           size = 'medium'
-          color = '#3A1F75' // var(--accent-dark)
+          color = '#3A1F75'
         }
 
         return L.divIcon({
@@ -142,8 +168,7 @@ export function BLWMap({ mode = 'default' }) {
 
     markersRef.current = {}
 
-    // Add markers for each campus
-    campuses.forEach((campus) => {
+    filteredCampuses.forEach((campus) => {
       if (!campus.latitude || !campus.longitude) return
 
       const lat = parseFloat(campus.latitude)
@@ -169,29 +194,80 @@ export function BLWMap({ mode = 'default' }) {
 
     map.addLayer(markerClusterGroup)
     clusterGroupRef.current = markerClusterGroup
-
-    return () => {
-      // Don't remove map on unmount—keep it persistent
-    }
-  }, [campuses])
+  }, [filteredCampuses])
 
   if (loading) {
     return (
       <div className="blw-map-loading">
         <div className="blw-map-loading-content">
           <div className="blw-map-loading-spinner">⏳</div>
-          <p>Loading 358 campuses...</p>
+          <p>Loading campuses...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="blw-map-container">
-      <div ref={mapRef} className="blw-map" />
+    <div className="blw-map-wrapper" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Controls bar */}
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        padding: '12px 16px',
+        backgroundColor: '#fff',
+        borderBottom: '1px solid #e0e0e0',
+      }}>
+        <input
+          type="text"
+          placeholder="Search campus or institution..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          style={{
+            padding: '8px 12px',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            fontSize: '14px',
+            width: '220px',
+          }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <label style={{ fontSize: '14px', fontWeight: '500', color: '#444' }}>Region:</label>
+          <select
+            value={selectedRegion || ''}
+            onChange={(e) => setSelectedRegion(e.target.value || null)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              fontSize: '14px',
+              cursor: 'pointer',
+              backgroundColor: 'white',
+            }}
+          >
+            <option value="">All Regions ({campuses.length})</option>
+            {uniqueRegions.map((region) => (
+              <option key={region} value={region}>
+                {region} ({campuses.filter((c) => c.group_name === region).length})
+              </option>
+            ))}
+          </select>
+        </div>
+        {searchTerm && foundCampus && (
+          <span style={{ fontSize: '13px', color: '#4C2A92', fontWeight: '500' }}>
+            Found: {foundCampus.name}
+          </span>
+        )}
+        {searchTerm && !foundCampus && (
+          <span style={{ fontSize: '13px', color: '#999' }}>No match</span>
+        )}
+      </div>
 
-      {/* Campus Detail Modal */}
-      <CampusDetailModal campus={selectedCampus} isOpen={showModal} onClose={() => setShowModal(false)} />
+      <div className="blw-map-container" style={{ flex: 1 }}>
+        <div ref={mapRef} className="blw-map" />
+        <CampusDetailModal campus={selectedCampus} isOpen={showModal} onClose={() => setShowModal(false)} />
+      </div>
     </div>
   )
 }

@@ -63,6 +63,7 @@ const Settings = lazy(() => import('./pages/settings/Settings'))
 const IntegrationStatusPage = lazy(() => import('./pages/settings/IntegrationStatusPage'))
 const GoogleDriveAuthCallback = lazy(() => import('./pages/auth/GoogleDriveAuthCallback'))
 const GoogleCalendarCallback = lazy(() => import('./pages/auth/GoogleCalendarCallback'))
+const MinistryCalendarGoogleCallback = lazy(() => import('./pages/calendar/MinistryCalendarGoogleCallback'))
 const SlackCallback = lazy(() => import('./pages/auth/SlackCallback'))
 const OutlookCalendarCallback = lazy(() => import('./pages/auth/OutlookCalendarCallback'))
 const TeamsCallback = lazy(() => import('./pages/auth/TeamsCallback'))
@@ -72,6 +73,7 @@ const FilesPage = lazy(() => import('./pages/FilesPage'))
 const MeetingReportPublicPage = lazy(() => import('./pages/reports/MeetingReportPublicPage'))
 const PersonalIntegrationsPage = lazy(() => import('./pages/settings/PersonalIntegrationsPage'))
 const CampusEditsPage = lazy(() => import('./pages/admin/CampusEditsPage'))
+const CampusPhotosSettings = lazy(() => import('./pages/settings/CampusPhotosSettings'))
 const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
 const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
 const InvitationWizard = lazy(() => import('./pages/communications/InvitationWizard'))
@@ -99,6 +101,7 @@ export default function App() {
       <Route path="/accept-invite" element={<ActivateInvitation />} />
       <Route path="/auth/google-drive/callback" element={<GoogleDriveAuthCallback />} />
       <Route path="/auth/google_calendar-callback" element={<GoogleCalendarCallback />} />
+      <Route path="/auth/ministry-calendar-callback" element={<MinistryCalendarGoogleCallback />} />
       <Route path="/auth/slack-callback" element={<SlackCallback />} />
       <Route path="/auth/outlook_calendar-callback" element={<OutlookCalendarCallback />} />
       <Route path="/auth/teams-callback" element={<TeamsCallback />} />
@@ -133,7 +136,7 @@ export default function App() {
           <Route
             path="/calendar-management"
             element={
-              <ProtectedRoute roles={['super_admin']}>
+              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
                 <CalendarManagementPage />
               </ProtectedRoute>
             }
@@ -164,6 +167,14 @@ export default function App() {
             }
           />
           <Route
+            path="/settings/campus-photos"
+            element={
+              <ProtectedRoute roles={['super_admin', 'ors']}>
+                <CampusPhotosSettings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/permissions"
             element={
               <ProtectedRoute roles={['super_admin']}>
@@ -179,7 +190,7 @@ export default function App() {
           <Route
             path="/flock"
             element={
-              <ProtectedRoute roles={['pastor']}>
+              <ProtectedRoute roles={['regional_secretary', 'pastor', 'super_admin']}>
                 <FlockView />
               </ProtectedRoute>
             }
@@ -187,7 +198,7 @@ export default function App() {
           <Route
             path="/flock-crm"
             element={
-              <ProtectedRoute roles={['regional_secretary']}>
+              <ProtectedRoute roles={['regional_secretary', 'super_admin']}>
                 <FlockCRMPage />
               </ProtectedRoute>
             }
@@ -197,7 +208,7 @@ export default function App() {
           <Route
             path="/meetings/wizard"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'dept_lead', 'ors']}>
                 <MeetingWizardPage />
               </ProtectedRoute>
             }
@@ -227,7 +238,7 @@ export default function App() {
           <Route
             path="/people"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead', 'pastor']}>
+              <ProtectedRoute roles={['super_admin', 'dept_lead', 'regional_secretary', 'pastor']}>
                 <AllPeoplePage />
               </ProtectedRoute>
             }
@@ -235,7 +246,7 @@ export default function App() {
           <Route
             path="/people/users"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead', 'pastor']}>
+              <ProtectedRoute roles={['super_admin', 'dept_lead', 'regional_secretary', 'pastor']}>
                 <UsersPage />
               </ProtectedRoute>
             }
@@ -243,7 +254,7 @@ export default function App() {
           <Route
             path="/people/invitations"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'dept_lead', 'regional_secretary']}>
                 <InvitationsPage />
               </ProtectedRoute>
             }
@@ -251,7 +262,7 @@ export default function App() {
           <Route
             path="/people/departments"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead', 'pastor']}>
+              <ProtectedRoute roles={['super_admin', 'dept_lead', 'regional_secretary', 'pastor']}>
                 <DepartmentsPage />
               </ProtectedRoute>
             }
@@ -259,7 +270,7 @@ export default function App() {
           <Route
             path="/people/pastoral-assignments"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead', 'pastor']}>
+              <ProtectedRoute roles={['super_admin', 'dept_lead', 'regional_secretary', 'pastor']}>
                 <PastoralAssignmentsPage />
               </ProtectedRoute>
             }
@@ -283,7 +294,7 @@ export default function App() {
           <Route
             path="/communications"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'ors']}>
                 <CommunicationsPage />
               </ProtectedRoute>
             }
@@ -291,7 +302,7 @@ export default function App() {
           <Route
             path="/communications/recipients"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'ors']}>
                 <RecipientsPage />
               </ProtectedRoute>
             }
@@ -299,7 +310,7 @@ export default function App() {
           <Route
             path="/communications/campaigns"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'ors']}>
                 <CampaignPage />
               </ProtectedRoute>
             }
@@ -307,7 +318,7 @@ export default function App() {
           <Route
             path="/communications/segments"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'ors']}>
                 <SegmentsPage />
               </ProtectedRoute>
             }
@@ -315,7 +326,7 @@ export default function App() {
           <Route
             path="/communications/analytics"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'ors']}>
                 <AnalyticsPage />
               </ProtectedRoute>
             }
@@ -323,7 +334,7 @@ export default function App() {
           <Route
             path="/communications/invitations/new"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'ors']}>
                 <InvitationWizard />
               </ProtectedRoute>
             }
@@ -331,7 +342,7 @@ export default function App() {
           <Route
             path="/communications/invitations/:id"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'ors']}>
                 <InvitationDetailPage />
               </ProtectedRoute>
             }

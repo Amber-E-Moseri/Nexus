@@ -5,6 +5,7 @@ import { isTaskCompleted } from '../../lib/taskStatuses'
 import TaskCalendarView from '../../features/tasks/components/TaskCalendarView'
 import TaskDetailSidebar from '../../features/sprints/components/TaskDetailSidebar'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
+import { TasksProvider } from '../../features/tasks/TasksContext'
 
 function UpcomingTasksList({ tasks, onTaskClick }) {
   const upcomingTasks = useMemo(() => {
@@ -164,12 +165,14 @@ export default function TaskCalendarPage() {
       ) : (
         <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
           <div className="rounded-[16px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)]">
-            <TaskCalendarView
-              filteredTasks={tasks}
-              onTaskClick={(task) => setSelectedTask({ mode: 'edit', task })}
-              onAddTask={() => setSelectedTask({ mode: 'create' })}
-              userId={profile?.id}
-            />
+            <TasksProvider>
+              <TaskCalendarView
+                filteredTasks={tasks}
+                onTaskClick={(task) => setSelectedTask({ mode: 'edit', task })}
+                onAddTask={() => setSelectedTask({ mode: 'create' })}
+                userId={profile?.id}
+              />
+            </TasksProvider>
           </div>
 
           <div>

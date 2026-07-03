@@ -13,6 +13,7 @@ export default function AudioTranscriptionPanel({
   meetingId,
   departmentId,
   canRecord,
+  meetingContext = '',    // WIN 2: context from meetings.context for better extraction
   startImmediately = false,
   stopImmediately = false,  // when true while recording → stop the recorder
   recordOnly = false,       // skip the mode selector, go straight to record UI
@@ -35,6 +36,7 @@ export default function AudioTranscriptionPanel({
   const [recordingTime, setRecordingTime] = useState(0)
   const [pastedText, setPastedText] = useState('')
   const [transcribing, setTranscribing] = useState(false)
+  const [extracting, setExtracting] = useState(false)  // WIN 3: streaming extraction state
   const [progress, setProgress] = useState(0)
   const [chunkStatus, setChunkStatus] = useState('')
   const [error, setError] = useState('')
@@ -145,6 +147,91 @@ export default function AudioTranscriptionPanel({
     if (file) { setMode('upload'); acceptFile(file) }
   }
 
+  // ── Streaming extraction (WIN 3) ──────────────────────────────────────────────
+
+  const streamExtractMeetingData = async (transcriptText) => {
+    setExtracting(true)
+    setExtractedData(null)
+    try {
+      const session = (await supabase.auth.getSession()).data.session
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+      const response = await fetch(`${supabaseUrl}/functions/v1/extract-meeting-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          transcript: transcriptText,
+          context: meetingContext || '',
+          stream: true,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Extraction failed: ${response.status}`)
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let fullText = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.done) {
+              // Parse final accumulated JSON
+              try {
+                const result = JSON.parse(fullText)
+                setExtractedData(result)
+                if (result.action_items?.length) {
+                  setSelectedActionItems(new Set(result.action_items.map((_, i) => i)))
+                }
+              } catch {
+                // Claude returned non-JSON — strip markdown fences
+                const match = fullText.match(/```(?:json)?\s*([\s\S]*?)```/)
+                if (match) {
+                  try {
+                    const result = JSON.parse(match[1])
+                    setExtractedData(result)
+                    if (result.action_items?.length) {
+                      setSelectedActionItems(new Set(result.action_items.map((_, i) => i)))
+                    }
+                  } catch { /* ignore */ }
+                }
+              }
+              return
+            }
+            if (data.text) fullText += data.text
+          } catch { /* skip malformed SSE */ }
+        }
+      }
+    } catch (err) {
+      console.warn('Streaming extraction failed, falling back to non-streaming:', err)
+      // Fallback: non-streaming invoke
+      try {
+        const { data: extractData, error: extractErr } = await supabase.functions.invoke(
+          'extract-meeting-data',
+          { body: { transcript: transcriptText, context: meetingContext || '' } }
+        )
+        if (!extractErr && extractData?.extracted) {
+          setExtractedData(extractData.extracted)
+          if (extractData.extracted.action_items?.length) {
+            setSelectedActionItems(new Set(extractData.extracted.action_items.map((_, i) => i)))
+          }
+        }
+      } catch { /* extraction is optional */ }
+    } finally {
+      setExtracting(false)
+    }
+  }
+
   // ── Transcription ─────────────────────────────────────────────────────────────
 
   const handleTranscribe = async () => {
@@ -231,28 +318,12 @@ export default function AudioTranscriptionPanel({
       if (recErr) console.warn('Transcription record save failed:', recErr)
       await supabase.from('meetings').update({ summary: transcript }).eq('id', meetingId)
 
-      setChunkStatus('Extracting insights…')
-      setProgress(92)
-      let extracted = null
-      try {
-        const { data: extractData, error: extractErr } = await supabase.functions.invoke(
-          'extract-meeting-data',
-          { body: { transcript } }
-        )
-        if (!extractErr) {
-          extracted = extractData?.extracted ?? null
-          setExtractedData(extracted)
-          if (extracted?.action_items?.length) {
-            setSelectedActionItems(new Set(extracted.action_items.map((_, i) => i)))
-          }
-        }
-      } catch {
-        // extraction is optional — transcript already saved above
-      }
-
       setProgress(100)
       setChunkStatus('')
-      onTranscriptionComplete?.({ transcript, record, extracted })
+      onTranscriptionComplete?.({ transcript, record, extracted: null })
+
+      // WIN 3: stream extraction asynchronously after transcription is saved
+      streamExtractMeetingData(transcript)
     } catch (err) {
       setError(err.message || 'Transcription failed.')
     } finally {
@@ -320,27 +391,11 @@ export default function AudioTranscriptionPanel({
       setProgress(60)
       const record = await saveTranscriptText(transcriptText)
 
-      // Claude extraction — optional, non-blocking
-      setProgress(85)
-      let extracted = null
-      try {
-        const { data: extractData, error: extractErr } = await supabase.functions.invoke(
-          'extract-meeting-data',
-          { body: { transcript: transcriptText } }
-        )
-        if (!extractErr) {
-          extracted = extractData?.extracted ?? null
-          setExtractedData(extracted)
-          if (extracted?.action_items?.length) {
-            setSelectedActionItems(new Set(extracted.action_items.map((_, i) => i)))
-          }
-        }
-      } catch {
-        // extraction is optional
-      }
-
       setProgress(100)
-      onTranscriptionComplete?.({ transcript: transcriptText, record, extracted })
+      onTranscriptionComplete?.({ transcript: transcriptText, record, extracted: null })
+
+      // WIN 3: stream extraction asynchronously
+      streamExtractMeetingData(transcriptText)
     } catch (err) {
       setError(err.message || 'Extraction failed.')
     } finally {
@@ -540,8 +595,8 @@ export default function AudioTranscriptionPanel({
             </>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} />}
-        <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }`}</style>
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} />}
+        <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} } @keyframes spin { to{transform:rotate(360deg)} }`}</style>
       </div>
     )
   }
@@ -595,7 +650,7 @@ export default function AudioTranscriptionPanel({
             </div>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} />}
       </div>
     )
   }
@@ -653,7 +708,7 @@ export default function AudioTranscriptionPanel({
             </div>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} />}
       </div>
     )
   }
@@ -662,13 +717,21 @@ export default function AudioTranscriptionPanel({
 }
 
 // ── Transcript + extracted data card ─────────────────────────────────────────────
-function TranscriptCard({ transcript, extractedData, selectedItems, toggleItem, onMerge, merging, mergeSuccess, error, s }) {
+function TranscriptCard({ transcript, extractedData, extracting, selectedItems, toggleItem, onMerge, merging, mergeSuccess, error, s }) {
   return (
     <div style={s.card}>
       <h3 style={s.title}>Transcript</h3>
       <div style={s.transcriptBox}>{transcript}</div>
 
-      {extractedData && (
+      {/* WIN 3: spinner while streaming extraction runs */}
+      {extracting && (
+        <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:'#F0EBF8', borderRadius:6, marginTop:12 }}>
+          <div style={{ width:20, height:20, border:'3px solid #E0E0E0', borderTopColor:'#4C2A92', borderRadius:'50%', animation:'spin 0.8s linear infinite', flexShrink:0 }} />
+          <p style={{ margin:0, fontSize:13, color:'#4C2A92', fontWeight:600 }}>Extracting action items…</p>
+        </div>
+      )}
+
+      {!extracting && extractedData && (
         <div style={s.extractSection}>
           {extractedData.summary && (
             <>

@@ -34,25 +34,73 @@ serve(async (req) => {
     }
 
     // Extract transcript from Deepgram's callback payload
-    const transcript: string =
+    const fullTranscript: string =
       payload.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? "";
+
+    // Polish the transcript with Claude (WIN 1)
+    let polishedTranscript = fullTranscript;
+    if (fullTranscript && fullTranscript.length > 0) {
+      try {
+        const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+        if (anthropicKey) {
+          const polishResp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": anthropicKey,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 4000,
+              messages: [
+                {
+                  role: "user",
+                  content: `Clean up this transcription for readability.
+
+Fix grammar and spelling. Remove filler words (um, like, uh, you know, basically, actually, etc.). Fix stuttering and repetition. Preserve exact names, technical terms, and original meaning.
+
+Do NOT add commentary, do NOT summarize, do NOT change meaning.
+Return ONLY the cleaned transcription.
+
+Transcription:
+${fullTranscript}`,
+                },
+              ],
+            }),
+          });
+
+          if (polishResp.ok) {
+            const polishData = await polishResp.json();
+            const polished = polishData.content?.[0]?.text;
+            if (polished) polishedTranscript = polished;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to polish transcript:", err);
+        // Fall back to raw transcript
+      }
+    }
 
     await supabase
       .from("meeting_transcriptions")
       .update({
         status: "complete",
-        full_transcript: transcript,
-        summary: transcript.slice(0, 500) || null,
-        tokens_used: Math.ceil(transcript.length / 4),
+        full_transcript: fullTranscript,
+        summary: polishedTranscript.slice(0, 500) || null,
+        tokens_used: Math.ceil(fullTranscript.length / 4),
         processed_at: new Date().toISOString(),
       })
       .eq("id", recordId);
 
-    // Update meeting summary so the AI Extract tab has the text ready
-    if (transcript) {
+    // Update meeting with raw summary and polished transcript
+    if (fullTranscript) {
       await supabase
         .from("meetings")
-        .update({ summary: transcript })
+        .update({
+          summary: fullTranscript,
+          polished_transcript: polishedTranscript,
+        })
         .eq("id", meetingId);
     }
 

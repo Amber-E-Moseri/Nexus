@@ -238,7 +238,6 @@ function DeptBoardView({ dept, onTaskClick, onAddTask }) {
 }
 
 function DeptListView({ dept, onTaskClick, onAddTask }) {
-  const { profile } = useAuth()
   const { tasks, loading, error, statuses, defaultStatusId, moveTask } = useTasks()
   const members = useDeptMembers(dept?.id)
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
@@ -265,7 +264,7 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
       </div>
 
       <div style={{ flex: 1, padding: '16px 24px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {filtered.length === 0 && view !== 'calendar' ? (
+        {filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>
             <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
             <div style={{ fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>
@@ -273,20 +272,7 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
             </div>
             <div>Create your first task to get started</div>
           </div>
-        ) : view === 'kanban' ? (
-          <div style={{ flex: 1, overflow: 'hidden' }}>
-            <KanbanBoard
-              filteredTasks={filtered}
-              onTaskClick={onTaskClick}
-              onAddTask={(defaultStatusId) => onAddTask(defaultStatusId)}
-              departmentId={dept?.id}
-              departments={[dept].filter(Boolean)}
-              defaultDepartmentId={dept?.id}
-              members={members}
-              onCreateTask={onAddTask}
-            />
-          </div>
-        ) : view === 'list' ? (
+        ) : (
           <div style={{ flex: 1, overflow: 'hidden', background: 'white', borderRadius: 12, border: '1px solid var(--border)' }}>
             <TaskListView
               tasks={filtered}
@@ -295,16 +281,6 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
               onTaskStatusChange={handleTaskStatusChange}
               people={Object.fromEntries(members.map((m) => [m.id, m]))}
               priorities={{}}
-            />
-          </div>
-        ) : (
-          <div style={{ flex: 1, overflow: 'hidden' }}>
-            <TaskCalendarView
-              filteredTasks={filtered}
-              onTaskClick={onTaskClick}
-              onAddTask={() => onAddTask(defaultStatusId)}
-              spaceId={dept?.id}
-              userId={profile?.id}
             />
           </div>
         )}

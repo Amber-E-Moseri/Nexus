@@ -5,6 +5,7 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../hooks/useAuth'
 import { useDeptMembers } from '../../hooks/useDeptMembers'
 import { useMyTasks } from '../../features/tasks/hooks/useMyTasks'
+import { TasksProvider } from '../../features/tasks/TasksContext'
 import { listTaskStatuses } from '../../lib/taskStatuses'
 import { getMySpaces } from '../../features/spaces'
 import TaskModal from '../../features/tasks/components/TaskModal'
@@ -138,17 +139,18 @@ export default function MyTasks() {
               </div>
             </div>
             <div className="min-h-[520px]">
-              <KanbanBoard
-                filteredTasks={tasks}
-                departmentId={null}
-                spaceName="My Tasks"
-                departments={departmentOptions}
-                onTaskClick={(task) => setModal({ mode: 'edit', task })}
-                canAddTask={true}
-                onCreateTask={() => setModal({ mode: 'create' })}
-                readOnly={false}
-                showTaskTypes={true}
-              />
+              <TasksProvider>
+                <KanbanBoard
+                  filteredTasks={tasks}
+                  departmentId={null}
+                  spaceName="My Tasks"
+                  departments={departmentOptions}
+                  statusesOverride={statuses}
+                  onTaskClick={(task) => setModal({ mode: 'edit', task })}
+                  onCreateTask={() => setModal({ mode: 'create' })}
+                  readOnly={false}
+                />
+              </TasksProvider>
             </div>
           </>
         ) : (

@@ -43,6 +43,17 @@
   margin: 0;
 }
 
+.flock-open-button {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: #4C2A92;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .flock-loading-state {
   display: flex;
   flex-direction: column;

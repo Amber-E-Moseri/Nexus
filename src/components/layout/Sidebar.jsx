@@ -31,12 +31,13 @@ import { useInboxCount } from '../../context/InboxCountContext'
 import { useAuth } from '../../hooks/useAuth'
 import { archiveSpace, getSpacesByType, restoreSpace, updateSpace } from '../../features/spaces'
 import { supabase } from '../../lib/supabase'
-import { FLOCK_CRM_CONFIG } from '../../lib/permissions'
+import { FLOCK_CRM_CONFIG, hasFeatureRole } from '../../lib/permissions'
 import SidebarSpaceTree from './SidebarSpaceTree'
 import SpaceModal from '../../features/spaces/components/SpaceModal'
 import SprintModal from '../../features/sprints/components/SprintModal'
 import { useSprints } from '../../features/sprints/SprintsContext'
 import { CACHE_KEYS, getItemSafe, setItemSafe } from '../../lib/cacheUtils'
+import { RegionalUpdateCompose } from '../../features/regional-updates/components/RegionalUpdateCompose'
 
 const SECTION_LABEL_STYLE = {
   padding: '4px 9px 5px',
@@ -265,7 +266,7 @@ export default function Sidebar() {
 
   const canCreateSpace = role === 'super_admin' || role === 'dept_lead'
   const canManageSpaces = role === 'super_admin' || role === 'dept_lead'
-  const showPeople = role !== 'member'
+  const showPeople = ['super_admin', 'dept_lead', 'regional_secretary'].includes(role)
   const showAdminPlatform = role === 'super_admin' || role === 'dept_lead'
 
   async function loadSpaces() {
@@ -620,7 +621,7 @@ export default function Sidebar() {
           label="Ministry Calendar"
           onClick={() => go('/calendar')}
         />
-        {role === 'pastor' ? (
+        {(['regional_secretary', 'pastor', 'super_admin'].includes(role)) ? (
           <SidebarItem
             active={isPathActive(location.pathname, '/flock')}
             icon={Users}
@@ -1124,6 +1125,7 @@ export default function Sidebar() {
             />
           </>
         ) : null}
+        {(['super_admin', 'ors'].includes(role) || hasFeatureRole(user, null, 'programs')) && (
         <div
           style={{
             ...ITEM_BASE_STYLE,
@@ -1159,7 +1161,8 @@ export default function Sidebar() {
             <ChevronDown size={15} style={{ opacity: 0.85, transform: communicationsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
           </button>
         </div>
-        {communicationsExpanded && showAdminPlatform ? (
+        )}
+        {(communicationsExpanded && (['super_admin', 'ors'].includes(role) || hasFeatureRole(user, null, 'programs'))) ? (
           <>
             <SidebarItem
               active={isPathActive(location.pathname, '/communications/campaigns')}
@@ -1183,7 +1186,7 @@ export default function Sidebar() {
             />
           </>
         ) : null}
-        {role === 'super_admin' && (
+        {(['super_admin', 'regional_secretary', 'media'].includes(role)) && (
           <SidebarItem
             active={isPathActive(location.pathname, '/instagram')}
             icon={Image}
@@ -1192,22 +1195,40 @@ export default function Sidebar() {
           />
         )}
         <SidebarItem
-          active={false}
+          active={isPathActive(location.pathname, '/map')}
           icon={Map}
           label="CAN Map"
-          onClick={() => openExternal('/apps/map/index.html')}
+          onClick={() => go('/map')}
         />
-        {FLOCK_CRM_CONFIG.enabled && FLOCK_CRM_CONFIG.checkAccess(role) ? (
+        {['super_admin', 'ors'].includes(role) && (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/settings/campus-photos')}
+            icon={Image}
+            label="Campus Photos"
+            onClick={() => go('/settings/campus-photos')}
+          />
+        )}
+        {FLOCK_CRM_CONFIG.checkAccess(role) ? (
           <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12 }}>
             <div style={{ ...SECTION_LABEL_STYLE }}>Confidential</div>
             <SidebarItem
               active={isPathActive(location.pathname, '/flock-crm')}
               icon={Phone}
-              label="Flock CRM"
+              label="Flock CRM — Pastoral Outreach"
               onClick={() => go('/flock-crm')}
             />
           </div>
         ) : null}
+
+        {role === 'regional_secretary' ? (
+          <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 10 }}>
+            <div style={{ ...SECTION_LABEL_STYLE }}>Regional Secretary</div>
+            <div style={{ marginTop: 8 }}>
+              <RegionalUpdateCompose />
+            </div>
+          </div>
+        ) : null}
+
         {integrations.map((integration) => (
           <SidebarItem
             key={integration.id}

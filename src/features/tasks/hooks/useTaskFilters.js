@@ -10,7 +10,7 @@ const EMPTY_FILTERS = {
   source: [],
   hasComments: false,
   hasDependencies: false,
-  showDone: false,
+  showDone: true,
 }
 
 function startOfDay(date) {

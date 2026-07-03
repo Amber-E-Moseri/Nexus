@@ -24,10 +24,10 @@ export function useGoogleCalendarSync(spaceId) {
     }
   }, [spaceId]);
 
-  const initiateOAuth = useCallback(async () => {
+  const initiateOAuth = useCallback(async (orgId) => {
     try {
       setError(null);
-      const oauthUrl = await CalendarAPI.getGoogleOAuthUrl(spaceId);
+      const oauthUrl = await CalendarAPI.getGoogleOAuthUrl(spaceId, orgId);
       window.location.href = oauthUrl;
     } catch (err) {
       setError(err.message);

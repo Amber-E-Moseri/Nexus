@@ -68,6 +68,235 @@ function toGCalDateTime(date: string, time: string): string {
   return `${date}T${time.slice(0, 5)}:00`
 }
 
+// ── Space-level (Ministry Calendar) token helpers ──────────────────────────
+// Unlike the per-user google_calendar_tokens table, google_calendar_sync
+// stores its own access/refresh tokens directly against (org_id, space_id).
+
+async function getValidSpaceToken(orgId: string, spaceId: string): Promise<{
+  access_token: string
+  google_calendar_id: string
+  sync_direction: string
+} | null> {
+  const supabase = adminClient()
+  const { data: row } = await supabase
+    .from('google_calendar_sync')
+    .select('google_access_token, google_refresh_token, token_expires_at, google_calendar_id, sync_direction, sync_enabled')
+    .eq('org_id', orgId)
+    .eq('space_id', spaceId)
+    .single()
+
+  if (!row || !row.sync_enabled) return null
+
+  const expiry = row.token_expires_at ? new Date(row.token_expires_at) : new Date(0)
+  if (expiry.getTime() - Date.now() > 60_000) {
+    return { access_token: row.google_access_token, google_calendar_id: row.google_calendar_id, sync_direction: row.sync_direction }
+  }
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      refresh_token: row.google_refresh_token,
+      grant_type: 'refresh_token',
+    }),
+  })
+
+  if (!res.ok) return null
+
+  const tokens = await res.json()
+  const newExpiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
+
+  await supabase
+    .from('google_calendar_sync')
+    .update({ google_access_token: tokens.access_token, token_expires_at: newExpiry, updated_at: new Date().toISOString() })
+    .eq('org_id', orgId)
+    .eq('space_id', spaceId)
+
+  return { access_token: tokens.access_token, google_calendar_id: row.google_calendar_id, sync_direction: row.sync_direction }
+}
+
+async function exchangeCodeForSpace(payload: Record<string, string>) {
+  const { code, redirect_uri, org_id, space_id, user_id } = payload
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      redirect_uri,
+      grant_type: 'authorization_code',
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    return json(400, { error: `Token exchange failed: ${err}` })
+  }
+
+  const tokens = await res.json()
+  const expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
+
+  const supabase = adminClient()
+  const { error } = await supabase
+    .from('google_calendar_sync')
+    .upsert({
+      org_id,
+      space_id,
+      google_calendar_id: 'primary',
+      google_access_token: tokens.access_token,
+      google_refresh_token: tokens.refresh_token,
+      token_expires_at: expiry,
+      sync_enabled: true,
+      sync_direction: 'both',
+      connected_by: user_id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'org_id,space_id,google_calendar_id' })
+
+  if (error) return json(500, { error: error.message })
+  return json(200, { success: true })
+}
+
+function toDateOnlyOrDateTime(iso: string, allDay: boolean): Record<string, string> {
+  return allDay ? { date: iso.slice(0, 10) } : { dateTime: iso, timeZone: 'America/Toronto' }
+}
+
+async function syncSpaceCalendar(payload: Record<string, string>) {
+  const { org_id, space_id } = payload
+  if (!org_id || !space_id) return json(400, { error: 'org_id and space_id are required' })
+
+  const supabase = adminClient()
+  const token = await getValidSpaceToken(org_id, space_id)
+  if (!token) return json(401, { error: 'reauth_required' })
+
+  const calId = encodeURIComponent(token.google_calendar_id)
+  const baseUrl = `https://www.googleapis.com/calendar/v3/calendars/${calId}/events`
+  const headers = { Authorization: `Bearer ${token.access_token}`, 'Content-Type': 'application/json' }
+
+  let created = 0
+  let updated = 0
+  let pulled = 0
+
+  // ── PUSH: local approved events not yet synced (or edited since last sync) → Google ──
+  if (token.sync_direction === 'to_google' || token.sync_direction === 'both') {
+    const { data: pending } = await supabase
+      .from('calendar_events')
+      .select('id, title, description, start_date, end_date, all_day, google_event_id, synced_from_google')
+      .eq('space_id', space_id)
+      .eq('status', 'approved')
+      .eq('synced_to_google', false)
+      // Events pulled from Google are pushed back only via the pull branch below,
+      // to avoid bouncing the same event back and forth.
+      .eq('synced_from_google', false)
+
+    for (const ev of pending ?? []) {
+      const body = {
+        summary: ev.title,
+        description: ev.description ?? '',
+        start: toDateOnlyOrDateTime(ev.start_date, ev.all_day),
+        end: toDateOnlyOrDateTime(ev.end_date ?? ev.start_date, ev.all_day),
+      }
+
+      if (ev.google_event_id) {
+        const res = await fetch(`${baseUrl}/${ev.google_event_id}`, { method: 'PATCH', headers, body: JSON.stringify(body) })
+        if (res.ok) updated++
+      } else {
+        const res = await fetch(baseUrl, { method: 'POST', headers, body: JSON.stringify(body) })
+        if (res.ok) {
+          const created_event = await res.json()
+          await supabase.from('calendar_events').update({ google_event_id: created_event.id }).eq('id', ev.id)
+          created++
+        }
+      }
+
+      await supabase
+        .from('calendar_events')
+        .update({ synced_to_google: true, last_sync_at: new Date().toISOString() })
+        .eq('id', ev.id)
+    }
+  }
+
+  // ── PULL: Google events → local calendar_events ──────────────────────────
+  if (token.sync_direction === 'from_google' || token.sync_direction === 'both') {
+    const params = new URLSearchParams({
+      timeMin: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+      timeMax: new Date(Date.now() + 365 * 86_400_000).toISOString(),
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: '250',
+    })
+
+    const res = await fetch(`${baseUrl}?${params}`, { headers: { Authorization: `Bearer ${token.access_token}` } })
+    if (res.ok) {
+      const data = await res.json()
+      for (const item of data.items ?? []) {
+        if (item.status === 'cancelled') continue
+        const startObj = item.start as Record<string, string>
+        const endObj = item.end as Record<string, string>
+        const allDay = !startObj.dateTime
+        const start_date = startObj.dateTime ?? startObj.date
+        const end_date = endObj.dateTime ?? endObj.date
+
+        const { data: existing } = await supabase
+          .from('calendar_events')
+          .select('id')
+          .eq('google_event_id', item.id)
+          .eq('space_id', space_id)
+          .maybeSingle()
+
+        if (existing) {
+          await supabase
+            .from('calendar_events')
+            .update({
+              title: item.summary ?? '(no title)',
+              description: item.description ?? null,
+              start_date,
+              end_date,
+              all_day: allDay,
+              synced_from_google: true,
+              last_sync_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id)
+        } else {
+          await supabase.from('calendar_events').insert({
+            title: item.summary ?? '(no title)',
+            description: item.description ?? null,
+            event_type: 'event',
+            start_date,
+            end_date,
+            all_day: allDay,
+            space_id,
+            status: 'approved',
+            google_event_id: item.id,
+            google_calendar_id: token.google_calendar_id,
+            synced_from_google: true,
+            synced_to_google: true,
+            last_sync_at: new Date().toISOString(),
+          })
+        }
+        pulled++
+      }
+    }
+  }
+
+  await supabase
+    .from('google_calendar_sync')
+    .update({ last_sync_at: new Date().toISOString() })
+    .eq('org_id', org_id)
+    .eq('space_id', space_id)
+
+  await supabase.rpc('log_calendar_sync_attempt', {
+    p_status: 'success',
+    p_synced_events: pulled + created + updated,
+    p_created_events: created,
+    p_updated_events: updated,
+  })
+
+  return json(200, { created, updated, pulled })
+}
+
 // ── Action handlers ──────────────────────────────────────────────────────────
 
 async function exchangeCode(payload: Record<string, string>) {
@@ -330,14 +559,16 @@ Deno.serve(async (req) => {
 
   try {
     switch (action) {
-      case 'exchange_code':          return await exchangeCode(payload as Record<string, string>)
-      case 'refresh_token':          return await refreshToken(payload as Record<string, string>)
-      case 'create_event':           return await createEvent(payload as Record<string, string>)
-      case 'update_event':           return await updateEvent(payload as Record<string, string>)
-      case 'delete_event':           return await deleteEvent(payload as Record<string, string>)
-      case 'list_external_events':   return await listExternalEvents(payload as Record<string, string>)
-      case 'sync_org_calendar_event': return await syncOrgCalendarEvent(payload)
-      default:                       return json(400, { error: `Unknown action: ${action}` })
+      case 'exchange_code':            return await exchangeCode(payload as Record<string, string>)
+      case 'exchange_code_space':      return await exchangeCodeForSpace(payload as Record<string, string>)
+      case 'refresh_token':            return await refreshToken(payload as Record<string, string>)
+      case 'create_event':             return await createEvent(payload as Record<string, string>)
+      case 'update_event':             return await updateEvent(payload as Record<string, string>)
+      case 'delete_event':             return await deleteEvent(payload as Record<string, string>)
+      case 'list_external_events':     return await listExternalEvents(payload as Record<string, string>)
+      case 'sync_org_calendar_event':  return await syncOrgCalendarEvent(payload)
+      case 'sync_space_calendar':      return await syncSpaceCalendar(payload as Record<string, string>)
+      default:                         return json(400, { error: `Unknown action: ${action}` })
     }
   } catch (err) {
     console.error('[google-calendar-sync]', err)

@@ -73,6 +73,9 @@ function MeetingDetailViewInner() {
   const [editingTranscript, setEditingTranscript] = useState(false)
   const [editedTranscript, setEditedTranscript]   = useState('')
   const [savingTranscript, setSavingTranscript]   = useState(false)
+  const [showRawTranscript, setShowRawTranscript] = useState(false)  // WIN 1: toggle polished/raw
+  const [context, setContext]                     = useState('')      // WIN 2: meeting context
+  const [contextChanged, setContextChanged]       = useState(false)
 
   const timerRef       = useRef(null)
   const startRef       = useRef(null)
@@ -132,7 +135,7 @@ function MeetingDetailViewInner() {
         .from('meetings')
         .select(`
           id, title, department_id, date, meeting_type, agenda, minutes,
-          decisions, next_steps, summary, meeting_notes, doc_drive_url, doc_title,
+          decisions, next_steps, summary, polished_transcript, context, meeting_notes, doc_drive_url, doc_title,
           zoom_join_url, drive_url, status, started_at,
           created_by, created_at,
           agendas(id, title, agenda_items(id, segment, notes, duration_minutes, sort_order))
@@ -160,6 +163,7 @@ function MeetingDetailViewInner() {
       if (data.minutes) setMinutesText(data.minutes)
       if (data.decisions) setDecisionsText(data.decisions)
       if (data.next_steps) setNextStepsText(data.next_steps)
+      if (data.context) setContext(data.context)
 
       const items = data.agendas?.[0]?.agenda_items
         ?.sort((a, b) => a.sort_order - b.sort_order)
@@ -273,7 +277,7 @@ function MeetingDetailViewInner() {
     setAiResult(null)
     try {
       const { data, error } = await supabase.functions.invoke('extract-meeting-data', {
-        body: { transcript }
+        body: { transcript, context: context || '' }
       })
       if (error) throw error
       const extracted = data?.extracted ?? null
@@ -584,6 +588,26 @@ function MeetingDetailViewInner() {
                   </div>
                 )}
 
+                {/* WIN 2: Meeting Context (prep mode only) */}
+                {isPrep && canManage && (
+                  <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'14px 16px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
+                    <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:4 }}>Meeting Context</div>
+                    <div style={{ fontSize:11, color: FS.xmuted, marginBottom:8 }}>e.g. "Q3 planning", "API redesign" — helps AI extract better action items</div>
+                    <textarea
+                      value={context}
+                      onChange={(e) => { setContext(e.target.value); setContextChanged(true) }}
+                      onBlur={async () => {
+                        if (!contextChanged) return
+                        const { error } = await supabase.from('meetings').update({ context }).eq('id', meetingId)
+                        if (!error) setContextChanged(false)
+                      }}
+                      placeholder="Add context to help AI extract better action items…"
+                      rows={2}
+                      style={{ width:'100%', padding:'10px 12px', border:`1px solid ${FS.border}`, borderRadius:8, fontSize:13, color: FS.text, fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box', background:'#fff' }}
+                    />
+                  </div>
+                )}
+
                 {/* 📝 Discussion */}
                 <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden' }}>
                   <div style={{ padding:'11px 14px', borderBottom:`1px solid ${FS.borderL}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
@@ -752,6 +776,7 @@ function MeetingDetailViewInner() {
                     meetingId={meetingId}
                     departmentId={meeting.department_id}
                     canRecord={canManage}
+                    meetingContext={context}
                     recordOnly
                     startImmediately={recording}
                     stopImmediately={!recording}
@@ -766,6 +791,7 @@ function MeetingDetailViewInner() {
                   meetingId={meetingId}
                   departmentId={meeting.department_id}
                   canRecord={false}
+                  meetingContext={context}
                   onTranscriptionComplete={({ transcript }) => setMeeting(m => ({ ...m, summary: transcript }))}
                   onActionItemsExtracted={() => { fetchActionItems(); setActiveTab('actions') }}
                 />
@@ -775,6 +801,7 @@ function MeetingDetailViewInner() {
                   meetingId={meetingId}
                   departmentId={meeting.department_id}
                   canRecord={false}
+                  meetingContext={context}
                   pasteOnly
                   onTranscriptionComplete={({ transcript }) => setMeeting(m => ({ ...m, summary: transcript }))}
                   onActionItemsExtracted={() => { fetchActionItems(); setActiveTab('actions') }}
@@ -786,8 +813,22 @@ function MeetingDetailViewInner() {
                     <div style={{ padding:'12px 16px', borderBottom:`1px solid ${FS.borderL}`, display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
                       <div style={{ minWidth:0 }}>
                         <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>📄 Saved Transcript</div>
-                        <div style={{ fontSize:11, color: FS.muted, marginTop:2 }}>Ready for AI extraction</div>
+                        <div style={{ fontSize:11, color: FS.muted, marginTop:2 }}>
+                          {meeting.polished_transcript ? 'AI-polished · ' : ''}Ready for AI extraction
+                        </div>
                       </div>
+                      {/* WIN 1: raw/polished toggle */}
+                      {meeting.polished_transcript && (
+                        <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, color: FS.muted, cursor:'pointer', flexShrink:0 }}>
+                          <input
+                            type="checkbox"
+                            checked={showRawTranscript}
+                            onChange={(e) => setShowRawTranscript(e.target.checked)}
+                            style={{ accentColor: FS.purple }}
+                          />
+                          Show raw transcript
+                        </label>
+                      )}
                       <div style={{ display:'flex', gap:8, flexShrink:0 }}>
                         {!editingTranscript && (
                           <button
@@ -837,7 +878,9 @@ function MeetingDetailViewInner() {
                       </div>
                     ) : (
                       <div style={{ padding:'14px 16px', maxHeight:240, overflowY:'auto' }}>
-                        <p style={{ margin:0, fontSize:13, color: FS.text, lineHeight:1.8, whiteSpace:'pre-wrap' }}>{meeting.summary}</p>
+                        <p style={{ margin:0, fontSize:13, color: FS.text, lineHeight:1.8, whiteSpace:'pre-wrap' }}>
+                          {showRawTranscript ? meeting.summary : (meeting.polished_transcript || meeting.summary)}
+                        </p>
                       </div>
                     )}
                     {!editingTranscript && (

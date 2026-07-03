@@ -15,7 +15,7 @@ export function GoogleCalendarConnect({ spaceId, orgId }) {
   }, [orgId, spaceId, fetchSyncStatus]);
 
   const handleConnect = async () => {
-    await initiateOAuth();
+    await initiateOAuth(orgId);
   };
 
   const handleSync = async () => {

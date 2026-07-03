@@ -1,6 +1,23 @@
 export function OverviewTab({ stats, campus }) {
   return (
     <div className="blw-overview-tab">
+      {campus.photo_url && (
+        <div style={{ marginBottom: '16px' }}>
+          <img
+            src={campus.photo_url}
+            alt={campus.name}
+            style={{
+              width: '100%',
+              height: '200px',
+              objectFit: 'cover',
+              borderRadius: '8px',
+            }}
+            onError={(e) => {
+              e.target.style.display = 'none'
+            }}
+          />
+        </div>
+      )}
       <div className="blw-overview-header">
         <h3>Campus Overview</h3>
         {campus.status && <p className="blw-overview-status">{campus.status}</p>}

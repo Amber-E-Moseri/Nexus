@@ -33,10 +33,16 @@ export function TasksProvider({ departmentId, sprintId, children }) {
   }, [departmentId, sprintId])
 
   const loadTasks = useCallback(async () => {
-    if (!departmentId && !sprintId) return
     try {
       setLoading(true)
       setError(null)
+
+      if (!departmentId && !sprintId) {
+        // No scope provided — provider is used for context/utilities only
+        setTasks([])
+        setStatuses([])
+        return
+      }
 
       // Load both global and department-specific statuses
       const statusPromises = [listTaskStatuses()]

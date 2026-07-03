@@ -1431,8 +1431,8 @@ export default function SpaceOverview() {
       />
 
       <div className="relative">
-        <div role="tablist" className="flex items-center border-b border-[var(--border)]">
-          <div className="flex flex-wrap gap-0">
+        <div role="tablist" className="flex items-center border-b border-[var(--border)] overflow-x-auto">
+          <div className="flex flex-nowrap gap-0">
             {visibleTabs.map((tab) => {
               const tabId = tab.toLowerCase().replace(/\s+/g, '-')
               return (

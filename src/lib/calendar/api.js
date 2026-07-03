@@ -145,56 +145,65 @@ export async function rejectCalendarEvent(eventId, note) {
 // ─── Google Calendar Integration ────────────────────────────────
 
 /**
- * Get Google Calendar OAuth URL
+ * Get Google Calendar OAuth URL for Ministry Calendar (space-scoped)
  */
-export async function getGoogleOAuthUrl(spaceId) {
-  // This will be implemented in the backend edge function
-  // For now, return the URL structure
+export async function getGoogleOAuthUrl(spaceId, orgId) {
+  const redirectUri = `${window.location.origin}/auth/ministry-calendar-callback`;
+  const state = btoa(JSON.stringify({ spaceId, orgId }));
   const params = new URLSearchParams({
-    space_id: spaceId,
     client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-    redirect_uri: `${window.location.origin}/api/calendar/google/callback`,
+    redirect_uri: redirectUri,
     response_type: 'code',
     scope: 'https://www.googleapis.com/auth/calendar',
     access_type: 'offline',
     prompt: 'consent',
+    state,
   });
-
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
 /**
- * Get Google Calendar sync status
+ * Exchange OAuth code for space-scoped Ministry Calendar tokens
+ */
+export async function exchangeGoogleCodeForSpace({ code, orgId, spaceId, userId }) {
+  const redirectUri = `${window.location.origin}/auth/ministry-calendar-callback`;
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: {
+      action: 'exchange_code_space',
+      payload: { code, redirect_uri: redirectUri, org_id: orgId, space_id: spaceId, user_id: userId },
+    },
+  });
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+/**
+ * Get Google Calendar sync status for a space
  */
 export async function getGoogleSyncStatus(orgId, spaceId) {
+  if (!spaceId) return null;
   const { data, error } = await supabase
     .from('google_calendar_sync')
     .select('*')
     .eq('org_id', orgId)
     .eq('space_id', spaceId)
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
   return data;
 }
 
 /**
- * Trigger manual sync with Google Calendar
+ * Trigger bidirectional sync with Google Calendar
  */
 export async function triggerGoogleSync(orgId, spaceId) {
-  // This calls an edge function that handles the sync
-  const response = await fetch('/api/calendar/google/sync', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ org_id: orgId, space_id: spaceId }),
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'sync_space_calendar', payload: { org_id: orgId, space_id: spaceId } },
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Sync failed');
-  }
-
-  return response.json();
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+  return data;
 }
 
 /**

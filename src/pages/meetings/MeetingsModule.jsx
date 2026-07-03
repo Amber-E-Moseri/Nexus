@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { getAllDepartments } from '../../features/automations'
+import { hasFeatureRole } from '../../lib/permissions'
 import MeetingModal from '../../features/meetings/components/MeetingModal'
 import UnifiedMeetingsView from '../../features/meetings/components/UnifiedMeetingsView'
 import LiveMinutesMode from '../../features/meetings/components/LiveMinutesMode'
@@ -12,14 +13,15 @@ import ExpectedAttendeesPage from './ExpectedAttendeesPage'
 
 function MeetingsModuleFallback() {
   const navigate = useNavigate()
-  const { profile, role } = useAuth()
+  const { profile, role, user } = useAuth()
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [departments, setDepartments] = useState([])
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(profile?.department_id ?? '')
   const [showModal, setShowModal] = useState(false)
   const [liveSession, setLiveSession] = useState(null)
   const isSuperAdmin = role === 'super_admin'
-  const canManage = role !== 'member'
+  const canManage = ['super_admin', 'dept_lead', 'ors'].includes(role) ||
+                    hasFeatureRole(user, selectedDepartmentId, 'programs')
 
   useEffect(() => {
     let active = true
