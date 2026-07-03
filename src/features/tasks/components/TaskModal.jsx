@@ -295,20 +295,10 @@ export default function TaskModal({
       return
     }
 
-    Promise.all([
-      listTaskStatuses({ departmentId: sprintId ? null : departmentId }),
-      listTaskStatuses({ departmentId: null }) // Fetch org-wide statuses
-    ])
-      .then(([deptStatuses, orgStatuses]) => {
-        // Deduplicate by ID: keep first occurrence
-        const seen = new Set()
-        const allStatuses = [...orgStatuses, ...deptStatuses].filter((status) => {
-          if (seen.has(status.id)) return false
-          seen.add(status.id)
-          return true
-        })
-        setStatuses(allStatuses)
-        setStatusId((current) => current || selectDefaultStatus(allStatuses)?.id || '')
+    listTaskStatuses({ departmentId: sprintId ? null : departmentId })
+      .then((nextStatuses) => {
+        setStatuses(nextStatuses)
+        setStatusId((current) => current || selectDefaultStatus(nextStatuses)?.id || '')
       })
       .catch(() => setStatuses([]))
   }, [contextStatuses, departmentId, sprintId])
