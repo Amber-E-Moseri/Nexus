@@ -221,7 +221,7 @@ export default function AudioTranscriptionPanel({
           { body: { transcript: transcriptText, context: meetingContext || '' } }
         )
         if (!extractErr && extractData?.extracted) {
-          setExtractedData(extractData.extracted)
+          setExtractedData({ ...extractData.extracted, output_mode: extractData.output_mode, transcript: extractData.transcript || transcriptText })
           if (extractData.extracted.action_items?.length) {
             setSelectedActionItems(new Set(extractData.extracted.action_items.map((_, i) => i)))
           }

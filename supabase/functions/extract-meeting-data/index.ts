@@ -101,24 +101,120 @@ serve(async (req) => {
       });
     }
 
-    const contextLine = context
-      ? `Meeting Context: ${context}`
-      : "Meeting Context: No additional context provided";
+    // Step 1: Content Classification (pre-pass)
+    const classifyPrompt = `You are classifying a transcript to determine how it should be processed.
 
-    const prompt = `${contextLine}
+Return ONLY valid JSON, no other text:
 
-Meeting transcript:
-${transcript.slice(0, 8000)}
-
-Extract and return ONLY valid JSON (no markdown, no extra text):
 {
-  "summary": "2-3 sentence summary",
-  "decisions": ["decision 1", "decision 2"],
-  "action_items": [
-    {"title": "action description", "owner": "name or TBD", "due_date": "YYYY-MM-DD or null"}
+  "content_type": "meeting" | "raw_note" | "list_data" | "other",
+  "confidence": 0.0-1.0,
+  "reasoning": "one sentence"
+}
+
+Guidelines:
+- "meeting" = multiple speakers in dialogue, discussion/decision-making structure, or a single speaker narrating meeting-like content (updates, plans, assignments)
+- "raw_note" = single-voice notes, journaling, unstructured thoughts with no discussion structure
+- "list_data" = structured data dumps that happen to be spoken/typed (e.g. birthday lists, roster reads, inventory reads)
+- "other" = anything that doesn't fit above
+
+If content_type is not "meeting" with confidence >= 0.6, meeting extraction will be skipped.
+
+Transcript:
+${transcript.slice(0, 4000)}
+
+Meeting context (if provided): ${context || "None"}`;
+
+    const classifyResult = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": anthropicKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 256,
+        messages: [{ role: "user", content: classifyPrompt }],
+      }),
+    });
+
+    if (!classifyResult.ok) {
+      throw new Error(`Claude classification failed: ${classifyResult.status}`);
+    }
+
+    const classifyData = await classifyResult.json();
+    const classifyText = classifyData.content?.[0]?.text ?? "";
+    let classification;
+    try {
+      classification = JSON.parse(classifyText);
+    } catch {
+      classification = { content_type: "other", confidence: 0, reasoning: "Parse error" };
+    }
+
+    // Step 2: Determine output mode based on classification
+    let outputMode = "organized"; // default
+    if (classification.content_type !== "meeting" || classification.confidence < 0.6) {
+      outputMode = "full_transcript";
+    }
+
+    // Step 3: Select prompt based on mode
+    let prompt: string;
+    if (outputMode === "full_transcript") {
+      prompt = `You are cleaning and lightly organizing a raw transcript for archival/reference use.
+Do NOT extract decisions, action items, or force meeting structure.
+
+Return ONLY valid JSON:
+
+{
+  "cleaned_transcript": "string — full transcript with filler words (um, uh, you know) removed and speaker turns clearly labeled",
+  "chapters": [
+    { "title": "string — short label for this section", "start_marker": "string — first few words of this section" }
+  ]
+}
+
+Rules:
+- Preserve all substantive content.
+- Only remove disfluencies (um, uh, like, you know, false starts).
+- Chapters should reflect natural topic shifts.
+- Never invent content.
+
+Transcript:
+${transcript.slice(0, 8000)}`;
+    } else {
+      prompt = `You are extracting structured meeting minutes from a transcript.
+
+Return ONLY valid JSON:
+
+{
+  "summary": "string — 2-3 sentence overview",
+  "decisions": [
+    { "decision": "string", "context": "string — brief why/how" }
   ],
-  "key_topics": ["topic1", "topic2"]
-}`;
+  "action_items": [
+    {
+      "title": "string",
+      "owner": "string or null",
+      "owner_confidence": "explicit" | "inferred" | "unassigned",
+      "due_date": "string or null",
+      "priority": "high" | "medium" | "low"
+    }
+  ],
+  "key_topics": ["string"]
+}
+
+Assignment rules:
+- "explicit": person directly named as doing task
+- "inferred": acceptance/response in dialogue without direct task statement
+- "unassigned": no owner can be determined — do not guess
+
+Deduplication: If a task is mentioned, then merged into another task explicitly, output ONE item. If declined or ruled unnecessary, do NOT include.
+
+Meeting context: ${context || "None"}
+
+Transcript:
+${transcript.slice(0, 8000)}`;
+    }
 
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!anthropicKey) {
@@ -202,7 +298,7 @@ Extract and return ONLY valid JSON (no markdown, no extra text):
     const transcriptHash = await hashTranscript(transcript + (context || ""));
     const cached = await getCachedExtraction(transcriptHash);
     if (cached) {
-      return new Response(JSON.stringify({ success: true, extracted: cached, cached: true }), {
+      return new Response(JSON.stringify({ success: true, extracted: cached, transcript, output_mode: outputMode, cached: true }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -240,7 +336,7 @@ Extract and return ONLY valid JSON (no markdown, no extra text):
 
     await setCachedExtraction(transcriptHash, extracted);
 
-    return new Response(JSON.stringify({ success: true, extracted, cached: false }), {
+    return new Response(JSON.stringify({ success: true, extracted, transcript, output_mode: outputMode, cached: false }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
