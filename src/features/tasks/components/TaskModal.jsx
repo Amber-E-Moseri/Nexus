@@ -295,10 +295,15 @@ export default function TaskModal({
       return
     }
 
-    listTaskStatuses({ departmentId: sprintId ? null : departmentId })
-      .then((nextStatuses) => {
-        setStatuses(nextStatuses)
-        setStatusId((current) => current || selectDefaultStatus(nextStatuses)?.id || '')
+    Promise.all([
+      listTaskStatuses({ departmentId: sprintId ? null : departmentId }),
+      listTaskStatuses({ departmentId: null }) // Fetch org-wide statuses
+    ])
+      .then(([deptStatuses, orgStatuses]) => {
+        // Combine org statuses + dept statuses, org first for display
+        const allStatuses = [...orgStatuses, ...deptStatuses]
+        setStatuses(allStatuses)
+        setStatusId((current) => current || selectDefaultStatus(allStatuses)?.id || '')
       })
       .catch(() => setStatuses([]))
   }, [contextStatuses, departmentId, sprintId])
