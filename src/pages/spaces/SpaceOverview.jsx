@@ -2,7 +2,10 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { SlidersHorizontal, Settings } from 'lucide-react'
+import { SlidersHorizontal, Settings, GripVertical } from 'lucide-react'
+import { DndContext, closestCenter } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../../hooks/useAuth'
 import { getMonthEvents } from '../../features/calendar'
 import { hasPermission } from '../../lib/permissions'
@@ -26,7 +29,7 @@ import { useTaskFilters } from '../../features/tasks/hooks/useTaskFilters'
 import { mergeTaskFieldSettings, normalizeTaskFieldSettings, TASK_FIELD_OPTIONS } from '../../lib/taskFieldSettings'
 import FileList from '../../components/files/FileList'
 
-const TABS = ['Overview', 'Browse', 'Board', 'List', 'Calendar', 'Sprints', 'Meetings', 'Automations', 'Members']
+const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Sprints', 'Meetings', 'Automations', 'Members']
 
 const STATUS_ACCENT = {
   open: '#C9BEAD',
@@ -353,6 +356,44 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
   )
 }
 
+function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, onMoveList }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({ id: list.id })
+  const style = { transform: CSS.Transform.toString(transform), opacity: isDragging ? 0.5 : 1 }
+
+  return (
+    <div ref={setNodeRef} style={style} className={['flex items-center gap-2 rounded-xl px-3 py-2', isSelected ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]' : ''].join(' ')}>
+      <button
+        type="button"
+        className="cursor-grab active:cursor-grabbing text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+        {...listeners}
+        {...attributes}
+        title="Drag to move to another folder"
+      >
+        <GripVertical size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={() => onSelect(list.id)}
+        className={['flex min-w-0 flex-1 items-center gap-2 text-left text-sm', isSelected ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'].join(' ')}
+      >
+        <span>📋</span>
+        <span className="truncate">{list.name}</span>
+      </button>
+      {canEditList(list) ? (
+        <button
+          type="button"
+          onClick={() => onEdit(list)}
+          className="rounded-lg border border-[var(--border)] bg-white px-2 py-1 text-xs text-[var(--text-secondary)]"
+          aria-label={`Edit settings for ${list.name}`}
+          title="List settings"
+        >
+          <span aria-hidden="true">⚙️</span>
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 function FolderTree({
   folders,
   lists,
@@ -368,6 +409,9 @@ function FolderTree({
   onNewFolder,
   onNewList,
   onNewUnfoldedList,
+  onMoveList,
+  onDeleteFolder,
+  onDeleteList,
 }) {
   const listsByFolder = useMemo(
     () => folders.reduce((acc, folder) => ({ ...acc, [folder.id]: lists.filter((list) => list.folder_id === folder.id) }), {}),
@@ -375,8 +419,22 @@ function FolderTree({
   )
   const unfoldedLists = useMemo(() => lists.filter((list) => !list.folder_id), [lists])
 
+  const handleDragEnd = (event) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const list = lists.find((l) => l.id === active.id)
+    if (!list) return
+
+    const targetFolderId = over.id === 'unfolded' ? null : over.id
+    if (list.folder_id === targetFolderId) return
+
+    onMoveList?.(list.id, targetFolderId)
+  }
+
   return (
-    <div className="space-y-3">
+    <DndContext onDragEnd={handleDragEnd} collisionDetection={closestCenter}>
+      <div className="space-y-3">
       <button
         type="button"
         onClick={() => onSelectList(null)}
@@ -421,38 +479,11 @@ function FolderTree({
 
               {open ? (
                 <div className="mt-3 space-y-2 pl-2">
-                  {folderLists.map((list) => (
-                    <div
-                      key={list.id}
-                      className={[
-                        'flex items-center gap-2 rounded-xl px-3 py-2',
-                        selectedListId === list.id ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]' : '',
-                      ].join(' ')}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => onSelectList(list.id)}
-                        className={[
-                          'flex min-w-0 flex-1 items-center gap-2 text-left text-sm',
-                          selectedListId === list.id ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]',
-                        ].join(' ')}
-                      >
-                        <span>📋</span>
-                        <span className="truncate">{list.name}</span>
-                      </button>
-                      {canEditList(list) ? (
-                        <button
-                          type="button"
-                          onClick={() => onEditList(list)}
-                          className="rounded-lg border border-[var(--border)] bg-white px-2 py-1 text-xs text-[var(--text-secondary)]"
-                          aria-label={`Edit settings for ${list.name}`}
-                          title="List settings"
-                        >
-                          <span aria-hidden="true">⚙️</span>
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
+                  <SortableContext items={folderLists.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+                    {folderLists.map((list) => (
+                      <DraggableListItem key={list.id} list={list} isSelected={selectedListId === list.id} onSelect={onSelectList} onEdit={onEditList} canEditList={canEditList} onMoveList={onMoveList} />
+                    ))}
+                  </SortableContext>
                   {folderLists.length === 0 ? <div className="rounded-xl bg-white px-3 py-2 text-xs text-[var(--text-tertiary)]">No lists in this folder yet.</div> : null}
                 </div>
               ) : null}
@@ -474,38 +505,11 @@ function FolderTree({
             ) : null}
           </div>
           <div className="space-y-2">
-            {unfoldedLists.map((list) => (
-              <div
-                key={list.id}
-                className={[
-                  'flex items-center gap-2 rounded-xl px-3 py-2',
-                  selectedListId === list.id ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]' : '',
-                ].join(' ')}
-              >
-                <button
-                  type="button"
-                  onClick={() => onSelectList(list.id)}
-                  className={[
-                    'flex min-w-0 flex-1 items-center gap-2 text-left text-sm',
-                    selectedListId === list.id ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]',
-                  ].join(' ')}
-                >
-                  <span>📋</span>
-                  <span className="truncate">{list.name}</span>
-                </button>
-                {canEditList(list) ? (
-                  <button
-                    type="button"
-                    onClick={() => onEditList(list)}
-                    className="rounded-lg border border-[var(--border)] bg-white px-2 py-1 text-xs text-[var(--text-secondary)]"
-                    aria-label={`Edit settings for ${list.name}`}
-                    title="List settings"
-                  >
-                    <span aria-hidden="true">⚙️</span>
-                  </button>
-                ) : null}
-              </div>
-            ))}
+            <SortableContext items={unfoldedLists.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+              {unfoldedLists.map((list) => (
+                <DraggableListItem key={list.id} list={list} isSelected={selectedListId === list.id} onSelect={onSelectList} onEdit={onEditList} canEditList={canEditList} onMoveList={onMoveList} />
+              ))}
+            </SortableContext>
           </div>
         </div>
       ) : null}
@@ -515,92 +519,11 @@ function FolderTree({
           + Add Folder
         </button>
       ) : null}
-    </div>
-  )
-}
-
-function SpaceBrowseTab({ folders, lists, onSelectList }) {
-  const [openFolders, setOpenFolders] = useState(() => {
-    const init = {}
-    for (const f of folders) init[f.id] = true
-    return init
-  })
-
-  const listsByFolder = useMemo(
-    () => folders.reduce((acc, f) => ({ ...acc, [f.id]: lists.filter((l) => l.folder_id === f.id) }), {}),
-    [folders, lists],
-  )
-  const rootLists = useMemo(() => lists.filter((l) => !l.folder_id), [lists])
-
-  if (folders.length === 0 && lists.length === 0) {
-    return (
-      <div className="rounded-[24px] border border-dashed border-[var(--border)] bg-white px-6 py-12 text-center text-sm text-[var(--text-tertiary)] shadow-[var(--card-shadow)]">
-        No folders or lists yet. Use the organizer to create some.
       </div>
-    )
-  }
-
-  return (
-    <div className="space-y-4">
-      {folders.map((folder) => {
-        const folderLists = listsByFolder[folder.id] ?? []
-        const isOpen = openFolders[folder.id] ?? true
-        return (
-          <div key={folder.id} className="rounded-[20px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)] overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setOpenFolders((prev) => ({ ...prev, [folder.id]: !prev[folder.id] }))}
-              className="flex w-full items-center gap-3 px-5 py-4 text-left"
-            >
-              <span className="text-base">📁</span>
-              <span className="flex-1 text-sm font-semibold text-[var(--text-primary)]">{folder.name}</span>
-              <span className="text-xs text-[var(--text-tertiary)]">{folderLists.length} list{folderLists.length !== 1 ? 's' : ''}</span>
-              <span className="ml-2 text-[var(--text-tertiary)]" style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', display: 'inline-block', transition: 'transform 0.15s' }}>›</span>
-            </button>
-            {isOpen ? (
-              <div className="border-t border-[var(--border)] divide-y divide-[var(--border)]">
-                {folderLists.length === 0 ? (
-                  <div className="px-5 py-3 text-xs text-[var(--text-tertiary)]">No lists in this folder yet.</div>
-                ) : folderLists.map((list) => (
-                  <button
-                    key={list.id}
-                    type="button"
-                    onClick={() => onSelectList(list.id)}
-                    className="flex w-full items-center gap-3 px-5 py-3 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-tertiary)] transition-colors"
-                  >
-                    <span>📋</span>
-                    <span className="flex-1">{list.name}</span>
-                    <span className="text-xs text-[var(--accent)] font-medium">Open →</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        )
-      })}
-
-      {rootLists.length > 0 ? (
-        <div className="rounded-[20px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)] overflow-hidden">
-          <div className="px-5 py-4 text-sm font-semibold text-[var(--text-secondary)]">Unorganized lists</div>
-          <div className="border-t border-[var(--border)] divide-y divide-[var(--border)]">
-            {rootLists.map((list) => (
-              <button
-                key={list.id}
-                type="button"
-                onClick={() => onSelectList(list.id)}
-                className="flex w-full items-center gap-3 px-5 py-3 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-tertiary)] transition-colors"
-              >
-                <span>📋</span>
-                <span className="flex-1">{list.name}</span>
-                <span className="text-xs text-[var(--accent)] font-medium">Open →</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </div>
+    </DndContext>
   )
 }
+
 
 function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage, onTreeDataChange }) {
   const { effectiveRole, profile } = useAuth()
@@ -731,6 +654,15 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
     }
   }
 
+  async function handleMoveList(listId, targetFolderId) {
+    try {
+      await updateList(listId, { folder_id: targetFolderId })
+      await loadTree()
+    } catch (err) {
+      console.error('Failed to move list:', err)
+    }
+  }
+
   return (
     <>
       {treeLoading ? <div className="rounded-[24px] border border-[var(--border)] bg-white px-5 py-12 shadow-[var(--card-shadow)]"><LoadingSpinner label="Loading folders" /></div> : (
@@ -757,6 +689,7 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
           onNewFolder={() => setFolderModalOpen(true)}
           onNewList={(folder) => setListModalFolder(folder)}
           onNewUnfoldedList={() => setListModalFolder({ id: null, name: 'Unfolded' })}
+          onMoveList={handleMoveList}
         />
       )}
 
@@ -1305,15 +1238,6 @@ export default function SpaceOverview() {
   const tabContent = (
     <>
       {activeTab === 'Overview' ? <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}><SpaceOverviewTab space={space} listsCount={listsCount} members={spaceMembers} tasks={overviewTasks} sprints={spaceSprints} meetings={spaceMeetings} selectedFolder={selectedFolder} selectedList={selectedList} /></div> : null}
-      {activeTab === 'Browse' ? (
-        <div role="tabpanel" id="tabpanel-browse" aria-labelledby="tab-browse" tabIndex={0}>
-          <SpaceBrowseTab
-            folders={treeData.folders}
-            lists={treeData.lists}
-            onSelectList={(listId) => { setSelectedListId(listId); setSelectedFolderId(null); setActiveTab('List'); navigate(`/spaces/${spaceId}?list=${listId}`) }}
-          />
-        </div>
-      ) : null}
       {activeTab === 'Board' ? <div role="tabpanel" id="tabpanel-board" aria-labelledby="tab-board" tabIndex={0}><TasksProvider departmentId={spaceId}><SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="kanban" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} /></TasksProvider></div> : null}
       {activeTab === 'List' ? <div role="tabpanel" id="tabpanel-list" aria-labelledby="tab-list" tabIndex={0}><TasksProvider departmentId={spaceId}><SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="list" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} /></TasksProvider></div> : null}
       {activeTab === 'Calendar' ? (
