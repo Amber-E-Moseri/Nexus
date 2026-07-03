@@ -1,7 +1,16 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
-import { createSprint, createSprintWithTemplate, updateSprint, getDepartments, createSprintTeam } from '../lib/sprints'
+import {
+  addSprintMember,
+  createSprint,
+  createSprintTeam,
+  createSprintWithTemplate,
+  getActiveUsers,
+  getDepartments,
+  updateSprint,
+  updateSprintMember,
+} from '../lib/sprints'
 
 const inputStyle = {
   width: '100%',
@@ -41,6 +50,60 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
   const [success, setSuccess] = useState(false)
   const titleRef = useRef(null)
 
+  async function createSprintTemplateFallback() {
+    const departmentId = template === 'single' ? selectedDepts[0] : null
+    const sprintPayload = {
+      name: name.trim(),
+      goal: goal.trim() || null,
+      description: description.trim() || null,
+      start_date: startDate || null,
+      end_date: endDate || null,
+      department_id: departmentId,
+    }
+
+    const sprintRecord = await createSprint(sprintPayload, profile.id)
+    const activeUsers = await getActiveUsers()
+    const createdTeamsLocal = []
+
+    for (const departmentIdValue of selectedDepts) {
+      const department = depts.find((entry) => entry.id === departmentIdValue)
+      if (!department) continue
+
+      const team = await createSprintTeam(sprintRecord.id, {
+        name: department.name,
+        description: '',
+        lead_user_id: null,
+      })
+
+      const members = activeUsers.filter(
+        (user) => user.department_id === departmentIdValue && user.id !== profile.id,
+      )
+
+      for (const member of members) {
+        await addSprintMember(sprintRecord.id, member.id, 'contributor', [team.id])
+      }
+
+      const creatorBelongsToTeam = activeUsers.some(
+        (user) => user.id === profile.id && user.department_id === departmentIdValue,
+      )
+
+      if (creatorBelongsToTeam) {
+        await updateSprintMember(sprintRecord.id, profile.id, { sprint_team_id: team.id })
+      }
+
+      createdTeamsLocal.push({
+        id: team.id,
+        name: team.name,
+        member_count: members.length + (creatorBelongsToTeam ? 1 : 0),
+      })
+    }
+
+    setCreatedTeams(createdTeamsLocal)
+    setSuccess(true)
+
+    return sprintRecord
+  }
+
   useEffect(() => {
     titleRef.current?.focus()
   }, [])
@@ -79,33 +142,42 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
       if (mode === 'create') {
         if ((template === 'single' || template === 'multi') && selectedDepts.length > 0) {
           // Use new RPC that auto-populates members
-          const result = await createSprintWithTemplate(
-            name.trim(),
-            goal.trim() || null,
-            description.trim() || null,
-            startDate || null,
-            endDate || null,
-            template === 'single' ? 'single_dept' : 'multi_dept',
-            selectedDepts,
-            profile.id
-          )
+          try {
+            const result = await createSprintWithTemplate(
+              name.trim(),
+              goal.trim() || null,
+              description.trim() || null,
+              startDate || null,
+              endDate || null,
+              template === 'single' ? 'single_dept' : 'multi_dept',
+              selectedDepts,
+              profile.id
+            )
 
-          if (result) {
-            saved = {
-              id: result.sprint_id,
-              name: name.trim(),
-              goal: goal.trim() || null,
-              description: description.trim() || null,
-              start_date: startDate || null,
-              end_date: endDate || null,
-              status: 'planning',
-              is_archived: false,
-              created_by: profile.id,
-              created_at: new Date().toISOString(),
-              department_id: template === 'single' ? selectedDepts[0] : null,
+            if (result) {
+              saved = {
+                id: result.sprint_id,
+                name: name.trim(),
+                goal: goal.trim() || null,
+                description: description.trim() || null,
+                start_date: startDate || null,
+                end_date: endDate || null,
+                status: 'planning',
+                is_archived: false,
+                created_by: profile.id,
+                created_at: new Date().toISOString(),
+                department_id: template === 'single' ? selectedDepts[0] : null,
+              }
+              setCreatedTeams(result.created_teams || [])
+              setSuccess(true)
             }
-            setCreatedTeams(result.created_teams || [])
-            setSuccess(true)
+          } catch (rpcError) {
+            const message = String(rpcError?.message || '')
+            if (!message.includes('column reference "sprint_id" is ambiguous')) {
+              throw rpcError
+            }
+
+            saved = await createSprintTemplateFallback()
           }
         } else {
           // Custom template - no auto-creation

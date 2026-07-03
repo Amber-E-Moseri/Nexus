@@ -396,6 +396,45 @@
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
 }
 
+/* ── Map Popup Styling ───────────────────────────────────────────────────── */
+.mpop {
+  padding: 12px 14px;
+  min-width: 200px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.mpop-inst {
+  font-size: 13px;
+  font-weight: 700;
+  color: #202124;
+}
+
+.mpop-campus {
+  font-size: 11px;
+  color: #1a73e8;
+  font-weight: 500;
+  margin-top: 1px;
+}
+
+.mpop-sub {
+  font-size: 11px;
+  color: #80868b;
+  margin-top: 1px;
+}
+
+.mpop-status {
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.mpop-hint {
+  font-size: 11px;
+  color: #1a73e8;
+  margin-top: 4px;
+}
+
 /* ── Modal Styling (Legacy — Use campus-detail-modal.css) ───────────────── */
 .blw-modal-overlay {
   position: fixed;

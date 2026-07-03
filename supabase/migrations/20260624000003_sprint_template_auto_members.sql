@@ -95,7 +95,8 @@ begin
         -- Creator already added as sprint member, update their team assignment for this dept
         update public.sprint_members
         set sprint_team_id = v_team_id
-        where sprint_id = v_sprint_id and user_id = p_created_by;
+        where public.sprint_members.sprint_id = v_sprint_id
+          and public.sprint_members.user_id = p_created_by;
       end if;
 
       v_teams := v_teams || jsonb_build_object(
@@ -110,7 +111,7 @@ begin
     v_teams := '[]'::jsonb;
   end if;
 
-  return query select v_sprint_id, v_teams;
+  return query select v_sprint_id as sprint_id, v_teams as created_teams;
 end;
 $$ language plpgsql security definer;
 

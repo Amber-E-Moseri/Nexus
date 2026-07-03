@@ -12,11 +12,11 @@ const STATUS_LABELS = {
 }
 
 const STATUS_COLORS = {
-  planning: '#EDE8F8',
-  active: '#E0F2FE',
-  completed: '#DCFCE7',
-  review: '#FEF3C7',
-  archived: '#F3F0EB',
+  planning: '#D4B5F4',
+  active: '#3B82F6',
+  completed: '#10B981',
+  review: '#F59E0B',
+  archived: '#6B7280',
 }
 
 function calculateSprintHealth(sprint, progress) {
