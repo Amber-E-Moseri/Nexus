@@ -16,6 +16,7 @@ import NewTeamModal from '../../features/sprints/components/NewTeamModal'
 import InviteExternalModal from '../../features/sprints/components/InviteExternalModal'
 import SprintReview from './SprintReview'
 import FileList from '../../components/files/FileList'
+import SprintGoalsPanel from '../../features/sprints/components/SprintGoalsPanel'
 
 const TABS = ['Overview', 'Tasks', 'Calendar', 'Teams', 'Members', 'Files', 'Review']
 const CALENDAR_EVENT_SELECT = 'id, title, description, event_type, start_date, end_date, all_day, location, zoom_join_url, sprint_id, space_id, created_by, created_at, status, department_id, approved_by, approved_at, rejection_note, is_org_wide'
@@ -466,6 +467,13 @@ export default function SprintOverview() {
       {tasks.length > 0 && (
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
           <SprintProgressBar tasksCount={calculateSprintTaskStats(tasks)} compact={false} />
+        </div>
+      )}
+
+      {/* Sprint Goals */}
+      {activeTab === 'Overview' && (
+        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+          <SprintGoalsPanel sprintId={detail.sprint.id} departmentId={detail.sprint.department_id} />
         </div>
       )}
 

@@ -1008,3 +1008,67 @@ export async function sendSprintInvitationEmail(payload) {
     message: 'Invitation email prepared (logging enabled)',
   }
 }
+
+// ============================================================================
+// Sprint Goals
+// ============================================================================
+
+export async function createSprintGoal(sprintId, goalData, createdBy) {
+  const { data: goal, error } = await supabase
+    .from('goals')
+    .insert({
+      sprint_id: sprintId,
+      title: goalData.title,
+      description: goalData.description || null,
+      owner_id: createdBy,
+      target_value: goalData.targetValue || 100,
+      current_value: goalData.currentValue || 0,
+      due_date: goalData.dueDate || null,
+      status: goalData.status || 'not_started',
+      department_id: goalData.departmentId || null,
+    })
+    .select('id, sprint_id, title, description, owner_id, target_value, current_value, due_date, status, created_at')
+    .single()
+
+  if (error) throw error
+  return goal
+}
+
+export async function getSprintGoals(sprintId) {
+  const { data, error } = await supabase
+    .from('goals')
+    .select('id, sprint_id, title, description, owner_id, target_value, current_value, due_date, status, created_at, users:owner_id(id, name, email)')
+    .eq('sprint_id', sprintId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data || []
+}
+
+export async function updateSprintGoal(goalId, updates) {
+  const { data, error } = await supabase
+    .from('goals')
+    .update({
+      title: updates.title,
+      description: updates.description || null,
+      target_value: updates.targetValue || undefined,
+      current_value: updates.currentValue || undefined,
+      due_date: updates.dueDate || null,
+      status: updates.status || undefined,
+    })
+    .eq('id', goalId)
+    .select('id, sprint_id, title, description, owner_id, target_value, current_value, due_date, status, created_at')
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function deleteSprintGoal(goalId) {
+  const { error } = await supabase
+    .from('goals')
+    .delete()
+    .eq('id', goalId)
+
+  if (error) throw error
+}
