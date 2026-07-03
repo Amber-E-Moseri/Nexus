@@ -287,13 +287,26 @@ export async function createMeetingWithAgenda(meetingData, agendaData, agendaIte
   try {
     // Check permission
     const { data: user, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
+    if (userError || !user?.user?.id) {
       throw new Error('User not authenticated')
     }
 
-    const hasPermission = await userHasPermission(user.id, 'meetings:manage')
-    if (!hasPermission) {
-      throw new Error('You do not have permission to create meetings. Contact your administrator.')
+    const userId = user.user.id
+
+    // Check if user is super_admin (they can always create meetings)
+    const { data: userData, error: userDataError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .single()
+
+    const isSuperAdmin = userData?.role === 'super_admin'
+
+    if (!isSuperAdmin) {
+      const hasPermission = await userHasPermission(userId, 'meetings:manage')
+      if (!hasPermission) {
+        throw new Error('You do not have permission to create meetings. Contact your administrator.')
+      }
     }
 
     // Ensure department_id is set
