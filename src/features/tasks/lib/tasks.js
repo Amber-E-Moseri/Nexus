@@ -8,6 +8,16 @@ import {
   normalizeTaskRows,
 } from '../../../lib/taskStatuses'
 
+// Explicit column list for the tasks table — avoids "sprint_id is ambiguous" when
+// tasks is self-joined for subtasks (PostgREST bug with SELECT * on self-joins).
+const TASK_COLS = `
+  id, title, description, is_personal, status, priority,
+  assignee_id, department_id, parent_task_id, meeting_id, goal_id,
+  source, source_name, source_type, external_unique_key,
+  due_date, completed_at, created_by, created_at,
+  sprint_id, task_type, status_id, list_id, sort_order, deleted_at
+`
+
 const TASK_STATUS_SELECT = `
   status,
   status_id,
@@ -69,6 +79,11 @@ function buildTaskPayload(taskData = {}) {
     delete payload.assigneeId
   }
 
+  if ('dueDate' in payload) {
+    payload.due_date = payload.dueDate
+    delete payload.dueDate
+  }
+
   if ('statusCategory' in payload) {
     delete payload.statusCategory
   }
@@ -102,7 +117,7 @@ export async function getDeptTasks(departmentId) {
   const { data, error } = await supabase
     .from('tasks')
     .select(`
-      *,
+      ${TASK_COLS},
       ${TASK_STATUS_SELECT},
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
@@ -126,7 +141,7 @@ export async function getSprintTasks(sprintId) {
   const { data, error } = await supabase
     .from('tasks')
     .select(`
-      *,
+      ${TASK_COLS},
       ${TASK_STATUS_SELECT},
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
@@ -148,7 +163,7 @@ export async function getSprintTasks(sprintId) {
 export async function getPersonalTasks(userId) {
   const { data, error } = await supabase
     .from('tasks')
-    .select(`*, ${TASK_STATUS_SELECT}, ${TASK_LIST_SELECT}, department:departments(id, name, color), subtasks:tasks!parent_task_id(${SUBTASK_SELECT})`)
+    .select(`${TASK_COLS}, ${TASK_STATUS_SELECT}, ${TASK_LIST_SELECT}, department:departments(id, name, color), subtasks:tasks!parent_task_id(${SUBTASK_SELECT})`)
     .eq('assignee_id', userId)
     .eq('is_personal', true)
     .is('parent_task_id', null)
@@ -173,7 +188,7 @@ export async function getMyTasks(userId) {
   const { data: spaceTasks, error: spaceError } = await supabase
     .from('tasks')
     .select(`
-      *,
+      ${TASK_COLS},
       ${TASK_STATUS_SELECT},
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
@@ -193,7 +208,7 @@ export async function getMyTasks(userId) {
   const { data: personalTasks, error: personalError } = await supabase
     .from('tasks')
     .select(`
-      *,
+      ${TASK_COLS},
       ${TASK_STATUS_SELECT},
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
@@ -214,7 +229,7 @@ export async function getMyTasks(userId) {
     const { data: tasks, error: error2 } = await supabase
       .from('tasks')
       .select(`
-        *,
+        ${TASK_COLS},
         ${TASK_STATUS_SELECT},
         ${TASK_LIST_SELECT},
         department:departments(id, name, color),
@@ -317,7 +332,7 @@ export async function createTask(taskData) {
     .from('tasks')
     .insert(payload)
     .select(`
-      *,
+      ${TASK_COLS},
       ${TASK_STATUS_SELECT},
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
@@ -385,7 +400,7 @@ export async function updateTask(taskId, updates, actorId = null) {
     .update(patch)
     .eq('id', taskId)
     .select(`
-      *,
+      ${TASK_COLS},
       ${TASK_STATUS_SELECT},
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),

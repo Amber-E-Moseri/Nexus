@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
-import { getSprintMembers } from '../lib/sprints'
+import { getSprintMembers, listSprintTeamsIndependent } from '../lib/sprints'
+import { supabase } from '../../../lib/supabase'
 import KanbanBoard from '../../tasks/components/KanbanBoard'
 import TaskFilters from '../../tasks/components/TaskFilters'
 import TaskListView from '../../tasks/components/TaskListView'
@@ -14,6 +15,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
   const { profile } = useAuth()
   const { tasks, loading, error, statuses, defaultStatusId, moveTask, addTask } = useTasks()
   const [members, setMembers] = useState([])
+  const [teamsWithMembers, setTeamsWithMembers] = useState([])
   const [view, setView] = useState('kanban')
   const [teamView, setTeamView] = useState('all')
   const [modal, setModal] = useState(null)
@@ -25,11 +27,11 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
 
   // Get current user's teams in this sprint
   const getMyTeams = useCallback(() => {
-    if (!sprint?.teams) return []
-    return sprint.teams.filter((team) =>
+    if (!teamsWithMembers) return []
+    return teamsWithMembers.filter((team) =>
       team.sprint_team_members?.some((member) => member.user_id === profile?.id),
     )
-  }, [sprint, profile?.id])
+  }, [teamsWithMembers, profile?.id])
 
   // Filter tasks for "My Team" view
   const getMyTeamTasks = useCallback(() => {
@@ -50,11 +52,11 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
 
   // Group tasks by team for "All Teams" view
   const getTasksByTeam = useMemo(() => {
-    if (!filtered || !sprint?.teams) return {}
+    if (!filtered || !teamsWithMembers) return {}
 
     const grouped = {}
 
-    sprint.teams.forEach((team) => {
+    teamsWithMembers.forEach((team) => {
       grouped[team.id] = {
         team,
         tasks: filtered.filter((task) => team.sprint_team_members?.some((m) => m.user_id === task.assignee_id)),
@@ -62,10 +64,39 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
     })
 
     return grouped
-  }, [filtered, sprint])
+  }, [filtered, teamsWithMembers])
 
   useEffect(() => {
-    getSprintMembers(sprintId).then(setMembers).catch(() => setMembers([]))
+    Promise.all([
+      getSprintMembers(sprintId),
+      (async () => {
+        try {
+          const teams = await listSprintTeamsIndependent(sprintId)
+          // Fetch team members for each team
+          const teamsWithMembersData = await Promise.all(
+            teams.map(async (team) => {
+              const { data: teamMembers } = await supabase
+                .from('sprint_team_members')
+                .select('user_id, users:user_id(id, name, email)')
+                .eq('team_id', team.id)
+              return {
+                ...team,
+                sprint_team_members: teamMembers ?? [],
+              }
+            })
+          )
+          return teamsWithMembersData
+        } catch {
+          return []
+        }
+      })(),
+    ]).then(([sprintMembers, teams]) => {
+      setMembers(sprintMembers)
+      setTeamsWithMembers(teams)
+    }).catch(() => {
+      setMembers([])
+      setTeamsWithMembers([])
+    })
   }, [sprintId])
 
   if (loading) {
@@ -126,7 +157,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
       </div>
 
       <div className="flex-1 overflow-hidden px-5 pb-5 pt-4">
-        {view === 'kanban' && sprint?.teams && sprint.teams.length > 0 ? (
+        {view === 'kanban' && teamsWithMembers && teamsWithMembers.length > 0 ? (
           <div className="flex flex-1 flex-col overflow-hidden">
             {/* Team View Tabs */}
             <div className="mb-4 flex gap-2 border-b border-[var(--border)]">
@@ -221,6 +252,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
           task={modal.task}
           defaultStatus={modal.defaultStatus ?? ''}
           sprintId={sprintId}
+          departmentId={sprint?.sprint?.department_id}
           isReadOnly={!canEdit}
           onClose={() => setModal(null)}
         />
@@ -231,7 +263,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
 
 export default function SprintTaskBoard({ sprintId, sprint, canEdit }) {
   return (
-    <TasksProvider sprintId={sprintId}>
+    <TasksProvider sprintId={sprintId} departmentId={sprint?.sprint?.department_id}>
       <SprintTasksInner sprintId={sprintId} sprint={sprint} canEdit={canEdit} />
     </TasksProvider>
   )

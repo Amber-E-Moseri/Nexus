@@ -392,60 +392,71 @@ export async function createTeamFromSpace(spaceId, sprintId = null) {
 }
 
 export async function getTeamDetail(teamId) {
-  const { data, error } = await supabase
+  const { data: team, error: teamError } = await supabase
     .from('sprint_teams')
-    .select(
-      `
-      id, name, description, lead_user_id, sprint_id, source_space_id,
-      is_archived, created_by, created_at,
-      sprint_team_members (${SPRINT_TEAM_MEMBERS_SELECT})
-    `,
-    )
+    .select('id, name, description, lead_user_id, sprint_id, source_space_id, is_archived, created_by, created_at')
     .eq('id', teamId)
     .single()
 
-  if (error) throw error
-  return data
+  if (teamError) throw teamError
+
+  const { data: members, error: membersError } = await supabase
+    .from('sprint_team_members')
+    .select(SPRINT_TEAM_MEMBERS_SELECT)
+    .eq('team_id', teamId)
+
+  if (membersError) throw membersError
+
+  return { ...team, sprint_team_members: members || [] }
 }
 
 export async function listAllTeams() {
-  const { data, error } = await supabase
+  const { data: teams, error } = await supabase
     .from('sprint_teams')
-    .select(
-      `
-      id, name, description, sprint_id, source_space_id,
-      lead_user_id, is_archived, created_at,
-      sprint_team_members (
-        id, user_id,
-        users:user_id (id, name, email, department_id)
-      )
-    `,
-    )
+    .select('id, name, description, sprint_id, source_space_id, lead_user_id, is_archived, created_at')
     .eq('is_archived', false)
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return data
+
+  // Fetch members separately to avoid nested relationship ambiguity
+  const teamsWithMembers = await Promise.all(
+    (teams || []).map(async (team) => {
+      const { data: members } = await supabase
+        .from('sprint_team_members')
+        .select('id, user_id, users:user_id(id, name, email, department_id)')
+        .eq('team_id', team.id)
+
+      return { ...team, sprint_team_members: members || [] }
+    })
+  )
+
+  return teamsWithMembers
 }
 
 export async function listSprintTeamsIndependent(sprintId) {
   const { data, error } = await supabase
     .from('sprint_teams')
-    .select(
-      `
-      id, name, description, lead_user_id,
-      sprint_team_members (
-        id, user_id,
-        users:user_id (id, name, email)
-      )
-    `,
-    )
+    .select('id, name, description, lead_user_id')
     .eq('sprint_id', sprintId)
     .eq('is_archived', false)
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return data
+
+  // Fetch members separately to avoid nested relationship ambiguity
+  const teamsWithMembers = await Promise.all(
+    (data || []).map(async (team) => {
+      const { data: members } = await supabase
+        .from('sprint_team_members')
+        .select('id, user_id, users:user_id(id, name, email)')
+        .eq('team_id', team.id)
+
+      return { ...team, sprint_team_members: members || [] }
+    })
+  )
+
+  return teamsWithMembers
 }
 
 export async function addTeamMember(teamId, userId, role = null) {
@@ -625,7 +636,7 @@ export async function getSprintTasks(sprintId) {
       ),
       assignee:users!assignee_id(id, name, avatar_url),
       subtasks:tasks!parent_task_id(
-        id, title, status, status_id, sprint_id, task_type,
+        id, title, status, status_id, task_type,
         status_definition:task_status_definitions!status_id(
           id, name, color, category, department_id, sort_order, is_default, active, legacy_key
         )

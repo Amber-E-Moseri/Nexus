@@ -476,8 +476,8 @@ export default function SprintOverview() {
         </div>
       ) : null}
 
-      {/* Review Section */}
-      {detail.sprint.status === 'completed' || detail.sprint.status === 'review' ? (
+      {/* Review Tab */}
+      {activeTab === 'Review' && (detail.sprint.status === 'completed' || detail.sprint.status === 'review' || detail.sprint.status === 'archived') ? (
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">Sprint Review</h2>

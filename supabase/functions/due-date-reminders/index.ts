@@ -1,7 +1,7 @@
 // Register cron job in Supabase SQL Editor with:
 // select cron.schedule(
-//   'due-date-reminders',
-//   '0 12 * * *',  -- 12:00 UTC = 8am ET
+//   'due-date-reminders-hourly',
+//   '0 * * * *',  -- Every hour
 //   $$
 //   select net.http_post(
 //     url := '[SUPABASE_PROJECT_URL]/functions/v1/due-date-reminders',
@@ -56,29 +56,36 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   )
 
-  // Query tasks due tomorrow
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  const tomorrowStr = tomorrow.toISOString().split('T')[0]
+  // Get today and upcoming dates
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
 
+  const inThreeDays = new Date()
+  inThreeDays.setDate(inThreeDays.getDate() + 3)
+  const inThreeDaysStr = inThreeDays.toISOString().split('T')[0]
+
+  // Query tasks that are:
+  // 1. Overdue (due_date < today)
+  // 2. Due today
+  // 3. Due within next 3 days
   const { data: tasks, error: tasksError } = await supabase
     .from('tasks')
-    .select('id, title, assigned_to')
-    .neq('status', 'done')
-    .like('due_date', `${tomorrowStr}%`)
+    .select('id, title, assignee_id, due_date, status_definition!status_id(category)')
+    .lte('due_date', inThreeDaysStr)
+    .neq('status_definition.category', 'completed')
 
   if (tasksError) {
     return jsonResponse(500, { error: tasksError.message })
   }
 
   if (!tasks || tasks.length === 0) {
-    return jsonResponse(200, { notified: 0, message: 'No tasks due tomorrow' })
+    return jsonResponse(200, { notified: 0, message: 'No overdue or upcoming tasks' })
   }
 
   // Filter for users with the preference enabled
   const assigneeIds = tasks
-    .filter((t) => t.assigned_to)
-    .map((t) => t.assigned_to)
+    .filter((t) => t.assignee_id)
+    .map((t) => t.assignee_id)
   const uniqueAssigneeIds = [...new Set(assigneeIds)] as string[]
 
   const { data: prefs } = await supabase
@@ -90,20 +97,49 @@ Deno.serve(async (req) => {
 
   const enabledUserIds = new Set((prefs || []).map((p) => p.user_id))
 
-  // Insert notifications
+  // Check which tasks already have notifications to avoid duplicates
+  const taskUserPairs = tasks
+    .filter((t) => t.assignee_id && enabledUserIds.has(t.assignee_id))
+    .map((t) => ({ taskId: t.id, userId: t.assignee_id }))
+
+  if (taskUserPairs.length === 0) {
+    return jsonResponse(200, { notified: 0, message: 'No users with preference enabled' })
+  }
+
+  // Check for existing notifications from the last 24 hours
+  const oneDayAgo = new Date()
+  oneDayAgo.setHours(oneDayAgo.getHours() - 24)
+
+  const { data: existingNotifications } = await supabase
+    .from('notifications')
+    .select('id, user_id, payload->>task_id')
+    .in('user_id', uniqueAssigneeIds)
+    .eq('type', 'task_due_soon')
+    .gte('created_at', oneDayAgo.toISOString())
+
+  const existingPairs = new Set(
+    (existingNotifications || []).map((n) => `${n['payload->>task_id']}:${n.user_id}`)
+  )
+
+  // Build notifications for tasks that don't already have one
   const notificationsToInsert = tasks
-    .filter((t) => t.assigned_to && enabledUserIds.has(t.assigned_to))
+    .filter((t) => {
+      if (!t.assignee_id || !enabledUserIds.has(t.assignee_id)) return false
+      return !existingPairs.has(`${t.id}:${t.assignee_id}`)
+    })
     .map((task) => ({
-      user_id: task.assigned_to,
+      user_id: task.assignee_id,
       type: 'task_due_soon',
       payload: {
         task_title: task.title,
         task_id: task.id,
+        due_date: task.due_date,
+        is_overdue: task.due_date < todayStr,
       },
     }))
 
   if (notificationsToInsert.length === 0) {
-    return jsonResponse(200, { notified: 0, message: 'No users with preference enabled' })
+    return jsonResponse(200, { notified: 0, message: 'No new notifications needed' })
   }
 
   const { error: insertError } = await supabase
@@ -114,5 +150,8 @@ Deno.serve(async (req) => {
     return jsonResponse(500, { error: insertError.message })
   }
 
-  return jsonResponse(200, { notified: notificationsToInsert.length })
+  return jsonResponse(200, {
+    notified: notificationsToInsert.length,
+    message: `Created ${notificationsToInsert.length} task due notifications`
+  })
 })

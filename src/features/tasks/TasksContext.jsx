@@ -13,7 +13,7 @@ export function TasksProvider({ departmentId, sprintId, children }) {
   const loadStatuses = useCallback(async () => {
     // Load both global and department-specific statuses
     const statusPromises = [listTaskStatuses()]
-    if (!sprintId && departmentId) {
+    if (departmentId) {
       statusPromises.push(listTaskStatuses({ departmentId }))
     }
     const allResults = await Promise.all(statusPromises)
@@ -46,7 +46,7 @@ export function TasksProvider({ departmentId, sprintId, children }) {
 
       // Load both global and department-specific statuses
       const statusPromises = [listTaskStatuses()]
-      if (!sprintId && departmentId) {
+      if (departmentId) {
         statusPromises.push(listTaskStatuses({ departmentId }))
       }
 

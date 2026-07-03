@@ -179,6 +179,7 @@ export default function MyTasks() {
           mode={modal.mode}
           task={modal.task}
           defaultStatus={modal.defaultStatus ?? ''}
+          departmentId={modal.task?.department_id}
           fieldSettings={{}}
           onClose={() => setModal(null)}
           onSaved={handleSaved}

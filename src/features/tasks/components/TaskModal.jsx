@@ -295,13 +295,13 @@ export default function TaskModal({
       return
     }
 
-    listTaskStatuses({ departmentId: sprintId ? null : departmentId })
+    listTaskStatuses({ departmentId })
       .then((nextStatuses) => {
         setStatuses(nextStatuses)
         setStatusId((current) => current || selectDefaultStatus(nextStatuses)?.id || '')
       })
       .catch(() => setStatuses([]))
-  }, [contextStatuses, departmentId, sprintId])
+  }, [contextStatuses, departmentId])
 
   useEffect(() => {
     titleRef.current?.focus()

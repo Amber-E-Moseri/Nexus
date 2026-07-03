@@ -5,8 +5,6 @@ import 'leaflet.markercluster'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import { supabase } from '../../lib/supabase'
-import { PrayerTimer } from './PrayerTimer'
-import { CampusDetailModal } from './CampusDetailModal'
 import '../../styles/BLWMap.css'
 
 // Fix Leaflet icon issue in Vite
@@ -25,9 +23,10 @@ export function BLWMap({ mode = 'default' }) {
   const [campuses, setCampuses] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedCampus, setSelectedCampus] = useState(null)
-  const [showModal, setShowModal] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
   const [selectedRegion, setSelectedRegion] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [activeChip, setActiveChip] = useState('all')
 
   const uniqueRegions = useMemo(() => {
     const regions = [...new Set(campuses.map((c) => c.group_name).filter(Boolean))]
@@ -185,7 +184,7 @@ export function BLWMap({ mode = 'default' }) {
 
       marker.on('click', () => {
         setSelectedCampus(campus)
-        setShowModal(true)
+        setPanelOpen(true)
       })
 
       markerClusterGroup.addLayer(marker)
@@ -208,66 +207,172 @@ export function BLWMap({ mode = 'default' }) {
   }
 
   return (
-    <div className="blw-map-wrapper" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Controls bar */}
-      <div style={{
-        display: 'flex',
-        gap: '12px',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        padding: '12px 16px',
-        backgroundColor: '#fff',
-        borderBottom: '1px solid #e0e0e0',
-      }}>
-        <input
-          type="text"
-          placeholder="Search campus or institution..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={{
-            padding: '8px 12px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            fontSize: '14px',
-            width: '220px',
-          }}
-        />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label style={{ fontSize: '14px', fontWeight: '500', color: '#444' }}>Region:</label>
-          <select
-            value={selectedRegion || ''}
-            onChange={(e) => setSelectedRegion(e.target.value || null)}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-              fontSize: '14px',
-              cursor: 'pointer',
-              backgroundColor: 'white',
-            }}
-          >
-            <option value="">All Regions ({campuses.length})</option>
-            {uniqueRegions.map((region) => (
-              <option key={region} value={region}>
-                {region} ({campuses.filter((c) => c.group_name === region).length})
-              </option>
-            ))}
-          </select>
+    <div className="blw-map-container">
+      {/* Top Bar */}
+      <div className="blw-top-bar">
+        <div className="blw-logo-pill">
+          <span className="blw-logo-text">🙏 BLW</span>
         </div>
-        {searchTerm && foundCampus && (
-          <span style={{ fontSize: '13px', color: '#4C2A92', fontWeight: '500' }}>
-            Found: {foundCampus.name}
-          </span>
-        )}
-        {searchTerm && !foundCampus && (
-          <span style={{ fontSize: '13px', color: '#999' }}>No match</span>
-        )}
+        <div className="blw-search-pill">
+          <input
+            type="text"
+            className="blw-search-input"
+            placeholder="Search campus..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
       </div>
 
-      <div className="blw-map-container" style={{ flex: 1 }}>
-        <div ref={mapRef} className="blw-map" />
-        <CampusDetailModal campus={selectedCampus} isOpen={showModal} onClose={() => setShowModal(false)} />
+      {/* Filter Chips */}
+      <div className="blw-chips-container">
+        <button
+          className={`blw-chip ${activeChip === 'all' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveChip('all')
+            setSelectedRegion(null)
+          }}
+        >
+          All Regions ({campuses.length})
+        </button>
+        {uniqueRegions.map((region) => (
+          <button
+            key={region}
+            className={`blw-chip ${activeChip === region ? 'active' : ''}`}
+            onClick={() => {
+              setActiveChip(region)
+              setSelectedRegion(region)
+            }}
+          >
+            <span className="blw-chip-dot" style={{ backgroundColor: '#5b34c7' }} />
+            {region}
+          </button>
+        ))}
       </div>
+
+      {/* Map */}
+      <div ref={mapRef} className="blw-map" />
+
+      {/* Tally Bar */}
+      <div className="blw-tally">
+        <div className="blw-tally-item">
+          <div className="blw-tally-num">{filteredCampuses.length}</div>
+          <div className="blw-tally-label">Campuses</div>
+        </div>
+        <div className="blw-progress-wrap">
+          <div className="blw-progress-label">
+            <span>Coverage</span>
+            <span>{Math.round((filteredCampuses.length / campuses.length) * 100)}%</span>
+          </div>
+          <div className="blw-progress-bar">
+            <div
+              className="blw-progress-fill"
+              style={{ width: `${(filteredCampuses.length / campuses.length) * 100}%` }}
+            />
+          </div>
+        </div>
+        <div className="blw-tally-item">
+          <div className="blw-tally-num">
+            {campuses.filter((c) => c.status === 'active').length}
+          </div>
+          <div className="blw-tally-label">Active</div>
+        </div>
+      </div>
+
+      {/* Side Panel */}
+      <div className={`blw-side-panel ${panelOpen ? 'open' : ''}`}>
+        <div className="blw-panel-header">
+          <div>
+            <h2 className="blw-panel-title">{selectedCampus?.name}</h2>
+            <div className="blw-panel-subtitle">{selectedCampus?.institution}</div>
+          </div>
+          <button
+            className="blw-panel-close"
+            onClick={() => setPanelOpen(false)}
+          >
+            ✕
+          </button>
+        </div>
+        <div className="blw-panel-body">
+          {selectedCampus ? (
+            <CampusDetailContent campus={selectedCampus} />
+          ) : (
+            <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '40px 20px' }}>
+              Click a campus to view details
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CampusDetailContent({ campus }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {campus.photo_url && (
+        <img
+          src={campus.photo_url}
+          alt={campus.name}
+          style={{ borderRadius: '8px', width: '100%', height: '200px', objectFit: 'cover' }}
+        />
+      )}
+
+      <div>
+        <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>
+          Hub
+        </div>
+        <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
+          {campus.hub || 'N/A'}
+        </div>
+      </div>
+
+      {campus.campus_name_alt && (
+        <div>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>
+            Also Known As
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
+            {campus.campus_name_alt}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+        <div style={{ padding: '8px', background: 'var(--surface-secondary)', borderRadius: '6px' }}>
+          <div style={{ fontSize: '9px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+            Latitude
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: '500', marginTop: '2px' }}>
+            {campus.latitude?.toFixed(3)}
+          </div>
+        </div>
+        <div style={{ padding: '8px', background: 'var(--surface-secondary)', borderRadius: '6px' }}>
+          <div style={{ fontSize: '9px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+            Longitude
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: '500', marginTop: '2px' }}>
+            {campus.longitude?.toFixed(3)}
+          </div>
+        </div>
+      </div>
+
+      {campus.spotify_playlist_id && (
+        <div style={{ marginTop: '8px' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '8px' }}>
+            Worship Playlist
+          </div>
+          <iframe
+            src={`https://open.spotify.com/embed/playlist/${campus.spotify_playlist_id}`}
+            width="100%"
+            height="152"
+            frameBorder="0"
+            style={{ borderRadius: '8px' }}
+            allowFullScreen={true}
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          />
+        </div>
+      )}
     </div>
   )
 }

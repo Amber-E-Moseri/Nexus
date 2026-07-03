@@ -3,7 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import SprintCard from '../../features/sprints/components/SprintCard'
 import SprintModal from '../../features/sprints/components/SprintModal'
 import { useAuth } from '../../hooks/useAuth'
-import { deleteSprint, duplicateSprint, getAllSprints, getMySprints, restoreSprint } from '../../features/sprints'
+import { deleteSprint, duplicateSprint, getAllSprints, getMySprints, restoreSprint, listSprintTeamsIndependent } from '../../features/sprints'
+import { getSprintTasks } from '../../features/sprints/lib/sprints'
+import { supabase } from '../../lib/supabase'
 
 const FILTERS = ['all', 'active', 'planning', 'completed', 'review', 'archived']
 const STATUS_ORDER = ['active', 'planning', 'completed', 'review', 'archived']
@@ -31,6 +33,7 @@ export default function SprintsList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [sprints, setSprints] = useState([])
   const [filter, setFilter] = useState('all')
+  const [view, setView] = useState('all')
   const [query, setQuery] = useState('')
   const [showModal, setShowModal] = useState(searchParams.get('new') === 'true')
   const [loading, setLoading] = useState(true)
@@ -38,8 +41,66 @@ export default function SprintsList() {
   async function loadSprints() {
     setLoading(true)
     try {
-      const data = role === 'super_admin' ? await getAllSprints() : await getMySprints()
-      setSprints(data)
+      const sprintData = role === 'super_admin' ? await getAllSprints() : await getMySprints()
+
+      // Fetch task counts, department info, and team data for each sprint
+      const enrichedSprints = await Promise.all(
+        sprintData.map(async (sprint) => {
+          try {
+            const tasks = await getSprintTasks(sprint.id)
+            const completed = tasks.filter((t) => t.status_definition?.category === 'completed').length
+
+            // Fetch department name if sprint has a department
+            let deptName = null
+            if (sprint.department_id) {
+              const { data: dept } = await supabase
+                .from('departments')
+                .select('name')
+                .eq('id', sprint.department_id)
+                .single()
+              deptName = dept?.name
+            }
+
+            // Fetch teams and check if user is in any team
+            let isUserInTeam = false
+            try {
+              const teams = await listSprintTeamsIndependent(sprint.id)
+              for (const team of teams) {
+                const { data: members } = await supabase
+                  .from('sprint_team_members')
+                  .select('user_id')
+                  .eq('team_id', team.id)
+
+                if (members?.some((m) => m.user_id === profile?.id)) {
+                  isUserInTeam = true
+                  break
+                }
+              }
+            } catch {
+              // If team fetch fails, continue without team info
+            }
+
+            return {
+              ...sprint,
+              task_count: tasks.length,
+              completed_count: completed,
+              department_name: deptName,
+              is_user_in_team: isUserInTeam,
+            }
+          } catch (err) {
+            console.error(`Failed to load details for sprint ${sprint.id}:`, err)
+            return {
+              ...sprint,
+              task_count: 0,
+              completed_count: 0,
+              department_name: null,
+              is_user_in_team: false,
+            }
+          }
+        })
+      )
+
+      setSprints(enrichedSprints)
     } finally {
       setLoading(false)
     }
@@ -66,8 +127,22 @@ export default function SprintsList() {
   }, [query, sprints])
 
   const filtered = useMemo(
-    () => (filter === 'all' ? searched : searched.filter((sprint) => sprint.status === filter)),
-    [filter, searched],
+    () => {
+      let result = searched
+
+      // Apply status filter
+      if (filter !== 'all') {
+        result = result.filter((sprint) => sprint.status === filter)
+      }
+
+      // Apply view filter
+      if (view === 'my-team') {
+        result = result.filter((sprint) => sprint.is_user_in_team)
+      }
+
+      return result
+    },
+    [filter, searched, view],
   )
 
 
@@ -114,7 +189,39 @@ export default function SprintsList() {
         ) : null}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap items-center">
+        <div className="flex gap-1 rounded-lg bg-[var(--surface-secondary)] p-1">
+          <button
+            onClick={() => setView('all')}
+            style={{
+              padding: '6px 12px',
+              fontSize: 13,
+              fontWeight: view === 'all' ? 600 : 400,
+              borderRadius: 6,
+              border: 'none',
+              background: view === 'all' ? 'white' : 'transparent',
+              color: view === 'all' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              cursor: 'pointer',
+            }}
+          >
+            All Sprints
+          </button>
+          <button
+            onClick={() => setView('my-team')}
+            style={{
+              padding: '6px 12px',
+              fontSize: 13,
+              fontWeight: view === 'my-team' ? 600 : 400,
+              borderRadius: 6,
+              border: 'none',
+              background: view === 'my-team' ? 'white' : 'transparent',
+              color: view === 'my-team' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              cursor: 'pointer',
+            }}
+          >
+            My Teams
+          </button>
+        </div>
         <input
           type="search"
           value={query}
