@@ -300,8 +300,13 @@ export default function TaskModal({
       listTaskStatuses({ departmentId: null }) // Fetch org-wide statuses
     ])
       .then(([deptStatuses, orgStatuses]) => {
-        // Combine org statuses + dept statuses, org first for display
-        const allStatuses = [...orgStatuses, ...deptStatuses]
+        // Deduplicate by ID: keep first occurrence
+        const seen = new Set()
+        const allStatuses = [...orgStatuses, ...deptStatuses].filter((status) => {
+          if (seen.has(status.id)) return false
+          seen.add(status.id)
+          return true
+        })
         setStatuses(allStatuses)
         setStatusId((current) => current || selectDefaultStatus(allStatuses)?.id || '')
       })
