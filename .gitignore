@@ -13,3 +13,6 @@ apps/meeting-os/ors-report-suite-main.zip
 supabase/supabase/
 **/.temp/
 .vercel
+
+# Google Apps Script configuration with sensitive credentials
+supabase/functions/google-apps-script/CONFIG.gs
