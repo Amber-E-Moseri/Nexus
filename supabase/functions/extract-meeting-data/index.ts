@@ -92,7 +92,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { transcript, context, stream: wantStream } = body;
+    const { transcript, context, stream: wantStream, linked_spaces = [], participants = [], meeting_date = new Date().toISOString() } = body;
 
     if (!transcript || typeof transcript !== "string") {
       return new Response(JSON.stringify({ error: "Missing transcript" }), {
@@ -101,101 +101,90 @@ serve(async (req) => {
       });
     }
 
-    // Step 1: Content Classification (pre-pass)
-    const classifyPrompt = `You are classifying a transcript to determine how it should be processed.
+    // Step 1: Format participant data for validation
+    const participantsJson = JSON.stringify(participants);
+    const linkedSpacesJson = JSON.stringify(linked_spaces);
 
-Return ONLY valid JSON, no other text:
+    // Step 2: Build v2.1 system prompt with data validation + classification + extraction
+    const systemPrompt = `SYSTEM PROMPT — extract-meeting-data (v2.1, merged classification + space validation)
+
+You are processing a transcript. First validate participant data, then classify content,
+then extract accordingly.
+
+=== DATA VALIDATION (before processing) ===
+Validate participant data integrity:
+- Any participant with 2+ spaces MUST have a "primary" field defined
+- If a participant has 2+ spaces but primary is missing, null, or not in their
+  spaces array, flag it as a data integrity issue
+
+Add any validation failures to a "data_issues" array in your response.
+
+When you encounter a task assigned to a person with a missing/invalid primary_space
+during extraction:
+- Set suggested_space: null
+- Set space_confidence: "ambiguous"
+- Do NOT try to guess their primary space or default to their first space
+- Continue extraction normally — the downstream review process will handle manual
+  intervention
+
+=== STEP 1 — Classify Content Type ===
+Determine content_type: "meeting" | "raw_note" | "list_data" | "other"
+- "meeting" = multiple speakers in dialogue, OR single speaker narrating meeting-like
+  content (updates, plans, assignments, decisions)
+- "raw_note" = single-voice notes/journaling, no discussion structure, internal
+  reflection
+- "list_data" = structured data read aloud (e.g. birthday lists, roster reads,
+  inventory reads) — NOT a meeting even if names and dates appear together
+- "other" = anything else (scripture reading, song lyrics, random audio, stray
+  recordings, etc.)
+
+=== STEP 2 — Extract Based on Classification ===
+- If content_type is NOT "meeting", OR confidence < 0.6:
+    → Only return cleaned_transcript, chapters, and content_type fields.
+    → Leave summary, decisions, action_items, key_topics as empty/null.
+    → This prevents forced meeting structure for non-meeting content.
+- If content_type IS "meeting" with confidence >= 0.6:
+    → Populate all fields including summary, decisions, action_items, key_topics.
+
+=== SPACE SUGGESTION RULES (only apply if content_type = meeting) ===
+- Only suggest spaces from the meeting's linked_spaces: ${linkedSpacesJson}
+- Base suggested_space on TASK CONTENT ONLY:
+  * "coordinate media team" → Media
+  * "approve budget line" → Admin
+  * "prayer team ushering" → PFCC
+  → Do NOT default to the owner's known primary space just because it's convenient.
+- Set space_confidence based on clarity of task content:
+  * "high" = task content clearly and specifically points to one space
+  * "low" = task is generic/could fit multiple spaces but one is plausible
+  * "ambiguous" = genuinely unclear which space owns this, don't force a guess
+- Participants and their space memberships (provided for context only):
+  ${participantsJson}
+
+=== RETURN SCHEMA ===
+Return ONLY valid JSON (no markdown, no extra text):
 
 {
   "content_type": "meeting" | "raw_note" | "list_data" | "other",
-  "confidence": 0.0-1.0,
-  "reasoning": "one sentence"
-}
-
-Guidelines:
-- "meeting" = multiple speakers in dialogue, discussion/decision-making structure, or a single speaker narrating meeting-like content (updates, plans, assignments)
-- "raw_note" = single-voice notes, journaling, unstructured thoughts with no discussion structure
-- "list_data" = structured data dumps that happen to be spoken/typed (e.g. birthday lists, roster reads, inventory reads)
-- "other" = anything that doesn't fit above
-
-If content_type is not "meeting" with confidence >= 0.6, meeting extraction will be skipped.
-
-Transcript:
-${transcript.slice(0, 4000)}
-
-Meeting context (if provided): ${context || "None"}`;
-
-    const classifyResult = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 256,
-        messages: [{ role: "user", content: classifyPrompt }],
-      }),
-    });
-
-    if (!classifyResult.ok) {
-      throw new Error(`Claude classification failed: ${classifyResult.status}`);
+  "confidence": 0.0 to 1.0,
+  "data_issues": [
+    {
+      "type": "missing_primary_space" | "invalid_primary_space" | "other",
+      "participant_name": "string",
+      "spaces": ["array of space names"],
+      "action": "string — brief explanation"
     }
-
-    const classifyData = await classifyResult.json();
-    const classifyText = classifyData.content?.[0]?.text ?? "";
-    let classification;
-    try {
-      classification = JSON.parse(classifyText);
-    } catch {
-      classification = { content_type: "other", confidence: 0, reasoning: "Parse error" };
-    }
-
-    // Step 2: Determine output mode based on classification
-    let outputMode = "organized"; // default
-    if (classification.content_type !== "meeting" || classification.confidence < 0.6) {
-      outputMode = "full_transcript";
-    }
-
-    // Step 3: Select prompt based on mode
-    let prompt: string;
-    if (outputMode === "full_transcript") {
-      prompt = `You are cleaning and lightly organizing a raw transcript for archival/reference use.
-Do NOT extract decisions, action items, or force meeting structure.
-
-Return ONLY valid JSON:
-
-{
-  "cleaned_transcript": "string — full transcript with filler words (um, uh, you know) removed and speaker turns clearly labeled",
-  "chapters": [
-    { "title": "string — short label for this section", "start_marker": "string — first few words of this section" }
-  ]
-}
-
-Rules:
-- Preserve all substantive content.
-- Only remove disfluencies (um, uh, like, you know, false starts).
-- Chapters should reflect natural topic shifts.
-- Never invent content.
-
-Transcript:
-${transcript.slice(0, 8000)}`;
-    } else {
-      prompt = `You are extracting structured meeting minutes from a transcript.
-
-Return ONLY valid JSON:
-
-{
-  "summary": "string — 2-3 sentence overview",
-  "decisions": [
-    { "decision": "string", "context": "string — brief why/how" }
   ],
+  "cleaned_transcript": "string with filler removed, or null if content_type != meeting",
+  "chapters": [{ "title": "string", "start_marker": "string" }],
+  "summary": "string or null",
+  "decisions": [{ "decision": "string", "context": "string" }],
   "action_items": [
     {
       "title": "string",
       "owner": "string or null",
       "owner_confidence": "explicit" | "inferred" | "unassigned",
+      "suggested_space": "string or null",
+      "space_confidence": "high" | "low" | "ambiguous",
       "due_date": "string or null",
       "priority": "high" | "medium" | "low"
     }
@@ -203,18 +192,32 @@ Return ONLY valid JSON:
   "key_topics": ["string"]
 }
 
-Assignment rules:
-- "explicit": person directly named as doing task
-- "inferred": acceptance/response in dialogue without direct task statement
-- "unassigned": no owner can be determined — do not guess
+=== ASSIGNMENT INFERENCE RULES ===
+- owner_confidence = "explicit" when directly named ("Amber will build the form")
+- owner_confidence = "inferred" when implied by acceptance ("Can you take that?" / "Yeah I got it")
+- owner_confidence = "unassigned" when no owner can be determined
 
-Deduplication: If a task is mentioned, then merged into another task explicitly, output ONE item. If declined or ruled unnecessary, do NOT include.
+=== DEDUPLICATION RULES ===
+- If task is mentioned then merged ("fold that into what you're already doing"), output ONE item
+- If task is proposed then declined/ruled out, do NOT include it
+- If same deliverable discussed multiple times, consolidate into single item
+
+=== DATE NORMALIZATION ===
+- Meeting date: ${meeting_date}
+- Convert clear relative references ("by Friday", "next Tuesday", "in two weeks") to actual dates
+- Keep vague references as-is ("before the event", "well before the day")
+- Never guess a due date — null is better than a wrong date
 
 Meeting context: ${context || "None"}
 
 Transcript:
 ${transcript.slice(0, 8000)}`;
-    }
+
+    // Step 3: Call Claude with v2.1 prompt (single call, no classification pre-pass)
+    const classifyPrompt = systemPrompt;
+
+    // v2.1 handles classification + extraction in one call
+    const prompt = classifyPrompt;
 
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!anthropicKey) {
@@ -298,6 +301,7 @@ ${transcript.slice(0, 8000)}`;
     const transcriptHash = await hashTranscript(transcript + (context || ""));
     const cached = await getCachedExtraction(transcriptHash);
     if (cached) {
+      const outputMode = cached.content_type === "meeting" && cached.confidence >= 0.6 ? "organized" : "full_transcript";
       return new Response(JSON.stringify({ success: true, extracted: cached, transcript, output_mode: outputMode, cached: true }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -335,6 +339,8 @@ ${transcript.slice(0, 8000)}`;
     }
 
     await setCachedExtraction(transcriptHash, extracted);
+
+    const outputMode = extracted.content_type === "meeting" && extracted.confidence >= 0.6 ? "organized" : "full_transcript";
 
     return new Response(JSON.stringify({ success: true, extracted, transcript, output_mode: outputMode, cached: false }), {
       status: 200,
