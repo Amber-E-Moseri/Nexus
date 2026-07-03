@@ -18,14 +18,21 @@ const STATUS_COLORS = {
 }
 
 const STATUS_EMOJIS = {
-  'active': '🟢',
+  'active': '✅',
   'inactive': '🔴',
+}
+
+const HUB_COLORS = {
+  'West': '#8430ce',
+  'Central': '#1a73e8',
+  'Central-East': '#f9ab00',
 }
 
 export function BLWMap({ mode = 'default' }) {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const markersRef = useRef({})
+  const hubCirclesRef = useRef({})
   const [campuses, setCampuses] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedCampus, setSelectedCampus] = useState(null)
@@ -84,7 +91,6 @@ export function BLWMap({ mode = 'default' }) {
             lng: c.longitude,
             campus: c.name,
             group: c.group_name,
-            needs_plan: false, // Default value - can be added to DB later
           }))
           setCampuses(transformed)
         }
@@ -105,7 +111,13 @@ export function BLWMap({ mode = 'default' }) {
         (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             setCampuses((prev) => {
-              const transformed = { ...payload.new, lat: payload.new.latitude, lng: payload.new.longitude, campus: payload.new.name }
+              const transformed = {
+                ...payload.new,
+                lat: payload.new.latitude,
+                lng: payload.new.longitude,
+                campus: payload.new.name,
+                group: payload.new.group_name
+              }
               const updated = [...prev]
               const idx = updated.findIndex((c) => c.id === transformed.id)
               if (idx >= 0) {
@@ -149,6 +161,50 @@ export function BLWMap({ mode = 'default' }) {
       map.removeLayer(marker)
     })
     markersRef.current = {}
+
+    // Add hub circles if enabled
+    if (showHubs) {
+      Object.values(hubCirclesRef.current).forEach((circle) => {
+        map.removeLayer(circle)
+      })
+      hubCirclesRef.current = {}
+
+      const uniqueHubs = [...new Set(campuses.map(c => c.hub).filter(Boolean))]
+      uniqueHubs.forEach(hub => {
+        const campusesInHub = campuses.filter(c => c.hub === hub)
+        if (campusesInHub.length > 0) {
+          const avgLat = campusesInHub.reduce((sum, c) => sum + parseFloat(c.lat), 0) / campusesInHub.length
+          const avgLng = campusesInHub.reduce((sum, c) => sum + parseFloat(c.lng), 0) / campusesInHub.length
+          const color = HUB_COLORS[hub] || '#9aa0a6'
+
+          const circle = L.circle([avgLat, avgLng], {
+            radius: 50000,
+            color: color,
+            weight: 2,
+            opacity: 0.8,
+            fillColor: color,
+            fillOpacity: 0.1,
+            interactive: false
+          }).addTo(map)
+
+          const label = L.marker([avgLat, avgLng], {
+            icon: L.divIcon({
+              className: 'hub-label',
+              html: `<div style="color:${color};padding:4px 8px;background:rgba(255,255,255,.95);border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;border:1.5px solid ${color};font-family:DM Sans;box-shadow:0 2px 4px rgba(0,0,0,.15)">${hub}</div>`,
+              iconAnchor: [0, 0]
+            }),
+            interactive: false
+          }).addTo(map)
+
+          hubCirclesRef.current[hub] = circle
+        }
+      })
+    } else {
+      Object.values(hubCirclesRef.current).forEach((circle) => {
+        map.removeLayer(circle)
+      })
+      hubCirclesRef.current = {}
+    }
 
     // Add markers for filtered campuses
     filteredCampuses.forEach((campus) => {
@@ -204,13 +260,12 @@ export function BLWMap({ mode = 'default' }) {
       marker.addTo(map)
       markersRef.current[campus.id] = marker
     })
-  }, [filteredCampuses, selectedCampus?.id])
+  }, [filteredCampuses, selectedCampus?.id, showHubs, campuses])
 
   const handleSaveCampus = async () => {
     if (!selectedCampus) return
     setSaving(true)
     try {
-      // Only update fields that exist in the database
       const updates = {
         status: panelEdits.status !== undefined ? panelEdits.status : selectedCampus.status,
       }
@@ -233,8 +288,8 @@ export function BLWMap({ mode = 'default' }) {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--g500)' }}>
-        Loading map...
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9aa0a6', fontSize: '14px' }}>
+        Loading campuses...
       </div>
     )
   }
@@ -249,7 +304,7 @@ export function BLWMap({ mode = 'default' }) {
         {/* Top Bar */}
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 800, display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 14px', pointerEvents: 'none', flexWrap: 'wrap' }}>
           <div style={{ pointerEvents: 'all', display: 'flex', alignItems: 'center', gap: '7px', background: 'white', borderRadius: '24px', boxShadow: '0 2px 6px rgba(60,64,67,.2), 0 8px 24px rgba(60,64,67,.12)', padding: '0 14px', height: '42px', flexShrink: 0 }}>
-            <span style={{ fontFamily: 'DM Serif Display', fontSize: '16px', color: '#202124' }}>🙏 BLW</span>
+            <span style={{ fontFamily: 'DM Serif Display', fontSize: '16px', color: '#202124', fontWeight: 500 }}>🙏 BLW CAN</span>
           </div>
           <div style={{ pointerEvents: 'all', flex: 1, maxWidth: '300px', display: 'flex', alignItems: 'center', gap: '7px', background: 'white', borderRadius: '24px', boxShadow: '0 2px 6px rgba(60,64,67,.2), 0 8px 24px rgba(60,64,67,.12)', padding: '0 14px', height: '42px' }}>
             <input
@@ -263,7 +318,7 @@ export function BLWMap({ mode = 'default' }) {
         </div>
 
         {/* Filter Chips */}
-        <div style={{ position: 'absolute', top: '64px', left: '14px', zIndex: 800, display: 'flex', gap: '6px', flexWrap: 'wrap', maxWidth: '620px' }}>
+        <div style={{ position: 'absolute', top: '64px', left: '14px', zIndex: 800, display: 'flex', gap: '6px', flexWrap: 'wrap', maxWidth: '700px' }}>
           <button
             onClick={() => { setActiveFilter('all'); setSelectedRegion(null) }}
             style={{
@@ -275,6 +330,21 @@ export function BLWMap({ mode = 'default' }) {
           >
             All ({campuses.length})
           </button>
+          {uniqueRegions.map(region => (
+            <button
+              key={region}
+              onClick={() => { setActiveFilter('all'); setSelectedRegion(region) }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '5px', background: selectedRegion === region ? '#e8f0fe' : 'white',
+                border: 'none', borderRadius: '20px', padding: '5px 12px', fontFamily: 'DM Sans', fontSize: '12px', fontWeight: 500,
+                color: selectedRegion === region ? '#1a73e8' : '#5f6368', cursor: 'pointer', boxShadow: '0 1px 3px rgba(60,64,67,.15), 0 4px 8px rgba(60,64,67,.1)',
+                transition: 'all 0.15s', whiteSpace: 'nowrap'
+              }}
+            >
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#5b34c7' }} />
+              {region}
+            </button>
+          ))}
           {['active', 'inactive'].map((status) => {
             const color = STATUS_COLORS[status]
             return (
@@ -293,6 +363,18 @@ export function BLWMap({ mode = 'default' }) {
               </button>
             )
           })}
+          <button
+            onClick={() => setShowHubs(!showHubs)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '5px', background: showHubs ? '#e3f2fd' : 'white',
+              border: 'none', borderRadius: '20px', padding: '5px 12px', fontFamily: 'DM Sans', fontSize: '12px', fontWeight: 500,
+              color: showHubs ? '#0277bd' : '#5f6368', cursor: 'pointer', boxShadow: '0 1px 3px rgba(60,64,67,.15), 0 4px 8px rgba(60,64,67,.1)',
+              transition: 'all 0.15s', whiteSpace: 'nowrap'
+            }}
+          >
+            <span style={{ width: '6px', height: '6px', background: showHubs ? '#0277bd' : '#5f6368', borderRadius: '1px', transform: 'rotate(45deg)' }} />
+            Hubs
+          </button>
         </div>
 
         {/* Map */}
@@ -323,7 +405,8 @@ export function BLWMap({ mode = 'default' }) {
       <div style={{ width: '380px', background: 'white', display: 'flex', flexDirection: 'column', boxShadow: '-2px 0 12px rgba(60,64,67,.1)', position: 'absolute', top: 0, right: 0, bottom: 0, zIndex: 700, transform: panelOpen ? 'translateX(0)' : 'translateX(380px)', transition: 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)', overflow: 'hidden' }}>
         {!panelOpen || !selectedCampus ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', color: '#9aa0a6', textAlign: 'center', padding: '40px 20px' }}>
-            <div style={{ fontSize: '13px', lineHeight: 1.5 }}>Click a campus on the map to view details, add notes and prayer points.</div>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <div style={{ fontSize: '13px', lineHeight: 1.5 }}>Click a campus on the map<br/>to view details and information.</div>
           </div>
         ) : (
           <CampusPanel
@@ -352,7 +435,7 @@ function CampusPanel({ campus, edits, onEdit, onSave, onClose, saving }) {
           <div style={{ fontSize: '12px', color: '#1a73e8', fontWeight: 500, marginTop: '2px' }}>{campus.campus || 'Main Campus'}</div>
           <div style={{ fontSize: '11px', color: '#80868b', marginTop: '1px' }}>{campus.group || '—'}</div>
         </div>
-        <button onClick={onClose} style={{ width: '28px', height: '28px', borderRadius: '50%', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#80868b', flexShrink: 0, transition: 'background 0.15s' }}>
+        <button onClick={onClose} style={{ width: '28px', height: '28px', borderRadius: '50%', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#80868b', flexShrink: 0, transition: 'background 0.15s', fontSize: '18px' }}>
           ✕
         </button>
       </div>
@@ -368,7 +451,7 @@ function CampusPanel({ campus, edits, onEdit, onSave, onClose, saving }) {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid #e8eaed', flexShrink: 0, padding: '0 16px' }}>
-        {['info', 'edit'].map((tab) => (
+        {['info', 'details', 'edit'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -400,17 +483,22 @@ function CampusPanel({ campus, edits, onEdit, onSave, onClose, saving }) {
               </div>
               <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '2px' }}>Location</div>
+                  <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '2px' }}>Coordinates</div>
                   <div style={{ fontSize: '11px', color: '#80868b' }}>{campus.lat?.toFixed(4)}, {campus.lng?.toFixed(4)}</div>
                 </div>
               </div>
             </div>
             {campus.photo_url && (
               <div>
-                <img src={campus.photo_url} alt={campus.institution} style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '10px' }} />
+                <img src={campus.photo_url} alt={campus.institution} style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '10px' }} onError={(e) => {e.target.style.display = 'none'}} />
               </div>
             )}
-            {campus.spotify_playlist_id && (
+          </>
+        )}
+
+        {activeTab === 'details' && (
+          <>
+            {campus.spotify_playlist_id ? (
               <div>
                 <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '6px' }}>Worship Playlist</div>
                 <iframe
@@ -422,6 +510,10 @@ function CampusPanel({ campus, edits, onEdit, onSave, onClose, saving }) {
                   allowFullScreen={true}
                   allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                 />
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', color: '#9aa0a6', padding: '32px 20px', fontSize: '12px' }}>
+                No additional details available
               </div>
             )}
           </>
