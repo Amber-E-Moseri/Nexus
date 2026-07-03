@@ -248,6 +248,28 @@ function OrganizedView({ results, onSaveToMinutes, onDiscard, saving }) {
       </h3>
       <p style={{ margin: '0 0 20px', fontSize: 13, color: '#9E9488' }}>Review and edit before saving</p>
 
+      {/* Data Issues Alert */}
+      {results.data_issues && results.data_issues.length > 0 && (
+        <div
+          style={{
+            marginBottom: 20,
+            padding: 12,
+            backgroundColor: '#FEF0E6',
+            border: '1px solid #FED9B3',
+            borderRadius: 6,
+          }}
+        >
+          <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#C94830' }}>
+            ⚠️ Data Issues Detected
+          </p>
+          {results.data_issues.map((issue, i) => (
+            <div key={i} style={{ fontSize: 12, color: '#9E5C3C', marginBottom: i < results.data_issues.length - 1 ? 6 : 0 }}>
+              <strong>{issue.participant_name}</strong> ({issue.type}): {issue.action}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Summary */}
       <div style={{ marginBottom: 24 }}>
         <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: '#2D2A22' }}>
@@ -407,6 +429,35 @@ function OrganizedView({ results, onSaveToMinutes, onDiscard, saving }) {
                   fontFamily: 'inherit',
                 }}
               />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="Space (suggested)"
+                value={item.suggested_space || ''}
+                onChange={(e) => handleUpdateAction(i, 'suggested_space', e.target.value)}
+                style={{
+                  padding: '8px 10px',
+                  fontSize: 13,
+                  border: '1px solid #EDE8DC',
+                  borderRadius: 6,
+                  fontFamily: 'inherit',
+                }}
+              />
+              <select
+                value={item.space_confidence || 'high'}
+                onChange={(e) => handleUpdateAction(i, 'space_confidence', e.target.value)}
+                style={{
+                  padding: '8px 10px',
+                  fontSize: 13,
+                  border: '1px solid #EDE8DC',
+                  borderRadius: 6,
+                }}
+              >
+                <option value="high">High confidence</option>
+                <option value="low">Low confidence</option>
+                <option value="ambiguous">Ambiguous</option>
+              </select>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
               <input
