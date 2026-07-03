@@ -13,17 +13,13 @@ L.Icon.Default.mergeOptions({
 })
 
 const STATUS_COLORS = {
-  'Established Fellowship': '#1e8e3e',
-  'Pioneering Fellowship': '#f9ab00',
-  'Influenced': '#1a73e8',
-  'Not Reached': '#d93025',
+  'active': '#1e8e3e',
+  'inactive': '#d93025',
 }
 
 const STATUS_EMOJIS = {
-  'Established Fellowship': '✅',
-  'Pioneering Fellowship': '🟡',
-  'Influenced': '🔵',
-  'Not Reached': '🔴',
+  'active': '🟢',
+  'inactive': '🔴',
 }
 
 export function BLWMap({ mode = 'default' }) {
@@ -54,11 +50,7 @@ export function BLWMap({ mode = 'default' }) {
     }
 
     if (activeFilter !== 'all') {
-      if (activeFilter === 'needs_plan') {
-        result = result.filter((c) => c.needs_plan)
-      } else {
-        result = result.filter((c) => c.status === activeFilter)
-      }
+      result = result.filter((c) => c.status === activeFilter)
     }
 
     if (searchTerm.trim()) {
@@ -67,7 +59,8 @@ export function BLWMap({ mode = 'default' }) {
         (c) =>
           c.name?.toLowerCase().includes(lower) ||
           c.institution?.toLowerCase().includes(lower) ||
-          c.hub?.toLowerCase().includes(lower)
+          c.hub?.toLowerCase().includes(lower) ||
+          c.group?.toLowerCase().includes(lower)
       )
     }
 
@@ -80,12 +73,7 @@ export function BLWMap({ mode = 'default' }) {
       try {
         const { data, error } = await supabase
           .from('campuses')
-          .select(`
-            id, name, institution, campus_name_alt, latitude, longitude, hub,
-            spotify_playlist_id, status, group_name, photo_url, province,
-            needs_plan, address, contact_name, contact_phone, notes, strategy,
-            prayer_notes, custom_photo, coverage_plan, prayer_points
-          `)
+          .select('id, name, institution, campus_name_alt, latitude, longitude, hub, spotify_playlist_id, status, group_name, photo_url')
           .order('name')
 
         if (!error && data) {
@@ -96,6 +84,7 @@ export function BLWMap({ mode = 'default' }) {
             lng: c.longitude,
             campus: c.name,
             group: c.group_name,
+            needs_plan: false, // Default value - can be added to DB later
           }))
           setCampuses(transformed)
         }
@@ -169,7 +158,7 @@ export function BLWMap({ mode = 'default' }) {
       const lng = parseFloat(campus.lng)
       if (isNaN(lat) || isNaN(lng)) return
 
-      const color = campus.needs_plan ? '#8430ce' : STATUS_COLORS[campus.status] || '#9aa0a6'
+      const color = STATUS_COLORS[campus.status] || '#9aa0a6'
       const isSelected = selectedCampus?.id === campus.id
 
       const icon = L.divIcon({
@@ -177,11 +166,10 @@ export function BLWMap({ mode = 'default' }) {
         html: `<div style="
           width: ${isSelected ? 18 : 12}px;
           height: ${isSelected ? 18 : 12}px;
-          border-radius: ${campus.needs_plan ? '2px' : '50%'};
+          border-radius: 50%;
           background: ${color};
           border: ${isSelected ? 3 : 2}px solid white;
           box-shadow: 0 1px ${isSelected ? 8 : 4}px rgba(0,0,0,0.25);
-          transform: ${campus.needs_plan ? 'rotate(45deg)' : 'none'};
           transition: all 0.2s;
         "></div>`,
         iconSize: [isSelected ? 18 : 12, isSelected ? 18 : 12],
@@ -195,9 +183,9 @@ export function BLWMap({ mode = 'default' }) {
       popupContent.innerHTML = `
         <div class="mpop-inst">${campus.institution}</div>
         ${campus.campus ? `<div class="mpop-campus">${campus.campus}</div>` : ''}
-        <div class="mpop-sub">${[campus.province, campus.group].filter(Boolean).join(' · ')}</div>
-        <div class="mpop-status" style="color: ${campus.needs_plan ? '#8430ce' : STATUS_COLORS[campus.status] || '#888'}">
-          ${campus.needs_plan ? '🔷 Needs Coverage Plan' : (STATUS_EMOJIS[campus.status] || '') + ' ' + campus.status}
+        <div class="mpop-sub">${[campus.hub, campus.group].filter(Boolean).join(' · ')}</div>
+        <div class="mpop-status" style="color: ${STATUS_COLORS[campus.status] || '#888'}">
+          ${(STATUS_EMOJIS[campus.status] || '•') + ' ' + campus.status}
         </div>
         <div class="mpop-hint">Click to open details →</div>
       `
@@ -222,16 +210,9 @@ export function BLWMap({ mode = 'default' }) {
     if (!selectedCampus) return
     setSaving(true)
     try {
+      // Only update fields that exist in the database
       const updates = {
-        status: panelEdits.status || selectedCampus.status,
-        contact_name: panelEdits.contact_name || selectedCampus.contact_name || '',
-        contact_phone: panelEdits.contact_phone || selectedCampus.contact_phone || '',
-        notes: panelEdits.notes || selectedCampus.notes || '',
-        strategy: panelEdits.strategy || selectedCampus.strategy || '',
-        prayer_notes: panelEdits.prayer_notes || selectedCampus.prayer_notes || '',
-        custom_photo: panelEdits.custom_photo || selectedCampus.custom_photo || '',
-        coverage_plan: panelEdits.coverage_plan || selectedCampus.coverage_plan || '',
-        prayer_points: panelEdits.prayer_points || selectedCampus.prayer_points || [],
+        status: panelEdits.status !== undefined ? panelEdits.status : selectedCampus.status,
       }
 
       await supabase.from('campuses').update(updates).eq('id', selectedCampus.id)
@@ -258,12 +239,9 @@ export function BLWMap({ mode = 'default' }) {
     )
   }
 
-  const established = filteredCampuses.filter((c) => c.status === 'Established Fellowship').length
-  const pioneering = filteredCampuses.filter((c) => c.status === 'Pioneering Fellowship').length
-  const influenced = filteredCampuses.filter((c) => c.status === 'Influenced').length
-  const notReached = filteredCampuses.filter((c) => c.status === 'Not Reached').length
-  const needsPlan = filteredCampuses.filter((c) => c.needs_plan).length
-  const coverage = filteredCampuses.length > 0 ? Math.round(((established + pioneering + influenced) / filteredCampuses.length) * 100) : 0
+  const active = filteredCampuses.filter((c) => c.status === 'active').length
+  const inactive = filteredCampuses.filter((c) => c.status === 'inactive').length
+  const coverage = filteredCampuses.length > 0 ? Math.round((active / filteredCampuses.length) * 100) : 0
 
   return (
     <div style={{ display: 'flex', height: '100%', position: 'relative', background: '#f1f3f4' }}>
@@ -297,33 +275,24 @@ export function BLWMap({ mode = 'default' }) {
           >
             All ({campuses.length})
           </button>
-          {Object.entries(STATUS_COLORS).map(([status, color]) => (
-            <button
-              key={status}
-              onClick={() => { setActiveFilter(status); setSelectedRegion(null) }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '5px', background: activeFilter === status ? 'rgba(26, 115, 232, 0.1)' : 'white',
-                border: 'none', borderRadius: '20px', padding: '5px 12px', fontFamily: 'DM Sans', fontSize: '12px', fontWeight: 500,
-                color: activeFilter === status ? '#1a73e8' : '#5f6368', cursor: 'pointer', boxShadow: '0 1px 3px rgba(60,64,67,.15), 0 4px 8px rgba(60,64,67,.1)',
-                transition: 'all 0.15s', whiteSpace: 'nowrap'
-              }}
-            >
-              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color }} />
-              {status.split(' ')[0]}
-            </button>
-          ))}
-          <button
-            onClick={() => { setActiveFilter('needs_plan'); setSelectedRegion(null) }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '5px', background: activeFilter === 'needs_plan' ? 'rgba(132, 48, 206, 0.1)' : 'white',
-              border: 'none', borderRadius: '20px', padding: '5px 12px', fontFamily: 'DM Sans', fontSize: '12px', fontWeight: 500,
-              color: activeFilter === 'needs_plan' ? '#8430ce' : '#5f6368', cursor: 'pointer', boxShadow: '0 1px 3px rgba(60,64,67,.15), 0 4px 8px rgba(60,64,67,.1)',
-              transition: 'all 0.15s', whiteSpace: 'nowrap'
-            }}
-          >
-            <span style={{ width: '6px', height: '6px', background: '#8430ce', transform: 'rotate(45deg)', borderRadius: '1px' }} />
-            Needs Plan
-          </button>
+          {['active', 'inactive'].map((status) => {
+            const color = STATUS_COLORS[status]
+            return (
+              <button
+                key={status}
+                onClick={() => { setActiveFilter(status); setSelectedRegion(null) }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '5px', background: activeFilter === status ? 'rgba(26, 115, 232, 0.1)' : 'white',
+                  border: 'none', borderRadius: '20px', padding: '5px 12px', fontFamily: 'DM Sans', fontSize: '12px', fontWeight: 500,
+                  color: activeFilter === status ? '#1a73e8' : '#5f6368', cursor: 'pointer', boxShadow: '0 1px 3px rgba(60,64,67,.15), 0 4px 8px rgba(60,64,67,.1)',
+                  transition: 'all 0.15s', whiteSpace: 'nowrap'
+                }}
+              >
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color }} />
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+              </button>
+            )
+          })}
         </div>
 
         {/* Map */}
@@ -337,15 +306,15 @@ export function BLWMap({ mode = 'default' }) {
           </div>
           <div style={{ padding: '0 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px', minWidth: '130px' }}>
             <div style={{ fontSize: '9px', color: '#9aa0a6', fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Reach</span><span>{coverage}%</span>
+              <span>Active</span><span>{coverage}%</span>
             </div>
             <div style={{ height: '4px', background: '#e8eaed', borderRadius: '2px', overflow: 'hidden' }}>
               <div style={{ height: '100%', background: 'linear-gradient(90deg, #1e8e3e, #34a853)', borderRadius: '2px', width: `${coverage}%`, transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }} />
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '8px 14px', borderLeft: '1px solid #f1f3f4', gap: '1px' }}>
-            <div style={{ fontSize: '17px', fontWeight: 700, color: '#202124', lineHeight: 1 }}>{needsPlan}</div>
-            <div style={{ fontSize: '9px', color: '#9aa0a6', fontWeight: 500, letterSpacing: '.03em', textTransform: 'uppercase' }}>Needs Plan</div>
+            <div style={{ fontSize: '17px', fontWeight: 700, color: '#202124', lineHeight: 1 }}>{inactive}</div>
+            <div style={{ fontSize: '9px', color: '#9aa0a6', fontWeight: 500, letterSpacing: '.03em', textTransform: 'uppercase' }}>Inactive</div>
           </div>
         </div>
       </div>
@@ -381,7 +350,7 @@ function CampusPanel({ campus, edits, onEdit, onSave, onClose, saving }) {
         <div>
           <div style={{ fontSize: '15px', fontWeight: 700, color: '#202124', lineHeight: 1.3 }}>{campus.institution}</div>
           <div style={{ fontSize: '12px', color: '#1a73e8', fontWeight: 500, marginTop: '2px' }}>{campus.campus || 'Main Campus'}</div>
-          <div style={{ fontSize: '11px', color: '#80868b', marginTop: '1px' }}>{[campus.province, campus.group].filter(Boolean).join(' · ')}</div>
+          <div style={{ fontSize: '11px', color: '#80868b', marginTop: '1px' }}>{campus.group || '—'}</div>
         </div>
         <button onClick={onClose} style={{ width: '28px', height: '28px', borderRadius: '50%', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#80868b', flexShrink: 0, transition: 'background 0.15s' }}>
           ✕
@@ -391,20 +360,15 @@ function CampusPanel({ campus, edits, onEdit, onSave, onClose, saving }) {
       {/* Badges */}
       <div style={{ padding: '10px 16px 0', display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
         {campus.status && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: '20px', padding: '3px 9px', fontSize: '11px', fontWeight: 600, background: `${STATUS_COLORS[campus.status]}20`, color: STATUS_COLORS[campus.status] }}>
-            {STATUS_EMOJIS[campus.status]} {campus.status}
-          </span>
-        )}
-        {campus.needs_plan && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: '20px', padding: '3px 9px', fontSize: '11px', fontWeight: 600, background: '#f3e8fd', color: '#8430ce' }}>
-            🔷 Needs Plan
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: '20px', padding: '3px 9px', fontSize: '11px', fontWeight: 600, background: `${STATUS_COLORS[campus.status] || '#bdc1c6'}20`, color: STATUS_COLORS[campus.status] || '#bdc1c6' }}>
+            {STATUS_EMOJIS[campus.status] || '•'} {campus.status}
           </span>
         )}
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid #e8eaed', flexShrink: 0, padding: '0 16px' }}>
-        {['info', 'notes', 'prayer', 'edit'].map((tab) => (
+        {['info', 'edit'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -414,7 +378,7 @@ function CampusPanel({ campus, edits, onEdit, onSave, onClose, saving }) {
               fontFamily: 'DM Sans', transition: 'all 0.15s', whiteSpace: 'nowrap'
             }}
           >
-            {tab === 'prayer' ? '🙏 Prayer' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </div>
@@ -430,83 +394,34 @@ function CampusPanel({ campus, edits, onEdit, onSave, onClose, saving }) {
                   <div style={{ fontSize: '13px', color: '#202124', fontWeight: 500 }}>{campus.hub || '—'}</div>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '2px' }}>Distance</div>
-                  <div style={{ fontSize: '13px', color: '#202124', fontWeight: 500 }}>—</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '2px' }}>Province</div>
-                  <div style={{ fontSize: '13px', color: '#202124', fontWeight: 500 }}>{campus.province || '—'}</div>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '2px' }}>Group</div>
                   <div style={{ fontSize: '13px', color: '#202124', fontWeight: 500 }}>{campus.group || '—'}</div>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '2px' }}>Address</div>
-                  <div style={{ fontSize: '11px', color: '#80868b' }}>{campus.address || '—'}</div>
+                  <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '2px' }}>Location</div>
+                  <div style={{ fontSize: '11px', color: '#80868b' }}>{campus.lat?.toFixed(4)}, {campus.lng?.toFixed(4)}</div>
                 </div>
               </div>
             </div>
-            {campus.contact_name || campus.contact_phone ? (
-              <div style={{ background: '#f8f9fa', borderRadius: '10px', padding: '11px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '2px' }}>Contact</div>
-                {campus.contact_name && <div style={{ fontSize: '13px', color: '#3c4043' }}>👤 {campus.contact_name}</div>}
-                {campus.contact_phone && <div style={{ fontSize: '13px', color: '#3c4043' }}>📱 {campus.contact_phone}</div>}
-              </div>
-            ) : null}
-          </>
-        )}
-
-        {activeTab === 'notes' && (
-          <>
-            {campus.notes && (
+            {campus.photo_url && (
               <div>
-                <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '6px' }}>Campus Notes</div>
-                <div style={{ fontSize: '13px', color: '#5f6368', lineHeight: 1.6, whiteSpace: 'pre-wrap', background: '#f8f9fa', borderRadius: '10px', padding: '11px 14px' }}>{campus.notes}</div>
+                <img src={campus.photo_url} alt={campus.institution} style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '10px' }} />
               </div>
             )}
-            {campus.strategy && (
+            {campus.spotify_playlist_id && (
               <div>
-                <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '6px' }}>Strategy</div>
-                <div style={{ fontSize: '13px', color: '#5f6368', lineHeight: 1.6, whiteSpace: 'pre-wrap', background: '#f8f9fa', borderRadius: '10px', padding: '11px 14px' }}>{campus.strategy}</div>
-              </div>
-            )}
-            {!campus.notes && !campus.strategy && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#bdc1c6', textAlign: 'center', padding: '32px 20px' }}>
-                <div style={{ fontSize: '12px', lineHeight: 1.5, color: '#9aa0a6' }}>No notes yet.<br/>Go to Edit to add notes.</div>
-              </div>
-            )}
-          </>
-        )}
-
-        {activeTab === 'prayer' && (
-          <>
-            {campus.prayer_points && campus.prayer_points.length > 0 ? (
-              <div>
-                <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '6px' }}>Prayer Points</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {campus.prayer_points.map((point, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', color: '#3c4043', background: '#f8f9fa', borderRadius: '8px', padding: '9px 12px', lineHeight: 1.4 }}>
-                      <span style={{ flex: 0 }}>🙏</span>
-                      <span>{point}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {campus.prayer_notes && (
-              <div>
-                <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '6px' }}>Prayer Notes</div>
-                <div style={{ fontSize: '13px', color: '#5f6368', lineHeight: 1.6, whiteSpace: 'pre-wrap', background: '#f8f9fa', borderRadius: '10px', padding: '11px 14px' }}>{campus.prayer_notes}</div>
-              </div>
-            )}
-            {!campus.prayer_points?.length && !campus.prayer_notes && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#bdc1c6', textAlign: 'center', padding: '32px 20px' }}>
-                <div style={{ fontSize: '12px', lineHeight: 1.5, color: '#9aa0a6' }}>No prayer points yet.<br/>Go to Edit to add them.</div>
+                <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '6px' }}>Worship Playlist</div>
+                <iframe
+                  src={`https://open.spotify.com/embed/playlist/${campus.spotify_playlist_id}`}
+                  width="100%"
+                  height="152"
+                  frameBorder="0"
+                  style={{ borderRadius: '8px' }}
+                  allowFullScreen={true}
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                />
               </div>
             )}
           </>
@@ -517,59 +432,14 @@ function CampusPanel({ campus, edits, onEdit, onSave, onClose, saving }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: '#5f6368', display: 'flex', alignItems: 'center', gap: '4px' }}>Status</label>
               <select
-                value={edits.status || campus.status || ''}
+                value={edits.status !== undefined ? edits.status : (campus.status || '')}
                 onChange={(e) => onEdit({ ...edits, status: e.target.value })}
                 style={{ fontFamily: 'DM Sans', fontSize: '12px', border: '1.5px solid #dadce0', borderRadius: '8px', padding: '8px 10px', color: '#202124', background: 'white', outline: 'none', transition: 'border-color 0.15s', width: '100%' }}
               >
-                {Object.keys(STATUS_COLORS).map((status) => (
-                  <option key={status} value={status}>{STATUS_EMOJIS[status]} {status}</option>
-                ))}
+                <option value="">Select status</option>
+                <option value="active">🟢 Active</option>
+                <option value="inactive">🔴 Inactive</option>
               </select>
-            </div>
-
-            <div style={{ height: '1px', background: '#f1f3f4' }} />
-            <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '6px' }}>Contact</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: '#5f6368' }}>Name</label>
-                <input
-                  type="text"
-                  placeholder="Contact name"
-                  value={edits.contact_name ?? campus.contact_name ?? ''}
-                  onChange={(e) => onEdit({ ...edits, contact_name: e.target.value })}
-                  style={{ fontFamily: 'DM Sans', fontSize: '12px', border: '1.5px solid #dadce0', borderRadius: '8px', padding: '8px 10px', color: '#202124', background: 'white', outline: 'none', transition: 'border-color 0.15s', width: '100%' }}
-                />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: '#5f6368' }}>Phone</label>
-                <input
-                  type="tel"
-                  placeholder="+1 000 000 0000"
-                  value={edits.contact_phone ?? campus.contact_phone ?? ''}
-                  onChange={(e) => onEdit({ ...edits, contact_phone: e.target.value })}
-                  style={{ fontFamily: 'DM Sans', fontSize: '12px', border: '1.5px solid #dadce0', borderRadius: '8px', padding: '8px 10px', color: '#202124', background: 'white', outline: 'none', transition: 'border-color 0.15s', width: '100%' }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: '#5f6368' }}>Campus Notes</label>
-              <textarea
-                placeholder="Visit history, open doors, challenges…"
-                value={edits.notes ?? campus.notes ?? ''}
-                onChange={(e) => onEdit({ ...edits, notes: e.target.value })}
-                style={{ fontFamily: 'DM Sans', fontSize: '12px', border: '1.5px solid #dadce0', borderRadius: '8px', padding: '8px 10px', color: '#202124', background: 'white', outline: 'none', transition: 'border-color 0.15s', width: '100%', resize: 'vertical', minHeight: '68px', lineHeight: 1.5 }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: '#5f6368' }}>Prayer Notes</label>
-              <textarea
-                placeholder="Intercession notes, scriptures, burdens…"
-                value={edits.prayer_notes ?? campus.prayer_notes ?? ''}
-                onChange={(e) => onEdit({ ...edits, prayer_notes: e.target.value })}
-                style={{ fontFamily: 'DM Sans', fontSize: '12px', border: '1.5px solid #dadce0', borderRadius: '8px', padding: '8px 10px', color: '#202124', background: 'white', outline: 'none', transition: 'border-color 0.15s', width: '100%', resize: 'vertical', minHeight: '68px', lineHeight: 1.5 }}
-              />
             </div>
 
             <button
