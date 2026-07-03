@@ -5,24 +5,11 @@ language sql
 stable
 set search_path = public
 as $$
-  with has_space_rows as (
-    select exists (
-      select 1
-      from public.task_status_definitions
-      where department_id = p_department_id
-    ) as value
-  )
   select tsd.*
   from public.task_status_definitions tsd
-  cross join has_space_rows hsr
-  where (
-    hsr.value = true
-    and tsd.department_id = p_department_id
-  ) or (
-    hsr.value = false
-    and tsd.department_id is null
-  )
-  order by tsd.sort_order asc, tsd.name asc;
+  where tsd.is_org_status = true
+    or tsd.department_id = p_department_id
+  order by tsd.is_org_status desc, tsd.sort_order asc, tsd.name asc;
 $$;
 
 grant execute on function public.get_space_statuses(uuid) to authenticated;
