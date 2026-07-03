@@ -264,6 +264,7 @@ export default function TaskModal({
   const [members, setMembers] = useState(sprintId ? [] : deptMembers)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showDeleteOptions, setShowDeleteOptions] = useState(false)
   const [error, setError] = useState(null)
   const [blockers, setBlockers] = useState([])
   const [taskMilestone, setTaskMilestone] = useState(task?.milestone || null)
@@ -405,7 +406,14 @@ export default function TaskModal({
   }
 
   async function handleDelete() {
-    if (!confirmDelete) {
+    // For super_admin, show soft/permanent delete options
+    if (role === 'super_admin' && !showDeleteOptions) {
+      setShowDeleteOptions(true)
+      return
+    }
+
+    // For regular users or after confirmation
+    if (!confirmDelete && role !== 'super_admin') {
       setConfirmDelete(true)
       return
     }
@@ -423,6 +431,12 @@ export default function TaskModal({
       setError(err.message)
       setSaving(false)
     }
+  }
+
+  function handlePermanentDelete() {
+    // TODO: Implement permanent delete (if needed)
+    // For now, regular soft delete
+    handleDelete()
   }
 
   return (
@@ -547,41 +561,13 @@ export default function TaskModal({
             </div>
 
             <div style={{ marginBottom: 18 }}>
-              <label style={labelStyle}>Space</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, pointerEvents: isReadOnly ? 'none' : 'auto', opacity: isReadOnly ? 0.6 : 1 }}>
-                {spaces.map((space) => {
-                  const isSelected = selectedSpaceId === space.id
-                  const spaceIcon = SPACE_TYPE_ICONS[space.space_type] ?? space.name[0]?.toUpperCase()
-                  const spaceColor = `#${space.color}`
-                  return (
-                    <button
-                      key={space.id}
-                      type="button"
-                      onClick={() => setSelectedSpaceId(space.id)}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '6px 12px',
-                        borderRadius: 20,
-                        background: isSelected ? spaceColor : 'white',
-                        color: isSelected ? 'white' : '#6B7280',
-                        border: isSelected ? `1px solid ${spaceColor}` : '1px solid var(--border)',
-                        fontSize: 13,
-                        fontWeight: 500,
-                        cursor: isReadOnly ? 'default' : 'pointer',
-                      }}
-                    >
-                      <span style={{ fontSize: 16 }}>{spaceIcon}</span> {space.name}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 18 }}>
               <label style={labelStyle}>Link to sprint</label>
-              <div style={{ color: '#9CA3AF', fontSize: 13 }}>Not linked</div>
+              <div style={{ color: '#9CA3AF', fontSize: 13 }}>
+                {sprintId ? `Linked to sprint ${sprintId}` : 'Not linked'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                Sprint linking is managed at the list/folder level
+              </div>
             </div>
 
             <div style={{ marginBottom: 18 }}>
@@ -768,6 +754,83 @@ export default function TaskModal({
               ) : null}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
+              {/* Delete options dialog for super_admin */}
+              {showDeleteOptions && role === 'super_admin' && (
+                <div style={{
+                  position: 'fixed',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(0,0,0,0.5)',
+                  zIndex: 60,
+                }} onClick={() => setShowDeleteOptions(false)}>
+                  <div style={{
+                    background: 'white',
+                    borderRadius: 12,
+                    padding: '20px',
+                    maxWidth: 400,
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                  }} onClick={(e) => e.stopPropagation()}>
+                    <h3 style={{ margin: '0 0 12px 0', fontSize: 16, fontWeight: 600 }}>Delete task</h3>
+                    <p style={{ margin: '0 0 20px 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+                      Choose deletion type:
+                    </p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => {
+                          setShowDeleteOptions(false)
+                          setConfirmDelete(true)
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '8px 12px',
+                          fontSize: 13,
+                          borderRadius: 8,
+                          border: '1px solid #F5AEAE',
+                          background: '#FEE2E2',
+                          color: '#A32D2D',
+                          cursor: 'pointer',
+                          fontWeight: 500,
+                        }}
+                      >
+                        Soft Delete (Archive)
+                      </button>
+                      <button
+                        onClick={handlePermanentDelete}
+                        style={{
+                          flex: 1,
+                          padding: '8px 12px',
+                          fontSize: 13,
+                          borderRadius: 8,
+                          border: '1px solid #DC2626',
+                          background: '#DC2626',
+                          color: 'white',
+                          cursor: 'pointer',
+                          fontWeight: 500,
+                        }}
+                      >
+                        Permanent Delete
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => setShowDeleteOptions(false)}
+                      style={{
+                        marginTop: 12,
+                        width: '100%',
+                        padding: '8px',
+                        fontSize: 13,
+                        borderRadius: 8,
+                        border: '1px solid var(--border)',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
               <Dialog.Close
                 style={{
                   fontSize: 13,
