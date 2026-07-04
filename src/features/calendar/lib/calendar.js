@@ -14,6 +14,7 @@ export async function getCalendarEvents(startDate, endDate) {
     .gte('start_date', startDate.toISOString())
     .lte('start_date', endDate.toISOString())
     .eq('status', 'approved')
+    .is('deleted_at', null)
     .order('start_date', { ascending: true })
 
   if (error) throw error
@@ -30,6 +31,7 @@ export async function getUpcomingEvents(limit = 5) {
     .gte('start_date', now.toISOString())
     .lte('start_date', future.toISOString())
     .eq('status', 'approved')
+    .is('deleted_at', null)
     .order('start_date', { ascending: true })
     .limit(limit)
 
@@ -69,7 +71,7 @@ export async function updateCalendarEvent(eventId, updates) {
 export async function deleteCalendarEvent(eventId) {
   const { error } = await supabase
     .from('calendar_events')
-    .delete()
+    .update({ deleted_at: new Date().toISOString(), synced_to_google: false })
     .eq('id', eventId)
 
   if (error) throw error
@@ -241,6 +243,7 @@ export async function getEventsBySubscriptionToken(token) {
     .from('calendar_events')
     .select('id, title, description, start_date, end_date, all_day, location, status')
     .eq('status', 'approved')
+    .is('deleted_at', null)
     .gte('start_date', new Date().toISOString())
 
   if (subscription.scope === 'department' && subscription.dept_id) {

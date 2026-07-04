@@ -189,6 +189,7 @@ export default function TopBar({ onOpenMobileMenu }) {
           .from('calendar_events')
           .select('id, title, start_date, event_type')
           .ilike('title', pattern)
+          .is('deleted_at', null)
           .limit(3),
       ])
         .then(([tasksResult, spacesResult, sprintsResult, eventsResult]) => {

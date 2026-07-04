@@ -11,7 +11,8 @@ import { supabase } from '../supabase.js';
 export async function fetchCalendarEvents(filters = {}) {
   let query = supabase
     .from('calendar_events')
-    .select('*');
+    .select('*')
+    .is('deleted_at', null);
 
   if (filters.space_id) {
     query = query.eq('space_id', filters.space_id);
@@ -95,12 +96,14 @@ export async function updateCalendarEvent(id, updates) {
 }
 
 /**
- * Delete a calendar event
+ * Soft-delete a calendar event.
+ * Sets deleted_at so the sync engine can propagate the deletion to Google
+ * on the next cron run before the row is eventually purged.
  */
 export async function deleteCalendarEvent(id) {
   const { error } = await supabase
     .from('calendar_events')
-    .delete()
+    .update({ deleted_at: new Date().toISOString(), synced_to_google: false })
     .eq('id', id);
 
   if (error) throw error;

@@ -115,7 +115,7 @@ export default function SearchModal() {
         supabase.from('tasks').select('id, title, status, priority, department_id, sprint_id, due_date').ilike('title', pattern).eq('is_personal', false).limit(5),
         supabase.from('departments').select('id, name, color').ilike('name', pattern).limit(3),
         supabase.from('sprints').select('id, name, status').ilike('name', pattern).neq('status', 'archived').limit(3),
-        supabase.from('calendar_events').select('id, title, start_date, event_type').ilike('title', pattern).limit(3),
+        supabase.from('calendar_events').select('id, title, start_date, event_type').ilike('title', pattern).is('deleted_at', null).limit(3),
       ]).then(([t, s, sp, e]) => {
         if (requestRef.current !== id) return
         setResults({

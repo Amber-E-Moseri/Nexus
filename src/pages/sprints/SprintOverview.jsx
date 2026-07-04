@@ -223,6 +223,7 @@ export default function SprintOverview() {
       .from('calendar_events')
       .select(CALENDAR_EVENT_SELECT)
       .eq('sprint_id', sprintId)
+      .is('deleted_at', null)
       .order('start_date', { ascending: true })
       .then(({ data, error }) => {
         if (error) throw error
@@ -280,6 +281,7 @@ export default function SprintOverview() {
         .from('calendar_events')
         .select(CALENDAR_EVENT_SELECT)
         .eq('sprint_id', sprintId)
+        .is('deleted_at', null)
         .order('start_date', { ascending: true })
 
       if (error) throw error
