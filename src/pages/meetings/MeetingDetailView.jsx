@@ -9,6 +9,7 @@ import AudioTranscriptionPanel from '../../features/meetings/components/AudioTra
 import MeetingDocsTab from '../../features/meetings/components/MeetingDocsTab'
 import MeetingSummaryEditor from '../../features/meetings/components/MeetingSummaryEditor'
 import GenerateMeetingDocButton from '../../features/meetings/components/GenerateMeetingDocButton'
+import { createTasksFromActionItems } from '../../features/meetings/lib/meetings'
 
 // exact colors from the HTML reference
 const FS = {
@@ -45,7 +46,7 @@ const TABS = [
 function MeetingDetailViewInner() {
   const { meetingId } = useParams()
   const navigate      = useNavigate()
-  const { role }      = useAuth()
+  const { role, profile } = useAuth()
 
   const [meeting, setMeeting]   = useState(null)
   const [agenda, setAgenda]     = useState([])
@@ -70,6 +71,9 @@ function MeetingDetailViewInner() {
   const [aiExtracting, setAiExtracting]         = useState(false)
   const [aiResult, setAiResult]                 = useState(null)
   const [aiError, setAiError]                   = useState('')
+  const [selectedAiActionItems, setSelectedAiActionItems] = useState(new Set())
+  const [mergingAiActions, setMergingAiActions] = useState(false)
+  const [aiMergeSuccess, setAiMergeSuccess]     = useState(false)
   const [editingTranscript, setEditingTranscript] = useState(false)
   const [editedTranscript, setEditedTranscript]   = useState('')
   const [savingTranscript, setSavingTranscript]   = useState(false)
@@ -275,6 +279,8 @@ function MeetingDetailViewInner() {
     setAiExtracting(true)
     setAiError('')
     setAiResult(null)
+    setSelectedAiActionItems(new Set())
+    setAiMergeSuccess(false)
     try {
       const { data, error } = await supabase.functions.invoke('extract-meeting-data', {
         body: { transcript, context: context || '' }
@@ -282,6 +288,9 @@ function MeetingDetailViewInner() {
       if (error) throw error
       const extracted = data?.extracted ?? null
       setAiResult(extracted)
+      if (extracted?.action_items?.length) {
+        setSelectedAiActionItems(new Set(extracted.action_items.map((_, i) => i)))
+      }
       // Save summary back to meeting
       if (extracted?.summary) {
         await supabase.from('meetings').update({ summary: extracted.summary }).eq('id', meetingId)
@@ -298,6 +307,42 @@ function MeetingDetailViewInner() {
       setAiError(err.message || 'Extraction failed.')
     } finally {
       setAiExtracting(false)
+    }
+  }
+
+  function toggleAiActionItem(i) {
+    setSelectedAiActionItems((prev) => {
+      const next = new Set(prev)
+      next.has(i) ? next.delete(i) : next.add(i)
+      return next
+    })
+  }
+
+  // Deliberately does NOT setActiveTab('actions') after a successful merge, unlike Path A
+  // (AudioTranscriptionPanel.jsx's handleMerge, wired via onActionItemsExtracted). Staying on
+  // this tab keeps the success banner visible for confirmation. Not an oversight — don't
+  // "fix" this to match Path A without a conscious call to do so.
+  async function handleAiActionItemsMerge() {
+    if (!aiResult?.action_items?.length || !meeting?.department_id) return
+    setMergingAiActions(true)
+    setAiError('')
+    try {
+      const items = aiResult.action_items
+        .filter((_, i) => selectedAiActionItems.has(i))
+        .map((item) => ({
+          title: item.title,
+          assigneeId: null,
+          dueDate: item.due_date ?? null,
+          description: item.owner && item.owner !== 'TBD' ? `Owner: ${item.owner}` : null,
+        }))
+      if (!items.length) { setMergingAiActions(false); return }
+      await createTasksFromActionItems(meetingId, meeting.department_id, items, profile?.id)
+      setAiMergeSuccess(true)
+      fetchActionItems()
+    } catch (err) {
+      setAiError(err.message || 'Failed to create tasks.')
+    } finally {
+      setMergingAiActions(false)
     }
   }
 
@@ -979,22 +1024,61 @@ function MeetingDetailViewInner() {
                       <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
                         <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>Decisions extracted</div>
                         <ul style={{ margin:0, paddingLeft:18 }}>
-                          {aiResult.decisions.map((d, i) => <li key={i} style={{ fontSize:13, color: FS.text, lineHeight:1.6, marginBottom:4 }}>{d}</li>)}
+                          {aiResult.decisions.map((d, i) => (
+                            <li key={i} style={{ fontSize:13, color: FS.text, lineHeight:1.6, marginBottom:4 }}>
+                              {typeof d === 'string' ? d : d.decision}
+                              {typeof d !== 'string' && d.context && (
+                                <div style={{ fontSize:11, color: FS.muted, marginTop:2 }}>{d.context}</div>
+                              )}
+                            </li>
+                          ))}
                         </ul>
-                        <button onClick={() => { setDecisionsText(aiResult.decisions.join('\n• ')); setActiveTab('minutes') }} style={{ marginTop:12, padding:'7px 14px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                        <button onClick={() => { setDecisionsText(aiResult.decisions.map(d => typeof d === 'string' ? d : d.decision).join('\n• ')); setActiveTab('minutes') }} style={{ marginTop:12, padding:'7px 14px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}>
                           → Copy to Minutes
                         </button>
                       </div>
                     )}
                     {aiResult.action_items?.length > 0 && (
                       <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
-                        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>Action items extracted</div>
-                        <ul style={{ margin:0, paddingLeft:18 }}>
-                          {aiResult.action_items.map((a, i) => <li key={i} style={{ fontSize:13, color: FS.text, lineHeight:1.6, marginBottom:4 }}>{typeof a === 'string' ? a : a.title}</li>)}
-                        </ul>
-                        <button onClick={() => setActiveTab('actions')} style={{ marginTop:12, padding:'7px 14px', border:'none', borderRadius:6, background: FS.purple, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}>
-                          → View Actions tab
-                        </button>
+                        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>Action items extracted — select to add to board</div>
+                        {aiResult.action_items.map((item, i) => (
+                          <label
+                            key={i}
+                            onClick={() => toggleAiActionItem(i)}
+                            style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'8px 10px', background: FS.surface, borderRadius:6, border:`1px solid ${selectedAiActionItems.has(i) ? FS.purple : FS.borderL}`, cursor:'pointer', marginBottom:6 }}
+                          >
+                            <input type="checkbox" checked={selectedAiActionItems.has(i)} onChange={() => toggleAiActionItem(i)} style={{ marginTop:2, cursor:'pointer', accentColor: FS.purple }} />
+                            <div>
+                              <div style={{ fontSize:13, fontWeight:600, color: FS.text }}>{typeof item === 'string' ? item : item.title}</div>
+                              {typeof item !== 'string' && (
+                                <div style={{ fontSize:11, color: FS.muted, marginTop:2 }}>
+                                  Owner: {item.owner || 'TBD'}{item.due_date ? ` · Due ${item.due_date}` : ''}
+                                </div>
+                              )}
+                            </div>
+                          </label>
+                        ))}
+
+                        {aiMergeSuccess && (
+                          <div style={{ marginTop:12, padding:'9px 14px', borderRadius:8, background: FS.sageL, color: FS.sage, fontSize:12, fontWeight:600, borderLeft:`3px solid ${FS.sage}` }}>
+                            ✅ {selectedAiActionItems.size} task{selectedAiActionItems.size !== 1 ? 's' : ''} added to the Actions board.
+                          </div>
+                        )}
+
+                        <div style={{ display:'flex', gap:8, marginTop:12 }}>
+                          {!aiMergeSuccess && (
+                            <button
+                              onClick={handleAiActionItemsMerge}
+                              disabled={selectedAiActionItems.size === 0 || mergingAiActions}
+                              style={{ padding:'7px 14px', border:'none', borderRadius:6, background: FS.purple, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor: selectedAiActionItems.size === 0 || mergingAiActions ? 'not-allowed' : 'pointer', opacity: selectedAiActionItems.size === 0 || mergingAiActions ? 0.6 : 1 }}
+                            >
+                              {mergingAiActions ? '⏳ Adding...' : `✓ Add ${selectedAiActionItems.size} item${selectedAiActionItems.size !== 1 ? 's' : ''} to board`}
+                            </button>
+                          )}
+                          <button onClick={() => setActiveTab('actions')} style={{ padding:'7px 14px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.navy, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                            → View Actions tab
+                          </button>
+                        </div>
                       </div>
                     )}
                   </>
