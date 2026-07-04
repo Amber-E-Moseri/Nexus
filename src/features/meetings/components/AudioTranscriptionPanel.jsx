@@ -186,10 +186,11 @@ export default function AudioTranscriptionPanel({
           try {
             const data = JSON.parse(line.slice(6))
             if (data.done) {
+              const wasTruncated = !!data.truncated
               // Parse final accumulated JSON
               try {
                 const result = JSON.parse(fullText)
-                setExtractedData(result)
+                setExtractedData({ ...result, truncated: wasTruncated })
                 if (result.action_items?.length) {
                   setSelectedActionItems(new Set(result.action_items.map((_, i) => i)))
                 }
@@ -199,7 +200,7 @@ export default function AudioTranscriptionPanel({
                 if (match) {
                   try {
                     const result = JSON.parse(match[1])
-                    setExtractedData(result)
+                    setExtractedData({ ...result, truncated: wasTruncated })
                     if (result.action_items?.length) {
                       setSelectedActionItems(new Set(result.action_items.map((_, i) => i)))
                     }
@@ -221,7 +222,12 @@ export default function AudioTranscriptionPanel({
           { body: { transcript: transcriptText, context: meetingContext || '' } }
         )
         if (!extractErr && extractData?.extracted) {
-          setExtractedData({ ...extractData.extracted, output_mode: extractData.output_mode, transcript: extractData.transcript || transcriptText })
+          setExtractedData({
+            ...extractData.extracted,
+            output_mode: extractData.output_mode,
+            transcript: extractData.transcript || transcriptText,
+            truncated: !!extractData.truncated,
+          })
           if (extractData.extracted.action_items?.length) {
             setSelectedActionItems(new Set(extractData.extracted.action_items.map((_, i) => i)))
           }
@@ -490,6 +496,7 @@ export default function AudioTranscriptionPanel({
     progressFill: { height: '100%', background: '#4C2A92', transition: 'width .3s' },
     error: { padding: '10px 14px', background: '#FEE8E6', borderRadius: 6, color: '#C73B2B', fontSize: 13, borderLeft: '3px solid #C73B2B', marginTop: 12 },
     success: { padding: '10px 14px', background: '#E8F5E9', borderRadius: 6, color: '#2E7D32', fontSize: 13, borderLeft: '3px solid #2E7D32', marginTop: 12 },
+    warning: { padding: '10px 14px', background: '#FEF0E6', borderRadius: 6, color: '#9E5C3C', fontSize: 13, borderLeft: '3px solid #E8A020', marginTop: 12 },
     transcriptBox: { padding: 14, background: '#fff', borderRadius: 6, border: '1px solid #E9E4D8', fontSize: 13, lineHeight: 1.7, maxHeight: 200, overflowY: 'auto', color: '#2D2A22' },
     extractSection: { marginTop: 16, padding: 16, background: '#F5F2ED', borderRadius: 6, border: '1px solid #E9E4D8' },
     extractLabel: { fontSize: 11, fontWeight: 700, color: '#4C2A92', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 },
@@ -722,6 +729,13 @@ function TranscriptCard({ transcript, extractedData, extracting, selectedItems, 
     <div style={s.card}>
       <h3 style={s.title}>Transcript</h3>
       <div style={s.transcriptBox}>{transcript}</div>
+
+      {extractedData?.truncated === true && (
+        <div style={s.warning}>
+          ⚠️ This meeting was long — only the first portion of the transcript was sent for extraction.
+          Some decisions or action items from later in the meeting may be missing below. The full transcript is shown above.
+        </div>
+      )}
 
       {/* WIN 3: spinner while streaming extraction runs */}
       {extracting && (

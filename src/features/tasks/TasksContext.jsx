@@ -67,6 +67,16 @@ export function TasksProvider({ departmentId, sprintId, children }) {
         }
       }
 
+      // Ensure "Not Started" is always included
+      const hasNotStarted = Array.from(statusMap.values()).some(s => s.name === 'Not Started')
+      if (!hasNotStarted && statusResults[0]) {
+        const notStartedStatus = statusResults[0].find(s => s.name === 'Not Started')
+        if (notStartedStatus) {
+          const key = `${notStartedStatus.category}:${notStartedStatus.legacy_key || notStartedStatus.name}`
+          statusMap.set(key, notStartedStatus)
+        }
+      }
+
       const finalStatuses = Array.from(statusMap.values())
       console.log('[TasksContext] Space/Sprint statuses:', {
         sprintId,

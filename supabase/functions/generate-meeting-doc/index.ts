@@ -3,6 +3,9 @@ import { serve } from 'https://deno.land/std@0.208.0/http/server.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID') ?? ''
+const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET') ?? ''
+const GOOGLE_REFRESH_TOKEN = Deno.env.get('GOOGLE_REFRESH_TOKEN') ?? ''
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +18,37 @@ function json(status: number, body: unknown) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
+}
+
+// Static GOOGLE_ACCESS_TOKEN secrets expire hourly. Exchange the long-lived
+// GOOGLE_REFRESH_TOKEN for a fresh access token on every invocation instead.
+async function getFreshAccessToken(): Promise<string> {
+  if (!GOOGLE_REFRESH_TOKEN || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    throw new Error('Google Drive not configured. Set GOOGLE_REFRESH_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET secrets.')
+  }
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      refresh_token: GOOGLE_REFRESH_TOKEN,
+      grant_type: 'refresh_token',
+    }),
+  })
+
+  if (!res.ok) {
+    const errBody = await res.text()
+    throw new Error(`Failed to refresh Google access token: ${errBody}`)
+  }
+
+  const tokens = await res.json()
+  if (!tokens.access_token) {
+    throw new Error(`Google token refresh returned no access_token: ${JSON.stringify(tokens)}`)
+  }
+
+  return tokens.access_token
 }
 
 async function getOrCreateFolder(
@@ -201,10 +235,7 @@ serve(async (req) => {
 
     if (!meetingId) return json(400, { error: 'meetingId is required' })
 
-    const accessToken = Deno.env.get('GOOGLE_ACCESS_TOKEN') ?? ''
-    if (!accessToken) {
-      return json(500, { error: 'Google Drive not configured. Set GOOGLE_ACCESS_TOKEN secret.' })
-    }
+    const accessToken = await getFreshAccessToken()
 
     // Build folder hierarchy: BLW Canada Meeting Minutes / YEAR / Month
     const d = new Date(date)

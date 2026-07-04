@@ -6,9 +6,11 @@ import { getUpcomingEvents } from '../features/calendar'
 import { PRIORITY_STYLES } from '../lib/priorities'
 import { getMySpaces } from '../features/spaces'
 import { getMySprints } from '../features/sprints/lib/sprints'
+import { getTaskById } from '../features/tasks'
 import { supabase } from '../lib/supabase'
 import SpaceModal from '../features/spaces/components/SpaceModal'
 import SprintModal from '../features/sprints/components/SprintModal'
+import TaskModal from '../features/tasks/components/TaskModal'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function greetingForHour() {
@@ -67,7 +69,7 @@ function KpiTile({ label, value, subtitle, bg, textColor = '#fff', subtitleColor
 }
 
 // ─── Task row ────────────────────────────────────────────────────────────────
-function TaskRow({ task }) {
+function TaskRow({ task, onClick }) {
   const p = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium
   const due = task.due_date ? new Date(task.due_date + 'T00:00:00') : null
   const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -75,7 +77,12 @@ function TaskRow({ task }) {
   const context = [task.department?.name, task.sprint?.name].filter(Boolean).join(' · ')
 
   return (
-    <div className="flex items-start gap-3 px-4 py-3 border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-secondary)] transition-colors">
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-start gap-3 px-4 py-3 border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-secondary)] transition-colors text-left"
+      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '12px 16px' }}
+    >
       <span className="mt-[7px] h-2 w-2 shrink-0 rounded-full" style={{ background: p.text }} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium text-[var(--text-primary)]">{task.title}</div>
@@ -93,7 +100,7 @@ function TaskRow({ task }) {
           </span>
         )}
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -229,6 +236,7 @@ export default function Home() {
   const [eventFilter, setEventFilter] = useState('all')
   const [showSpaceModal, setShowSpaceModal] = useState(false)
   const [showSprintModal, setShowSprintModal] = useState(false)
+  const [selectedTask, setSelectedTask] = useState(null)
 
   // My tasks (with sprint + dept context) — includes space and sprint tasks
   useEffect(() => {
@@ -306,6 +314,12 @@ export default function Home() {
   }
 
   useEffect(() => { loadSpaces() }, [profile?.id, profile?.department_id, role])
+
+  // Handle task row click to open task modal
+  async function handleTaskClick(task) {
+    const fullTask = await getTaskById(task.id)
+    setSelectedTask(fullTask)
+  }
 
   // Active sprints
   useEffect(() => {
@@ -396,7 +410,7 @@ export default function Home() {
               <div className="px-4 py-8 text-center text-sm text-[var(--text-tertiary)]">No open tasks assigned to you.</div>
             ) : (
               <div>
-                {myTasks.map(t => <TaskRow key={t.id} task={t} />)}
+                {myTasks.map(t => <TaskRow key={t.id} task={t} onClick={() => handleTaskClick(t)} />)}
               </div>
             )}
           </Card>
@@ -520,6 +534,15 @@ export default function Home() {
             getMySprints().then(sprints => setActiveSprintCount(sprints.filter(s => s.status === 'active').length)).catch(() => {})
           }}
           onClose={() => setShowSprintModal(false)}
+        />
+      )}
+
+      {selectedTask && (
+        <TaskModal
+          task={selectedTask}
+          departmentId={selectedTask.department_id}
+          sprintId={selectedTask.sprint_id}
+          onClose={() => setSelectedTask(null)}
         />
       )}
     </div>

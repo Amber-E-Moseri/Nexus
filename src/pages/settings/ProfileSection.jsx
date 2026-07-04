@@ -15,8 +15,6 @@ function getInitials(name = '') {
 export default function ProfileSection({
   name,
   setName,
-  subgroup,
-  setSubgroup,
   role,
   user,
   profile,
@@ -249,15 +247,6 @@ export default function ProfileSection({
             />
           </label>
 
-          <label className="space-y-1 md:col-span-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">Subgroup</span>
-            <input
-              className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm"
-              value={subgroup}
-              onChange={(event) => setSubgroup(event.target.value)}
-              placeholder="Optional team or subgroup"
-            />
-          </label>
         </div>
 
         {profileMessage ? <p className="mt-4 text-sm text-[var(--text-secondary)]">{profileMessage}</p> : null}

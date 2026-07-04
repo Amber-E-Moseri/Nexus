@@ -8,6 +8,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const MAX_TRANSCRIPT_CHARS = Number(Deno.env.get("MAX_TRANSCRIPT_CHARS")) || 60000;
+
 // Redis is optional — if secrets aren't set, caching is skipped but extraction still works
 let _redis: Redis | null = null;
 function getRedis(): Redis | null {
@@ -104,6 +106,8 @@ serve(async (req) => {
     // Step 1: Format participant data for validation
     const participantsJson = JSON.stringify(participants);
     const linkedSpacesJson = JSON.stringify(linked_spaces);
+    const truncated = transcript.length > MAX_TRANSCRIPT_CHARS;
+    const transcriptForPrompt = truncated ? transcript.slice(0, MAX_TRANSCRIPT_CHARS) : transcript;
 
     // Step 2: Build v2.1 system prompt with data validation + classification + extraction
     const systemPrompt = `SYSTEM PROMPT — extract-meeting-data (v2.1, merged classification + space validation)
@@ -211,7 +215,7 @@ Return ONLY valid JSON (no markdown, no extra text):
 Meeting context: ${context || "None"}
 
 Transcript:
-${transcript.slice(0, 8000)}`;
+${transcriptForPrompt}`;
 
     // Step 3: Call Claude with v2.1 prompt (single call, no classification pre-pass)
     const classifyPrompt = systemPrompt;
@@ -236,7 +240,7 @@ ${transcript.slice(0, 8000)}`;
         },
         body: JSON.stringify({
           model: "claude-haiku-4-5-20251001",
-          max_tokens: 1024,
+          max_tokens: 4096,
           stream: true,
           messages: [{ role: "user", content: prompt }],
         }),
@@ -277,7 +281,7 @@ ${transcript.slice(0, 8000)}`;
               }
             }
             controller.enqueue(
-              new TextEncoder().encode(`data: ${JSON.stringify({ done: true })}\n\n`)
+              new TextEncoder().encode(`data: ${JSON.stringify({ done: true, truncated })}\n\n`)
             );
           } catch (err) {
             controller.error(err);
@@ -298,11 +302,13 @@ ${transcript.slice(0, 8000)}`;
     }
 
     // ── NON-STREAMING path (unchanged + context support) ──────────────────
-    const transcriptHash = await hashTranscript(transcript + (context || ""));
+    const transcriptHash = await hashTranscript(
+      transcript + (context || "") + linkedSpacesJson + participantsJson + meeting_date
+    );
     const cached = await getCachedExtraction(transcriptHash);
     if (cached) {
       const outputMode = cached.content_type === "meeting" && cached.confidence >= 0.6 ? "organized" : "full_transcript";
-      return new Response(JSON.stringify({ success: true, extracted: cached, transcript, output_mode: outputMode, cached: true }), {
+      return new Response(JSON.stringify({ success: true, extracted: cached, transcript, output_mode: outputMode, cached: true, truncated }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -317,7 +323,7 @@ ${transcript.slice(0, 8000)}`;
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
+        max_tokens: 4096,
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -335,14 +341,26 @@ ${transcript.slice(0, 8000)}`;
       extracted = JSON.parse(text);
     } catch {
       const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-      extracted = match ? JSON.parse(match[1]) : { summary: text, decisions: [], action_items: [], key_topics: [] };
+      extracted = match
+        ? JSON.parse(match[1])
+        : {
+            content_type: null,
+            confidence: 0,
+            data_issues: [],
+            cleaned_transcript: null,
+            chapters: [],
+            summary: text,
+            decisions: [],
+            action_items: [],
+            key_topics: [],
+          };
     }
 
     await setCachedExtraction(transcriptHash, extracted);
 
     const outputMode = extracted.content_type === "meeting" && extracted.confidence >= 0.6 ? "organized" : "full_transcript";
 
-    return new Response(JSON.stringify({ success: true, extracted, transcript, output_mode: outputMode, cached: false }), {
+    return new Response(JSON.stringify({ success: true, extracted, transcript, output_mode: outputMode, cached: false, truncated }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

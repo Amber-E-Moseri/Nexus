@@ -34,7 +34,6 @@ export default function Settings() {
   const [departments, setDepartments] = useState([])
   const [prefs, setPrefs] = useState({})
   const [name, setName] = useState(profile?.name ?? '')
-  const [subgroup, setSubgroup] = useState(profile?.subgroup ?? '')
   const [profileMessage, setProfileMessage] = useState('')
   const [profileSaving, setProfileSaving] = useState(false)
   const [passwordMessage, setPasswordMessage] = useState('')
@@ -79,19 +78,15 @@ export default function Settings() {
 
   useEffect(() => {
     setName(profile?.name ?? '')
-    setSubgroup(profile?.subgroup ?? '')
-  }, [profile?.name, profile?.subgroup])
+  }, [profile?.name])
 
   useEffect(() => {
     let active = true
 
     async function loadSettingsData() {
-      const [nextDepartments, nextPrefs, ownRow, orgData] = await Promise.all([
+      const [nextDepartments, nextPrefs, orgData] = await Promise.all([
         listDepartments().catch(() => []),
         user?.id ? getNotificationPrefs(user.id).catch(() => ({})) : Promise.resolve({}),
-        profile?.id
-          ? supabase.from('users').select('subgroup').eq('id', profile.id).single().then(({ data }) => data).catch(() => null)
-          : Promise.resolve(null),
         role === 'super_admin'
           ? supabase.from('org_settings').select('id, org_name, timezone, logo_url').single().then(({ data }) => data).catch(() => null)
           : Promise.resolve(null),
@@ -101,10 +96,6 @@ export default function Settings() {
 
       setDepartments(nextDepartments)
       setPrefs(nextPrefs)
-
-      if (ownRow?.subgroup != null) {
-        setSubgroup(ownRow.subgroup)
-      }
 
       if (orgData) {
         setOrgSettings(orgData)
@@ -124,7 +115,6 @@ export default function Settings() {
     setProfileMessage('')
 
     const payload = { name: name.trim() }
-    if (subgroup !== undefined) payload.subgroup = subgroup.trim() || null
 
     const { error } = await supabase.from('users').update(payload).eq('id', profile.id)
 
@@ -351,8 +341,6 @@ export default function Settings() {
           <ProfileSection
             name={name}
             setName={setName}
-            subgroup={subgroup}
-            setSubgroup={setSubgroup}
             role={role}
             user={user}
             profile={profile}

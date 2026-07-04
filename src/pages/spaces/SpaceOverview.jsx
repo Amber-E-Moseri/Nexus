@@ -3,13 +3,13 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { SlidersHorizontal, Settings, GripVertical } from 'lucide-react'
-import { DndContext, closestCenter } from '@dnd-kit/core'
+import { DndContext, closestCenter, useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../../hooks/useAuth'
 import { getMonthEvents } from '../../features/calendar'
 import { hasPermission } from '../../lib/permissions'
-import { archiveSpace, canManageSpace, createFolder, createList, deleteFolder, deleteList, getFolders, getLists, getSpaceDetail, getSpaceListsCount, getSpaceMembers, getSpaceMeetings, getSpaceSprints, getSpaceTasks, restoreSpace, SPACE_TYPE_LABELS, updateFolder, updateList, updateSpace, updateTaskDueDate } from '../../features/spaces'
+import { archiveSpace, canManageSpace, createFolder, createList, deleteFolder, deleteList, getFolders, getLists, getSpaceDetail, getSpaceListsCount, getSpaceMembers, getSpaceMeetings, getSpaceSprints, getSpaceTasks, restoreSpace, SPACE_TYPE_LABELS, updateFolder, updateList, updateSpace, updateTaskDueDate, updateFolderVisibility, updateListVisibility, getFolderShares, getListShares, shareFolderWithUser, shareListWithUser, removeFolderShare, removeListShare } from '../../features/spaces'
 import { getTaskById } from '../../features/tasks'
 import Badge from '../../components/ui/Badge'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
@@ -356,9 +356,10 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
   )
 }
 
-function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, onMoveList }) {
+function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, onMoveList, onDelete }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({ id: list.id })
   const style = { transform: CSS.Transform.toString(transform), opacity: isDragging ? 0.5 : 1 }
+  const [menuOpen, setMenuOpen] = useState(false)
 
   return (
     <div ref={setNodeRef} style={style} className={['flex items-center gap-2 rounded-xl px-3 py-2', isSelected ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]' : ''].join(' ')}>
@@ -380,16 +381,173 @@ function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, on
         <span className="truncate">{list.name}</span>
       </button>
       {canEditList(list) ? (
-        <button
-          type="button"
-          onClick={() => onEdit(list)}
-          className="rounded-lg border border-[var(--border)] bg-white px-2 py-1 text-xs text-[var(--text-secondary)]"
-          aria-label={`Edit settings for ${list.name}`}
-          title="List settings"
-        >
-          <span aria-hidden="true">⚙️</span>
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="rounded-lg border border-[var(--border)] bg-white px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
+            aria-label={`Menu for ${list.name}`}
+            title="List options"
+          >
+            <span aria-hidden="true">⚙️</span>
+          </button>
+          {menuOpen ? (
+            <DropdownMenu.Root open={true} onOpenChange={setMenuOpen}>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  side="bottom"
+                  align="end"
+                  sideOffset={4}
+                  className="min-w-[120px] rounded-lg border border-[var(--border)] bg-white shadow-lg"
+                  style={{ zIndex: 50 }}
+                >
+                  <DropdownMenu.Item
+                    onSelect={() => { onEdit(list); setMenuOpen(false) }}
+                    className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none"
+                  >
+                    <span>✏️</span>
+                    <span>Edit</span>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onSelect={() => { onDelete?.(list); setMenuOpen(false) }}
+                    className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[#DC2626] hover:bg-[#FEE2E2] focus:outline-none"
+                  >
+                    <span>🗑️</span>
+                    <span>Delete</span>
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          ) : null}
+        </div>
       ) : null}
+    </div>
+  )
+}
+
+function UnfoldedListsDropZone({ lists, selectedListId, onSelectList, onEditList, canEditList, onMoveList, onDeleteList, onNewUnfoldedList, canManage }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'unfolded' })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={['rounded-2xl border-2 p-3 transition-colors', isOver ? 'border-[var(--accent)] bg-[var(--accent-light)]' : 'border-[var(--border)] bg-[var(--surface-tertiary)]'].join(' ')}
+    >
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="text-sm font-medium text-[var(--text-primary)]">Unfolded</div>
+        {canManage ? (
+          <button type="button" onClick={onNewUnfoldedList} className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs text-[var(--text-secondary)]">
+            + List
+          </button>
+        ) : null}
+      </div>
+      <div className="space-y-2">
+        {lists.map((list) => (
+          <DraggableListItem key={list.id} list={list} isSelected={selectedListId === list.id} onSelect={onSelectList} onEdit={onEditList} canEditList={canEditList} onMoveList={onMoveList} onDelete={onDeleteList} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DroppableFolder({ folder, isOpen, onToggle, onEdit, onDelete, canEditFolder, canManage, onNewList, children, onShare }) {
+  const { setNodeRef, isOver } = useDroppable({ id: folder.id })
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [updating, setUpdating] = useState(false)
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={['rounded-2xl border-2 p-3 transition-colors', isOver ? 'border-[var(--accent)] bg-[var(--accent-light)]' : 'border-[var(--border)] bg-[var(--surface-tertiary)]'].join(' ')}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <button type="button" onClick={onToggle} className="flex min-w-0 items-center gap-2 text-left text-sm font-medium text-[var(--text-primary)]">
+          <span>📁</span>
+          <span className="truncate">{folder.name}</span>
+        </button>
+        {(canEditFolder(folder) || canManage) ? (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
+              aria-label={`Menu for ${folder.name}`}
+              title="Folder options"
+            >
+              <span aria-hidden="true">⚙️</span>
+            </button>
+            {menuOpen ? (
+              <DropdownMenu.Root open={true} onOpenChange={setMenuOpen}>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    side="bottom"
+                    align="end"
+                    sideOffset={4}
+                    className="min-w-[160px] rounded-lg border border-[var(--border)] bg-white shadow-lg"
+                    style={{ zIndex: 50 }}
+                  >
+                    {canEditFolder(folder) ? (
+                      <>
+                        <DropdownMenu.Item
+                          onSelect={() => { onEdit(folder); setMenuOpen(false) }}
+                          className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none"
+                        >
+                          <span>✏️</span>
+                          <span>Edit</span>
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          onSelect={async () => {
+                            setUpdating(true)
+                            try {
+                              await updateFolderVisibility(folder.id, folder.visibility === 'public' ? 'private' : 'public')
+                            } catch (err) {
+                              console.error('Failed to update visibility:', err)
+                            }
+                            setUpdating(false)
+                            setMenuOpen(false)
+                          }}
+                          disabled={updating}
+                          className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none disabled:opacity-50"
+                        >
+                          <span>{folder.visibility === 'public' ? '🔓' : '🔒'}</span>
+                          <span>{folder.visibility === 'public' ? 'Make Private' : 'Make Public'}</span>
+                        </DropdownMenu.Item>
+                        {folder.visibility === 'private' ? (
+                          <DropdownMenu.Item
+                            onSelect={() => { onShare?.(folder); setMenuOpen(false) }}
+                            className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none"
+                          >
+                            <span>👥</span>
+                            <span>Share</span>
+                          </DropdownMenu.Item>
+                        ) : null}
+                        <DropdownMenu.Item
+                          onSelect={() => { onDelete?.(folder); setMenuOpen(false) }}
+                          className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[#DC2626] hover:bg-[#FEE2E2] focus:outline-none"
+                        >
+                          <span>🗑️</span>
+                          <span>Delete</span>
+                        </DropdownMenu.Item>
+                      </>
+                    ) : null}
+                    {canManage ? (
+                      <DropdownMenu.Item
+                        onSelect={() => { onNewList(folder); setMenuOpen(false) }}
+                        className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none"
+                      >
+                        <span>➕</span>
+                        <span>New List</span>
+                      </DropdownMenu.Item>
+                    ) : null}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {isOpen ? <div className="mt-3 space-y-2 pl-2">{children}</div> : null}
     </div>
   )
 }
@@ -432,94 +590,71 @@ function FolderTree({
     onMoveList?.(list.id, targetFolderId)
   }
 
+  const allListIds = lists.map((l) => l.id)
+
   return (
     <DndContext onDragEnd={handleDragEnd} collisionDetection={closestCenter}>
-      <div className="space-y-3">
-      <button
-        type="button"
-        onClick={() => onSelectList(null)}
-        className={[
-          'w-full rounded-xl border px-3 py-2 text-left text-sm',
-          selectedListId == null ? 'border-[var(--accent)] bg-[var(--accent-light)] text-[var(--accent)]' : 'border-[var(--border)] text-[var(--text-secondary)]',
-        ].join(' ')}
-      >
-        All tasks
-      </button>
+      <SortableContext items={allListIds} strategy={verticalListSortingStrategy}>
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => onSelectList(null)}
+            className={[
+              'w-full rounded-xl border px-3 py-2 text-left text-sm',
+              selectedListId == null ? 'border-[var(--accent)] bg-[var(--accent-light)] text-[var(--accent)]' : 'border-[var(--border)] text-[var(--text-secondary)]',
+            ].join(' ')}
+          >
+            All tasks
+          </button>
 
-      <div className="space-y-3">
-        {folders.map((folder) => {
-          const folderLists = listsByFolder[folder.id] ?? []
-          const open = openFolders[folder.id] ?? true
-          return (
-            <div key={folder.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-tertiary)] p-3">
-              <div className="flex items-center justify-between gap-2">
-                <button type="button" onClick={() => onToggleFolder(folder.id)} className="flex min-w-0 items-center gap-2 text-left text-sm font-medium text-[var(--text-primary)]">
-                  <span>📁</span>
-                  <span className="truncate">{folder.name}</span>
-                </button>
-                <div className="flex items-center gap-2">
-                  {canEditFolder(folder) ? (
-                    <button
-                      type="button"
-                      onClick={() => onEditFolder(folder)}
-                      className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs text-[var(--text-secondary)]"
-                      aria-label={`Edit settings for ${folder.name}`}
-                      title="Folder settings"
-                    >
-                      <span aria-hidden="true">⚙️</span>
-                    </button>
-                  ) : null}
-                  {canManage ? (
-                    <button type="button" onClick={() => onNewList(folder)} className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs text-[var(--text-secondary)]">
-                      + List
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-
-              {open ? (
-                <div className="mt-3 space-y-2 pl-2">
-                  <SortableContext items={folderLists.map((l) => l.id)} strategy={verticalListSortingStrategy}>
-                    {folderLists.map((list) => (
-                      <DraggableListItem key={list.id} list={list} isSelected={selectedListId === list.id} onSelect={onSelectList} onEdit={onEditList} canEditList={canEditList} onMoveList={onMoveList} />
-                    ))}
-                  </SortableContext>
+          <div className="space-y-3">
+            {folders.map((folder) => {
+              const folderLists = listsByFolder[folder.id] ?? []
+              const open = openFolders[folder.id] ?? true
+              return (
+                <DroppableFolder
+                  key={folder.id}
+                  folder={folder}
+                  isOpen={open}
+                  onToggle={() => onToggleFolder(folder.id)}
+                  onEdit={onEditFolder}
+                  onDelete={onDeleteFolder}
+                  canEditFolder={canEditFolder}
+                  canManage={canManage}
+                  onNewList={onNewList}
+                >
+                  {folderLists.map((list) => (
+                    <DraggableListItem key={list.id} list={list} isSelected={selectedListId === list.id} onSelect={onSelectList} onEdit={onEditList} canEditList={canEditList} onMoveList={onMoveList} onDelete={onDeleteList} />
+                  ))}
                   {folderLists.length === 0 ? <div className="rounded-xl bg-white px-3 py-2 text-xs text-[var(--text-tertiary)]">No lists in this folder yet.</div> : null}
-                </div>
-              ) : null}
-            </div>
-          )
-        })}
-      </div>
-
-      {folders.length === 0 ? <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-6 text-sm text-[var(--text-tertiary)]">No folders yet. Create one to organize lists in this space.</div> : null}
-
-      {unfoldedLists.length > 0 ? (
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-tertiary)] p-3">
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="text-sm font-medium text-[var(--text-primary)]">Unfolded</div>
-            {canManage ? (
-              <button type="button" onClick={onNewUnfoldedList} className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs text-[var(--text-secondary)]">
-                + List
-              </button>
-            ) : null}
+                </DroppableFolder>
+              )
+            })}
           </div>
-          <div className="space-y-2">
-            <SortableContext items={unfoldedLists.map((l) => l.id)} strategy={verticalListSortingStrategy}>
-              {unfoldedLists.map((list) => (
-                <DraggableListItem key={list.id} list={list} isSelected={selectedListId === list.id} onSelect={onSelectList} onEdit={onEditList} canEditList={canEditList} onMoveList={onMoveList} />
-              ))}
-            </SortableContext>
-          </div>
+
+          {folders.length === 0 ? <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-6 text-sm text-[var(--text-tertiary)]">No folders yet. Create one to organize lists in this space.</div> : null}
+
+          {unfoldedLists.length > 0 ? (
+            <UnfoldedListsDropZone
+              lists={unfoldedLists}
+              selectedListId={selectedListId}
+              onSelectList={onSelectList}
+              onEditList={onEditList}
+              canEditList={canEditList}
+              onMoveList={onMoveList}
+              onDeleteList={onDeleteList}
+              onNewUnfoldedList={onNewUnfoldedList}
+              canManage={canManage}
+            />
+          ) : null}
+
+          {canManage ? (
+            <button type="button" onClick={onNewFolder} className="w-full rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
+              + Add Folder
+            </button>
+          ) : null}
         </div>
-      ) : null}
-
-      {canManage ? (
-        <button type="button" onClick={onNewFolder} className="w-full rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
-          + Add Folder
-        </button>
-      ) : null}
-      </div>
+      </SortableContext>
     </DndContext>
   )
 }
@@ -663,6 +798,28 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
     }
   }
 
+  async function handleDeleteFolder(folder) {
+    if (!window.confirm(`Delete folder "${folder.name}"? This will also delete all lists inside it.`)) return
+    try {
+      await deleteFolder(folder.id)
+      await loadTree()
+    } catch (err) {
+      console.error('Failed to delete folder:', err)
+      window.alert(`Failed to delete folder: ${err.message}`)
+    }
+  }
+
+  async function handleDeleteList(list) {
+    if (!window.confirm(`Delete list "${list.name}"? This action cannot be undone.`)) return
+    try {
+      await deleteList(list.id)
+      await loadTree()
+    } catch (err) {
+      console.error('Failed to delete list:', err)
+      window.alert(`Failed to delete list: ${err.message}`)
+    }
+  }
+
   return (
     <>
       {treeLoading ? <div className="rounded-[24px] border border-[var(--border)] bg-white px-5 py-12 shadow-[var(--card-shadow)]"><LoadingSpinner label="Loading folders" /></div> : (
@@ -690,6 +847,8 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
           onNewList={(folder) => setListModalFolder(folder)}
           onNewUnfoldedList={() => setListModalFolder({ id: null, name: 'Unfolded' })}
           onMoveList={handleMoveList}
+          onDeleteFolder={handleDeleteFolder}
+          onDeleteList={handleDeleteList}
         />
       )}
 

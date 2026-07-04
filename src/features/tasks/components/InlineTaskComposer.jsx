@@ -30,7 +30,11 @@ export default function InlineTaskComposer({
   const [priority, setPriority] = useState('medium')
   const [dueDate, setDueDate] = useState('')
   const [assigneeId, setAssigneeId] = useState('')
-  const [statusId, setStatusId] = useState(statuses.filter(s => s.name !== 'Not Started').find(s => s.category === 'open')?.id ?? '')
+  const [statusId, setStatusId] = useState(() => {
+    const notStarted = statuses.find(s => s.name === 'Not Started')
+    if (notStarted) return notStarted.id
+    return statuses.find(s => s.category === 'open')?.id ?? ''
+  })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [subtasks, setSubtasks] = useState([])
@@ -221,7 +225,7 @@ export default function InlineTaskComposer({
             Status
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {statuses.filter(s => s.name !== 'Not Started').map((status) => {
+            {statuses.map((status) => {
               const active = statusId === status.id
               return (
                 <button

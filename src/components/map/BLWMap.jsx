@@ -19,7 +19,7 @@ const STATUS_COLORS = {
 
 const STATUS_EMOJIS = {
   'active': '✅',
-  'inactive': '🔴',
+  'inactive': '❌',
 }
 
 const HUB_COLORS = {
@@ -67,7 +67,7 @@ export function BLWMap({ mode = 'default' }) {
           c.name?.toLowerCase().includes(lower) ||
           c.institution?.toLowerCase().includes(lower) ||
           c.hub?.toLowerCase().includes(lower) ||
-          c.group?.toLowerCase().includes(lower)
+          c.group_name?.toLowerCase().includes(lower)
       )
     }
 
@@ -529,8 +529,8 @@ function CampusPanel({ campus, edits, onEdit, onSave, onClose, saving }) {
                 style={{ fontFamily: 'DM Sans', fontSize: '12px', border: '1.5px solid #dadce0', borderRadius: '8px', padding: '8px 10px', color: '#202124', background: 'white', outline: 'none', transition: 'border-color 0.15s', width: '100%' }}
               >
                 <option value="">Select status</option>
-                <option value="active">🟢 Active</option>
-                <option value="inactive">🔴 Inactive</option>
+                <option value="active">✅ Active</option>
+                <option value="inactive">❌ Inactive</option>
               </select>
             </div>
 

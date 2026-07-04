@@ -1125,7 +1125,7 @@ export default function Sidebar() {
             />
           </>
         ) : null}
-        {(['super_admin', 'ors'].includes(role) || hasFeatureRole(user, null, 'programs')) && (
+        {(['super_admin', 'ors'].includes(role) || hasFeatureRole(profile, null, 'programs')) && (
         <div
           style={{
             ...ITEM_BASE_STYLE,
@@ -1162,7 +1162,7 @@ export default function Sidebar() {
           </button>
         </div>
         )}
-        {(communicationsExpanded && (['super_admin', 'ors'].includes(role) || hasFeatureRole(user, null, 'programs'))) ? (
+        {(communicationsExpanded && (['super_admin', 'ors'].includes(role) || hasFeatureRole(profile, null, 'programs'))) ? (
           <>
             <SidebarItem
               active={isPathActive(location.pathname, '/communications/campaigns')}

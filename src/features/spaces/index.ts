@@ -30,4 +30,12 @@ export {
   getSpaceListsCount,
   updateTaskDueDate,
   getSpaceActivity,
+  updateFolderVisibility,
+  updateListVisibility,
+  getFolderShares,
+  getListShares,
+  shareFolderWithUser,
+  shareListWithUser,
+  removeFolderShare,
+  removeListShare,
 } from './lib/spaces'

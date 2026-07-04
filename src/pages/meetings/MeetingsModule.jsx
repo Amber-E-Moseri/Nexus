@@ -132,15 +132,15 @@ function MeetingsModuleFallback() {
 
 const TABS = [
   { key: 'meetings', label: 'Meetings' },
-  { key: 'report', label: 'Report' },
-  { key: 'roster', label: '⚙ Roster' },
+  { key: 'report', label: 'Report', roles: ['super_admin', 'ors', 'programs', 'regional_secretary'] },
+  { key: 'roster', label: '⚙ Roster', roles: ['super_admin', 'ors', 'programs', 'regional_secretary'] },
 ]
 
-function TabBar({ active, onChange }) {
+function TabBar({ active, onChange, visibleTabs }) {
   const isMobile = useMediaQuery('(max-width: 640px)')
   return (
     <div style={{ display: 'flex', gap: 0, padding: isMobile ? '0 12px' : '0 20px', background: '#FBF8F2', flexShrink: 0 }}>
-      {TABS.map((tab) => (
+      {visibleTabs.map((tab) => (
         <button
           key={tab.key}
           type="button"
@@ -167,22 +167,41 @@ function TabBar({ active, onChange }) {
 }
 
 export default function MeetingsModule() {
+  const { role, user } = useAuth()
   const meetingOsUrl = import.meta.env.VITE_MEETING_OS_URL
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [searchParams, setSearchParams] = useSearchParams()
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState('')
+
+  // Check if user has access to report/roster tabs
+  const canViewReportRoster = ['super_admin', 'ors', 'regional_secretary'].includes(role) ||
+    (role === 'dept_lead' && hasFeatureRole(user, selectedDepartmentId, 'programs'))
+
+  // Filter tabs based on user role
+  const visibleTabs = TABS.filter(tab => !tab.roles || tab.roles.includes(role) || (role === 'dept_lead' && tab.roles?.includes('programs') && hasFeatureRole(user, selectedDepartmentId, 'programs')))
+
   const [activeTab, setActiveTab] = useState(() => {
-    if (searchParams.get('report')) return 'report'
-    if (searchParams.get('tab') === 'roster') return 'roster'
-    return 'meetings'
+    const initial = searchParams.get('report') ? 'report' : searchParams.get('tab') === 'roster' ? 'roster' : 'meetings'
+    // If user doesn't have access to the requested tab, default to meetings
+    return visibleTabs.some(t => t.key === initial) ? initial : 'meetings'
   })
 
   useEffect(() => {
-    if (searchParams.get('report')) { setActiveTab('report'); return }
-    if (searchParams.get('tab') === 'roster') { setActiveTab('roster'); return }
-    setActiveTab('meetings')
-  }, [searchParams])
+    const requestedTab = searchParams.get('report') ? 'report' : searchParams.get('tab') === 'roster' ? 'roster' : 'meetings'
+    // If the requested tab is not visible to user, redirect to meetings
+    if (!visibleTabs.some(t => t.key === requestedTab)) {
+      setActiveTab('meetings')
+      return
+    }
+    setActiveTab(requestedTab)
+  }, [searchParams, visibleTabs])
 
   function handleTabChange(nextTab) {
+    // Prevent navigation to restricted tabs
+    if (!visibleTabs.some(t => t.key === nextTab)) {
+      setActiveTab('meetings')
+      return
+    }
     setActiveTab(nextTab)
     const nextParams = new URLSearchParams(searchParams)
 
@@ -245,7 +264,7 @@ export default function MeetingsModule() {
       </div>
 
       <div style={{ borderBottom: '1px solid #EDE8DC', flexShrink: 0 }} />
-      <TabBar active={activeTab} onChange={handleTabChange} />
+      <TabBar active={activeTab} onChange={handleTabChange} visibleTabs={visibleTabs} />
 
       {activeTab === 'report' ? (
         <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', background: '#FBF8F2' }}>

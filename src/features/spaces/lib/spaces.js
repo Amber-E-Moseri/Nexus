@@ -402,3 +402,89 @@ export async function getSpaceActivity(departmentId) {
   if (error) throw error
   return data ?? []
 }
+
+export async function updateFolderVisibility(folderId, visibility) {
+  const { data, error } = await supabase
+    .from('folders')
+    .update({ visibility })
+    .eq('id', folderId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function updateListVisibility(listId, visibility) {
+  const { data, error } = await supabase
+    .from('lists')
+    .update({ visibility })
+    .eq('id', listId)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function getFolderShares(folderId) {
+  const { data, error } = await supabase
+    .from('folder_shares')
+    .select('id, user_id, user:users!user_id(id, name, email)')
+    .eq('folder_id', folderId)
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getListShares(listId) {
+  const { data, error } = await supabase
+    .from('list_shares')
+    .select('id, user_id, user:users!user_id(id, name, email)')
+    .eq('list_id', listId)
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function shareFolderWithUser(folderId, userId) {
+  const { data, error } = await supabase
+    .from('folder_shares')
+    .insert({ folder_id: folderId, user_id: userId })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function shareListWithUser(listId, userId) {
+  const { data, error } = await supabase
+    .from('list_shares')
+    .insert({ list_id: listId, user_id: userId })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function removeFolderShare(folderId, userId) {
+  const { error } = await supabase
+    .from('folder_shares')
+    .delete()
+    .eq('folder_id', folderId)
+    .eq('user_id', userId)
+
+  if (error) throw error
+}
+
+export async function removeListShare(listId, userId) {
+  const { error } = await supabase
+    .from('list_shares')
+    .delete()
+    .eq('list_id', listId)
+    .eq('user_id', userId)
+
+  if (error) throw error
+}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { safeHref } from '../../lib/urlUtils'
+import { migrateIntegrationRow } from '../../lib/integrations/loadTransform'
 
 const INTEGRATION_TYPES = ['foundation_school', 'zoom', 'canva', 'google_drive', 'custom']
 const VISIBILITY_OPTIONS = ['all', 'super_admin', 'dept_lead']
@@ -34,7 +35,7 @@ function UserSelect({ value, onChange, users, multiple = false }) {
               }}
               className="rounded"
             />
-            {user.display_name || user.email}
+            {user.name || user.email}
           </label>
         ))}
       </div>
@@ -50,7 +51,7 @@ function UserSelect({ value, onChange, users, multiple = false }) {
       <option value="">All users (global)</option>
       {users.map((user) => (
         <option key={user.id} value={user.id}>
-          {user.display_name || user.email}
+          {user.name || user.email}
         </option>
       ))}
     </select>
@@ -324,7 +325,7 @@ export default function IntegrationsSection({ role, supabaseClient }) {
     try {
       const { data, error } = await supabaseClient
         .from('external_integrations')
-        .select('id, name, type, launch_url, description, icon_emoji, visible_to, enabled, show_in_sidebar, sort_order, department_id')
+        .select('id, name, type, launch_url, description, icon_emoji, visible_to, enabled, show_in_sidebar, sort_order, department_id, scope, department_ids, user_ids')
         .order('sort_order')
 
       if (error) {
@@ -338,13 +339,7 @@ export default function IntegrationsSection({ role, supabaseClient }) {
 
       console.log('Loaded integrations:', data?.length ?? 0, 'items')
 
-      // Transform data - add default values for new fields
-      const migratedData = (data ?? []).map((integration) => ({
-        ...integration,
-        scope: 'global',
-        department_ids: [],
-        user_ids: [],
-      }))
+      const migratedData = (data ?? []).map(migrateIntegrationRow)
 
       console.log('Migrated integrations:', migratedData.length, 'items')
       setIntegrations(migratedData)
@@ -370,8 +365,8 @@ export default function IntegrationsSection({ role, supabaseClient }) {
         .order('name'),
       supabaseClient
         .from('users')
-        .select('id, display_name, email')
-        .order('display_name'),
+        .select('id, name, email')
+        .order('name'),
     ]).then(([{ data: deptData }, { data: userData }]) => {
       setDepartments(deptData ?? [])
       setUsers(userData ?? [])

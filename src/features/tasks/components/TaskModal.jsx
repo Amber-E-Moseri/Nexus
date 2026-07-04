@@ -295,12 +295,33 @@ export default function TaskModal({
       return
     }
 
-    listTaskStatuses({ departmentId })
-      .then((nextStatuses) => {
-        setStatuses(nextStatuses)
-        setStatusId((current) => current || selectDefaultStatus(nextStatuses)?.id || '')
+    Promise.all([
+      listTaskStatuses({ departmentId }),
+      listTaskStatuses(), // Load global statuses to ensure "Not Started" is available
+    ])
+      .then(([deptStatuses, globalStatuses]) => {
+        // Merge and deduplicate: prefer dept-specific over global
+        const statusMap = new Map()
+        for (const status of globalStatuses) {
+          const key = `${status.category}:${status.legacy_key || status.name}`
+          statusMap.set(key, status)
+        }
+        for (const status of deptStatuses) {
+          const key = `${status.category}:${status.legacy_key || status.name}`
+          statusMap.set(key, status)
+        }
+
+        const merged = Array.from(statusMap.values())
+        console.log('[TaskModal] Merged statuses:', merged.map(s => ({ name: s.name, category: s.category, is_org: s.is_org_status })))
+        setStatuses(merged)
+        const defaultStatus = selectDefaultStatus(merged)
+        console.log('[TaskModal] Default status:', defaultStatus?.name)
+        setStatusId((current) => current || defaultStatus?.id || '')
       })
-      .catch(() => setStatuses([]))
+      .catch((err) => {
+        console.error('[TaskModal] Failed to load statuses:', err)
+        setStatuses([])
+      })
   }, [contextStatuses, departmentId])
 
   useEffect(() => {
