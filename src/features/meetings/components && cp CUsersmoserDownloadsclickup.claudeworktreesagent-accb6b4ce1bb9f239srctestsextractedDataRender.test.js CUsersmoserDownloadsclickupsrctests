@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../hooks/useAuth'
 import { createTasksFromActionItems } from '../lib/meetings'
-import { processSSELines } from '../../../lib/meetings/sseParser'
 
 // Accept any audio type — browser MIME strings vary (audio/x-m4a, audio/x-mpeg, etc.)
 const isAudioType = (type) => type.startsWith('audio/') || type === 'video/webm'
@@ -150,45 +149,6 @@ export default function AudioTranscriptionPanel({
 
   // ── Streaming extraction (WIN 3) ──────────────────────────────────────────────
 
-  /** Race any promise against a timeout; rejects with a clear message on expiry. */
-  const withTimeout = (promise, ms, label) =>
-    Promise.race([
-      promise,
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s — the server may be overloaded. Please try again.`)), ms)
-      ),
-    ])
-
-  /**
-   * Apply a parsed extraction result to React state.
-   * Returns true when a valid result was committed, false otherwise.
-   */
-  const applyExtractedResult = (fullText, wasTruncated) => {
-    // Try plain JSON first
-    try {
-      const result = JSON.parse(fullText)
-      setExtractedData({ ...result, truncated: wasTruncated })
-      if (result.action_items?.length) {
-        setSelectedActionItems(new Set(result.action_items.map((_, i) => i)))
-      }
-      return true
-    } catch { /* fall through */ }
-
-    // Claude sometimes wraps output in markdown fences — strip and retry
-    const match = fullText.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (match) {
-      try {
-        const result = JSON.parse(match[1])
-        setExtractedData({ ...result, truncated: wasTruncated })
-        if (result.action_items?.length) {
-          setSelectedActionItems(new Set(result.action_items.map((_, i) => i)))
-        }
-        return true
-      } catch { /* ignore */ }
-    }
-    return false
-  }
-
   const streamExtractMeetingData = async (transcriptText) => {
     setExtracting(true)
     setExtractedData(null)
@@ -215,62 +175,46 @@ export default function AudioTranscriptionPanel({
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let fullText = ''
-      let buffer = ''
-      let receivedDone = false
 
-      const streamingLoop = async () => {
-        while (true) {
-          const { value, done: streamDone } = await reader.read()
-          if (streamDone) break
-
-          // stream:true tells TextDecoder to buffer incomplete multi-byte chars
-          const rawChunk = decoder.decode(value, { stream: true })
-          const { updatedBuffer, events } = processSSELines(buffer, rawChunk)
-          buffer = updatedBuffer
-
-          for (const event of events) {
-            if (event.done) {
-              receivedDone = true
-              applyExtractedResult(fullText, !!event.truncated)
-            } else if (event.text) {
-              fullText += event.text
-            }
-          }
-
-          if (receivedDone) break
-        }
-
-        // Flush any remaining partial line after the stream closes cleanly
-        const remaining = buffer.trim()
-        if (!receivedDone && remaining.startsWith('data: ')) {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
           try {
-            const event = JSON.parse(remaining.slice(6))
-            if (event.done) {
-              receivedDone = true
-              applyExtractedResult(fullText, !!event.truncated)
-            } else if (event.text) {
-              fullText += event.text
+            const data = JSON.parse(line.slice(6))
+            if (data.done) {
+              const wasTruncated = !!data.truncated
+              // Parse final accumulated JSON
+              try {
+                const result = JSON.parse(fullText)
+                setExtractedData({ ...result, truncated: wasTruncated })
+                if (result.action_items?.length) {
+                  setSelectedActionItems(new Set(result.action_items.map((_, i) => i)))
+                }
+              } catch {
+                // Claude returned non-JSON — strip markdown fences
+                const match = fullText.match(/```(?:json)?\s*([\s\S]*?)```/)
+                if (match) {
+                  try {
+                    const result = JSON.parse(match[1])
+                    setExtractedData({ ...result, truncated: wasTruncated })
+                    if (result.action_items?.length) {
+                      setSelectedActionItems(new Set(result.action_items.map((_, i) => i)))
+                    }
+                  } catch { /* ignore */ }
+                }
+              }
+              return
             }
-          } catch (err) {
-            console.error('[streamExtract] Final buffer parse error:', err.message, { remaining })
-          }
-        }
-
-        if (!receivedDone) {
-          console.warn('[streamExtract] Stream closed without a done event — extraction may have failed')
+            if (data.text) fullText += data.text
+          } catch { /* skip malformed SSE */ }
         }
       }
-
-      await withTimeout(streamingLoop(), 120_000, 'streamExtractMeetingData')
     } catch (err) {
-      const isTimeout = err.message?.includes('timed out')
-      console.warn(
-        isTimeout ? '[streamExtract] Timed out — falling back to non-streaming' : 'Streaming extraction failed, falling back to non-streaming:',
-        err
-      )
-      if (isTimeout) {
-        setError(err.message)
-      }
+      console.warn('Streaming extraction failed, falling back to non-streaming:', err)
       // Fallback: non-streaming invoke
       try {
         const { data: extractData, error: extractErr } = await supabase.functions.invoke(
@@ -287,15 +231,8 @@ export default function AudioTranscriptionPanel({
           if (extractData.extracted.action_items?.length) {
             setSelectedActionItems(new Set(extractData.extracted.action_items.map((_, i) => i)))
           }
-          // Clear any timeout error if the fallback succeeded
-          if (isTimeout) setError('')
-        } else if (extractErr) {
-          setError('AI extraction failed. Please try again or extract manually.')
         }
-      } catch (fallbackErr) {
-        console.warn('[streamExtract] Fallback also failed:', fallbackErr)
-        setError('AI extraction is unavailable right now. Your transcript was saved successfully.')
-      }
+      } catch { /* extraction is optional */ }
     } finally {
       setExtracting(false)
     }

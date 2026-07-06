@@ -311,7 +311,7 @@ export default function Settings() {
         </p>
       </div>
 
-      <div role="tablist" className="flex flex-wrap border-b border-[var(--border)]">
+      <div role="tablist" className="flex border-b border-[var(--border)] overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
         {visibleTabs.map((tab) => {
           const tabId = tab.toLowerCase().replace(/\s+/g, '-')
           return (

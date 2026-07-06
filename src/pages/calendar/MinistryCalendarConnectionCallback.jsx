@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import { exchangeGoogleCodeForSpace } from '../../lib/calendar/api.js'
+import { exchangeMinistryCalendarConnectionCode } from '../../features/calendar/lib/calendar'
 
-export default function MinistryCalendarGoogleCallback() {
+// Callback for the Ministry Calendar's shared Google connection (one account
+// covers all sources — org calendar, Birthdays, Holidays, etc). Unlike the
+// old space-scoped callback, there's no spaceId/orgId in the OAuth state —
+// just a fixed marker, since this connection isn't scoped to anything.
+export default function MinistryCalendarConnectionCallback() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { profile } = useAuth()
@@ -14,16 +18,10 @@ export default function MinistryCalendarGoogleCallback() {
     async function handleCallback() {
       try {
         const code = searchParams.get('code')
-        const rawState = searchParams.get('state')
-
         if (!code) throw new Error(searchParams.get('error') || 'No authorization code received')
-        if (!rawState) throw new Error('Missing state parameter')
         if (!profile?.id) throw new Error('User not authenticated')
 
-        const { spaceId, orgId } = JSON.parse(atob(rawState))
-        if (!spaceId || !orgId) throw new Error('Invalid state: missing spaceId or orgId')
-
-        await exchangeGoogleCodeForSpace({ code, orgId, spaceId, userId: profile.id })
+        await exchangeMinistryCalendarConnectionCode({ code, userId: profile.id })
         setStatus('success')
         setTimeout(() => navigate('/calendar/settings'), 1500)
       } catch (err) {

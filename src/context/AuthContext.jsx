@@ -19,6 +19,12 @@ async function fetchProfile(userId) {
     .single()
 
   if (error) {
+    // PGRST116 = no rows returned — this user has an auth account but no public.users row.
+    // Try to self-heal by accepting any pending invitation for their email.
+    if (error.code === 'PGRST116') {
+      const { data: healed, error: healError } = await supabase.rpc('heal_pending_invitation_for_self')
+      if (!healError && healed) return healed
+    }
     throw error
   }
 

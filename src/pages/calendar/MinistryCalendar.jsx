@@ -9,6 +9,7 @@ import CalendarView from '../../features/calendar/components/CalendarView'
 import EventModal from '../../features/calendar/components/EventModal'
 import { EVENT_COLORS } from '../../features/calendar/components/CalendarEventCard'
 import EventSubmitModal from '../../features/calendar/components/EventSubmitModal'
+import CalendarSourcesPanel from '../../features/calendar/components/CalendarSourcesPanel'
 
 export default function MinistryCalendar() {
   const { effectiveRole, profile } = useAuth()
@@ -317,6 +318,8 @@ export default function MinistryCalendar() {
               ))}
             </div>
           </div>
+
+          <CalendarSourcesPanel />
 
           {/* Department Filter */}
           <div style={{

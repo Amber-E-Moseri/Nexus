@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { migrateIntegrationRow } from '../lib/integrations/loadTransform'
+import { migrateIntegrationRow, buildSavePayload } from '../lib/integrations/loadTransform'
 
 // Minimal valid row as Supabase would return it for a pre-migration record
 const BASE_ROW = {
@@ -159,6 +159,115 @@ describe('migrateIntegrationRow — loadIntegrations transform', () => {
       expect(results[0].department_ids).toEqual([])
       expect(results[2].department_ids).toEqual([])
       expect(results[3].department_ids).toEqual([])
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// buildSavePayload — scope-based sibling-field nulling
+// ---------------------------------------------------------------------------
+
+const BASE_DRAFT = {
+  id: 'int-1',
+  name: 'Test Integration',
+  type: 'custom',
+  launch_url: 'https://example.com',
+  description: 'A test',
+  icon_emoji: '🔗',
+  visible_to: 'all',
+  enabled: true,
+  show_in_sidebar: false,
+  sort_order: 1,
+}
+
+describe('buildSavePayload — scope-based sibling nulling', () => {
+  // -------------------------------------------------------------------------
+  // scope === 'global' — both arrays must be null in the DB payload
+  // -------------------------------------------------------------------------
+  describe('scope: global', () => {
+    test('department_ids is null even when draft has stale values', () => {
+      const draft = { ...BASE_DRAFT, scope: 'global', department_ids: ['dept-1'], user_ids: ['user-1'] }
+      expect(buildSavePayload(draft).department_ids).toBeNull()
+    })
+
+    test('user_ids is null even when draft has stale values', () => {
+      const draft = { ...BASE_DRAFT, scope: 'global', department_ids: ['dept-1'], user_ids: ['user-1'] }
+      expect(buildSavePayload(draft).user_ids).toBeNull()
+    })
+
+    test('scope field is preserved in payload', () => {
+      expect(buildSavePayload({ ...BASE_DRAFT, scope: 'global', department_ids: [], user_ids: [] }).scope).toBe('global')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // scope === 'departments' — department_ids preserved, user_ids nulled
+  // -------------------------------------------------------------------------
+  describe('scope: departments', () => {
+    const deptId1 = 'dept-aaaa-1111'
+    const deptId2 = 'dept-bbbb-2222'
+
+    test('department_ids is preserved in payload', () => {
+      const draft = { ...BASE_DRAFT, scope: 'departments', department_ids: [deptId1, deptId2], user_ids: [] }
+      expect(buildSavePayload(draft).department_ids).toEqual([deptId1, deptId2])
+    })
+
+    test('user_ids is null even when draft has stale values (scope switch scenario)', () => {
+      const draft = { ...BASE_DRAFT, scope: 'departments', department_ids: [deptId1], user_ids: ['user-old'] }
+      expect(buildSavePayload(draft).user_ids).toBeNull()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // scope === 'users' — user_ids preserved, department_ids nulled
+  // The key regression scenario: departments→users switch with populated dept IDs
+  // -------------------------------------------------------------------------
+  describe('scope: users', () => {
+    const userId = 'user-cccc-3333'
+
+    test('user_ids is preserved in payload', () => {
+      const draft = { ...BASE_DRAFT, scope: 'users', department_ids: [], user_ids: [userId] }
+      expect(buildSavePayload(draft).user_ids).toEqual([userId])
+    })
+
+    test('department_ids is null after switching from departments scope (regression)', () => {
+      // Simulate: was scope=departments with 2 depts, user switches to scope=users,
+      // picks 1 user, saves — the old department_ids must NOT bleed into the payload.
+      const draftAfterScopeSwitch = {
+        ...BASE_DRAFT,
+        scope: 'users',
+        department_ids: ['dept-aaaa-1111', 'dept-bbbb-2222'], // stale, still in UI state
+        user_ids: [userId],
+      }
+      expect(buildSavePayload(draftAfterScopeSwitch).department_ids).toBeNull()
+    })
+
+    test('full payload shape is correct after scope switch', () => {
+      const draft = {
+        ...BASE_DRAFT,
+        scope: 'users',
+        department_ids: ['dept-stale'],
+        user_ids: [userId],
+      }
+      const payload = buildSavePayload(draft)
+      expect(payload.scope).toBe('users')
+      expect(payload.user_ids).toEqual([userId])
+      expect(payload.department_ids).toBeNull()
+      expect(payload.name).toBe('Test Integration')
+      expect(payload.enabled).toBe(true)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // null/undefined draft values — graceful defaults
+  // -------------------------------------------------------------------------
+  describe('null/undefined scope in draft', () => {
+    test('null scope defaults to global and nulls both arrays', () => {
+      const draft = { ...BASE_DRAFT, scope: null, department_ids: ['dept-1'], user_ids: ['user-1'] }
+      const payload = buildSavePayload(draft)
+      expect(payload.scope).toBe('global')
+      expect(payload.department_ids).toBeNull()
+      expect(payload.user_ids).toBeNull()
     })
   })
 })

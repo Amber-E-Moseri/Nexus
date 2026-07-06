@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { safeHref } from '../../lib/urlUtils'
-import { migrateIntegrationRow } from '../../lib/integrations/loadTransform'
+import { migrateIntegrationRow, buildSavePayload } from '../../lib/integrations/loadTransform'
 
 const INTEGRATION_TYPES = ['foundation_school', 'zoom', 'canva', 'google_drive', 'custom']
 const VISIBILITY_OPTIONS = ['all', 'super_admin', 'dept_lead']
@@ -376,20 +376,7 @@ export default function IntegrationsSection({ role, supabaseClient }) {
   async function saveIntegration(integration) {
     setIntegrationSavingId(integration.id ?? integration.name)
 
-    const payload = {
-      name: integration.name.trim(),
-      type: integration.type,
-      launch_url: integration.launch_url.trim(),
-      description: integration.description?.trim() || null,
-      icon_emoji: integration.icon_emoji?.trim() || null,
-      visible_to: integration.visible_to,
-      enabled: Boolean(integration.enabled),
-      show_in_sidebar: Boolean(integration.show_in_sidebar),
-      sort_order: integration.sort_order ?? 0,
-      scope: integration.scope ?? 'global',
-      department_ids: integration.department_ids ?? [],
-      user_ids: integration.user_ids ?? [],
-    }
+    const payload = buildSavePayload(integration)
 
     try {
       console.log('Saving integration:', { id: integration.id, payload })

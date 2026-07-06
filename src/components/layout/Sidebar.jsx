@@ -116,9 +116,11 @@ function SidebarItem({
   trailing,
 }) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onClick?.() } }}
       style={{
         ...ITEM_BASE_STYLE,
         borderLeft: `3px solid ${active ? '#4C2A92' : 'transparent'}`,
@@ -157,7 +159,7 @@ function SidebarItem({
         </span>
       ) : null}
       {trailing ?? null}
-    </button>
+    </div>
   )
 }
 

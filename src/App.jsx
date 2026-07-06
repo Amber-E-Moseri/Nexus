@@ -63,7 +63,7 @@ const Settings = lazy(() => import('./pages/settings/Settings'))
 const IntegrationStatusPage = lazy(() => import('./pages/settings/IntegrationStatusPage'))
 const GoogleDriveAuthCallback = lazy(() => import('./pages/auth/GoogleDriveAuthCallback'))
 const GoogleCalendarCallback = lazy(() => import('./pages/auth/GoogleCalendarCallback'))
-const MinistryCalendarGoogleCallback = lazy(() => import('./pages/calendar/MinistryCalendarGoogleCallback'))
+const MinistryCalendarConnectionCallback = lazy(() => import('./pages/calendar/MinistryCalendarConnectionCallback'))
 const SlackCallback = lazy(() => import('./pages/auth/SlackCallback'))
 const OutlookCalendarCallback = lazy(() => import('./pages/auth/OutlookCalendarCallback'))
 const TeamsCallback = lazy(() => import('./pages/auth/TeamsCallback'))
@@ -101,7 +101,7 @@ export default function App() {
       <Route path="/accept-invite" element={<ActivateInvitation />} />
       <Route path="/auth/google-drive/callback" element={<GoogleDriveAuthCallback />} />
       <Route path="/auth/google_calendar-callback" element={<GoogleCalendarCallback />} />
-      <Route path="/auth/ministry-calendar-callback" element={<MinistryCalendarGoogleCallback />} />
+      <Route path="/auth/ministry-calendar-callback" element={<MinistryCalendarConnectionCallback />} />
       <Route path="/auth/slack-callback" element={<SlackCallback />} />
       <Route path="/auth/outlook_calendar-callback" element={<OutlookCalendarCallback />} />
       <Route path="/auth/teams-callback" element={<TeamsCallback />} />

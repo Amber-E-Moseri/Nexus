@@ -818,6 +818,7 @@ function MeetingDetailViewInner() {
                 {/* Live Recording */}
                 {canManage && (
                   <AudioTranscriptionPanel
+                    key={`record-${meetingId}`}
                     meetingId={meetingId}
                     departmentId={meeting.department_id}
                     canRecord={canManage}
@@ -833,6 +834,7 @@ function MeetingDetailViewInner() {
 
                 {/* Upload */}
                 <AudioTranscriptionPanel
+                  key={`upload-${meetingId}`}
                   meetingId={meetingId}
                   departmentId={meeting.department_id}
                   canRecord={false}
@@ -843,6 +845,7 @@ function MeetingDetailViewInner() {
 
                 {/* Paste transcript */}
                 <AudioTranscriptionPanel
+                  key={`paste-${meetingId}`}
                   meetingId={meetingId}
                   departmentId={meeting.department_id}
                   canRecord={false}

@@ -35,6 +35,84 @@ function greetingForHour() {
   return 'Good evening'
 }
 
+// ─── Org stats ───────────────────────────────────────────────────────────────
+
+function useOrgStats(userId) {
+  const [stats, setStats] = useState({ spaces: null, openTasks: null, myDue: null, activeSprints: null })
+
+  useEffect(() => {
+    if (!userId) return
+    let active = true
+
+    async function load() {
+      const [spacesRes, tasksRes, myDueRes, sprintsRes] = await Promise.all([
+        supabase.from('spaces').select('id', { count: 'exact', head: true }),
+        supabase.from('tasks').select('id', { count: 'exact', head: true })
+          .eq('is_personal', false).is('parent_task_id', null).is('completed_at', null),
+        supabase.from('tasks').select('id', { count: 'exact', head: true })
+          .eq('assigned_to', userId).is('completed_at', null).not('due_date', 'is', null),
+        supabase.from('sprints').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+      ])
+      if (!active) return
+      setStats({
+        spaces: spacesRes.count ?? 0,
+        openTasks: tasksRes.count ?? 0,
+        myDue: myDueRes.count ?? 0,
+        activeSprints: sprintsRes.count ?? 0,
+      })
+    }
+
+    load()
+    return () => { active = false }
+  }, [userId])
+
+  return stats
+}
+
+function HeroStatCard({ label, value, sub, bg, blobColor, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        background: bg,
+        borderRadius: 24,
+        padding: '28px 28px 24px',
+        border: 'none',
+        cursor: onClick ? 'pointer' : 'default',
+        textAlign: 'left',
+        width: '100%',
+        transition: 'filter .15s',
+      }}
+      onMouseEnter={(e) => { if (onClick) e.currentTarget.style.filter = 'brightness(1.07)' }}
+      onMouseLeave={(e) => { e.currentTarget.style.filter = 'none' }}
+    >
+      {/* decorative blob */}
+      <span style={{
+        position: 'absolute',
+        top: -28,
+        right: -28,
+        width: 130,
+        height: 130,
+        borderRadius: '50%',
+        background: blobColor,
+        pointerEvents: 'none',
+      }} />
+      <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 10, position: 'relative' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 64, fontWeight: 900, color: '#fff', lineHeight: 1, letterSpacing: '-0.03em', position: 'relative' }}>
+        {value ?? '—'}
+      </div>
+      <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.7)', marginTop: 8, fontWeight: 500, position: 'relative' }}>
+        {sub}
+      </div>
+    </button>
+  )
+}
+
 // ─── Inline widgets ───────────────────────────────────────────────────────────
 
 function MyTasksSummaryWidget({ userId }) {
@@ -446,6 +524,8 @@ export default function Dashboard() {
   const { profile, role } = useAuth()
   const { unreadCount } = useNotifications()
   const location = useLocation()
+  const orgStats = useOrgStats(profile?.id)
+  const navigate = useNavigate()
   const [prefs, setPrefs] = useState([])
   const [loadingPrefs, setLoadingPrefs] = useState(true)
   const [showCustomize, setShowCustomize] = useState(false)
@@ -546,12 +626,11 @@ export default function Dashboard() {
       <div className="space-y-5 pb-20">
         <section className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 style={{ fontSize: 21, fontWeight: 900, color: '#1C1610', margin: 0, letterSpacing: '-0.02em' }}>
-              {greetingForHour()}, {profile?.name?.split(' ')[0] ?? 'there'}
+            <h1 style={{ fontSize: 26, fontWeight: 900, color: '#1C1610', margin: 0, letterSpacing: '-0.025em' }}>
+              {greetingForHour()}, {profile?.name?.split(' ')[0] ?? 'there'} 👋
             </h1>
-            <p style={{ marginTop: 4, fontSize: 12.5, color: '#9E9488', margin: 0 }}>
-              {new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })}
-              {unreadCount > 0 ? ` · ${unreadCount} unread` : ''}
+            <p style={{ marginTop: 5, fontSize: 13, color: '#9E9488', margin: '5px 0 0' }}>
+              Keep ministry execution visible across departments, meetings, and follow-through.
             </p>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -577,6 +656,42 @@ export default function Dashboard() {
             </button>
           </div>
         </section>
+
+        {/* ── Hero stat cards ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+          <HeroStatCard
+            label="Active Spaces"
+            value={orgStats.spaces}
+            sub="across the org"
+            bg="#5B2F9E"
+            blobColor="rgba(255,255,255,.13)"
+            onClick={() => navigate('/spaces')}
+          />
+          <HeroStatCard
+            label="Open Tasks"
+            value={orgStats.openTasks}
+            sub="in progress & queued"
+            bg="#1E1040"
+            blobColor="rgba(255,255,255,.10)"
+            onClick={() => navigate('/my-tasks')}
+          />
+          <HeroStatCard
+            label="My Tasks Due"
+            value={orgStats.myDue}
+            sub="assigned to you"
+            bg="#D4920A"
+            blobColor="rgba(255,255,255,.15)"
+            onClick={() => navigate('/my-tasks')}
+          />
+          <HeroStatCard
+            label="Active Sprints"
+            value={orgStats.activeSprints}
+            sub="running now"
+            bg="#D4613A"
+            blobColor="rgba(255,255,255,.15)"
+            onClick={() => navigate('/sprints')}
+          />
+        </div>
 
         {visibleWidgets.length === 0 ? (
           <div

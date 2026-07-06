@@ -35,8 +35,4 @@ export {
   createEventType,
   updateEventType,
   deleteEventType,
-  createRegionalCalendarSync,
-  getRegionalCalendarSyncs,
-  syncRegionalCalendar,
-  disconnectRegionalCalendar,
 } from './lib/calendar'

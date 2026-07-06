@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import CalendarSettingsPanel from '../../features/calendar/components/CalendarSettingsPanel'
 import { SubscriptionManager } from '../../features/calendar/components'
-import { GoogleCalendarConnect } from '../../features/calendar/components'
+import { CalendarSourcesAdminPanel } from '../../features/calendar/components'
 import { CategoryVisibilityConfig } from '../../features/calendar/components'
 
 // Ministry Calendar settings.
@@ -17,7 +17,6 @@ export default function CalendarSettingsPage() {
   const navigate = useNavigate()
   const [programsMembers, setProgramsMembers] = useState([])
   const [membersLoaded, setMembersLoaded] = useState(false)
-  const [programsSpaceId, setProgramsSpaceId] = useState(null)
 
   useEffect(() => {
     async function loadProgramsMembers() {
@@ -31,7 +30,6 @@ export default function CalendarSettingsPage() {
         setMembersLoaded(true)
         return
       }
-      setProgramsSpaceId(dept.id)
 
       const { data: members } = await supabase
         .from('users')
@@ -109,7 +107,7 @@ export default function CalendarSettingsPage() {
 
           <SubscriptionManager userId={profile?.id} orgId={orgId} />
 
-          {orgId && programsSpaceId && <GoogleCalendarConnect orgId={orgId} spaceId={programsSpaceId} />}
+          <CalendarSourcesAdminPanel />
         </>
       )}
 

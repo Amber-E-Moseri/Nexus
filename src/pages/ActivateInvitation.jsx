@@ -6,7 +6,7 @@ import { acceptInvitation, previewInvitation } from '../lib/people/api'
 import { supabase } from '../lib/supabase'
 
 export default function ActivateInvitation() {
-  const { user, loading } = useAuth()
+  const { user, loading, refreshProfile } = useAuth()
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const token = params.get('token') ?? ''
@@ -77,16 +77,17 @@ export default function ActivateInvitation() {
 
     try {
       if (!emailMatchesSession) {
-        const { error: signUpError } = await supabase.auth.signUp({
-          email: invitation.email,
-          password,
-          options: {
-            emailRedirectTo: undefined, // Skip email confirmation
-          }
+        const createRes = await supabase.functions.invoke('create-invite-user', {
+          body: {
+            email: invitation.email,
+            password,
+            name: `${invitation.first_name} ${invitation.last_name}`.trim(),
+          },
         })
 
-        if (signUpError && !signUpError.message.toLowerCase().includes('already')) {
-          throw signUpError
+        if (createRes.error) {
+          const msg = createRes.error.message ?? 'Failed to create account'
+          if (!msg.toLowerCase().includes('already')) throw new Error(msg)
         }
 
         const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -100,6 +101,10 @@ export default function ActivateInvitation() {
       }
 
       await acceptInvitation(token)
+      // Force-reload the profile now that public.users exists.
+      // onAuthStateChange already ran during signInWithPassword (before the row
+      // existed), so without this the user lands on dashboard with profile = null.
+      await refreshProfile()
 
       if (invitation?.invited_by) {
         await createNotification(invitation.invited_by, 'invitation_accepted', {

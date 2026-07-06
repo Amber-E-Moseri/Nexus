@@ -48,9 +48,14 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     // ── 1. Validate token ────────────────────────────────────────────────────
+    // NOTE: reads dept_id, not the legacy department_id — subscriptions
+    // created since the dept_id/department_id drift fix (see
+    // 20261107000000_fix_calendar_subscriptions_column.sql) only populate
+    // dept_id, so reading department_id here silently dropped department
+    // scoping and leaked all-org events to department-scoped subscribers.
     const { data: subscription, error: subError } = await supabase
       .from("calendar_subscriptions")
-      .select("user_id, scope, department_id")
+      .select("user_id, scope, dept_id")
       .eq("token", token)
       .single()
 
@@ -86,18 +91,21 @@ serve(async (req) => {
     )
 
     // ── 5. Build the events query ────────────────────────────────────────────
+    // NOTE: filters out soft-deleted events (deleted_at) — previously missing,
+    // which let soft-deleted events keep appearing in exported iCal feeds.
     let baseQuery = supabase
       .from("calendar_events")
       .select(
-        "id, title, description, start_date, end_date, all_day, location, zoom_join_url, department_id, event_type"
+        "id, title, description, start_date, end_date, all_day, location, zoom_join_url, department_id, event_type, source_id"
       )
       .eq("status", "approved")
       .gte("start_date", new Date().toISOString())
+      .is("deleted_at", null)
 
-    if (subscription.scope === "department" && subscription.department_id) {
+    if (subscription.scope === "department" && subscription.dept_id) {
       // Department scope: own dept events + org-wide events (null department_id)
       baseQuery = baseQuery.or(
-        `department_id.eq.${subscription.department_id},department_id.is.null`
+        `department_id.eq.${subscription.dept_id},department_id.is.null`
       )
     }
 
@@ -111,6 +119,15 @@ serve(async (req) => {
       return new Response("Failed to fetch events", { status: 500 })
     }
 
+    // ── 5b. Exclude sources this subscriber has personally hidden ────────────
+    // Independent of the org-based category visibility below — user_calendar_
+    // source_preferences is per-user, not org-scoped. Events with source_id
+    // NULL (manually created, not Google-synced) always pass through.
+    const hiddenSourceIds = await getHiddenSourceIds(supabase, subscription.user_id)
+    const sourceFiltered = hiddenSourceIds.size
+      ? (allEvents || []).filter((e) => !e.source_id || !hiddenSourceIds.has(e.source_id))
+      : (allEvents || [])
+
     // ── 6. Apply role-based category visibility ──────────────────────────────
     // When the org has no visibility rules at all (hasAnyRules=false) we pass
     // everything through — this is backward compatible with orgs that have not
@@ -118,11 +135,11 @@ serve(async (req) => {
     // When rules exist, an event whose event_type is either in hiddenCategories
     // OR whose event_type is NULL (uncategorised) is excluded.
     const events = hasAnyRules
-      ? (allEvents || []).filter((e) => {
+      ? sourceFiltered.filter((e) => {
           const cat = e.event_type ?? ""
           return !hiddenCategories.has(cat)
         })
-      : (allEvents || [])
+      : sourceFiltered
 
     // ── 7. Emit iCalendar ────────────────────────────────────────────────────
     const ical = generateICalendar(events, subscription.scope)
@@ -164,6 +181,22 @@ async function getOrgId(supabase: any, userId: string): Promise<string | null> {
     .eq("id", userId)
     .maybeSingle()
   return user?.departments?.org_id ?? null
+}
+
+async function getHiddenSourceIds(supabase: any, userId: string): Promise<Set<string>> {
+  if (!userId) return new Set()
+  const { data, error } = await supabase
+    .from("user_calendar_source_preferences")
+    .select("source_id")
+    .eq("user_id", userId)
+    .eq("hidden", true)
+
+  if (error) {
+    console.error("user_calendar_source_preferences query error:", error)
+    return new Set()
+  }
+
+  return new Set((data || []).map((row: { source_id: string }) => row.source_id))
 }
 
 interface HiddenCategoriesResult {

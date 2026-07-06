@@ -44,6 +44,26 @@ Deno.serve(async (req) => {
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey)
 
+  // Provision the app-layer user row before inserting into sprint_members.
+  // sprint_members.user_id references public.users(id), so this must exist first.
+  const { error: profileError } = await adminClient
+    .from('users')
+    .upsert(
+      {
+        id: body.user_id,
+        email: body.email.toLowerCase(),
+        name: body.name || body.email.split('@')[0],
+        status: 'pending_activation',
+        is_temporary: true,
+      },
+      { onConflict: 'id' },
+    )
+
+  if (profileError) {
+    console.error('Failed to provision user profile:', profileError)
+    return jsonResponse(500, { error: `Failed to provision user profile: ${profileError.message}` })
+  }
+
   // Add user to sprint
   const { error: insertError } = await adminClient
     .from('sprint_members')

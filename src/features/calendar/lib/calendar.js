@@ -1,4 +1,3 @@
-import ICAL from 'ical.js'
 import { supabase } from '../../../lib/supabase'
 import { hasPermission } from '../../../lib/permissions'
 import { createNotification } from '../../notifications/lib/notifications'
@@ -386,195 +385,110 @@ export async function createEventDirectly(eventData, createdBy) {
     .single()
 
   if (error) throw error
-
-  if (status === 'approved' && eventData.space_id) {
-    try {
-      await triggerSpaceSync(eventData.space_id)
-    } catch (e) {
-      console.warn('Could not trigger sync:', e)
-    }
-  }
-
   return data
 }
 
-// ---- Regional Ministry Calendar Integration ----
+// ---- Ministry Calendar Sources (multi-source Google sync) ----
+// One shared OAuth connection covers all sources (Birthdays/Holidays/main
+// org calendar/etc are all visible via that account's calendarList).
 
-export async function createRegionalCalendarSync(payload) {
-  const {
-    org_id,
-    regional_calendar_name,
-    regional_calendar_url,
-    sync_direction = 'from_google', // Regional → BLW (read-only by default)
-    color = '#FF6B6B',
-    description = '',
-  } = payload
+export function getMinistryCalendarConnectOAuthUrl() {
+  const redirectUri = `${window.location.origin}/auth/ministry-calendar-callback`
+  const params = new URLSearchParams({
+    client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'https://www.googleapis.com/auth/calendar',
+    access_type: 'offline',
+    prompt: 'consent',
+    state: 'ministry_calendar_connection',
+  })
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`
+}
 
+export async function exchangeMinistryCalendarConnectionCode({ code, userId }) {
+  const redirectUri = `${window.location.origin}/auth/ministry-calendar-callback`
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: {
+      action: 'exchange_code_connection',
+      payload: { code, redirect_uri: redirectUri, user_id: userId },
+    },
+  })
+  if (error) throw new Error(error.message)
+  if (data?.error) throw new Error(data.error)
+  return data
+}
+
+export async function getMinistryCalendarConnectionStatus() {
   const { data, error } = await supabase
-    .from('regional_calendar_syncs')
-    .insert({
-      org_id,
-      regional_calendar_name,
-      regional_calendar_url,
-      sync_direction,
-      color,
-      description,
-      is_active: true,
-      connected_by: (await supabase.auth.getUser()).data.user.id,
-      connected_at: new Date().toISOString(),
-    })
-    .select()
-    .single()
+    .from('ministry_calendar_connection')
+    .select('id, connected_at, updated_at')
+    .maybeSingle()
 
   if (error) throw error
   return data
 }
 
-export async function getRegionalCalendarSyncs(orgId) {
+export async function listAvailableCalendarSources() {
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'list_available_calendars', payload: {} },
+  })
+  if (error) throw new Error(error.message)
+  if (data?.error) throw new Error(data.error)
+  return data.calendars ?? []
+}
+
+export async function getMinistryCalendarSources() {
   const { data, error } = await supabase
-    .from('regional_calendar_syncs')
+    .from('ministry_calendar_sources')
     .select('*')
-    .eq('org_id', orgId)
-    .eq('is_active', true)
-    .order('connected_at', { ascending: false })
+    .order('display_name')
 
   if (error) throw error
   return data ?? []
 }
 
-export async function syncRegionalCalendar(syncId) {
-  // Fetch events from regional calendar URL (iCal format)
-  // Parse and import into local calendar with regional tag
-  const { data: sync, error: fetchError } = await supabase
-    .from('regional_calendar_syncs')
-    .select('*')
-    .eq('id', syncId)
-    .single()
-
-  if (fetchError) throw fetchError
-
-  try {
-    // Fetch regional calendar (iCal format)
-    const response = await fetch(sync.regional_calendar_url)
-    const icalText = await response.text()
-
-    // Parse iCal and create events (simplified - full parser would be more complex)
-    const events = parseICalEvents(icalText)
-
-    // Bulk insert with regional tag
-    const { error: insertError } = await supabase
-      .from('calendar_events')
-      .insert(
-        events.map((e) => ({
-          ...e,
-          status: 'approved', // Regional events auto-approved
-          is_regional: true,
-          regional_sync_id: syncId,
-          color: sync.color,
-        }))
-      )
-
-    if (insertError) throw insertError
-
-    // Update last sync timestamp
-    await supabase
-      .from('regional_calendar_syncs')
-      .update({ last_synced_at: new Date().toISOString(), synced_count: events.length })
-      .eq('id', syncId)
-
-    return { synced: events.length, events }
-  } catch (err) {
-    throw new Error(`Failed to sync regional calendar: ${err.message}`)
-  }
+export async function addCalendarSource({ googleCalendarId, displayName, color, pushEnabled, createdBy }) {
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: {
+      action: 'add_source',
+      payload: {
+        google_calendar_id: googleCalendarId,
+        display_name: displayName,
+        color: color ?? null,
+        push_enabled: pushEnabled ?? false,
+        created_by: createdBy ?? null,
+      },
+    },
+  })
+  if (error) throw new Error(error.message)
+  if (data?.error) throw new Error(data.error)
+  return data.source
 }
 
-export async function disconnectRegionalCalendar(syncId) {
-  // Soft delete + remove associated events
-  const { data: sync } = await supabase
-    .from('regional_calendar_syncs')
-    .select('id')
-    .eq('id', syncId)
-    .single()
-
-  if (!sync) throw new Error('Sync not found')
-
-  // Remove regional events from this sync
-  await supabase
-    .from('calendar_events')
-    .delete()
-    .eq('regional_sync_id', syncId)
-    .eq('is_regional', true)
-
-  // Deactivate sync
-  const { error } = await supabase
-    .from('regional_calendar_syncs')
-    .update({ is_active: false, disconnected_at: new Date().toISOString() })
-    .eq('id', syncId)
-
-  if (error) throw error
+export async function updateCalendarSource(sourceId, updates) {
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'update_source', payload: { source_id: sourceId, ...updates } },
+  })
+  if (error) throw new Error(error.message)
+  if (data?.error) throw new Error(data.error)
+  return data.source
 }
 
-// Parse iCal text using ical.js — handles line folding, VTIMEZONE, VALARM,
-// recurring events, all-day events, and multi-line values correctly.
-function parseICalEvents(icalText) {
-  const events = []
-
-  let jcal
-  try {
-    jcal = ICAL.parse(icalText)
-  } catch (err) {
-    console.error('Failed to parse iCal data:', err)
-    return events
-  }
-
-  const comp = new ICAL.Component(jcal)
-  const vevents = comp.getAllSubcomponents('vevent')
-
-  for (const vevent of vevents) {
-    try {
-      const event = new ICAL.Event(vevent)
-
-      const dtstart = event.startDate
-      const dtend = event.endDate
-
-      // ical.js represents all-day dates as ICAL.Time with isDate=true
-      const allDay = dtstart?.isDate ?? false
-
-      const startIso = allDay
-        ? dtstart.toString() // e.g. "2026-07-15"
-        : dtstart?.toJSDate()?.toISOString() ?? null
-
-      const endIso = allDay
-        ? dtend?.toString() ?? startIso
-        : dtend?.toJSDate()?.toISOString() ?? startIso
-
-      if (!event.summary || !startIso) continue
-
-      events.push({
-        title: event.summary,
-        description: event.description || '',
-        start_date: startIso,
-        end_date: endIso,
-        location: event.location || '',
-        all_day: allDay,
-        department_id: null,
-        is_org_wide: true,
-        created_at: new Date().toISOString(),
-      })
-    } catch (err) {
-      console.warn('Skipped malformed VEVENT:', err)
-    }
-  }
-
-  return events
+export async function removeCalendarSource(sourceId) {
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'remove_source', payload: { source_id: sourceId } },
+  })
+  if (error) throw new Error(error.message)
+  if (data?.error) throw new Error(data.error)
+  return data
 }
 
-async function triggerSpaceSync(spaceId) {
-  try {
-    await supabase.functions.invoke('calendar-google-sync', {
-      body: { space_id: spaceId },
-    })
-  } catch (e) {
-    console.warn('Sync trigger failed:', e)
-  }
+export async function syncCalendarSource(sourceId) {
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'sync_one_source', payload: { source_id: sourceId } },
+  })
+  if (error) throw new Error(error.message)
+  if (data?.error) throw new Error(data.error)
+  return data
 }
