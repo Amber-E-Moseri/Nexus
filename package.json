@@ -20,6 +20,7 @@
     "@tailwindcss/vite": "^4.1.10",
     "date-fns": "^4.4.0",
     "esbuild": "^0.28.1",
+    "framer-motion": "^12.42.2",
     "html2canvas": "^1.4.1",
     "ical.js": "^2.2.1",
     "jspdf": "^4.2.1",

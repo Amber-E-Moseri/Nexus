@@ -25,6 +25,7 @@ import {
   Users2,
   Image,
 } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useInboxCount } from '../../context/InboxCountContext'
@@ -38,14 +39,16 @@ import SprintModal from '../../features/sprints/components/SprintModal'
 import { useSprints } from '../../features/sprints/SprintsContext'
 import { CACHE_KEYS, getItemSafe, setItemSafe } from '../../lib/cacheUtils'
 import { RegionalUpdateCompose } from '../../features/regional-updates/components/RegionalUpdateCompose'
+import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 
 const SECTION_LABEL_STYLE = {
   padding: '4px 9px 5px',
+  fontFamily: FONT_HEADING,
   fontSize: 9.5,
-  fontWeight: 700,
+  fontWeight: 600,
   textTransform: 'uppercase',
   letterSpacing: '0.14em',
-  color: '#B0A696',
+  color: 'var(--ink-3)',
 }
 
 const ITEM_BASE_STYLE = {
@@ -516,6 +519,7 @@ export default function Sidebar() {
         flexDirection: 'column',
         height: '100vh',
         flexShrink: 0,
+        fontFamily: FONT_BODY,
       }}
     >
       <div
@@ -678,29 +682,38 @@ export default function Sidebar() {
               ) : space.name}
               glyph={<SpaceGlyph color={space.color} label={space.name?.charAt(0)?.toUpperCase() ?? '?'} />}
               trailing={canManageSpaces && (hoveredSpaceId === space.id || quickAddSpaceId === space.id || openSpaceMenuId === space.id || openQuickAddMenuId === space.id) ? (
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <motion.div
+                  initial={{ opacity: 0, x: 4 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.14 }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                >
                   <DropdownMenu.Root open={openQuickAddMenuId === space.id} onOpenChange={(open) => setOpenQuickAddMenuId(open ? space.id : null)}>
                     <DropdownMenu.Trigger asChild>
-                      <button
+                      {/* Hex literals in motion targets mirror tokens (CSS vars
+                          aren't interpolable): #5F3BB8 = --purple-600 */}
+                      <motion.button
                         type="button"
                         onClick={(event) => event.stopPropagation()}
                         aria-label={`Add to ${space.name}`}
+                        whileHover={{ backgroundColor: '#5F3BB8', color: '#FFFFFF' }}
+                        whileTap={{ scale: 0.9 }}
                         style={{
                           width: 22,
                           height: 22,
                           border: 'none',
-                          background: openQuickAddMenuId === space.id ? '#F2EEE6' : 'transparent',
+                          background: openQuickAddMenuId === space.id ? '#5F3BB8' : 'rgba(95,59,184,0)',
                           borderRadius: 6,
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: openQuickAddMenuId === space.id ? '#4C2A92' : '#B0A696',
+                          color: openQuickAddMenuId === space.id ? '#FFFFFF' : '#6D6860',
                           cursor: 'pointer',
                           flexShrink: 0,
                         }}
                       >
                         <Plus size={14} />
-                      </button>
+                      </motion.button>
                     </DropdownMenu.Trigger>
                     <DropdownMenu.Portal>
                       <DropdownMenu.Content
@@ -712,7 +725,7 @@ export default function Sidebar() {
                         style={{
                           minWidth: 180,
                           background: '#FFFFFF',
-                          border: '1px solid #E9E4D8',
+                          border: '1px solid var(--border-1)',
                           borderRadius: 12,
                           boxShadow: '0 8px 28px rgba(28,22,16,.14)',
                           padding: 6,
@@ -725,7 +738,7 @@ export default function Sidebar() {
                             setQuickAddType('folder')
                             setQuickAddFolderName('')
                           }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                          className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                         >
                           <Folder size={14} />
                           <span>Create folder</span>
@@ -736,7 +749,7 @@ export default function Sidebar() {
                             setQuickAddType('list')
                             setQuickAddListName('')
                           }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                          className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                         >
                           <LayoutGrid size={14} />
                           <span>Create list</span>
@@ -746,26 +759,28 @@ export default function Sidebar() {
                   </DropdownMenu.Root>
                   <DropdownMenu.Root open={openSpaceMenuId === space.id} onOpenChange={(open) => setOpenSpaceMenuId(open ? space.id : null)}>
                     <DropdownMenu.Trigger asChild>
-                      <button
+                      <motion.button
                         type="button"
                         onClick={(event) => event.stopPropagation()}
                         aria-label={`More options for ${space.name}`}
+                        whileHover={{ backgroundColor: '#5F3BB8', color: '#FFFFFF' }}
+                        whileTap={{ scale: 0.9 }}
                         style={{
                           width: 22,
                           height: 22,
                           border: 'none',
-                          background: openSpaceMenuId === space.id ? '#F2EEE6' : 'transparent',
+                          background: openSpaceMenuId === space.id ? '#5F3BB8' : 'rgba(95,59,184,0)',
                           borderRadius: 6,
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: openSpaceMenuId === space.id ? '#4C2A92' : '#B0A696',
+                          color: openSpaceMenuId === space.id ? '#FFFFFF' : '#6D6860',
                           cursor: 'pointer',
                           flexShrink: 0,
                         }}
                       >
                         <MoreHorizontal size={14} />
-                      </button>
+                      </motion.button>
                     </DropdownMenu.Trigger>
                     <DropdownMenu.Portal>
                       <DropdownMenu.Content
@@ -777,7 +792,7 @@ export default function Sidebar() {
                         style={{
                           minWidth: 196,
                           background: '#FFFFFF',
-                          border: '1px solid #E9E4D8',
+                          border: '1px solid var(--border-1)',
                           borderRadius: 12,
                           boxShadow: '0 8px 28px rgba(28,22,16,.14)',
                           padding: 6,
@@ -789,21 +804,21 @@ export default function Sidebar() {
                             setInlineRenameId(space.id)
                             setInlineRenameValue(space.name)
                           }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                          className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                         >
                           <Pencil size={14} />
                           <span>Rename</span>
                         </DropdownMenu.Item>
                         <DropdownMenu.Item
                           onSelect={() => navigate(`/dept/${slugifySpaceName(space.slug ?? space.name)}`)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                          className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                         >
                           <Settings size={14} />
                           <span>Task Statuses</span>
                         </DropdownMenu.Item>
                         <DropdownMenu.Item
                           onSelect={() => handleHideSpace(space.id)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                          className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                         >
                           <EyeOff size={14} />
                           <span>Hide Space</span>
@@ -817,7 +832,7 @@ export default function Sidebar() {
                                 handleArchiveSpace(space).catch(console.error)
                               }
                             }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                            className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                           >
                             <Archive size={14} />
                             <span>{space.status === 'archived' ? 'Restore' : 'Archive'}</span>
@@ -826,7 +841,7 @@ export default function Sidebar() {
                         {role === 'super_admin' ? (
                           <DropdownMenu.Item
                             onSelect={() => handleDeleteSpace(space).catch(console.error)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none', color: '#C94830' }}
+                            className="cu-menu-item cu-menu-item-danger" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none', color: 'var(--accent-red)' }}
                           >
                             <Trash2 size={14} />
                             <span>Delete</span>
@@ -835,18 +850,21 @@ export default function Sidebar() {
                       </DropdownMenu.Content>
                     </DropdownMenu.Portal>
                   </DropdownMenu.Root>
-                </div>
+                </motion.div>
               ) : null}
               onClick={() => go(`/spaces/${space.id}`)}
             />
             {quickAddSpaceId === space.id ? (
-              <div
+              <motion.div
+                initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 480, damping: 34 }}
                 style={{
                   marginTop: 4,
                   marginLeft: 34,
                   marginRight: 8,
                   background: '#FFFFFF',
-                  border: '1px solid #E9E4D8',
+                  border: '1px solid var(--border-1)',
                   borderRadius: 10,
                   padding: 10,
                   boxShadow: '0 8px 28px rgba(28,22,16,.10)',
@@ -885,8 +903,8 @@ export default function Sidebar() {
                     background: '#FFFFFF',
                   }}
                 />
-                <div style={{ marginTop: 8, fontSize: 11, color: '#B0A696' }}>{quickAddSaving ? 'Saving…' : 'Press Enter to save'}</div>
-              </div>
+                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--ink-3)' }}>{quickAddSaving ? 'Saving…' : 'Press Enter to save'}</div>
+              </motion.div>
             ) : null}
             <SidebarSpaceTree spaceId={space.id} spaceName={space.name} isActive={isPathActive(location.pathname, `/spaces/${space.id}`)} />
           </div>
@@ -925,7 +943,7 @@ export default function Sidebar() {
                       label={space.name}
                       glyph={<SpaceGlyph color={space.color} label={space.name?.charAt(0)?.toUpperCase() ?? '?'} />}
                       trailing={canManageSpaces ? (
-                        <button
+                        <motion.button
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation()
@@ -933,27 +951,24 @@ export default function Sidebar() {
                           }}
                           aria-label={`More options for ${space.name}`}
                           title={`More options for ${space.name}`}
+                          whileHover={{ backgroundColor: '#5F3BB8', color: '#FFFFFF' }}
+                          whileTap={{ scale: 0.9 }}
                           style={{
                             width: 22,
                             height: 22,
                             border: 'none',
-                            background: openSpaceMenuId === space.id ? '#F2EEE6' : 'transparent',
+                            background: openSpaceMenuId === space.id ? '#5F3BB8' : 'rgba(95,59,184,0)',
                             borderRadius: 6,
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: openSpaceMenuId === space.id ? '#4C2A92' : '#B0A696',
+                            color: openSpaceMenuId === space.id ? '#FFFFFF' : '#6D6860',
                             cursor: 'pointer',
                             flexShrink: 0,
                           }}
-                          onMouseEnter={(event) => { event.currentTarget.style.background = '#F2EEE6'; event.currentTarget.style.color = '#4C2A92' }}
-                          onMouseLeave={(event) => {
-                            event.currentTarget.style.background = openSpaceMenuId === space.id ? '#F2EEE6' : 'transparent'
-                            event.currentTarget.style.color = openSpaceMenuId === space.id ? '#4C2A92' : '#B0A696'
-                          }}
                         >
                           <MoreHorizontal size={14} />
-                        </button>
+                        </motion.button>
                       ) : null}
                       onClick={() => go(`/spaces/${space.id}`)}
                     />
@@ -969,7 +984,7 @@ export default function Sidebar() {
                             style={{
                               minWidth: 196,
                               background: '#FFFFFF',
-                              border: '1px solid #E9E4D8',
+                              border: '1px solid var(--border-1)',
                               borderRadius: 12,
                               boxShadow: '0 8px 28px rgba(28,22,16,.14)',
                               padding: 6,
@@ -981,21 +996,21 @@ export default function Sidebar() {
                                 setInlineRenameId(space.id)
                                 setInlineRenameValue(space.name)
                               }}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                              className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                             >
                               <Pencil size={14} />
                               <span>Rename</span>
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
                               onSelect={() => navigate(`/dept/${slugifySpaceName(space.slug ?? space.name)}?openStatuses=true`)}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                              className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                             >
                               <Settings size={14} />
                               <span>Task Statuses</span>
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
                               onSelect={() => handleHideSpace(space.id)}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                              className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                             >
                               <EyeOff size={14} />
                               <span>Hide Space</span>
@@ -1009,7 +1024,7 @@ export default function Sidebar() {
                                     handleArchiveSpace(space).catch(console.error)
                                   }
                                 }}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                                className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                               >
                                 <Archive size={14} />
                                 <span>{space.status === 'archived' ? 'Restore' : 'Archive'}</span>
@@ -1018,7 +1033,7 @@ export default function Sidebar() {
                             {role === 'super_admin' ? (
                               <DropdownMenu.Item
                                 onSelect={() => handleDeleteSpace(space).catch(console.error)}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none', color: '#C94830' }}
+                                className="cu-menu-item cu-menu-item-danger" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none', color: 'var(--accent-red)' }}
                               >
                                 <Trash2 size={14} />
                                 <span>Delete</span>

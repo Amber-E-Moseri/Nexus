@@ -311,3 +311,43 @@ code, kbd { font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospa
 .fs-quick-card:hover .qc-icon { background: var(--accent); color: var(--amber); }
 .qc-name { font-size: 13px; font-weight: 700; color: var(--text-primary); }
 .qc-desc { font-size: 11.5px; color: var(--text-secondary); line-height: 1.4; }
+
+/* ── ClickUp UI refresh tokens (experiment/clickup-ui-refresh) ──────────
+   Approved palette for the restyle pass (Calendar, Inbox, Notifications,
+   Spaces). Appended so unrestyled modules keep their original tokens. */
+:root {
+  /* Purple scale */
+  --purple-700:        #4C2A92;   /* anchor — primary buttons, active nav */
+  --purple-600:        #5F3BB8;   /* hover / elevated state */
+  --purple-500:        #7C5CE0;   /* focus rings, links, unread (live) */
+  --purple-tint:       #EDE8F8;   /* light tint */
+
+  /* Surfaces */
+  --bg-app:            #FAFAF8;   /* page canvas (was cream #F4F1EA) */
+  --surface-card:      #FFFFFF;   /* component surfaces */
+  --surface-sub:       #F5F3F0;   /* sub-tile / secondary surface */
+  --surface-hover-warm:#F2EEE6;   /* hover, paired with new canvas */
+
+  /* Borders (cooled to pair with the whiter canvas) */
+  --border-1:          #E7E5DE;   /* primary */
+  --border-2:          #D8D5CC;   /* secondary */
+
+  /* Text */
+  --ink-1:             #1C1610;
+  --ink-2:             #4A4641;
+  --ink-3:             #6D6860;
+
+  /* Semantic accents (base / tint / dark text — AA on their tints) */
+  --accent-blue:   #2563EB;  --accent-blue-tint:   #DBEAFE;  --accent-blue-text:   #1E40AF;
+  --accent-green:  #059669;  --accent-green-tint:  #D1FAE5;  --accent-green-text:  #065F46;
+  --accent-yellow: #D97706;  --accent-yellow-tint: #FEF3C7;  --accent-yellow-text: #92400E;
+  --accent-orange: #F97316;  --accent-orange-tint: #FFEDD5;  --accent-orange-text: #7C2D12;
+  --accent-red:    #DC2626;  --accent-red-tint:    #FEE2E2;  --accent-red-text:    #7F1D1D;
+  --accent-pink:   #EC4899;  --accent-pink-tint:   #FCE7F3;  --accent-pink-text:   #831843;
+  --accent-teal:   #0891B2;  --accent-teal-tint:   #CFFAFE;  --accent-teal-text:   #164E63;
+}
+
+/* ── ClickUp UI refresh: Radix dropdown items (Spaces menus) ──────────── */
+.cu-menu-item { transition: background .12s, color .12s; }
+.cu-menu-item[data-highlighted] { background: var(--purple-tint); color: var(--purple-700); outline: none; }
+.cu-menu-item-danger[data-highlighted] { background: var(--accent-red-tint); color: var(--accent-red-text); }

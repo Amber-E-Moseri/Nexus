@@ -9,6 +9,18 @@
       "autoPort": false
     },
     {
+      "name": "dev-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5199", "--strictPort"],
+      "port": 5199
+    },
+    {
+      "name": "dev-alt2",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5217", "--strictPort"],
+      "port": 5217
+    },
+    {
       "name": "design",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "9877", "--directory", "C:/Users/moser/Downloads"],

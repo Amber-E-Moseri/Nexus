@@ -1,5 +1,11 @@
+// Notification dropdown row (ClickUp UI refresh pass). Visual layer only —
+// unread state is shown with a live-purple dot instead of a row tint;
+// markAsRead / close behavior unchanged.
+
+import { useState } from 'react'
 import { useNotifications } from '../../../context/NotificationsContext'
 import { formatNotificationMessage, NOTIFICATION_TYPES } from '../lib/notifications'
+import { FONT_BODY, FONT_MONO } from '../../../lib/fonts'
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -14,6 +20,7 @@ function timeAgo(dateStr) {
 
 export default function NotificationItem({ notification }) {
   const { markAsRead, setIsOpen } = useNotifications()
+  const [hovered, setHovered] = useState(false)
   const def = NOTIFICATION_TYPES[notification.type] ?? { icon: '🔔' }
   const message = formatNotificationMessage(notification)
 
@@ -27,28 +34,30 @@ export default function NotificationItem({ notification }) {
   return (
     <div
       onClick={handleClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex',
         alignItems: 'flex-start',
         gap: 10,
         padding: '10px 16px',
-        background: notification.read ? 'transparent' : 'var(--accent-muted)',
-        borderBottom: '0.5px solid var(--border)',
+        background: hovered ? 'var(--surface-sub)' : 'transparent',
+        borderBottom: '1px solid var(--border-1)',
         cursor: 'pointer',
-        transition: 'background 0.15s',
+        transition: 'background 0.13s',
       }}
     >
       <div
         style={{
-          width: 32,
-          height: 32,
-          borderRadius: '50%',
+          width: 30,
+          height: 30,
+          borderRadius: 9,
           flexShrink: 0,
-          background: 'var(--surface-secondary)',
+          background: 'var(--purple-tint)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 14,
+          fontSize: 13,
         }}
       >
         {def.icon}
@@ -56,15 +65,16 @@ export default function NotificationItem({ notification }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
+            fontFamily: FONT_BODY,
             fontSize: 12,
-            color: 'var(--text-primary)',
+            color: notification.read ? 'var(--ink-2)' : 'var(--ink-1)',
             lineHeight: 1.5,
-            fontWeight: notification.read ? 400 : 500,
+            fontWeight: notification.read ? 400 : 600,
           }}
         >
           {message}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+        <div style={{ fontFamily: FONT_MONO, fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>
           {timeAgo(notification.created_at)}
         </div>
       </div>
@@ -74,7 +84,7 @@ export default function NotificationItem({ notification }) {
             width: 7,
             height: 7,
             borderRadius: '50%',
-            background: 'var(--accent)',
+            background: 'var(--purple-500)',
             flexShrink: 0,
             marginTop: 4,
           }}

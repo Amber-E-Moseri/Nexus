@@ -1,15 +1,16 @@
 ﻿import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Calendar, Settings } from 'lucide-react'
+import { Download, Link2, Settings } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../hooks/useAuth'
-import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingEvents, getEventTypes } from '../../features/calendar'
+import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingEvents, getEventTypes, getOrCreateSubscription } from '../../features/calendar'
 import { hasPermission } from '../../lib/permissions'
 import { useToast } from '../../context/ToastContext'
 import CalendarView from '../../features/calendar/components/CalendarView'
 import EventModal from '../../features/calendar/components/EventModal'
-import { EVENT_COLORS } from '../../features/calendar/components/CalendarEventCard'
 import EventSubmitModal from '../../features/calendar/components/EventSubmitModal'
-import CalendarSourcesPanel from '../../features/calendar/components/CalendarSourcesPanel'
+import CalendarSidebar from '../../features/calendar/components/CalendarSidebar'
+import { FONT_BODY, FONT_HEADING } from '../../features/calendar/lib/fonts'
 
 export default function MinistryCalendar() {
   const { effectiveRole, profile } = useAuth()
@@ -115,6 +116,24 @@ export default function MinistryCalendar() {
     await loadCalendar()
   }
 
+  function goPrevMonth() {
+    if (month === 0) {
+      setMonth(11)
+      setYear(year - 1)
+    } else {
+      setMonth(month - 1)
+    }
+  }
+
+  function goNextMonth() {
+    if (month === 11) {
+      setMonth(0)
+      setYear(year + 1)
+    } else {
+      setMonth(month + 1)
+    }
+  }
+
   const filteredEvents = events.filter((e) => {
     if (!selectedEventTypes.has(e.event_type)) return false
     if (deptOnly && !e.department_id) return false
@@ -122,8 +141,6 @@ export default function MinistryCalendar() {
   })
 
   const [showExportMenu, setShowExportMenu] = useState(false)
-  const miniCalendarStart = new Date(year, month, 1)
-  const miniCalendarEnd = new Date(year, month + 1, 0)
 
   function generateICS() {
     let ics = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//BLW CAN NEXUS//EN\n'
@@ -177,282 +194,223 @@ export default function MinistryCalendar() {
     showToast('Calendar downloaded', { tone: 'success' })
   }
 
-  function copySubscribeLink() {
-    const projectUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co'
-    const url = `webcal://${projectUrl.replace('https://', '')}/functions/v1/calendar-ical?token=YOUR_TOKEN`
-    navigator.clipboard.writeText(url)
-    setShowExportMenu(false)
-    showToast('Subscribe link copied — paste into Google Calendar or Apple Calendar', { tone: 'success' })
+  async function copySubscribeLink() {
+    try {
+      if (!profile?.id) throw new Error('User not authenticated')
+      const subscription = await getOrCreateSubscription(
+        profile.id,
+        deptOnly ? 'department' : 'all',
+        deptOnly ? (profile?.department_id ?? null) : null,
+      )
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-ical?token=${subscription.token}`
+      await navigator.clipboard.writeText(url)
+      setShowExportMenu(false)
+      showToast('Subscribe link copied — paste into Google Calendar or Apple Calendar', { tone: 'success' })
+    } catch (err) {
+      console.error('Failed to copy subscribe link:', err)
+      showToast('Could not copy subscribe link', { tone: 'error' })
+    }
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: FONT_BODY }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '28px', fontWeight: 600, letterSpacing: '-0.04em', color: 'var(--text-primary)' }}>
+          <h1 style={{ fontFamily: FONT_HEADING, fontSize: '26px', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
             Ministry Calendar
           </h1>
-          <p style={{ marginTop: '8px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+          <p style={{ marginTop: '6px', fontSize: '13.5px', color: 'var(--text-secondary)' }}>
             An org-wide view of programs, training, prayer, deadlines, and major ministry events.
           </p>
         </div>
         {effectiveRole === 'super_admin' && (
-          <button
+          <motion.button
             type="button"
             onClick={() => navigate('/calendar/settings')}
             title="Calendar Settings"
-            className="p-2 rounded-lg border border-[var(--border)] hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)]"
+            whileHover={{ backgroundColor: '#F9F7F3', rotate: 22 }}
+            whileTap={{ scale: 0.92 }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 36,
+              height: 36,
+              padding: 0,
+              borderRadius: 10,
+              border: '1px solid var(--border)',
+              background: 'white',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+            }}
           >
-            <Settings size={20} />
-          </button>
+            <Settings size={18} />
+          </motion.button>
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '24px', alignItems: 'start' }}>
-        {/* Left Panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Mini Month Navigator */}
-          <div style={{
-            borderRadius: '12px',
-            border: '1px solid var(--border)',
-            backgroundColor: 'white',
-            padding: '16px',
-            boxShadow: 'var(--card-shadow)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <button
-                onClick={() => {
-                  if (month === 0) {
-                    setMonth(11)
-                    setYear(year - 1)
-                  } else {
-                    setMonth(month - 1)
-                  }
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '18px',
-                  padding: '4px',
-                  color: 'var(--text-primary)'
-                }}
-              >
-                ←
-              </button>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                {miniCalendarStart.toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })}
-              </div>
-              <button
-                onClick={() => {
-                  if (month === 11) {
-                    setMonth(0)
-                    setYear(year + 1)
-                  } else {
-                    setMonth(month + 1)
-                  }
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '18px',
-                  padding: '4px',
-                  color: 'var(--text-primary)'
-                }}
-              >
-                →
-              </button>
-            </div>
-          </div>
-
-          {/* Event Type Filters */}
-          <div style={{
-            borderRadius: '12px',
-            border: '1px solid var(--border)',
-            backgroundColor: 'white',
-            padding: '16px',
-            boxShadow: 'var(--card-shadow)'
-          }}>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '12px', textTransform: 'uppercase' }}>
-              Event Types
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {eventTypes.map((type) => (
-                <label
-                  key={type}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    color: 'var(--text-primary)'
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedEventTypes.has(type)}
-                    onChange={(e) => {
-                      const newSet = new Set(selectedEventTypes)
-                      if (e.target.checked) {
-                        newSet.add(type)
-                      } else {
-                        newSet.delete(type)
-                      }
-                      setSelectedEventTypes(newSet)
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  <span
-                    style={{
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '50%',
-                      backgroundColor: EVENT_COLORS[type],
-                      flexShrink: 0
-                    }}
-                  />
-                  <span style={{ textTransform: 'capitalize', flex: 1 }}>{type}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <CalendarSourcesPanel />
-
-          {/* Department Filter */}
-          <div style={{
-            borderRadius: '12px',
-            border: '1px solid var(--border)',
-            backgroundColor: 'white',
-            padding: '16px',
-            boxShadow: 'var(--card-shadow)'
-          }}>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                color: 'var(--text-primary)'
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={deptOnly}
-                onChange={(e) => setDeptOnly(e.target.checked)}
-                style={{ cursor: 'pointer' }}
-              />
-              <span>My department only</span>
-            </label>
-          </div>
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '20px', alignItems: 'start' }}>
+        <CalendarSidebar
+          year={year}
+          month={month}
+          onPrevMonth={goPrevMonth}
+          onNextMonth={goNextMonth}
+          eventTypes={eventTypes}
+          selectedEventTypes={selectedEventTypes}
+          onToggleType={(type, checked) => {
+            const newSet = new Set(selectedEventTypes)
+            if (checked) {
+              newSet.add(type)
+            } else {
+              newSet.delete(type)
+            }
+            setSelectedEventTypes(newSet)
+          }}
+          deptOnly={deptOnly}
+          onDeptOnlyChange={setDeptOnly}
+          onShare={copySubscribeLink}
+          onDownload={downloadICS}
+          onOpenSettings={effectiveRole === 'super_admin' ? () => navigate('/calendar/settings') : undefined}
+        />
 
         {/* Main Calendar */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', position: 'relative' }}>
-            <button
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px', position: 'relative' }}>
+            <motion.button
               onClick={() => setShowSubmitModal(true)}
+              whileHover={{ backgroundColor: '#3A1F75' }}
+              whileTap={{ scale: 0.97 }}
               style={{
-                padding: '10px 16px',
+                padding: '9px 16px',
                 backgroundColor: 'var(--accent)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
                 cursor: 'pointer',
                 fontWeight: 600,
-                fontSize: '14px'
+                fontSize: '13.5px',
+                fontFamily: FONT_BODY
               }}
             >
               + Add Event
-            </button>
+            </motion.button>
 
             <div style={{ position: 'relative' }}>
-              <button
+              <motion.button
                 onClick={() => setShowExportMenu(!showExportMenu)}
+                whileHover={{ backgroundColor: '#F2EEE6' }}
+                whileTap={{ scale: 0.97 }}
                 style={{
-                  padding: '10px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '7px',
+                  padding: '9px 14px',
                   backgroundColor: 'var(--surface-secondary)',
                   color: 'var(--text-primary)',
                   border: '1px solid var(--border)',
                   borderRadius: '8px',
                   cursor: 'pointer',
                   fontWeight: 600,
-                  fontSize: '14px'
+                  fontSize: '13.5px',
+                  fontFamily: FONT_BODY
                 }}
               >
-                📥 Export
-              </button>
+                <Download size={14} style={{ color: 'var(--text-secondary)' }} />
+                Export
+              </motion.button>
 
-              {showExportMenu && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  right: 0,
-                  marginTop: '4px',
-                  backgroundColor: 'white',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                  zIndex: 100,
-                  minWidth: '180px'
-                }}>
-                  <button
-                    onClick={downloadICS}
+              <AnimatePresence>
+                {showExportMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                    transition={{ duration: 0.16, ease: 'easeOut' }}
                     style={{
-                      display: 'block',
-                      width: '100%',
-                      padding: '12px 16px',
-                      textAlign: 'left',
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      color: 'var(--text-primary)',
-                      borderBottom: '1px solid var(--border)'
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      marginTop: '6px',
+                      backgroundColor: 'white',
+                      border: '1px solid var(--border)',
+                      borderRadius: '10px',
+                      boxShadow: 'var(--shadow-lg)',
+                      zIndex: 100,
+                      minWidth: '200px',
+                      overflow: 'hidden',
+                      padding: '4px',
+                      transformOrigin: 'top right'
                     }}
                   >
-                    Download .ics
-                  </button>
-                  <button
-                    onClick={copySubscribeLink}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      padding: '12px 16px',
-                      textAlign: 'left',
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      color: 'var(--text-primary)'
-                    }}
-                  >
-                    Copy subscribe link
-                  </button>
-                </div>
-              )}
+                    <motion.button
+                      onClick={downloadICS}
+                      initial={{ backgroundColor: 'rgba(242, 238, 230, 0)' }}
+                      whileHover={{ backgroundColor: 'rgba(242, 238, 230, 1)' }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '9px',
+                        width: '100%',
+                        padding: '9px 10px',
+                        textAlign: 'left',
+                        border: 'none',
+                        borderRadius: '7px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontFamily: FONT_BODY,
+                        color: 'var(--text-primary)'
+                      }}
+                    >
+                      <Download size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                      Download .ics
+                    </motion.button>
+                    <motion.button
+                      onClick={copySubscribeLink}
+                      initial={{ backgroundColor: 'rgba(242, 238, 230, 0)' }}
+                      whileHover={{ backgroundColor: 'rgba(242, 238, 230, 1)' }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '9px',
+                        width: '100%',
+                        padding: '9px 10px',
+                        textAlign: 'left',
+                        border: 'none',
+                        borderRadius: '7px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontFamily: FONT_BODY,
+                        color: 'var(--text-primary)'
+                      }}
+                    >
+                      <Link2 size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                      Copy subscribe link
+                    </motion.button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {canApprove && pendingCount > 0 && (
-              <button
+              <motion.button
                 onClick={() => window.location.href = '/calendar/review'}
+                whileHover={{ backgroundColor: '#FDE8B8' }}
+                whileTap={{ scale: 0.97 }}
                 style={{
-                  padding: '10px 16px',
+                  padding: '9px 14px',
                   backgroundColor: '#FEF3C7',
                   color: '#92400E',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer',
                   fontWeight: 600,
-                  fontSize: '14px',
+                  fontSize: '13.5px',
+                  fontFamily: FONT_BODY,
                   whiteSpace: 'nowrap'
                 }}
               >
                 Pending review ({pendingCount})
-              </button>
+              </motion.button>
             )}
           </div>
 
@@ -475,22 +433,8 @@ export default function MinistryCalendar() {
               setShowModal(true)
             }}
             onDeleteEvent={handleDelete}
-            onPrevMonth={() => {
-              if (month === 0) {
-                setMonth(11)
-                setYear(year - 1)
-              } else {
-                setMonth(month - 1)
-              }
-            }}
-            onNextMonth={() => {
-              if (month === 11) {
-                setMonth(0)
-                setYear(year + 1)
-              } else {
-                setMonth(month + 1)
-              }
-            }}
+            onPrevMonth={goPrevMonth}
+            onNextMonth={goNextMonth}
             onToday={() => {
               const now = new Date()
               setYear(now.getFullYear())

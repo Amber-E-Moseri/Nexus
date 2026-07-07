@@ -1,6 +1,8 @@
 // Small pill switch shared by CategoryVisibilityConfig, CalendarSourcesPanel,
 // and CalendarSourcesAdminPanel — extracted since it's now used in 3 places.
 
+import { motion } from 'framer-motion'
+
 export default function Toggle({ checked, disabled, onChange, label }) {
   return (
     <button
@@ -24,7 +26,10 @@ export default function Toggle({ checked, disabled, onChange, label }) {
         flexShrink: 0,
       }}
     >
-      <span
+      <motion.span
+        initial={false}
+        animate={{ left: checked ? 19 : 3 }}
+        transition={{ type: 'spring', stiffness: 550, damping: 32 }}
         style={{
           display: 'block',
           width: 14,
@@ -33,8 +38,6 @@ export default function Toggle({ checked, disabled, onChange, label }) {
           background: 'white',
           position: 'absolute',
           top: 3,
-          left: checked ? 19 : 3,
-          transition: 'left 0.18s',
           boxShadow: '0 1px 3px rgba(0,0,0,0.18)',
         }}
       />

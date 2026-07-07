@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import CalendarGrid from './CalendarGrid'
 import CalendarEventCard from './CalendarEventCard'
+import { FONT_HEADING } from '../lib/fonts'
 
 function sortByStartDate(events = []) {
   return [...events].sort((left, right) => new Date(left.start_date) - new Date(right.start_date))
@@ -88,13 +90,23 @@ export default function CalendarView({
 
         <div className="space-y-4">
           <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-            <div className="mb-4 flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]">
+            <div
+              className="mb-4 flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]"
+              style={{ fontFamily: FONT_HEADING, letterSpacing: '-0.01em' }}
+            >
               <CalendarDays size={18} className="text-[var(--accent)]" />
               Upcoming Events
             </div>
             <div className="space-y-3">
-              {nextUpcoming.length > 0 ? nextUpcoming.map((event) => (
-                <CalendarEventCard key={event.id} event={event} canEdit={false} />
+              {nextUpcoming.length > 0 ? nextUpcoming.map((event, index) => (
+                <motion.div
+                  key={event.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, delay: index * 0.06, ease: [0.22, 0.61, 0.36, 1] }}
+                >
+                  <CalendarEventCard event={event} canEdit={false} />
+                </motion.div>
               )) : (
                 <div className="rounded-[20px] border border-dashed border-[var(--border)] bg-[var(--surface-tertiary)] p-6 text-sm text-[var(--text-tertiary)]">
                   No upcoming events in the next 30 days.
@@ -103,17 +115,27 @@ export default function CalendarView({
             </div>
           </div>
 
-          {selectedEvent ? (
-            <CalendarEventCard
-              event={selectedEvent}
-              canEdit={!readOnly}
-              onEdit={(event) => {
-                handleSelectEvent(event)
-                onEditEvent?.(event)
-              }}
-              onDelete={onDeleteEvent}
-            />
-          ) : null}
+          <AnimatePresence>
+            {selectedEvent ? (
+              <motion.div
+                key={selectedEvent.id}
+                initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+              >
+                <CalendarEventCard
+                  event={selectedEvent}
+                  canEdit={!readOnly}
+                  onEdit={(event) => {
+                    handleSelectEvent(event)
+                    onEditEvent?.(event)
+                  }}
+                  onDelete={onDeleteEvent}
+                />
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
       </div>
     </div>
