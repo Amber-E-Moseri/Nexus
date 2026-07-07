@@ -13,6 +13,7 @@ import KanbanBoard from '../../features/tasks/components/KanbanBoard'
 import TaskListView from '../../features/tasks/components/TaskListView'
 import TaskFilters from '../../features/tasks/components/TaskFilters'
 import { getTaskTypeInfo } from '../../features/tasks/lib/task-types'
+import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 
 function loadViewMode() {
   return localStorage.getItem('blw_mytasks_view') ?? 'list'
@@ -87,14 +88,14 @@ export default function MyTasks() {
 
   return (
     <>
-      <div className="space-y-5">
+      <div className="space-y-5" style={{ fontFamily: FONT_BODY }}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--text-primary)]">My Tasks</h1>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">Everything assigned to you across departments and programs.</p>
+            <h1 className="text-2xl" style={{ fontFamily: FONT_HEADING, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ink-1)' }}>My Tasks</h1>
+            <p className="mt-1 text-sm" style={{ color: 'var(--ink-2)' }}>Everything assigned to you across departments and programs.</p>
           </div>
 
-          <div className="flex items-center gap-2 rounded-[10px] bg-[var(--surface-secondary)] p-[3px]">
+          <div className="flex items-center gap-1 p-[3px]" style={{ background: 'var(--surface-sub)', border: '1px solid var(--border-1)', borderRadius: 10 }}>
             {['board', 'list'].map((mode) => (
               <button
                 key={mode}
@@ -102,9 +103,10 @@ export default function MyTasks() {
                 onClick={() => setView(mode)}
                 className="px-3 py-1.5 text-sm font-medium rounded-lg transition-all"
                 style={{
-                  background: viewMode === mode ? 'white' : 'transparent',
-                  color: viewMode === mode ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                  boxShadow: viewMode === mode ? '0 1px 2px rgba(28,22,16,0.04)' : 'none',
+                  background: viewMode === mode ? 'var(--surface-card)' : 'transparent',
+                  color: viewMode === mode ? 'var(--purple-700)' : 'var(--ink-3)',
+                  fontWeight: viewMode === mode ? 600 : 500,
+                  boxShadow: viewMode === mode ? '0 1px 2px rgba(28,22,16,0.06)' : 'none',
                 }}
               >
                 {mode === 'board' ? 'Board' : 'List'}
@@ -124,15 +126,18 @@ export default function MyTasks() {
                 <button
                   type="button"
                   onClick={() => setBoardFiltersOpen((current) => !current)}
-                  className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
+                  className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
+                  style={{ border: '1px solid var(--border-1)', background: 'var(--surface-card)', color: 'var(--ink-1)', transition: 'border-color .13s' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--purple-500)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-1)' }}
                 >
                   <SlidersHorizontal size={14} />
                   <span>Filter</span>
-                  {hasActiveFilters ? <span className="text-[var(--accent)]">(active)</span> : null}
+                  {hasActiveFilters ? <span style={{ color: 'var(--purple-500)' }}>(active)</span> : null}
                 </button>
 
                 {boardFiltersOpen ? (
-                  <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[640px] max-w-[80vw] rounded-[16px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-lg)]">
+                  <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[640px] max-w-[80vw] rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--shadow-lg)]">
                     <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={statuses} tasks={tasks} />
                   </div>
                 ) : null}
@@ -156,7 +161,7 @@ export default function MyTasks() {
         ) : (
           <>
             <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={statuses} tasks={tasks} />
-            <div className="min-h-[520px] rounded-[24px] border border-[var(--border)] bg-white p-4 shadow-[var(--card-shadow)]">
+            <div className="min-h-[520px] rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--card-shadow)]">
               <TaskListView
                 tasks={tasks}
                 statuses={statuses}

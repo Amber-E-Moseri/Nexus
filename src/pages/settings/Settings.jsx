@@ -13,6 +13,7 @@ import MembersPanel from '../../components/settings/MembersPanel'
 import ApiDocumentationPage from '../ApiDocumentationPage'
 import ActivityFeedWidget from '../../features/dashboard/components/ActivityFeedWidget'
 import ApiPermissionsSection from './ApiPermissionsSection'
+import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 
 const TABS = ['Profile', 'Notifications', 'Integrations', 'Automations', 'Members', 'Activity Log', 'API Permissions', 'Organisation', 'API', 'Danger Zone']
 const EXPORT_TABLE_SELECT = {
@@ -303,15 +304,15 @@ export default function Settings() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={{ fontFamily: FONT_BODY }}>
       <div>
-        <h1 className="text-[2rem] font-semibold text-[var(--text-primary)]">Settings</h1>
-        <p className="mt-2 text-sm text-[var(--text-secondary)]">
+        <h1 className="text-[26px]" style={{ fontFamily: FONT_HEADING, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ink-1)' }}>Settings</h1>
+        <p className="mt-2 text-sm" style={{ color: 'var(--ink-2)' }}>
           Profile, notifications, integrations and workspace automations.
         </p>
       </div>
 
-      <div role="tablist" className="flex border-b border-[var(--border)] overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+      <div role="tablist" className="flex border-b border-[var(--border-1)] overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
         {visibleTabs.map((tab) => {
           const tabId = tab.toLowerCase().replace(/\s+/g, '-')
           return (
@@ -324,10 +325,10 @@ export default function Settings() {
               aria-controls={`tabpanel-${tabId}`}
               onClick={() => setActiveTab(tab)}
               className={[
-                'border-b-2 px-3 py-3 text-sm font-medium transition',
+                'border-b-2 px-3 py-3 text-sm transition',
                 activeTab === tab
-                  ? 'border-[var(--accent)] text-[var(--accent)]'
-                  : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+                  ? 'border-[var(--purple-700)] text-[var(--purple-700)] font-semibold'
+                  : 'border-transparent text-[var(--ink-2)] font-medium hover:text-[var(--purple-600)]',
               ].join(' ')}
             >
               {tab}

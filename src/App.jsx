@@ -16,7 +16,6 @@ if ('serviceWorker' in navigator) {
 }
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
-const Home = lazy(() => import('./pages/Home'))
 const Inbox = lazy(() => import('./pages/Inbox'))
 const ActivateInvitation = lazy(() => import('./pages/ActivateInvitation'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
@@ -110,7 +109,8 @@ export default function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>
-          <Route path="/" element={<Home />} />
+          {/* Home merged into Dashboard (experiment/clickup-ui-refresh) */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route

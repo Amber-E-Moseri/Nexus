@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase'
 import SpaceModal from '../features/spaces/components/SpaceModal'
 import SprintModal from '../features/sprints/components/SprintModal'
 import TaskModal from '../features/tasks/components/TaskModal'
+import { FONT_BODY, FONT_HEADING, FONT_MONO } from '../lib/fonts'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function greetingForHour() {
@@ -46,24 +47,21 @@ const PRIO_LABEL = { urgent: 'Urgent', high: 'High', medium: 'Medium', low: 'Low
 
 // ─── KPI tile ────────────────────────────────────────────────────────────────
 function KpiTile({ label, value, subtitle, bg, textColor = '#fff', subtitleColor, delay = 0 }) {
-  const circle = bg !== '#FEF0ED'
   return (
     <div
       className="fs-fade-up relative overflow-hidden rounded-2xl p-5 cursor-default transition-[transform,box-shadow] duration-[180ms] hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(28,22,16,.10)]"
       style={{ background: bg, animationDelay: `${delay}ms` }}
     >
-      <div className="text-[10.5px] font-bold uppercase tracking-[.05em]" style={{ color: textColor, opacity: .8 }}>
+      <div className="text-[10.5px] uppercase tracking-[.05em]" style={{ fontFamily: FONT_HEADING, fontWeight: 600, color: textColor, opacity: .8 }}>
         {label}
       </div>
-      <div className="mt-1.5 text-[27px] font-black leading-none" style={{ color: textColor }}>
+      <div className="mt-1.5 text-[27px] leading-none" style={{ fontFamily: FONT_HEADING, fontWeight: 700, color: textColor }}>
         {value ?? '—'}
       </div>
       <div className="mt-1.5 text-[11.5px] font-semibold" style={{ color: subtitleColor ?? textColor, opacity: subtitleColor ? 1 : .75 }}>
         {subtitle}
       </div>
-      {circle && (
-        <div className="absolute -bottom-4 -right-4 h-[72px] w-[72px] rounded-full" style={{ background: 'rgba(255,255,255,.07)' }} />
-      )}
+      <div className="absolute -bottom-4 -right-4 h-[72px] w-[72px] rounded-full" style={{ background: 'rgba(255,255,255,.07)' }} />
     </div>
   )
 }
@@ -80,7 +78,7 @@ function TaskRow({ task, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="w-full flex items-start gap-3 px-4 py-3 border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-secondary)] transition-colors text-left"
+      className="w-full flex items-start gap-3 px-4 py-3 border-b border-[var(--border-1)] last:border-0 hover:bg-[var(--surface-secondary)] transition-colors text-left"
       style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '12px 16px' }}
     >
       <span className="mt-[7px] h-2 w-2 shrink-0 rounded-full" style={{ background: p.text }} />
@@ -109,7 +107,7 @@ function ActivityRow({ entry }) {
   const initials = actorInitials(entry.action)
   const bg = avatarBg(initials)
   return (
-    <div className="flex items-start gap-3 px-4 py-3 border-b border-[var(--border)] last:border-0">
+    <div className="flex items-start gap-3 px-4 py-3 border-b border-[var(--border-1)] last:border-0">
       <div
         className="mt-px flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10.5px] font-bold text-white"
         style={{ background: bg }}
@@ -127,7 +125,7 @@ function ActivityRow({ entry }) {
 // ─── Quick action row ─────────────────────────────────────────────────────────
 function QuickRow({ icon, label, to, external }) {
   const inner = (
-    <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer">
+    <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border-1)] last:border-0 hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer">
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: 'var(--accent-light)' }}>
         {typeof icon === 'string'
           ? <span className="text-sm font-bold text-white" style={{ background: 'var(--accent)', borderRadius: 4, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</span>
@@ -147,7 +145,7 @@ function QuickRow({ icon, label, to, external }) {
 function SpaceIcon({ space }) {
   const color = `#${space.color ?? '4C2A92'}`
   return (
-    <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer">
+    <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border-1)] last:border-0 hover:bg-[var(--surface-secondary)] transition-colors cursor-pointer">
       <Link to={`/spaces/${space.id}`} className="flex w-full items-center gap-3">
         <span
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold text-white"
@@ -174,10 +172,10 @@ function EventRow({ event }) {
   const typeLabel = (event.event_type ?? 'event').replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
   return (
-    <div className="flex items-start gap-4 px-4 py-3 border-b border-[var(--border)] last:border-0">
+    <div className="flex items-start gap-4 px-4 py-3 border-b border-[var(--border-1)] last:border-0">
       <div className="w-10 shrink-0 text-center">
         <div className="text-[9px] font-bold uppercase tracking-[.1em] text-[var(--text-tertiary)]">{month}</div>
-        <div className="text-[22px] font-black leading-tight" style={{ color: 'var(--accent)' }}>{day}</div>
+        <div className="text-[22px] leading-tight" style={{ fontFamily: FONT_HEADING, fontWeight: 700, color: 'var(--purple-700)' }}>{day}</div>
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-semibold text-[var(--text-primary)]">{event.title}</div>
@@ -187,7 +185,7 @@ function EventRow({ event }) {
       </div>
       <span
         className="shrink-0 rounded-full px-2 py-[2px] text-[10.5px] font-bold"
-        style={{ background: 'var(--status-done-bg)', color: 'var(--status-done-text)' }}
+        style={{ background: 'var(--accent-teal-tint)', color: 'var(--accent-teal-text)' }}
       >
         {typeLabel}
       </span>
@@ -198,7 +196,7 @@ function EventRow({ event }) {
 // ─── Card wrapper ─────────────────────────────────────────────────────────────
 function Card({ children, className = '' }) {
   return (
-    <div className={`rounded-2xl border border-[var(--border)] bg-white shadow-[0_1px_3px_rgba(28,22,16,.05)] overflow-hidden ${className}`}>
+    <div className={`rounded-2xl border border-[var(--border-1)] bg-white shadow-[0_1px_3px_rgba(28,22,16,.05)] overflow-hidden ${className}`}>
       {children}
     </div>
   )
@@ -209,9 +207,9 @@ function CardHead({ title, count, countVariant = 'navy', action }) {
     ? { background: 'var(--amber-light)', color: 'var(--amber-hover)' }
     : { background: 'var(--accent-light)', color: 'var(--accent)' }
   return (
-    <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
+    <div className="flex items-center justify-between border-b border-[var(--border-1)] px-4 py-3">
       <div className="flex items-center gap-2">
-        <span className="text-[13.5px] font-bold text-[var(--text-primary)]">{title}</span>
+        <span className="text-[13.5px]" style={{ fontFamily: FONT_HEADING, fontWeight: 600, color: 'var(--ink-1)' }}>{title}</span>
         {count != null && (
           <span className="rounded-full px-[7px] py-[2px] text-[10.5px] font-bold" style={countStyle}>
             {count}
@@ -356,34 +354,36 @@ export default function Home() {
   const myTaskCount = myTasks?.length ?? null
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" style={{ fontFamily: FONT_BODY }}>
       {/* Header */}
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-[21px] font-black leading-tight text-[var(--text-primary)]">
+          <h1 className="text-[21px] leading-tight" style={{ fontFamily: FONT_HEADING, fontWeight: 700, color: 'var(--ink-1)', letterSpacing: '-0.02em' }}>
             {greetingForHour()}, {profile?.name?.split(' ')[0] ?? 'there'} 👋
           </h1>
-          <p className="mt-1 text-[12.5px] text-[var(--text-secondary)]">
+          <p className="mt-1 text-[12.5px]" style={{ color: 'var(--ink-2)' }}>
             Keep ministry execution visible across departments, meetings, and follow-through.
           </p>
         </div>
         <div
-          className="rounded-2xl border border-[var(--border)] px-4 py-3 text-right"
-          style={{ background: 'var(--surface-secondary)', boxShadow: '0 1px 3px rgba(28,22,16,.05)' }}
+          className="rounded-2xl px-4 py-3 text-right"
+          style={{ background: 'var(--surface-card)', border: '1px solid var(--border-1)', boxShadow: '0 1px 3px rgba(28,22,16,.04)' }}
         >
-          <div className="text-[9.5px] font-bold uppercase tracking-[.14em] text-[var(--text-tertiary)]">Today</div>
-          <div className="mt-0.5 text-sm font-semibold text-[var(--text-primary)]">
+          <div className="text-[9.5px] uppercase tracking-[.14em]" style={{ fontFamily: FONT_HEADING, fontWeight: 600, color: 'var(--ink-3)' }}>Today</div>
+          <div className="mt-0.5 text-[12.5px] font-medium" style={{ fontFamily: FONT_MONO, color: 'var(--ink-1)' }}>
             {new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
         </div>
       </section>
 
       {/* KPI row */}
+      {/* Same accent mapping as the Dashboard hero cards:
+          purple anchor / blue progress / orange priority / green active */}
       <section className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiTile label="Active Spaces"  value={spaceCount}          subtitle="across the org"         bg="#4C2A92" delay={40} />
-        <KpiTile label="Open Tasks"     value={openTaskCount}        subtitle="in progress &amp; queued" bg="#18122E" delay={90} />
-        <KpiTile label="My Tasks Due"   value={myTaskCount}          subtitle="assigned to you"        bg="#E8A020" delay={140} />
-        <KpiTile label="Active Sprints" value={activeSprintCount}    subtitle="running now"            bg="#FEF0ED" textColor="#C94830" subtitleColor="#F06449" delay={190} />
+        <KpiTile label="Active Spaces"  value={spaceCount}          subtitle="across the org"         bg="var(--purple-700)" delay={40} />
+        <KpiTile label="Open Tasks"     value={openTaskCount}        subtitle="in progress &amp; queued" bg="var(--accent-blue)" delay={90} />
+        <KpiTile label="My Tasks Due"   value={myTaskCount}          subtitle="assigned to you"        bg="var(--accent-orange)" delay={140} />
+        <KpiTile label="Active Sprints" value={activeSprintCount}    subtitle="running now"            bg="var(--accent-green)" delay={190} />
       </section>
 
       {/* Two-column body */}
@@ -440,7 +440,7 @@ export default function Home() {
             <QuickRow icon={<Gem size={15} />} label="View all sprints" to="/sprints" />
             {(role === 'super_admin' || role === 'dept_lead') && (
               <div
-                className="flex cursor-pointer items-center gap-3 border-b border-[var(--border)] px-4 py-3 transition-colors last:border-0 hover:bg-[var(--surface-secondary)]"
+                className="flex cursor-pointer items-center gap-3 border-b border-[var(--border-1)] px-4 py-3 transition-colors last:border-0 hover:bg-[var(--surface-secondary)]"
                 onClick={() => setShowSprintModal(true)}
               >
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: 'var(--accent-light)' }}>
@@ -458,7 +458,7 @@ export default function Home() {
             {(role === 'super_admin' || role === 'dept_lead') && (
               <>
                 <div
-                  className="flex cursor-pointer items-center gap-3 border-b border-[var(--border)] px-4 py-3 transition-colors last:border-0 hover:bg-[var(--surface-secondary)]"
+                  className="flex cursor-pointer items-center gap-3 border-b border-[var(--border-1)] px-4 py-3 transition-colors last:border-0 hover:bg-[var(--surface-secondary)]"
                   onClick={() => setShowSpaceModal(true)}
                 >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: 'var(--accent-light)' }}>
@@ -474,8 +474,8 @@ export default function Home() {
 
           {/* Upcoming Events */}
           <Card>
-            <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
-              <span className="text-[13.5px] font-bold text-[var(--text-primary)]">Upcoming Events</span>
+            <div className="flex items-center justify-between border-b border-[var(--border-1)] px-4 py-3">
+              <span className="text-[13.5px]" style={{ fontFamily: FONT_HEADING, fontWeight: 600, color: 'var(--ink-1)' }}>Upcoming Events</span>
               <div className="flex gap-1">
                 {['all', 'dept'].map(f => (
                   <button
@@ -494,7 +494,7 @@ export default function Home() {
               </div>
             </div>
             {profile?.department && (
-              <div className="border-b border-[var(--border)] px-4 py-2 text-[11px] text-[var(--text-tertiary)]">
+              <div className="border-b border-[var(--border-1)] px-4 py-2 text-[11px] text-[var(--text-tertiary)]">
                 {eventFilter === 'dept'
                   ? `Your department (${profile.department.name}) only`
                   : 'All upcoming ministry events'}
@@ -510,7 +510,7 @@ export default function Home() {
               </div>
             )}
             {visibleEvents.length > 4 && (
-              <div className="border-t border-[var(--border)] px-4 py-2.5">
+              <div className="border-t border-[var(--border-1)] px-4 py-2.5">
                 <NavLink to="/calendar" className="text-[12px] font-semibold" style={{ color: 'var(--accent)' }}>
                   View all events →
                 </NavLink>

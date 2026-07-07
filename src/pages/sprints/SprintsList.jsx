@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import SprintCard from '../../features/sprints/components/SprintCard'
@@ -6,6 +7,17 @@ import { useAuth } from '../../hooks/useAuth'
 import { deleteSprint, duplicateSprint, getAllSprints, getMySprints, restoreSprint, listSprintTeamsIndependent } from '../../features/sprints'
 import { getSprintTasks } from '../../features/sprints/lib/sprints'
 import { supabase } from '../../lib/supabase'
+import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
+
+const gridStagger = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.05, delayChildren: 0.03 } },
+}
+
+const cardEnter = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 400, damping: 34 } },
+}
 
 const FILTERS = ['all', 'active', 'planning', 'completed', 'review', 'archived']
 const STATUS_ORDER = ['active', 'planning', 'completed', 'review', 'archived']
@@ -172,17 +184,20 @@ export default function SprintsList() {
   const canCreate = role === 'super_admin' || role === 'dept_lead'
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" style={{ fontFamily: FONT_BODY }}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">Sprints</h1>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">Temporary cross-functional initiatives running alongside department spaces.</p>
+          <h1 className="text-[26px]" style={{ fontFamily: FONT_HEADING, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ink-1)' }}>Sprints</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--ink-2)' }}>Temporary cross-functional initiatives running alongside department spaces.</p>
         </div>
         {canCreate ? (
           <button
             type="button"
             onClick={() => setShowModal(true)}
-            className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white"
+            className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white"
+            style={{ background: 'var(--purple-700)', transition: 'background .13s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--purple-600)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--purple-700)' }}
           >
             + New Sprint
           </button>
@@ -190,17 +205,18 @@ export default function SprintsList() {
       </div>
 
       <div className="flex gap-2 flex-wrap items-center">
-        <div className="flex gap-1 rounded-lg bg-[var(--surface-secondary)] p-1">
+        <div className="flex gap-1 p-1" style={{ background: 'var(--surface-sub)', border: '1px solid var(--border-1)', borderRadius: 10 }}>
           <button
             onClick={() => setView('all')}
             style={{
               padding: '6px 12px',
               fontSize: 13,
-              fontWeight: view === 'all' ? 600 : 400,
+              fontWeight: view === 'all' ? 600 : 500,
               borderRadius: 6,
               border: 'none',
-              background: view === 'all' ? 'white' : 'transparent',
-              color: view === 'all' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              background: view === 'all' ? 'var(--surface-card)' : 'transparent',
+              color: view === 'all' ? 'var(--purple-700)' : 'var(--ink-3)',
+              boxShadow: view === 'all' ? '0 1px 2px rgba(28,22,16,0.06)' : 'none',
               cursor: 'pointer',
             }}
           >
@@ -211,11 +227,12 @@ export default function SprintsList() {
             style={{
               padding: '6px 12px',
               fontSize: 13,
-              fontWeight: view === 'my-team' ? 600 : 400,
+              fontWeight: view === 'my-team' ? 600 : 500,
               borderRadius: 6,
               border: 'none',
-              background: view === 'my-team' ? 'white' : 'transparent',
-              color: view === 'my-team' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              background: view === 'my-team' ? 'var(--surface-card)' : 'transparent',
+              color: view === 'my-team' ? 'var(--purple-700)' : 'var(--ink-3)',
+              boxShadow: view === 'my-team' ? '0 1px 2px rgba(28,22,16,0.06)' : 'none',
               cursor: 'pointer',
             }}
           >
@@ -227,12 +244,14 @@ export default function SprintsList() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search sprints"
-          className="min-w-[220px] rounded-full border border-[var(--border)] bg-white px-4 py-1.5 text-sm text-[var(--text-primary)]"
+          className="min-w-[220px] rounded-full px-4 py-1.5 text-sm"
+          style={{ border: '1px solid var(--border-1)', background: 'var(--surface-card)', color: 'var(--ink-1)' }}
         />
         <select
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-sm text-[var(--text-primary)]"
+          className="rounded-lg px-3 py-1.5 text-sm"
+          style={{ border: '1px solid var(--border-1)', background: 'var(--surface-card)', color: 'var(--ink-1)' }}
         >
           {FILTERS.map((option) => (
             <option key={option} value={option}>
@@ -247,18 +266,19 @@ export default function SprintsList() {
           Loading...
         </div>
       ) : filtered.length > 0 ? (
-        <div className="grid gap-4 lg:grid-cols-3">
+        <motion.div variants={gridStagger} initial="hidden" animate="show" className="grid gap-4 lg:grid-cols-3">
           {filtered.map((sprint) => (
-            <SprintCard
-              key={sprint.id}
-              sprint={sprint}
-              onClick={() => navigate(`/sprints/${sprint.id}`)}
-              onDuplicate={canCreate ? handleDuplicate : undefined}
-              onRestore={canCreate ? handleRestore : undefined}
-              onDelete={canCreate ? handleDelete : undefined}
-            />
+            <motion.div key={sprint.id} variants={cardEnter}>
+              <SprintCard
+                sprint={sprint}
+                onClick={() => navigate(`/sprints/${sprint.id}`)}
+                onDuplicate={canCreate ? handleDuplicate : undefined}
+                onRestore={canCreate ? handleRestore : undefined}
+                onDelete={canCreate ? handleDelete : undefined}
+              />
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       ) : (
         <EmptyState />
       )}
