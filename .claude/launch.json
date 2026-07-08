@@ -21,6 +21,12 @@
       "port": 5217
     },
     {
+      "name": "dev-alt3",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5241", "--strictPort"],
+      "port": 5241
+    },
+    {
       "name": "design",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "9877", "--directory", "C:/Users/moser/Downloads"],
