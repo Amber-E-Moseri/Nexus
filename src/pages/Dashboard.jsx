@@ -34,6 +34,7 @@ import TeamAvailabilityWidget from '../features/dashboard/components/TeamAvailab
 import ChartWidget from '../features/dashboard/components/ChartWidget'
 import CalculationWidget from '../features/dashboard/components/CalculationWidget'
 import GoalsWidget from '../features/dashboard/components/GoalsWidget'
+import EmbedWidget from '../features/dashboard/components/EmbedWidget'
 import { RegionalUpdateWidget } from '../features/regional-updates/components/RegionalUpdateWidget'
 import { getDashboardPresets } from '../features/dashboard/lib/dashboard-queries'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
@@ -357,6 +358,7 @@ const WIDGET_META = {
   chart_widget:           { title: 'Chart',                     Component: ChartWidget, configurable: true },
   calculation_widget:     { title: 'Calculation',                Component: CalculationWidget, configurable: true },
   goals:                  { title: 'Goals & OKRs',              Component: GoalsWidget },
+  embed:                  { title: 'Embed Content',            Component: EmbedWidget },
 }
 
 const ALL_WIDGET_KEYS = Object.keys(WIDGET_META)
