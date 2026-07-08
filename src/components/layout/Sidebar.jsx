@@ -26,7 +26,7 @@ import {
   Image,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useInboxCount } from '../../context/InboxCountContext'
 import { useAuth } from '../../hooks/useAuth'
@@ -89,7 +89,7 @@ function isPathActive(pathname, to) {
   return pathname === to || pathname.startsWith(`${to}/`)
 }
 
-function SidebarSectionLabel({ children, onAdd }) {
+const SidebarSectionLabel = memo(function SidebarSectionLabel({ children, onAdd }) {
   return (
     <div style={{ ...SECTION_LABEL_STYLE, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 9 }}>
       <span>{children}</span>
@@ -107,9 +107,9 @@ function SidebarSectionLabel({ children, onAdd }) {
       )}
     </div>
   )
-}
+})
 
-function SidebarItem({
+const SidebarItem = memo(function SidebarItem({
   active,
   label,
   icon: Icon,
@@ -118,19 +118,21 @@ function SidebarItem({
   onClick,
   trailing,
 }) {
+  const itemStyle = useMemo(() => ({
+    ...ITEM_BASE_STYLE,
+    borderLeft: `3px solid ${active ? '#4C2A92' : 'transparent'}`,
+    background: active ? '#EDE8F8' : 'transparent',
+    color: active ? '#4C2A92' : '#1C1610',
+    fontWeight: active ? 700 : 500,
+  }), [active])
+
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onClick?.() } }}
-      style={{
-        ...ITEM_BASE_STYLE,
-        borderLeft: `3px solid ${active ? '#4C2A92' : 'transparent'}`,
-        background: active ? '#EDE8F8' : 'transparent',
-        color: active ? '#4C2A92' : '#1C1610',
-        fontWeight: active ? 700 : 500,
-      }}
+      style={itemStyle}
       onMouseEnter={(event) => {
         if (!active) event.currentTarget.style.background = '#F2EEE6'
       }}
@@ -164,9 +166,9 @@ function SidebarItem({
       {trailing ?? null}
     </div>
   )
-}
+})
 
-function SpaceGlyph({ color, label }) {
+const SpaceGlyph = memo(function SpaceGlyph({ color, label }) {
   return (
     <span
       style={{
@@ -186,9 +188,9 @@ function SpaceGlyph({ color, label }) {
       {label}
     </span>
   )
-}
+})
 
-function SprintGlyph({ label }) {
+const SprintGlyph = memo(function SprintGlyph({ label }) {
   return (
     <span
       style={{
@@ -208,9 +210,9 @@ function SprintGlyph({ label }) {
       {label}
     </span>
   )
-}
+})
 
-function EmojiGlyph({ emoji }) {
+const EmojiGlyph = memo(function EmojiGlyph({ emoji }) {
   return (
     <span
       style={{
@@ -227,7 +229,7 @@ function EmojiGlyph({ emoji }) {
       {emoji || '🔗'}
     </span>
   )
-}
+})
 
 
 export default function Sidebar() {
