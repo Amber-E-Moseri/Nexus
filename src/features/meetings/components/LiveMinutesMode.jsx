@@ -52,8 +52,9 @@ function LiveMinutesModeInner({ meeting, onClose }) {
     }
   }, [isPaused])
 
-  // Crash-safe autosave: persist the live draft locally so a refresh, tab
-  // close, or crash mid-meeting doesn't lose notes/captures/timer progress.
+  // Crash-safe autosave: persist the live draft locally on meaningful changes
+  // (notes, captures, agenda, item changes) but NOT on every elapsed second.
+  // This avoids hundreds of localStorage writes during a long meeting.
   useEffect(() => {
     const payload = { startedAt, elapsedSeconds, currentItemIndex, itemNotes, capturedItems, agendaItems }
     try {
@@ -62,7 +63,7 @@ function LiveMinutesModeInner({ meeting, onClose }) {
     } catch {
       // localStorage unavailable (private browsing, quota) — in-memory state still holds notes
     }
-  }, [meeting.id, startedAt, elapsedSeconds, currentItemIndex, itemNotes, capturedItems, agendaItems])
+  }, [meeting.id, startedAt, currentItemIndex, itemNotes, capturedItems, agendaItems])
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60)
