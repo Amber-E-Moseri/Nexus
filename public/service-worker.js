@@ -18,6 +18,13 @@ const STATIC_ASSETS = [
   '/canada_sr.png',
 ];
 
+// Cache expiration times (ms)
+const CACHE_EXPIRY = {
+  API: 5 * 60 * 1000,      // 5 minutes for API responses
+  HTML: 60 * 60 * 1000,    // 1 hour for HTML
+  ASSET: 7 * 24 * 60 * 1000, // 7 days for assets
+};
+
 // Install event: cache essential assets
 self.addEventListener('install', (event) => {
   console.log('[Service Worker] Installing v1.0.0');
@@ -97,7 +104,12 @@ self.addEventListener('fetch', (event) => {
 function cacheFirstStrategy(request, cacheName) {
   return caches.match(request).then((response) => {
     if (response) {
-      return response;
+      // Check cache metadata for expiration
+      const metadata = response.headers.get('sw-cached-at');
+      const isExpired = metadata && Date.now() - parseInt(metadata) > CACHE_EXPIRY.ASSET;
+      if (!isExpired) {
+        return response;
+      }
     }
 
     return fetch(request).then((response) => {
@@ -107,7 +119,14 @@ function cacheFirstStrategy(request, cacheName) {
 
       const responseToCache = response.clone();
       caches.open(cacheName).then((cache) => {
-        cache.put(request, responseToCache);
+        // Add cache timestamp metadata
+        const clonedResponse = new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: new Headers(response.headers),
+        });
+        clonedResponse.headers.set('sw-cached-at', Date.now().toString());
+        cache.put(request, clonedResponse);
       });
 
       return response;
@@ -128,7 +147,14 @@ function networkFirstStrategy(request, cacheName) {
 
       const responseToCache = response.clone();
       caches.open(cacheName).then((cache) => {
-        cache.put(request, responseToCache);
+        // Add cache timestamp for API expiration
+        const clonedResponse = new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: new Headers(response.headers),
+        });
+        clonedResponse.headers.set('sw-cached-at', Date.now().toString());
+        cache.put(request, clonedResponse);
       });
 
       return response;
@@ -136,7 +162,12 @@ function networkFirstStrategy(request, cacheName) {
     .catch(() => {
       return caches.match(request).then((response) => {
         if (response) {
-          return response;
+          // Use cached response but check if it's still valid
+          const metadata = response.headers.get('sw-cached-at');
+          const isExpired = metadata && Date.now() - parseInt(metadata) > CACHE_EXPIRY.API;
+          if (!isExpired) {
+            return response;
+          }
         }
         return new Response('Network error and no cache available', {
           status: 503,
@@ -159,7 +190,14 @@ function htmlFirstStrategy(request) {
 
       const responseToCache = response.clone();
       caches.open(DYNAMIC_CACHE).then((cache) => {
-        cache.put(request, responseToCache);
+        // Add cache timestamp for HTML expiration
+        const clonedResponse = new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: new Headers(response.headers),
+        });
+        clonedResponse.headers.set('sw-cached-at', Date.now().toString());
+        cache.put(request, clonedResponse);
       });
 
       return response;
@@ -167,7 +205,12 @@ function htmlFirstStrategy(request) {
     .catch(() => {
       return caches.match(request).then((response) => {
         if (response) {
-          return response;
+          // Use cached HTML but check if still valid
+          const metadata = response.headers.get('sw-cached-at');
+          const isExpired = metadata && Date.now() - parseInt(metadata) > CACHE_EXPIRY.HTML;
+          if (!isExpired) {
+            return response;
+          }
         }
         return caches.match('/offline.html');
       });
