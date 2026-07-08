@@ -9,9 +9,9 @@ import GenerateMeetingDocButton from './GenerateMeetingDocButton'
 
 const MEETING_TYPES = [
   { value: 'general', label: 'General' },
-  { value: 'team', label: 'Team' },
-  { value: 'media', label: 'Media' },
-  { value: 'department', label: 'Department' },
+  { value: 'regional_group', label: 'Regional Group' },
+  { value: 'staff_meeting', label: 'Staff Meeting' },
+  { value: 'department_meeting', label: 'Department Meeting' },
 ]
 
 function toLocalDateTime(value) {

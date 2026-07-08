@@ -195,7 +195,7 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     } finally {
       setIsLoading(false)
     }
-  }, [userId, filters?.status, filters?.assignee, filters?.space, dateRange, filters?.dateRange, showToast])
+  }, [userId, filters?.status, filters?.assignee, filters?.space, dateRange, filters?.dateRange, filters?.priority, filters?.taskType, filters?.source, filters?.dueDateRange, filters?.showDone, filters?.hasComments, filters?.hasDependencies, filters?.milestoneStatus, showToast])
 
   // Initial load
   useEffect(() => {
@@ -213,9 +213,14 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     const handlePayload = (payload) => {
       if (payload.eventType === 'DELETE') {
         setTasks((prev) => prev.filter((t) => t.id !== payload.old.id))
-      } else {
-        // Refetch to get full normalized data
-        load()
+      } else if (payload.eventType === 'INSERT') {
+        // New task created — patch it in without a full refetch
+        setTasks((prev) => [...prev, payload.new])
+      } else if (payload.eventType === 'UPDATE') {
+        // Task updated — patch the changed row
+        setTasks((prev) =>
+          prev.map((t) => (t.id === payload.new.id ? { ...t, ...payload.new } : t)),
+        )
       }
     }
 
