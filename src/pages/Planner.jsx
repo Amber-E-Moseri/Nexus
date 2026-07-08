@@ -55,6 +55,11 @@ function isActionable(task) {
   return !isTaskCompleted(task) && !isTaskCancelled(task)
 }
 
+// Matches the same predicate as My Tasks' Delegated tab: created by me, assigned to someone else.
+function isDelegatedTask(task, userId) {
+  return task.created_by === userId && task.assignee_id !== userId
+}
+
 function SpaceChip({ space }) {
   if (!space?.name) return null
   const color = space.color?.startsWith?.('#') ? space.color : `#${space.color ?? '4C2A92'}`
@@ -65,7 +70,7 @@ function SpaceChip({ space }) {
   )
 }
 
-function TaskCardBody({ task }) {
+function TaskCardBody({ task, isDelegated }) {
   const hasMilestone = task.milestone && task.milestone.milestone_date !== task.due_date
   return (
     <>
@@ -93,11 +98,16 @@ function TaskCardBody({ task }) {
           </span>
         )}
       </div>
+      {isDelegated && (
+        <div style={{ marginTop: 4, fontSize: 10.5, fontWeight: 600, color: PRIMARY }}>
+          Delegated{task.assignee?.name ? ` → ${task.assignee.name}` : ''}
+        </div>
+      )}
     </>
   )
 }
 
-function DraggableTask({ task, onClick }) {
+function DraggableTask({ task, onClick, isDelegated }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id })
   return (
     <div
@@ -113,7 +123,7 @@ function DraggableTask({ task, onClick }) {
         boxShadow: '0 1px 2px rgba(28,22,16,.04)',
       }}
     >
-      <TaskCardBody task={task} />
+      <TaskCardBody task={task} isDelegated={isDelegated} />
     </div>
   )
 }
@@ -308,7 +318,16 @@ export default function Planner() {
   const weekEndISO = toISODate(addDays(weekStart, 6))
   const todayISO = toISODate(new Date())
 
-  const backlog = useMemo(() => allTasks.filter((t) => !t.due_date && isActionable(t)), [allTasks])
+  // Backlog pool = my own no-date tasks (personal + assigned-to-me) plus tasks I
+  // delegated that don't have a due date yet -- so they can be triaged and scheduled
+  // from here, same as My Tasks' Delegated tab surfaces them for viewing.
+  const backlog = useMemo(
+    () =>
+      allTasks.filter(
+        (t) => !t.due_date && isActionable(t) && (t.assignee_id === profile?.id || isDelegatedTask(t, profile?.id))
+      ),
+    [allTasks, profile?.id]
+  )
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
   const tasksByDay = useMemo(() => {
     const map = {}
@@ -357,6 +376,7 @@ export default function Planner() {
         title,
         due_date: dateISO,
         created_by: profile.id,
+        assignee_id: profile.id,
         is_personal: true,
         task_type: 'personal',
         source: 'manual',
@@ -606,7 +626,7 @@ export default function Planner() {
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>Backlog · No date</div>
             {isLoading ? <div style={{ fontSize: 12, color: MUTED }}>Loading…</div> : backlog.length === 0 ? (
               <div style={{ fontSize: 12, color: MUTED, padding: '8px 0' }}>Nothing in your backlog.</div>
-            ) : backlog.map((t) => <DraggableTask key={t.id} task={t} onClick={setModalTask} />)}
+            ) : backlog.map((t) => <DraggableTask key={t.id} task={t} onClick={setModalTask} isDelegated={isDelegatedTask(t, profile?.id)} />)}
           </DroppableColumn>
 
           {/* Week grid */}
@@ -626,7 +646,7 @@ export default function Planner() {
                     <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.1 }}>{day.getDate()}</div>
                   </div>
                   <div style={{ flex: 1, overflowY: 'auto', minHeight: 24 }}>
-                    {dayTasks.map((t) => <DraggableTask key={t.id} task={t} onClick={setModalTask} />)}
+                    {dayTasks.map((t) => <DraggableTask key={t.id} task={t} onClick={setModalTask} isDelegated={isDelegatedTask(t, profile?.id)} />)}
                   </div>
                   <DayInlineAdd dateISO={iso} onCreate={handleCreate} />
                 </DroppableColumn>
@@ -638,7 +658,7 @@ export default function Planner() {
         <DragOverlay>
           {activeTask ? (
             <div style={{ width: 240, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 10px', boxShadow: '0 16px 40px rgba(28,22,16,.18)' }}>
-              <TaskCardBody task={activeTask} />
+              <TaskCardBody task={activeTask} isDelegated={isDelegatedTask(activeTask, profile?.id)} />
             </div>
           ) : null}
         </DragOverlay>
