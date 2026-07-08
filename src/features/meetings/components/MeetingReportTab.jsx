@@ -1,11 +1,12 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
-import { CalendarRange, Files, LayoutGrid, Link2, Mail, Printer, RotateCcw, Users } from 'lucide-react'
+import { CalendarRange, Files, LayoutGrid, Link2, Mail, Printer, RotateCcw, Users, TrendingDown } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
 import { useToast } from '../../../context/ToastContext'
 import AbsenceBatchConfirmModal from '../../../components/meetings/AbsenceBatchConfirmModal'
 import { exportReportToGoogleDrive, checkGoogleDriveAuth } from '../lib/google-drive-service'
+import AttendanceTrendsView from './AttendanceTrendsView'
 
 const PRINT_STYLES = `
 @media print {
@@ -1097,6 +1098,7 @@ export default function MeetingReportTab() {
   const [roster, setRoster] = useState([])
   const [rosterLoading, setRosterLoading] = useState(true)
   const [rosterError, setRosterError] = useState(null)
+  const [viewMode, setViewMode] = useState('single') // 'single' | 'trends'
 
   const [phase, setPhase] = useState('input')
   const [meetingLabel, setMeetingLabel] = useState('')
@@ -1834,6 +1836,55 @@ export default function MeetingReportTab() {
               </div>
             </div>
 
+            {/* View Mode Toggle */}
+            <div className="screen-only" style={{ background: 'white', borderRadius: 12, padding: '12px', display: 'flex', gap: 8, borderBottom: '1px solid #EDE8DC' }}>
+              <button
+                type="button"
+                onClick={() => setViewMode('single')}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  borderRadius: 8,
+                  border: viewMode === 'single' ? '2px solid #4C2A92' : '1px solid #EDE8DC',
+                  background: viewMode === 'single' ? '#F0EBFC' : 'white',
+                  color: viewMode === 'single' ? '#4C2A92' : '#6B6560',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.12s',
+                }}
+              >
+                Single Meeting
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('trends')}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  borderRadius: 8,
+                  border: viewMode === 'trends' ? '2px solid #4C2A92' : '1px solid #EDE8DC',
+                  background: viewMode === 'trends' ? '#F0EBFC' : 'white',
+                  color: viewMode === 'trends' ? '#4C2A92' : '#6B6560',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.12s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <TrendingDown size={16} />
+                Attendance Trends
+              </button>
+            </div>
+
+            {viewMode === 'trends' ? (
+              <AttendanceTrendsView subgroupFilter={activeSubgroup || null} />
+            ) : (
+              <>
               {reportMode === 'regional' ? (
                 <>
                   {reportSubgroups.length > 1 && (
@@ -2037,7 +2088,10 @@ export default function MeetingReportTab() {
                 </div>
               )}
               {saving && <div className="screen-only" style={{ fontSize: 12, color: '#9E9488', textAlign: 'center' }}>Saving to history...</div>}
+              </>
+            )}
             </div>
+
           </main>
         </div>
 
