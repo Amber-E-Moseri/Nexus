@@ -8,8 +8,10 @@ import PageSpinner from './components/ui/PageSpinner'
 import { PWAInstallPrompt } from './components/PWAInstallPrompt'
 import { OfflineIndicator } from './components/OfflineIndicator'
 
-// Register service worker for PWA (offline support, caching, push notifications)
-if ('serviceWorker' in navigator) {
+// Register service worker for PWA (offline support, caching, push notifications).
+// Production only — in dev its cache-first .js handling can mask code changes
+// behind a stale cached module for up to 7 days.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js')
     .then(registration => console.log('[PWA] Service Worker registered successfully'))
     .catch(err => console.warn('[PWA] Service Worker registration failed:', err))

@@ -711,12 +711,14 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
     onTreeDataChange?.({ folders, lists })
   }, [folders, lists])
 
+  const MANAGE_ROLES = ['super_admin', 'dept_lead', 'ors', 'programs', 'media', 'regional_secretary']
+
   function canEditFolderSettings(folder) {
-    return effectiveRole === 'super_admin' || effectiveRole === 'dept_lead' || folder.created_by === profile?.id
+    return MANAGE_ROLES.includes(effectiveRole) || folder.created_by === profile?.id
   }
 
   function canEditListSettings(list) {
-    return effectiveRole === 'super_admin' || effectiveRole === 'dept_lead' || list.created_by === profile?.id
+    return MANAGE_ROLES.includes(effectiveRole) || list.created_by === profile?.id
   }
 
   async function handleCreateFolder(event) {

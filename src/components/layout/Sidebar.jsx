@@ -271,8 +271,9 @@ export default function Sidebar() {
   })
   const sidebarRef = useRef(null)
 
-  const canCreateSpace = role === 'super_admin' || role === 'dept_lead'
-  const canManageSpaces = role === 'super_admin' || role === 'dept_lead'
+  const DEPT_LEAD_ROLES = ['super_admin', 'dept_lead', 'ors', 'programs', 'media', 'regional_secretary']
+  const canCreateSpace = DEPT_LEAD_ROLES.includes(role)
+  const canManageSpaces = DEPT_LEAD_ROLES.includes(role)
   const showPeople = ['super_admin', 'dept_lead', 'regional_secretary'].includes(role)
   const showAdminPlatform = role === 'super_admin' || role === 'dept_lead'
 

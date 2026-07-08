@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { createTask, deleteTask, getDeptTasks, getSprintTasks, updateTask } from './lib/tasks'
 import { listTaskStatuses, selectDefaultStatus, selectActiveTaskStatuses } from '../../lib/taskStatuses'
+import { supabase } from '../../lib/supabase'
 
 export const TasksContext = createContext(null)
 
@@ -112,6 +113,33 @@ export function TasksProvider({ departmentId, sprintId, children }) {
   useEffect(() => {
     loadTasks()
   }, [loadTasks])
+
+  // Real-time sync for department/sprint tasks — update live as teammates edit
+  useEffect(() => {
+    if (!departmentId && !sprintId) return undefined
+
+    const handlePayload = (payload) => {
+      if (payload.eventType === 'DELETE') {
+        setTasks((prev) => prev.filter((t) => t.id !== payload.old.id))
+      } else if (payload.eventType === 'INSERT') {
+        setTasks((prev) => [...prev, payload.new])
+      } else if (payload.eventType === 'UPDATE') {
+        setTasks((prev) => prev.map((t) => (t.id === payload.new.id ? { ...t, ...payload.new } : t)))
+      }
+    }
+
+    const channelId = departmentId ? `tasks:dept:${departmentId}` : `tasks:sprint:${sprintId}`
+    const filter = departmentId ? `department_id=eq.${departmentId}` : `sprint_id=eq.${sprintId}`
+
+    const channel = supabase
+      .channel(channelId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter }, handlePayload)
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [departmentId, sprintId])
 
   const moveTask = useCallback(
     async (taskId, nextStatus) => {
