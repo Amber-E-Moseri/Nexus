@@ -242,9 +242,19 @@ export default function AudioTranscriptionPanel({
 
     // Org directory drives both the AI's space-suggestion context (linked_spaces/
     // participants) and the client-side owner/space matching once results land.
-    const [departments, users] = await Promise.all([getOrgDepartments(), getOrgUsers()])
+    // If fetching fails (e.g. transient network blip), degrade gracefully with
+    // empty arrays rather than hanging the UI with an unhandled rejection.
+    let departments = []
+    let users = []
+    try {
+      [departments, users] = await Promise.all([getOrgDepartments(), getOrgUsers()])
+      setOrgDirectory({ departments, users })
+    } catch (err) {
+      console.warn('[AudioTranscriptionPanel] Failed to load org directory for extraction context:', err.message)
+      setOrgDirectory({ departments: [], users: [] })
+    }
+
     const directory = { departments, users }
-    setOrgDirectory(directory)
     const deptNameById = Object.fromEntries(departments.map((d) => [d.id, d.name]))
     const linkedSpaces = departments.map((d) => d.name)
     const participants = users.map((u) => {

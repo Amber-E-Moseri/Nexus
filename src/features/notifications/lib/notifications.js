@@ -53,39 +53,24 @@ export async function createNotification(userId, type, payload) {
   return data
 }
 
-export async function createMentionNotifications(commenterId, commenterName, commentBody, taskId, taskTitle) {
-  // Parse @mentions from comment body: /@([a-zA-Z0-9_\s]+)/g
-  const mentionPattern = /@([a-zA-Z0-9_\s]+)/g
-  const matches = commentBody.match(mentionPattern) || []
-
-  if (matches.length === 0) return []
-
-  const mentionedNames = matches.map((match) => match.slice(1).trim())
-  const uniqueNames = [...new Set(mentionedNames)]
-
-  // Look up users by full_name or username
-  const { data: foundUsers } = await supabase
-    .from('users')
-    .select('id, name')
-    .in('name', uniqueNames)
-
-  if (!foundUsers || foundUsers.length === 0) return []
+export async function createMentionNotifications(commenterId, commenterName, mentionedUserIds, taskId, taskTitle) {
+  if (!mentionedUserIds || mentionedUserIds.length === 0) return []
 
   // Check preferences for each mentioned user
   const { data: userPrefs } = await supabase
     .from('user_notification_prefs')
     .select('user_id')
-    .in('user_id', foundUsers.map((u) => u.id))
+    .in('user_id', mentionedUserIds)
     .eq('notification_type', 'mention')
     .eq('in_app', false)
 
   const disabledUserIds = new Set((userPrefs || []).map((p) => p.user_id))
 
-  // Insert notifications for enabled mentions
-  const notificationsToInsert = foundUsers
-    .filter((u) => u.id !== commenterId && !disabledUserIds.has(u.id))
-    .map((mentionedUser) => ({
-      user_id: mentionedUser.id,
+  // Insert notifications for enabled mentions (excluding self-mentions)
+  const notificationsToInsert = mentionedUserIds
+    .filter((userId) => userId !== commenterId && !disabledUserIds.has(userId))
+    .map((userId) => ({
+      user_id: userId,
       type: 'mention',
       payload: {
         actor_name: commenterName,

@@ -113,7 +113,7 @@ async function processOverdueTasks(supabase: ReturnType<typeof createClient>): P
       department_id,
       due_date,
       status_id,
-      task_status_definitions!status_id(category),
+      task_status_definitions!inner!status_id(category),
       department:departments(id, name)
       `
     )

@@ -243,7 +243,7 @@ export default function TaskComments({ taskId }) {
       void createMentionNotifications(
         profile.id,
         profile.name,
-        body,
+        mentions.map((m) => m.id),
         taskId,
         task?.title ?? 'a task'
       )
