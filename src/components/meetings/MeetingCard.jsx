@@ -1,10 +1,28 @@
-import { Calendar, Users, FileText, Clock } from 'lucide-react'
+import { Calendar, FileText, Clock } from 'lucide-react'
 
 const TYPE_COLORS = {
-  general: { bg: '#F3E8FF', text: '#4C2A92', border: '#DDD6FE' },
-  team: { bg: '#EFF6FF', text: '#1B72E8', border: '#BFDBFE' },
-  media: { bg: '#FFFBEB', text: '#E8A020', border: '#FEE4A8' },
-  department: { bg: '#ECFDF5', text: '#16A34A', border: '#BBF7D0' },
+  general: { bg: 'var(--purple-tint)', text: 'var(--purple-700)', border: '#DDD6FE' },
+  team: { bg: 'var(--accent-blue-tint)', text: 'var(--accent-blue-text)', border: '#BFDBFE' },
+  media: { bg: 'var(--accent-yellow-tint)', text: 'var(--accent-yellow-text)', border: '#FEE4A8' },
+  department: { bg: 'var(--accent-green-tint)', text: 'var(--accent-green-text)', border: '#BBF7D0' },
+}
+
+const STATUS_LABELS = {
+  scheduled: 'Scheduled',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+}
+
+const STATUS_TONES = {
+  scheduled: { bg: 'var(--accent-blue-tint)', text: 'var(--accent-blue-text)' },
+  in_progress: { bg: 'var(--accent-yellow-tint)', text: 'var(--accent-yellow-text)' },
+  completed: { bg: 'var(--accent-green-tint)', text: 'var(--accent-green-text)' },
+  cancelled: { bg: 'var(--accent-red-tint)', text: 'var(--accent-red-text)' },
+}
+
+function getInitials(name = '') {
+  return name.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || '?'
 }
 
 export default function MeetingCard({
@@ -15,6 +33,7 @@ export default function MeetingCard({
   showAttendance = false,
 }) {
   const typeColor = TYPE_COLORS[meeting.meeting_type] || TYPE_COLORS.general
+  const statusTone = STATUS_TONES[meeting.status] ?? STATUS_TONES.scheduled
   const meetingDate = new Date(meeting.date)
   const isUpcoming = meetingDate > new Date()
 
@@ -30,7 +49,9 @@ export default function MeetingCard({
     hour12: true,
   })
 
-  const attendanceCount = meeting.attendance?.length || 0
+  const attendance = meeting.attendance || []
+  const present = attendance.filter((a) => a.status === 'present' && a.attendee?.name)
+  const absentCount = attendance.filter((a) => a.status === 'absent').length
 
   return (
     <button
@@ -47,9 +68,9 @@ export default function MeetingCard({
         gap: 12,
         padding: 16,
         borderRadius: 12,
-        border: isSelected ? `2px solid ${typeColor.text}` : `1px solid ${typeColor.border}`,
+        border: isSelected ? `2px solid ${typeColor.text}` : `1px solid var(--border-1)`,
         background: 'white',
-        boxShadow: isSelected ? `0 0 0 3px ${typeColor.bg}` : '0 1px 3px rgba(0,0,0,0.08)',
+        boxShadow: isSelected ? `0 0 0 3px ${typeColor.bg}` : 'var(--card-shadow)',
         cursor: 'pointer',
         transition: 'all 0.2s ease',
         textAlign: 'left',
@@ -57,46 +78,57 @@ export default function MeetingCard({
       }}
       onMouseEnter={(e) => {
         if (!isSelected) {
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)'
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(28,22,16,.12)'
           e.currentTarget.style.transform = 'translateY(-2px)'
         }
       }}
       onMouseLeave={(e) => {
         if (!isSelected) {
-          e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)'
+          e.currentTarget.style.boxShadow = 'var(--card-shadow)'
           e.currentTarget.style.transform = 'translateY(0)'
         }
       }}
     >
-      {/* Type Badge */}
-      <div
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          width: 'fit-content',
-          paddingLeft: 8,
-          paddingRight: 8,
-          paddingTop: 4,
-          paddingBottom: 4,
-          borderRadius: 6,
-          background: typeColor.bg,
-          color: typeColor.text,
-          fontSize: 12,
-          fontWeight: 600,
-          textTransform: 'capitalize',
-        }}
-      >
+      {/* Type + status badges */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <div
           style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: typeColor.text,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            width: 'fit-content',
+            padding: '4px 8px',
+            borderRadius: 6,
+            background: typeColor.bg,
+            color: typeColor.text,
+            fontSize: 12,
+            fontWeight: 600,
+            textTransform: 'capitalize',
           }}
-          aria-hidden="true"
-        />
-        {meeting.meeting_type || 'General'}
+        >
+          <div
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: typeColor.text,
+            }}
+            aria-hidden="true"
+          />
+          {meeting.meeting_type || 'General'}
+        </div>
+        <div
+          style={{
+            padding: '4px 8px',
+            borderRadius: 999,
+            background: statusTone.bg,
+            color: statusTone.text,
+            fontSize: 10.5,
+            fontWeight: 700,
+          }}
+        >
+          {STATUS_LABELS[meeting.status] ?? STATUS_LABELS.scheduled}
+        </div>
       </div>
 
       {/* Title */}
@@ -106,7 +138,7 @@ export default function MeetingCard({
             margin: 0,
             fontSize: 16,
             fontWeight: 700,
-            color: '#1C1C1C',
+            color: 'var(--ink-1)',
             lineHeight: 1.3,
             display: '-webkit-box',
             WebkitLineClamp: 2,
@@ -127,7 +159,7 @@ export default function MeetingCard({
           paddingTop: 8,
           borderTop: `1px solid ${typeColor.border}`,
           fontSize: 13,
-          color: '#7E7D78',
+          color: 'var(--ink-3)',
         }}
       >
         {/* Date & Time */}
@@ -141,25 +173,66 @@ export default function MeetingCard({
 
         {/* Status indicator */}
         {isUpcoming && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#16A34A' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-green-text)' }}>
             <Clock size={16} aria-hidden="true" />
             <span>Upcoming</span>
           </div>
         )}
 
         {/* Attendance */}
-        {showAttendance && attendanceCount > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Users size={16} aria-hidden="true" />
-            <span>
-              {attendanceCount} attendee{attendanceCount !== 1 ? 's' : ''}
-            </span>
+        {showAttendance && (present.length > 0 || absentCount > 0) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {present.length > 0 && (
+              <div style={{ display: 'flex' }}>
+                {present.slice(0, 4).map((entry, idx) => (
+                  <div
+                    key={entry.attendee?.id ?? idx}
+                    title={entry.attendee?.name}
+                    style={{
+                      width: 20, height: 20, borderRadius: '50%',
+                      background: 'var(--purple-tint)', color: 'var(--purple-700)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 9, fontWeight: 700,
+                      border: '1.5px solid white',
+                      marginLeft: idx === 0 ? 0 : -6,
+                    }}
+                  >
+                    {getInitials(entry.attendee?.name)}
+                  </div>
+                ))}
+                {present.length > 4 && (
+                  <div
+                    style={{
+                      width: 20, height: 20, borderRadius: '50%',
+                      background: 'var(--surface-sub)', color: 'var(--ink-2)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 9, fontWeight: 700,
+                      border: '1.5px solid white',
+                      marginLeft: -6,
+                    }}
+                  >
+                    +{present.length - 4}
+                  </div>
+                )}
+              </div>
+            )}
+            {absentCount > 0 && (
+              <span
+                style={{
+                  fontSize: 10.5, fontWeight: 700,
+                  color: 'var(--accent-red-text)', background: 'var(--accent-red-tint)',
+                  borderRadius: 999, padding: '2px 7px',
+                }}
+              >
+                {absentCount} absent
+              </span>
+            )}
           </div>
         )}
 
         {/* Notes indicator */}
         {meeting.minutes && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#4C2A92' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--purple-700)' }}>
             <FileText size={16} aria-hidden="true" />
             <span>Has notes</span>
           </div>

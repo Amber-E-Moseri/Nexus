@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { createMeeting, getDeptMeetings, updateMeeting } from './lib/meetings'
+import { createMeeting, deleteMeeting, getDeptMeetings, updateMeeting } from './lib/meetings'
 
 const MeetingsContext = createContext(null)
 
@@ -44,8 +44,13 @@ export function MeetingsProvider({ departmentId, children }) {
     return updated
   }, [])
 
+  const removeMeeting = useCallback(async (meetingId) => {
+    await deleteMeeting(meetingId)
+    setMeetings((prev) => prev.filter((meeting) => meeting.id !== meetingId))
+  }, [])
+
   return (
-    <MeetingsContext.Provider value={{ meetings, loading, error, reload, addMeeting, editMeeting }}>
+    <MeetingsContext.Provider value={{ meetings, loading, error, reload, addMeeting, editMeeting, removeMeeting }}>
       {children}
     </MeetingsContext.Provider>
   )

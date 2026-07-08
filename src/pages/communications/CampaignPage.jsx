@@ -8,18 +8,25 @@ import EmailPreviewModal from '../../features/communications/components/EmailPre
 import EmailSignatureEditor from '../../features/communications/components/EmailSignatureEditor'
 import SegmentBuilderAdvanced from '../../features/communications/components/SegmentBuilderAdvanced'
 import { Edit2, BarChart3 } from 'lucide-react'
+import { FONT_HEADING } from '../../lib/fonts'
 
-const CAMPAIGN_SELECT = 'id, name, status, subject, body, segment_id, recipient_filters, scheduled_at, sent_at, recipient_count, sent_count, open_count, failed_count, created_at, recurring_rule'
+const PRIMARY = 'var(--purple-700)'
+const BORDER = 'var(--border-1)'
+const SURFACE = '#FFFFFF'
+const TEXT = 'var(--ink-1)'
+const MUTED = 'var(--ink-3)'
+
+const CAMPAIGN_SELECT = 'id, name, status, subject, body, segment_id, segment:communication_segments(name), recipient_filters, scheduled_at, sent_at, recipient_count, sent_count, open_count, failed_count, created_at, recurring_rule'
 const SEND_SELECT = 'id, campaign_id, recipient_email, recipient_name, status, opened_at, error_message, created_at'
 const AB_TEST_SELECT = 'id, campaign_id, subject_a, subject_b, winner_subject'
 
 const STATUS_STYLE = {
-  draft:     { bg: 'var(--surface-secondary)', color: 'var(--text-secondary)' },
-  scheduled: { bg: 'var(--info-bg)', color: 'var(--info)' },
-  sending:   { bg: 'var(--status-review-bg)', color: 'var(--status-review-text)' },
-  sent:      { bg: 'var(--sage-light)', color: 'var(--sage)' },
-  failed:    { bg: 'var(--coral-light)', color: 'var(--coral-dark)' },
-  cancelled: { bg: 'var(--surface-secondary)', color: 'var(--text-secondary)' },
+  draft:     { bg: 'var(--surface-sub)', color: 'var(--ink-2)' },
+  scheduled: { bg: 'var(--accent-blue-tint)', color: 'var(--accent-blue-text)' },
+  sending:   { bg: 'var(--accent-yellow-tint)', color: 'var(--accent-yellow-text)' },
+  sent:      { bg: 'var(--accent-green-tint)', color: 'var(--accent-green-text)' },
+  failed:    { bg: 'var(--accent-red-tint)', color: 'var(--accent-red-text)' },
+  cancelled: { bg: 'var(--surface-sub)', color: 'var(--ink-2)' },
 }
 
 const VARIABLE_CHIPS = [
@@ -803,6 +810,8 @@ export default function CampaignPage() {
   const [draftCampaignId, setDraftCampaignId] = useState(null)
   const [view, setView] = useState('all') // 'all' or 'scheduled'
   const [toast, setToast] = useState(null)
+  const [hoveredId, setHoveredId] = useState(null)
+  const [abTestCampaignIds, setAbTestCampaignIds] = useState(new Set())
 
   async function loadCampaigns() {
     setLoading(true)
@@ -820,6 +829,14 @@ export default function CampaignPage() {
     const { data } = await query
     setCampaigns(data ?? [])
     setLoading(false)
+
+    const ids = (data ?? []).map((c) => c.id)
+    if (ids.length > 0) {
+      const { data: abRows } = await supabase.from('communication_ab_tests').select('campaign_id').in('campaign_id', ids)
+      setAbTestCampaignIds(new Set((abRows ?? []).map((r) => r.campaign_id)))
+    } else {
+      setAbTestCampaignIds(new Set())
+    }
   }
 
   async function fireScheduledCampaigns() {
@@ -943,7 +960,7 @@ export default function CampaignPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, paddingBottom: 14 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>Campaigns</h1>
+            <h1 style={{ fontFamily: FONT_HEADING, margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>Campaigns</h1>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>Schedule and track bulk email sends.</p>
           </div>
           <button type="button" onClick={() => navigate('/communications/compose')} style={{ border: 'none', background: 'var(--accent)', color: '#FFFFFF', borderRadius: 9, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
@@ -1078,18 +1095,51 @@ export default function CampaignPage() {
         {loading ? (
           <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)', fontSize: 13 }}>Loading...</div>
         ) : campaigns.length === 0 ? (
-          <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 16, padding: '36px 24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-            {view === 'scheduled' ? 'No scheduled campaigns.' : statusFilter ? 'No campaigns with this status.' : 'No campaigns yet. Create one to get started.'}
+          <div style={{ background: SURFACE, border: `1px dashed ${BORDER}`, borderRadius: 18, padding: '36px 24px', textAlign: 'center' }}>
+            <div style={{ margin: '0 auto 14px', display: 'flex', height: 52, width: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 16, background: 'var(--purple-tint)', fontSize: 22 }}>
+              📧
+            </div>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: TEXT }}>
+              {view === 'scheduled' ? 'No scheduled campaigns' : statusFilter ? 'No campaigns with this status' : 'No campaigns yet'}
+            </h3>
+            <p style={{ margin: '6px auto 0', maxWidth: 380, fontSize: 13, color: MUTED }}>
+              {view === 'scheduled'
+                ? 'Campaigns you schedule for later will show up here.'
+                : statusFilter
+                ? 'Try a different status filter, or clear it to see everything.'
+                : 'Create a campaign to reach a segment or your full roster.'}
+            </p>
+            {view === 'all' && !statusFilter ? (
+              <button
+                type="button"
+                onClick={() => navigate('/communications/compose')}
+                style={{ marginTop: 16, border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '9px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                + New Campaign
+              </button>
+            ) : null}
           </div>
         ) : isMobile ? (
           // Mobile: Stacked cards
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {campaigns.map((c) => (
               <div key={c.id} style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 14 }}>{c.name}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: TEXT, fontSize: 14 }}>
+                  {c.name}
+                  {abTestCampaignIds.has(c.id) ? (
+                    <span style={{ display: 'inline-block', borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, background: 'var(--accent-pink-tint)', color: 'var(--accent-pink)' }}>
+                      A/B
+                    </span>
+                  ) : null}
+                </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <StatusBadge status={c.status} />
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  {c.segment?.name ? (
+                    <span style={{ display: 'inline-block', borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 600, background: 'var(--purple-tint)', color: PRIMARY }}>
+                      {c.segment.name}
+                    </span>
+                  ) : null}
+                  <span style={{ fontSize: 12, color: MUTED }}>
                     {c.status === 'sent' && c.sent_at ? new Date(c.sent_at).toLocaleDateString() : c.scheduled_at ? new Date(c.scheduled_at).toLocaleString() : '—'}
                   </span>
                 </div>
@@ -1123,7 +1173,7 @@ export default function CampaignPage() {
                       </th>
                     ))
                   ) : (
-                    ['Name', 'Status', 'Recipients', 'Sent', 'Opens', 'Scheduled / Sent', 'Actions'].map((h) => (
+                    ['Name', 'Status', 'Segment', 'Recipients', 'Sent', 'Opens', 'Scheduled / Sent', 'Actions'].map((h) => (
                       <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.07em', borderBottom: `1px solid ${BORDER}` }}>
                         {h}
                       </th>
@@ -1133,7 +1183,12 @@ export default function CampaignPage() {
               </thead>
               <tbody>
                 {campaigns.map((c) => (
-                  <tr key={c.id} style={{ borderBottom: `1px solid ${BORDER}`, position: 'relative' }}>
+                  <tr
+                    key={c.id}
+                    onMouseEnter={() => setHoveredId(c.id)}
+                    onMouseLeave={() => setHoveredId((current) => (current === c.id ? null : current))}
+                    style={{ borderBottom: `1px solid ${BORDER}`, position: 'relative' }}
+                  >
                     {view === 'scheduled' ? (
                       <>
                         <td style={{ padding: '12px 14px', fontWeight: 700, color: 'var(--text-primary)', fontSize: 13 }}>{c.name}</td>
@@ -1160,39 +1215,59 @@ export default function CampaignPage() {
                       </>
                     ) : (
                       <>
-                        <td style={{ padding: '12px 14px', fontWeight: 700, color: 'var(--text-primary)', fontSize: 13 }}>
-                          {c.name}
+                        <td style={{ padding: '12px 14px', fontWeight: 700, color: TEXT, fontSize: 13 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {c.name}
+                            {abTestCampaignIds.has(c.id) ? (
+                              <span style={{ display: 'inline-block', borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, background: 'var(--accent-pink-tint)', color: 'var(--accent-pink)' }}>
+                                A/B
+                              </span>
+                            ) : null}
+                          </div>
                           {c.status === 'sending' ? (
-                            <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500, marginTop: 4 }}>
+                            <div style={{ fontSize: 11, color: MUTED, fontWeight: 500, marginTop: 4 }}>
                               Sending… {c.sent_count ?? 0} / {c.recipient_count ?? 0} sent
                             </div>
                           ) : null}
                         </td>
                         <td style={{ padding: '12px 14px' }}><StatusBadge status={c.status} /></td>
-                        <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', fontSize: 13 }}>{c.recipient_count ?? '—'}</td>
-                        <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', fontSize: 13 }}>{c.sent_count ?? '—'}</td>
-                        <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', fontSize: 13 }}>{c.open_count ?? '—'}</td>
-                        <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', fontSize: 12 }}>
+                        <td style={{ padding: '12px 14px' }}>
+                          {c.segment?.name ? (
+                            <span style={{ display: 'inline-block', borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 600, background: 'var(--purple-tint)', color: PRIMARY }}>
+                              {c.segment.name}
+                            </span>
+                          ) : c.recipient_filters?.length ? (
+                            <span style={{ display: 'inline-block', borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 600, background: 'var(--surface-sub)', color: MUTED }}>
+                              Custom filter
+                            </span>
+                          ) : (
+                            <span style={{ color: MUTED, fontSize: 12 }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.recipient_count ?? '—'}</td>
+                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.sent_count ?? '—'}</td>
+                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{c.open_count ?? '—'}</td>
+                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 12 }}>
                           {c.status === 'sent' && c.sent_at ? new Date(c.sent_at).toLocaleDateString() : c.scheduled_at ? new Date(c.scheduled_at).toLocaleString() : '—'}
                         </td>
                         <td style={{ padding: '12px 14px' }}>
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', opacity: hoveredId === c.id ? 1 : 0, transition: 'opacity .13s' }}>
                             {c.status === 'draft' ? (
                               <>
-                                <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--accent)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
-                                <button type="button" onClick={() => handleDelete(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
-                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--text-secondary)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
+                                <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                                <button type="button" onClick={() => handleDelete(c.id)} style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: 'var(--accent-red-text)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
                               </>
                             ) : c.status === 'scheduled' ? (
                               <>
-                                <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--accent)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
-                                <button type="button" onClick={() => handleCancel(c.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--text-secondary)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
+                                <button type="button" onClick={() => navigate(`/communications/campaigns/${c.id}/edit`)} style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                                <button type="button" onClick={() => handleCancel(c.id)} style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: 'var(--accent-red-text)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
                               </>
                             ) : c.status === 'sent' || c.status === 'sending' ? (
                               <>
-                                <button type="button" onClick={() => setModal({ mode: 'report', campaign: c })} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--accent)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>View Report</button>
-                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--text-secondary)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
+                                <button type="button" onClick={() => setModal({ mode: 'report', campaign: c })} style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>View Report</button>
+                                <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
                               </>
                             ) : null}
                           </div>

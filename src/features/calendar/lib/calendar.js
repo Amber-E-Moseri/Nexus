@@ -196,12 +196,25 @@ export async function getPendingApprovals() {
 // ---- iCal subscriptions ----
 
 export async function getOrCreateSubscription(userId, scope = 'all', departmentId = null) {
+  // Deliberately avoid .upsert(onConflict:...) here: calendar_subscriptions only has
+  // partial unique indexes (see 20261202000000_dedupe_and_index_subscriptions.sql),
+  // which Postgres can't match against a plain ON CONFLICT (col list) target — that
+  // upsert always fails with "no unique or exclusion constraint matching" (42P10).
+  let existingQuery = supabase
+    .from('calendar_subscriptions')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('scope', scope)
+
+  existingQuery = departmentId ? existingQuery.eq('department_id', departmentId) : existingQuery.is('department_id', null)
+
+  const { data: existing, error: selectError } = await existingQuery.maybeSingle()
+  if (selectError) throw selectError
+  if (existing) return existing
+
   const { data, error } = await supabase
     .from('calendar_subscriptions')
-    .upsert(
-      { user_id: userId, scope, dept_id: departmentId },
-      { onConflict: 'user_id,scope,dept_id' }
-    )
+    .insert({ user_id: userId, scope, department_id: departmentId })
     .select()
     .single()
 
@@ -212,7 +225,7 @@ export async function getOrCreateSubscription(userId, scope = 'all', departmentI
 export async function getSubscriptions(userId) {
   const { data, error } = await supabase
     .from('calendar_subscriptions')
-    .select('id, token, scope, dept_id, created_at')
+    .select('id, token, scope, department_id, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
 
@@ -232,7 +245,7 @@ export async function deleteSubscription(subscriptionId) {
 export async function getEventsBySubscriptionToken(token) {
   const { data: subscription, error: subError } = await supabase
     .from('calendar_subscriptions')
-    .select('user_id, scope, dept_id')
+    .select('user_id, scope, department_id')
     .eq('token', token)
     .single()
 
@@ -245,8 +258,8 @@ export async function getEventsBySubscriptionToken(token) {
     .is('deleted_at', null)
     .gte('start_date', new Date().toISOString())
 
-  if (subscription.scope === 'department' && subscription.dept_id) {
-    query = query.or(`department_id.eq.${subscription.dept_id},department_id.is.null`)
+  if (subscription.scope === 'department' && subscription.department_id) {
+    query = query.or(`department_id.eq.${subscription.department_id},department_id.is.null`)
   }
 
   const { data, error } = await query
@@ -422,7 +435,7 @@ export async function exchangeMinistryCalendarConnectionCode({ code, userId }) {
 export async function getMinistryCalendarConnectionStatus() {
   const { data, error } = await supabase
     .from('ministry_calendar_connection')
-    .select('id, connected_at, updated_at')
+    .select('id, connected_at, updated_at, needs_reauth')
     .maybeSingle()
 
   if (error) throw error

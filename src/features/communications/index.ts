@@ -1,3 +1,4 @@
+export { default as AudiencePicker } from './components/AudiencePicker'
 export { default as EmailComposer } from './components/EmailComposer'
 export { default as CampaignEditor } from './components/CampaignEditor'
 export { default as CampaignStatus } from './components/CampaignStatus'

@@ -156,18 +156,121 @@ Deno.serve(async (request) => {
     return jsonResponse(400, { error: 'body_template is required' })
   }
 
+  // ── Authorization ──────────────────────────────────────────────────────────
+  // Fetch the caller's profile to determine role.
+  // Privileged roles (super_admin, dept_lead) can email any report's absentees.
+  // Others may only email absentees from reports they personally created.
+  const { data: callerProfile, error: callerProfileError } = await supabase
+    .from('users')
+    .select('id, role')
+    .eq('id', user.id)
+    .single()
+
+  if (callerProfileError || !callerProfile) {
+    return jsonResponse(403, { error: 'User profile not found' })
+  }
+
+  const isPrivileged = ['super_admin', 'dept_lead'].includes(callerProfile.role)
+
+  // ── Report ownership check ─────────────────────────────────────────────────
+  // NOTE: meeting_attendance_reports has no department_id column; ownership is
+  // tracked via created_by. Privileged roles bypass this check.
+  let reportAbsentNames: string[] = []
+
+  if (reportId) {
+    const { data: report, error: reportError } = await supabase
+      .from('meeting_attendance_reports')
+      .select('id, created_by, absent_names')
+      .eq('id', reportId)
+      .single()
+
+    if (reportError || !report) {
+      return jsonResponse(404, { error: 'Report not found' })
+    }
+
+    if (!isPrivileged && report.created_by !== user.id) {
+      return jsonResponse(403, { error: 'You do not have permission to email absentees for this report' })
+    }
+
+    reportAbsentNames = (report.absent_names as string[]) ?? []
+  } else if (!isPrivileged) {
+    // No report_id and not privileged — cannot verify who the absentees are.
+    return jsonResponse(403, { error: 'report_id is required' })
+  }
+
+  // ── Recipient cross-check ──────────────────────────────────────────────────
+  // Every recipient email must exist in expected_attendees (active roster).
+  // When a report is provided, the attendee's name must also appear in
+  // absent_names to close the "arbitrary email address" abuse vector.
+  const allRecipientEmails = recipients.map(r => r.email.toLowerCase())
+  const { data: rosterData } = await supabase
+    .from('expected_attendees')
+    .select('full_name, email')
+    .in('email', allRecipientEmails)
+    .eq('active', true)
+
+  const rosterByEmail = new Map(
+    (rosterData ?? []).map((ea: { full_name: string; email: string }) => [
+      ea.email.toLowerCase(),
+      ea.full_name,
+    ]),
+  )
+
+  const absentNamesLower = new Set(
+    reportAbsentNames.map(n => n.toLowerCase().trim()),
+  )
+
+  const validatedRecipients: Recipient[] = []
+  const droppedRecipients: Array<{ name: string; email: string; reason: string }> = []
+
+  for (const r of recipients) {
+    const emailLower = r.email.toLowerCase()
+    const rosterName = rosterByEmail.get(emailLower)
+
+    if (!rosterName) {
+      droppedRecipients.push({ name: r.name ?? '', email: r.email, reason: 'recipient_not_on_roster' })
+      continue
+    }
+
+    if (reportAbsentNames.length > 0 && !absentNamesLower.has(rosterName.toLowerCase().trim())) {
+      droppedRecipients.push({ name: r.name ?? '', email: r.email, reason: 'recipient_not_absent' })
+      continue
+    }
+
+    validatedRecipients.push(r)
+  }
+
+  // Log dropped recipients immediately (before the send loop)
+  for (const dropped of droppedRecipients) {
+    const { error: dropLogError } = await supabase.from('absence_email_log').insert({
+      report_id: reportId,
+      recipient_name: dropped.name,
+      recipient_email: dropped.email,
+      subject,
+      body: bodyTemplate,
+      status: 'skipped',
+      error_message: dropped.reason,
+      sent_by: user.id ?? null,
+    })
+    if (dropLogError) {
+      console.error('Failed to log dropped recipient', dropLogError)
+    }
+  }
+
+  // ── Send loop ──────────────────────────────────────────────────────────────
+
   let sent = 0
   let failed = 0
-  let skipped = 0
+  let skipped = droppedRecipients.length
   const errors: Array<{ name: string; email: string; error: string }> = []
 
   // BATCH-LOAD user preferences once (not per-recipient)
   // Step 1: Get user IDs by email
-  const recipientEmails = recipients.map(r => r.email.toLowerCase())
+  const recipientEmails = validatedRecipients.map(r => r.email.toLowerCase())
   const { data: usersData } = await supabase
     .from('users')
     .select('id, email')
-    .in('email', recipientEmails)
+    .in('email', recipientEmails.length > 0 ? recipientEmails : ['noop@noop.invalid'])
 
   // Create Map: email → user_id for O(1) lookup
   const userIdByEmail = new Map(
@@ -180,15 +283,15 @@ Deno.serve(async (request) => {
     .from('user_notification_prefs')
     .select('user_id, email')
     .eq('notification_type', 'absent_from_meeting')
-    .in('user_id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000']) // Prevent "in ()" error
+    .in('user_id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000'])
 
   // Create Map: user_id → email_enabled for O(1) lookup
   const prefsByUserId = new Map(
     (allPrefs || []).map(p => [p.user_id, p.email])
   )
 
-  for (let i = 0; i < recipients.length; i++) {
-    const recipient = recipients[i]
+  for (let i = 0; i < validatedRecipients.length; i++) {
+    const recipient = validatedRecipients[i]
 
     // Check if recipient has notification preference enabled for absence emails
     // Look up user_id from email, then check preference in Map (O(1), not DB query)
@@ -268,7 +371,7 @@ Deno.serve(async (request) => {
       console.error('Failed to write absence_email_log row', logError)
     }
 
-    if (i < recipients.length - 1) {
+    if (i < validatedRecipients.length - 1) {
       await sleep(100)
     }
   }

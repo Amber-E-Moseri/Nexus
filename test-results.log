@@ -1,0 +1,249 @@
+
+> blw-canada-os@0.1.0 test
+> vitest run tests/
+
+
+ RUN  v4.1.9 C:/Users/moser/Downloads/clickup
+
+Warning: A vi.mock('../lib/supabase.js') call in "C:/Users/moser/Downloads/clickup/.claude/worktrees/agent-accb6b4ce1bb9f239/src/tests/calendar.test.js" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+Warning: A vi.mock('../lib/supabase.js') call in "C:/Users/moser/Downloads/clickup/.claude/worktrees/agent-a52744d52eda56392/src/tests/calendar.test.js" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+Warning: A vi.mock('../lib/supabase.js') call in "C:/Users/moser/Downloads/clickup/.claude/worktrees/agent-a2e8a68c95e933569/src/tests/calendar.test.js" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+Warning: A vi.mock('../lib/supabase.js') call in "C:/Users/moser/Downloads/clickup/.claude/worktrees/agent-ae8ecdf5d9692d7cf/src/tests/calendar.test.js" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+Warning: A vi.mock('../lib/supabase.js') call in "C:/Users/moser/Downloads/clickup/src/tests/calendar.test.js" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+ ❯ .claude/worktrees/agent-ae8ecdf5d9692d7cf/tests/features.test.js (36 tests | 4 failed) 783ms
+     × should allow super_admin all access 512ms
+     × should fetch space tasks assigned to user 4ms
+     × should return super_admin with all widgets 1ms
+     × should fetch action items 1ms
+ ❯ .claude/worktrees/agent-ae8ecdf5d9692d7cf/src/tests/calendar.test.js (57 tests | 3 failed) 3032ms
+       × formats single day event correctly 1903ms
+       × formats multi-day event correctly 6ms
+       × handles events without end date 6ms
+ ❯ .claude/worktrees/agent-a2e8a68c95e933569/src/tests/email-absent-edge-cases.test.js (31 tests | 2 failed) 1019ms
+       × matches names with hyphens - removes hyphens 670ms
+       × matches names with accents - accents are removed 5ms
+ ❯ .claude/worktrees/agent-accb6b4ce1bb9f239/src/tests/email-absent-edge-cases.test.js (31 tests | 2 failed) 1171ms
+       × matches names with hyphens - removes hyphens 591ms
+       × matches names with accents - accents are removed 3ms
+ ❯ .claude/worktrees/agent-ae8ecdf5d9692d7cf/src/tests/email-absent-edge-cases.test.js (31 tests | 2 failed) 1761ms
+       × matches names with hyphens - removes hyphens 246ms
+       × matches names with accents - accents are removed 232ms
+ ❯ src/tests/email-absent-edge-cases.test.js (31 tests | 2 failed) 1350ms
+       × matches names with hyphens - removes hyphens 512ms
+       × matches names with accents - accents are removed 3ms
+ ❯ .claude/worktrees/agent-a52744d52eda56392/src/tests/email-absent-edge-cases.test.js (31 tests | 2 failed) 783ms
+       × matches names with hyphens - removes hyphens 270ms
+       × matches names with accents - accents are removed 9ms
+ ❯ .claude/worktrees/agent-a2e8a68c95e933569/src/tests/documentUpload.test.js (0 test)
+ ❯ .claude/worktrees/agent-a52744d52eda56392/src/tests/documentUpload.test.js (0 test)
+ ❯ src/tests/documentUpload.test.js (0 test)
+ ❯ .claude/worktrees/agent-accb6b4ce1bb9f239/src/tests/documentUpload.test.js (0 test)
+ ❯ .claude/worktrees/agent-ae8ecdf5d9692d7cf/src/tests/documentUpload.test.js (0 test)
+ ❯ src/tests/permissions.test.js (0 test)
+ ❯ .claude/worktrees/agent-a2e8a68c95e933569/src/tests/permissions.test.js (0 test)
+ ❯ .claude/worktrees/agent-accb6b4ce1bb9f239/src/tests/permissions.test.js (0 test)
+ ❯ .claude/worktrees/agent-ae8ecdf5d9692d7cf/src/tests/permissions.test.js (0 test)
+ ❯ .claude/worktrees/agent-a52744d52eda56392/src/tests/permissions.test.js (0 test)
+ ❯ .claude/worktrees/agent-a2e8a68c95e933569/src/tests/rsvp.permission.test.js (26 tests | 5 failed | 21 todo) 780ms
+       × should allow inserting recipients for own org campaign 421ms
+       × should prevent inserting recipients for other org campaign 2ms
+       × should allow yes response 1ms
+       × should allow no response 333ms
+       × should allow maybe response 2ms
+ ❯ .claude/worktrees/agent-accb6b4ce1bb9f239/src/tests/rsvp.permission.test.js (26 tests | 5 failed | 21 todo) 304ms
+       × should allow inserting recipients for own org campaign 31ms
+       × should prevent inserting recipients for other org campaign 3ms
+       × should allow yes response 1ms
+       × should allow no response 4ms
+       × should allow maybe response 4ms
+ ❯ .claude/worktrees/agent-a52744d52eda56392/src/tests/rsvp.permission.test.js (26 tests | 5 failed | 21 todo) 315ms
+       × should allow inserting recipients for own org campaign 24ms
+       × should prevent inserting recipients for other org campaign 1ms
+       × should allow yes response 279ms
+       × should allow no response 2ms
+       × should allow maybe response 1ms
+ ❯ src/tests/sseBuffering.test.js (12 tests | 1 failed) 1353ms
+     × malformed JSON in an SSE line logs an error and does not crash 987ms
+ ❯ .claude/worktrees/agent-ae8ecdf5d9692d7cf/src/tests/rsvp.permission.test.js (26 tests | 26 failed) 1852ms
+       × should allow ORS user to create campaign in their org 740ms
+       × should allow super_admin to view all campaigns 2ms
+       × should block non-ORS user from creating campaign for org 1ms
+       × should allow inserting recipients for own org campaign 2ms
+       × should prevent inserting recipients for other org campaign 1ms
+       × should accept valid RSVP token format 2ms
+       × should reject invalid RSVP token format 1ms
+       × should reject token with special characters 1ms
+       × should accept yes, no, maybe RSVP responses 385ms
+       × should reject invalid RSVP responses 6ms
+       × should generate 48-character tokens 1ms
+       × should use only alphanumeric characters 2ms
+       × should have no spaces or special characters 1ms
+       × should allow yes response 3ms
+       × should allow no response 1ms
+       × should allow maybe response 1ms
+       × should reject response values outside allowed set 1ms
+       × should calculate correct yes count 1ms
+       × should calculate correct no count 1ms
+       × should calculate correct maybe count 347ms
+       × should handle all pending responses 1ms
+       × should accept pending status 333ms
+       × should accept sent status 1ms
+       × should accept bounced status 2ms
+       × should accept complained status 1ms
+       × should reject invalid status 1ms
+ ❯ src/tests/rsvp.permission.test.js (26 tests | 5 failed | 21 todo) 366ms
+       × should allow inserting recipients for own org campaign 24ms
+       × should prevent inserting recipients for other org campaign 2ms
+       × should allow yes response 1ms
+       × should allow no response 1ms
+       × should allow maybe response 330ms
+[vitest-pool]: Timeout terminating forks worker for test files C:/Users/moser/Downloads/clickup/.claude/worktrees/agent-ae8ecdf5d9692d7cf/src/tests/rsvp.permission.test.js.
+[vitest-pool]: Timeout terminating forks worker for test files C:/Users/moser/Downloads/clickup/src/tests/rsvp.permission.test.js.
+[vitest-pool]: Timeout terminating forks worker for test files C:/Users/moser/Downloads/clickup/.claude/worktrees/agent-accb6b4ce1bb9f239/src/tests/agendaPermissions.test.js.
+[vitest-pool]: Timeout terminating forks worker for test files C:/Users/moser/Downloads/clickup/.claude/worktrees/agent-a2e8a68c95e933569/src/tests/agendaPermissions.test.js.
+[vitest-pool]: Timeout terminating forks worker for test files C:/Users/moser/Downloads/clickup/.claude/worktrees/agent-a52744d52eda56392/src/tests/agendaPermissions.test.js.
+[vitest-pool]: Timeout terminating forks worker for test files C:/Users/moser/Downloads/clickup/.claude/worktrees/agent-ae8ecdf5d9692d7cf/src/tests/agendaPermissions.test.js.
+ ❯ src/tests/calendar-settings-access.test.js (0 test)
+TAP version 13
+# Subtest: basic user selectors return expected records
+ok 1 - basic user selectors return expected records
+  ---
+  duration_ms: 5.4444
+  ...
+# Subtest: lifecycle stats scope to pastor members
+ok 2 - lifecycle stats scope to pastor members
+  ---
+  duration_ms: 308.3386
+  ...
+ ❯ .claude/worktrees/agent-a52744d52eda56392/tests/peopleSelectors.test.js (0 test)
+TAP version 13
+# Subtest: basic user selectors return expected records
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 673.3041
+ok 1 - basic user selectors return expected records
+  ---
+  duration_ms: 4.9817
+  ...
+# Subtest: lifecycle stats scope to pastor members
+ok 2 - lifecycle stats scope to pastor members
+  ---
+  duration_ms: 290.1887
+  ...
+ ❯ .claude/worktrees/agent-accb6b4ce1bb9f239/tests/peopleSelectors.test.js (0 test)
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 641.8879
+TAP version 13
+# Subtest: basic user selectors return expected records
+ok 1 - basic user selectors return expected records
+  ---
+  duration_ms: 6.78
+  ...
+# Subtest: lifecycle stats scope to pastor members
+ok 2 - lifecycle stats scope to pastor members
+  ---
+  duration_ms: 305.579
+  ...
+ ❯ tests/peopleSelectors.test.js (0 test)
+TAP version 13
+# Subtest: basic user selectors return expected records
+ok 1 - basic user selectors return expected records
+  ---
+  duration_ms: 6.7895
+  ...
+# Subtest: lifecycle stats scope to pastor members
+ok 2 - lifecycle stats scope to pastor members
+  ---
+  duration_ms: 310.6119
+  ...
+ ❯ .claude/worktrees/agent-ae8ecdf5d9692d7cf/tests/peopleSelectors.test.js (0 test)
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 689.4083
+TAP version 13
+# Subtest: basic user selectors return expected records
+ok 1 - basic user selectors return expected records
+  ---
+  duration_ms: 5.0889
+  ...
+# Subtest: lifecycle stats scope to pastor members
+ok 2 - lifecycle stats scope to pastor members
+  ---
+  duration_ms: 300.711
+  ...
+ ❯ .claude/worktrees/agent-a2e8a68c95e933569/tests/peopleSelectors.test.js (0 test)
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 769.4356
+[vitest-pool]: Timeout terminating forks worker for test files C:/Users/moser/Downloads/clickup/.claude/worktrees/agent-ae8ecdf5d9692d7cf/tests/peopleSelectors.test.js.
+TAP version 13
+# Subtest: parseInvitationCsv maps expected columns
+ok 1 - parseInvitationCsv maps expected columns
+  ---
+  duration_ms: 8.5037
+  ...
+[vitest-pool]: Timeout terminating forks worker for test files C:/Users/moser/Downloads/clickup/.claude/worktrees/agent-a2e8a68c95e933569/tests/peopleSelectors.test.js.
+ ❯ .claude/worktrees/agent-accb6b4ce1bb9f239/tests/invitationCsv.test.js (0 test)
+TAP version 13
+# Subtest: parseInvitationCsv maps expected columns
+ok 1 - parseInvitationCsv maps expected columns
+  ---
+  duration_ms: 226.3081
+  ...
+ ❯ .claude/worktrees/agent-a2e8a68c95e933569/tests/invitationCsv.test.js (0 test)
+ ❯ src/tests/calendar-subscription-token.test.js (2 tests | 1 failed) 932ms
+     × token DEFAULT generates valid 64-char hex string (MD5 format) 329ms
+TAP version 13
+# Subtest: parseInvitationCsv maps expected columns
+ok 1 - parseInvitationCsv maps expected columns
+  ---
+  duration_ms: 234.2544
+  ...
+ ❯ tests/invitationCsv.test.js (0 test)
+TAP version 13
+# Subtest: parseInvitationCsv maps expected columns
+ok 1 - parseInvitationCsv maps expected columns
+  ---
+  duration_ms: 6.6773
+  ...
+ ❯ .claude/worktrees/agent-a52744d52eda56392/tests/invitationCsv.test.js (0 test)
+TAP version 13
+# Subtest: parseInvitationCsv maps expected columns
+ok 1 - parseInvitationCsv maps expected columns
+  ---
+  duration_ms: 235.2426
+  ...
+ ❯ .claude/worktrees/agent-ae8ecdf5d9692d7cf/tests/invitationCsv.test.js (0 test)
+[vitest-pool]: Timeout terminating forks worker for test files C:/Users/moser/Downloads/clickup/tests/invitationCsv.test.js.
+[vitest-pool]: Timeout terminating forks worker for test files C:/Users/moser/Downloads/clickup/.claude/worktrees/agent-a52744d52eda56392/tests/invitationCsv.test.js.
+[vitest-pool]: Timeout terminating forks worker for test files C:/Users/moser/Downloads/clickup/.claude/worktrees/agent-ae8ecdf5d9692d7cf/tests/invitationCsv.test.js.

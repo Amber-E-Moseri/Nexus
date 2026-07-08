@@ -38,6 +38,7 @@ interface CampaignRow {
   segment_id: string | null
   recipient_filters: RecipientPill[] | null
   status: string
+  attachments: CampaignAttachment[] | null
 }
 
 interface RecipientPill {
@@ -49,6 +50,14 @@ interface RecipientPill {
   subgroup?: string
   category?: string
   entries?: Array<{ email: string; name?: string }>
+}
+
+interface CampaignAttachment {
+  filename: string
+  storage_path: string
+  size: number
+  mime_type: string
+  public_url: string | null
 }
 
 interface RequestBody {
@@ -462,10 +471,12 @@ Deno.serve(async (request) => {
     test_email: testEmail,
   } = requestBody
 
+  let campaignAttachments: CampaignAttachment[] | null = null
+
   if (campaignId) {
     const { data: campaign, error: campaignError } = await supabase
       .from('communication_campaigns')
-      .select('id, name, subject, preview_text, body, body_html, body_text, from_name, reply_to_email, segment_id, recipient_filters, status')
+      .select('id, name, subject, preview_text, body, body_html, body_text, from_name, reply_to_email, segment_id, recipient_filters, status, attachments')
       .eq('id', campaignId)
       .single()
 
@@ -481,6 +492,7 @@ Deno.serve(async (request) => {
     previewText = previewText || typedCampaign.preview_text || ''
     replyTo = replyTo || typedCampaign.reply_to_email || callerEmail || undefined
     to = to.length > 0 ? to : await fetchCampaignRecipients(typedCampaign, supabase)
+    campaignAttachments = typedCampaign.attachments ?? null
   }
 
   if (testEmail?.trim()) {
@@ -584,6 +596,11 @@ Deno.serve(async (request) => {
   const errors: Array<{ name: string; email: string; error: string }> = []
   const batchSize = 10
 
+  const resendAttachments = (campaignAttachments ?? [])
+    .filter((a) => a.public_url !== null)
+    .map((a) => ({ filename: a.filename, path: a.public_url as string }))
+  console.log(`[send-communication-email] ${resendAttachments.length} attachment(s) will be included with each send`)
+
   for (let batchStart = 0; batchStart < filteredRecipients.length; batchStart += batchSize) {
     const batch = filteredRecipients.slice(batchStart, batchStart + batchSize)
 
@@ -666,6 +683,7 @@ Deno.serve(async (request) => {
               'X-Entity-Ref-ID': campaignId ?? crypto.randomUUID(),
               Precedence: 'bulk',
             },
+            attachments: resendAttachments.length ? resendAttachments : undefined,
           }),
         })
 

@@ -225,7 +225,13 @@ export default function AudioTranscriptionPanel({
 
           // stream:true tells TextDecoder to buffer incomplete multi-byte chars
           const rawChunk = decoder.decode(value, { stream: true })
-          const { updatedBuffer, events } = processSSELines(buffer, rawChunk)
+          const { updatedBuffer, events, error } = processSSELines(buffer, rawChunk)
+
+          // Buffer overflow: stream is likely corrupted, fall back to non-streaming
+          if (error === 'buffer_overflow') {
+            throw new Error('SSE buffer overflow — stream appears corrupted. Switching to non-streaming extraction.')
+          }
+
           buffer = updatedBuffer
 
           for (const event of events) {

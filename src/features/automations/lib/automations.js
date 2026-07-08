@@ -1,19 +1,14 @@
 import { supabase } from '../../../lib/supabase'
 
 export const TRIGGER_LABELS = {
-  task_status_changed: 'Task status changes',
-  task_created: 'Task is created',
-  task_overdue: 'Task becomes overdue',
-  sprint_status_changed: 'Sprint status changes',
+  task_status_change: 'Task status changes',
+  task_assigned: 'Task is assigned',
   meeting_created: 'Meeting is logged',
-  api_task_received: 'Task received via API',
-  manual: 'Manually triggered',
 }
 
 export const ACTION_LABELS = {
-  notify_user: 'Notify a user',
+  send_notification: 'Notify a user',
   create_task: 'Create a task',
-  update_task_status: 'Update task status',
   send_email: 'Send an email',
   post_webhook: 'Post to webhook URL',
 }

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../../lib/auth'
 import { createClient } from '@supabase/supabase-js'
+import AudiencePicker from './AudiencePicker'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
@@ -19,7 +20,6 @@ interface FormData {
   title: string
   body: string
   iconUrl: string
-  recipientPills: RecipientPill[]
   includeEmail: boolean
   emailSubject: string
 }
@@ -31,7 +31,6 @@ export function BroadcastCampaignEditor() {
     title: '',
     body: '',
     iconUrl: '',
-    recipientPills: [],
     includeEmail: false,
     emailSubject: '',
   })
@@ -40,9 +39,21 @@ export function BroadcastCampaignEditor() {
   const [sending, setSending] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [pills, setPills] = useState<RecipientPill[]>([])
+  const [segmentId, setSegmentId] = useState<string | null>(null)
+  const [segments, setSegments] = useState<{ id: string; name: string; estimated_count: number | null }[]>([])
+
+  useEffect(() => {
+    if (!user?.session?.access_token) return
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${user.session.access_token}` } },
+    })
+    supabase.from('communication_segments').select('id, name, estimated_count').order('name')
+      .then(({ data }) => setSegments((data as typeof segments) ?? []))
+  }, [user?.session?.access_token])
 
   // Handle input change
-  const handleInputChange = (field: keyof Omit<FormData, 'recipientPills'>, value: string | boolean) => {
+  const handleInputChange = (field: keyof FormData, value: string | boolean) => {
     setForm((prev) => ({
       ...prev,
       [field]: value,
@@ -52,7 +63,7 @@ export function BroadcastCampaignEditor() {
   // Handle email subject auto-fill
   const handleTitleChange = (value: string) => {
     setForm((prev) => ({
-      prev,
+      ...prev,
       title: value,
       emailSubject: form.emailSubject === form.title || form.emailSubject === '' ? value : form.emailSubject,
     }))
@@ -82,7 +93,8 @@ export function BroadcastCampaignEditor() {
         title: form.title,
         body: form.body,
         icon_url: form.iconUrl || null,
-        recipient_filters: form.recipientPills,
+        recipient_filters: pills,
+        segment_id: segmentId,
         status: 'draft',
         include_email: form.includeEmail,
         email_subject: form.emailSubject || form.title,
@@ -99,10 +111,11 @@ export function BroadcastCampaignEditor() {
           title: '',
           body: '',
           iconUrl: '',
-          recipientPills: [],
           includeEmail: false,
           emailSubject: '',
         })
+        setPills([])
+        setSegmentId(null)
         setTimeout(() => setMessage(null), 3000)
       }
     } catch (error) {
@@ -124,7 +137,7 @@ export function BroadcastCampaignEditor() {
       return
     }
 
-    if (form.recipientPills.length === 0) {
+    if (pills.length === 0 && !segmentId) {
       setMessage({ type: 'error', text: 'At least one recipient is required' })
       return
     }
@@ -154,7 +167,8 @@ export function BroadcastCampaignEditor() {
           title: form.title,
           body: form.body,
           icon_url: form.iconUrl || null,
-          recipient_filters: form.recipientPills,
+          recipient_filters: pills,
+          segment_id: segmentId,
           status: 'draft',
           include_email: form.includeEmail,
           email_subject: form.emailSubject || form.title,
@@ -195,10 +209,11 @@ export function BroadcastCampaignEditor() {
           title: '',
           body: '',
           iconUrl: '',
-          recipientPills: [],
           includeEmail: false,
           emailSubject: '',
         })
+        setPills([])
+        setSegmentId(null)
         setTimeout(() => setMessage(null), 5000)
       }
     } catch (error) {
@@ -284,14 +299,18 @@ export function BroadcastCampaignEditor() {
           />
         </div>
 
-        {/* Recipients placeholder (TODO: implement RecipientField component integration) */}
+        {/* Recipients */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Recipients <span className="text-red-500">*</span>
           </label>
-          <div className="p-3 border border-gray-300 rounded-lg bg-gray-50 text-sm text-gray-600">
-            TODO: Integrate RecipientField component for department/role/individual selection
-          </div>
+          <AudiencePicker
+            pills={pills}
+            onPillsChange={setPills}
+            segmentId={segmentId}
+            onSegmentChange={setSegmentId}
+            segments={segments}
+          />
         </div>
 
         {/* Include email checkbox */}
@@ -360,8 +379,8 @@ export function BroadcastCampaignEditor() {
           <div className="bg-white rounded-lg p-6 max-w-sm mx-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Send Broadcast?</h3>
             <p className="text-sm text-gray-600 mb-4">
-              This will send to {form.recipientPills.length} recipient
-              {form.recipientPills.length !== 1 ? 's' : ''}. This cannot be undone.
+              This will send to {pills.length || (segmentId ? 'segment' : '0')} recipient
+              {pills.length !== 1 ? 's' : ''}. This cannot be undone.
             </p>
 
             <div className="flex gap-2 justify-end">

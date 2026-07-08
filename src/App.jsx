@@ -78,6 +78,7 @@ const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
 const InvitationWizard = lazy(() => import('./pages/communications/InvitationWizard'))
 const InvitationDetailPage = lazy(() => import('./pages/communications/InvitationDetailPage'))
 const InstagramGradingPage = lazy(() => import('./features/instagram/pages/InstagramGradingPage'))
+const HelpPage = lazy(() => import('./pages/HelpPage'))
 
 function onError(error, errorInfo) {
   console.error('[AppErrorBoundary]', error, errorInfo)
@@ -358,6 +359,7 @@ export default function App() {
             }
           />
           <Route path="/settings/api-docs" element={<ApiDocumentationPage />} />
+          <Route path="/help" element={<HelpPage />} />
           <Route
             path="/instagram"
             element={

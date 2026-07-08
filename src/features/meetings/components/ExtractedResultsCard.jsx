@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ErrorBoundary } from '../../../components/ErrorBoundary'
 
 export default function ExtractedResultsCard({ results, onSaveToMinutes, onDiscard, saving }) {
   const outputMode = results.output_mode || 'organized'
@@ -20,12 +21,14 @@ export default function ExtractedResultsCard({ results, onSaveToMinutes, onDisca
   // ── organized mode ───────────────────────────────────────────────────
   if (outputMode === 'organized') {
     return (
-      <OrganizedView
-        results={results}
-        onSaveToMinutes={onSaveToMinutes}
-        onDiscard={onDiscard}
-        saving={saving}
-      />
+      <ErrorBoundary>
+        <OrganizedView
+          results={results}
+          onSaveToMinutes={onSaveToMinutes}
+          onDiscard={onDiscard}
+          saving={saving}
+        />
+      </ErrorBoundary>
     )
   }
 
@@ -196,10 +199,25 @@ function OrganizedView({ results, onSaveToMinutes, onDiscard, saving }) {
   const [summary, setSummary] = useState(results.summary)
   const [decisions, setDecisions] = useState(
     Array.isArray(results.decisions)
-      ? results.decisions.map((d) => (typeof d === 'string' ? { decision: d, context: '' } : d))
+      ? results.decisions
+          .filter((d) => d != null) // Filter out null/undefined
+          .map((d) => {
+            // Normalize all decision shapes to { decision: string, context: string }
+            if (typeof d === 'string') return { decision: d, context: '' }
+            if (d && typeof d === 'object' && typeof d.decision === 'string') {
+              return { ...d, decision: d.decision, context: d.context || '' }
+            }
+            // Malformed object: skip it (would crash on render otherwise)
+            console.warn('[ExtractedResultsCard] Malformed decision object:', d)
+            return null
+          })
+          .filter((d) => d !== null)
       : []
   )
-  const [actionItems, setActionItems] = useState(results.action_items || results.extractedActionItems || [])
+  const [actionItems, setActionItems] = useState(
+    Array.isArray(results.action_items) ? results.action_items :
+    Array.isArray(results.extractedActionItems) ? results.extractedActionItems : []
+  )
   const [newDecisionText, setNewDecisionText] = useState('')
   const [showAddDecision, setShowAddDecision] = useState(false)
 
@@ -296,42 +314,56 @@ function OrganizedView({ results, onSaveToMinutes, onDiscard, saving }) {
         <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: '#2D2A22' }}>
           Decisions Made
         </label>
-        {decisions.map((decision, i) => (
-          <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <input
-              type="text"
-              value={typeof decision === 'string' ? decision : decision.decision}
-              onChange={(e) => {
-                const updated = [...decisions]
-                updated[i] = { ...updated[i], decision: e.target.value }
-                setDecisions(updated)
-              }}
-              style={{
-                flex: 1,
-                padding: '8px 10px',
-                fontSize: 13,
-                border: '1px solid #EDE8DC',
-                borderRadius: 6,
-                fontFamily: 'inherit',
-              }}
-            />
-            <button
-              onClick={() => handleRemoveDecision(i)}
-              style={{
-                padding: '8px 12px',
-                fontSize: 12,
-                border: '1px solid #EDE8DC',
-                borderRadius: 6,
-                background: '#FFFFFF',
-                color: '#DC3545',
-                cursor: 'pointer',
-                fontWeight: 500,
-              }}
-            >
-              Remove
-            </button>
-          </div>
-        ))}
+        {decisions
+          .map((decision, i) => {
+            // Defensive: handle null, undefined, or malformed decision objects
+            if (decision == null) return null
+            const decisionText =
+              typeof decision === 'string' ? decision : (decision?.decision ?? '')
+            return { i, decision, decisionText }
+          })
+          .filter((item) => item !== null)
+          .map(({ i, decision, decisionText }) => (
+            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <input
+                type="text"
+                value={decisionText}
+                onChange={(e) => {
+                  const updated = [...decisions]
+                  // Ensure the object has a decision property (handle string case)
+                  if (typeof updated[i] === 'string') {
+                    updated[i] = { decision: e.target.value, context: '' }
+                  } else if (updated[i] && typeof updated[i] === 'object') {
+                    updated[i] = { ...updated[i], decision: e.target.value }
+                  }
+                  setDecisions(updated)
+                }}
+                style={{
+                  flex: 1,
+                  padding: '8px 10px',
+                  fontSize: 13,
+                  border: '1px solid #EDE8DC',
+                  borderRadius: 6,
+                  fontFamily: 'inherit',
+                }}
+              />
+              <button
+                onClick={() => handleRemoveDecision(i)}
+                style={{
+                  padding: '8px 12px',
+                  fontSize: 12,
+                  border: '1px solid #EDE8DC',
+                  borderRadius: 6,
+                  background: '#FFFFFF',
+                  color: '#DC3545',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
         {!showAddDecision ? (
           <button
             onClick={() => setShowAddDecision(true)}

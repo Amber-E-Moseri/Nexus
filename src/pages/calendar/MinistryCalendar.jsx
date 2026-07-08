@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Download, Link2, Settings } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { Download, Settings } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingEvents, getEventTypes, getOrCreateSubscription } from '../../features/calendar'
 import { hasPermission } from '../../lib/permissions'
@@ -10,6 +10,7 @@ import CalendarView from '../../features/calendar/components/CalendarView'
 import EventModal from '../../features/calendar/components/EventModal'
 import EventSubmitModal from '../../features/calendar/components/EventSubmitModal'
 import CalendarSidebar from '../../features/calendar/components/CalendarSidebar'
+import SubscribeButton from '../../features/calendar/components/SubscribeButton'
 import { FONT_BODY, FONT_HEADING } from '../../features/calendar/lib/fonts'
 
 export default function MinistryCalendar() {
@@ -140,8 +141,6 @@ export default function MinistryCalendar() {
     return true
   })
 
-  const [showExportMenu, setShowExportMenu] = useState(false)
-
   function generateICS() {
     let ics = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//BLW CAN NEXUS//EN\n'
 
@@ -190,7 +189,6 @@ export default function MinistryCalendar() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    setShowExportMenu(false)
     showToast('Calendar downloaded', { tone: 'success' })
   }
 
@@ -204,7 +202,6 @@ export default function MinistryCalendar() {
       )
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-ical?token=${subscription.token}`
       await navigator.clipboard.writeText(url)
-      setShowExportMenu(false)
       showToast('Subscribe link copied — paste into Google Calendar or Apple Calendar', { tone: 'success' })
     } catch (err) {
       console.error('Failed to copy subscribe link:', err)
@@ -295,101 +292,34 @@ export default function MinistryCalendar() {
               + Add Event
             </motion.button>
 
-            <div style={{ position: 'relative' }}>
-              <motion.button
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                whileHover={{ backgroundColor: '#F2EEE6' }}
-                whileTap={{ scale: 0.97 }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '7px',
-                  padding: '9px 14px',
-                  backgroundColor: 'var(--surface-secondary)',
-                  color: 'var(--text-primary)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: '13.5px',
-                  fontFamily: FONT_BODY
-                }}
-              >
-                <Download size={14} style={{ color: 'var(--text-secondary)' }} />
-                Export
-              </motion.button>
+            <SubscribeButton
+              userId={profile?.id}
+              deptOnly={deptOnly}
+              departmentId={profile?.department_id}
+            />
 
-              <AnimatePresence>
-                {showExportMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -6, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -6, scale: 0.97 }}
-                    transition={{ duration: 0.16, ease: 'easeOut' }}
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      right: 0,
-                      marginTop: '6px',
-                      backgroundColor: 'white',
-                      border: '1px solid var(--border)',
-                      borderRadius: '10px',
-                      boxShadow: 'var(--shadow-lg)',
-                      zIndex: 100,
-                      minWidth: '200px',
-                      overflow: 'hidden',
-                      padding: '4px',
-                      transformOrigin: 'top right'
-                    }}
-                  >
-                    <motion.button
-                      onClick={downloadICS}
-                      initial={{ backgroundColor: 'rgba(242, 238, 230, 0)' }}
-                      whileHover={{ backgroundColor: 'rgba(242, 238, 230, 1)' }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '9px',
-                        width: '100%',
-                        padding: '9px 10px',
-                        textAlign: 'left',
-                        border: 'none',
-                        borderRadius: '7px',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        fontFamily: FONT_BODY,
-                        color: 'var(--text-primary)'
-                      }}
-                    >
-                      <Download size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-                      Download .ics
-                    </motion.button>
-                    <motion.button
-                      onClick={copySubscribeLink}
-                      initial={{ backgroundColor: 'rgba(242, 238, 230, 0)' }}
-                      whileHover={{ backgroundColor: 'rgba(242, 238, 230, 1)' }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '9px',
-                        width: '100%',
-                        padding: '9px 10px',
-                        textAlign: 'left',
-                        border: 'none',
-                        borderRadius: '7px',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        fontFamily: FONT_BODY,
-                        color: 'var(--text-primary)'
-                      }}
-                    >
-                      <Link2 size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-                      Copy subscribe link
-                    </motion.button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            <motion.button
+              onClick={downloadICS}
+              whileHover={{ backgroundColor: '#F2EEE6' }}
+              whileTap={{ scale: 0.97 }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '7px',
+                padding: '9px 14px',
+                backgroundColor: 'var(--surface-secondary)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '13.5px',
+                fontFamily: FONT_BODY
+              }}
+            >
+              <Download size={14} style={{ color: 'var(--text-secondary)' }} />
+              Export
+            </motion.button>
 
             {canApprove && pendingCount > 0 && (
               <motion.button

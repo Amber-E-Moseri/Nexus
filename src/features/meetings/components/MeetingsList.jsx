@@ -6,10 +6,17 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../hooks/useAuth'
 
 const TYPE_CHIP_COLORS = {
-  general: '#4C2A92',
-  team: '#1B72E8',
-  media: '#E8A020',
-  department: '#16A34A',
+  general: 'var(--purple-700)',
+  team: 'var(--accent-blue)',
+  media: 'var(--accent-yellow)',
+  department: 'var(--accent-green)',
+}
+
+const STATUS_DOT_COLORS = {
+  scheduled: 'var(--accent-blue)',
+  in_progress: 'var(--accent-yellow)',
+  completed: 'var(--accent-green)',
+  cancelled: 'var(--accent-red)',
 }
 
 function groupMeetingsByCategory(meetings) {
@@ -280,16 +287,25 @@ export default function MeetingsList({ onAddMeeting, onTasksAdded, canManage = f
                       if (!isSelected) e.currentTarget.style.background = 'transparent'
                     }}
                   >
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                      {meeting.title}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                          background: STATUS_DOT_COLORS[meeting.status] || 'var(--accent-blue)',
+                        }}
+                      />
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-1)' }}>
+                        {meeting.title}
+                      </div>
                     </div>
-                    <div style={{ marginTop: 4, display: 'flex', gap: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
+                    <div style={{ marginTop: 4, display: 'flex', gap: 8, fontSize: 11, color: 'var(--ink-3)' }}>
                       <span
                         style={{
                           display: 'inline-block',
                           padding: '2px 6px',
                           borderRadius: 4,
-                          background: TYPE_CHIP_COLORS[meeting.meeting_type] || '#E5E5E4',
+                          background: TYPE_CHIP_COLORS[meeting.meeting_type] || 'var(--ink-3)',
                           color: 'white',
                           fontSize: 10,
                           fontWeight: 600,

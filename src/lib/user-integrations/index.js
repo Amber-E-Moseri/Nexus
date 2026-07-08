@@ -20,7 +20,6 @@ export {
   checkTokenExpiry,
   updateIntegrationSettings,
   getIntegrationSettings,
-  setupGoogleCalendarIntegration,
   setupSlackIntegration,
   setupEmailIntegration,
   setupZapierIntegration,

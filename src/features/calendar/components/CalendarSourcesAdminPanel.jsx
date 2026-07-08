@@ -27,6 +27,11 @@ export default function CalendarSourcesAdminPanel() {
   const [picker, setPicker] = useState(null) // available calendars, or null if picker closed
   const [pickerLoading, setPickerLoading] = useState(false)
   const [busySourceId, setBusySourceId] = useState(null)
+  const [needs_reauth, setNeedsReauth] = useState(false)
+
+  function isReauthRequiredError(err) {
+    return err?.message?.includes('reauth_required')
+  }
 
   async function load() {
     setLoading(true)
@@ -36,6 +41,7 @@ export default function CalendarSourcesAdminPanel() {
         getMinistryCalendarSources(),
       ])
       setConnected(!!connection)
+      setNeedsReauth(connection?.needs_reauth ?? false)
       setSources(sourceRows)
     } catch (err) {
       console.error('Failed to load Ministry Calendar sources:', err)
@@ -58,8 +64,14 @@ export default function CalendarSourcesAdminPanel() {
     setPickerLoading(true)
     try {
       const calendars = await listAvailableCalendarSources()
+      setNeedsReauth(false)
       setPicker(calendars)
     } catch (err) {
+      if (isReauthRequiredError(err)) {
+        setNeedsReauth(true)
+        showToast('Google connection expired. Reconnect the account to continue.', { tone: 'error' })
+        return
+      }
       showToast(err.message || 'Failed to list calendars', { tone: 'error' })
     } finally {
       setPickerLoading(false)
@@ -101,9 +113,15 @@ export default function CalendarSourcesAdminPanel() {
     setBusySourceId(source.id)
     try {
       const result = await syncCalendarSource(source.id)
+      setNeedsReauth(false)
       showToast(`Synced — ${result.created ?? 0} created, ${result.updated ?? 0} updated, ${result.pulled ?? 0} pulled`, { tone: 'success' })
       await load()
     } catch (err) {
+      if (isReauthRequiredError(err)) {
+        setNeedsReauth(true)
+        showToast('Google connection expired. Reconnect the account to sync again.', { tone: 'error' })
+        return
+      }
       showToast(err.message || 'Sync failed', { tone: 'error' })
     } finally {
       setBusySourceId(null)
@@ -154,7 +172,7 @@ export default function CalendarSourcesAdminPanel() {
       <div style={{ padding: '16px' }}>
         {loading ? (
           <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
-            Loading…
+            Loading...
           </div>
         ) : !connected ? (
           <button
@@ -170,6 +188,50 @@ export default function CalendarSourcesAdminPanel() {
           </button>
         ) : (
           <>
+            {needs_reauth && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  marginBottom: '12px',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid #F59E0B',
+                  backgroundColor: '#FFFBEB',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#B45309' }}>
+                    Google connection needs attention
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#92400E', marginTop: '2px' }}>
+                    The stored Google authorization has expired. Reconnect before syncing or adding calendars.
+                  </div>
+                </div>
+                <button
+                  onClick={handleConnect}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    backgroundColor: '#D97706',
+                    color: 'white',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  <LinkIcon size={13} /> Reconnect Google
+                </button>
+              </div>
+            )}
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <div style={{ fontSize: '12px', color: '#059669', fontWeight: 600 }}>✓ Google account connected</div>
               <button
@@ -182,7 +244,7 @@ export default function CalendarSourcesAdminPanel() {
                   fontSize: '12px', fontWeight: 600, cursor: pickerLoading ? 'not-allowed' : 'pointer',
                 }}
               >
-                <CalendarPlus size={13} /> {pickerLoading ? 'Loading…' : 'Add a calendar'}
+                <CalendarPlus size={13} /> {pickerLoading ? 'Loading...' : 'Add a calendar'}
               </button>
             </div>
 

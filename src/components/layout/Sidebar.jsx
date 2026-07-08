@@ -8,7 +8,7 @@ import {
   Clock,
   Copy,
   Folder,
-  Home,
+  HelpCircle,
   LayoutGrid,
   Mail,
   MailPlus,
@@ -600,12 +600,6 @@ export default function Sidebar() {
           label="Inbox"
           badge={inboxCount > 0 ? inboxCount : 0}
           onClick={() => go('/inbox')}
-        />
-        <SidebarItem
-          active={isPathActive(location.pathname, '/')}
-          icon={Home}
-          label="Home"
-          onClick={() => go('/')}
         />
         <SidebarItem
           active={isPathActive(location.pathname, '/my-tasks')}
@@ -1273,6 +1267,12 @@ export default function Sidebar() {
             />
           </>
         ) : null}
+        <SidebarItem
+          active={isPathActive(location.pathname, '/help')}
+          icon={HelpCircle}
+          label="Help & FAQ"
+          onClick={() => go('/help')}
+        />
       </div>
 
       {/* Tools & Resources - SOPs and Tools */}
