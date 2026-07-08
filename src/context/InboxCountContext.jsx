@@ -1,76 +1,54 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { useNotifications } from './NotificationsContext'
 import { supabase } from '../lib/supabase'
 
 const InboxCountContext = createContext(null)
 
 export function InboxCountProvider({ children }) {
   const { user } = useAuth()
-  const [inboxCount, setInboxCount] = useState(0)
+  const { unreadCount: notificationCount } = useNotifications()
+  const [assignedCommentCount, setAssignedCommentCount] = useState(0)
 
+  // Only count assigned task comments separately; use NotificationsContext for
+  // notifications so we don't duplicate the realtime subscription.
   useEffect(() => {
     let active = true
     let intervalId
 
-    async function refreshBadge() {
+    async function refreshAssignedComments() {
       if (!user?.id) {
-        if (active) setInboxCount(0)
+        if (active) setAssignedCommentCount(0)
         return
       }
 
-      const [{ count: assignedCount }, { count: notifCount }] = await Promise.all([
-        supabase
-          .from('task_comments')
-          .select('id', { count: 'exact', head: true })
-          .eq('assigned_to', user.id)
-          .is('resolved_at', null),
-        supabase
-          .from('notifications')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('read', false),
-      ])
+      const { count } = await supabase
+        .from('task_comments')
+        .select('id', { count: 'exact', head: true })
+        .eq('assigned_to', user.id)
+        .is('resolved_at', null)
 
       if (active) {
-        setInboxCount((assignedCount ?? 0) + (notifCount ?? 0))
+        setAssignedCommentCount(count ?? 0)
       }
     }
 
-    refreshBadge().catch(() => {
-      if (active) setInboxCount(0)
+    refreshAssignedComments().catch(() => {
+      if (active) setAssignedCommentCount(0)
     })
 
     intervalId = window.setInterval(() => {
-      refreshBadge().catch(() => {})
+      refreshAssignedComments().catch(() => {})
     }, 60000)
-
-    if (!user?.id) {
-      return () => {
-        active = false
-        window.clearInterval(intervalId)
-      }
-    }
-
-    const channel = supabase
-      .channel(`inbox-badge-${user.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`,
-      }, () => {
-        refreshBadge().catch(() => {})
-      })
-      .subscribe()
 
     return () => {
       active = false
       window.clearInterval(intervalId)
-      supabase.removeChannel(channel)
     }
   }, [user?.id])
 
-  const value = useMemo(() => ({ inboxCount }), [inboxCount])
+  const inboxCount = assignedCommentCount + (notificationCount ?? 0)
+  const value = useMemo(() => ({ inboxCount }), [assignedCommentCount, notificationCount])
 
   return <InboxCountContext.Provider value={value}>{children}</InboxCountContext.Provider>
 }

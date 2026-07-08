@@ -227,6 +227,16 @@
   margin: 0 1px;
 }
 
+.blwp-subgroup-select {
+  border: 1px solid rgba(233,228,216,.7);
+  outline: none;
+  max-width: 160px;
+}
+
+.blwp-subgroup-select.on {
+  border-color: var(--blwp-purple);
+}
+
 /* ── KEY PANEL ─────────────────────────────────────────────────────────── */
 .blwp-key {
   position: absolute;

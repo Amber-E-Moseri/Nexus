@@ -33,6 +33,7 @@ export function BLWMap() {
   const [panelOpen, setPanelOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [activeFilter, setActiveFilter] = useState('all') // 'all' | <status> | 'needs_plan'
+  const [subgroupFilter, setSubgroupFilter] = useState('all')
   const [showHubs, setShowHubs] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [regionalOpen, setRegionalOpen] = useState(false)
@@ -45,6 +46,11 @@ export function BLWMap() {
     [campuses, selectedId]
   )
 
+  const subgroups = useMemo(
+    () => Array.from(new Set(campuses.map((c) => c.subgroup).filter(Boolean))).sort(),
+    [campuses]
+  )
+
   const filteredCampuses = useMemo(() => {
     const q = searchTerm.trim().toLowerCase()
     return campuses.filter((c) => {
@@ -54,6 +60,7 @@ export function BLWMap() {
       } else if (activeFilter !== 'all' && c.status !== activeFilter) {
         return false
       }
+      if (subgroupFilter !== 'all' && c.subgroup !== subgroupFilter) return false
       if (q) {
         const hay = [c.institution, c.campus, c.nearestHubName, c.province, c.group, c.subgroup]
           .filter(Boolean)
@@ -63,7 +70,7 @@ export function BLWMap() {
       }
       return true
     })
-  }, [campuses, activeFilter, searchTerm])
+  }, [campuses, activeFilter, subgroupFilter, searchTerm])
 
   // Tally always reflects the full dataset (not the active status filter), like the original.
   const tally = useMemo(() => {
@@ -340,6 +347,21 @@ export function BLWMap() {
             <span className="blwp-cd diamond" style={{ background: NEEDS_PLAN_COLOR }} />
             Needs Plan
           </button>
+          {subgroups.length > 0 && (
+            <>
+              <div className="blwp-chip-sep" />
+              <select
+                className={`blwp-chip blwp-subgroup-select${subgroupFilter !== 'all' ? ' on' : ''}`}
+                value={subgroupFilter}
+                onChange={(e) => setSubgroupFilter(e.target.value)}
+              >
+                <option value="all">All Sub-groups</option>
+                {subgroups.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </>
+          )}
           <div className="blwp-chip-sep" />
           <button className={`blwp-chip${showHubs ? ' on hubs' : ''}`} onClick={() => setShowHubs((v) => !v)}>
             ◎ Hubs

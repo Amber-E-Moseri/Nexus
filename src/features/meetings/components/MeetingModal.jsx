@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { useDeptMembers } from '../../../hooks/useDeptMembers'
 import { useMeetings } from '../MeetingsContext'
+import { supabase } from '../../../lib/supabase'
+import { canProcessTranscript } from '../../../lib/meetings/costLimits'
 
 const MEETING_TYPES = [
   { value: 'general', label: 'General' },
@@ -33,6 +35,8 @@ export default function MeetingModal({ departmentId, onClose }) {
   const [attendeeIds, setAttendeeIds] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [aiExtracting, setAiExtracting] = useState(false)
+  const [aiError, setAiError] = useState(null)
 
   const attendanceLabel = useMemo(() => {
     if (attendeeIds.length === 0) return 'No attendees selected'
@@ -44,6 +48,64 @@ export default function MeetingModal({ departmentId, onClose }) {
     setAttendeeIds((previous) =>
       previous.includes(memberId) ? previous.filter((id) => id !== memberId) : [...previous, memberId],
     )
+  }
+
+  async function runAiExtraction() {
+    if (transcript.trim().length < 20) {
+      setAiError('Paste at least 20 characters of transcript to extract from.')
+      return
+    }
+
+    setAiExtracting(true)
+    setAiError(null)
+
+    try {
+      const limitCheck = await canProcessTranscript(profile?.id, transcript.trim().length)
+      if (!limitCheck.allowed) {
+        setAiError(limitCheck.reason)
+        return
+      }
+
+      const { data, error: fnError } = await supabase.functions.invoke('extract-meeting-data', {
+        body: { transcript: transcript.trim() },
+      })
+      if (fnError) throw fnError
+
+      const extracted = data?.extracted
+      if (!extracted) throw new Error(data?.error || 'Failed to process transcript')
+
+      if (extracted.summary) {
+        setSummary(extracted.summary)
+      }
+
+      const minutesParts = []
+      if (extracted.decisions?.length) {
+        const decisionStrings = extracted.decisions
+          .map((d) => (typeof d === 'string' ? d : d?.decision))
+          .filter(Boolean)
+        if (decisionStrings.length) {
+          minutesParts.push(`Decisions:\n• ${decisionStrings.join('\n• ')}`)
+        }
+      }
+      if (extracted.next_steps?.length) {
+        minutesParts.push(`Next steps:\n• ${extracted.next_steps.join('\n• ')}`)
+      }
+      if (extracted.action_items?.length) {
+        const actionStrings = extracted.action_items
+          .map((item) => item?.title && (item.owner && item.owner !== 'TBD' ? `${item.title} (${item.owner})` : item.title))
+          .filter(Boolean)
+        if (actionStrings.length) {
+          minutesParts.push(`Action items:\n• ${actionStrings.join('\n• ')}`)
+        }
+      }
+      if (minutesParts.length) {
+        setMinutes(minutesParts.join('\n\n'))
+      }
+    } catch (nextError) {
+      setAiError(nextError.message || 'Extraction failed.')
+    } finally {
+      setAiExtracting(false)
+    }
   }
 
   async function handleSave() {
@@ -178,8 +240,36 @@ export default function MeetingModal({ departmentId, onClose }) {
             </div>
 
             <div style={{ marginTop: 14 }}>
-              <label style={labelStyle}>Transcript</label>
-              <textarea value={transcript} onChange={(event) => setTranscript(event.target.value)} rows={5} placeholder="Optional transcript excerpt or pasted transcript." style={textareaStyle} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>Transcript</label>
+                <button
+                  type="button"
+                  onClick={runAiExtraction}
+                  disabled={aiExtracting || transcript.trim().length < 20}
+                  style={{
+                    borderRadius: 6,
+                    border: '1px solid var(--accent)',
+                    background: 'transparent',
+                    padding: '4px 10px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: 'var(--accent)',
+                    cursor: aiExtracting || transcript.trim().length < 20 ? 'not-allowed' : 'pointer',
+                    opacity: aiExtracting || transcript.trim().length < 20 ? 0.5 : 1,
+                  }}
+                >
+                  {aiExtracting ? 'Extracting…' : '⚡ Run AI extraction'}
+                </button>
+              </div>
+              <textarea value={transcript} onChange={(event) => setTranscript(event.target.value)} rows={5} placeholder="Optional transcript excerpt or pasted transcript. Paste one here to auto-fill summary and minutes with AI." style={textareaStyle} />
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-secondary)' }}>
+                No transcript from a live session? Paste one here — you don't need to have planned the meeting first.
+              </div>
+              {aiError ? (
+                <div style={{ marginTop: 8, borderRadius: 8, background: 'var(--coral-light)', padding: '8px 10px', fontSize: 12, color: 'var(--coral-dark)' }}>
+                  {aiError}
+                </div>
+              ) : null}
             </div>
 
             <div style={{ marginTop: 18 }}>

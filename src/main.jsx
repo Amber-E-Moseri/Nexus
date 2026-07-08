@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './context/AuthContext'
+import { NotificationsProvider } from './context/NotificationsContext'
 import { InboxCountProvider } from './context/InboxCountContext'
 import './styles/index.css'
 
@@ -10,9 +11,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <InboxCountProvider>
-          <App />
-        </InboxCountProvider>
+        <NotificationsProvider>
+          <InboxCountProvider>
+            <App />
+          </InboxCountProvider>
+        </NotificationsProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,

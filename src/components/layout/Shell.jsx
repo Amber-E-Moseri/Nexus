@@ -1,6 +1,5 @@
 import { Suspense, useState } from 'react'
 import { Outlet } from 'react-router-dom'
-import { NotificationsProvider } from '../../context/NotificationsContext'
 import { SprintsProvider } from '../../features/sprints/SprintsContext'
 import { usePrefetchRoutes } from '../../hooks/usePrefetchRoutes'
 import PageSpinner from '../ui/PageSpinner'
@@ -14,7 +13,6 @@ export default function Shell() {
 
   return (
     <SprintsProvider>
-      <NotificationsProvider>
         <div className="flex h-screen overflow-hidden bg-[var(--bg-app)]">
           {/* Desktop Sidebar */}
           <div className="hidden md:flex">
@@ -46,7 +44,6 @@ export default function Shell() {
             </main>
           </div>
         </div>
-      </NotificationsProvider>
     </SprintsProvider>
   )
 }

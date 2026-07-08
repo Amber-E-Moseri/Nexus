@@ -20,7 +20,9 @@ function MeetingsModuleFallback() {
   const [showModal, setShowModal] = useState(false)
   const [liveSession, setLiveSession] = useState(null)
   const isSuperAdmin = role === 'super_admin'
-  const canManage = ['super_admin', 'dept_lead', 'ors'].includes(role) ||
+  const userDeptName = departments.find((d) => d.id === profile?.department_id)?.name
+  const canManage = ['super_admin', 'dept_lead'].includes((role ?? '').toLowerCase()) ||
+                    isOrsUser(role, userDeptName) ||
                     hasFeatureRole(user, selectedDepartmentId, 'programs')
 
   useEffect(() => {
@@ -132,9 +134,20 @@ function MeetingsModuleFallback() {
 
 const TABS = [
   { key: 'meetings', label: 'Meetings' },
-  { key: 'report', label: 'Report', roles: ['super_admin', 'ors', 'programs', 'regional_secretary'] },
-  { key: 'roster', label: '⚙ Roster', roles: ['super_admin', 'ors', 'programs', 'regional_secretary'] },
+  { key: 'report', label: 'Report', restricted: true },
+  { key: 'roster', label: '⚙ Roster', restricted: true },
 ]
+
+// Department names that identify ORS users (mirrors the meetings RLS policies,
+// which grant ORS access by department, not by the users.role column)
+const ORS_DEPT_NAMES = ['ors', 'ors projects']
+
+export function isOrsUser(role, departmentName) {
+  return (
+    (role ?? '').toLowerCase() === 'ors' ||
+    ORS_DEPT_NAMES.includes((departmentName ?? '').toLowerCase())
+  )
+}
 
 function TabBar({ active, onChange, visibleTabs }) {
   const isMobile = useMediaQuery('(max-width: 640px)')
@@ -167,18 +180,46 @@ function TabBar({ active, onChange, visibleTabs }) {
 }
 
 export default function MeetingsModule() {
-  const { role, user } = useAuth()
+  const { role, user, profile } = useAuth()
   const meetingOsUrl = import.meta.env.VITE_MEETING_OS_URL
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedDepartmentId, setSelectedDepartmentId] = useState('')
+  const [userDeptName, setUserDeptName] = useState(null)
+
+  // Resolve the user's department name — ORS access is department-based
+  // (matching the meetings RLS policies), not just the users.role column.
+  useEffect(() => {
+    if (!profile?.department_id) {
+      setUserDeptName(null)
+      return
+    }
+
+    let active = true
+    getAllDepartments()
+      .then((depts) => {
+        if (!active) return
+        const dept = (depts ?? []).find((d) => d.id === profile.department_id)
+        setUserDeptName(dept?.name ?? null)
+      })
+      .catch(() => {
+        if (active) setUserDeptName(null)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [profile?.department_id])
 
   // Check if user has access to report/roster tabs
-  const canViewReportRoster = ['super_admin', 'ors', 'regional_secretary'].includes(role) ||
-    (role === 'dept_lead' && hasFeatureRole(user, selectedDepartmentId, 'programs'))
+  const normalizedRole = (role ?? '').toLowerCase()
+  const canViewReportRoster =
+    ['super_admin', 'regional_secretary', 'programs'].includes(normalizedRole) ||
+    isOrsUser(role, userDeptName) ||
+    (normalizedRole === 'dept_lead' && hasFeatureRole(user, selectedDepartmentId, 'programs'))
 
-  // Filter tabs based on user role
-  const visibleTabs = TABS.filter(tab => !tab.roles || tab.roles.includes(role) || (role === 'dept_lead' && tab.roles?.includes('programs') && hasFeatureRole(user, selectedDepartmentId, 'programs')))
+  // Filter tabs based on access
+  const visibleTabs = TABS.filter(tab => !tab.restricted || canViewReportRoster)
 
   const [activeTab, setActiveTab] = useState(() => {
     const initial = searchParams.get('report') ? 'report' : searchParams.get('tab') === 'roster' ? 'roster' : 'meetings'
