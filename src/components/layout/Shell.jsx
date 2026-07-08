@@ -2,6 +2,7 @@ import { Suspense, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { NotificationsProvider } from '../../context/NotificationsContext'
 import { SprintsProvider } from '../../features/sprints/SprintsContext'
+import { usePrefetchRoutes } from '../../hooks/usePrefetchRoutes'
 import PageSpinner from '../ui/PageSpinner'
 import NotificationPermissionPrompt from '../notifications/NotificationPermissionPrompt'
 import Sidebar from './Sidebar'
@@ -9,6 +10,7 @@ import TopBar from './TopBar'
 
 export default function Shell() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
+  usePrefetchRoutes()
 
   return (
     <SprintsProvider>
