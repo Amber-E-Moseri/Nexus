@@ -255,7 +255,9 @@ export default function TaskModal({
   const [statuses, setStatuses] = useState(contextStatuses)
   const [statusId, setStatusId] = useState(getTaskStatusId(task) ?? defaultStatus ?? '')
   const [priority, setPriority] = useState(task?.priority ?? 'medium')
-  const [assigneeIds, setAssigneeIds] = useState(task?.assignee_id ? [task.assignee_id] : [])
+  const [assigneeIds, setAssigneeIds] = useState(
+    task?.assignee_id ? [task.assignee_id] : profile?.id ? [profile.id] : []
+  )
   const [dueDate, setDueDate] = useState(task?.due_date ?? defaultDueDate ?? '')
   const [personal, setPersonal] = useState(task?.is_personal ?? isPersonal)
   const [subtasks, setSubtasks] = useState(task?.subtasks ?? [])

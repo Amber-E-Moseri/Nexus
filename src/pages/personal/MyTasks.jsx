@@ -28,9 +28,17 @@ export default function MyTasks() {
   const [departments, setDepartments] = useState([])
   const [modal, setModal] = useState(null)
   const [viewMode, setViewMode] = useState(loadViewMode)
+  const [activeTab, setActiveTab] = useState('mine')
   const [filters, setFilters] = useState({})
   const [boardFiltersOpen, setBoardFiltersOpen] = useState(false)
   const deptMembers = useDeptMembers(profile?.department_id)
+
+  // "Mine" = personal tasks + tasks assigned to me by others (assignee_id === me).
+  // "Delegated" = tasks I created for someone else (created_by === me, assignee_id !== me) —
+  // tracked separately so they don't inflate my own to-do totals.
+  const myTasks = tasks.filter((t) => t.assignee_id === profile?.id)
+  const delegatedTasks = tasks.filter((t) => t.created_by === profile?.id && t.assignee_id !== profile?.id)
+  const tabTasks = activeTab === 'delegated' ? delegatedTasks : myTasks
 
   async function loadMetadata() {
     if (!profile?.id) return
@@ -115,6 +123,28 @@ export default function MyTasks() {
           </div>
         </div>
 
+        <div className="flex items-center gap-1 p-[3px]" style={{ background: 'var(--surface-sub)', border: '1px solid var(--border-1)', borderRadius: 10, width: 'fit-content' }}>
+          {[
+            { id: 'mine', label: 'My Tasks', count: myTasks.length },
+            { id: 'delegated', label: 'Delegated', count: delegatedTasks.length },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className="px-3 py-1.5 text-sm font-medium rounded-lg transition-all"
+              style={{
+                background: activeTab === tab.id ? 'var(--surface-card)' : 'transparent',
+                color: activeTab === tab.id ? 'var(--purple-700)' : 'var(--ink-3)',
+                fontWeight: activeTab === tab.id ? 600 : 500,
+                boxShadow: activeTab === tab.id ? '0 1px 2px rgba(28,22,16,0.06)' : 'none',
+              }}
+            >
+              {tab.label}{tab.count > 0 ? ` (${tab.count})` : ''}
+            </button>
+          ))}
+        </div>
+
         {isLoading ? (
           <div className="flex justify-center py-16">
             <LoadingSpinner label="Loading tasks" />
@@ -138,7 +168,7 @@ export default function MyTasks() {
 
                 {boardFiltersOpen ? (
                   <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[640px] max-w-[80vw] rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--shadow-lg)]">
-                    <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={statuses} tasks={tasks} />
+                    <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={statuses} tasks={tabTasks} />
                   </div>
                 ) : null}
               </div>
@@ -146,29 +176,29 @@ export default function MyTasks() {
             <div className="min-h-[520px]">
               <TasksProvider>
                 <KanbanBoard
-                  filteredTasks={tasks}
+                  filteredTasks={tabTasks}
                   departmentId={null}
                   spaceName="My Tasks"
                   departments={departmentOptions}
                   statusesOverride={statuses}
-                  onTaskClick={(task) => setModal({ mode: 'edit', task })}
+                  onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: activeTab === 'delegated' })}
                   onCreateTask={() => setModal({ mode: 'create' })}
-                  readOnly={false}
+                  readOnly={activeTab === 'delegated'}
                 />
               </TasksProvider>
             </div>
           </>
         ) : (
           <>
-            <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={statuses} tasks={tasks} />
+            <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={statuses} tasks={tabTasks} />
             <div className="min-h-[520px] rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--card-shadow)]">
               <TaskListView
-                tasks={tasks}
+                tasks={tabTasks}
                 statuses={statuses}
                 departments={departmentOptions}
-                canAddTask={true}
+                canAddTask={activeTab === 'mine'}
                 onCreateTask={() => setModal({ mode: 'create' })}
-                onTaskClick={(task) => setModal({ mode: 'edit', task })}
+                onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: activeTab === 'delegated' })}
                 onTaskStatusChange={undefined}
                 people={memberMap}
                 priorities={{}}
@@ -183,6 +213,7 @@ export default function MyTasks() {
         <TaskModal
           mode={modal.mode}
           task={modal.task}
+          isReadOnly={modal.isReadOnly ?? false}
           defaultStatus={modal.defaultStatus ?? ''}
           departmentId={modal.task?.department_id}
           fieldSettings={{}}
