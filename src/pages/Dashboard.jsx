@@ -32,6 +32,7 @@ import PersonalRemindersWidget from '../features/dashboard/components/PersonalRe
 import TeamAvailabilityWidget from '../features/dashboard/components/TeamAvailabilityWidget'
 import ChartWidget from '../features/dashboard/components/ChartWidget'
 import CalculationWidget from '../features/dashboard/components/CalculationWidget'
+import GoalsWidget from '../features/dashboard/components/GoalsWidget'
 import { RegionalUpdateWidget } from '../features/regional-updates/components/RegionalUpdateWidget'
 import { getDashboardPresets } from '../features/dashboard/lib/dashboard-queries'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
@@ -352,6 +353,7 @@ const WIDGET_META = {
   team_availability:      { title: 'Team Availability',         Component: TeamAvailabilityWidget },
   chart_widget:           { title: 'Chart',                     Component: ChartWidget, configurable: true },
   calculation_widget:     { title: 'Calculation',                Component: CalculationWidget, configurable: true },
+  goals:                  { title: 'Goals & OKRs',              Component: GoalsWidget },
 }
 
 const ALL_WIDGET_KEYS = Object.keys(WIDGET_META)
