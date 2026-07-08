@@ -7,6 +7,7 @@ import { BellRing, ChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationsContext'
+import { useToast } from '../context/ToastContext'
 import { useAuth } from '../hooks/useAuth'
 import { getUserDashboardPreferences, getRoleDashboardDefaults, upsertDashboardPreferences, deleteDashboardPreferences } from '../features/dashboard/lib/dashboards'
 import { supabase } from '../lib/supabase'
@@ -64,21 +65,23 @@ function useOrgStats(userId) {
     let active = true
 
     async function load() {
-      const [spacesRes, tasksRes, myDueRes, sprintsRes] = await Promise.all([
-        supabase.from('spaces').select('id', { count: 'exact', head: true }),
-        supabase.from('tasks').select('id', { count: 'exact', head: true })
-          .eq('is_personal', false).is('parent_task_id', null).is('completed_at', null),
-        supabase.from('tasks').select('id', { count: 'exact', head: true })
-          .eq('assigned_to', userId).is('completed_at', null).not('due_date', 'is', null),
-        supabase.from('sprints').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-      ])
+      const { data, error } = await supabase.rpc('get_dashboard_stats', { p_user_id: userId })
       if (!active) return
-      setStats({
-        spaces: spacesRes.count ?? 0,
-        openTasks: tasksRes.count ?? 0,
-        myDue: myDueRes.count ?? 0,
-        activeSprints: sprintsRes.count ?? 0,
-      })
+
+      if (error) {
+        console.error('Failed to load dashboard stats:', error)
+        return
+      }
+
+      if (data && data.length > 0) {
+        const row = data[0]
+        setStats({
+          spaces: row.space_count ?? 0,
+          openTasks: row.open_task_count ?? 0,
+          myDue: row.my_due_task_count ?? 0,
+          activeSprints: row.active_sprint_count ?? 0,
+        })
+      }
     }
 
     load()
@@ -647,6 +650,7 @@ function CustomizePanel({ prefs, onClose, onSave, onReset }) {
 export default function Dashboard() {
   const { profile, role } = useAuth()
   const { unreadCount } = useNotifications()
+  const { showToast } = useToast()
   const location = useLocation()
   const orgStats = useOrgStats(profile?.id)
   const navigate = useNavigate()
@@ -701,12 +705,18 @@ export default function Dashboard() {
   )
 
   async function handleUnpin(widgetKey) {
+    const previous = prefs
     setPrefs((current) =>
       current.map((p) => (p.widget_key === widgetKey ? { ...p, visible: false } : p)),
     )
     if (!profile?.id) return
     const existing = prefs.find((p) => p.widget_key === widgetKey)
-    await upsertDashboardPreferences(profile.id, [{ widget_key: widgetKey, visible: false, sort_order: existing?.sort_order ?? 999 }])
+    try {
+      await upsertDashboardPreferences(profile.id, [{ widget_key: widgetKey, visible: false, sort_order: existing?.sort_order ?? 999 }])
+    } catch {
+      setPrefs(previous)
+      showToast("Couldn't unpin that widget. Try again.", { tone: 'error' })
+    }
   }
 
   async function handleConfigChange(widgetKey, config) {
