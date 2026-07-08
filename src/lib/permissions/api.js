@@ -29,6 +29,35 @@ export function getPermissionLabel(permission) {
   return PERMISSION_LABELS[permission] || permission
 }
 
+const ROLE_BASELINE_PERMISSIONS = {
+  super_admin: [
+    'campus:approve', 'campus:edit',
+    'meetings:manage', 'meetings:view',
+    'calendar:write', 'calendar:view',
+    'tasks:assign', 'reports:view',
+    'users:manage', 'automations:manage', 'api:access',
+  ],
+  ors: [
+    'campus:approve', 'campus:edit',
+    'meetings:manage', 'meetings:view',
+    'calendar:view', 'reports:view',
+  ],
+  dept_lead: [
+    'calendar:write', 'calendar:view',
+    'tasks:assign', 'reports:view',
+    'automations:manage',
+  ],
+  pastor: [
+    'calendar:view', 'tasks:assign', 'tasks:create', 'meetings:view',
+  ],
+  reg_sec: [
+    'calendar:view', 'reports:view', 'flock:integrate',
+  ],
+  member: [
+    'calendar:view', 'tasks:view', 'meetings:join',
+  ],
+}
+
 /**
  * Check if a user has a specific permission
  */
@@ -40,12 +69,17 @@ export async function userHasPermission(userId, permissionKey) {
       .eq('id', userId)
       .single();
 
-    if (userError || !user) return false;
+    if (userError || !user) {
+      console.error('userHasPermission: user fetch error', userError);
+      return false;
+    }
+
+    console.log(`[userHasPermission] userId=${userId}, role=${user.role}, permissionKey=${permissionKey}`);
 
     // Super admin has everything
     if (user.role === 'super_admin') return true;
 
-    // Check role_permissions
+    // Check role_permissions table first
     const { data: permission, error: permError } = await supabase
       .from('role_permissions')
       .select('enabled')
@@ -53,8 +87,19 @@ export async function userHasPermission(userId, permissionKey) {
       .eq('permission_key', permissionKey)
       .maybeSingle();
 
-    if (permError) return false;
-    return permission?.enabled || false;
+    if (permError) {
+      console.log('[userHasPermission] role_permissions query error (expected if table missing):', permError);
+    } else if (permission != null) {
+      console.log('[userHasPermission] role_permissions found:', permission.enabled);
+      return permission.enabled;
+    }
+
+    // Fallback to hardcoded baseline when role_permissions table is empty or missing
+    const baseline = ROLE_BASELINE_PERMISSIONS[user.role];
+    const hasPermission = baseline && baseline.includes(permissionKey);
+    console.log(`[userHasPermission] baseline fallback: role=${user.role}, hasPermission=${hasPermission}`);
+
+    return hasPermission || false;
   } catch (err) {
     console.error('userHasPermission error:', err);
     return false;

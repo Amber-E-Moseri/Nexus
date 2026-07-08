@@ -21,6 +21,7 @@ import {
   getTaskStatusLabel,
   listTaskStatuses,
   selectDefaultStatus,
+  selectActiveTaskStatuses,
 } from '../../../lib/taskStatuses'
 import AssigneeSelector from './AssigneeSelector'
 import MilestoneCreator from './MilestoneCreator'
@@ -293,17 +294,18 @@ export default function TaskModal({
 
   useEffect(() => {
     if (contextStatuses.length > 0) {
-      setStatuses(contextStatuses)
+      setStatuses(selectActiveTaskStatuses(contextStatuses))
       setStatusId((current) => current || selectDefaultStatus(contextStatuses)?.id || '')
       return
     }
 
-    Promise.all([
-      listTaskStatuses({ departmentId }),
-      listTaskStatuses(), // Load global statuses to ensure "Not Started" is available
-    ])
-      .then(([deptStatuses, globalStatuses]) => {
-        // Merge and deduplicate: prefer dept-specific over global
+    ;(async () => {
+      try {
+        const [deptStatuses, globalStatuses] = await Promise.all([
+          listTaskStatuses({ departmentId }),
+          listTaskStatuses(),
+        ])
+
         const statusMap = new Map()
         for (const status of globalStatuses) {
           const key = `${status.category}:${status.legacy_key || status.name}`
@@ -314,17 +316,37 @@ export default function TaskModal({
           statusMap.set(key, status)
         }
 
-        const merged = Array.from(statusMap.values())
-        console.log('[TaskModal] Merged statuses:', merged.map(s => ({ name: s.name, category: s.category, is_org: s.is_org_status })))
+        if (!Array.from(statusMap.values()).some(s => s.category === 'open')) {
+          try {
+            const allStatuses = await listTaskStatuses({ departmentId, includeInactive: true })
+            const openStatus = allStatuses.find(s => s.category === 'open')
+            if (openStatus) {
+              statusMap.set(`open:${openStatus.legacy_key || openStatus.name}`, { ...openStatus, active: true })
+            }
+          } catch { /* ignore */ }
+          if (!Array.from(statusMap.values()).some(s => s.category === 'open')) {
+            statusMap.set('open:to_do', {
+              id: '__fallback_todo',
+              name: 'To Do',
+              color: '#378ADD',
+              category: 'open',
+              legacy_key: 'to_do',
+              is_default: true,
+              active: true,
+              sort_order: 0,
+            })
+          }
+        }
+
+        const merged = selectActiveTaskStatuses(Array.from(statusMap.values()))
         setStatuses(merged)
-        const defaultStatus = selectDefaultStatus(merged)
-        console.log('[TaskModal] Default status:', defaultStatus?.name)
-        setStatusId((current) => current || defaultStatus?.id || '')
-      })
-      .catch((err) => {
+        const defaultSt = selectDefaultStatus(merged)
+        setStatusId((current) => current || defaultSt?.id || '')
+      } catch (err) {
         console.error('[TaskModal] Failed to load statuses:', err)
         setStatuses([])
-      })
+      }
+    })()
   }, [contextStatuses, departmentId])
 
   useEffect(() => {

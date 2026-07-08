@@ -83,15 +83,19 @@ async function getContacts() {
 }
 
 async function addContact({ name, role, fellowship, priority, cadenceDays }) {
-  const { error } = await supabase.from('flock_contacts').insert({
-    full_name: name,
-    role: role || null,
-    fellowship: fellowship || null,
-    priority: priority || null,
-    cadence_days: parseInt(cadenceDays, 10) || 28,
-  })
+  const { data, error } = await supabase
+    .from('flock_contacts')
+    .insert({
+      full_name: name,
+      role: role || null,
+      fellowship: fellowship || null,
+      priority: priority || null,
+      cadence_days: parseInt(cadenceDays, 10) || 28,
+    })
+    .select('id')
+    .single()
   if (error) throw new Error(error.message)
-  return { success: true }
+  return { success: true, personId: data.id }
 }
 
 async function updateCadence({ personId, cadenceDays }) {

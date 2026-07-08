@@ -1,5 +1,9 @@
+const CATEGORY_ORDER = { open: 0, in_progress: 1, completed: 2, cancelled: 3 }
+
 export function sortTaskStatuses(statuses = []) {
   return [...statuses].sort((left, right) => {
+    const catDelta = (CATEGORY_ORDER[left.category] ?? 1) - (CATEGORY_ORDER[right.category] ?? 1)
+    if (catDelta !== 0) return catDelta
     const orderDelta = (left.sort_order ?? 0) - (right.sort_order ?? 0)
     if (orderDelta !== 0) return orderDelta
     return String(left.name ?? '').localeCompare(String(right.name ?? ''))

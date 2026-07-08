@@ -157,7 +157,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/map" element={<CanMapPage />} />
           <Route
             path="/admin/campus-edits"
             element={
@@ -368,6 +367,8 @@ export default function App() {
             }
           />
         </Route>
+        {/* Map rendered fullscreen — no sidebar shell */}
+        <Route path="/map" element={<CanMapPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

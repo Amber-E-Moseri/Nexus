@@ -1,7 +1,7 @@
 import { CSS } from '@dnd-kit/utilities'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { endOfWeek, isBefore, isEqual, parseISO, startOfDay } from 'date-fns'
+import { endOfWeek, isBefore, isEqual, parseISO, startOfDay, startOfWeek } from 'date-fns'
 import { AnimatePresence, motion } from 'framer-motion'
 import { BellRing, ChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -54,6 +54,209 @@ function greetingForHour() {
   if (h < 12) return 'Good morning'
   if (h < 18) return 'Good afternoon'
   return 'Good evening'
+}
+
+// ─── Custom stat card ─────────────────────────────────────────────────────────
+
+const CUSTOM_STAT_OPTIONS = [
+  {
+    key: 'meetings_this_week',
+    label: 'Meetings This Week',
+    sub: 'scheduled this week',
+    bg: 'var(--purple-700)',
+    blobColor: 'rgba(255,255,255,.13)',
+    path: '/meetings',
+  },
+  {
+    key: 'completed_this_week',
+    label: 'Completed This Week',
+    sub: 'tasks finished this week',
+    bg: 'var(--purple-700)',
+    blobColor: 'rgba(255,255,255,.13)',
+    path: '/my-tasks',
+  },
+  {
+    key: 'unread_notifications',
+    label: 'Notifications',
+    sub: 'unread',
+    bg: 'var(--purple-700)',
+    blobColor: 'rgba(255,255,255,.13)',
+    path: '/notifications',
+  },
+]
+
+const CUSTOM_STAT_KEY = 'dashboard_custom_stat_v1'
+
+function useCustomStat(userId, unreadCount) {
+  const [statKey, setStatKey] = useState(() => localStorage.getItem(CUSTOM_STAT_KEY) ?? 'meetings_this_week')
+  const [value, setValue] = useState(null)
+
+  function choose(key) {
+    setStatKey(key)
+    localStorage.setItem(CUSTOM_STAT_KEY, key)
+  }
+
+  useEffect(() => {
+    if (!userId) return
+    let active = true
+    setValue(null)
+
+    if (statKey === 'unread_notifications') {
+      setValue(unreadCount ?? 0)
+      return
+    }
+
+    async function load() {
+      if (statKey === 'meetings_this_week') {
+        const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString()
+        const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 }).toISOString()
+        const { count } = await supabase
+          .from('meetings')
+          .select('*', { count: 'exact', head: true })
+          .gte('date', weekStart)
+          .lte('date', weekEnd)
+        if (active) setValue(count ?? 0)
+      } else if (statKey === 'completed_this_week') {
+        const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString()
+        const { count } = await supabase
+          .from('tasks')
+          .select('*', { count: 'exact', head: true })
+          .gte('completed_at', weekStart)
+          .not('completed_at', 'is', null)
+        if (active) setValue(count ?? 0)
+      }
+    }
+
+    load()
+    return () => { active = false }
+  }, [statKey, userId, unreadCount])
+
+  const meta = CUSTOM_STAT_OPTIONS.find((o) => o.key === statKey) ?? CUSTOM_STAT_OPTIONS[0]
+  return { meta, value, statKey, choose }
+}
+
+function CustomHeroStatCard({ meta, value, statKey, onChoose, onClick }) {
+  const [showPicker, setShowPicker] = useState(false)
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <motion.button
+        type="button"
+        onClick={onClick}
+        variants={heroEnter}
+        whileHover={{ y: -2 }}
+        whileTap={{ scale: 0.99 }}
+        style={{
+          position: 'relative',
+          overflow: 'hidden',
+          background: meta.bg,
+          borderRadius: 24,
+          padding: '28px 28px 24px',
+          border: 'none',
+          cursor: 'pointer',
+          textAlign: 'left',
+          width: '100%',
+          transition: 'filter .15s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(1.07)' }}
+        onMouseLeave={(e) => { e.currentTarget.style.filter = 'none' }}
+      >
+        <span style={{
+          position: 'absolute',
+          top: -28,
+          right: -28,
+          width: 130,
+          height: 130,
+          borderRadius: '50%',
+          background: meta.blobColor,
+          pointerEvents: 'none',
+        }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+          <div style={{ fontFamily: FONT_HEADING, fontSize: 10.5, fontWeight: 600, letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,.78)' }}>
+            {meta.label}
+          </div>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setShowPicker((v) => !v) }}
+            title="Change stat"
+            style={{
+              border: 'none',
+              background: 'rgba(255,255,255,.18)',
+              borderRadius: 6,
+              color: 'rgba(255,255,255,.85)',
+              fontSize: 10,
+              fontWeight: 700,
+              padding: '2px 7px',
+              cursor: 'pointer',
+              letterSpacing: '.04em',
+              lineHeight: 1.6,
+              transition: 'background .12s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,.28)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,.18)' }}
+          >
+            change
+          </button>
+        </div>
+        <div style={{ fontFamily: FONT_HEADING, fontSize: 64, fontWeight: 700, color: '#fff', lineHeight: 1, letterSpacing: '-0.03em', position: 'relative', marginTop: 10 }}>
+          {value ?? '—'}
+        </div>
+        <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: 'rgba(255,255,255,.72)', marginTop: 8, fontWeight: 500, position: 'relative' }}>
+          {meta.sub}
+        </div>
+      </motion.button>
+
+      {showPicker && (
+        <>
+          <div
+            onClick={() => setShowPicker(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 90 }}
+          />
+          <div style={{
+            position: 'absolute',
+            top: 'calc(100% + 8px)',
+            left: 0,
+            zIndex: 100,
+            background: 'var(--surface-card)',
+            border: '1px solid var(--border-1)',
+            borderRadius: 14,
+            boxShadow: '0 8px 24px rgba(28,22,16,.12)',
+            padding: 8,
+            minWidth: 220,
+          }}>
+            <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--ink-3)', letterSpacing: '.1em', textTransform: 'uppercase', padding: '4px 8px 8px' }}>
+              Choose stat
+            </div>
+            {CUSTOM_STAT_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => { onChoose(opt.key); setShowPicker(false) }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: opt.key === statKey ? 'var(--purple-tint)' : 'transparent',
+                  color: opt.key === statKey ? 'var(--purple-700)' : 'var(--ink-1)',
+                  fontSize: 13,
+                  fontWeight: opt.key === statKey ? 700 : 500,
+                  cursor: 'pointer',
+                  transition: 'background .1s',
+                }}
+                onMouseEnter={(e) => { if (opt.key !== statKey) e.currentTarget.style.background = 'var(--surface-sub)' }}
+                onMouseLeave={(e) => { if (opt.key !== statKey) e.currentTarget.style.background = 'transparent' }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 // ─── Org stats ───────────────────────────────────────────────────────────────
@@ -656,6 +859,7 @@ export default function Dashboard() {
   const location = useLocation()
   const orgStats = useOrgStats(profile?.id)
   const navigate = useNavigate()
+  const customStat = useCustomStat(profile?.id, unreadCount)
   const [prefs, setPrefs] = useState([])
   const [loadingPrefs, setLoadingPrefs] = useState(true)
   const [showCustomize, setShowCustomize] = useState(false)
@@ -815,13 +1019,12 @@ export default function Dashboard() {
           animate="show"
           style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}
         >
-          <HeroStatCard
-            label="Active Spaces"
-            value={orgStats.spaces}
-            sub="across the org"
-            bg="var(--purple-700)"
-            blobColor="rgba(255,255,255,.13)"
-            onClick={() => navigate('/spaces')}
+          <CustomHeroStatCard
+            meta={customStat.meta}
+            value={customStat.value}
+            statKey={customStat.statKey}
+            onChoose={customStat.choose}
+            onClick={() => navigate(customStat.meta.path)}
           />
           <HeroStatCard
             label="Open Tasks"

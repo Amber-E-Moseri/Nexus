@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, Check, Sparkles, Wand2 } from 'lucide-react'
+import { AlertCircle, Check, Sparkles, Wand2, X } from 'lucide-react'
 import { callFlockCRM as callFlockAPI, flockCard, FLOCK } from '../../lib/flockSupabase'
 
 const RESULTS = ['Reached', 'No Answer', 'Left Message', 'Rescheduled Call']
@@ -135,8 +135,10 @@ const inputStyle = {
 }
 const labelStyle = { fontSize: '12px', fontWeight: 700, color: FLOCK.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px', display: 'block' }
 
-export default function FlockAiLogPanel() {
+export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
   const [people, setPeople] = useState([])
+  // Person carried over from a "Log a call" click elsewhere (due card, People tab).
+  const [forPerson, setForPerson] = useState(preselect)
   const [text, setText] = useState(loadDraft)
   const [parsing, setParsing] = useState(false)
   const [parsed, setParsed] = useState(null)
@@ -170,7 +172,9 @@ export default function FlockAiLogPanel() {
     let nextAction = detectNextAction(lower)
     const dt = parseNaturalDate(desc)
     if (dt && nextAction === 'None') nextAction = 'Follow-up'
-    const person = matchPerson(lower, people)
+    let person = matchPerson(lower, people)
+    // No name in the text? Fall back to the person this log was opened for.
+    if (!person.personId && forPerson) person = { personId: forPerson.id, personName: forPerson.name }
     setParsed({
       personId: person.personId || '',
       personName: person.personName || '',
@@ -240,6 +244,7 @@ export default function FlockAiLogPanel() {
     setParsed(null)
     setMsg(null)
     setSuccess(false)
+    setForPerson(null)
   }
 
   if (success) {
@@ -250,9 +255,16 @@ export default function FlockAiLogPanel() {
         </div>
         <div style={{ fontSize: '18px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Call logged.</div>
         <div style={{ fontSize: '13px', color: FLOCK.muted, marginTop: '6px' }}>Interaction saved to {parsed?.personName || 'the call list'}.</div>
-        <button type="button" onClick={reset} style={{ marginTop: '22px', padding: '11px 18px', background: FLOCK.purple, color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: FLOCK.fontBody }}>
-          Log another call
-        </button>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '22px', flexWrap: 'wrap' }}>
+          <button type="button" onClick={reset} style={{ padding: '11px 18px', background: FLOCK.purple, color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: FLOCK.fontBody }}>
+            Log another call
+          </button>
+          {onOpenPerson && parsed?.personId && (
+            <button type="button" onClick={() => onOpenPerson(parsed.personId)} style={{ padding: '11px 18px', background: FLOCK.card, color: FLOCK.text, border: `1px solid ${FLOCK.borderStrong}`, borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: FLOCK.fontBody }}>
+              View {parsed?.personName ? `${parsed.personName.split(' ')[0]}’s` : 'their'} notes
+            </button>
+          )}
+        </div>
       </div>
     )
   }
@@ -275,6 +287,14 @@ export default function FlockAiLogPanel() {
       )}
 
       <div style={flockCard({ padding: '16px', display: 'grid', gap: '12px' })}>
+        {forPerson && !parsed && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifySelf: 'start', padding: '6px 12px', borderRadius: '999px', background: FLOCK.purpleTint, color: FLOCK.purple, fontSize: '12px', fontWeight: 700, fontFamily: FLOCK.fontBody }}>
+            Logging a call for {forPerson.name}
+            <button type="button" onClick={() => setForPerson(null)} title="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: FLOCK.purple, display: 'grid', placeItems: 'center', padding: 0 }}>
+              <X size={13} />
+            </button>
+          </div>
+        )}
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}

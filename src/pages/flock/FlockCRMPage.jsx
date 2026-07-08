@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, CheckSquare, Clock, ExternalLink, Home, Phone, Plus, RefreshCw, Search as SearchIcon, Settings as SettingsIcon, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, UserPlus } from 'lucide-react'
+import { AlertCircle, CheckSquare, Home, Phone, Plus, RefreshCw, Settings as SettingsIcon, ShieldCheck, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { FLOCK_CRM_CONFIG } from '../../lib/permissions'
 import { callFlockCRM as callFlockAPI, flockCard, formatTimeAgo, FLOCK } from '../../lib/flockSupabase'
-import FlockHistoryPanel from '../../components/flock/FlockHistoryPanel'
 import FlockTodosPanel from '../../components/flock/FlockTodosPanel'
-import FlockAddPersonPanel from '../../components/flock/FlockAddPersonPanel'
-import FlockCadencePanel from '../../components/flock/FlockCadencePanel'
-import FlockSearchPanel from '../../components/flock/FlockSearchPanel'
+import FlockPeoplePanel from '../../components/flock/FlockPeoplePanel'
 import FlockAiLogPanel from '../../components/flock/FlockAiLogPanel'
 import FlockSettingsPanel from '../../components/flock/FlockSettingsPanel'
 
@@ -35,7 +32,7 @@ function StatTile({ label, value, tone, note }) {
   )
 }
 
-function DuePersonCard({ person, expanded, onExpand, onRefresh, todos = [] }) {
+function DuePersonCard({ person, expanded, onExpand, onRefresh, onOpenPerson, todos = [] }) {
   const [isLogging, setIsLogging] = useState(false)
   const [callNote, setCallNote] = useState('')
   const [newTodo, setNewTodo] = useState('')
@@ -87,9 +84,12 @@ function DuePersonCard({ person, expanded, onExpand, onRefresh, todos = [] }) {
       >
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: '14px', fontWeight: 700, color: FLOCK.text }}>{person.name || person.firstName}</div>
-          <div style={{ fontSize: '12px', color: FLOCK.muted, marginTop: '4px' }}>
-            <span style={{ fontFamily: FLOCK.fontMono }}>{person.phone || 'No phone'}</span> {person.email ? `• ${person.email}` : ''}
-          </div>
+          {(person.fellowship || person.phone || person.email) && (
+            <div style={{ fontSize: '12px', color: FLOCK.muted, marginTop: '4px' }}>
+              {person.fellowship || <span style={{ fontFamily: FLOCK.fontMono }}>{person.phone}</span>}
+              {person.email ? ` • ${person.email}` : ''}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {personTodos.length > 0 && (
@@ -144,6 +144,16 @@ function DuePersonCard({ person, expanded, onExpand, onRefresh, todos = [] }) {
               Log Call
             </button>
           </div>
+
+          {onOpenPerson && (
+            <button
+              type="button"
+              onClick={() => onOpenPerson(person.id)}
+              style={{ justifySelf: 'start', alignSelf: 'flex-start', background: 'none', border: 'none', cursor: 'pointer', color: FLOCK.purple, fontSize: '12px', fontWeight: 600, fontFamily: FLOCK.fontBody, padding: 0 }}
+            >
+              View past notes →
+            </button>
+          )}
 
           {personTodos.length > 0 && (
             <div style={{ display: 'grid', gap: '8px' }}>
@@ -233,7 +243,7 @@ function DuePersonCard({ person, expanded, onExpand, onRefresh, todos = [] }) {
   )
 }
 
-function HomePanel({ onLogCall }) {
+function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
   const { role } = useAuth()
   const [stats, setStats] = useState({ today: 0, overdue: 0, week: 0, total: 0 })
   const [duePeople, setDuePeople] = useState([])
@@ -282,10 +292,10 @@ function HomePanel({ onLogCall }) {
 
   return (
     <div style={{ display: 'grid', gap: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
         <button
           type="button"
-          onClick={onLogCall}
+          onClick={() => onLogCall()}
           style={{
             border: 'none',
             borderRadius: '10px',
@@ -303,6 +313,27 @@ function HomePanel({ onLogCall }) {
         >
           <Sparkles size={14} />
           Log a Call
+        </button>
+        <button
+          type="button"
+          onClick={onAddPerson}
+          style={{
+            border: `1px solid ${FLOCK.borderStrong}`,
+            borderRadius: '10px',
+            padding: '8px 14px',
+            background: FLOCK.card,
+            color: FLOCK.text,
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontFamily: FLOCK.fontBody,
+          }}
+        >
+          <UserPlus size={14} />
+          Add Person
         </button>
         <button
           type="button"
@@ -350,33 +381,54 @@ function HomePanel({ onLogCall }) {
         </div>
       )}
 
-      <section>
-        <h2 style={{ fontSize: '18px', fontWeight: 700, color: FLOCK.text, margin: '0 0 16px', fontFamily: FLOCK.fontHead }}>
-          Follow-up Queue ({duePeople.length})
-        </h2>
-        <div style={{ display: 'grid', gap: '12px' }}>
-          {loading ? (
-            <div style={{ ...flockCard({ padding: '24px' }), textAlign: 'center', color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
-              Loading follow-ups...
-            </div>
-          ) : duePeople.length > 0 ? (
-            duePeople.map((person) => (
-              <DuePersonCard
-                key={person.id}
-                person={person}
-                expanded={expandedPerson === person.id}
-                onExpand={(isExpanded) => setExpandedPerson(isExpanded ? person.id : null)}
-                onRefresh={fetchData}
-                todos={todos}
-              />
-            ))
-          ) : (
-            <div style={{ ...flockCard({ padding: '24px' }), textAlign: 'center', color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
-              No one is due for follow-up right now.
-            </div>
-          )}
+      {!loading && !error && stats.total === 0 ? (
+        <div style={{ ...flockCard({ padding: '44px 28px' }), textAlign: 'center', fontFamily: FLOCK.fontBody }}>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: FLOCK.purpleTint, color: FLOCK.purple, display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
+            <UserPlus size={26} />
+          </div>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Welcome to your Flock CRM</div>
+          <p style={{ margin: '8px auto 20px', fontSize: '13px', lineHeight: 1.6, color: FLOCK.muted, maxWidth: '400px' }}>
+            Add the people you shepherd, log calls in plain language, and this page will tell you who's due for a call each day. Your flock is private to you.
+          </p>
+          <button
+            type="button"
+            onClick={onAddPerson}
+            style={{ padding: '12px 20px', background: FLOCK.purple, color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', fontFamily: FLOCK.fontBody, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+          >
+            <UserPlus size={15} />
+            Add your first person
+          </button>
         </div>
-      </section>
+      ) : (
+        <section>
+          <h2 style={{ fontSize: '18px', fontWeight: 700, color: FLOCK.text, margin: '0 0 16px', fontFamily: FLOCK.fontHead }}>
+            Follow-up Queue ({duePeople.length})
+          </h2>
+          <div style={{ display: 'grid', gap: '12px' }}>
+            {loading ? (
+              <div style={{ ...flockCard({ padding: '24px' }), textAlign: 'center', color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
+                Loading follow-ups...
+              </div>
+            ) : duePeople.length > 0 ? (
+              duePeople.map((person) => (
+                <DuePersonCard
+                  key={person.id}
+                  person={person}
+                  expanded={expandedPerson === person.id}
+                  onExpand={(isExpanded) => setExpandedPerson(isExpanded ? person.id : null)}
+                  onRefresh={fetchData}
+                  onOpenPerson={onOpenPerson}
+                  todos={todos}
+                />
+              ))
+            ) : (
+              <div style={{ ...flockCard({ padding: '24px' }), textAlign: 'center', color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
+                No one is due for follow-up right now — you're all caught up.
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
@@ -384,43 +436,49 @@ function HomePanel({ onLogCall }) {
 const TABS = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'ai-log', label: 'Log a Call', icon: Sparkles },
-  { id: 'history', label: 'Past Notes', icon: Clock },
+  { id: 'people', label: 'People', icon: Users },
   { id: 'todos', label: 'To-Dos', icon: CheckSquare },
-  { id: 'add', label: 'Add Person', icon: UserPlus },
-  { id: 'cadence', label: 'People Settings', icon: SlidersHorizontal },
-  { id: 'search', label: 'Search', icon: SearchIcon },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ]
 
 export default function FlockCRMPage() {
   const { role } = useAuth()
   const [activeTab, setActiveTab] = useState('home')
-  const [historyPreselect, setHistoryPreselect] = useState(null)
+  const [peoplePreselect, setPeoplePreselect] = useState(null)
+  const [peopleStartAdd, setPeopleStartAdd] = useState(false)
+  const [aiPreselect, setAiPreselect] = useState(null)
 
-  const openPersonHistory = (personId) => {
-    setHistoryPreselect(personId)
-    setActiveTab('history')
+  // Cross-panel navigation: every entry point resets the one-shot state it doesn't use.
+  const openPersonNotes = (personId) => {
+    setPeoplePreselect(personId)
+    setPeopleStartAdd(false)
+    setActiveTab('people')
+  }
+
+  const openAddPerson = () => {
+    setPeoplePreselect(null)
+    setPeopleStartAdd(true)
+    setActiveTab('people')
+  }
+
+  const openLogCall = (person = null) => {
+    setAiPreselect(person ? { id: person.id, name: person.name || person.firstName || '' } : null)
+    setActiveTab('ai-log')
   }
 
   const renderPanel = () => {
     switch (activeTab) {
       case 'ai-log':
-        return <FlockAiLogPanel />
-      case 'history':
-        return <FlockHistoryPanel preselectId={historyPreselect} />
+        return <FlockAiLogPanel preselect={aiPreselect} onOpenPerson={openPersonNotes} />
+      case 'people':
+        return <FlockPeoplePanel preselectId={peoplePreselect} startAdding={peopleStartAdd} onLogCall={openLogCall} />
       case 'todos':
         return <FlockTodosPanel />
-      case 'add':
-        return <FlockAddPersonPanel />
-      case 'cadence':
-        return <FlockCadencePanel />
-      case 'search':
-        return <FlockSearchPanel onOpenPerson={openPersonHistory} />
       case 'settings':
         return <FlockSettingsPanel />
       case 'home':
       default:
-        return <HomePanel onLogCall={() => setActiveTab('ai-log')} />
+        return <HomePanel onLogCall={openLogCall} onAddPerson={openAddPerson} onOpenPerson={openPersonNotes} />
     }
   }
 
@@ -442,8 +500,6 @@ export default function FlockCRMPage() {
     )
   }
 
-  const canOpenExternal = Boolean(FLOCK_CRM_CONFIG.appUrl)
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minHeight: '100%', fontFamily: FLOCK.fontBody }}>
       <section
@@ -452,43 +508,17 @@ export default function FlockCRMPage() {
           background: `radial-gradient(circle at top left, ${FLOCK.purpleTint} 0%, ${FLOCK.surface} 45%, ${FLOCK.card} 100%)`,
         })}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '18px', flexWrap: 'wrap' }}>
-          <div style={{ maxWidth: '760px' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 10px', borderRadius: '999px', background: FLOCK.purpleTint, color: FLOCK.purple, fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              <ShieldCheck size={12} />
-              Pastoral Operations
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '14px' }}>
-              <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: FLOCK.purple, display: 'grid', placeItems: 'center', color: '#FFFFFF' }}>
-                <Phone size={20} />
-              </div>
-              <h1 style={{ margin: 0, fontSize: '30px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Flock CRM</h1>
-            </div>
+        <div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 10px', borderRadius: '999px', background: FLOCK.purpleTint, color: FLOCK.purple, fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            <ShieldCheck size={12} />
+            Pastoral Operations
           </div>
-
-          <button
-            type="button"
-            onClick={() => window.open(FLOCK_CRM_CONFIG.appUrl, '_blank', 'noopener,noreferrer')}
-            disabled={!canOpenExternal}
-            style={{
-              border: `1px solid ${FLOCK.borderStrong}`,
-              borderRadius: '12px',
-              padding: '12px 16px',
-              background: FLOCK.card,
-              color: FLOCK.text,
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: canOpenExternal ? 'pointer' : 'not-allowed',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              opacity: canOpenExternal ? 1 : 0.55,
-              fontFamily: FLOCK.fontBody,
-            }}
-          >
-            <ExternalLink size={14} />
-            Open Full CRM
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '14px' }}>
+            <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: FLOCK.purple, display: 'grid', placeItems: 'center', color: '#FFFFFF' }}>
+              <Phone size={20} />
+            </div>
+            <h1 style={{ margin: 0, fontSize: '30px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Flock CRM</h1>
+          </div>
         </div>
 
         <nav style={{ display: 'flex', gap: '6px', marginTop: '20px', flexWrap: 'wrap' }}>

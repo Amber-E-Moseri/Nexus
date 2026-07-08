@@ -1,31 +1,9 @@
-/* BLW CAN Map Styling — OS Theme Aware Modern Design */
+/* BLW CAN Map Styling */
 
-/* ── OS Theme Detection ────────────────────────────────────────────────── */
+/* Map-scoped accent alias (uses Nexus purple tokens) */
 :root {
-  color-scheme: light dark;
-  --surface: #ffffff;
-  --surface-secondary: #f8f9fa;
-  --bg: #f1f3f4;
-  --text-primary: #202124;
-  --text-secondary: #5f6368;
-  --text-tertiary: #9aa0a6;
-  --border: #dadce0;
-  --accent: #5b34c7;
-  --shadow-lg: 0 2px 6px rgba(60, 64, 67, 0.2), 0 8px 24px rgba(60, 64, 67, 0.12);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --surface: #1a1a1a;
-    --surface-secondary: #262626;
-    --bg: #0d0d0d;
-    --text-primary: #e8e8e8;
-    --text-secondary: #b0b0b0;
-    --text-tertiary: #808080;
-    --border: #404040;
-    --accent: #7c5cdb;
-    --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.4);
-  }
+  --blw-accent: var(--purple-700, #4C2A92);
+  --blw-accent-hover: var(--purple-600, #5F3BB8);
 }
 
 /* ── Map Container ─────────────────────────────────────────────────────── */
@@ -137,7 +115,7 @@
 
 .blw-chip.active {
   background: rgba(91, 52, 199, 0.1);
-  color: var(--accent);
+  color: var(--blw-accent);
 }
 
 /* ── Tally Bar (Bottom) ────────────────────────────────────────────────── */
@@ -186,10 +164,10 @@
 /* ── Side Panel ────────────────────────────────────────────────────────── */
 .blw-side-panel {
   width: 380px;
-  background: var(--surface);
+  background: var(--surface, #FAFAF8);
   display: flex;
   flex-direction: column;
-  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.15);
+  box-shadow: -2px 0 16px rgba(28, 22, 16, 0.10);
   position: absolute;
   top: 0;
   right: 0;
@@ -264,7 +242,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--fs-bg);
+  background: var(--surface-secondary, #F9F7F3);
 }
 
 .blw-map-loading-content {
@@ -362,7 +340,7 @@
 .blw-popup-button {
   width: 100%;
   padding: 12px;
-  background: var(--accent);
+  background: var(--blw-accent);
   color: white;
   border: none;
   border-radius: 8px;
@@ -374,7 +352,7 @@
 }
 
 .blw-popup-button:hover {
-  background: var(--accent-hover);
+  background: var(--blw-accent-hover);
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(76, 42, 146, 0.2);
 }
@@ -396,6 +374,23 @@
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
 }
 
+/* ── Hover Tooltip (marker preview) ──────────────────────────────────────── */
+.leaflet-tooltip.blw-map-tip {
+  background: var(--surface, #FAFAF8);
+  border: 1px solid var(--border, #E9E4D8);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg, 0 8px 28px rgba(28,22,16,.12));
+  padding: 10px 12px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: var(--text-primary, #1C1610);
+  max-width: 240px;
+  white-space: normal;
+}
+
+.leaflet-tooltip.blw-map-tip::before {
+  border-top-color: var(--border, #E9E4D8);
+}
+
 /* ── Map Popup Styling ───────────────────────────────────────────────────── */
 .mpop {
   padding: 12px 14px;
@@ -407,19 +402,19 @@
 .mpop-inst {
   font-size: 13px;
   font-weight: 700;
-  color: #202124;
+  color: var(--text-primary, #1C1610);
 }
 
 .mpop-campus {
   font-size: 11px;
-  color: #1a73e8;
+  color: var(--purple-700, #4C2A92);
   font-weight: 500;
   margin-top: 1px;
 }
 
 .mpop-sub {
   font-size: 11px;
-  color: #80868b;
+  color: var(--text-secondary, #7A6F5E);
   margin-top: 1px;
 }
 
@@ -431,7 +426,7 @@
 
 .mpop-hint {
   font-size: 11px;
-  color: #1a73e8;
+  color: var(--purple-500, #7C5CE0);
   margin-top: 4px;
 }
 
@@ -564,8 +559,8 @@
 }
 
 .blw-modal-tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--blw-accent);
+  border-bottom-color: var(--blw-accent);
 }
 
 .blw-modal-tab-icon {
@@ -648,7 +643,7 @@
 .blw-stat-value {
   font-size: 28px;
   font-weight: 800;
-  color: var(--accent);
+  color: var(--blw-accent);
   line-height: 1;
   margin-bottom: 4px;
 }
@@ -718,7 +713,7 @@
 }
 
 .blw-requests-btn-new {
-  background: var(--accent);
+  background: var(--blw-accent);
   color: white;
   border: none;
   border-radius: 8px;
@@ -730,7 +725,7 @@
 }
 
 .blw-requests-btn-new:hover {
-  background: var(--accent-hover);
+  background: var(--blw-accent-hover);
   transform: translateY(-1px);
 }
 
@@ -775,7 +770,7 @@
 
 .blw-request-btn-submit {
   padding: 10px;
-  background: var(--accent);
+  background: var(--blw-accent);
   color: white;
   border: none;
   border-radius: 8px;
@@ -786,7 +781,7 @@
 }
 
 .blw-request-btn-submit:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--blw-accent-hover);
 }
 
 .blw-request-btn-submit:disabled {
@@ -970,9 +965,9 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--blw-accent);
   border: 2px solid var(--surface);
-  box-shadow: 0 0 0 2px var(--accent);
+  box-shadow: 0 0 0 2px var(--blw-accent);
   margin-top: 4px;
 }
 
@@ -1026,7 +1021,7 @@
 .blw-activity-stat-value {
   font-size: 18px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--blw-accent);
 }
 
 .blw-empty-state {
@@ -1196,7 +1191,7 @@
 
 /* ── Accessibility ─────────────────────────────────────────────────────── */
 button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--blw-accent);
   outline-offset: 2px;
 }
 

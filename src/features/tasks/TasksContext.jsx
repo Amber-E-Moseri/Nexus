@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { createTask, deleteTask, getDeptTasks, getSprintTasks, updateTask } from './lib/tasks'
-import { listTaskStatuses, selectDefaultStatus } from '../../lib/taskStatuses'
+import { listTaskStatuses, selectDefaultStatus, selectActiveTaskStatuses } from '../../lib/taskStatuses'
 
 export const TasksContext = createContext(null)
 
@@ -67,17 +67,31 @@ export function TasksProvider({ departmentId, sprintId, children }) {
         }
       }
 
-      // Ensure "Not Started" is always included
-      const hasNotStarted = Array.from(statusMap.values()).some(s => s.name === 'Not Started')
-      if (!hasNotStarted && statusResults[0]) {
-        const notStartedStatus = statusResults[0].find(s => s.name === 'Not Started')
-        if (notStartedStatus) {
-          const key = `${notStartedStatus.category}:${notStartedStatus.legacy_key || notStartedStatus.name}`
-          statusMap.set(key, notStartedStatus)
+      // Ensure an open-category status is always included (To Do / Not Started)
+      if (!Array.from(statusMap.values()).some(s => s.category === 'open')) {
+        try {
+          const allStatuses = await listTaskStatuses({ departmentId, includeInactive: true })
+          const openStatus = allStatuses.find(s => s.category === 'open')
+          if (openStatus) {
+            statusMap.set(`open:${openStatus.legacy_key || openStatus.name}`, { ...openStatus, active: true })
+          }
+        } catch { /* ignore */ }
+        // Last resort: synthetic To Do if nothing in DB
+        if (!Array.from(statusMap.values()).some(s => s.category === 'open')) {
+          statusMap.set('open:to_do', {
+            id: '__fallback_todo',
+            name: 'To Do',
+            color: '#378ADD',
+            category: 'open',
+            legacy_key: 'to_do',
+            is_default: true,
+            active: true,
+            sort_order: 0,
+          })
         }
       }
 
-      const finalStatuses = Array.from(statusMap.values())
+      const finalStatuses = selectActiveTaskStatuses(Array.from(statusMap.values()))
       console.log('[TasksContext] Space/Sprint statuses:', {
         sprintId,
         departmentId,

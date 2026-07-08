@@ -132,6 +132,13 @@ export function BLWMap() {
     L.control.zoom({ position: 'bottomright' }).addTo(map)
     mapInstanceRef.current = map
 
+    // Leaflet caches the container size at creation. If the flex container hasn't
+    // settled yet (common on first paint), tiles render blank and markers land in
+    // the wrong place. Re-measure after layout, and again on any container resize.
+    requestAnimationFrame(() => map.invalidateSize())
+    const ro = new ResizeObserver(() => map.invalidateSize())
+    ro.observe(mapRef.current)
+
     map.on('zoomend', () => {
       updateHubVisibility()
       const { sz, bw } = scaleForZoom(map.getZoom())
@@ -140,6 +147,14 @@ export function BLWMap() {
         marker.setIcon(getIcon(campus, false, sz, bw))
       })
     })
+
+    return () => {
+      ro.disconnect()
+      map.remove()
+      mapInstanceRef.current = null
+      markersRef.current = {}
+      hubLayersRef.current = {}
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -234,47 +249,40 @@ export function BLWMap() {
       if (existing) {
         existing.campus = c
         existing.marker.setIcon(getIcon(c, sel, sel ? undefined : sz, sel ? undefined : bw))
-        existing.marker.setPopupContent(popupHTML(c))
+        existing.marker.setTooltipContent(popupHTML(c, { withHint: false }))
         return
       }
       const marker = L.marker([c.lat, c.lng], {
         icon: getIcon(c, sel, sel ? undefined : sz, sel ? undefined : bw),
       })
-      marker.bindPopup(L.popup({ closeButton: false, offset: [0, -4] }).setContent(popupHTML(c)))
+      // Hover shows a lightweight preview; click opens the full side panel.
+      // (A bound popup would open on click too, colliding with the panel.)
+      marker.bindTooltip(popupHTML(c, { withHint: false }), {
+        direction: 'top',
+        offset: [0, -6],
+        opacity: 1,
+        className: 'blw-map-tip',
+      })
       marker.on('click', () => {
         setSelectedId(c.id)
         setPanelOpen(true)
-      })
-      marker.on('popupopen', (e) => {
-        e.popup.getElement()?.querySelector('.mpop')?.addEventListener('click', () => {
-          map.closePopup()
-          setSelectedId(c.id)
-          setPanelOpen(true)
-        })
       })
       marker.addTo(map)
       markersRef.current[c.id] = { marker, campus: c }
     })
   }, [filteredCampuses, selectedId])
 
-  // Pan to selected campus.
+  // Pan to selected campus, offsetting for the side panel when it's open so the
+  // marker lands in the visible area rather than hidden behind the 380px panel.
   useEffect(() => {
     const map = mapInstanceRef.current
-    if (map && selectedCampus?.lat && selectedCampus?.lng) {
-      map.panTo([selectedCampus.lat, selectedCampus.lng], { animate: true })
+    if (!map || !selectedCampus?.lat || !selectedCampus?.lng) return
+    map.panTo([selectedCampus.lat, selectedCampus.lng], { animate: true })
+    if (panelOpen) {
+      const panelHalf = window.innerWidth > 768 ? 190 : 0
+      if (panelHalf) map.panBy([panelHalf, 0], { animate: true })
     }
-  }, [selectedCampus])
-
-  if (loading) {
-    return (
-      <div className="blw-map-loading">
-        <div className="blw-map-loading-content">
-          <div className="blw-map-loading-spinner">🍁</div>
-          <p>Loading campuses…</p>
-        </div>
-      </div>
-    )
-  }
+  }, [selectedCampus, panelOpen])
 
   return (
     <div style={{ display: 'flex', height: '100%', position: 'relative', background: THEME.surface }}>
@@ -306,6 +314,9 @@ export function BLWMap() {
             <button className={`blwp-navpill${showKey ? ' active' : ''}`} onClick={() => setShowKey((v) => !v)}>
               ⓘ Key
             </button>
+            <button className="blwp-navpill" onClick={() => window.open('/map', '_blank')} title="Open map in new tab">
+              ↗
+            </button>
           </div>
         </div>
 
@@ -335,8 +346,8 @@ export function BLWMap() {
           </button>
         </div>
 
-        {/* Map */}
-        <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+        {/* Map — position:absolute so height is never dependent on flex chain */}
+        <div ref={mapRef} style={{ position: 'absolute', inset: 0, zIndex: 1 }} />
 
         {/* Key panel */}
         {showKey && (
@@ -371,6 +382,16 @@ export function BLWMap() {
             <div className="blwp-prog-bar"><div className="blwp-prog-fill" style={{ width: `${tally.pct}%` }} /></div>
           </div>
         </div>
+
+        {/* Loading overlay — map stays mounted underneath so Leaflet can init */}
+        {loading && (
+          <div className="blw-map-loading" style={{ position: 'absolute', inset: 0, zIndex: 900 }}>
+            <div className="blw-map-loading-content">
+              <div className="blw-map-loading-spinner">🍁</div>
+              <p>Loading campuses…</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Side panel */}

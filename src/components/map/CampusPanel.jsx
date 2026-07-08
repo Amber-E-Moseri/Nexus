@@ -109,7 +109,7 @@ export function CampusPanel({ campus, canEdit, onClose, onSaved }) {
         {campus.needs_plan && (
           <span className="blwp-badge" style={{ background: `${NEEDS_PLAN_COLOR}20`, color: NEEDS_PLAN_COLOR }}>🔷 Needs Plan</span>
         )}
-        {campus.subgroup && <span className="blwp-badge" style={{ background: '#f1f3f4', color: '#5f6368' }}>📂 {campus.subgroup}</span>}
+        {campus.subgroup && <span className="blwp-badge" style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>📂 {campus.subgroup}</span>}
       </div>
 
       {/* Tabs */}
@@ -204,7 +204,7 @@ function InfoTab({ campus }) {
             {campus.contact_name && <div className="blwp-cic-row">👤 {campus.contact_name}</div>}
             {campus.contact_phone && (
               <div className="blwp-cic-row">
-                📞 <a href={`tel:${campus.contact_phone.replace(/\s/g, '')}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>{campus.contact_phone}</a>
+                📞 <a href={`tel:${campus.contact_phone.replace(/\s/g, '')}`} style={{ color: 'var(--purple-700)', textDecoration: 'none' }}>{campus.contact_phone}</a>
               </div>
             )}
           </div>
