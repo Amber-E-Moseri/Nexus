@@ -15,6 +15,7 @@ export default defineConfig({
       usePolling: true,
       interval: 100,
     },
+    warmupEntry: ['src/main.jsx', 'src/App.jsx'],
   },
   plugins: [
     react(),
