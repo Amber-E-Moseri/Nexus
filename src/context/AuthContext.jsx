@@ -126,21 +126,28 @@ export function AuthProvider({ children }) {
       setJwtRole(getJwtRole(session))
 
       if (session?.user) {
-        setLoading(true)
-        try {
-          const nextProfile = await fetchProfile(session.user.id)
-          if (mounted) {
-            setProfile(nextProfile)
+        // Only fetch profile on SIGNED_IN (initial login). On TOKEN_REFRESHED
+        // and other events, keep the cached profile to avoid unnecessary DB queries.
+        if (event === 'SIGNED_IN') {
+          setLoading(true)
+          try {
+            const nextProfile = await fetchProfile(session.user.id)
+            if (mounted) {
+              setProfile(nextProfile)
+            }
+            touchLastActive().catch(() => {})
+          } catch {
+            if (mounted) {
+              setProfile(null)
+            }
+          } finally {
+            if (mounted) {
+              setLoading(false)
+            }
           }
+        } else if (event === 'TOKEN_REFRESHED') {
+          // Token refreshed: keep existing profile (no DB query needed)
           touchLastActive().catch(() => {})
-        } catch {
-          if (mounted) {
-            setProfile(null)
-          }
-        } finally {
-          if (mounted) {
-            setLoading(false)
-          }
         }
       } else {
         setProfile(null)
