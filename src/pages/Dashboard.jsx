@@ -3,7 +3,7 @@ import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from 
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { endOfWeek, isBefore, isEqual, parseISO, startOfDay } from 'date-fns'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlarmClock, BellRing, ChevronRight, UsersRound } from 'lucide-react'
+import { BellRing, ChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationsContext'
@@ -28,6 +28,8 @@ import PastoralMembersWidget from '../features/dashboard/components/PastoralMemb
 import AbsentMembersWidget from '../features/dashboard/components/AbsentMembersWidget'
 import TeamActivityHeatmap from '../features/dashboard/components/TeamActivityHeatmap'
 import TeamVelocityWidget from '../features/dashboard/components/TeamVelocityWidget'
+import PersonalRemindersWidget from '../features/dashboard/components/PersonalRemindersWidget'
+import TeamAvailabilityWidget from '../features/dashboard/components/TeamAvailabilityWidget'
 import { RegionalUpdateWidget } from '../features/regional-updates/components/RegionalUpdateWidget'
 import { getDashboardPresets } from '../features/dashboard/lib/dashboard-queries'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
@@ -320,75 +322,6 @@ function MySpacesWidget({ userId, role, departmentId }) {
         )
       })}
     </div>
-  )
-}
-
-// Placeholder widget frame — data areas identified in the Dashboard/Home merge
-// that have no backing schema yet (personal reminders, member availability).
-// UI frame only: wire a real data source in and drop the frame when it lands.
-function PlaceholderWidget({ icon: Icon, message }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 10,
-        padding: '26px 16px',
-        border: '1px dashed var(--border-2)',
-        borderRadius: 14,
-        background: 'var(--surface-sub)',
-        textAlign: 'center',
-      }}
-    >
-      <span
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 38,
-          height: 38,
-          borderRadius: '50%',
-          background: 'var(--purple-tint)',
-          color: 'var(--purple-700)',
-        }}
-      >
-        <Icon size={18} />
-      </span>
-      <span style={{ fontSize: 12.5, color: 'var(--ink-2)', maxWidth: 300, lineHeight: 1.5 }}>{message}</span>
-      <span
-        style={{
-          fontSize: 10.5,
-          fontWeight: 700,
-          letterSpacing: '.06em',
-          textTransform: 'uppercase',
-          color: 'var(--purple-700)',
-          background: 'var(--purple-tint)',
-          borderRadius: 999,
-          padding: '3px 10px',
-        }}
-      >
-        Planned
-      </span>
-    </div>
-  )
-}
-
-function PersonalRemindersWidget() {
-  return (
-    <PlaceholderWidget
-      icon={AlarmClock}
-      message="Personal reminders will live here — quick notes-to-self with a due time, separate from tasks."
-    />
-  )
-}
-
-function TeamAvailabilityWidget() {
-  return (
-    <PlaceholderWidget
-      icon={UsersRound}
-      message="Team member status and availability will appear here once presence data is tracked."
-    />
   )
 }
 

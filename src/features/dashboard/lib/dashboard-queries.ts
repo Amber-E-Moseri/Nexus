@@ -59,6 +59,22 @@ export interface SprintVelocity {
   completion_rate_percent: number
 }
 
+export interface TeamAvailabilityEntry {
+  member_id: string
+  name: string
+  until: string | null
+  reason: string | null
+}
+
+export interface PersonalReminder {
+  id: string
+  user_id: string
+  note: string
+  remind_at: string | null
+  done: boolean
+  created_at: string
+}
+
 export async function getDashboardPresets(role: string): Promise<DashboardPreset> {
   const { data, error } = await supabase.rpc('get_dashboard_presets', { p_role: role })
 
@@ -112,4 +128,43 @@ export async function getTeamVelocity(deptId: string, sprintCount: number = 4): 
 
   if (error) throw error
   return data ?? []
+}
+
+export async function getTeamAvailability(deptId: string): Promise<TeamAvailabilityEntry[]> {
+  const { data, error } = await supabase.rpc('get_team_availability', { p_dept_id: deptId })
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getPersonalReminders(userId: string): Promise<PersonalReminder[]> {
+  const { data, error } = await supabase
+    .from('personal_reminders')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('done', false)
+    .order('remind_at', { ascending: true, nullsFirst: false })
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createPersonalReminder(userId: string, note: string, remindAt: string | null): Promise<PersonalReminder> {
+  const { data, error } = await supabase
+    .from('personal_reminders')
+    .insert({ user_id: userId, note, remind_at: remindAt })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function completePersonalReminder(reminderId: string): Promise<void> {
+  const { error } = await supabase
+    .from('personal_reminders')
+    .update({ done: true })
+    .eq('id', reminderId)
+
+  if (error) throw error
 }

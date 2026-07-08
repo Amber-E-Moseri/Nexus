@@ -8,6 +8,7 @@ export const EVENT_COLORS = {
   graduation: '#DB2777',
   event: '#4C2A92',
   deadline: '#DC2626',
+  leave: '#6B7280',
 }
 
 function formatEventTime(event) {

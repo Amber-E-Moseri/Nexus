@@ -144,6 +144,7 @@ export function CalendarEventForm({ eventId, spaceId, onSave, onCancel }) {
             <option value="graduation">Graduation</option>
             <option value="event">Event</option>
             <option value="deadline">Deadline</option>
+            <option value="leave">Leave / Out of Office</option>
           </select>
         </div>
 

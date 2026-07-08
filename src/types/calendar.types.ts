@@ -3,7 +3,7 @@
 
 export type CalendarEventStatus = 'pending' | 'approved' | 'rejected' | 'draft' | 'confirmed' | 'cancelled' | 'completed';
 export type EventPriority = 'high' | 'medium' | 'low';
-export type EventType = 'conference' | 'program' | 'training' | 'prayer' | 'graduation' | 'event' | 'deadline';
+export type EventType = 'conference' | 'program' | 'training' | 'prayer' | 'graduation' | 'event' | 'deadline' | 'leave';
 export type SyncDirection = 'to_google' | 'from_google' | 'both';
 export type SubscriptionScope = 'all' | 'department';
 
