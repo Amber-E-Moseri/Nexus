@@ -58,6 +58,13 @@ const TASK_COMMENT_SELECT = `
   resolved_user:users!resolved_by(id, name, avatar_url)
 `
 
+// A task is "delegated" if the current user created it for someone else.
+// Requires a real assignee — an unassigned task (assignee_id null) is not
+// delegated to anyone yet, just unclaimed.
+export function isDelegatedTask(task, userId) {
+  return Boolean(task.assignee_id) && task.created_by === userId && task.assignee_id !== userId
+}
+
 function normalizeTaskResult(task) {
   return normalizeTaskRow(task)
 }
@@ -123,7 +130,7 @@ export async function getDeptTasks(departmentId) {
       department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
       meeting:meetings!meeting_id(id, title),
-      subtasks:tasks!parent_task_id(${SUBTASK_SELECT}),
+      subtask_count:tasks!parent_task_id(count),
       comments:task_comments(count),
       files:task_files(count),
       dependencies:task_dependencies!task_id(count)
@@ -146,7 +153,7 @@ export async function getSprintTasks(sprintId) {
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
-      subtasks:tasks!parent_task_id(${SUBTASK_SELECT}),
+      subtask_count:tasks!parent_task_id(count),
       comments:task_comments(count),
       files:task_files(count),
       dependencies:task_dependencies!task_id(count)
@@ -163,7 +170,7 @@ export async function getSprintTasks(sprintId) {
 export async function getPersonalTasks(userId) {
   const { data, error } = await supabase
     .from('tasks')
-    .select(`${TASK_COLS}, ${TASK_STATUS_SELECT}, ${TASK_LIST_SELECT}, department:departments(id, name, color), subtasks:tasks!parent_task_id(${SUBTASK_SELECT})`)
+    .select(`${TASK_COLS}, ${TASK_STATUS_SELECT}, ${TASK_LIST_SELECT}, department:departments(id, name, color), subtask_count:tasks!parent_task_id(count)`)
     .eq('assignee_id', userId)
     .eq('is_personal', true)
     .is('parent_task_id', null)
@@ -193,7 +200,7 @@ export async function getMyTasks(userId) {
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
-      subtasks:tasks!parent_task_id(${SUBTASK_SELECT}),
+      subtask_count:tasks!parent_task_id(count),
       comments:task_comments(count),
       files:task_files(count)
     `)
@@ -213,7 +220,7 @@ export async function getMyTasks(userId) {
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
-      subtasks:tasks!parent_task_id(${SUBTASK_SELECT}),
+      subtask_count:tasks!parent_task_id(count),
       comments:task_comments(count),
       files:task_files(count)
     `)
@@ -234,7 +241,7 @@ export async function getMyTasks(userId) {
         ${TASK_LIST_SELECT},
         department:departments(id, name, color),
         assignee:users!assignee_id(id, name, avatar_url),
-        subtasks:tasks!parent_task_id(${SUBTASK_SELECT}),
+        subtask_count:tasks!parent_task_id(count),
         comments:task_comments(count),
         files:task_files(count)
       `)
@@ -705,6 +712,17 @@ export async function getTaskBlockers(taskId) {
     `)
     .eq('depends_on_id', taskId)
     .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return normalizeTaskResultList(data)
+}
+
+export async function getTaskSubtasks(taskId) {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`${SUBTASK_SELECT}`)
+    .eq('parent_task_id', taskId)
+    .order('sort_order', { ascending: true })
 
   if (error) throw error
   return normalizeTaskResultList(data)

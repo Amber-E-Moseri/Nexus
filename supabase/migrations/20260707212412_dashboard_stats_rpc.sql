@@ -9,16 +9,15 @@ returns table (
   active_sprint_count bigint
 )
 language sql
-stable
 as $$
   select
-    (select count(*) from public.spaces) as space_count,
+    (select count(*) from public.departments) as space_count,
     (select count(*) from public.tasks
      where is_personal = false
      and parent_task_id is null
      and completed_at is null) as open_task_count,
     (select count(*) from public.tasks
-     where assigned_to = p_user_id
+     where assignee_id = p_user_id
      and completed_at is null
      and due_date is not null) as my_due_task_count,
     (select count(*) from public.sprints
