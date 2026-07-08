@@ -218,22 +218,22 @@ export function TasksProvider({ departmentId, sprintId, children }) {
 
   const defaultStatus = selectDefaultStatus(statuses)
 
+  const value = useMemo(() => ({
+    tasks,
+    statuses,
+    defaultStatusId: defaultStatus?.id ?? null,
+    loading,
+    error,
+    moveTask,
+    addTask,
+    editTask,
+    removeTask,
+    reload: loadTasks,
+    reloadStatuses: loadStatuses,
+  }), [tasks, statuses, defaultStatus, loading, error, moveTask, addTask, editTask, removeTask, loadTasks, loadStatuses])
+
   return (
-    <TasksContext.Provider
-      value={{
-        tasks,
-        statuses,
-        defaultStatusId: defaultStatus?.id ?? null,
-        loading,
-        error,
-        moveTask,
-        addTask,
-        editTask,
-        removeTask,
-        reload: loadTasks,
-        reloadStatuses: loadStatuses,
-      }}
-    >
+    <TasksContext.Provider value={value}>
       {children}
     </TasksContext.Provider>
   )

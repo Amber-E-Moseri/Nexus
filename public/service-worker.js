@@ -120,10 +120,10 @@ function cacheFirstStrategy(request, cacheName) {
       const responseToCache = response.clone();
       caches.open(cacheName).then((cache) => {
         // Add cache timestamp metadata
-        const clonedResponse = new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: new Headers(response.headers),
+        const clonedResponse = new Response(responseToCache.body, {
+          status: responseToCache.status,
+          statusText: responseToCache.statusText,
+          headers: new Headers(responseToCache.headers),
         });
         clonedResponse.headers.set('sw-cached-at', Date.now().toString());
         cache.put(request, clonedResponse);
@@ -148,10 +148,10 @@ function networkFirstStrategy(request, cacheName) {
       const responseToCache = response.clone();
       caches.open(cacheName).then((cache) => {
         // Add cache timestamp for API expiration
-        const clonedResponse = new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: new Headers(response.headers),
+        const clonedResponse = new Response(responseToCache.body, {
+          status: responseToCache.status,
+          statusText: responseToCache.statusText,
+          headers: new Headers(responseToCache.headers),
         });
         clonedResponse.headers.set('sw-cached-at', Date.now().toString());
         cache.put(request, clonedResponse);
@@ -191,10 +191,10 @@ function htmlFirstStrategy(request) {
       const responseToCache = response.clone();
       caches.open(DYNAMIC_CACHE).then((cache) => {
         // Add cache timestamp for HTML expiration
-        const clonedResponse = new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: new Headers(response.headers),
+        const clonedResponse = new Response(responseToCache.body, {
+          status: responseToCache.status,
+          statusText: responseToCache.statusText,
+          headers: new Headers(responseToCache.headers),
         });
         clonedResponse.headers.set('sw-cached-at', Date.now().toString());
         cache.put(request, clonedResponse);

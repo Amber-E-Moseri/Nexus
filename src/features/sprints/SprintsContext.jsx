@@ -39,20 +39,22 @@ export function SprintsProvider({ children }) {
     loadSprints()
   }, [loadSprints])
 
-  // For sidebar: use filtered active sprints
-  const activeSprints = sidebarSprints.filter((sprint) => sprint.status === 'active')
-  const planningSprints = sidebarSprints.filter((sprint) => sprint.status === 'planning')
+  // Memoize sprint filtering so these arrays have stable references
+  const { activeSprints, planningSprints } = useMemo(() => ({
+    activeSprints: sidebarSprints.filter((sprint) => sprint.status === 'active'),
+    planningSprints: sidebarSprints.filter((sprint) => sprint.status === 'planning'),
+  }), [sidebarSprints])
+
+  const value = useMemo(() => ({
+    sprints,
+    activeSprints,
+    planningSprints,
+    loading,
+    reload: loadSprints,
+  }), [sprints, activeSprints, planningSprints, loading, loadSprints])
 
   return (
-    <SprintsContext.Provider
-      value={{
-        sprints,
-        activeSprints,
-        planningSprints,
-        loading,
-        reload: loadSprints,
-      }}
-    >
+    <SprintsContext.Provider value={value}>
       {children}
     </SprintsContext.Provider>
   )

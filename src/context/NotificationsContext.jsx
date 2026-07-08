@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { getNotifications, getUnreadCount, markAllAsRead, markAsRead } from '../features/notifications'
 import { supabase } from '../lib/supabase'
@@ -73,19 +73,19 @@ export function NotificationsProvider({ children }) {
     setUnreadCount(0)
   }, [user])
 
+  const value = useMemo(() => ({
+    notifications,
+    unreadCount,
+    loading,
+    isOpen,
+    setIsOpen,
+    markAsRead: handleMarkAsRead,
+    markAllAsRead: handleMarkAllAsRead,
+    reload: loadNotifications,
+  }), [notifications, unreadCount, loading, isOpen, handleMarkAsRead, handleMarkAllAsRead, loadNotifications])
+
   return (
-    <NotificationsContext.Provider
-      value={{
-        notifications,
-        unreadCount,
-        loading,
-        isOpen,
-        setIsOpen,
-        markAsRead: handleMarkAsRead,
-        markAllAsRead: handleMarkAllAsRead,
-        reload: loadNotifications,
-      }}
-    >
+    <NotificationsContext.Provider value={value}>
       {children}
     </NotificationsContext.Provider>
   )

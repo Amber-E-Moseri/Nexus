@@ -4,7 +4,8 @@ import { useAuth } from '../../../hooks/useAuth'
 import { useDeptMembers } from '../../../hooks/useDeptMembers'
 import { useMeetings } from '../MeetingsContext'
 import { supabase } from '../../../lib/supabase'
-import { canProcessTranscript } from '../../../lib/meetings/costLimits'
+import AudioTranscriptionPanel from './AudioTranscriptionPanel'
+import GenerateMeetingDocButton from './GenerateMeetingDocButton'
 
 const MEETING_TYPES = [
   { value: 'general', label: 'General' },
@@ -22,21 +23,27 @@ function toLocalDateTime(value) {
 
 export default function MeetingModal({ departmentId, onClose }) {
   const { profile } = useAuth()
-  const { addMeeting } = useMeetings()
+  const { addMeeting, editMeeting } = useMeetings()
   const members = useDeptMembers(departmentId)
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(() => toLocalDateTime(new Date().toISOString()))
   const [meetingType, setMeetingType] = useState('general')
   const [summary, setSummary] = useState('')
   const [minutes, setMinutes] = useState('')
-  const [transcript, setTranscript] = useState('')
   const [zoomJoinUrl, setZoomJoinUrl] = useState('')
   const [driveUrl, setDriveUrl] = useState('')
   const [attendeeIds, setAttendeeIds] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-  const [aiExtracting, setAiExtracting] = useState(false)
-  const [aiError, setAiError] = useState(null)
+
+  // Log meeting is meant for meetings that already happened without ever going
+  // through a "plan meeting" flow. Recording, AI extraction, and Drive export
+  // all need a real meeting row to attach to, so we create a draft row the
+  // moment a title is committed (on blur) instead of gating those tools behind
+  // a separate planning step.
+  const [savedMeeting, setSavedMeeting] = useState(null)
+  const [creatingDraft, setCreatingDraft] = useState(false)
+  const [actionItems, setActionItems] = useState([])
 
   const attendanceLabel = useMemo(() => {
     if (attendeeIds.length === 0) return 'No attendees selected'
@@ -50,62 +57,36 @@ export default function MeetingModal({ departmentId, onClose }) {
     )
   }
 
-  async function runAiExtraction() {
-    if (transcript.trim().length < 20) {
-      setAiError('Paste at least 20 characters of transcript to extract from.')
-      return
-    }
+  async function ensureDraftMeeting() {
+    if (savedMeeting || creatingDraft || !title.trim()) return
 
-    setAiExtracting(true)
-    setAiError(null)
+    setCreatingDraft(true)
+    setError(null)
 
     try {
-      const limitCheck = await canProcessTranscript(profile?.id, transcript.trim().length)
-      if (!limitCheck.allowed) {
-        setAiError(limitCheck.reason)
-        return
-      }
-
-      const { data, error: fnError } = await supabase.functions.invoke('extract-meeting-data', {
-        body: { transcript: transcript.trim() },
+      const created = await addMeeting({
+        title: title.trim(),
+        department_id: departmentId,
+        date: new Date(date).toISOString(),
+        meeting_type: meetingType,
+        created_by: profile?.id,
       })
-      if (fnError) throw fnError
-
-      const extracted = data?.extracted
-      if (!extracted) throw new Error(data?.error || 'Failed to process transcript')
-
-      if (extracted.summary) {
-        setSummary(extracted.summary)
-      }
-
-      const minutesParts = []
-      if (extracted.decisions?.length) {
-        const decisionStrings = extracted.decisions
-          .map((d) => (typeof d === 'string' ? d : d?.decision))
-          .filter(Boolean)
-        if (decisionStrings.length) {
-          minutesParts.push(`Decisions:\n• ${decisionStrings.join('\n• ')}`)
-        }
-      }
-      if (extracted.next_steps?.length) {
-        minutesParts.push(`Next steps:\n• ${extracted.next_steps.join('\n• ')}`)
-      }
-      if (extracted.action_items?.length) {
-        const actionStrings = extracted.action_items
-          .map((item) => item?.title && (item.owner && item.owner !== 'TBD' ? `${item.title} (${item.owner})` : item.title))
-          .filter(Boolean)
-        if (actionStrings.length) {
-          minutesParts.push(`Action items:\n• ${actionStrings.join('\n• ')}`)
-        }
-      }
-      if (minutesParts.length) {
-        setMinutes(minutesParts.join('\n\n'))
-      }
+      setSavedMeeting(created)
     } catch (nextError) {
-      setAiError(nextError.message || 'Extraction failed.')
+      setError(nextError.message)
     } finally {
-      setAiExtracting(false)
+      setCreatingDraft(false)
     }
+  }
+
+  async function fetchActionItems() {
+    if (!savedMeeting?.id) return
+    const { data, error: fetchError } = await supabase
+      .from('tasks')
+      .select('id, title, status, due_date, assignee:users!assignee_id(id, name)')
+      .eq('meeting_id', savedMeeting.id)
+      .order('created_at', { ascending: true })
+    if (!fetchError) setActionItems(data ?? [])
   }
 
   async function handleSave() {
@@ -123,19 +104,41 @@ export default function MeetingModal({ departmentId, onClose }) {
     setError(null)
 
     try {
-      await addMeeting({
-        title: title.trim(),
-        department_id: departmentId,
-        date: new Date(date).toISOString(),
-        meeting_type: meetingType,
-        summary: summary.trim() || null,
-        minutes: minutes.trim() || null,
-        transcript: transcript.trim() || null,
-        zoom_join_url: zoomJoinUrl.trim() || null,
-        drive_url: driveUrl.trim() || null,
-        created_by: profile?.id,
-        attendanceUserIds: attendeeIds,
-      })
+      if (savedMeeting?.id) {
+        await editMeeting(savedMeeting.id, {
+          title: title.trim(),
+          date: new Date(date).toISOString(),
+          meeting_type: meetingType,
+          summary: summary.trim() || null,
+          minutes: minutes.trim() || null,
+          zoom_join_url: zoomJoinUrl.trim() || null,
+          drive_url: driveUrl.trim() || null,
+        })
+
+        await supabase.from('meeting_attendance').delete().eq('meeting_id', savedMeeting.id)
+        if (attendeeIds.length > 0) {
+          await supabase.from('meeting_attendance').insert(
+            attendeeIds.map((userId) => ({
+              meeting_id: savedMeeting.id,
+              user_id: userId,
+              status: 'present',
+            })),
+          )
+        }
+      } else {
+        await addMeeting({
+          title: title.trim(),
+          department_id: departmentId,
+          date: new Date(date).toISOString(),
+          meeting_type: meetingType,
+          summary: summary.trim() || null,
+          minutes: minutes.trim() || null,
+          zoom_join_url: zoomJoinUrl.trim() || null,
+          drive_url: driveUrl.trim() || null,
+          created_by: profile?.id,
+          attendanceUserIds: attendeeIds,
+        })
+      }
       onClose()
     } catch (nextError) {
       setError(nextError.message)
@@ -200,7 +203,13 @@ export default function MeetingModal({ departmentId, onClose }) {
             <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'minmax(0, 1.5fr) minmax(220px, 1fr) minmax(180px, 1fr)' }}>
               <div>
                 <label style={labelStyle}>Title *</label>
-                <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Weekly Team Sync" style={inputStyle} />
+                <input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  onBlur={ensureDraftMeeting}
+                  placeholder="Weekly Team Sync"
+                  style={inputStyle}
+                />
               </div>
               <div>
                 <label style={labelStyle}>Date *</label>
@@ -239,37 +248,44 @@ export default function MeetingModal({ departmentId, onClose }) {
               <textarea value={minutes} onChange={(event) => setMinutes(event.target.value)} rows={6} placeholder="Store the final minutes text or key decisions here." style={textareaStyle} />
             </div>
 
-            <div style={{ marginTop: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <label style={{ ...labelStyle, marginBottom: 0 }}>Transcript</label>
-                <button
-                  type="button"
-                  onClick={runAiExtraction}
-                  disabled={aiExtracting || transcript.trim().length < 20}
-                  style={{
-                    borderRadius: 6,
-                    border: '1px solid var(--accent)',
-                    background: 'transparent',
-                    padding: '4px 10px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: 'var(--accent)',
-                    cursor: aiExtracting || transcript.trim().length < 20 ? 'not-allowed' : 'pointer',
-                    opacity: aiExtracting || transcript.trim().length < 20 ? 0.5 : 1,
-                  }}
-                >
-                  {aiExtracting ? 'Extracting…' : '⚡ Run AI extraction'}
-                </button>
-              </div>
-              <textarea value={transcript} onChange={(event) => setTranscript(event.target.value)} rows={5} placeholder="Optional transcript excerpt or pasted transcript. Paste one here to auto-fill summary and minutes with AI." style={textareaStyle} />
-              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-secondary)' }}>
-                No transcript from a live session? Paste one here — you don't need to have planned the meeting first.
-              </div>
-              {aiError ? (
-                <div style={{ marginTop: 8, borderRadius: 8, background: 'var(--coral-light)', padding: '8px 10px', fontSize: 12, color: 'var(--coral-dark)' }}>
-                  {aiError}
+            <div style={{ marginTop: 18 }}>
+              <label style={labelStyle}>Recording, transcript &amp; AI extraction</label>
+              {!savedMeeting ? (
+                <div style={{ borderRadius: 10, border: '1px dashed var(--border)', padding: '14px 16px', fontSize: 12, color: 'var(--text-secondary)' }}>
+                  {creatingDraft
+                    ? 'Setting up…'
+                    : 'Enter a title above, then click out of the field — this unlocks recording, audio upload, transcript paste, AI extraction, action-item creation, and Drive export below. No separate "plan meeting" step required.'}
                 </div>
-              ) : null}
+              ) : (
+                <>
+                  <AudioTranscriptionPanel
+                    meetingId={savedMeeting.id}
+                    departmentId={departmentId}
+                    canRecord
+                    onTranscriptionComplete={({ transcript }) => setSummary(transcript)}
+                    onActionItemsExtracted={fetchActionItems}
+                  />
+
+                  {actionItems.length > 0 ? (
+                    <div style={{ marginTop: 14, fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {actionItems.length} action item{actionItems.length === 1 ? '' : 's'} created from this meeting so far.
+                    </div>
+                  ) : null}
+
+                  <div style={{ marginTop: 16, borderRadius: 10, border: '1px solid var(--border)', padding: '14px 16px' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>📄 Save to Drive</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                      Generates a formatted Google Doc with the summary and action items, uploaded to Drive automatically.
+                    </div>
+                    <GenerateMeetingDocButton
+                      meetingId={savedMeeting.id}
+                      meeting={{ ...savedMeeting, title, date, summary, minutes }}
+                      actionItems={actionItems}
+                      onSuccess={(result) => setDriveUrl(result.docUrl)}
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             <div style={{ marginTop: 18 }}>

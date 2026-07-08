@@ -77,6 +77,16 @@ export default function KanbanBoard({
     return source.map(mapStatusForBoard)
   }, [spaceStatuses, statuses, statusesOverride])
 
+  // Memoize task grouping by status to avoid O(n×columns) filtering on every render.
+  // Prevents re-renders during drag operations and maintains stable array references for memoized KanbanColumn.
+  const tasksByStatus = useMemo(() => {
+    const map = {}
+    boardStatuses.forEach((status) => {
+      map[status.id] = tasks.filter((task) => taskMatchesStatus(task, status))
+    })
+    return map
+  }, [tasks, boardStatuses])
+
   const sensors = useDndSensors()
 
   function handleDragOver({ over }) {
@@ -150,7 +160,7 @@ export default function KanbanBoard({
         <KanbanColumn
           key={status.id}
           status={status}
-          tasks={tasks.filter((task) => taskMatchesStatus(task, status))}
+          tasks={tasksByStatus[status.id] ?? []}
           onTaskClick={onTaskClick}
           onStartAddTask={() => setComposerStatusId(status.id)}
           composer={!readOnly && composerStatusId === status.id ? (
