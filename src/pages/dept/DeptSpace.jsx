@@ -8,6 +8,7 @@ import MiniCalendar from '../../features/calendar/components/MiniCalendar'
 import MeetingModal from '../../features/meetings/components/MeetingModal'
 import MeetingsList from '../../features/meetings/components/MeetingsList'
 import { MeetingsProvider } from '../../features/meetings/MeetingsContext'
+import AssignedToMeToggle from '../../features/tasks/components/AssignedToMeToggle'
 import KanbanBoard from '../../features/tasks/components/KanbanBoard'
 import TaskCalendarView from '../../features/tasks/components/TaskCalendarView'
 import TaskFilters from '../../features/tasks/components/TaskFilters'
@@ -131,9 +132,12 @@ function TabBar({ activeTab, onTab, canManageTasks, canManageMeetings, onNewTask
 }
 
 function DeptBoardView({ dept, onTaskClick, onAddTask }) {
+  const { profile } = useAuth()
   const { tasks, loading, error, statuses, defaultStatusId } = useTasks()
   const members = useDeptMembers(dept?.id)
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
+  const assignedToMe = Boolean(profile?.id) && filters.assigneeId === profile.id
+  const toggleAssignedToMe = () => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))
   const [boardStatuses, setBoardStatuses] = useState([])
   const [loadingStatuses, setLoadingStatuses] = useState(true)
   const [statusError, setStatusError] = useState('')
@@ -215,6 +219,9 @@ function DeptBoardView({ dept, onTaskClick, onAddTask }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ paddingBottom: 12, borderBottom: '1px solid #F2EEE6', marginBottom: 12, flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+          <AssignedToMeToggle active={assignedToMe} onClick={toggleAssignedToMe} />
+        </div>
         <TaskFilters
           filters={filters}
           setFilters={setFilters}
@@ -238,9 +245,12 @@ function DeptBoardView({ dept, onTaskClick, onAddTask }) {
 }
 
 function DeptListView({ dept, onTaskClick, onAddTask }) {
+  const { profile } = useAuth()
   const { tasks, loading, error, statuses, defaultStatusId, moveTask } = useTasks()
   const members = useDeptMembers(dept?.id)
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
+  const assignedToMe = Boolean(profile?.id) && filters.assigneeId === profile.id
+  const toggleAssignedToMe = () => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))
 
   function handleTaskStatusChange({ taskId, newStatus }) {
     moveTask(taskId, newStatus)
@@ -252,6 +262,9 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ paddingBottom: 12, borderBottom: '1px solid #F2EEE6', marginBottom: 12, flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+          <AssignedToMeToggle active={assignedToMe} onClick={toggleAssignedToMe} />
+        </div>
         <TaskFilters
           filters={filters}
           setFilters={setFilters}

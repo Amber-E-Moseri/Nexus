@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { getSprintMembers, listSprintTeamsIndependent } from '../lib/sprints'
 import { supabase } from '../../../lib/supabase'
+import AssignedToMeToggle from '../../tasks/components/AssignedToMeToggle'
 import KanbanBoard from '../../tasks/components/KanbanBoard'
 import TaskFilters from '../../tasks/components/TaskFilters'
 import TaskListView from '../../tasks/components/TaskListView'
@@ -20,6 +21,8 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
   const [teamView, setTeamView] = useState('all')
   const [modal, setModal] = useState(null)
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
+  const assignedToMe = Boolean(profile?.id) && filters.assigneeId === profile.id
+  const toggleAssignedToMe = () => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))
 
   function handleTaskStatusChange({ taskId, newStatus }) {
     moveTask(taskId, newStatus)
@@ -133,15 +136,18 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
           ))}
         </div>
 
-        {canEdit ? (
-          <button
-            type="button"
-            onClick={() => setModal({ mode: 'create', defaultStatus: defaultStatusId })}
-            className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white"
-          >
-            + New task
-          </button>
-        ) : null}
+        <div className="flex items-center gap-2">
+          <AssignedToMeToggle active={assignedToMe} onClick={toggleAssignedToMe} />
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={() => setModal({ mode: 'create', defaultStatus: defaultStatusId })}
+              className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white"
+            >
+              + New task
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="px-5">

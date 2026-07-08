@@ -20,6 +20,7 @@ import SpaceIntegrationsTab from '../../features/spaces/components/SpaceIntegrat
 import SpaceModal from '../../features/spaces/components/SpaceModal'
 import SpaceStatusSettings from '../../features/spaces/components/SpaceStatusSettings'
 import SprintModal from '../../features/sprints/components/SprintModal'
+import AssignedToMeToggle from '../../features/tasks/components/AssignedToMeToggle'
 import KanbanBoard from '../../features/tasks/components/KanbanBoard'
 import TaskFilters from '../../features/tasks/components/TaskFilters'
 import TaskListView from '../../features/tasks/components/TaskListView'
@@ -909,6 +910,8 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
   const [modal, setModal] = useState(null)
   const [boardFiltersOpen, setBoardFiltersOpen] = useState(false)
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
+  const assignedToMe = Boolean(profile?.id) && filters.assigneeId === profile.id
+  const toggleAssignedToMe = () => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))
 
   const selectedList = useMemo(() => lists.find((list) => list.id === selectedListId) ?? null, [lists, selectedListId])
   const selectedFolder = useMemo(
@@ -1017,7 +1020,8 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
         ) : null}
 
         {viewMode === 'kanban' ? (
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-end gap-2">
+            <AssignedToMeToggle active={assignedToMe} onClick={toggleAssignedToMe} />
             <div className="relative">
               <button
                 type="button"
@@ -1038,7 +1042,14 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
           </div>
         ) : null}
 
-        {viewMode === 'list' ? <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={visibleStatuses} tasks={visibleTasks} /> : null}
+        {viewMode === 'list' ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-end">
+              <AssignedToMeToggle active={assignedToMe} onClick={toggleAssignedToMe} />
+            </div>
+            <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={visibleStatuses} tasks={visibleTasks} />
+          </div>
+        ) : null}
 
         {viewMode === 'kanban' ? (
           <div className="min-h-[520px]">
