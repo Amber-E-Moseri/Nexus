@@ -292,7 +292,7 @@ export function BLWMap() {
   }, [selectedCampus, panelOpen])
 
   return (
-    <div style={{ display: 'flex', height: '100%', position: 'relative', background: THEME.surface }}>
+    <div style={{ display: 'flex', width: '100%', height: '100%', position: 'relative', background: THEME.surface }}>
       <div style={{ flex: 1, position: 'relative' }}>
         {/* Top bar */}
         <div className="blwp-topbar">
