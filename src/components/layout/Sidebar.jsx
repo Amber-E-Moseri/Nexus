@@ -515,7 +515,7 @@ export default function Sidebar() {
       ref={sidebarRef}
       style={{
         width: 222,
-        background: '#FBF8F2',
+        background: '#FAFAF8',
         borderRight: '1px solid #EDE8DC',
         display: 'flex',
         flexDirection: 'column',

@@ -1,5 +1,4 @@
 ﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { jwtDecode } from 'https://esm.sh/jwt-decode@^4'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -17,17 +16,19 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   })
 }
 
-async function verifyJwt(token: string): Promise<{ sub: string; role?: string } | null> {
-  try {
-    const decoded = jwtDecode<{ sub: string; role?: string }>(token)
-    // Basic validation: token should have a 'sub' claim (user ID)
-    if (!decoded.sub) {
-      return null
-    }
-    return decoded
-  } catch {
+// Verifies the JWT's signature against Supabase Auth (unlike jwt-decode,
+// which only base64-decodes the payload and would accept any well-formed
+// but unsigned/forged token). A service-role client is required here since
+// this function has no anon key context of its own.
+async function verifyJwt(
+  supabase: ReturnType<typeof createClient>,
+  token: string,
+): Promise<{ sub: string } | null> {
+  const { data, error } = await supabase.auth.getUser(token)
+  if (error || !data?.user?.id) {
     return null
   }
+  return { sub: data.user.id }
 }
 
 function isSafeWebhookUrl(value: string): boolean {
@@ -97,6 +98,48 @@ type TriggerConditions = {
   department_id?: string
 }
 
+// The "IF conditions" step in AutomationBuilder — up to 3 field/operator/value
+// filters, ANDed together, stored in automations.conditions.
+type BuilderCondition = {
+  field: string
+  operator: string
+  value?: string
+}
+
+const CONDITION_FIELD_MAP: Record<string, string> = {
+  'task.status': 'status',
+  'task.priority': 'priority',
+  'task.department': 'department_id',
+  'task.assignee': 'assignee_id',
+}
+
+function evaluateBuilderConditions(
+  conditions: BuilderCondition[] | null,
+  record: Record<string, unknown>,
+): boolean {
+  if (!Array.isArray(conditions) || conditions.length === 0) return true
+
+  return conditions.every((condition) => {
+    const recordKey = CONDITION_FIELD_MAP[condition.field]
+    if (!recordKey) return true
+
+    const actual = record[recordKey]
+
+    switch (condition.operator) {
+      case 'equals':
+        return String(actual ?? '') === String(condition.value ?? '')
+      case 'not equals':
+        return String(actual ?? '') !== String(condition.value ?? '')
+      case 'is empty':
+        return actual == null || actual === ''
+      case 'is not empty':
+        return actual != null && actual !== ''
+      default:
+        return true
+    }
+  })
+}
+
 function evaluateTriggerConditions(
   triggerType: string,
   conditions: TriggerConditions | null,
@@ -134,6 +177,12 @@ function evaluateTriggerConditions(
     return true
   }
 
+  if (triggerType === 'task_overdue') {
+    // task_overdue doesn't need special trigger conditions,
+    // just basic department scoping (handled elsewhere)
+    return true
+  }
+
   return true
 }
 
@@ -151,7 +200,7 @@ async function executeAction(
         let userId: string | null = null
 
         if (config.user_id === 'assigned_to') {
-          userId = typeof context.assigned_to === 'string' ? context.assigned_to : null
+          userId = typeof context.assignee_id === 'string' ? context.assignee_id : null
         } else if (config.user_id === 'created_by') {
           userId = typeof context.created_by === 'string' ? context.created_by : null
         } else if (typeof config.user_id === 'string') {
@@ -223,17 +272,21 @@ async function executeAction(
         }
 
         let assigneeId: string | null = null
-        if (config.assigned_to === 'task_assigned_to') {
-          assigneeId = typeof context.assigned_to === 'string' ? context.assigned_to : null
-        } else if (typeof config.assigned_to === 'string') {
-          assigneeId = config.assigned_to
+        if (config.assignee_id === 'task_assigned_to') {
+          assigneeId = typeof context.assignee_id === 'string' ? context.assignee_id : null
+        } else if (typeof config.assignee_id === 'string' && config.assignee_id) {
+          assigneeId = config.assignee_id
         }
 
+        // department_id is always the automation's own department, never a
+        // client-supplied value from action config — otherwise a department's
+        // automation could be configured to create tasks inside another
+        // department's space.
         const { data: task, error } = await supabase
           .from('tasks')
           .insert({
             title,
-            department_id: typeof config.department_id === 'string' ? config.department_id : null,
+            department_id: typeof automation.department_id === 'string' ? automation.department_id : null,
             assignee_id: assigneeId,
             status: 'backlog',
             priority: typeof config.priority === 'string' ? config.priority : 'medium',
@@ -310,16 +363,16 @@ Deno.serve(async (req) => {
     return jsonResponse(401, { error: 'Missing or invalid Authorization header' })
   }
 
-  const token = authHeader.substring(7)
-  const jwtData = await verifyJwt(token)
-  if (!jwtData) {
-    return jsonResponse(401, { error: 'Invalid JWT token' })
-  }
-
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   )
+
+  const token = authHeader.substring(7)
+  const jwtData = await verifyJwt(supabase, token)
+  if (!jwtData) {
+    return jsonResponse(401, { error: 'Invalid JWT token' })
+  }
 
   let body: Record<string, unknown>
   try {
@@ -339,7 +392,7 @@ Deno.serve(async (req) => {
   if (triggerType === 'task_status_change' || triggerType === 'task_assigned') {
     newRecord = typeof body.new_record === 'object' && body.new_record ? (body.new_record as Record<string, unknown>) : null
     oldRecord = typeof body.old_record === 'object' && body.old_record ? (body.old_record as Record<string, unknown>) : null
-  } else if (triggerType === 'meeting_created') {
+  } else if (triggerType === 'meeting_created' || triggerType === 'task_overdue') {
     newRecord = typeof body.record === 'object' && body.record ? (body.record as Record<string, unknown>) : null
   }
 
@@ -349,9 +402,23 @@ Deno.serve(async (req) => {
 
   // Task assigned condition: check if assignment actually changed
   if (triggerType === 'task_assigned' && oldRecord) {
-    if (oldRecord.assigned_to === newRecord.assigned_to) {
+    if (oldRecord.assignee_id === newRecord.assignee_id) {
       return jsonResponse(200, { matched: 0, message: 'No assignment change detected' })
     }
+  }
+
+  // Automations are scoped to a department or a sprint (see automations_select
+  // RLS policy) — an automation must never fire for a record outside its own
+  // scope, or a department's rule could act on another department's data.
+  const recordDepartmentId = typeof newRecord.department_id === 'string' ? newRecord.department_id : null
+  const recordSprintId = typeof newRecord.sprint_id === 'string' ? newRecord.sprint_id : null
+
+  const scopeClauses: string[] = []
+  if (recordDepartmentId) scopeClauses.push(`department_id.eq.${recordDepartmentId}`)
+  if (recordSprintId) scopeClauses.push(`sprint_id.eq.${recordSprintId}`)
+
+  if (scopeClauses.length === 0) {
+    return jsonResponse(200, { matched: 0, message: 'Record has no department or sprint scope' })
   }
 
   const { data: automations, error } = await supabase
@@ -359,6 +426,7 @@ Deno.serve(async (req) => {
     .select('*')
     .eq('trigger_type', triggerType)
     .eq('enabled', true)
+    .or(scopeClauses.join(','))
 
   if (error) {
     console.error('Error fetching automations:', error.message)
@@ -378,9 +446,11 @@ Deno.serve(async (req) => {
     let runError: string | null = null
 
     try {
-      const triggerConditions = automation.trigger_conditions as TriggerConditions | null
+      const triggerConditions = automation.trigger_config as TriggerConditions | null
 
-      const conditionsMet = evaluateTriggerConditions(triggerType, triggerConditions, newRecord, oldRecord)
+      const conditionsMet =
+        evaluateTriggerConditions(triggerType, triggerConditions, newRecord, oldRecord)
+        && evaluateBuilderConditions(automation.conditions as BuilderCondition[] | null, newRecord)
 
       if (!conditionsMet) {
         continue

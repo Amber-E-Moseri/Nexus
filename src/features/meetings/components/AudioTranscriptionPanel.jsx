@@ -3,11 +3,45 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../hooks/useAuth'
 import { createTasksFromActionItems } from '../lib/meetings'
 import { processSSELines } from '../../../lib/meetings/sseParser'
+import { getAllDepartments, getAllUsers } from '../../automations/lib/automations'
 
 // Accept any audio type — browser MIME strings vary (audio/x-m4a, audio/x-mpeg, etc.)
 const isAudioType = (type) => type.startsWith('audio/') || type === 'video/webm'
 const MAX_SIZE = 300 * 1024 * 1024
 const STORAGE_LIMIT = 49 * 1024 * 1024 // 49MB — just under Supabase Storage 50MB limit
+
+// Org directory (departments + users) rarely changes within a session and is
+// needed by every panel instance (record/upload/paste render 3 copies on the
+// same page) — memoize the fetch at module scope instead of per-instance.
+let _orgDeptsPromise = null
+let _orgUsersPromise = null
+function getOrgDepartments() {
+  if (!_orgDeptsPromise) _orgDeptsPromise = getAllDepartments()
+  return _orgDeptsPromise
+}
+function getOrgUsers() {
+  if (!_orgUsersPromise) _orgUsersPromise = getAllUsers()
+  return _orgUsersPromise
+}
+
+const normalizeName = (s) => (s || '').trim().toLowerCase()
+
+// Match an AI-extracted owner name to a real user. Only returns a match when
+// it's unambiguous — a wrong auto-assignment is worse than none.
+function matchUserByName(name, users) {
+  const n = normalizeName(name)
+  if (!n || n === 'tbd' || n === 'unassigned') return null
+  const exact = users.find((u) => normalizeName(u.name) === n)
+  if (exact) return exact
+  const firstNameMatches = users.filter((u) => normalizeName(u.name).split(' ')[0] === n.split(' ')[0])
+  return firstNameMatches.length === 1 ? firstNameMatches[0] : null
+}
+
+function matchDepartmentByName(name, departments) {
+  const n = normalizeName(name)
+  if (!n) return null
+  return departments.find((d) => normalizeName(d.name) === n) ?? null
+}
 
 
 export default function AudioTranscriptionPanel({
@@ -48,6 +82,10 @@ export default function AudioTranscriptionPanel({
   const [selectedActionItems, setSelectedActionItems] = useState(new Set())
   const [merging, setMerging] = useState(false)
   const [mergeSuccess, setMergeSuccess] = useState(false)
+  // Per-action-item assignee/department, keyed by index into extractedData.action_items.
+  // Pre-filled from AI-suggested owner/space (when unambiguous) but always user-editable.
+  const [actionAssignments, setActionAssignments] = useState([])
+  const [orgDirectory, setOrgDirectory] = useState({ departments: [], users: [] })
 
   const mediaRecorder = useRef(null)
   const audioChunks = useRef([])
@@ -160,17 +198,29 @@ export default function AudioTranscriptionPanel({
     ])
 
   /**
-   * Apply a parsed extraction result to React state.
+   * Apply a parsed extraction result to React state, resolving each action
+   * item's AI-suggested owner/space against the real org directory.
    * Returns true when a valid result was committed, false otherwise.
    */
-  const applyExtractedResult = (fullText, wasTruncated) => {
-    // Try plain JSON first
-    try {
-      const result = JSON.parse(fullText)
+  const applyExtractedResult = (fullText, wasTruncated, directory) => {
+    const commit = (result) => {
       setExtractedData({ ...result, truncated: wasTruncated })
       if (result.action_items?.length) {
         setSelectedActionItems(new Set(result.action_items.map((_, i) => i)))
+        setActionAssignments(
+          result.action_items.map((item) => ({
+            assigneeId: matchUserByName(item.owner, directory.users)?.id ?? null,
+            departmentId: matchDepartmentByName(item.suggested_space, directory.departments)?.id ?? null,
+          })),
+        )
+      } else {
+        setActionAssignments([])
       }
+    }
+
+    // Try plain JSON first
+    try {
+      commit(JSON.parse(fullText))
       return true
     } catch { /* fall through */ }
 
@@ -178,11 +228,7 @@ export default function AudioTranscriptionPanel({
     const match = fullText.match(/```(?:json)?\s*([\s\S]*?)```/)
     if (match) {
       try {
-        const result = JSON.parse(match[1])
-        setExtractedData({ ...result, truncated: wasTruncated })
-        if (result.action_items?.length) {
-          setSelectedActionItems(new Set(result.action_items.map((_, i) => i)))
-        }
+        commit(JSON.parse(match[1]))
         return true
       } catch { /* ignore */ }
     }
@@ -192,6 +238,20 @@ export default function AudioTranscriptionPanel({
   const streamExtractMeetingData = async (transcriptText) => {
     setExtracting(true)
     setExtractedData(null)
+    setActionAssignments([])
+
+    // Org directory drives both the AI's space-suggestion context (linked_spaces/
+    // participants) and the client-side owner/space matching once results land.
+    const [departments, users] = await Promise.all([getOrgDepartments(), getOrgUsers()])
+    const directory = { departments, users }
+    setOrgDirectory(directory)
+    const deptNameById = Object.fromEntries(departments.map((d) => [d.id, d.name]))
+    const linkedSpaces = departments.map((d) => d.name)
+    const participants = users.map((u) => {
+      const space = deptNameById[u.department_id] ?? null
+      return { name: u.name, spaces: space ? [space] : [], primary: space }
+    })
+
     try {
       const session = (await supabase.auth.getSession()).data.session
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -204,6 +264,8 @@ export default function AudioTranscriptionPanel({
         body: JSON.stringify({
           transcript: transcriptText,
           context: meetingContext || '',
+          linked_spaces: linkedSpaces,
+          participants,
           stream: true,
         }),
       })
@@ -237,7 +299,7 @@ export default function AudioTranscriptionPanel({
           for (const event of events) {
             if (event.done) {
               receivedDone = true
-              applyExtractedResult(fullText, !!event.truncated)
+              applyExtractedResult(fullText, !!event.truncated, directory)
             } else if (event.text) {
               fullText += event.text
             }
@@ -253,7 +315,7 @@ export default function AudioTranscriptionPanel({
             const event = JSON.parse(remaining.slice(6))
             if (event.done) {
               receivedDone = true
-              applyExtractedResult(fullText, !!event.truncated)
+              applyExtractedResult(fullText, !!event.truncated, directory)
             } else if (event.text) {
               fullText += event.text
             }
@@ -281,7 +343,7 @@ export default function AudioTranscriptionPanel({
       try {
         const { data: extractData, error: extractErr } = await supabase.functions.invoke(
           'extract-meeting-data',
-          { body: { transcript: transcriptText, context: meetingContext || '' } }
+          { body: { transcript: transcriptText, context: meetingContext || '', linked_spaces: linkedSpaces, participants } }
         )
         if (!extractErr && extractData?.extracted) {
           setExtractedData({
@@ -292,6 +354,12 @@ export default function AudioTranscriptionPanel({
           })
           if (extractData.extracted.action_items?.length) {
             setSelectedActionItems(new Set(extractData.extracted.action_items.map((_, i) => i)))
+            setActionAssignments(
+              extractData.extracted.action_items.map((item) => ({
+                assigneeId: matchUserByName(item.owner, directory.users)?.id ?? null,
+                departmentId: matchDepartmentByName(item.suggested_space, directory.departments)?.id ?? null,
+              })),
+            )
           }
           // Clear any timeout error if the fallback succeeded
           if (isTimeout) setError('')
@@ -486,13 +554,18 @@ export default function AudioTranscriptionPanel({
     setError('')
     try {
       const items = extractedData.action_items
-        .filter((_, i) => selectedActionItems.has(i))
-        .map((item) => ({
-          title: item.title,
-          assigneeId: null,
-          dueDate: item.due_date ?? null,
-          description: item.owner && item.owner !== 'TBD' ? `Owner: ${item.owner}` : null,
-        }))
+        .map((item, i) => ({ item, i }))
+        .filter(({ i }) => selectedActionItems.has(i))
+        .map(({ item, i }) => {
+          const assignment = actionAssignments[i] ?? {}
+          return {
+            title: item.title,
+            assigneeId: assignment.assigneeId ?? null,
+            departmentId: assignment.departmentId ?? null,
+            dueDate: item.due_date ?? null,
+            description: item.owner && item.owner !== 'TBD' && !assignment.assigneeId ? `Owner: ${item.owner}` : null,
+          }
+        })
       if (!items.length) { setMerging(false); return }
       await createTasksFromActionItems(meetingId, departmentId, items, profile?.id)
       setMergeSuccess(true)
@@ -512,6 +585,14 @@ export default function AudioTranscriptionPanel({
     })
   }
 
+  const handleAssignmentChange = (i, field, value) => {
+    setActionAssignments((prev) => {
+      const next = [...prev]
+      next[i] = { ...next[i], [field]: value || null }
+      return next
+    })
+  }
+
   const reset = () => {
     setMode(recordOnly ? 'record' : canRecord ? null : 'upload')
     setAudioFile(null)
@@ -525,6 +606,7 @@ export default function AudioTranscriptionPanel({
     setError('')
     setMergeSuccess(false)
     setSelectedActionItems(new Set())
+    setActionAssignments([])
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -671,7 +753,7 @@ export default function AudioTranscriptionPanel({
             </>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} orgDirectory={orgDirectory} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} />}
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} } @keyframes spin { to{transform:rotate(360deg)} }`}</style>
       </div>
     )
@@ -726,7 +808,7 @@ export default function AudioTranscriptionPanel({
             </div>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} orgDirectory={orgDirectory} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} />}
       </div>
     )
   }
@@ -784,7 +866,7 @@ export default function AudioTranscriptionPanel({
             </div>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} orgDirectory={orgDirectory} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} />}
       </div>
     )
   }
@@ -793,7 +875,7 @@ export default function AudioTranscriptionPanel({
 }
 
 // ── Transcript + extracted data card ─────────────────────────────────────────────
-function TranscriptCard({ transcript, extractedData, extracting, selectedItems, toggleItem, onMerge, merging, mergeSuccess, error, s }) {
+function TranscriptCard({ transcript, extractedData, extracting, selectedItems, toggleItem, onMerge, merging, mergeSuccess, error, s, orgDirectory, assignments, onAssignmentChange }) {
   return (
     <div style={s.card}>
       <h3 style={s.title}>Transcript</h3>
@@ -842,17 +924,55 @@ function TranscriptCard({ transcript, extractedData, extracting, selectedItems, 
           {extractedData.action_items?.length > 0 && (
             <>
               <div style={s.extractLabel}>Action items — select to add to board</div>
-              {extractedData.action_items.map((item, i) => (
-                <label key={`action-item-${i}`} style={{ ...s.checkRow, borderColor: selectedItems.has(i) ? '#4C2A92' : '#E9E4D8' }} onClick={() => toggleItem(i)}>
-                  <input type="checkbox" checked={selectedItems.has(i)} onChange={() => toggleItem(i)} style={{ marginTop: 2, cursor: 'pointer', accentColor: '#4C2A92' }} />
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{item.title}</div>
-                    <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 2 }}>
-                      Owner: {item.owner || 'TBD'}{item.due_date ? ` · Due ${item.due_date}` : ''}
+              {extractedData.action_items.map((item, i) => {
+                const assignment = assignments?.[i] ?? {}
+                const users = orgDirectory?.users ?? []
+                const departments = orgDirectory?.departments ?? []
+                return (
+                  <label key={`action-item-${i}`} style={{ ...s.checkRow, flexDirection: 'column', alignItems: 'stretch' }}>
+                    <div
+                      style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', borderLeft: `2px solid ${selectedItems.has(i) ? '#4C2A92' : 'transparent'}`, paddingLeft: 4 }}
+                      onClick={() => toggleItem(i)}
+                    >
+                      <input type="checkbox" checked={selectedItems.has(i)} onChange={() => toggleItem(i)} style={{ marginTop: 2, cursor: 'pointer', accentColor: '#4C2A92' }} />
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{item.title}</div>
+                        <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 2 }}>
+                          AI suggested owner: {item.owner || 'TBD'}{item.due_date ? ` · Due ${item.due_date}` : ''}
+                          {item.suggested_space ? ` · Space: ${item.suggested_space}` : ''}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </label>
-              ))}
+                    <div
+                      style={{ display: 'flex', gap: 8, marginTop: 8, marginLeft: 26 }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <select
+                        aria-label="Assignee"
+                        value={assignment.assigneeId ?? ''}
+                        onChange={(e) => onAssignmentChange(i, 'assigneeId', e.target.value)}
+                        style={{ flex: 1, padding: '6px 8px', fontSize: 12, border: '1px solid #E9E4D8', borderRadius: 6, background: '#fff', color: '#2D2A22' }}
+                      >
+                        <option value="">Unassigned</option>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>{u.name}</option>
+                        ))}
+                      </select>
+                      <select
+                        aria-label="Space"
+                        value={assignment.departmentId ?? ''}
+                        onChange={(e) => onAssignmentChange(i, 'departmentId', e.target.value)}
+                        style={{ flex: 1, padding: '6px 8px', fontSize: 12, border: '1px solid #E9E4D8', borderRadius: 6, background: '#fff', color: '#2D2A22' }}
+                      >
+                        <option value="">This meeting's space</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </label>
+                )
+              })}
 
               {mergeSuccess ? (
                 <div style={s.success}>✅ {selectedItems.size} task{selectedItems.size !== 1 ? 's' : ''} added to the Actions board.</div>

@@ -177,7 +177,8 @@ export async function createTasksFromActionItems(meetingId, departmentId, action
   }
 
   // Get default status IDs for each unique destination department
-  const uniqueDeptIds = [...new Set([departmentId, ...Object.values(assigneeDeptMap)])]
+  const explicitDeptIds = actionItems.map((i) => i.departmentId).filter(Boolean)
+  const uniqueDeptIds = [...new Set([departmentId, ...Object.values(assigneeDeptMap), ...explicitDeptIds])]
   const statusIdByDept = {}
   await Promise.all(
     uniqueDeptIds.map(async (deptId) => {
@@ -186,7 +187,12 @@ export async function createTasksFromActionItems(meetingId, departmentId, action
   )
 
   const tasks = actionItems.map((item) => {
-    const destDeptId = item.assigneeId ? (assigneeDeptMap[item.assigneeId] ?? departmentId) : departmentId
+    // An assignee's own space wins (so the task shows on their board); otherwise
+    // fall back to an explicit department suggestion (e.g. AI-suggested space),
+    // then the meeting's own department.
+    const destDeptId = item.assigneeId
+      ? (assigneeDeptMap[item.assigneeId] ?? departmentId)
+      : (item.departmentId ?? departmentId)
     return {
       title: item.title,
       description: item.description || null,

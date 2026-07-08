@@ -50,11 +50,11 @@ export default function SpaceAutomationsTab({ space, canManage }) {
         label: 'When a task is blocked -> notify the space lead',
         values: {
           name: 'Notify lead when blocked',
-          trigger_type: 'task_status_changed',
+          trigger_type: 'task_status_change',
           trigger_config: { to_status: 'blocked' },
           actions: [
             {
-              type: 'notify_user',
+              type: 'send_notification',
               config: {
                 user_id: space?.owner_id ?? '',
                 message: 'A task has been blocked in {{space.name}}',
@@ -72,7 +72,7 @@ export default function SpaceAutomationsTab({ space, canManage }) {
           trigger_config: {},
           actions: [
             {
-              type: 'notify_user',
+              type: 'send_notification',
               config: {
                 user_id: space?.owner_id ?? '',
                 message: '{{task.title}} is overdue in {{space.name}}',

@@ -1,19 +1,45 @@
 import { useState, useEffect, useRef } from 'react'
 import { useMeetings } from '../MeetingsContext'
+import { useAuth } from '../../../hooks/useAuth'
+import { createTasksFromActionItems } from '../lib/meetings'
+
+function draftKey(meetingId) {
+  return `live-meeting-draft:${meetingId}`
+}
+
+function loadDraft(meetingId) {
+  try {
+    const raw = localStorage.getItem(draftKey(meetingId))
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
 
 function LiveMinutesModeInner({ meeting, onClose }) {
   const { editMeeting } = useMeetings()
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const { profile } = useAuth()
+  const draft = useRef(loadDraft(meeting.id)).current
+
+  const [agendaItems, setAgendaItems] = useState(() =>
+    draft?.agendaItems ?? (meeting.agenda ? meeting.agenda.split('\n').filter((l) => l.trim()) : []),
+  )
+  const [startedAt] = useState(() => draft?.startedAt ?? Date.now())
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => draft?.elapsedSeconds ?? 0)
   const [isPaused, setIsPaused] = useState(false)
-  const [currentItemIndex, setCurrentItemIndex] = useState(0)
-  const [notes, setNotes] = useState('')
-  const [capturedItems, setCapturedItems] = useState([])
+  const [currentItemIndex, setCurrentItemIndex] = useState(() => draft?.currentItemIndex ?? 0)
+  const [itemNotes, setItemNotes] = useState(() => draft?.itemNotes ?? {})
+  const [capturedItems, setCapturedItems] = useState(() => draft?.capturedItems ?? [])
   const [showAddItem, setShowAddItem] = useState(false)
   const [newItemText, setNewItemText] = useState('')
+  const [lastSavedAt, setLastSavedAt] = useState(null)
+  const [ending, setEnding] = useState(false)
+  const [endError, setEndError] = useState(null)
   const notesRef = useRef(null)
   const timerRef = useRef(null)
 
-  const agendaItems = meeting.agenda ? meeting.agenda.split('\n').filter((l) => l.trim()) : []
+  const notes = itemNotes[currentItemIndex] ?? ''
+  const setNotes = (value) => setItemNotes((prev) => ({ ...prev, [currentItemIndex]: value }))
 
   useEffect(() => {
     if (!isPaused) {
@@ -26,6 +52,18 @@ function LiveMinutesModeInner({ meeting, onClose }) {
     }
   }, [isPaused])
 
+  // Crash-safe autosave: persist the live draft locally so a refresh, tab
+  // close, or crash mid-meeting doesn't lose notes/captures/timer progress.
+  useEffect(() => {
+    const payload = { startedAt, elapsedSeconds, currentItemIndex, itemNotes, capturedItems, agendaItems }
+    try {
+      localStorage.setItem(draftKey(meeting.id), JSON.stringify(payload))
+      setLastSavedAt(Date.now())
+    } catch {
+      // localStorage unavailable (private browsing, quota) — in-memory state still holds notes
+    }
+  }, [meeting.id, startedAt, elapsedSeconds, currentItemIndex, itemNotes, capturedItems, agendaItems])
+
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
@@ -34,7 +72,7 @@ function LiveMinutesModeInner({ meeting, onClose }) {
 
   const handleAddAgendaItem = () => {
     if (newItemText.trim()) {
-      setAgendaItems([...agendaItems, newItemText.trim()])
+      setAgendaItems((prev) => [...prev, newItemText.trim()])
       setNewItemText('')
       setShowAddItem(false)
     }
@@ -42,8 +80,8 @@ function LiveMinutesModeInner({ meeting, onClose }) {
 
   const handleCaptureAction = () => {
     if (notes.trim()) {
-      setCapturedItems([
-        ...capturedItems,
+      setCapturedItems((prev) => [
+        ...prev,
         {
           id: Date.now(),
           type: 'action',
@@ -57,8 +95,8 @@ function LiveMinutesModeInner({ meeting, onClose }) {
 
   const handleMarkDecision = () => {
     if (notes.trim()) {
-      setCapturedItems([
-        ...capturedItems,
+      setCapturedItems((prev) => [
+        ...prev,
         {
           id: Date.now(),
           type: 'decision',
@@ -73,18 +111,52 @@ function LiveMinutesModeInner({ meeting, onClose }) {
   const handleNextItem = () => {
     if (currentItemIndex < agendaItems.length - 1) {
       setCurrentItemIndex(currentItemIndex + 1)
-      setNotes('')
     }
   }
 
   const handleEndMeeting = async () => {
+    setEnding(true)
+    setEndError(null)
+
+    const minutesText = agendaItems
+      .map((item, idx) => {
+        const text = itemNotes[idx]?.trim()
+        return text ? `${idx + 1}. ${item}\n${text}` : null
+      })
+      .filter(Boolean)
+      .join('\n\n')
+
+    const decisions = capturedItems.filter((item) => item.type === 'decision')
+    const actions = capturedItems.filter((item) => item.type === 'action')
+    const decisionsText = decisions.length
+      ? `\n\nDecisions:\n${decisions.map((d) => `- ${d.text} (${d.timestamp})`).join('\n')}`
+      : ''
+
     try {
       await editMeeting(meeting.id, {
-        minutes: notes,
+        minutes: minutesText + decisionsText,
       })
+
+      if (actions.length > 0) {
+        await createTasksFromActionItems(
+          meeting.id,
+          meeting.department_id,
+          actions.map((item) => ({ title: item.text })),
+          profile?.id ?? null,
+        )
+      }
+
+      try {
+        localStorage.removeItem(draftKey(meeting.id))
+      } catch {
+        // ignore — nothing left to clean up if storage isn't available
+      }
       onClose?.()
     } catch (error) {
       console.error('Failed to save minutes:', error)
+      setEndError(error.message || 'Failed to save minutes. Your notes are still here — try again.')
+    } finally {
+      setEnding(false)
     }
   }
 
@@ -171,6 +243,7 @@ function LiveMinutesModeInner({ meeting, onClose }) {
           <button
             type="button"
             onClick={handleEndMeeting}
+            disabled={ending}
             style={{
               padding: '8px 16px',
               borderRadius: 6,
@@ -179,13 +252,29 @@ function LiveMinutesModeInner({ meeting, onClose }) {
               color: '#000',
               fontSize: 13,
               fontWeight: 600,
-              cursor: 'pointer',
+              cursor: ending ? 'not-allowed' : 'pointer',
+              opacity: ending ? 0.7 : 1,
             }}
           >
-            End & save minutes
+            {ending ? 'Saving…' : 'End & save minutes'}
           </button>
         </div>
       </div>
+
+      {endError && (
+        <div
+          style={{
+            padding: '10px 24px',
+            background: '#7F1D1D',
+            color: 'white',
+            fontSize: 13,
+            fontWeight: 600,
+            flexShrink: 0,
+          }}
+        >
+          {endError}
+        </div>
+      )}
 
       {/* Main content - 3 columns */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', gap: 1, background: '#1C1C1C' }}>
@@ -331,7 +420,9 @@ function LiveMinutesModeInner({ meeting, onClose }) {
                   {currentItem ? `${currentItemIndex + 1}. ${currentItem}` : 'No items'}
                 </div>
               </div>
-              <div style={{ fontSize: 11, color: '#999' }}>notes autosaved now</div>
+              <div style={{ fontSize: 11, color: '#999' }}>
+                {lastSavedAt ? `draft saved ${new Date(lastSavedAt).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', second: '2-digit' })}` : 'saving draft…'}
+              </div>
             </div>
           </div>
 
@@ -486,7 +577,7 @@ function LiveMinutesModeInner({ meeting, onClose }) {
                 color: '#666',
               }}
             >
-              These post to the department board when you end the meeting
+              Actions post as tasks to the department board when you end the meeting; decisions are appended to the minutes.
             </div>
           </div>
         </div>

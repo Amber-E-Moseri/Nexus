@@ -95,7 +95,7 @@ export default function CalendarReviewPage() {
     }
 
     try {
-      await rejectEvent(event.id, profile.id, rejectionNote)
+      await rejectEvent(event.id, rejectionNote)
 
       // Create notification
       if (event.created_by) {

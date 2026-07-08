@@ -1,6 +1,3 @@
-export { default as NotificationBell } from './components/NotificationBell'
-export { default as NotificationItem } from './components/NotificationItem'
-
 export {
   NOTIFICATION_TYPES,
   getNotifications,

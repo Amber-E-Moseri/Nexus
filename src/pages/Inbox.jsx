@@ -5,6 +5,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bell, Check, Mail } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { formatRelativeDate } from '../lib/dateUtils'
 import { getTaskById } from '../features/tasks/lib/tasks'
 import { supabase } from '../lib/supabase'
@@ -307,33 +308,53 @@ export default function Inbox() {
             </p>
           </div>
 
-          <motion.button
-            type="button"
-            onClick={markAllRead}
-            disabled={unreadCount === 0}
-            whileTap={unreadCount > 0 ? { scale: 0.96 } : undefined}
-            style={{
-              padding: '8px 14px',
-              borderRadius: 10,
-              border: '1px solid var(--border-1)',
-              background: 'var(--surface-card)',
-              color: 'var(--purple-700)',
-              fontFamily: FONT_BODY,
-              fontSize: 12.5,
-              fontWeight: 600,
-              cursor: unreadCount === 0 ? 'default' : 'pointer',
-              opacity: unreadCount === 0 ? 0.5 : 1,
-              transition: 'border-color 0.13s, background 0.13s',
-            }}
-            onMouseEnter={(event) => {
-              if (unreadCount > 0) event.currentTarget.style.borderColor = 'var(--border-2)'
-            }}
-            onMouseLeave={(event) => {
-              event.currentTarget.style.borderColor = 'var(--border-1)'
-            }}
-          >
-            Mark all read
-          </motion.button>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <Link
+              to="/notifications"
+              style={{
+                padding: '8px 14px',
+                borderRadius: 10,
+                border: '1px solid var(--border-1)',
+                background: 'var(--surface-card)',
+                color: 'var(--ink-2)',
+                fontFamily: FONT_BODY,
+                fontSize: 12.5,
+                fontWeight: 600,
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              View all
+            </Link>
+            <motion.button
+              type="button"
+              onClick={markAllRead}
+              disabled={unreadCount === 0}
+              whileTap={unreadCount > 0 ? { scale: 0.96 } : undefined}
+              style={{
+                padding: '8px 14px',
+                borderRadius: 10,
+                border: '1px solid var(--border-1)',
+                background: 'var(--surface-card)',
+                color: 'var(--purple-700)',
+                fontFamily: FONT_BODY,
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: unreadCount === 0 ? 'default' : 'pointer',
+                opacity: unreadCount === 0 ? 0.5 : 1,
+                transition: 'border-color 0.13s, background 0.13s',
+              }}
+              onMouseEnter={(event) => {
+                if (unreadCount > 0) event.currentTarget.style.borderColor = 'var(--border-2)'
+              }}
+              onMouseLeave={(event) => {
+                event.currentTarget.style.borderColor = 'var(--border-1)'
+              }}
+            >
+              Mark all read
+            </motion.button>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>

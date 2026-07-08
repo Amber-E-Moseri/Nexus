@@ -203,32 +203,53 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
   }, [load])
 
   // Real-time sync for tasks
+  // Realtime postgres_changes filters only support a single column=op.value
+  // clause, not the or(...) syntax used for PostgREST queries — so this
+  // needs two separate subscriptions (created_by and assignee_id) rather
+  // than one filter with an or().
   useEffect(() => {
     if (!userId) return
 
-    const taskSubscription = supabase
-      .channel(`tasks:user:${userId}`)
+    const handlePayload = (payload) => {
+      if (payload.eventType === 'DELETE') {
+        setTasks((prev) => prev.filter((t) => t.id !== payload.old.id))
+      } else {
+        // Refetch to get full normalized data
+        load()
+      }
+    }
+
+    const createdSubscription = supabase
+      .channel(`tasks:created_by:${userId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'tasks',
-          filter: `or(created_by.eq.${userId},assignee_id.eq.${userId})`,
+          filter: `created_by=eq.${userId}`,
         },
-        (payload) => {
-          if (payload.eventType === 'DELETE') {
-            setTasks((prev) => prev.filter((t) => t.id !== payload.old.id))
-          } else {
-            // Refetch to get full normalized data
-            load()
-          }
+        handlePayload,
+      )
+      .subscribe()
+
+    const assignedSubscription = supabase
+      .channel(`tasks:assignee_id:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks',
+          filter: `assignee_id=eq.${userId}`,
         },
+        handlePayload,
       )
       .subscribe()
 
     return () => {
-      supabase.removeChannel(taskSubscription)
+      supabase.removeChannel(createdSubscription)
+      supabase.removeChannel(assignedSubscription)
     }
   }, [userId, load])
 
@@ -244,7 +265,7 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
           event: '*',
           schema: 'public',
           table: 'task_milestones',
-          filter: `user_id.eq.${userId}`,
+          filter: `user_id=eq.${userId}`,
         },
         (payload) => {
           if (payload.eventType === 'DELETE') {

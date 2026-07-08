@@ -24,6 +24,7 @@ export const FLOCK_CRM_CONFIG = {
   checkAccess: (userRole, userPermissions = []) => {
     return (
       userRole === 'regional_secretary' ||
+      userRole === 'pastor' ||
       userRole === 'super_admin' ||
       userPermissions.includes('can_access_flock_crm')
     )

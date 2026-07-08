@@ -30,8 +30,6 @@ export {
   getSpaceListsCount,
   updateTaskDueDate,
   getSpaceActivity,
-  updateFolderVisibility,
-  updateListVisibility,
   getFolderShares,
   getListShares,
   shareFolderWithUser,

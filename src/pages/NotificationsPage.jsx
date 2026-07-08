@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../hooks/useAuth'
 import { useNotifications } from '../context/NotificationsContext'
-import { getNotifications, markAsRead, markAllAsRead } from '../features/notifications'
+import { getNotifications, markAsRead, markAllAsRead, formatNotificationMessage } from '../features/notifications'
 import { supabase } from '../lib/supabase'
 import {
   CheckSquare, MessageSquare, Calendar, CalendarCheck, CalendarX, AtSign, Bell,
@@ -35,31 +35,6 @@ function timeAgo(dateStr) {
   const weeks = Math.floor(days / 7)
   if (weeks < 4) return `${weeks}w ago`
   return new Date(dateStr).toLocaleDateString()
-}
-
-function formatNotificationText(notification) {
-  const { type, payload = {} } = notification
-  const actor = payload.actor_name || 'Someone'
-  const title = payload.task_title || payload.meeting_title || 'item'
-
-  switch (type) {
-    case 'task_assigned':
-      return `${actor} assigned you "${title}"`
-    case 'task_comment':
-      return `${actor} commented on "${title}"`
-    case 'meeting_created':
-      return `New meeting: "${title}"`
-    case 'event_approved':
-      return `Your event was approved`
-    case 'event_rejected':
-      return `Your event was rejected`
-    case 'mention':
-      return `${actor} mentioned you in "${title}"`
-    case 'system':
-      return payload.message || 'System notification'
-    default:
-      return payload.message || type
-  }
 }
 
 function groupByRecency(items) {
@@ -157,7 +132,7 @@ function NotificationRow({ notification, isLast, onClick }) {
             color: notification.read ? 'var(--ink-2)' : 'var(--ink-1)',
           }}
         >
-          {formatNotificationText(notification)}
+          {formatNotificationMessage(notification)}
         </div>
         <div style={{ fontFamily: FONT_MONO, fontSize: 10.5, color: 'var(--ink-3)', marginTop: 3 }}>
           {timeAgo(notification.created_at)}
@@ -204,7 +179,7 @@ export default function NotificationsPage() {
         query.eq('read', false)
       }
 
-      const { data, error } = await query.limit(pageSize + 1).offset(newOffset)
+      const { data, error } = await query.range(newOffset, newOffset + pageSize)
 
       if (error) throw error
 

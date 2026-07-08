@@ -107,7 +107,7 @@ function createEmptyCondition() {
 }
 
 function createEmptyAction() {
-  return { id: crypto.randomUUID(), type: 'notify_user', config: { user_id: '', message: '' } }
+  return { id: crypto.randomUUID(), type: 'send_notification', config: { user_id: '', message: '' } }
 }
 
 function normalizeConditions(value) {
@@ -158,7 +158,7 @@ function validateWebhookUrl(url) {
 }
 
 function normalizeTriggerConfig(triggerType, currentConfig = {}) {
-  if (triggerType === 'task_status_changed') {
+  if (triggerType === 'task_status_change') {
     return {
       from_status: currentConfig.from_status ?? '',
       to_status: currentConfig.to_status ?? '',
@@ -362,7 +362,7 @@ export default function AutomationBuilder({
                 ))}
               </select>
 
-              {triggerType === 'task_status_changed' ? (
+              {triggerType === 'task_status_change' ? (
                 <div className="grid gap-3 md:grid-cols-2">
                   <select
                     value={triggerConfig.from_status ?? ''}
@@ -497,7 +497,7 @@ export default function AutomationBuilder({
                     ))}
                   </select>
 
-                  {action.type === 'notify_user' ? (
+                  {action.type === 'send_notification' ? (
                     <div className="grid gap-3 md:grid-cols-2">
                       <select
                         value={action.config?.user_id ?? ''}
@@ -537,38 +537,32 @@ export default function AutomationBuilder({
                   ) : null}
 
                   {action.type === 'create_task' ? (
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <input
-                        value={action.config?.title ?? ''}
-                        onChange={(event) => updateAction(index, (current) => ({
-                          ...current,
-                          config: { ...current.config, title: event.target.value },
-                        }))}
-                        className={INPUT_CLASS}
-                        placeholder="Task title template"
-                      />
-                      <select
-                        value={action.config?.department_id ?? departmentId ?? ''}
-                        onChange={(event) => updateAction(index, (current) => ({
-                          ...current,
-                          config: { ...current.config, department_id: event.target.value },
-                        }))}
-                        className={INPUT_CLASS}
-                      >
-                        <option value="">Department</option>
-                        {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
-                      </select>
-                      <select
-                        value={action.config?.assignee_id ?? ''}
-                        onChange={(event) => updateAction(index, (current) => ({
-                          ...current,
-                          config: { ...current.config, assignee_id: event.target.value },
-                        }))}
-                        className={INPUT_CLASS}
-                      >
-                        <option value="">Assignee</option>
-                        {scopedUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
-                      </select>
+                    <div className="space-y-2">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <input
+                          value={action.config?.title ?? ''}
+                          onChange={(event) => updateAction(index, (current) => ({
+                            ...current,
+                            config: { ...current.config, title: event.target.value },
+                          }))}
+                          className={INPUT_CLASS}
+                          placeholder="Task title template"
+                        />
+                        <select
+                          value={action.config?.assignee_id ?? ''}
+                          onChange={(event) => updateAction(index, (current) => ({
+                            ...current,
+                            config: { ...current.config, assignee_id: event.target.value },
+                          }))}
+                          className={INPUT_CLASS}
+                        >
+                          <option value="">Assignee</option>
+                          {scopedUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
+                        </select>
+                      </div>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        Created in {departments.find((department) => department.id === selectedDepartmentId)?.name ?? 'this automation’s'} space — automations can only create tasks in their own department.
+                      </p>
                     </div>
                   ) : null}
 

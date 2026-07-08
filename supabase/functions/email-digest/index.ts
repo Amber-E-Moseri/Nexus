@@ -38,17 +38,20 @@ async function verifyServiceRole(req: Request): Promise<boolean> {
   return token === expectedToken
 }
 
+// Keep in sync with formatNotificationMessage in src/features/notifications/lib/notifications.js —
+// edge functions run on Deno and can't share a module with the Vite/browser bundle, so this is a
+// deliberate duplicate. Payload key names (assigner_name, author_name, actor_name) must match what
+// each notification producer actually writes.
 function formatNotificationMessage(notification: { type: string; payload?: Record<string, unknown> }): string {
   const { type, payload = {} } = notification
-  const actor = (payload.actor_name as string) ?? 'Someone'
   const title = (payload.task_title as string) ?? (payload.event_title as string) ?? 'item'
 
   switch (type) {
     case 'task_assigned':
-      return `${actor} assigned you "${title}"`
+      return `${(payload.assigner_name as string) ?? 'Someone'} assigned you "${title}"`
     case 'task_comment':
     case 'comment_added':
-      return `${actor} commented on "${title}"`
+      return `${(payload.author_name as string) ?? 'Someone'} commented on "${title}"`
     case 'meeting_created':
       return `New meeting: "${title}"`
     case 'event_approved':
@@ -56,7 +59,7 @@ function formatNotificationMessage(notification: { type: string; payload?: Recor
     case 'event_rejected':
       return `Your event "${title}" was rejected`
     case 'mention':
-      return `${actor} mentioned you`
+      return `${(payload.actor_name as string) ?? 'Someone'} mentioned you`
     case 'task_due_soon':
       return `"${title}" is due tomorrow`
     case 'system':

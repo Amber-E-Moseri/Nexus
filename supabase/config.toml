@@ -1,0 +1,4 @@
+# Supabase Configuration
+
+[functions."task-overdue-trigger"]
+verify_jwt = false

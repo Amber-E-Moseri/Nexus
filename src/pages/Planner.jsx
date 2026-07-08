@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabase'
-import { createTask } from '../features/tasks/lib/tasks'
+import { createTask, isDelegatedTask } from '../features/tasks/lib/tasks'
 import { isTaskCancelled, isTaskCompleted, listTaskStatuses } from '../lib/taskStatuses'
 import { useMyTasks, getMilestoneForTask, saveMilestone } from '../features/tasks/hooks/useMyTasks'
 import { getMySpaces } from '../features/spaces'
@@ -53,11 +53,6 @@ function formatRange(weekStart) {
 
 function isActionable(task) {
   return !isTaskCompleted(task) && !isTaskCancelled(task)
-}
-
-// Matches the same predicate as My Tasks' Delegated tab: created by me, assigned to someone else.
-function isDelegatedTask(task, userId) {
-  return task.created_by === userId && task.assignee_id !== userId
 }
 
 function SpaceChip({ space }) {
@@ -669,6 +664,7 @@ export default function Planner() {
           mode="edit"
           task={modalTask}
           isReadOnly={true}
+          allowMilestoneEdit={true}
           departmentId={modalTask.department_id}
           sprintId={modalTask.sprint_id}
           onClose={() => setModalTask(null)}

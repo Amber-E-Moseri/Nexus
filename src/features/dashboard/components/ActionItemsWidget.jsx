@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { getUserActionItems } from '../lib/dashboard-queries'
+import { updateTask } from '../../../features/tasks'
 
 const STATUS_COLORS = {
   completed: { bg: '#EBF7F1', text: '#2D8653', label: '✓ Done' },
@@ -25,21 +27,31 @@ function deriveStatusKey(item) {
 export default function ActionItemsWidget() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [updating, setUpdating] = useState(null)
+
+  function reload() {
+    setLoading(true)
+    getUserActionItems()
+      .then(data => setItems(data ?? []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false))
+  }
 
   useEffect(() => {
-    let active = true
-    getUserActionItems()
-      .then(data => {
-        if (active) setItems(data ?? [])
-      })
-      .catch(() => {
-        if (active) setItems([])
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => { active = false }
+    reload()
   }, [])
+
+  async function handleStatusChange(taskId, newStatus) {
+    setUpdating(taskId)
+    try {
+      await updateTask(taskId, { statusCategory: newStatus === 'completed' ? 'completed' : 'open' })
+      reload()
+    } catch (error) {
+      console.error('Failed to update task status:', error)
+    } finally {
+      setUpdating(null)
+    }
+  }
 
   if (loading) return <div style={{ fontSize: 12.5, color: '#9E9488' }}>Loading…</div>
   if (items.length === 0) return (
@@ -51,6 +63,7 @@ export default function ActionItemsWidget() {
       {items.map(item => {
         const colors = STATUS_COLORS[deriveStatusKey(item)] || STATUS_COLORS.on_track
         const dueStr = item.due_date ? new Date(item.due_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'
+        const isUpdating = updating === item.task_id
 
         return (
           <div key={item.task_id} style={{
@@ -62,11 +75,8 @@ export default function ActionItemsWidget() {
             borderRadius: 8,
             background: 'white',
             transition: 'background 0.15s',
-            cursor: 'pointer',
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = '#FAFAF7'}
-          onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
-          >
+            opacity: isUpdating ? 0.6 : 1,
+          }}>
             <div style={{
               width: 3,
               height: 24,
@@ -100,18 +110,32 @@ export default function ActionItemsWidget() {
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              <span style={{
-                fontSize: 10,
-                fontWeight: 700,
-                padding: '2px 7px',
-                borderRadius: 4,
-                background: colors.bg,
-                color: colors.text,
-                whiteSpace: 'nowrap',
-              }}>
-                {colors.label}
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <select
+                value={deriveStatusKey(item) === 'completed' ? 'completed' : 'open'}
+                onChange={(e) => handleStatusChange(item.task_id, e.target.value)}
+                disabled={isUpdating}
+                title="Change status"
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  background: colors.bg,
+                  color: colors.text,
+                  border: 'none',
+                  cursor: isUpdating ? 'not-allowed' : 'pointer',
+                  appearance: 'none',
+                  paddingRight: 18,
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6' viewBox='0 0 8 6'%3E%3Cpath fill='${encodeURIComponent(colors.text)}' d='M0 0l4 6 4-6z'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 2px center',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <option value="open">Open</option>
+                <option value="completed">Done</option>
+              </select>
               <span style={{ fontSize: 11, color: '#9E9488', minWidth: 45, textAlign: 'right' }}>
                 {dueStr}
               </span>

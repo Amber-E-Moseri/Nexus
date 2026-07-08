@@ -13,6 +13,7 @@ import KanbanBoard from '../../features/tasks/components/KanbanBoard'
 import TaskListView from '../../features/tasks/components/TaskListView'
 import TaskFilters from '../../features/tasks/components/TaskFilters'
 import { getTaskTypeInfo } from '../../features/tasks/lib/task-types'
+import { isDelegatedTask } from '../../features/tasks/lib/tasks'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 
 function loadViewMode() {
@@ -34,10 +35,10 @@ export default function MyTasks() {
   const deptMembers = useDeptMembers(profile?.department_id)
 
   // "Mine" = personal tasks + tasks assigned to me by others (assignee_id === me).
-  // "Delegated" = tasks I created for someone else (created_by === me, assignee_id !== me) —
-  // tracked separately so they don't inflate my own to-do totals.
+  // "Delegated" = tasks I created for someone else — tracked separately so
+  // they don't inflate my own to-do totals.
   const myTasks = tasks.filter((t) => t.assignee_id === profile?.id)
-  const delegatedTasks = tasks.filter((t) => t.created_by === profile?.id && t.assignee_id !== profile?.id)
+  const delegatedTasks = tasks.filter((t) => isDelegatedTask(t, profile?.id))
   const tabTasks = activeTab === 'delegated' ? delegatedTasks : myTasks
 
   async function loadMetadata() {

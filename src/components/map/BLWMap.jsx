@@ -2,548 +2,402 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { supabase } from '../../lib/supabase'
+import { useCanEditCampus } from '../../hooks/useCanEditCampus'
+import { deriveCampus } from './data/deriveCampus'
+import { HUBS, GROUP_COLORS } from './data/hubs'
+import { STATUS, STATUS_ORDER, NEEDS_PLAN_COLOR, isReached } from './data/status'
+import { getIcon, scaleForZoom, popupHTML } from './data/markers'
+import { THEME } from './data/theme'
+import { CampusPanel } from './CampusPanel'
+import { RegionalView } from './RegionalView'
+import { PrayerMode } from './PrayerMode'
 import '../../styles/BLWMap.css'
+import '../../styles/blw-map-parity.css'
 
-// Fix Leaflet icon issue in Vite
-delete L.Icon.Default.prototype._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-})
+const CAMPUS_COLUMNS =
+  'id, name, institution, campus_name_alt, latitude, longitude, hub, group_name, ' +
+  'spotify_playlist_id, status, photo_url, province, subgroup, contact_name, ' +
+  'contact_phone, notes, strategy, prayer_points, prayer_notes, coverage_plan, custom_photo'
 
-const STATUS_COLORS = {
-  'active': '#1e8e3e',
-  'inactive': '#d93025',
-}
+const CARTO_TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
 
-const STATUS_EMOJIS = {
-  'active': '✅',
-  'inactive': '❌',
-}
-
-const HUB_COLORS = {
-  'West': '#8430ce',
-  'Central': '#1a73e8',
-  'Central-East': '#f9ab00',
-}
-
-export function BLWMap({ mode = 'default' }) {
+export function BLWMap() {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
-  const markersRef = useRef({})
-  const hubCirclesRef = useRef({})
+  const markersRef = useRef({}) // id -> { marker, campus }
+  const hubLayersRef = useRef({}) // name -> { circle, outer, label }
+
   const [campuses, setCampuses] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selectedCampus, setSelectedCampus] = useState(null)
+  const [selectedId, setSelectedId] = useState(null)
   const [panelOpen, setPanelOpen] = useState(false)
-  const [selectedRegion, setSelectedRegion] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [activeFilter, setActiveFilter] = useState('all')
+  const [activeFilter, setActiveFilter] = useState('all') // 'all' | <status> | 'needs_plan'
   const [showHubs, setShowHubs] = useState(false)
-  const [panelEdits, setPanelEdits] = useState({})
-  const [saving, setSaving] = useState(false)
+  const [showKey, setShowKey] = useState(false)
+  const [regionalOpen, setRegionalOpen] = useState(false)
+  const [prayerOpen, setPrayerOpen] = useState(false)
 
-  const uniqueRegions = useMemo(() => {
-    const regions = [...new Set(campuses.map((c) => c.group_name).filter(Boolean))]
-    return regions.sort()
-  }, [campuses])
+  const canEdit = useCanEditCampus()
+
+  const selectedCampus = useMemo(
+    () => campuses.find((c) => c.id === selectedId) || null,
+    [campuses, selectedId]
+  )
 
   const filteredCampuses = useMemo(() => {
-    let result = campuses
-
-    if (selectedRegion) {
-      result = result.filter((c) => c.group_name === selectedRegion)
-    }
-
-    if (activeFilter !== 'all') {
-      result = result.filter((c) => c.status === activeFilter)
-    }
-
-    if (searchTerm.trim()) {
-      const lower = searchTerm.toLowerCase()
-      result = result.filter(
-        (c) =>
-          c.name?.toLowerCase().includes(lower) ||
-          c.institution?.toLowerCase().includes(lower) ||
-          c.hub?.toLowerCase().includes(lower) ||
-          c.group_name?.toLowerCase().includes(lower)
-      )
-    }
-
-    return result
-  }, [campuses, selectedRegion, activeFilter, searchTerm])
-
-  // Load campuses from Supabase
-  useEffect(() => {
-    const fetchCampuses = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('campuses')
-          .select('id, name, institution, campus_name_alt, latitude, longitude, hub, spotify_playlist_id, status, group_name, photo_url')
-          .order('name')
-
-        if (!error && data) {
-          // Transform data to match expected structure
-          const transformed = data.map((c) => ({
-            ...c,
-            lat: c.latitude,
-            lng: c.longitude,
-            campus: c.name,
-            group: c.group_name,
-          }))
-          setCampuses(transformed)
-        }
-        setLoading(false)
-      } catch (err) {
-        console.error('Error fetching campuses:', err)
-        setLoading(false)
+    const q = searchTerm.trim().toLowerCase()
+    return campuses.filter((c) => {
+      if (!c.lat || !c.lng) return false
+      if (activeFilter === 'needs_plan') {
+        if (!c.needs_plan) return false
+      } else if (activeFilter !== 'all' && c.status !== activeFilter) {
+        return false
       }
-    }
+      if (q) {
+        const hay = [c.institution, c.campus, c.nearestHubName, c.province, c.group, c.subgroup]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+  }, [campuses, activeFilter, searchTerm])
 
+  // Tally always reflects the full dataset (not the active status filter), like the original.
+  const tally = useMemo(() => {
+    const scoped = campuses.filter((c) => c.lat && c.lng)
+    const count = (s) => scoped.filter((c) => c.status === s).length
+    const est = count('Established Fellowship')
+    const pio = count('Pioneering Fellowship')
+    const inf = count('Influenced')
+    const nr = count('Not Reached')
+    const np = scoped.filter((c) => c.needs_plan).length
+    const tot = scoped.length
+    const reached = scoped.filter((c) => isReached(c.status)).length
+    const pct = tot ? Math.round((reached / tot) * 100) : 0
+    return { est, pio, inf, nr, np, tot, pct }
+  }, [campuses])
+
+  // ── Load + realtime ────────────────────────────────────────────────────────
+  useEffect(() => {
+    let active = true
+    const fetchCampuses = async () => {
+      const { data, error } = await supabase.from('campuses').select(CAMPUS_COLUMNS).order('name')
+      if (!active) return
+      if (!error && data) setCampuses(data.map(deriveCampus))
+      setLoading(false)
+    }
     fetchCampuses()
 
-    const subscription = supabase
+    const channel = supabase
       .channel('campuses-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'campuses' },
-        (payload) => {
-          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            setCampuses((prev) => {
-              const transformed = {
-                ...payload.new,
-                lat: payload.new.latitude,
-                lng: payload.new.longitude,
-                campus: payload.new.name,
-                group: payload.new.group_name
-              }
-              const updated = [...prev]
-              const idx = updated.findIndex((c) => c.id === transformed.id)
-              if (idx >= 0) {
-                updated[idx] = transformed
-              } else {
-                updated.push(transformed)
-              }
-              return updated
-            })
-          } else if (payload.eventType === 'DELETE') {
-            setCampuses((prev) => prev.filter((c) => c.id !== payload.old.id))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'campuses' }, (payload) => {
+        setCampuses((prev) => {
+          if (payload.eventType === 'DELETE') return prev.filter((c) => c.id !== payload.old.id)
+          const next = deriveCampus(payload.new)
+          const idx = prev.findIndex((c) => c.id === next.id)
+          if (idx >= 0) {
+            const copy = [...prev]
+            copy[idx] = next
+            return copy
           }
-        }
-      )
+          return [...prev, next]
+        })
+      })
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      active = false
+      supabase.removeChannel(channel)
     }
   }, [])
 
-  // Initialize map and update markers
+  // ── Map init (once) ──────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!mapRef.current) return
+    if (!mapRef.current || mapInstanceRef.current) return
+    const map = L.map(mapRef.current, {
+      center: [58, -96],
+      zoom: 4,
+      minZoom: 3,
+      zoomControl: false,
+      preferCanvas: true,
+    })
+    L.tileLayer(CARTO_TILES, {
+      attribution: '&copy; OSM &copy; CARTO',
+      subdomains: 'abcd',
+      maxZoom: 19,
+    }).addTo(map)
+    L.control.zoom({ position: 'bottomright' }).addTo(map)
+    mapInstanceRef.current = map
 
-    if (!mapInstanceRef.current) {
-      const map = L.map(mapRef.current).setView([56.1304, -106.3468], 4)
+    map.on('zoomend', () => {
+      updateHubVisibility()
+      const { sz, bw } = scaleForZoom(map.getZoom())
+      Object.entries(markersRef.current).forEach(([id, { marker, campus }]) => {
+        if (id === String(selectedIdRef.current)) return
+        marker.setIcon(getIcon(campus, false, sz, bw))
+      })
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19,
-      }).addTo(map)
+  // Keep a ref of selectedId for the imperative zoom handler.
+  const selectedIdRef = useRef(null)
+  useEffect(() => {
+    selectedIdRef.current = selectedId
+  }, [selectedId])
 
-      mapInstanceRef.current = map
-    }
-
+  // ── Hub layers ───────────────────────────────────────────────────────────────
+  const updateHubVisibility = () => {
     const map = mapInstanceRef.current
-
-    // Clear existing markers
-    Object.values(markersRef.current).forEach((marker) => {
-      map.removeLayer(marker)
+    if (!map) return
+    const z = map.getZoom()
+    Object.values(hubLayersRef.current).forEach(({ circle, outer, label }) => {
+      const showCircle = showHubsRef.current && z >= 6
+      const showLabel = (showHubsRef.current && z >= 8) || z >= 9
+      toggleLayer(map, circle, showCircle)
+      toggleLayer(map, outer, showCircle)
+      toggleLayer(map, label, showLabel)
     })
-    markersRef.current = {}
-
-    // Add hub circles if enabled
-    if (showHubs) {
-      Object.values(hubCirclesRef.current).forEach((circle) => {
-        map.removeLayer(circle)
-      })
-      hubCirclesRef.current = {}
-
-      const uniqueHubs = [...new Set(campuses.map(c => c.hub).filter(Boolean))]
-      uniqueHubs.forEach(hub => {
-        const campusesInHub = campuses.filter(c => c.hub === hub)
-        if (campusesInHub.length > 0) {
-          const avgLat = campusesInHub.reduce((sum, c) => sum + parseFloat(c.lat), 0) / campusesInHub.length
-          const avgLng = campusesInHub.reduce((sum, c) => sum + parseFloat(c.lng), 0) / campusesInHub.length
-          const color = HUB_COLORS[hub] || '#9aa0a6'
-
-          const circle = L.circle([avgLat, avgLng], {
-            radius: 50000,
-            color: color,
-            weight: 2,
-            opacity: 0.8,
-            fillColor: color,
-            fillOpacity: 0.1,
-            interactive: false
-          }).addTo(map)
-
-          const label = L.marker([avgLat, avgLng], {
-            icon: L.divIcon({
-              className: 'hub-label',
-              html: `<div style="color:${color};padding:4px 8px;background:rgba(255,255,255,.95);border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;border:1.5px solid ${color};font-family:DM Sans;box-shadow:0 2px 4px rgba(0,0,0,.15)">${hub}</div>`,
-              iconAnchor: [0, 0]
-            }),
-            interactive: false
-          }).addTo(map)
-
-          hubCirclesRef.current[hub] = circle
-        }
-      })
-    } else {
-      Object.values(hubCirclesRef.current).forEach((circle) => {
-        map.removeLayer(circle)
-      })
-      hubCirclesRef.current = {}
-    }
-
-    // Add markers for filtered campuses
-    filteredCampuses.forEach((campus) => {
-      if (!campus.lat || !campus.lng) return
-
-      const lat = parseFloat(campus.lat)
-      const lng = parseFloat(campus.lng)
-      if (isNaN(lat) || isNaN(lng)) return
-
-      const color = STATUS_COLORS[campus.status] || '#9aa0a6'
-      const isSelected = selectedCampus?.id === campus.id
-
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="
-          width: ${isSelected ? 18 : 12}px;
-          height: ${isSelected ? 18 : 12}px;
-          border-radius: 50%;
-          background: ${color};
-          border: ${isSelected ? 3 : 2}px solid white;
-          box-shadow: 0 1px ${isSelected ? 8 : 4}px rgba(0,0,0,0.25);
-          transition: all 0.2s;
-        "></div>`,
-        iconSize: [isSelected ? 18 : 12, isSelected ? 18 : 12],
-        iconAnchor: [isSelected ? 9 : 6, isSelected ? 9 : 6],
-      })
-
-      const marker = L.marker([lat, lng], { icon })
-
-      const popupContent = document.createElement('div')
-      popupContent.className = 'mpop'
-      popupContent.innerHTML = `
-        <div class="mpop-inst">${campus.institution}</div>
-        ${campus.campus ? `<div class="mpop-campus">${campus.campus}</div>` : ''}
-        <div class="mpop-sub">${[campus.hub, campus.group].filter(Boolean).join(' · ')}</div>
-        <div class="mpop-status" style="color: ${STATUS_COLORS[campus.status] || '#888'}">
-          ${(STATUS_EMOJIS[campus.status] || '•') + ' ' + campus.status}
-        </div>
-        <div class="mpop-hint">Click to open details →</div>
-      `
-      popupContent.onclick = () => {
-        map.closePopup()
-        setSelectedCampus(campus)
-        setPanelOpen(true)
-      }
-
-      marker.bindPopup(L.popup({ closeButton: false, offset: [0, -4] }).setContent(popupContent))
-      marker.on('click', () => {
-        setSelectedCampus(campus)
-        setPanelOpen(true)
-      })
-
-      marker.addTo(map)
-      markersRef.current[campus.id] = marker
-    })
-  }, [filteredCampuses, selectedCampus?.id, showHubs, campuses])
-
-  const handleSaveCampus = async () => {
-    if (!selectedCampus) return
-    setSaving(true)
-    try {
-      const updates = {
-        status: panelEdits.status !== undefined ? panelEdits.status : selectedCampus.status,
-      }
-
-      await supabase.from('campuses').update(updates).eq('id', selectedCampus.id)
-
-      setCampuses((prev) =>
-        prev.map((c) =>
-          c.id === selectedCampus.id ? { ...c, ...updates } : c
-        )
-      )
-      setSelectedCampus((prev) => ({ ...prev, ...updates }))
-      setPanelEdits({})
-    } catch (err) {
-      console.error('Error saving campus:', err)
-    } finally {
-      setSaving(false)
-    }
   }
+  const showHubsRef = useRef(showHubs)
+  useEffect(() => {
+    showHubsRef.current = showHubs
+    updateHubVisibility()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showHubs])
+
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map) return
+    // Build hub layers once (idempotent).
+    if (Object.keys(hubLayersRef.current).length === 0) {
+      Object.entries(HUBS).forEach(([name, h]) => {
+        if (h.lat == null || h.lng == null) return
+        const col = GROUP_COLORS[h.group] || '#888'
+        const circle = L.circle([h.lat, h.lng], {
+          radius: 25000,
+          color: col,
+          weight: 2,
+          opacity: 0.8,
+          fillColor: col,
+          fillOpacity: 0.06,
+          interactive: false,
+        })
+        const outerR = Math.min(Math.max(h.radius * 111000, 25000), 40000)
+        const outer = L.circle([h.lat, h.lng], {
+          radius: outerR,
+          color: col,
+          weight: 1,
+          opacity: 0.35,
+          fillOpacity: 0,
+          interactive: false,
+          dashArray: '5,6',
+        })
+        const label = L.marker([h.lat, h.lng], {
+          icon: L.divIcon({
+            className: 'hub-label',
+            html: `<div style="color:${col};padding:1px 6px;background:rgba(255,255,255,.92);border-radius:3px;font-size:9px;font-weight:600;white-space:nowrap;border:1px solid ${col}30;font-family:${THEME.fontBody};box-shadow:0 1px 3px rgba(0,0,0,.12)">${name}</div>`,
+            iconAnchor: [0, 0],
+          }),
+          interactive: false,
+          zIndexOffset: -100,
+        })
+        hubLayersRef.current[name] = { circle, outer, label }
+      })
+    }
+    updateHubVisibility()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading])
+
+  // ── Markers ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map) return
+    const { sz, bw } = scaleForZoom(map.getZoom())
+    const visibleIds = new Set(filteredCampuses.map((c) => c.id))
+
+    // Remove markers no longer visible.
+    Object.entries(markersRef.current).forEach(([id, { marker }]) => {
+      if (!visibleIds.has(id)) {
+        map.removeLayer(marker)
+        delete markersRef.current[id]
+      }
+    })
+
+    // Add / update visible markers.
+    filteredCampuses.forEach((c) => {
+      const sel = c.id === selectedId
+      const existing = markersRef.current[c.id]
+      if (existing) {
+        existing.campus = c
+        existing.marker.setIcon(getIcon(c, sel, sel ? undefined : sz, sel ? undefined : bw))
+        existing.marker.setPopupContent(popupHTML(c))
+        return
+      }
+      const marker = L.marker([c.lat, c.lng], {
+        icon: getIcon(c, sel, sel ? undefined : sz, sel ? undefined : bw),
+      })
+      marker.bindPopup(L.popup({ closeButton: false, offset: [0, -4] }).setContent(popupHTML(c)))
+      marker.on('click', () => {
+        setSelectedId(c.id)
+        setPanelOpen(true)
+      })
+      marker.on('popupopen', (e) => {
+        e.popup.getElement()?.querySelector('.mpop')?.addEventListener('click', () => {
+          map.closePopup()
+          setSelectedId(c.id)
+          setPanelOpen(true)
+        })
+      })
+      marker.addTo(map)
+      markersRef.current[c.id] = { marker, campus: c }
+    })
+  }, [filteredCampuses, selectedId])
+
+  // Pan to selected campus.
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (map && selectedCampus?.lat && selectedCampus?.lng) {
+      map.panTo([selectedCampus.lat, selectedCampus.lng], { animate: true })
+    }
+  }, [selectedCampus])
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9aa0a6', fontSize: '14px' }}>
-        Loading campuses...
+      <div className="blw-map-loading">
+        <div className="blw-map-loading-content">
+          <div className="blw-map-loading-spinner">🍁</div>
+          <p>Loading campuses…</p>
+        </div>
       </div>
     )
   }
 
-  const active = filteredCampuses.filter((c) => c.status === 'active').length
-  const inactive = filteredCampuses.filter((c) => c.status === 'inactive').length
-  const coverage = filteredCampuses.length > 0 ? Math.round((active / filteredCampuses.length) * 100) : 0
-
   return (
-    <div style={{ display: 'flex', height: '100%', position: 'relative', background: '#f1f3f4' }}>
+    <div style={{ display: 'flex', height: '100%', position: 'relative', background: THEME.surface }}>
       <div style={{ flex: 1, position: 'relative' }}>
-        {/* Top Bar */}
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 800, display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 14px', pointerEvents: 'none', flexWrap: 'wrap' }}>
-          <div style={{ pointerEvents: 'all', display: 'flex', alignItems: 'center', gap: '7px', background: 'white', borderRadius: '24px', boxShadow: '0 2px 6px rgba(60,64,67,.2), 0 8px 24px rgba(60,64,67,.12)', padding: '0 14px', height: '42px', flexShrink: 0 }}>
-            <span style={{ fontFamily: 'DM Serif Display', fontSize: '16px', color: '#202124', fontWeight: 500 }}>🙏 BLW CAN</span>
+        {/* Top bar */}
+        <div className="blwp-topbar">
+          <div className="blwp-pill blwp-logo">
+            <span style={{ fontSize: 15 }}>🍁</span>
+            <span className="blwp-logo-text">BLW CAN</span>
           </div>
-          <div style={{ pointerEvents: 'all', flex: 1, maxWidth: '300px', display: 'flex', alignItems: 'center', gap: '7px', background: 'white', borderRadius: '24px', boxShadow: '0 2px 6px rgba(60,64,67,.2), 0 8px 24px rgba(60,64,67,.12)', padding: '0 14px', height: '42px' }}>
+          <div className="blwp-pill blwp-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
             <input
               type="text"
-              placeholder="Search campus..."
+              placeholder="Search campus, hub, province…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ flex: 1, border: 'none', outline: 'none', fontFamily: 'DM Sans', fontSize: '13px', color: '#202124', background: 'transparent' }}
             />
+          </div>
+          <div className="blwp-navpills">
+            {canEdit && (
+              <button className="blwp-navpill" onClick={() => setRegionalOpen(true)}>
+                🌐 Regional
+              </button>
+            )}
+            <button className="blwp-navpill blwp-prayer" onClick={() => setPrayerOpen(true)}>
+              🙏 Prayer
+            </button>
+            <button className={`blwp-navpill${showKey ? ' active' : ''}`} onClick={() => setShowKey((v) => !v)}>
+              ⓘ Key
+            </button>
           </div>
         </div>
 
-        {/* Filter Chips */}
-        <div style={{ position: 'absolute', top: '64px', left: '14px', zIndex: 800, display: 'flex', gap: '6px', flexWrap: 'wrap', maxWidth: '700px' }}>
-          <button
-            onClick={() => { setActiveFilter('all'); setSelectedRegion(null) }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '5px', background: activeFilter === 'all' && !selectedRegion ? '#e8f0fe' : 'white',
-              border: 'none', borderRadius: '20px', padding: '5px 12px', fontFamily: 'DM Sans', fontSize: '12px', fontWeight: 500,
-              color: activeFilter === 'all' && !selectedRegion ? '#1a73e8' : '#5f6368', cursor: 'pointer', boxShadow: '0 1px 3px rgba(60,64,67,.15), 0 4px 8px rgba(60,64,67,.1)',
-              transition: 'all 0.15s', whiteSpace: 'nowrap'
-            }}
-          >
-            All ({campuses.length})
-          </button>
-          {uniqueRegions.map(region => (
+        {/* Filter chips */}
+        <div className="blwp-chips">
+          <button className={`blwp-chip${activeFilter === 'all' ? ' on' : ''}`} onClick={() => setActiveFilter('all')}>All</button>
+          {STATUS_ORDER.map((s) => (
             <button
-              key={region}
-              onClick={() => { setActiveFilter('all'); setSelectedRegion(region) }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '5px', background: selectedRegion === region ? '#e8f0fe' : 'white',
-                border: 'none', borderRadius: '20px', padding: '5px 12px', fontFamily: 'DM Sans', fontSize: '12px', fontWeight: 500,
-                color: selectedRegion === region ? '#1a73e8' : '#5f6368', cursor: 'pointer', boxShadow: '0 1px 3px rgba(60,64,67,.15), 0 4px 8px rgba(60,64,67,.1)',
-                transition: 'all 0.15s', whiteSpace: 'nowrap'
-              }}
+              key={s}
+              className={`blwp-chip${activeFilter === s ? ' on' : ''}`}
+              onClick={() => setActiveFilter(s)}
             >
-              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#5b34c7' }} />
-              {region}
+              <span className="blwp-cd" style={{ background: STATUS[s].color }} />
+              {s.replace(' Fellowship', '')}
             </button>
           ))}
-          {['active', 'inactive'].map((status) => {
-            const color = STATUS_COLORS[status]
-            return (
-              <button
-                key={status}
-                onClick={() => { setActiveFilter(status); setSelectedRegion(null) }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '5px', background: activeFilter === status ? 'rgba(26, 115, 232, 0.1)' : 'white',
-                  border: 'none', borderRadius: '20px', padding: '5px 12px', fontFamily: 'DM Sans', fontSize: '12px', fontWeight: 500,
-                  color: activeFilter === status ? '#1a73e8' : '#5f6368', cursor: 'pointer', boxShadow: '0 1px 3px rgba(60,64,67,.15), 0 4px 8px rgba(60,64,67,.1)',
-                  transition: 'all 0.15s', whiteSpace: 'nowrap'
-                }}
-              >
-                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color }} />
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </button>
-            )
-          })}
           <button
-            onClick={() => setShowHubs(!showHubs)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '5px', background: showHubs ? '#e3f2fd' : 'white',
-              border: 'none', borderRadius: '20px', padding: '5px 12px', fontFamily: 'DM Sans', fontSize: '12px', fontWeight: 500,
-              color: showHubs ? '#0277bd' : '#5f6368', cursor: 'pointer', boxShadow: '0 1px 3px rgba(60,64,67,.15), 0 4px 8px rgba(60,64,67,.1)',
-              transition: 'all 0.15s', whiteSpace: 'nowrap'
-            }}
+            className={`blwp-chip needs${activeFilter === 'needs_plan' ? ' on' : ''}`}
+            onClick={() => setActiveFilter('needs_plan')}
           >
-            <span style={{ width: '6px', height: '6px', background: showHubs ? '#0277bd' : '#5f6368', borderRadius: '1px', transform: 'rotate(45deg)' }} />
-            Hubs
+            <span className="blwp-cd diamond" style={{ background: NEEDS_PLAN_COLOR }} />
+            Needs Plan
+          </button>
+          <div className="blwp-chip-sep" />
+          <button className={`blwp-chip${showHubs ? ' on hubs' : ''}`} onClick={() => setShowHubs((v) => !v)}>
+            ◎ Hubs
           </button>
         </div>
 
         {/* Map */}
         <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
-        {/* Tally Bar */}
-        <div style={{ position: 'absolute', bottom: '24px', left: '50%', transform: 'translateX(-50%)', zIndex: 800, background: 'white', borderRadius: '16px', boxShadow: '0 2px 6px rgba(60,64,67,.2), 0 8px 24px rgba(60,64,67,.12)', display: 'flex', alignItems: 'stretch', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '8px 14px', borderRight: '1px solid #f1f3f4', gap: '1px' }}>
-            <div style={{ fontSize: '17px', fontWeight: 700, color: '#202124', lineHeight: 1 }}>{filteredCampuses.length}</div>
-            <div style={{ fontSize: '9px', color: '#9aa0a6', fontWeight: 500, letterSpacing: '.03em', textTransform: 'uppercase' }}>Campuses</div>
-          </div>
-          <div style={{ padding: '0 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px', minWidth: '130px' }}>
-            <div style={{ fontSize: '9px', color: '#9aa0a6', fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Active</span><span>{coverage}%</span>
+        {/* Key panel */}
+        {showKey && (
+          <div className="blwp-key">
+            <div className="blwp-key-title">
+              Status Key
+              <button onClick={() => setShowKey(false)}>×</button>
             </div>
-            <div style={{ height: '4px', background: '#e8eaed', borderRadius: '2px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', background: 'linear-gradient(90deg, #1e8e3e, #34a853)', borderRadius: '2px', width: `${coverage}%`, transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }} />
+            {STATUS_ORDER.map((s) => (
+              <div className="blwp-key-row" key={s}>
+                <span className="blwp-key-dot" style={{ background: STATUS[s].color }} />
+                <div>{s}</div>
+              </div>
+            ))}
+            <div className="blwp-key-row">
+              <span className="blwp-key-dot diamond" style={{ background: NEEDS_PLAN_COLOR }} />
+              <div>Needs Coverage Plan — no hub within 25 km</div>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '8px 14px', borderLeft: '1px solid #f1f3f4', gap: '1px' }}>
-            <div style={{ fontSize: '17px', fontWeight: 700, color: '#202124', lineHeight: 1 }}>{inactive}</div>
-            <div style={{ fontSize: '9px', color: '#9aa0a6', fontWeight: 500, letterSpacing: '.03em', textTransform: 'uppercase' }}>Inactive</div>
+        )}
+
+        {/* Tally */}
+        <div className="blwp-tally">
+          <div className="blwp-tally-item"><div className="blwp-tally-num">{tally.tot}</div><div className="blwp-tally-lbl">Total</div></div>
+          <div className="blwp-tally-item"><div className="blwp-tally-dot" style={{ background: STATUS['Established Fellowship'].color }} /><div className="blwp-tally-num">{tally.est}</div><div className="blwp-tally-lbl">Est.</div></div>
+          <div className="blwp-tally-item"><div className="blwp-tally-dot" style={{ background: STATUS['Pioneering Fellowship'].color }} /><div className="blwp-tally-num">{tally.pio}</div><div className="blwp-tally-lbl">Pio.</div></div>
+          <div className="blwp-tally-item"><div className="blwp-tally-dot" style={{ background: STATUS['Influenced'].color }} /><div className="blwp-tally-num">{tally.inf}</div><div className="blwp-tally-lbl">Infl.</div></div>
+          <div className="blwp-tally-item"><div className="blwp-tally-dot" style={{ background: STATUS['Not Reached'].color }} /><div className="blwp-tally-num">{tally.nr}</div><div className="blwp-tally-lbl">N/R</div></div>
+          <div className="blwp-tally-item"><div className="blwp-tally-dot diamond" style={{ background: NEEDS_PLAN_COLOR }} /><div className="blwp-tally-num">{tally.np}</div><div className="blwp-tally-lbl">Plan</div></div>
+          <div className="blwp-prog">
+            <div className="blwp-prog-lbl"><span>Reach</span><span>{tally.pct}%</span></div>
+            <div className="blwp-prog-bar"><div className="blwp-prog-fill" style={{ width: `${tally.pct}%` }} /></div>
           </div>
         </div>
       </div>
 
-      {/* Side Panel */}
-      <div style={{ width: '380px', background: 'white', display: 'flex', flexDirection: 'column', boxShadow: '-2px 0 12px rgba(60,64,67,.1)', position: 'absolute', top: 0, right: 0, bottom: 0, zIndex: 700, transform: panelOpen ? 'translateX(0)' : 'translateX(380px)', transition: 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)', overflow: 'hidden' }}>
-        {!panelOpen || !selectedCampus ? (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', color: '#9aa0a6', textAlign: 'center', padding: '40px 20px' }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            <div style={{ fontSize: '13px', lineHeight: 1.5 }}>Click a campus on the map<br/>to view details and information.</div>
-          </div>
-        ) : (
+      {/* Side panel */}
+      <div className={`blw-side-panel${panelOpen && selectedCampus ? ' open' : ''}`}>
+        {selectedCampus && (
           <CampusPanel
             campus={selectedCampus}
-            edits={panelEdits}
-            onEdit={setPanelEdits}
-            onSave={handleSaveCampus}
-            onClose={() => setPanelOpen(false)}
-            saving={saving}
+            canEdit={canEdit}
+            onClose={() => { setPanelOpen(false); setSelectedId(null) }}
+            onSaved={(patch) =>
+              setCampuses((prev) => prev.map((c) => (c.id === selectedCampus.id ? deriveCampus({ ...c, ...patch }) : c)))
+            }
           />
         )}
       </div>
+
+      {regionalOpen && <RegionalView campuses={campuses} onClose={() => setRegionalOpen(false)} />}
+      {prayerOpen && <PrayerMode campuses={campuses} onClose={() => setPrayerOpen(false)} />}
     </div>
   )
 }
 
-function CampusPanel({ campus, edits, onEdit, onSave, onClose, saving }) {
-  const [activeTab, setActiveTab] = useState('info')
-
-  return (
-    <>
-      {/* Header */}
-      <div style={{ flexShrink: 0, padding: '16px 16px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: '15px', fontWeight: 700, color: '#202124', lineHeight: 1.3 }}>{campus.institution}</div>
-          <div style={{ fontSize: '12px', color: '#1a73e8', fontWeight: 500, marginTop: '2px' }}>{campus.campus || 'Main Campus'}</div>
-          <div style={{ fontSize: '11px', color: '#80868b', marginTop: '1px' }}>{campus.group || '—'}</div>
-        </div>
-        <button onClick={onClose} style={{ width: '28px', height: '28px', borderRadius: '50%', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#80868b', flexShrink: 0, transition: 'background 0.15s', fontSize: '18px' }}>
-          ✕
-        </button>
-      </div>
-
-      {/* Badges */}
-      <div style={{ padding: '10px 16px 0', display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-        {campus.status && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: '20px', padding: '3px 9px', fontSize: '11px', fontWeight: 600, background: `${STATUS_COLORS[campus.status] || '#bdc1c6'}20`, color: STATUS_COLORS[campus.status] || '#bdc1c6' }}>
-            {STATUS_EMOJIS[campus.status] || '•'} {campus.status}
-          </span>
-        )}
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #e8eaed', flexShrink: 0, padding: '0 16px' }}>
-        {['info', 'details', 'edit'].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            style={{
-              flex: 1, padding: '9px 4px', fontSize: '12px', fontWeight: 600, background: 'none', border: 'none',
-              color: activeTab === tab ? '#1a73e8' : '#9aa0a6', cursor: 'pointer', borderBottom: `2px solid ${activeTab === tab ? '#1a73e8' : 'transparent'}`,
-              fontFamily: 'DM Sans', transition: 'all 0.15s', whiteSpace: 'nowrap'
-            }}
-          >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
-      </div>
-
-      {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {activeTab === 'info' && (
-          <>
-            <div style={{ background: '#f8f9fa', borderRadius: '10px', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '2px' }}>Hub</div>
-                  <div style={{ fontSize: '13px', color: '#202124', fontWeight: 500 }}>{campus.hub || '—'}</div>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '2px' }}>Group</div>
-                  <div style={{ fontSize: '13px', color: '#202124', fontWeight: 500 }}>{campus.group || '—'}</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '2px' }}>Coordinates</div>
-                  <div style={{ fontSize: '11px', color: '#80868b' }}>{campus.lat?.toFixed(4)}, {campus.lng?.toFixed(4)}</div>
-                </div>
-              </div>
-            </div>
-            {campus.photo_url && (
-              <div>
-                <img src={campus.photo_url} alt={campus.institution} style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '10px' }} onError={(e) => {e.target.style.display = 'none'}} />
-              </div>
-            )}
-          </>
-        )}
-
-        {activeTab === 'details' && (
-          <>
-            {campus.spotify_playlist_id ? (
-              <div>
-                <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: '#9aa0a6', marginBottom: '6px' }}>Worship Playlist</div>
-                <iframe
-                  src={`https://open.spotify.com/embed/playlist/${campus.spotify_playlist_id}`}
-                  width="100%"
-                  height="152"
-                  frameBorder="0"
-                  style={{ borderRadius: '8px' }}
-                  allowFullScreen={true}
-                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                />
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', color: '#9aa0a6', padding: '32px 20px', fontSize: '12px' }}>
-                No additional details available
-              </div>
-            )}
-          </>
-        )}
-
-        {activeTab === 'edit' && (
-          <>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: '#5f6368', display: 'flex', alignItems: 'center', gap: '4px' }}>Status</label>
-              <select
-                value={edits.status !== undefined ? edits.status : (campus.status || '')}
-                onChange={(e) => onEdit({ ...edits, status: e.target.value })}
-                style={{ fontFamily: 'DM Sans', fontSize: '12px', border: '1.5px solid #dadce0', borderRadius: '8px', padding: '8px 10px', color: '#202124', background: 'white', outline: 'none', transition: 'border-color 0.15s', width: '100%' }}
-              >
-                <option value="">Select status</option>
-                <option value="active">✅ Active</option>
-                <option value="inactive">❌ Inactive</option>
-              </select>
-            </div>
-
-            <button
-              onClick={onSave}
-              disabled={saving}
-              style={{ width: '100%', padding: '11px', border: 'none', borderRadius: '10px', background: saving ? '#bdc1c6' : '#1a73e8', color: 'white', fontFamily: 'DM Sans', fontSize: '13px', fontWeight: 600, cursor: saving ? 'default' : 'pointer', transition: 'all 0.15s', marginTop: '8px' }}
-            >
-              {saving ? 'Saving…' : 'Save Changes'}
-            </button>
-          </>
-        )}
-      </div>
-    </>
-  )
+function toggleLayer(map, layer, show) {
+  if (!layer) return
+  if (show) {
+    if (!map.hasLayer(layer)) layer.addTo(map)
+  } else if (map.hasLayer(layer)) {
+    map.removeLayer(layer)
+  }
 }
