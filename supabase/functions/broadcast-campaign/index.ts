@@ -51,6 +51,7 @@ interface Campaign {
   body_html: string | null
   icon_url: string | null
   recipient_filters: RecipientPill[]
+  segment_id: string | null
   status: string
   include_email: boolean
   email_subject: string | null
@@ -298,8 +299,20 @@ Deno.serve(async (request) => {
       .update({ status: 'broadcasting' })
       .eq('id', requestBody.campaign_id)
 
-    // Resolve recipients from filters
-    const recipients = await resolveRecipients(typedCampaign.recipient_filters ?? [], supabaseService)
+    // Resolve recipients: prefer saved segment over inline filters
+    let recipientPills: RecipientPill[] = typedCampaign.recipient_filters ?? []
+    if (typedCampaign.segment_id) {
+      console.log(`[broadcast-campaign] resolving recipients from saved segment ${typedCampaign.segment_id}`)
+      const { data: segment } = await supabaseService
+        .from('communication_segments')
+        .select('filters')
+        .eq('id', typedCampaign.segment_id)
+        .single()
+      recipientPills = (segment?.filters as RecipientPill[]) ?? []
+    } else {
+      console.log('[broadcast-campaign] resolving recipients from inline recipient_filters')
+    }
+    const recipients = await resolveRecipients(recipientPills, supabaseService)
 
     if (recipients.length === 0) {
       await supabaseService

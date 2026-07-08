@@ -1614,32 +1614,9 @@ export default function MeetingReportTab() {
 
       if (error) throw error
 
-      // Log email sent to absence_email_log table
-      const sentAt = new Date().toISOString()
-      const currentUser = profile?.id
-
-      for (const recipient of emailEditor.recipients) {
-        try {
-          await supabase
-            .from('absence_email_log')
-            .insert({
-              report_id: report.id,
-              recipient_name: recipient.name,
-              recipient_email: recipient.email,
-              subject: emailEditor.subject,
-              body: emailEditor.body,
-              status: 'sent',
-              sent_by: currentUser,
-              sent_at: sentAt,
-            })
-        } catch (logErr) {
-          // Log error but don't fail the whole operation - silently continue
-        }
-      }
-
       let message = `Sent to ${data.sent} member${data.sent !== 1 ? 's' : ''}`
       if (data.skipped > 0) {
-        message += `, ${data.skipped} skipped (preferences disabled)`
+        message += `, ${data.skipped} skipped`
       }
       if (data.failed > 0) {
         message += `, ${data.failed} failed`

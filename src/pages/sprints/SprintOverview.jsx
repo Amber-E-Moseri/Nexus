@@ -17,6 +17,7 @@ import InviteExternalModal from '../../features/sprints/components/InviteExterna
 import SprintReview from './SprintReview'
 import FileList from '../../components/files/FileList'
 import SprintGoalsPanel from '../../features/sprints/components/SprintGoalsPanel'
+import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 
 const TABS = ['Overview', 'Tasks', 'Calendar', 'Teams', 'Members', 'Files', 'Review']
 const CALENDAR_EVENT_SELECT = 'id, title, description, event_type, start_date, end_date, all_day, location, zoom_join_url, sprint_id, space_id, created_by, created_at, status, department_id, approved_by, approved_at, rejection_note, is_org_wide'
@@ -102,8 +103,9 @@ function Stat({ label, value, bg, textColor, border }) {
       />
       <div
         style={{
+          fontFamily: FONT_HEADING,
           fontSize: '10.5px',
-          fontWeight: 700,
+          fontWeight: 600,
           letterSpacing: '0.06em',
           textTransform: 'uppercase',
           color: textColor,
@@ -114,8 +116,9 @@ function Stat({ label, value, bg, textColor, border }) {
       </div>
       <div
         style={{
+          fontFamily: FONT_HEADING,
           fontSize: 28,
-          fontWeight: 800,
+          fontWeight: 700,
           lineHeight: 1,
           marginTop: 8,
           color: textColor,
@@ -422,13 +425,13 @@ export default function SprintOverview() {
   const healthStatus = completion >= 70 ? 'On track' : 'At risk'
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" style={{ fontFamily: FONT_BODY }}>
       {/* Header */}
       <div>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-semibold text-[var(--text-primary)]">{detail.sprint.name}</h1>
+              <h1 className="text-3xl" style={{ fontFamily: FONT_HEADING, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ink-1)' }}>{detail.sprint.name}</h1>
               {detail.sprint.status === 'active' && <Badge tone="success">Active</Badge>}
               {completion >= 70 && <Badge tone="success">On track</Badge>}
             </div>
@@ -441,14 +444,22 @@ export default function SprintOverview() {
 
           <div className="flex flex-wrap gap-2">
             {getNextAction(detail.sprint) && canManage && !isArchived ? (
-              <button type="button" onClick={handleAdvance} disabled={detail.sprint.status === 'review' && !reviewCompleted} className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">
+              <button
+                type="button"
+                onClick={handleAdvance}
+                disabled={detail.sprint.status === 'review' && !reviewCompleted}
+                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                style={{ background: 'var(--purple-700)', transition: 'background .13s' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--purple-600)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--purple-700)' }}
+              >
                 {getNextAction(detail.sprint).label}
               </button>
             ) : null}
-            <button type="button" onClick={handleArchive} disabled={isArchived} className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] disabled:opacity-50">
+            <button type="button" onClick={handleArchive} disabled={isArchived} className="rounded-xl border border-[var(--border-1)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ink-1)] disabled:opacity-50">
               {isArchived ? 'Archived' : 'Archive sprint'}
             </button>
-            <button type="button" className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
+            <button type="button" className="rounded-xl border border-[var(--border-1)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ink-1)]">
               Close
             </button>
           </div>
@@ -457,12 +468,13 @@ export default function SprintOverview() {
 
       {isArchived && <ArchivedSprintBanner sprint={detail.sprint} onRestore={handleRestore} userRole={role} />}
 
-      {/* Stats Grid */}
+      {/* Stats Grid — semantic accents: green done / blue progress /
+          orange remaining / teal teams */}
       <div className="grid grid-cols-4 gap-4">
-        <Stat label="COMPLETED" value={`${tasks.filter((t) => isTaskCompleted(t)).length}/${tasks.length}`} bg="#5B34C7" textColor="white" />
-        <Stat label="PROGRESS" value={`${completion}%`} bg="#1C1C2E" textColor="white" />
-        <Stat label="REMAINING" value={tasks.length - tasks.filter((t) => isTaskCompleted(t)).length} bg="#E8A020" textColor="white" />
-        <Stat label="TEAMS" value={detail.teams.length} bg="#FEF0ED" textColor="#C94830" border="#F9C4B3" />
+        <Stat label="COMPLETED" value={`${tasks.filter((t) => isTaskCompleted(t)).length}/${tasks.length}`} bg="var(--accent-green)" textColor="white" />
+        <Stat label="PROGRESS" value={`${completion}%`} bg="var(--accent-blue)" textColor="white" />
+        <Stat label="REMAINING" value={tasks.length - tasks.filter((t) => isTaskCompleted(t)).length} bg="var(--accent-orange)" textColor="white" />
+        <Stat label="TEAMS" value={detail.teams.length} bg="var(--accent-teal)" textColor="white" />
       </div>
 
       {/* Progress Bar */}

@@ -2,6 +2,8 @@ import { CSS } from '@dnd-kit/utilities'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { endOfWeek, isBefore, isEqual, parseISO, startOfDay } from 'date-fns'
+import { AnimatePresence, motion } from 'framer-motion'
+import { AlarmClock, BellRing, ChevronRight, UsersRound } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationsContext'
@@ -9,6 +11,7 @@ import { useAuth } from '../hooks/useAuth'
 import { getUserDashboardPreferences, getRoleDashboardDefaults, upsertDashboardPreferences, deleteDashboardPreferences } from '../features/dashboard/lib/dashboards'
 import { supabase } from '../lib/supabase'
 import { getMyTasks } from '../features/tasks'
+import { getMySpaces } from '../features/spaces'
 import { isTaskCompleted } from '../lib/taskStatuses'
 import CompletionRateWidget from '../features/dashboard/components/CompletionRateWidget'
 import MemberActivityWidget from '../features/dashboard/components/MemberActivityWidget'
@@ -27,6 +30,17 @@ import TeamActivityHeatmap from '../features/dashboard/components/TeamActivityHe
 import TeamVelocityWidget from '../features/dashboard/components/TeamVelocityWidget'
 import { RegionalUpdateWidget } from '../features/regional-updates/components/RegionalUpdateWidget'
 import { getDashboardPresets } from '../features/dashboard/lib/dashboard-queries'
+import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
+
+const heroStagger = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.06, delayChildren: 0.04 } },
+}
+
+const heroEnter = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 380, damping: 32 } },
+}
 
 function greetingForHour() {
   const h = new Date().getHours()
@@ -71,9 +85,12 @@ function useOrgStats(userId) {
 
 function HeroStatCard({ label, value, sub, bg, blobColor, onClick }) {
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
+      variants={heroEnter}
+      whileHover={onClick ? { y: -2 } : undefined}
+      whileTap={onClick ? { scale: 0.99 } : undefined}
       style={{
         position: 'relative',
         overflow: 'hidden',
@@ -100,16 +117,16 @@ function HeroStatCard({ label, value, sub, bg, blobColor, onClick }) {
         background: blobColor,
         pointerEvents: 'none',
       }} />
-      <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,.75)', marginBottom: 10, position: 'relative' }}>
+      <div style={{ fontFamily: FONT_HEADING, fontSize: 10.5, fontWeight: 600, letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,.78)', marginBottom: 10, position: 'relative' }}>
         {label}
       </div>
-      <div style={{ fontSize: 64, fontWeight: 900, color: '#fff', lineHeight: 1, letterSpacing: '-0.03em', position: 'relative' }}>
+      <div style={{ fontFamily: FONT_HEADING, fontSize: 64, fontWeight: 700, color: '#fff', lineHeight: 1, letterSpacing: '-0.03em', position: 'relative' }}>
         {value ?? '—'}
       </div>
-      <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.7)', marginTop: 8, fontWeight: 500, position: 'relative' }}>
+      <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: 'rgba(255,255,255,.72)', marginTop: 8, fontWeight: 500, position: 'relative' }}>
         {sub}
       </div>
-    </button>
+    </motion.button>
   )
 }
 
@@ -149,9 +166,9 @@ function MyTasksSummaryWidget({ userId }) {
   }, [userId])
 
   const stats = [
-    { label: 'Today', value: counts.today, color: '#4C2A92' },
-    { label: 'Overdue', value: counts.overdue, color: '#C94830' },
-    { label: 'This Week', value: counts.thisWeek, color: '#2D8653' },
+    { label: 'Today', value: counts.today, color: 'var(--purple-700)' },
+    { label: 'Overdue', value: counts.overdue, color: 'var(--accent-red)' },
+    { label: 'This Week', value: counts.thisWeek, color: 'var(--accent-green)' },
   ]
 
   return (
@@ -162,21 +179,21 @@ function MyTasksSummaryWidget({ userId }) {
           type="button"
           onClick={() => navigate('/my-tasks')}
           style={{
-            background: '#FAFAF7',
-            border: '1px solid #EDE8DC',
+            background: 'var(--surface-sub)',
+            border: '1px solid var(--border-1)',
             borderRadius: 12,
             padding: '14px 8px',
             cursor: 'pointer',
             textAlign: 'center',
             transition: 'border-color .12s',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92' }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#EDE8DC' }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--purple-500)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-1)' }}
         >
-          <div style={{ fontSize: 28, fontWeight: 900, color: stat.color, lineHeight: 1 }}>
+          <div style={{ fontFamily: FONT_HEADING, fontSize: 28, fontWeight: 700, color: stat.color, lineHeight: 1 }}>
             {stat.value ?? '—'}
           </div>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9E9488', marginTop: 5, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+          <div style={{ fontFamily: FONT_BODY, fontSize: 10.5, fontWeight: 600, color: 'var(--ink-3)', marginTop: 5, textTransform: 'uppercase', letterSpacing: '.06em' }}>
             {stat.label}
           </div>
         </button>
@@ -190,7 +207,7 @@ function QuickActionsWidget({ role }) {
 
   if (role !== 'super_admin' && role !== 'dept_lead') {
     return (
-      <div style={{ fontSize: 13, color: '#B0A696', padding: '8px 0' }}>
+      <div style={{ fontSize: 13, color: 'var(--ink-3)', padding: '8px 0' }}>
         Quick actions are available to admins and leads.
       </div>
     )
@@ -210,24 +227,168 @@ function QuickActionsWidget({ role }) {
           type="button"
           onClick={() => navigate(action.path)}
           style={{
-            background: '#F9F7F3',
-            border: '1px solid #EDE8DC',
+            background: 'var(--surface-sub)',
+            border: '1px solid var(--border-1)',
             borderRadius: 10,
             padding: '10px 14px',
             textAlign: 'left',
             fontSize: 13,
             fontWeight: 600,
-            color: '#4C2A92',
+            color: 'var(--purple-700)',
             cursor: 'pointer',
             transition: 'background .12s, border-color .12s',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#EDE8F8'; e.currentTarget.style.borderColor = '#9B78E8' }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = '#F9F7F3'; e.currentTarget.style.borderColor = '#EDE8DC' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--purple-tint)'; e.currentTarget.style.borderColor = 'var(--purple-500)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--surface-sub)'; e.currentTarget.style.borderColor = 'var(--border-1)' }}
         >
           {action.label}
         </button>
       ))}
     </div>
+  )
+}
+
+// ─── Home-merge coverage widgets ──────────────────────────────────────────────
+
+function MySpacesWidget({ userId, role, departmentId }) {
+  const navigate = useNavigate()
+  const [spaces, setSpaces] = useState(null)
+
+  useEffect(() => {
+    if (!userId || !role) return
+    let active = true
+    getMySpaces(userId, role, departmentId)
+      .then((rows) => { if (active) setSpaces(rows.slice(0, 6)) })
+      .catch(() => { if (active) setSpaces([]) })
+    return () => { active = false }
+  }, [userId, role, departmentId])
+
+  if (spaces === null) {
+    return <div style={{ fontSize: 13, color: 'var(--ink-3)', padding: '8px 0' }}>Loading…</div>
+  }
+  if (spaces.length === 0) {
+    return <div style={{ fontSize: 13, color: 'var(--ink-3)', padding: '8px 0' }}>No spaces you belong to yet.</div>
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {spaces.map((space) => {
+        const color = `#${space.color ?? '4C2A92'}`
+        return (
+          <button
+            key={space.id}
+            type="button"
+            onClick={() => navigate(`/spaces/${space.id}`)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '7px 10px',
+              background: 'transparent',
+              border: 'none',
+              borderRadius: 10,
+              cursor: 'pointer',
+              textAlign: 'left',
+              transition: 'background .12s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-sub)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+          >
+            <span
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 26,
+                height: 26,
+                borderRadius: 8,
+                background: color,
+                color: 'white',
+                fontFamily: FONT_HEADING,
+                fontSize: 11.5,
+                fontWeight: 700,
+                flexShrink: 0,
+              }}
+            >
+              {(space.name ?? '?').charAt(0).toUpperCase()}
+            </span>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: 'var(--ink-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {space.name}
+            </span>
+            <ChevronRight size={14} style={{ color: 'var(--ink-3)', flexShrink: 0 }} />
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// Placeholder widget frame — data areas identified in the Dashboard/Home merge
+// that have no backing schema yet (personal reminders, member availability).
+// UI frame only: wire a real data source in and drop the frame when it lands.
+function PlaceholderWidget({ icon: Icon, message }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 10,
+        padding: '26px 16px',
+        border: '1px dashed var(--border-2)',
+        borderRadius: 14,
+        background: 'var(--surface-sub)',
+        textAlign: 'center',
+      }}
+    >
+      <span
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 38,
+          height: 38,
+          borderRadius: '50%',
+          background: 'var(--purple-tint)',
+          color: 'var(--purple-700)',
+        }}
+      >
+        <Icon size={18} />
+      </span>
+      <span style={{ fontSize: 12.5, color: 'var(--ink-2)', maxWidth: 300, lineHeight: 1.5 }}>{message}</span>
+      <span
+        style={{
+          fontSize: 10.5,
+          fontWeight: 700,
+          letterSpacing: '.06em',
+          textTransform: 'uppercase',
+          color: 'var(--purple-700)',
+          background: 'var(--purple-tint)',
+          borderRadius: 999,
+          padding: '3px 10px',
+        }}
+      >
+        Planned
+      </span>
+    </div>
+  )
+}
+
+function PersonalRemindersWidget() {
+  return (
+    <PlaceholderWidget
+      icon={AlarmClock}
+      message="Personal reminders will live here — quick notes-to-self with a due time, separate from tasks."
+    />
+  )
+}
+
+function TeamAvailabilityWidget() {
+  return (
+    <PlaceholderWidget
+      icon={UsersRound}
+      message="Team member status and availability will appear here once presence data is tracked."
+    />
   )
 }
 
@@ -251,6 +412,9 @@ const WIDGET_META = {
   team_activity_heatmap:  { title: 'Team Activity Heatmap',     Component: TeamActivityHeatmap },
   team_velocity:          { title: 'Team Velocity Trend',       Component: TeamVelocityWidget },
   quick_actions:          { title: 'Quick Actions',             Component: QuickActionsWidget },
+  my_spaces:              { title: 'My Spaces',                 Component: MySpacesWidget },
+  personal_reminders:     { title: 'Personal Reminders',        Component: PersonalRemindersWidget },
+  team_availability:      { title: 'Team Availability',         Component: TeamAvailabilityWidget },
 }
 
 const ALL_WIDGET_KEYS = Object.keys(WIDGET_META)
@@ -277,17 +441,18 @@ function WidgetCard({ widgetKey, role, userId, departmentId, onUnpin }) {
   const { title, Component } = meta
 
   return (
-    <div
+    <motion.div
+      variants={heroEnter}
       style={{
-        background: 'white',
-        border: '1px solid #E9E4D8',
+        background: 'var(--surface-card)',
+        border: '1px solid var(--border-1)',
         borderRadius: 20,
-        boxShadow: '0 1px 4px rgba(28,22,16,.05)',
+        boxShadow: '0 1px 4px rgba(28,22,16,.04)',
         padding: '18px 20px',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <span style={{ fontSize: 13.5, fontWeight: 700, color: '#1C1610' }}>{title}</span>
+        <span style={{ fontFamily: FONT_HEADING, fontSize: 13.5, fontWeight: 600, color: 'var(--ink-1)' }}>{title}</span>
         <button
           type="button"
           onClick={() => onUnpin(widgetKey)}
@@ -298,20 +463,20 @@ function WidgetCard({ widgetKey, role, userId, departmentId, onUnpin }) {
             background: 'none',
             cursor: 'pointer',
             fontSize: 14,
-            color: '#C8BFB2',
+            color: 'var(--ink-3)',
             padding: '2px 4px',
             lineHeight: 1,
             borderRadius: 6,
             transition: 'color .12s, background .12s',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = '#C94830'; e.currentTarget.style.background = '#FEF0ED' }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = '#C8BFB2'; e.currentTarget.style.background = 'none' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-red)'; e.currentTarget.style.background = 'var(--accent-red-tint)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--ink-3)'; e.currentTarget.style.background = 'none' }}
         >
           ✕
         </button>
       </div>
       <Component role={role} userId={userId} departmentId={departmentId} />
-    </div>
+    </motion.div>
   )
 }
 
@@ -330,12 +495,13 @@ function SortableWidgetRow({ item, onToggle }) {
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.65 : 1,
+        boxShadow: isDragging ? '0 6px 18px rgba(28,22,16,.12)' : 'none',
         display: 'flex',
         alignItems: 'center',
         gap: 10,
         padding: '10px 12px',
-        background: '#FAFAF7',
-        border: '1px solid #EDE8DC',
+        background: 'var(--surface-sub)',
+        border: `1px solid ${isDragging ? 'var(--purple-500)' : 'var(--border-1)'}`,
         borderRadius: 10,
       }}
     >
@@ -358,7 +524,7 @@ function SortableWidgetRow({ item, onToggle }) {
         ⋮⋮
       </button>
 
-      <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#1C1610' }}>{title}</span>
+      <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--ink-1)' }}>{title}</span>
 
       <button
         type="button"
@@ -370,7 +536,7 @@ function SortableWidgetRow({ item, onToggle }) {
           height: 20,
           borderRadius: 10,
           border: 'none',
-          background: item.visible ? '#4C2A92' : '#D1CBC0',
+          background: item.visible ? 'var(--purple-700)' : 'var(--border-2)',
           cursor: 'pointer',
           position: 'relative',
           flexShrink: 0,
@@ -430,36 +596,44 @@ function CustomizePanel({ prefs, onClose, onSave, onReset }) {
 
   return (
     <>
-      <div
+      <motion.div
         onClick={onClose}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.16 }}
         style={{ position: 'fixed', inset: 0, background: 'rgba(14,14,30,.25)', zIndex: 40 }}
       />
-      <div
+      <motion.div
+        initial={{ x: 340 }}
+        animate={{ x: 0, transition: { type: 'spring', stiffness: 380, damping: 36 } }}
+        exit={{ x: 340, transition: { duration: 0.18 } }}
         style={{
           position: 'fixed',
           top: 0,
           right: 0,
           bottom: 0,
           width: 320,
-          background: 'white',
+          background: 'var(--surface-card)',
           boxShadow: '-4px 0 24px rgba(28,22,16,.10)',
           zIndex: 50,
           display: 'flex',
           flexDirection: 'column',
+          fontFamily: FONT_BODY,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', borderBottom: '1px solid #EDE8DC' }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: '#1C1610' }}>Customize Dashboard</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', borderBottom: '1px solid var(--border-1)' }}>
+          <span style={{ fontFamily: FONT_HEADING, fontSize: 15, fontWeight: 600, color: 'var(--ink-1)' }}>Customize Dashboard</span>
           <button
             type="button"
             onClick={onClose}
-            style={{ border: 'none', background: 'none', fontSize: 18, color: '#B0A696', cursor: 'pointer' }}
+            style={{ border: 'none', background: 'none', fontSize: 18, color: 'var(--ink-3)', cursor: 'pointer' }}
           >
             ✕
           </button>
         </div>
 
-        <p style={{ margin: '10px 20px 4px', fontSize: 12, color: '#9E9488' }}>
+        <p style={{ margin: '10px 20px 4px', fontSize: 12, color: 'var(--ink-3)' }}>
           Toggle widgets on/off and drag to reorder.
         </p>
 
@@ -475,14 +649,14 @@ function CustomizePanel({ prefs, onClose, onSave, onReset }) {
           </DndContext>
         </div>
 
-        <div style={{ padding: '14px 20px', borderTop: '1px solid #EDE8DC', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border-1)', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button
             type="button"
             onClick={handleSave}
             disabled={saving}
             style={{
               width: '100%',
-              background: '#4C2A92',
+              background: 'var(--purple-700)',
               color: 'white',
               border: 'none',
               borderRadius: 10,
@@ -491,7 +665,10 @@ function CustomizePanel({ prefs, onClose, onSave, onReset }) {
               fontWeight: 700,
               cursor: saving ? 'not-allowed' : 'pointer',
               opacity: saving ? 0.65 : 1,
+              transition: 'background .13s',
             }}
+            onMouseEnter={(e) => { if (!saving) e.currentTarget.style.background = 'var(--purple-600)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--purple-700)' }}
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
@@ -500,20 +677,23 @@ function CustomizePanel({ prefs, onClose, onSave, onReset }) {
             onClick={onReset}
             style={{
               width: '100%',
-              background: 'white',
-              color: '#6B6560',
-              border: '1px solid #EDE8DC',
+              background: 'var(--surface-card)',
+              color: 'var(--ink-2)',
+              border: '1px solid var(--border-1)',
               borderRadius: 10,
               padding: '10px 16px',
               fontSize: 13,
               fontWeight: 600,
               cursor: 'pointer',
+              transition: 'border-color .13s',
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-2)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-1)' }}
           >
             Reset to defaults
           </button>
         </div>
-      </div>
+      </motion.div>
     </>
   )
 }
@@ -623,13 +803,13 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      <div className="space-y-5 pb-20">
+      <div className="space-y-5 pb-20" style={{ fontFamily: FONT_BODY }}>
         <section className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 style={{ fontSize: 26, fontWeight: 900, color: '#1C1610', margin: 0, letterSpacing: '-0.025em' }}>
+            <h1 style={{ fontFamily: FONT_HEADING, fontSize: 26, fontWeight: 700, color: 'var(--ink-1)', margin: 0, letterSpacing: '-0.02em' }}>
               {greetingForHour()}, {profile?.name?.split(' ')[0] ?? 'there'} 👋
             </h1>
-            <p style={{ marginTop: 5, fontSize: 13, color: '#9E9488', margin: '5px 0 0' }}>
+            <p style={{ marginTop: 5, fontSize: 13, color: 'var(--ink-2)', margin: '5px 0 0' }}>
               Keep ministry execution visible across departments, meetings, and follow-through.
             </p>
           </div>
@@ -639,31 +819,37 @@ export default function Dashboard() {
               type="button"
               onClick={() => setShowCustomize(true)}
               style={{
-                background: 'white',
-                border: '1px solid #EDE8DC',
+                background: 'var(--surface-card)',
+                border: '1px solid var(--border-1)',
                 borderRadius: 10,
                 padding: '8px 14px',
                 fontSize: 12.5,
                 fontWeight: 600,
-                color: '#4C2A92',
+                color: 'var(--purple-700)',
                 cursor: 'pointer',
                 transition: 'border-color .12s',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92' }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#EDE8DC' }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--purple-500)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-1)' }}
             >
               Customize Dashboard
             </button>
           </div>
         </section>
 
-        {/* ── Hero stat cards ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+        {/* ── Hero stat cards — semantic accent mapping: purple anchor /
+            blue progress / orange priority / green active ── */}
+        <motion.div
+          variants={heroStagger}
+          initial="hidden"
+          animate="show"
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}
+        >
           <HeroStatCard
             label="Active Spaces"
             value={orgStats.spaces}
             sub="across the org"
-            bg="#5B2F9E"
+            bg="var(--purple-700)"
             blobColor="rgba(255,255,255,.13)"
             onClick={() => navigate('/spaces')}
           />
@@ -671,7 +857,7 @@ export default function Dashboard() {
             label="Open Tasks"
             value={orgStats.openTasks}
             sub="in progress & queued"
-            bg="#1E1040"
+            bg="var(--accent-blue)"
             blobColor="rgba(255,255,255,.10)"
             onClick={() => navigate('/my-tasks')}
           />
@@ -679,7 +865,7 @@ export default function Dashboard() {
             label="My Tasks Due"
             value={orgStats.myDue}
             sub="assigned to you"
-            bg="#D4920A"
+            bg="var(--accent-orange)"
             blobColor="rgba(255,255,255,.15)"
             onClick={() => navigate('/my-tasks')}
           />
@@ -687,36 +873,36 @@ export default function Dashboard() {
             label="Active Sprints"
             value={orgStats.activeSprints}
             sub="running now"
-            bg="#D4613A"
+            bg="var(--accent-green)"
             blobColor="rgba(255,255,255,.15)"
             onClick={() => navigate('/sprints')}
           />
-        </div>
+        </motion.div>
 
         {visibleWidgets.length === 0 ? (
           <div
             style={{
               padding: '48px 16px',
               textAlign: 'center',
-              color: '#B0A696',
+              color: 'var(--ink-2)',
               fontSize: 13,
-              border: '1px dashed #D9D3C7',
+              border: '1px dashed var(--border-2)',
               borderRadius: 20,
-              background: '#FAFAF7',
+              background: 'var(--surface-card)',
             }}
           >
             No widgets pinned.{' '}
             <button
               type="button"
               onClick={() => setShowCustomize(true)}
-              style={{ color: '#4C2A92', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: 0 }}
+              style={{ color: 'var(--purple-700)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: 0 }}
             >
               Customize Dashboard
             </button>{' '}
             to add some.
           </div>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <motion.div variants={heroStagger} initial="hidden" animate="show" className="grid gap-4 lg:grid-cols-2">
             {visibleWidgets.map((pref) => (
               <WidgetCard
                 key={pref.widget_key}
@@ -727,7 +913,7 @@ export default function Dashboard() {
                 onUnpin={handleUnpin}
               />
             ))}
-          </div>
+          </motion.div>
         )}
 
         {/* ════════════════════════════════════════════════════════════ */}
@@ -735,14 +921,17 @@ export default function Dashboard() {
         {/* ════════════════════════════════════════════════════════════ */}
       </div>
 
-      {showCustomize ? (
-        <CustomizePanel
-          prefs={prefs}
-          onClose={() => setShowCustomize(false)}
-          onSave={handleSavePrefs}
-          onReset={handleReset}
-        />
-      ) : null}
+      <AnimatePresence>
+        {showCustomize ? (
+          <CustomizePanel
+            key="customize-panel"
+            prefs={prefs}
+            onClose={() => setShowCustomize(false)}
+            onSave={handleSavePrefs}
+            onReset={handleReset}
+          />
+        ) : null}
+      </AnimatePresence>
     </>
   )
 }

@@ -3,6 +3,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { ACTION_LABELS, TRIGGER_LABELS, deleteAutomation, getRecentAutomationRuns, toggleAutomation, getAllDepartments, getAllUsers, getAllAutomations, getAutomationRunLog, getWebhookDeliveryLog, AutomationBuilder } from '../../features/automations'
 import { formatLastActive } from '../../lib/dateUtils'
 import { supabase } from '../../lib/supabase'
+import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 
 function getRunTone(status) {
   if (status === 'success' || status === 'ok') {
@@ -180,12 +181,12 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
   const activeCount = automations.filter((automation) => automation.enabled).length
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={{ fontFamily: FONT_BODY }}>
       {!embedded ? (
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold text-[var(--text-primary)]">Automations</h1>
-            <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
+            <h1 className="text-[22px]" style={{ fontFamily: FONT_HEADING, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ink-1)' }}>Automations</h1>
+            <p className="mt-0.5 text-sm" style={{ color: 'var(--ink-2)' }}>
               Trigger-and-action workflows across departments.
             </p>
           </div>
@@ -195,7 +196,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
               setEditingAutomation(null)
               setShowBuilder(true)
             }}
-            className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-hover)]"
+            className="rounded-xl bg-[var(--purple-700)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--purple-600)]"
           >
             + New Automation
           </button>
@@ -214,7 +215,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
               setEditingAutomation(null)
               setShowBuilder(true)
             }}
-            className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-hover)]"
+            className="rounded-xl bg-[var(--purple-700)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--purple-600)]"
           >
             + New Automation
           </button>
@@ -240,8 +241,8 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
                 onClick={() => setActiveTab('automations')}
                 className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
                   activeTab === 'automations'
-                    ? 'border-[var(--accent)] text-[var(--accent)]'
-                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    ? 'border-[var(--purple-700)] text-[var(--purple-700)]'
+                    : 'border-transparent text-[var(--ink-2)] hover:text-[var(--purple-600)]'
                 }`}
               >
                 Automations
@@ -251,8 +252,8 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
                 onClick={() => setActiveTab('run-log')}
                 className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
                   activeTab === 'run-log'
-                    ? 'border-[var(--accent)] text-[var(--accent)]'
-                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    ? 'border-[var(--purple-700)] text-[var(--purple-700)]'
+                    : 'border-transparent text-[var(--ink-2)] hover:text-[var(--purple-600)]'
                 }`}
               >
                 Run Log
@@ -262,8 +263,8 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
                 onClick={() => setActiveTab('webhooks')}
                 className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
                   activeTab === 'webhooks'
-                    ? 'border-[var(--accent)] text-[var(--accent)]'
-                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    ? 'border-[var(--purple-700)] text-[var(--purple-700)]'
+                    : 'border-transparent text-[var(--ink-2)] hover:text-[var(--purple-600)]'
                 }`}
               >
                 Webhook Log

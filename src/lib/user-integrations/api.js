@@ -327,23 +327,6 @@ export async function getIntegrationSettings(integrationId) {
 
 // ─── Common Integration Workflows ────────────────────────────
 
-// Google Calendar
-export async function setupGoogleCalendarIntegration(userId, googleCalendarData) {
-  return connectUserIntegration({
-    user_id: userId,
-    integration_type: 'google_calendar',
-    integration_name: googleCalendarData.calendar_id,
-    oauth_token: googleCalendarData.access_token,
-    oauth_refresh_token: googleCalendarData.refresh_token,
-    token_expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
-    settings: {
-      calendar_id: googleCalendarData.calendar_id,
-      calendar_name: googleCalendarData.calendar_name,
-      color: googleCalendarData.color || '#4C2A92',
-    },
-  })
-}
-
 // Slack
 export async function setupSlackIntegration(userId, slackData) {
   return connectUserIntegration({

@@ -73,20 +73,68 @@ async function markTokenNeedsReauth(userId: string | null) {
     .eq('user_id', userId)
 }
 
+// ── Mark the shared ministry calendar connection as needing re-auth ────────────
+
+async function markConnectionNeedsReauth() {
+  const supabase = adminClient()
+  await supabase
+    .from('ministry_calendar_connection')
+    .update({ needs_reauth: true })
+    .not('id', 'is', null)
+}
+
+// ── Retry after refresh: attempt refresh on 401/403, retry once if successful ──
+
+async function retryAfterRefresh(
+  userId: string,
+  originalRequest: () => Promise<Response>
+): Promise<Response> {
+  // Attempt to refresh the token
+  const refreshedToken = await getValidToken(userId)
+
+  if (!refreshedToken) {
+    // Refresh failed — mark as needing re-auth and abort
+    await markTokenNeedsReauth(userId)
+    throw new NonRetryableError('Token refresh failed and user re-auth required', 401)
+  }
+
+  // Refresh succeeded — retry the original request once
+  return await originalRequest()
+}
+
 // ── Personal-path token helpers (alive, unrelated to Ministry Calendar sources) ─
 
 async function getValidToken(userId: string): Promise<string | null> {
   const supabase = adminClient()
   const { data: row } = await supabase
     .from('google_calendar_tokens')
-    .select('access_token, refresh_token, token_expiry')
+    .select('access_token_vault_id, refresh_token_vault_id, token_expiry')
     .eq('user_id', userId)
     .single()
 
   if (!row) return null
 
   const expiry = new Date(row.token_expiry)
-  if (expiry.getTime() - Date.now() > 60_000) return row.access_token
+  if (expiry.getTime() - Date.now() > 60_000) {
+    // Token still valid — decrypt and return access token from Vault
+    const { data: accessToken, error } = await supabase
+      .rpc('vault_get_secret', { secret_id: row.access_token_vault_id })
+    if (error || !accessToken) {
+      console.error('Failed to retrieve access token from vault:', error)
+      return null
+    }
+    return accessToken
+  }
+
+  // Token expired — refresh it
+  // First, get refresh token from Vault
+  const { data: refreshToken, error: refreshError } = await supabase
+    .rpc('vault_get_secret', { secret_id: row.refresh_token_vault_id })
+  if (refreshError || !refreshToken) {
+    console.error('Failed to retrieve refresh token from vault:', refreshError)
+    await markTokenNeedsReauth(userId)
+    return null
+  }
 
   // Refresh — not wrapped in withRetry: a 4xx means the token is revoked
   const res = await fetch('https://oauth2.googleapis.com/token', {
@@ -95,7 +143,7 @@ async function getValidToken(userId: string): Promise<string | null> {
     body: new URLSearchParams({
       client_id:     GOOGLE_CLIENT_ID,
       client_secret: GOOGLE_CLIENT_SECRET,
-      refresh_token: row.refresh_token,
+      refresh_token: refreshToken,
       grant_type:    'refresh_token',
     }),
   })
@@ -110,9 +158,21 @@ async function getValidToken(userId: string): Promise<string | null> {
   const tokens = await res.json()
   const newExpiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
 
+  // Store new access token in Vault
+  const { data: newVaultId, error: vaultError } = await supabase
+    .rpc('vault_create_secret', {
+      secret_name: `google_calendar_access_${userId}`,
+      secret_value: tokens.access_token,
+    })
+  if (vaultError || !newVaultId) {
+    console.error('Failed to store new access token in vault:', vaultError)
+    return null
+  }
+
+  // Update token_expiry and vault reference
   await supabase
     .from('google_calendar_tokens')
-    .update({ access_token: tokens.access_token, token_expiry: newExpiry })
+    .update({ access_token_vault_id: newVaultId, token_expiry: newExpiry })
     .eq('user_id', userId)
 
   return tokens.access_token
@@ -149,13 +209,32 @@ async function getValidConnectionToken(): Promise<string | null> {
   const supabase = adminClient()
   const { data: row } = await supabase
     .from('ministry_calendar_connection')
-    .select('access_token, refresh_token, token_expiry')
+    .select('access_token_vault_id, refresh_token_vault_id, token_expiry')
     .single()
 
   if (!row) return null
 
   const expiry = new Date(row.token_expiry)
-  if (expiry.getTime() - Date.now() > 60_000) return row.access_token
+  if (expiry.getTime() - Date.now() > 60_000) {
+    // Token still valid — decrypt and return access token from Vault
+    const { data: accessToken, error } = await supabase
+      .rpc('vault_get_secret', { secret_id: row.access_token_vault_id })
+    if (error || !accessToken) {
+      console.error('Failed to retrieve ministry connection access token from vault:', error)
+      return null
+    }
+    return accessToken
+  }
+
+  // Token expired — refresh it
+  // First, get refresh token from Vault
+  const { data: refreshToken, error: refreshError } = await supabase
+    .rpc('vault_get_secret', { secret_id: row.refresh_token_vault_id })
+  if (refreshError || !refreshToken) {
+    console.error('Failed to retrieve ministry connection refresh token from vault:', refreshError)
+    await markConnectionNeedsReauth()
+    return null
+  }
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -163,19 +242,34 @@ async function getValidConnectionToken(): Promise<string | null> {
     body: new URLSearchParams({
       client_id:     GOOGLE_CLIENT_ID,
       client_secret: GOOGLE_CLIENT_SECRET,
-      refresh_token: row.refresh_token,
+      refresh_token: refreshToken,
       grant_type:    'refresh_token',
     }),
   })
 
-  if (!res.ok) return null
+  if (!res.ok) {
+    await markConnectionNeedsReauth()
+    return null
+  }
 
   const tokens    = await res.json()
   const newExpiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
 
+  // Store new access token in Vault
+  const { data: newVaultId, error: vaultError } = await supabase
+    .rpc('vault_create_secret', {
+      secret_name: 'google_calendar_ministry_access',
+      secret_value: tokens.access_token,
+    })
+  if (vaultError || !newVaultId) {
+    console.error('Failed to store new ministry connection access token in vault:', vaultError)
+    return null
+  }
+
+  // Update token_expiry and vault reference
   await supabase
     .from('ministry_calendar_connection')
-    .update({ access_token: tokens.access_token, token_expiry: newExpiry, updated_at: new Date().toISOString() })
+    .update({ access_token_vault_id: newVaultId, token_expiry: newExpiry, updated_at: new Date().toISOString() })
     .not('id', 'is', null)
 
   return tokens.access_token
@@ -204,15 +298,36 @@ async function exchangeCodeForConnection(payload: Record<string, string>) {
   const expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
 
   const supabase = adminClient()
+
+  // Store tokens in Vault (never in plaintext)
+  const { data: accessVaultId, error: accessVaultError } = await supabase
+    .rpc('vault_create_secret', {
+      secret_name: 'google_calendar_ministry_access',
+      secret_value: tokens.access_token,
+    })
+  if (accessVaultError || !accessVaultId) {
+    return json(500, { error: `Failed to store access token in vault: ${accessVaultError?.message}` })
+  }
+
+  const { data: refreshVaultId, error: refreshVaultError } = await supabase
+    .rpc('vault_create_secret', {
+      secret_name: 'google_calendar_ministry_refresh',
+      secret_value: tokens.refresh_token,
+    })
+  if (refreshVaultError || !refreshVaultId) {
+    return json(500, { error: `Failed to store refresh token in vault: ${refreshVaultError?.message}` })
+  }
+
   // True singleton, enforced by a UNIQUE ((true)) index — a partial/expression
   // index isn't usable as a PostgREST upsert onConflict target, so replace
   // the row outright. No concurrent admin OAuth flows are expected.
   await supabase.from('ministry_calendar_connection').delete().not('id', 'is', null)
   const { error } = await supabase.from('ministry_calendar_connection').insert({
-    access_token:  tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    token_expiry:  expiry,
-    connected_by:  user_id ?? null,
+    access_token_vault_id:  accessVaultId,
+    refresh_token_vault_id: refreshVaultId,
+    token_expiry:           expiry,
+    connected_by:           user_id ?? null,
+    secret_type:            'vault',
   })
 
   if (error) return json(500, { error: error.message })
@@ -374,6 +489,8 @@ async function syncOneSource(payload: Record<string, string>) {
 
       try {
         if (ev.google_event_id) {
+          // Outbound (Nexus → Google): Nexus always wins — no timestamp comparison, always push.
+          // This is simple: Nexus is the source of truth for events not synced from Google.
           await gcalFetch(`${baseUrl}/${ev.google_event_id}`, { method: 'PATCH', headers, body: JSON.stringify(body) })
           updated++
         } else {
@@ -461,6 +578,25 @@ async function syncOneSource(payload: Record<string, string>) {
       const allDay     = !startObj.dateTime
       const start_date = startObj.dateTime ?? startObj.date
       const end_date   = endObj.dateTime   ?? endObj.date
+
+      // Inbound (Google → Nexus): last-write-wins with Nexus as tiebreaker.
+      // Only update if Google event is newer than the existing Nexus event.
+      const googleUpdated = item.updated ? new Date(item.updated).getTime() : Date.now()
+      const existingEvent = await supabase
+        .from('calendar_events')
+        .select('updated_at')
+        .eq('source_id', source_id)
+        .eq('google_event_id', item.id)
+        .maybeSingle()
+
+      // Skip if Nexus event is newer (or equal, giving Nexus the tiebreaker)
+      if (existingEvent.data?.updated_at) {
+        const nexusUpdated = new Date(existingEvent.data.updated_at).getTime()
+        if (nexusUpdated >= googleUpdated) {
+          pulled++ // Count it as pulled even though we skipped the update
+          continue
+        }
+      }
 
       const { error: upsertError } = await supabase
         .from('calendar_events')
@@ -559,16 +695,39 @@ async function exchangeCode(payload: Record<string, string>) {
   const expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
 
   const supabase = adminClient()
+
+  // Store tokens in Vault (never in plaintext)
+  const { data: accessVaultId, error: accessVaultError } = await supabase
+    .rpc('vault_create_secret', {
+      secret_name: `google_calendar_access_${user_id}`,
+      secret_value: tokens.access_token,
+    })
+  if (accessVaultError || !accessVaultId) {
+    return json(500, { error: `Failed to store access token in vault: ${accessVaultError?.message}` })
+  }
+
+  const { data: refreshVaultId, error: refreshVaultError } = await supabase
+    .rpc('vault_create_secret', {
+      secret_name: `google_calendar_refresh_${user_id}`,
+      secret_value: tokens.refresh_token,
+    })
+  if (refreshVaultError || !refreshVaultId) {
+    return json(500, { error: `Failed to store refresh token in vault: ${refreshVaultError?.message}` })
+  }
+
+  // Delete existing row (upsert via unique user_id) and insert with vault references
+  await supabase.from('google_calendar_tokens').delete().eq('user_id', user_id)
   const { error } = await supabase
     .from('google_calendar_tokens')
-    .upsert({
+    .insert({
       user_id,
-      access_token:       tokens.access_token,
-      refresh_token:      tokens.refresh_token,
-      token_expiry:       expiry,
-      google_calendar_id: 'primary',
-      needs_reauth:       false,
-    }, { onConflict: 'user_id' })
+      access_token_vault_id:  accessVaultId,
+      refresh_token_vault_id: refreshVaultId,
+      token_expiry:           expiry,
+      google_calendar_id:     'primary',
+      needs_reauth:           false,
+      secret_type:            'vault',
+    })
 
   if (error) return json(500, { error: error.message })
   return json(200, { success: true, calendar_id: 'primary' })
@@ -587,23 +746,43 @@ async function createEvent(payload: Record<string, string>) {
 
   let res: Response
   try {
-    res = await gcalFetch(
-      'https://www.googleapis.com/calendar/v3/calendars/primary/events',
-      {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          summary:     title,
-          description: description ?? '',
-          start: { dateTime: toGCalDateTime(scheduled_date, start_time), timeZone: 'America/Toronto' },
-          end:   { dateTime: toGCalDateTime(scheduled_date, end_time),   timeZone: 'America/Toronto' },
-        }),
-      },
-    )
-  } catch (err) {
-    if (err instanceof NonRetryableError && (err.statusCode === 401 || err.statusCode === 403)) {
-      await markTokenNeedsReauth(user_id)
+    try {
+      res = await gcalFetch(
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            summary:     title,
+            description: description ?? '',
+            start: { dateTime: toGCalDateTime(scheduled_date, start_time), timeZone: 'America/Toronto' },
+            end:   { dateTime: toGCalDateTime(scheduled_date, end_time),   timeZone: 'America/Toronto' },
+          }),
+        },
+      )
+    } catch (err) {
+      // On 401/403, attempt token refresh and retry once
+      if (err instanceof NonRetryableError && (err.statusCode === 401 || err.statusCode === 403)) {
+        res = await retryAfterRefresh(user_id, async () =>
+          gcalFetch(
+            'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+            {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${await getValidToken(user_id)}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                summary:     title,
+                description: description ?? '',
+                start: { dateTime: toGCalDateTime(scheduled_date, start_time), timeZone: 'America/Toronto' },
+                end:   { dateTime: toGCalDateTime(scheduled_date, end_time),   timeZone: 'America/Toronto' },
+              }),
+            },
+          )
+        )
+      } else {
+        throw err
+      }
     }
+  } catch (err) {
     await recordSyncFailure({
       userId:       user_id,
       errorCode:    err instanceof NonRetryableError ? err.statusCode : null,
@@ -627,22 +806,41 @@ async function updateEvent(payload: Record<string, string>) {
   if (!access_token) return json(401, { error: 'reauth_required' })
 
   try {
-    await gcalFetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${google_event_id}`,
-      {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          summary: title,
-          start: { dateTime: toGCalDateTime(scheduled_date, start_time), timeZone: 'America/Toronto' },
-          end:   { dateTime: toGCalDateTime(scheduled_date, end_time),   timeZone: 'America/Toronto' },
-        }),
-      },
-    )
-  } catch (err) {
-    if (err instanceof NonRetryableError && (err.statusCode === 401 || err.statusCode === 403)) {
-      await markTokenNeedsReauth(user_id)
+    try {
+      await gcalFetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${google_event_id}`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            summary: title,
+            start: { dateTime: toGCalDateTime(scheduled_date, start_time), timeZone: 'America/Toronto' },
+            end:   { dateTime: toGCalDateTime(scheduled_date, end_time),   timeZone: 'America/Toronto' },
+          }),
+        },
+      )
+    } catch (err) {
+      // On 401/403, attempt token refresh and retry once
+      if (err instanceof NonRetryableError && (err.statusCode === 401 || err.statusCode === 403)) {
+        await retryAfterRefresh(user_id, async () =>
+          gcalFetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events/${google_event_id}`,
+            {
+              method: 'PATCH',
+              headers: { Authorization: `Bearer ${await getValidToken(user_id)}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                summary: title,
+                start: { dateTime: toGCalDateTime(scheduled_date, start_time), timeZone: 'America/Toronto' },
+                end:   { dateTime: toGCalDateTime(scheduled_date, end_time),   timeZone: 'America/Toronto' },
+              }),
+            },
+          )
+        )
+      } else {
+        throw err
+      }
     }
+  } catch (err) {
     return json(err instanceof NonRetryableError ? err.statusCode : 500, { error: String(err) })
   }
 
@@ -655,16 +853,27 @@ async function deleteEvent(payload: Record<string, string>) {
   if (!access_token) return json(401, { error: 'reauth_required' })
 
   try {
-    await gcalFetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${google_event_id}`,
-      { method: 'DELETE', headers: { Authorization: `Bearer ${access_token}` } },
-    )
-  } catch (err) {
-    // 410 Gone = already deleted on Google's side — treat as success
-    if (err instanceof NonRetryableError && err.statusCode === 410) return json(200, { success: true })
-    if (err instanceof NonRetryableError && (err.statusCode === 401 || err.statusCode === 403)) {
-      await markTokenNeedsReauth(user_id)
+    try {
+      await gcalFetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${google_event_id}`,
+        { method: 'DELETE', headers: { Authorization: `Bearer ${access_token}` } },
+      )
+    } catch (err) {
+      // 410 Gone = already deleted on Google's side — treat as success
+      if (err instanceof NonRetryableError && err.statusCode === 410) return json(200, { success: true })
+      // On 401/403, attempt token refresh and retry once
+      if (err instanceof NonRetryableError && (err.statusCode === 401 || err.statusCode === 403)) {
+        await retryAfterRefresh(user_id, async () =>
+          gcalFetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events/${google_event_id}`,
+            { method: 'DELETE', headers: { Authorization: `Bearer ${await getValidToken(user_id)}` } },
+          )
+        )
+      } else {
+        throw err
+      }
     }
+  } catch (err) {
     return json(err instanceof NonRetryableError ? err.statusCode : 500, { error: String(err) })
   }
 
@@ -686,14 +895,25 @@ async function listExternalEvents(payload: Record<string, string>) {
 
   let res: Response
   try {
-    res = await gcalFetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
-      { headers: { Authorization: `Bearer ${access_token}` } },
-    )
-  } catch (err) {
-    if (err instanceof NonRetryableError && (err.statusCode === 401 || err.statusCode === 403)) {
-      await markTokenNeedsReauth(user_id)
+    try {
+      res = await gcalFetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+        { headers: { Authorization: `Bearer ${access_token}` } },
+      )
+    } catch (err) {
+      // On 401/403, attempt token refresh and retry once
+      if (err instanceof NonRetryableError && (err.statusCode === 401 || err.statusCode === 403)) {
+        res = await retryAfterRefresh(user_id, async () =>
+          gcalFetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+            { headers: { Authorization: `Bearer ${await getValidToken(user_id)}` } },
+          )
+        )
+      } else {
+        throw err
+      }
     }
+  } catch (err) {
     return json(err instanceof NonRetryableError ? err.statusCode : 500, { error: String(err) })
   }
 

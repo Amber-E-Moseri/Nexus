@@ -14,6 +14,7 @@ import {
   getActivityInitials,
 } from '../../../lib/activityLog'
 import { normalizeTaskFieldSettings } from '../../../lib/taskFieldSettings'
+import { FONT_BODY, FONT_HEADING } from '../../../lib/fonts'
 import { createTask, deleteTask, getTaskBlockers, updateTask } from '../lib/tasks'
 import {
   getTaskStatusId,
@@ -482,11 +483,13 @@ export default function TaskModal({
             maxHeight: '90vh',
             background: 'white',
             borderRadius: 16,
+            border: '1px solid var(--border-1)',
             boxShadow: '0 24px 64px rgba(14,14,30,0.22)',
             display: 'flex',
             flexDirection: 'column',
             zIndex: 50,
             overflow: 'hidden',
+            fontFamily: FONT_BODY,
           }}
           aria-describedby={undefined}
         >
@@ -496,10 +499,10 @@ export default function TaskModal({
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '16px 20px',
-              borderBottom: '1px solid var(--border)',
+              borderBottom: '1px solid var(--border-1)',
             }}
           >
-            <Dialog.Title style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+            <Dialog.Title style={{ fontFamily: FONT_HEADING, fontSize: 15, fontWeight: 600, color: 'var(--ink-1)', margin: 0 }}>
               {mode === 'create' ? 'New task' : 'Edit task'}
             </Dialog.Title>
             <Dialog.Close
@@ -872,18 +875,21 @@ export default function TaskModal({
                   disabled={saving}
                   style={{
                     fontSize: 13,
-                    fontWeight: 500,
+                    fontWeight: 600,
                     padding: '7px 20px',
                     borderRadius: 8,
                     cursor: 'pointer',
-                    background: 'var(--accent)',
+                    background: 'var(--purple-700)',
                     color: 'white',
                     border: 'none',
                     opacity: saving ? 0.7 : 1,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
+                    transition: 'background .13s',
                   }}
+                  onMouseEnter={(e) => { if (!saving) e.currentTarget.style.background = 'var(--purple-600)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--purple-700)' }}
                 >
                   {saving ? 'Saving…' : mode === 'create' ? 'Create task' : 'Save changes'}
                 </button>

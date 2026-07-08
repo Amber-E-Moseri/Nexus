@@ -3,12 +3,16 @@ import { Plus, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
+import { FONT_HEADING } from '../../lib/fonts'
+
+const PRIMARY = 'var(--purple-700)'
+const SURFACE = '#FFFFFF'
 
 const STATUS_COLORS = {
-  draft: { bg: 'var(--surface-secondary)', color: 'var(--text-secondary)' },
-  sending: { bg: 'var(--info-bg)', color: 'var(--info)' },
-  sent: { bg: 'var(--sage-light)', color: 'var(--sage)' },
-  paused: { bg: 'var(--status-review-bg)', color: 'var(--status-review-text)' },
+  draft: { bg: 'var(--surface-sub)', color: 'var(--ink-2)' },
+  sending: { bg: 'var(--accent-yellow-tint)', color: 'var(--accent-yellow-text)' },
+  sent: { bg: 'var(--accent-green-tint)', color: 'var(--accent-green-text)' },
+  paused: { bg: 'var(--accent-yellow-tint)', color: 'var(--accent-yellow-text)' },
 }
 
 function Spinner() {
@@ -187,7 +191,7 @@ export default function InvitationsListPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Invitations</h1>
+          <h1 style={{ fontFamily: FONT_HEADING, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Invitations</h1>
           <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
             {campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''}
           </p>

@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import Avatar from '../../components/ui/Avatar'
 import { deleteAvatar, uploadAvatar } from '../../lib/users'
 import { useToast } from '../../context/ToastContext'
@@ -249,13 +250,25 @@ export default function ProfileSection({
 
         </div>
 
-        {profileMessage ? <p className="mt-4 text-sm text-[var(--text-secondary)]">{profileMessage}</p> : null}
+        {profileMessage ? (
+          <motion.p
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18 }}
+            className="mt-4 inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium"
+            style={profileMessage === 'Profile saved.'
+              ? { background: 'var(--accent-green-tint)', color: 'var(--accent-green-text)' }
+              : { background: 'var(--accent-red-tint)', color: 'var(--accent-red-text)' }}
+          >
+            {profileMessage === 'Profile saved.' ? '✓ ' : ''}{profileMessage}
+          </motion.p>
+        ) : null}
 
         <button
           type="button"
           onClick={onSaveProfile}
           disabled={profileSaving}
-          className="mt-4 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-70"
+          className="mt-4 block rounded-xl bg-[var(--purple-700)] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--purple-600)] disabled:opacity-70"
         >
           {profileSaving ? 'Saving…' : 'Save changes'}
         </button>

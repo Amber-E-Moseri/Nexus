@@ -255,12 +255,14 @@ ${transcriptForPrompt}`;
         async start(controller) {
           const reader = upstreamResp.body!.getReader();
           const decoder = new TextDecoder();
+          let buffer = "";
           try {
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
-              const chunk = decoder.decode(value);
-              const lines = chunk.split("\n");
+              const combined = buffer + decoder.decode(value);
+              const lines = combined.split("\n");
+              buffer = lines.pop() ?? "";
               for (const line of lines) {
                 if (!line.startsWith("data: ")) continue;
                 const raw = line.slice(6).trim();

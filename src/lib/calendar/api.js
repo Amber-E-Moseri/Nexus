@@ -148,23 +148,15 @@ export async function rejectCalendarEvent(eventId, note) {
 // ─── Calendar Subscriptions (iCal) ───────────────────────────────
 
 /**
- * Create a calendar subscription (iCal feed)
+ * DEPRECATED: Use getOrCreateSubscription() instead.
+ * This raw-insert path bypasses the canonical token generation in generate_ical_token RPC.
+ * Left for reference only; all callers should use getOrCreateSubscription().
  */
 export async function createCalendarSubscription(subscription) {
-  const user = (await supabase.auth.getUser()).data.user;
-
-  const { data, error } = await supabase
-    .from('calendar_subscriptions')
-    .insert([{
-      ...subscription,
-      user_id: user.id,
-      created_at: new Date().toISOString(),
-    }])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
+  throw new Error(
+    'createCalendarSubscription is deprecated. Use getOrCreateSubscription() from calendar.js instead. ' +
+    'It provides proper token generation via the generate_ical_token RPC.'
+  );
 }
 
 /**
@@ -228,7 +220,7 @@ export async function deleteCalendarSubscription(id) {
  * Get iCal feed URL for a subscription
  */
 export function getICalFeedUrl(token) {
-  return `${window.location.origin}/api/calendar/subscribe/${token}`;
+  return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-ical?token=${token}`;
 }
 
 // ─── Calendar Permissions ────────────────────────────────────────

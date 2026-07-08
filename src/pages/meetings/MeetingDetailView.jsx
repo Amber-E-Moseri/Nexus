@@ -298,7 +298,10 @@ function MeetingDetailViewInner() {
       }
       // Auto-populate minutes fields if empty
       if (extracted?.decisions?.length && !decisionsText) {
-        setDecisionsText(extracted.decisions.join('\n• '))
+        const decisionStrings = extracted.decisions
+          .map((d) => (typeof d === 'string' ? d : d?.decision ?? null))
+          .filter((d) => typeof d === 'string' && d !== null)
+        setDecisionsText(decisionStrings.join('\n• '))
       }
       if (extracted?.next_steps?.length && !nextStepsText) {
         setNextStepsText(extracted.next_steps.join('\n• '))

@@ -1,9 +1,20 @@
-import { ChevronRight } from 'lucide-react'
+// Sidebar space tree (ClickUp UI refresh pass) — collapsible folder → list
+// hierarchy under each space. Visual layer only: data loading, expansion
+// persistence (localStorage cache), and navigation are unchanged.
+// Hex literals inside framer-motion animate targets mirror tokens
+// (CSS vars aren't interpolable): #EDE8F8 = --purple-tint.
+
+import { AnimatePresence, motion } from 'framer-motion'
+import { ChevronRight, Folder, List } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { CACHE_KEYS, getItemSafe, setItemSafe } from '../../lib/cacheUtils'
+import { FONT_BODY } from '../../lib/fonts'
+
+const HOVER_BG = 'rgba(237, 232, 248, 1)'
+const HOVER_BG_OFF = 'rgba(237, 232, 248, 0)'
 
 const TREE_ITEM_STYLE = {
   width: '100%',
@@ -17,8 +28,9 @@ const TREE_ITEM_STYLE = {
   textAlign: 'left',
   fontSize: 12,
   cursor: 'pointer',
-  background: 'transparent',
-  color: '#1C1610',
+  background: HOVER_BG_OFF,
+  color: 'var(--ink-1)',
+  fontFamily: FONT_BODY,
 }
 
 export default function SidebarSpaceTree({ spaceId, spaceName, isActive }) {
@@ -94,62 +106,63 @@ export default function SidebarSpaceTree({ spaceId, spaceName, isActive }) {
 
         return (
           <div key={folder.id}>
-            <button
+            <motion.button
               type="button"
               onClick={() => toggleFolder(folder.id)}
+              whileHover={{ backgroundColor: HOVER_BG }}
+              whileTap={{ scale: 0.98 }}
               style={{
                 ...TREE_ITEM_STYLE,
                 paddingLeft: 4,
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#F2EEE6'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent'
-              }}
             >
-              <ChevronRight
-                size={14}
-                style={{
-                  flexShrink: 0,
-                  transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.15s',
-                  color: '#B0A696',
-                }}
-              />
-              <span style={{ fontSize: 11, fontWeight: 500, color: '#666' }}>📁 {folder.name}</span>
-            </button>
+              <motion.span
+                animate={{ rotate: isOpen ? 90 : 0 }}
+                transition={{ type: 'spring', stiffness: 480, damping: 32 }}
+                style={{ display: 'inline-flex', flexShrink: 0, color: 'var(--ink-3)' }}
+              >
+                <ChevronRight size={14} />
+              </motion.span>
+              <Folder size={12} style={{ flexShrink: 0, color: 'var(--accent-teal)' }} />
+              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--ink-2)' }}>{folder.name}</span>
+            </motion.button>
 
-            {isOpen ? (
-              <div>
-                {folderLists.map((list) => (
-                  <button
-                    key={list.id}
-                    type="button"
-                    onClick={() => navigateToList(list.id)}
-                    style={{
-                      ...TREE_ITEM_STYLE,
-                      paddingLeft: 32,
-                      fontSize: 11,
-                      color: '#666',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#F2EEE6'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent'
-                    }}
-                  >
-                    <span>📋 {list.name}</span>
-                  </button>
-                ))}
-                {folderLists.length === 0 ? (
-                  <div style={{ paddingLeft: 32, padding: '4px 8px', fontSize: 10, color: '#B0A696', fontStyle: 'italic' }}>
-                    No lists
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+            <AnimatePresence initial={false}>
+              {isOpen ? (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 36 }}
+                  style={{ overflow: 'hidden' }}
+                >
+                  {folderLists.map((list) => (
+                    <motion.button
+                      key={list.id}
+                      type="button"
+                      onClick={() => navigateToList(list.id)}
+                      whileHover={{ backgroundColor: HOVER_BG }}
+                      whileTap={{ scale: 0.98 }}
+                      style={{
+                        ...TREE_ITEM_STYLE,
+                        paddingLeft: 32,
+                        fontSize: 11,
+                        color: 'var(--ink-2)',
+                        gap: 7,
+                      }}
+                    >
+                      <List size={12} style={{ flexShrink: 0, color: 'var(--ink-3)' }} />
+                      <span>{list.name}</span>
+                    </motion.button>
+                  ))}
+                  {folderLists.length === 0 ? (
+                    <div style={{ paddingLeft: 32, padding: '4px 8px', fontSize: 10, color: 'var(--ink-3)', fontStyle: 'italic', fontFamily: FONT_BODY }}>
+                      No lists
+                    </div>
+                  ) : null}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
           </div>
         )
       })}

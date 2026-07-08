@@ -4,12 +4,14 @@ import { useAuth } from '../../../hooks/useAuth'
 import EmailComposer from './EmailComposer'
 import EmailPreviewModal from './EmailPreviewModal'
 import SendConfirmationModal from './SendConfirmationModal'
+import AudiencePicker from './AudiencePicker'
 
 const PRIMARY = '#4C2A92'
 const BORDER = '#EDE8DC'
 const TEXT = '#2D2A22'
 const MUTED = '#9E9488'
 const BG = '#F4F1EA'
+const SURFACE = '#FFFFFF'
 
 const STATUS_STYLE = {
   draft: { bg: '#F4F1EA', color: '#9E9488' },
@@ -64,9 +66,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   const [scheduledAt, setScheduledAt] = useState('')
   const [segmentId, setSegmentId] = useState(initial?.segment_id ?? '')
   const [segments, setSegments] = useState([])
-  const [useCustomFilter, setUseCustomFilter] = useState(false)
-  const [inlineConditions, setInlineConditions] = useState(initial?.recipient_filters ?? [])
-  const [inlineCount, setInlineCount] = useState(0)
+  const [pills, setPills] = useState(initial?.recipient_filters ?? [])
   const [abEnabled, setAbEnabled] = useState(false)
   const [subjectA, setSubjectA] = useState('')
   const [subjectB, setSubjectB] = useState('')
@@ -81,6 +81,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   const [showSendConfirm, setShowSendConfirm] = useState(false)
   const [recipientCount, setRecipientCount] = useState(0)
   const [suppressedCount, setSuppressedCount] = useState(0)
+  const [attachments, setAttachments] = useState(initial?.attachments ?? [])
 
   useEffect(() => {
     supabase.from('communication_segments').select('id, name, estimated_count').order('name')
@@ -131,9 +132,10 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       body: body.trim(),
       status,
       segment_id: segmentId || null,
-      recipient_filters: useCustomFilter ? inlineConditions : [],
+      recipient_filters: pills,
       scheduled_at: scheduleMode === 'later' ? scheduledAt || null : null,
       created_by: profile?.id ?? null,
+      attachments: attachments ?? [],
     }
 
     let campaignId = initial?.id ?? null
@@ -228,40 +230,13 @@ function CampaignForm({ initial, onSaved, onCancel }) {
           </label>
         </div>
       ) : step === 2 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              type="button"
-              onClick={() => setUseCustomFilter(false)}
-              style={{ flex: 1, padding: '9px 0', border: `2px solid ${!useCustomFilter ? PRIMARY : BORDER}`, borderRadius: 9, background: !useCustomFilter ? '#EDE8F8' : '#FFFFFF', color: !useCustomFilter ? PRIMARY : MUTED, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-            >
-              Use saved segment
-            </button>
-            <button
-              type="button"
-              onClick={() => setUseCustomFilter(true)}
-              style={{ flex: 1, padding: '9px 0', border: `2px solid ${useCustomFilter ? PRIMARY : BORDER}`, borderRadius: 9, background: useCustomFilter ? '#EDE8F8' : '#FFFFFF', color: useCustomFilter ? PRIMARY : MUTED, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-            >
-              Build custom filter
-            </button>
-          </div>
-
-          {!useCustomFilter ? (
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
-              Select segment
-              <select value={segmentId} onChange={(e) => setSegmentId(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, fontFamily: 'inherit', outline: 'none' }}>
-                <option value="">-- Choose segment --</option>
-                {segments.map((seg) => (
-                  <option key={seg.id} value={seg.id}>{seg.name} ({seg.estimated_count ?? '?'} members)</option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <div style={{ padding: 12, background: '#F9F7F3', borderRadius: 9, color: MUTED, fontSize: 12 }}>
-              Custom filters coming soon
-            </div>
-          )}
-        </div>
+        <AudiencePicker
+          pills={pills}
+          onPillsChange={setPills}
+          segmentId={segmentId}
+          onSegmentChange={setSegmentId}
+          segments={segments}
+        />
       ) : step === 3 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
@@ -269,7 +244,14 @@ function CampaignForm({ initial, onSaved, onCancel }) {
             <input value={subject} onChange={(e) => setSubject(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
           </label>
 
-          <EmailComposer value={body} onChange={setBody} variableChips={VARIABLE_CHIPS} />
+          <EmailComposer
+            value={body}
+            onChange={setBody}
+            variables={VARIABLE_CHIPS}
+            attachments={attachments}
+            onAttachmentsChange={setAttachments}
+            campaignId={initial?.id ?? null}
+          />
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <label style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>

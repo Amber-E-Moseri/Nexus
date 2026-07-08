@@ -3,9 +3,100 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { ACTION_LABELS, TRIGGER_LABELS, createAutomation, updateAutomation } from '../lib/automations'
 import { listTaskStatuses } from '../../../lib/taskStatuses'
+import { FONT_BODY, FONT_HEADING, FONT_MONO } from '../../../lib/fonts'
 
 const INPUT_CLASS =
-  'w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]'
+  'w-full rounded-xl border border-[var(--border-1)] bg-white px-3 py-2 text-sm text-[var(--ink-1)] outline-none focus:border-[var(--purple-500)]'
+
+// Visual step chain (WHEN → IF → THEN) for the builder. Presentation only —
+// all trigger/condition/action state and handlers are unchanged.
+const STEP_STYLES = {
+  trigger:   { chip: 'WHEN', chipBg: 'var(--purple-tint)',        chipText: 'var(--purple-700)',        edge: 'var(--purple-500)' },
+  condition: { chip: 'IF',   chipBg: 'var(--accent-yellow-tint)', chipText: 'var(--accent-yellow-text)', edge: 'var(--accent-yellow)' },
+  action:    { chip: 'THEN', chipBg: 'var(--accent-green-tint)',  chipText: 'var(--accent-green-text)',  edge: 'var(--accent-green)' },
+}
+
+function StepCard({ kind, title, description, headerRight, children }) {
+  const step = STEP_STYLES[kind]
+  return (
+    <section
+      style={{
+        border: '1px solid var(--border-1)',
+        borderLeft: `3px solid ${step.edge}`,
+        borderRadius: 14,
+        background: 'white',
+        padding: '14px 16px 16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <span
+            style={{
+              fontFamily: FONT_MONO,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '.08em',
+              background: step.chipBg,
+              color: step.chipText,
+              borderRadius: 6,
+              padding: '3px 8px',
+              marginTop: 2,
+              flexShrink: 0,
+            }}
+          >
+            {step.chip}
+          </span>
+          <div>
+            <h3 style={{ margin: 0, fontFamily: FONT_HEADING, fontSize: 14, fontWeight: 600, color: 'var(--ink-1)' }}>{title}</h3>
+            <p style={{ margin: '2px 0 0', fontSize: 12.5, color: 'var(--ink-2)' }}>{description}</p>
+          </div>
+        </div>
+        {headerRight}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function StepConnector() {
+  return (
+    <div aria-hidden="true" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 40, margin: '4px 0' }}>
+      <span style={{ width: 2, height: 14, background: 'var(--border-2)' }} />
+      <span style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '6px solid var(--border-2)' }} />
+    </div>
+  )
+}
+
+function AddStepButton({ label, disabled, onClick }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        border: '1px dashed var(--purple-500)',
+        color: 'var(--purple-700)',
+        background: 'transparent',
+        borderRadius: 8,
+        padding: '6px 12px',
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.45 : 1,
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+        transition: 'background .12s',
+      }}
+      onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = 'var(--purple-tint)' }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+    >
+      {label}
+    </button>
+  )
+}
 
 const CONDITION_FIELDS = ['task.status', 'task.priority', 'task.department', 'task.assignee']
 const CONDITION_OPERATORS = ['equals', 'not equals', 'is empty', 'is not empty']
@@ -207,11 +298,12 @@ export default function AutomationBuilder({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[min(760px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_64px_rgba(14,14,30,0.22)]"
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[min(760px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-1)] bg-white shadow-[0_24px_64px_rgba(14,14,30,0.22)]"
+          style={{ fontFamily: FONT_BODY }}
           aria-describedby={undefined}
         >
-          <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
-            <Dialog.Title className="text-sm font-semibold text-[var(--text-primary)]">
+          <div className="flex items-center justify-between border-b border-[var(--border-1)] px-5 py-4">
+            <Dialog.Title className="text-sm" style={{ fontFamily: FONT_HEADING, fontWeight: 600, color: 'var(--ink-1)' }}>
               {automation ? 'Edit automation' : 'New automation'}
             </Dialog.Title>
             <Dialog.Close aria-label="Close dialog" className="rounded-lg px-2 py-1 text-[var(--text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"><span aria-hidden="true">×</span></Dialog.Close>
@@ -258,11 +350,8 @@ export default function AutomationBuilder({
               />
             </section>
 
-            <section className="space-y-3">
-              <div>
-                <h3 className="text-sm font-semibold text-[var(--text-primary)]">Trigger</h3>
-                <p className="text-sm text-[var(--text-secondary)]">Choose what starts the automation.</p>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <StepCard kind="trigger" title="Trigger" description="Choose what starts the automation.">
               <select
                 value={triggerType}
                 onChange={(event) => handleTriggerTypeChange(event.target.value)}
@@ -313,24 +402,22 @@ export default function AutomationBuilder({
                   {SPRINT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
                 </select>
               ) : null}
-            </section>
+            </StepCard>
 
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Conditions</h3>
-                  <p className="text-sm text-[var(--text-secondary)]">Optional filters. Add up to three.</p>
-                </div>
-                <button
-                  type="button"
+            <StepConnector />
+
+            <StepCard
+              kind="condition"
+              title="Conditions"
+              description="Optional filters. Add up to three."
+              headerRight={(
+                <AddStepButton
+                  label="+ Add condition"
                   disabled={conditions.length >= 3}
                   onClick={() => setConditions((current) => [...current, createEmptyCondition()])}
-                  className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] disabled:opacity-50"
-                >
-                  + Add condition
-                </button>
-              </div>
-
+                />
+              )}
+            >
               {conditions.length === 0 ? (
                 <div className="rounded-xl bg-[var(--surface-secondary)] px-3 py-3 text-sm text-[var(--text-secondary)]">
                   No conditions. The trigger alone will qualify the rule.
@@ -338,7 +425,7 @@ export default function AutomationBuilder({
               ) : null}
 
               {conditions.map((condition, index) => (
-                <div key={condition.id} className="grid gap-3 rounded-xl border border-[var(--border)] p-3 md:grid-cols-[1.3fr_1fr_1fr_auto]">
+                <div key={condition.id} className="grid gap-3 rounded-xl border border-[var(--border-1)] bg-[var(--surface-sub)] p-3 md:grid-cols-[1.3fr_1fr_1fr_auto]">
                   <select value={condition.field} onChange={(event) => updateCondition(index, 'field', event.target.value)} className={INPUT_CLASS}>
                     {CONDITION_FIELDS.map((field) => <option key={field} value={field}>{field}</option>)}
                   </select>
@@ -361,26 +448,24 @@ export default function AutomationBuilder({
                   </button>
                 </div>
               ))}
-            </section>
+            </StepCard>
 
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Actions</h3>
-                  <p className="text-sm text-[var(--text-secondary)]">At least one action is required. Add up to five.</p>
-                </div>
-                <button
-                  type="button"
+            <StepConnector />
+
+            <StepCard
+              kind="action"
+              title="Actions"
+              description="At least one action is required. Add up to five."
+              headerRight={(
+                <AddStepButton
+                  label="+ Add action"
                   disabled={actions.length >= 5}
                   onClick={() => setActions((current) => [...current, createEmptyAction()])}
-                  className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] disabled:opacity-50"
-                >
-                  + Add action
-                </button>
-              </div>
-
+                />
+              )}
+            >
               {actions.map((action, index) => (
-                <div key={action.id} className="space-y-3 rounded-xl border border-[var(--border)] p-3">
+                <div key={action.id} className="space-y-3 rounded-xl border border-[var(--border-1)] bg-[var(--surface-sub)] p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium text-[var(--text-primary)]">
                       {ACTION_LABELS[action.type] ?? action.type}
@@ -534,18 +619,19 @@ export default function AutomationBuilder({
                   ) : null}
                 </div>
               ))}
-            </section>
+            </StepCard>
+            </div>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface-secondary)] px-5 py-4">
-            <Dialog.Close className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)]">
+          <div className="flex justify-end gap-2 border-t border-[var(--border-1)] bg-[var(--surface-sub)] px-5 py-4">
+            <Dialog.Close className="rounded-xl border border-[var(--border-1)] px-4 py-2 text-sm font-medium text-[var(--ink-2)]">
               Cancel
             </Dialog.Close>
             <button
               type="button"
               disabled={saving || !selectedDepartmentId}
               onClick={handleSave}
-              className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded-xl bg-[var(--purple-700)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--purple-600)] disabled:opacity-60"
             >
               {saving ? 'Saving…' : automation ? 'Save changes' : 'Create automation'}
             </button>

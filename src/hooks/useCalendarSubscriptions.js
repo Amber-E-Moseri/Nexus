@@ -1,10 +1,22 @@
-// useCalendarSubscriptions Hook
-// Manages calendar subscription (iCal feed) operations
+// DEPRECATED: useCalendarSubscriptions Hook
+// This hook is DEPRECATED in favor of direct calls to getOrCreateSubscription()
+// and related functions from src/features/calendar/lib/calendar.js.
+// See SubscriptionManager.jsx for the canonical pattern.
+//
+// The underlying API function createCalendarSubscription() bypasses the canonical
+// generate_ical_token RPC, causing token/subscription mismanagement. This hook is
+// kept for reference only and must NOT be used in new code. All callers should use
+// the canonical path: getOrCreateSubscription() from calendar.js.
 
 import { useState, useCallback, useEffect } from 'react';
 import * as CalendarAPI from '../lib/calendar/api.js';
 
 export function useCalendarSubscriptions(autoFetch = true) {
+  throw new Error(
+    'useCalendarSubscriptions is deprecated. Use getOrCreateSubscription() from ' +
+    'src/features/calendar/lib/calendar.js instead. See SubscriptionManager.jsx for the pattern.'
+  );
+}
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

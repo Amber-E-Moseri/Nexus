@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import InvitationWizard from './InvitationWizard'
 import InvitationsListPage from './InvitationsListPage'
+import { FONT_HEADING } from '../../lib/fonts'
 
-const PRIMARY = '#4C2A92'
-const BORDER = '#EDE8DC'
-const TEXT = '#2D2A22'
-const MUTED = '#9E9488'
+const PRIMARY = 'var(--purple-700)'
+const BORDER = 'var(--border-1)'
+const TEXT = 'var(--ink-1)'
+const MUTED = 'var(--ink-3)'
 
 export default function CommunicationsPage() {
   const [view, setView] = useState('campaigns') // 'campaigns' | 'invitations'
@@ -25,7 +26,7 @@ export default function CommunicationsPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', margin: 0 }}>
+          <h1 style={{ fontFamily: FONT_HEADING, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
             Communications
           </h1>
           <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '2px 0 0' }}>

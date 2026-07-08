@@ -1,9 +1,10 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useEffect, useMemo, useState } from 'react'
 import { deleteApiKey, generateApiKey, getDeptApiKeys, revokeApiKey } from '../../../lib/apiKeys'
+import { FONT_BODY, FONT_HEADING, FONT_MONO } from '../../../lib/fonts'
 
 const INPUT_CLASS =
-  'w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]'
+  'w-full rounded-xl border border-[var(--border-1)] bg-white px-3 py-2 text-sm text-[var(--ink-1)] outline-none focus:border-[var(--purple-500)]'
 
 function formatDateTime(value) {
   if (!value) return '—'
@@ -17,11 +18,15 @@ function formatDateTime(value) {
 }
 
 function getKeyStatus(key) {
-  if (key.revoked) return { label: 'Revoked', style: { background: 'var(--status-blocked-bg)', color: 'var(--status-blocked-text)' } }
+  if (key.revoked) return { label: 'Revoked', style: { background: 'var(--accent-red-tint)', color: 'var(--accent-red-text)' } }
   if (key.expires_at && new Date(key.expires_at).getTime() < Date.now()) {
-    return { label: 'Expired', style: { background: 'var(--status-review-bg)', color: 'var(--status-review-text)' } }
+    return { label: 'Expired', style: { background: 'var(--accent-yellow-tint)', color: 'var(--accent-yellow-text)' } }
   }
-  return { label: 'Active', style: { background: 'var(--status-done-bg)', color: 'var(--status-done-text)' } }
+  return { label: 'Active', style: { background: 'var(--accent-green-tint)', color: 'var(--accent-green-text)' } }
+}
+
+function maskKey(fullKey) {
+  return `${fullKey.slice(0, 10)}${'•'.repeat(Math.max(fullKey.length - 10, 12))}`
 }
 
 function MetaChip({ label, value }) {
@@ -49,6 +54,8 @@ export default function ApiKeyManager({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [generatedKey, setGeneratedKey] = useState('')
+  const [revealKey, setRevealKey] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const endpoint = useMemo(() => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? ''
@@ -112,13 +119,13 @@ export default function ApiKeyManager({
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border border-[var(--border)] bg-white p-5">
+    <section className="space-y-4 rounded-2xl border border-[var(--border-1)] bg-white p-5" style={{ fontFamily: FONT_BODY }}>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
-            API Keys <span style={{ fontSize: 12, fontWeight: 600, background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 999, padding: '2px 9px', marginLeft: 6 }}>{keys.length}</span>
+          <h2 style={{ margin: 0, fontFamily: FONT_HEADING, fontSize: 16, fontWeight: 600, color: 'var(--ink-1)' }}>
+            API Keys <span style={{ fontFamily: FONT_BODY, fontSize: 12, fontWeight: 600, background: 'var(--purple-tint)', color: 'var(--purple-700)', borderRadius: 999, padding: '2px 9px', marginLeft: 6 }}>{keys.length}</span>
           </h2>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+          <p className="mt-1 text-sm" style={{ color: 'var(--ink-2)' }}>
             Generate department-scoped keys for Google Sheets, Apps Script, and other external tools.
           </p>
         </div>
@@ -126,7 +133,7 @@ export default function ApiKeyManager({
           type="button"
           disabled={!canManage || !departmentId}
           onClick={() => setOpen(true)}
-          className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-xl bg-[var(--purple-700)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--purple-600)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           Generate key
         </button>
@@ -144,21 +151,24 @@ export default function ApiKeyManager({
               key={key.id}
               style={{
                 background: 'white',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--border-1)',
                 borderRadius: 14,
                 padding: '14px 16px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 10,
+                transition: 'border-color .13s',
               }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-2)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-1)' }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {key.name}
                   </div>
-                  <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-tertiary)', marginTop: 2 }}>
-                    {key.key_prefix}…
+                  <div style={{ fontSize: 11, fontFamily: FONT_MONO, color: 'var(--ink-3)', marginTop: 2 }}>
+                    {key.key_prefix}••••••••
                   </div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '3px 10px', ...status.style }}>
@@ -181,15 +191,18 @@ export default function ApiKeyManager({
                     }}
                     style={{
                       fontSize: 11,
-                      fontWeight: 600,
-                      padding: '4px 10px',
+                      fontWeight: 700,
+                      padding: '4px 12px',
                       borderRadius: 8,
-                      border: '1px solid var(--border)',
+                      border: '1px solid var(--accent-red)',
                       background: 'transparent',
-                      color: 'var(--text-secondary)',
+                      color: 'var(--accent-red-text)',
                       cursor: key.revoked ? 'not-allowed' : 'pointer',
-                      opacity: key.revoked ? 0.4 : 1,
+                      opacity: key.revoked ? 0.35 : 1,
+                      transition: 'background .12s',
                     }}
+                    onMouseEnter={(e) => { if (!key.revoked) e.currentTarget.style.background = 'var(--accent-red-tint)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                   >
                     Revoke
                   </button>
@@ -212,18 +225,41 @@ export default function ApiKeyManager({
                       fontWeight: 600,
                       padding: '4px 10px',
                       borderRadius: 8,
-                      border: '1px solid var(--border)',
+                      border: '1px solid var(--border-1)',
                       background: 'transparent',
-                      color: 'var(--coral-dark)',
+                      color: 'var(--ink-2)',
                       cursor: 'pointer',
+                      transition: 'color .12s, border-color .12s',
                     }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-red-text)'; e.currentTarget.style.borderColor = 'var(--accent-red)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--ink-2)'; e.currentTarget.style.borderColor = 'var(--border-1)' }}
                   >
                     Delete
                   </button>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                <MetaChip label="Permissions" value={(key.permissions ?? []).join(', ')} />
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <span style={{ fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>Scopes</span>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {(key.permissions ?? []).map((permission) => (
+                      <span
+                        key={permission}
+                        style={{
+                          fontFamily: FONT_MONO,
+                          fontSize: 10.5,
+                          fontWeight: 500,
+                          background: 'var(--accent-blue-tint)',
+                          color: 'var(--accent-blue-text)',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                        }}
+                      >
+                        {permission}
+                      </span>
+                    ))}
+                  </div>
+                </div>
                 <MetaChip label="Rate limit" value="60 req/min" />
                 <MetaChip label="Last used" value={formatDateTime(key.last_used_at)} />
                 <MetaChip label="Expires" value={formatDateTime(key.expires_at)} />
@@ -244,7 +280,7 @@ export default function ApiKeyManager({
         <div className="mt-3 pt-3 border-t border-[var(--border)]">
           <a
             href="/settings/api-docs"
-            className="inline-flex items-center gap-1 text-[var(--accent)] hover:text-[var(--accent-hover)] font-medium"
+            className="inline-flex items-center gap-1 text-[var(--purple-700)] hover:text-[var(--purple-500)] font-medium"
           >
             View API documentation →
           </a>
@@ -256,6 +292,8 @@ export default function ApiKeyManager({
         if (!nextOpen) {
           setGeneratedKey('')
           setError('')
+          setRevealKey(false)
+          setCopied(false)
         }
       }}>
         <Dialog.Portal>
@@ -264,8 +302,8 @@ export default function ApiKeyManager({
             className="fixed left-1/2 top-1/2 z-50 w-[min(560px,92vw)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl bg-white shadow-[0_24px_64px_rgba(14,14,30,0.22)]"
             aria-describedby={undefined}
           >
-            <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
-              <Dialog.Title className="text-sm font-semibold text-[var(--text-primary)]">
+            <div className="flex items-center justify-between border-b border-[var(--border-1)] px-5 py-4">
+              <Dialog.Title className="text-sm" style={{ fontFamily: FONT_HEADING, fontWeight: 600, color: 'var(--ink-1)' }}>
                 Generate API key
               </Dialog.Title>
               <Dialog.Close className="rounded-lg px-2 py-1 text-[var(--text-tertiary)]">×</Dialog.Close>
@@ -274,19 +312,35 @@ export default function ApiKeyManager({
             <div className="space-y-4 px-5 py-5">
               {generatedKey ? (
                 <div className="space-y-3">
-                  <div className="rounded-xl border px-3 py-2 text-sm" style={{ borderColor: 'var(--amber)', background: 'var(--amber-light)', color: 'var(--amber-hover)' }}>
+                  <div className="rounded-xl border px-3 py-2 text-sm" style={{ borderColor: 'var(--accent-yellow)', background: 'var(--accent-yellow-tint)', color: 'var(--accent-yellow-text)' }}>
                     This key will only be shown once. Copy it now.
                   </div>
                   <div className="rounded-2xl bg-[#111827] px-4 py-4 text-sm text-slate-100">
-                    <div className="break-all font-mono">{generatedKey}</div>
+                    <div className="break-all" style={{ fontFamily: FONT_MONO }}>
+                      {revealKey ? generatedKey : maskKey(generatedKey)}
+                    </div>
                   </div>
                   <div className="flex justify-end gap-2">
                     <button
                       type="button"
-                      onClick={() => navigator.clipboard.writeText(generatedKey)}
-                      className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-primary)]"
+                      onClick={() => setRevealKey((current) => !current)}
+                      className="rounded-xl border border-[var(--border-1)] px-4 py-2 text-sm font-medium text-[var(--ink-1)] transition-colors hover:bg-[var(--surface-sub)]"
                     >
-                      Copy
+                      {revealKey ? 'Hide' : 'Reveal'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(generatedKey)
+                        setCopied(true)
+                        setTimeout(() => setCopied(false), 1800)
+                      }}
+                      className="rounded-xl border px-4 py-2 text-sm font-medium transition-colors"
+                      style={copied
+                        ? { borderColor: 'var(--accent-green)', background: 'var(--accent-green-tint)', color: 'var(--accent-green-text)' }
+                        : { borderColor: 'var(--border-1)', color: 'var(--ink-1)' }}
+                    >
+                      {copied ? 'Copied ✓' : 'Copy'}
                     </button>
                     <button
                       type="button"
@@ -294,7 +348,7 @@ export default function ApiKeyManager({
                         setGeneratedKey('')
                         setOpen(false)
                       }}
-                      className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"
+                      className="rounded-xl bg-[var(--purple-700)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--purple-600)]"
                     >
                       Done
                     </button>
@@ -357,15 +411,15 @@ export default function ApiKeyManager({
             </div>
 
             {!generatedKey ? (
-              <div className="flex justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface-secondary)] px-5 py-4">
-                <Dialog.Close className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)]">
+              <div className="flex justify-end gap-2 border-t border-[var(--border-1)] bg-[var(--surface-sub)] px-5 py-4">
+                <Dialog.Close className="rounded-xl border border-[var(--border-1)] px-4 py-2 text-sm font-medium text-[var(--ink-2)]">
                   Cancel
                 </Dialog.Close>
                 <button
                   type="button"
                   disabled={saving || !departmentId}
                   onClick={handleGenerate}
-                  className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  className="rounded-xl bg-[var(--purple-700)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--purple-600)] disabled:opacity-60"
                 >
                   {saving ? 'Generating…' : 'Generate key'}
                 </button>

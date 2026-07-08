@@ -13,6 +13,7 @@ export async function getDeptMeetings(departmentId) {
       department_id,
       date,
       meeting_type,
+      status,
       agenda,
       minutes,
       transcript,
@@ -22,7 +23,7 @@ export async function getDeptMeetings(departmentId) {
       created_by,
       created_at,
       creator:users!created_by(id, name),
-      attendance:meeting_attendance(user_id, status),
+      attendance:meeting_attendance(user_id, status, attendee:users(id, name)),
       agendas(id, title, start_time, end_time, location, moderator_name, theme, created_by, agenda_items(id, segment, notes, duration_minutes, sort_order, is_pinned))
     `)
 

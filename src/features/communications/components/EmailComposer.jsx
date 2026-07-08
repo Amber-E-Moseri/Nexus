@@ -14,6 +14,32 @@ const BG = '#F4F1EA'
 const SURFACE = '#FFFFFF'
 const BORDER = '#EDE8DC'
 
+const MAX_SIZE = 25 * 1024 * 1024
+const ALLOWED_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function fileIcon(mimeType) {
+  if (mimeType === 'application/pdf') return '🗎'
+  if (mimeType.startsWith('image/')) return '🖼'
+  if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '📊'
+  return '📄'
+}
+
 // Default available variables
 const DEFAULT_VARIABLES = [
   '{{name}}',
@@ -389,12 +415,19 @@ export default function EmailComposer({
   isMobile = false,
   showSubject = true,
   autosave = true,
+  attachments = [],
+  onAttachmentsChange = () => {},
+  campaignId = null,
 }) {
   const { user } = useAuth()
   const [mode, setMode] = useState('plain') // 'plain', 'rich', 'mjml'
   const [autoSaveIndicator, setAutoSaveIndicator] = useState('saved')
   const [testLoading, setTestLoading] = useState(false)
+  const [uploadingAttachment, setUploadingAttachment] = useState(false)
+  const [attachmentError, setAttachmentError] = useState('')
   const editorRef = useRef(null)
+  const fileInputRef = useRef(null)
+  const [dragOverAttachments, setDragOverAttachments] = useState(false)
 
   // Auto-save to localStorage every 30s (opt-out via autosave=false, e.g. when
   // the parent owns persistence such as the campaign builder).
@@ -513,6 +546,67 @@ export default function EmailComposer({
     }
   }
 
+  async function uploadAttachment(file) {
+    if (!file) return
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setAttachmentError('Unsupported file type. Allowed: PDF, DOCX, XLSX, images.')
+      return
+    }
+    if (file.size > MAX_SIZE) {
+      setAttachmentError('File too large. Maximum 25 MB.')
+      return
+    }
+    setAttachmentError('')
+    setUploadingAttachment(true)
+    try {
+      const ext = file.name.split('.').pop()
+      const folderPath = campaignId ?? 'draft'
+      const storagePath = `${folderPath}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('communication-attachments')
+        .upload(storagePath, file, { cacheControl: '3600', upsert: false })
+      if (upErr) throw upErr
+
+      const { data: urlData } = supabase.storage
+        .from('communication-attachments')
+        .getPublicUrl(storagePath)
+      const publicUrl = urlData?.publicUrl ?? null
+
+      const newAttachment = {
+        filename: file.name,
+        storage_path: storagePath,
+        size: file.size,
+        mime_type: file.type,
+        public_url: publicUrl,
+      }
+      onAttachmentsChange([...attachments, newAttachment])
+    } catch (err) {
+      setAttachmentError(err.message || 'Upload failed.')
+    } finally {
+      setUploadingAttachment(false)
+    }
+  }
+
+  async function removeAttachment(attachmentIndex) {
+    const attachment = attachments[attachmentIndex]
+    if (!window.confirm(`Delete "${attachment.filename}"?`)) return
+    try {
+      await supabase.storage
+        .from('communication-attachments')
+        .remove([attachment.storage_path])
+      onAttachmentsChange(attachments.filter((_, i) => i !== attachmentIndex))
+    } catch (err) {
+      setAttachmentError(err.message || 'Delete failed.')
+    }
+  }
+
+  function handleAttachmentDrop(e) {
+    e.preventDefault()
+    setDragOverAttachments(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) uploadAttachment(file)
+  }
+
   const layoutStyle = !isMobile && previewVisible
     ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }
     : { display: 'block' }
@@ -574,6 +668,80 @@ export default function EmailComposer({
           <SubjectLineHelper value={subject} />
         </div>
       ) : null}
+
+      {/* Attachments section */}
+      <div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', marginBottom: 8 }}>Attachments ({attachments.length})</div>
+
+        {attachmentError && (
+          <div style={{ padding: '10px 12px', background: '#FEF0ED', borderRadius: 8, color: ERROR, fontSize: 12, marginBottom: 12, borderLeft: `3px solid ${ERROR}` }}>
+            {attachmentError}
+          </div>
+        )}
+
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOverAttachments(true) }}
+          onDragLeave={() => setDragOverAttachments(false)}
+          onDrop={handleAttachmentDrop}
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            padding: '20px 16px',
+            borderRadius: 8,
+            border: `2px dashed ${dragOverAttachments ? PRIMARY : BORDER}`,
+            background: dragOverAttachments ? 'rgba(76,42,146,0.06)' : BG,
+            textAlign: 'center',
+            cursor: 'pointer',
+            marginBottom: attachments.length > 0 ? 12 : 0,
+            transition: 'all 150ms',
+          }}
+        >
+          <div style={{ fontSize: 18, marginBottom: 6 }}>📎</div>
+          <div style={{ fontSize: 12, color: TEXT, fontWeight: 600 }}>
+            {dragOverAttachments ? 'Drop to attach' : 'Drop files to attach'}
+          </div>
+          <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>
+            PDF, DOCX, XLSX, images — max 25 MB
+          </div>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
+          style={{ display: 'none' }}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAttachment(f); e.target.value = '' }}
+        />
+
+        {attachments.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {attachments.map((att, idx) => (
+              <div
+                key={idx}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, border: `1px solid ${BORDER}`, background: SURFACE }}
+              >
+                <div style={{ flexShrink: 0, fontSize: 20, lineHeight: 1 }}>
+                  {fileIcon(att.mime_type)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {att.filename}
+                  </div>
+                  <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>
+                    {formatBytes(att.size)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => removeAttachment(idx)}
+                  style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${BORDER}`, background: 'transparent', color: MUTED, fontSize: 12, cursor: 'pointer', transition: 'all 150ms' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = ERROR }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = MUTED }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Main editor + preview layout */}
       <div style={layoutStyle}>

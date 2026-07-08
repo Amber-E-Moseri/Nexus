@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import { setupGoogleCalendarIntegration } from '../../lib/user-integrations/api'
+import { supabase } from '../../lib/supabase'
 
 export default function GoogleCalendarCallback() {
   const [searchParams] = useSearchParams()
@@ -14,7 +14,6 @@ export default function GoogleCalendarCallback() {
     async function handleCallback() {
       try {
         const code = searchParams.get('code')
-        const state = searchParams.get('state')
 
         if (!code) {
           const errorMsg = searchParams.get('error')
@@ -25,27 +24,25 @@ export default function GoogleCalendarCallback() {
           throw new Error('User not authenticated')
         }
 
-        // Exchange code for token with backend
-        const response = await fetch('/api/integrations/google-calendar/callback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, userId: profile.id }),
+        // Canonical personal-flow token storage now lives in google_calendar_tokens via the edge function.
+        const redirectUri = `${window.location.origin}/auth/google_calendar-callback`
+        const { data, error: invokeError } = await supabase.functions.invoke('google-calendar-sync', {
+          body: {
+            action: 'exchange_code',
+            payload: {
+              code,
+              redirect_uri: redirectUri,
+              user_id: profile.id,
+            },
+          },
         })
 
-        if (!response.ok) {
-          throw new Error('Failed to exchange authorization code')
+        if (invokeError) {
+          throw new Error(invokeError.message)
         }
 
-        const { calendars } = await response.json()
-
-        // Setup the integration
-        if (calendars && calendars.length > 0) {
-          await setupGoogleCalendarIntegration(profile.id, {
-            calendar_id: calendars[0].id,
-            calendar_name: calendars[0].summary,
-            access_token: calendars[0].access_token,
-            refresh_token: calendars[0].refresh_token,
-          })
+        if (data?.error) {
+          throw new Error(data.error)
         }
 
         setStatus('success')

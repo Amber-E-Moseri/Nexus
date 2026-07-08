@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import PeopleLayout from './PeopleLayout'
@@ -29,45 +29,46 @@ const ROLE_LABELS = {
   member: 'Member',
 }
 
+// Role/status chips and summary cards use the locked semantic accent triads
 const ROLE_TONES = {
-  super_admin: { bg: '#EFE7FF', text: '#6B3FD4' },
-  dept_lead: { bg: '#E8EEFF', text: '#2E5BCE' },
-  pastor: { bg: '#FFF0D9', text: '#C47E0A' },
-  member: { bg: '#F4EFE8', text: '#8A6F47' },
+  super_admin: { bg: 'var(--purple-tint)', text: 'var(--purple-700)' },
+  dept_lead: { bg: 'var(--accent-blue-tint)', text: 'var(--accent-blue-text)' },
+  pastor: { bg: 'var(--accent-yellow-tint)', text: 'var(--accent-yellow-text)' },
+  member: { bg: 'var(--surface-sub)', text: 'var(--ink-2)' },
 }
 
 const STATUS_TONES = {
-  active: { bg: '#E7F8ED', text: '#2D8653', border: '#A6E2BB' },
-  pending_activation: { bg: '#FFF2D9', text: '#C47E0A', border: '#F1C46D' },
-  inactive: { bg: '#F4EFE8', text: '#8B7762', border: '#E1D6C7' },
-  archived: { bg: '#F4EFE8', text: '#8B7762', border: '#E1D6C7' },
-  invited: { bg: '#FFF2D9', text: '#C47E0A', border: '#F1C46D' },
+  active: { bg: 'var(--accent-green-tint)', text: 'var(--accent-green-text)', border: 'var(--accent-green)' },
+  pending_activation: { bg: 'var(--accent-yellow-tint)', text: 'var(--accent-yellow-text)', border: 'var(--accent-yellow)' },
+  inactive: { bg: 'var(--surface-sub)', text: 'var(--ink-2)', border: 'var(--border-2)' },
+  archived: { bg: 'var(--surface-sub)', text: 'var(--ink-2)', border: 'var(--border-2)' },
+  invited: { bg: 'var(--accent-yellow-tint)', text: 'var(--accent-yellow-text)', border: 'var(--accent-yellow)' },
 }
 
 const SUMMARY_CARD_STYLES = {
   active: {
-    bg: '#563199',
+    bg: 'var(--purple-700)',
     text: '#FFFFFF',
     accent: 'rgba(255,255,255,0.08)',
-    border: '#563199',
+    border: 'var(--purple-700)',
   },
   pending: {
-    bg: '#F2A81D',
+    bg: 'var(--accent-yellow)',
     text: '#FFFFFF',
     accent: 'rgba(255,255,255,0.16)',
-    border: '#F2A81D',
+    border: 'var(--accent-yellow)',
   },
   inactive: {
-    bg: '#1F1739',
+    bg: 'var(--ink-1)',
     text: '#FFFFFF',
     accent: 'rgba(255,255,255,0.08)',
-    border: '#1F1739',
+    border: 'var(--ink-1)',
   },
   invites: {
-    bg: '#FFF6F3',
-    text: '#D35C3A',
-    accent: 'rgba(211,92,58,0.08)',
-    border: '#F4C5B8',
+    bg: 'var(--accent-red-tint)',
+    text: 'var(--accent-red-text)',
+    accent: 'rgba(220,38,38,0.08)',
+    border: 'var(--accent-red)',
   },
 }
 
@@ -82,11 +83,11 @@ function getInitials(name = '', email = '') {
 }
 
 function toneForStatus(status) {
-  return STATUS_TONES[status] ?? { bg: 'var(--accent-light)', text: 'var(--accent)', border: 'transparent' }
+  return STATUS_TONES[status] ?? { bg: 'var(--purple-tint)', text: 'var(--purple-700)', border: 'transparent' }
 }
 
 function toneForRole(role) {
-  return ROLE_TONES[role] ?? { bg: '#F4EFE8', text: '#8A6F47' }
+  return ROLE_TONES[role] ?? { bg: 'var(--surface-sub)', text: 'var(--ink-2)' }
 }
 
 function SummaryCard({ label, value, tone }) {
@@ -112,10 +113,12 @@ function FilterChip({ active, children, onClick }) {
       onClick={onClick}
       className="rounded-full border px-4 py-1.5 text-sm font-medium transition-colors"
       style={{
-        borderColor: active ? '#563199' : '#E6DED1',
-        background: active ? '#563199' : '#FFFFFF',
-        color: active ? '#FFFFFF' : '#7A6F5E',
+        borderColor: active ? 'var(--purple-700)' : 'var(--border-1)',
+        background: active ? 'var(--purple-700)' : '#FFFFFF',
+        color: active ? '#FFFFFF' : 'var(--ink-2)',
       }}
+      onMouseEnter={(e) => { if (!active) { e.currentTarget.style.borderColor = 'var(--purple-500)'; e.currentTarget.style.color = 'var(--purple-700)' } }}
+      onMouseLeave={(e) => { if (!active) { e.currentTarget.style.borderColor = 'var(--border-1)'; e.currentTarget.style.color = 'var(--ink-2)' } }}
     >
       {children}
     </button>
@@ -137,6 +140,7 @@ export default function UsersPage() {
     search: '',
   })
   const [selectedUserId, setSelectedUserId] = useState(null)
+  const [hoveredUserId, setHoveredUserId] = useState(null)
   const [draft, setDraft] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -331,7 +335,7 @@ export default function UsersPage() {
           <button
             type="button"
             onClick={() => navigate('/people/invitations')}
-            className="rounded-full bg-[#F2A81D] px-4 py-2 text-sm font-semibold text-white"
+            className="rounded-full bg-[var(--purple-700)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--purple-600)]"
           >
             + Invite
           </button>
@@ -367,12 +371,12 @@ export default function UsersPage() {
             value={filters.search}
             onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
             placeholder="Search by name or email"
-            className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            className="rounded-xl border border-[var(--border-1)] px-3 py-2 text-sm outline-none focus:border-[var(--purple-500)]"
           />
           <select
             value={filters.departmentId}
             onChange={(event) => setFilters((current) => ({ ...current, departmentId: event.target.value }))}
-            className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            className="rounded-xl border border-[var(--border-1)] px-3 py-2 text-sm outline-none focus:border-[var(--purple-500)]"
           >
             <option value="all">All departments</option>
             {departments.map((department) => (
@@ -384,7 +388,7 @@ export default function UsersPage() {
           <select
             value={filters.role}
             onChange={(event) => setFilters((current) => ({ ...current, role: event.target.value }))}
-            className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            className="rounded-xl border border-[var(--border-1)] px-3 py-2 text-sm outline-none focus:border-[var(--purple-500)]"
           >
             <option value="all">All roles</option>
             {Object.entries(ROLE_LABELS).map(([value, label]) => (
@@ -396,7 +400,7 @@ export default function UsersPage() {
           <select
             value={filters.pastorId}
             onChange={(event) => setFilters((current) => ({ ...current, pastorId: event.target.value }))}
-            className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            className="rounded-xl border border-[var(--border-1)] px-3 py-2 text-sm outline-none focus:border-[var(--purple-500)]"
           >
             <option value="all">All pastors</option>
             {pastors.map((pastor) => (
@@ -430,16 +434,18 @@ export default function UsersPage() {
                   <tr
                     key={user.id}
                     onClick={() => setSelectedUserId(user.id)}
+                    onMouseEnter={() => setHoveredUserId(user.id)}
+                    onMouseLeave={() => setHoveredUserId((current) => (current === user.id ? null : current))}
                     className={[
-                      'cursor-pointer border-t border-[var(--border)] transition-colors hover:bg-[var(--surface-secondary)]',
-                      isSelected ? 'bg-[var(--surface-secondary)]' : 'bg-white',
+                      'cursor-pointer border-t border-[var(--border-1)] transition-colors hover:bg-[var(--surface-sub)]',
+                      isSelected ? 'bg-[var(--surface-sub)]' : 'bg-white',
                     ].join(' ')}
                   >
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
                         <div
                           className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white"
-                          style={{ background: department?.color ? `#${department.color}` : '#563199' }}
+                          style={{ background: department?.color ? `#${department.color}` : 'var(--purple-700)' }}
                         >
                           {getInitials(user.name, user.email)}
                         </div>
@@ -457,7 +463,7 @@ export default function UsersPage() {
                         {ROLE_LABELS[user.role] ?? user.role}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-[var(--text-primary)]">{department?.name ?? '—'}</td>
+                    <td className="px-4 py-4 text-[var(--text-primary)]">{department?.name ?? 'â€”'}</td>
                     <td className="px-4 py-4">
                       <span
                         className="rounded-full border px-2.5 py-1 text-xs font-semibold"
@@ -474,8 +480,13 @@ export default function UsersPage() {
                           event.stopPropagation()
                           setSelectedUserId(user.id)
                         }}
-                        className="rounded-lg p-1.5 hover:bg-[var(--surface-tertiary)]"
+                        onFocus={() => setHoveredUserId(user.id)}
+                        className="rounded-lg p-1.5 hover:bg-[var(--purple-tint)] hover:text-[var(--purple-700)]"
                         aria-label={`Manage ${user.name}`}
+                        style={{
+                          opacity: hoveredUserId === user.id || isSelected ? 1 : 0,
+                          transition: 'opacity .13s',
+                        }}
                       >
                         <MoreHorizontal size={16} />
                       </button>
@@ -523,7 +534,7 @@ export default function UsersPage() {
                 value={draft.role}
                 disabled={!canManageUser(selectedUser) || role === 'dept_lead'}
                 onChange={(event) => setDraft((current) => ({ ...current, role: event.target.value }))}
-                className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] disabled:bg-[var(--surface-secondary)]"
+                className="w-full rounded-xl border border-[var(--border-1)] px-3 py-2 text-sm outline-none focus:border-[var(--purple-500)] disabled:bg-[var(--surface-secondary)]"
               >
                 {Object.entries(ROLE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
@@ -539,7 +550,7 @@ export default function UsersPage() {
                 value={draft.departmentId}
                 disabled={!canManageUser(selectedUser)}
                 onChange={(event) => setDraft((current) => ({ ...current, departmentId: event.target.value }))}
-                className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] disabled:bg-[var(--surface-secondary)]"
+                className="w-full rounded-xl border border-[var(--border-1)] px-3 py-2 text-sm outline-none focus:border-[var(--purple-500)] disabled:bg-[var(--surface-secondary)]"
               >
                 <option value="">Unassigned</option>
                 {departments.map((department) => (
@@ -556,7 +567,7 @@ export default function UsersPage() {
                 value={draft.status}
                 disabled={!canManageUser(selectedUser)}
                 onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value }))}
-                className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] disabled:bg-[var(--surface-secondary)]"
+                className="w-full rounded-xl border border-[var(--border-1)] px-3 py-2 text-sm outline-none focus:border-[var(--purple-500)] disabled:bg-[var(--surface-secondary)]"
               >
                 {Object.entries(STATUS_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
@@ -572,7 +583,7 @@ export default function UsersPage() {
                 value={draft.assignedPastorId}
                 disabled={!canManageUser(selectedUser) || draft.role !== 'member'}
                 onChange={(event) => setDraft((current) => ({ ...current, assignedPastorId: event.target.value }))}
-                className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] disabled:bg-[var(--surface-secondary)]"
+                className="w-full rounded-xl border border-[var(--border-1)] px-3 py-2 text-sm outline-none focus:border-[var(--purple-500)] disabled:bg-[var(--surface-secondary)]"
               >
                 <option value="">No pastor assigned</option>
                 {pastors

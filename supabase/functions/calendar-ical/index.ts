@@ -35,7 +35,7 @@ serve(async (req) => {
     const token = url.searchParams.get("token")
 
     if (!token) {
-      return new Response("Missing token", { status: 400 })
+      return new Response("Missing token", { status: 401 })
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")
@@ -101,6 +101,19 @@ serve(async (req) => {
       .eq("status", "approved")
       .gte("start_date", new Date().toISOString())
       .is("deleted_at", null)
+
+    // Add org_id as a true predicate for multi-tenant safety.
+    // FAIL-OPEN (orgId is null): Preserve backward compatibility for single-tenant setup where
+    // ministry_calendar_sources and calendar_events have no org_id column values. This is safe
+    // TODAY because Nexus is single-org (one BLW Canada instance). HOWEVER: if architecture
+    // changes to multi-tenant (dept-scoped or org-scoped sources), this silent fail-open becomes
+    // a CRITICAL LEAK. Future developers: if adding multi-tenant support, change this to fail-CLOSED:
+    // require orgId to be set and add .eq('org_id', orgId) unconditionally.
+    if (!orgId) {
+      console.warn('[calendar-ical] orgId is null for user %s — falling back to unfiltered query. This is safe only in single-tenant mode.', subscription.user_id)
+    } else {
+      baseQuery = baseQuery.eq("org_id", orgId)
+    }
 
     if (subscription.scope === "department" && subscription.dept_id) {
       // Department scope: own dept events + org-wide events (null department_id)

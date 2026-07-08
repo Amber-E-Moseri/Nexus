@@ -1,5 +1,6 @@
 import { LayoutGrid } from 'lucide-react'
 import MeetingCard from './MeetingCard'
+import { FONT_HEADING } from '../../lib/fonts'
 
 export default function CardGalleryView({
   meetings,
@@ -19,7 +20,7 @@ export default function CardGalleryView({
           justifyContent: 'center',
           gap: 12,
           padding: '40px 24px',
-          color: '#9E9488',
+          color: 'var(--ink-3)',
           textAlign: 'center',
         }}
       >
@@ -33,10 +34,10 @@ export default function CardGalleryView({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16 }}>
       {/* Header */}
       <div>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>
+        <h2 style={{ fontFamily: FONT_HEADING, margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--ink-1)' }}>
           {title}
         </h2>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: '#7E7D78' }}>
+        <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--ink-3)' }}>
           {meetings.length} meeting{meetings.length !== 1 ? 's' : ''}
         </p>
       </div>

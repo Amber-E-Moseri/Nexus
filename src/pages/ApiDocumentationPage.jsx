@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
 
 const ENDPOINTS = [
   {
@@ -249,11 +250,11 @@ export default function ApiDocumentationPage() {
     : 'https://[project-ref].supabase.co/functions/v1/task-api'
 
   return (
-    <div className="flex gap-6 p-6" style={{ background: '#F4F1EA', minHeight: '100vh' }}>
+    <div className="flex gap-6 p-6" style={{ background: 'var(--bg-app)', minHeight: '100vh', fontFamily: FONT_BODY }}>
       {/* Left sidebar - navigation */}
       <aside className="w-72 flex-shrink-0">
-        <div className="sticky top-6 rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
-          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+        <div className="sticky top-6 rounded-2xl border border-[var(--border-1)] bg-white p-5 shadow-sm">
+          <h3 className="mb-4 text-sm uppercase tracking-wide" style={{ fontFamily: FONT_HEADING, fontWeight: 600, color: 'var(--ink-3)' }}>
             Endpoints
           </h3>
           <nav className="space-y-2">
@@ -264,8 +265,8 @@ export default function ApiDocumentationPage() {
                 onClick={() => setSelectedEndpoint(endpoint)}
                 className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition ${
                   selectedEndpoint.id === endpoint.id
-                    ? 'bg-[var(--accent)] text-white font-medium'
-                    : 'text-[var(--text-primary)] hover:bg-[var(--border)]'
+                    ? 'bg-[var(--purple-700)] text-white font-medium'
+                    : 'text-[var(--ink-1)] hover:bg-[var(--purple-tint)]'
                 }`}
               >
                 <div className="font-mono text-xs">{endpoint.method}</div>
@@ -280,8 +281,8 @@ export default function ApiDocumentationPage() {
       <main className="flex-1 max-w-4xl">
         {/* Header section */}
         <div className="mb-8 rounded-2xl border border-[var(--border)] bg-white p-6 shadow-sm">
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">API Documentation</h1>
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">
+          <h1 className="text-2xl" style={{ fontFamily: FONT_HEADING, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ink-1)' }}>API Documentation</h1>
+          <p className="mt-2 text-sm" style={{ color: 'var(--ink-2)' }}>
             RESTful API for managing tasks, folders, and sprints programmatically.
           </p>
 

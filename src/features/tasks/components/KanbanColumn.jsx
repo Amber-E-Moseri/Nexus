@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import TaskCard from './TaskCard'
+import { FONT_HEADING } from '../../../lib/fonts'
 
 function KanbanColumn({
   status,
@@ -20,9 +21,9 @@ function KanbanColumn({
       style={{
         minWidth: 270, maxWidth: 270, flex: '0 0 270px',
         display: 'flex', flexDirection: 'column', gap: 0,
-        border: '1px solid var(--border)',
+        border: '1px solid var(--border-1)',
         borderRadius: 16,
-        background: '#FCFAF6',
+        background: 'var(--surface-sub)',
         padding: 10,
       }}
     >
@@ -38,10 +39,16 @@ function KanbanColumn({
             background: status.color, flexShrink: 0,
           }}
         />
-        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+        <span style={{ fontFamily: FONT_HEADING, fontSize: 12, fontWeight: 600, color: 'var(--ink-1)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
           {status.name}
         </span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-tertiary)', marginLeft: 4 }}>
+        <span
+          style={{
+            fontSize: 11, fontWeight: 700, color: 'var(--ink-2)', marginLeft: 4,
+            background: 'white', border: '1px solid var(--border-1)',
+            borderRadius: 999, padding: '1px 7px', lineHeight: '16px',
+          }}
+        >
           {tasks.length}
         </span>
         {!readOnly ? (
@@ -72,8 +79,8 @@ function KanbanColumn({
           flex: 1, display: 'flex', flexDirection: 'column', gap: 10,
           minHeight: 420, padding: 2,
           borderRadius: 12,
-          background: isOver ? 'rgba(123,104,238,0.06)' : 'transparent',
-          border: isOver ? '1.5px dashed rgba(123,104,238,0.3)' : '1.5px dashed transparent',
+          background: isOver ? 'var(--purple-tint)' : 'transparent',
+          border: isOver ? '1.5px dashed var(--purple-500)' : '1.5px dashed transparent',
           transition: 'background 0.15s, border 0.15s',
         }}
       >
@@ -100,9 +107,9 @@ function KanbanColumn({
               transition: 'all 0.15s',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.color = 'var(--accent)'
-              e.currentTarget.style.borderColor = 'var(--accent)'
-              e.currentTarget.style.background = 'var(--accent-light)'
+              e.currentTarget.style.color = 'var(--purple-700)'
+              e.currentTarget.style.borderColor = 'var(--purple-500)'
+              e.currentTarget.style.background = 'var(--purple-tint)'
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.color = 'var(--text-tertiary)'

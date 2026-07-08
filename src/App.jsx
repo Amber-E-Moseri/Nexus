@@ -16,7 +16,6 @@ if ('serviceWorker' in navigator) {
 }
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
-const Home = lazy(() => import('./pages/Home'))
 const Inbox = lazy(() => import('./pages/Inbox'))
 const ActivateInvitation = lazy(() => import('./pages/ActivateInvitation'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
@@ -79,6 +78,7 @@ const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
 const InvitationWizard = lazy(() => import('./pages/communications/InvitationWizard'))
 const InvitationDetailPage = lazy(() => import('./pages/communications/InvitationDetailPage'))
 const InstagramGradingPage = lazy(() => import('./features/instagram/pages/InstagramGradingPage'))
+const HelpPage = lazy(() => import('./pages/HelpPage'))
 
 function onError(error, errorInfo) {
   console.error('[AppErrorBoundary]', error, errorInfo)
@@ -110,7 +110,8 @@ export default function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>
-          <Route path="/" element={<Home />} />
+          {/* Home merged into Dashboard (experiment/clickup-ui-refresh) */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route
@@ -358,6 +359,7 @@ export default function App() {
             }
           />
           <Route path="/settings/api-docs" element={<ApiDocumentationPage />} />
+          <Route path="/help" element={<HelpPage />} />
           <Route
             path="/instagram"
             element={

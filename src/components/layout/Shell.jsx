@@ -13,7 +13,7 @@ export default function Shell() {
   return (
     <SprintsProvider>
       <NotificationsProvider>
-        <div className="flex h-screen overflow-hidden bg-[var(--surface-secondary)]">
+        <div className="flex h-screen overflow-hidden bg-[var(--bg-app)]">
           {/* Desktop Sidebar */}
           <div className="hidden md:flex">
             <Sidebar />
@@ -34,9 +34,9 @@ export default function Shell() {
             </>
           )}
 
-          <div className="flex flex-1 flex-col overflow-hidden bg-[var(--surface-secondary)]">
+          <div className="flex flex-1 flex-col overflow-hidden bg-[var(--bg-app)]">
             <TopBar onOpenMobileMenu={() => setMobileDrawerOpen(!mobileDrawerOpen)} />
-            <main className="flex-1 overflow-y-auto bg-[var(--surface-secondary)] pt-[22px] px-[26px] pb-[60px]">
+            <main className="flex-1 overflow-y-auto bg-[var(--bg-app)] pt-[22px] px-[26px] pb-[60px]">
               <NotificationPermissionPrompt />
               <Suspense fallback={<PageSpinner />}>
                 <Outlet />
