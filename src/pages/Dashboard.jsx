@@ -30,6 +30,8 @@ import TeamActivityHeatmap from '../features/dashboard/components/TeamActivityHe
 import TeamVelocityWidget from '../features/dashboard/components/TeamVelocityWidget'
 import PersonalRemindersWidget from '../features/dashboard/components/PersonalRemindersWidget'
 import TeamAvailabilityWidget from '../features/dashboard/components/TeamAvailabilityWidget'
+import ChartWidget from '../features/dashboard/components/ChartWidget'
+import CalculationWidget from '../features/dashboard/components/CalculationWidget'
 import { RegionalUpdateWidget } from '../features/regional-updates/components/RegionalUpdateWidget'
 import { getDashboardPresets } from '../features/dashboard/lib/dashboard-queries'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
@@ -348,6 +350,8 @@ const WIDGET_META = {
   my_spaces:              { title: 'My Spaces',                 Component: MySpacesWidget },
   personal_reminders:     { title: 'Personal Reminders',        Component: PersonalRemindersWidget },
   team_availability:      { title: 'Team Availability',         Component: TeamAvailabilityWidget },
+  chart_widget:           { title: 'Chart',                     Component: ChartWidget, configurable: true },
+  calculation_widget:     { title: 'Calculation',                Component: CalculationWidget, configurable: true },
 }
 
 const ALL_WIDGET_KEYS = Object.keys(WIDGET_META)
@@ -356,22 +360,23 @@ const FALLBACK_PREFS = ALL_WIDGET_KEYS.map((key, i) => ({
   widget_key: key,
   visible: true,
   sort_order: i + 1,
+  config: {},
 }))
 
 function mergeWithAllKeys(rows) {
   const map = new Map(rows.map((r) => [r.widget_key, r]))
   const maxOrder = rows.length > 0 ? Math.max(...rows.map((r) => r.sort_order ?? 0)) : 0
   return ALL_WIDGET_KEYS.map((key, i) =>
-    map.has(key) ? map.get(key) : { widget_key: key, visible: false, sort_order: maxOrder + i + 1 },
+    map.has(key) ? map.get(key) : { widget_key: key, visible: false, sort_order: maxOrder + i + 1, config: {} },
   )
 }
 
 // ─── Widget card ──────────────────────────────────────────────────────────────
 
-function WidgetCard({ widgetKey, role, userId, departmentId, onUnpin }) {
+function WidgetCard({ widgetKey, role, userId, departmentId, config, onConfigChange, onUnpin }) {
   const meta = WIDGET_META[widgetKey]
   if (!meta) return null
-  const { title, Component } = meta
+  const { title, Component, configurable } = meta
 
   return (
     <motion.div
@@ -408,7 +413,11 @@ function WidgetCard({ widgetKey, role, userId, departmentId, onUnpin }) {
           ✕
         </button>
       </div>
-      <Component role={role} userId={userId} departmentId={departmentId} />
+      {configurable ? (
+        <Component config={config} onConfigChange={onConfigChange} />
+      ) : (
+        <Component role={role} userId={userId} departmentId={departmentId} />
+      )}
     </motion.div>
   )
 }
@@ -698,6 +707,20 @@ export default function Dashboard() {
     await upsertDashboardPreferences(profile.id, [{ widget_key: widgetKey, visible: false, sort_order: existing?.sort_order ?? 999 }])
   }
 
+  async function handleConfigChange(widgetKey, config) {
+    setPrefs((current) =>
+      current.map((p) => (p.widget_key === widgetKey ? { ...p, config } : p)),
+    )
+    if (!profile?.id) return
+    const existing = prefs.find((p) => p.widget_key === widgetKey)
+    await upsertDashboardPreferences(profile.id, [{
+      widget_key: widgetKey,
+      visible: existing?.visible ?? true,
+      sort_order: existing?.sort_order ?? 999,
+      config,
+    }])
+  }
+
   async function handleSavePrefs(nextPrefs) {
     setPrefs(nextPrefs)
     if (!profile?.id) return
@@ -843,6 +866,8 @@ export default function Dashboard() {
                 role={role}
                 userId={profile?.id}
                 departmentId={profile?.department_id}
+                config={pref.config}
+                onConfigChange={(config) => handleConfigChange(pref.widget_key, config)}
                 onUnpin={handleUnpin}
               />
             ))}
