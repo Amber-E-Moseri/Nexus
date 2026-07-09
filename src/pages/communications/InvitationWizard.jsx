@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { FONT_HEADING } from '../../lib/fonts'
 import { useNavigate } from 'react-router-dom'
 import Step1PickTemplate from '../../components/invitations/Step1PickTemplate'
 import Step2EventDetails from '../../components/invitations/Step2EventDetails'
@@ -102,7 +103,7 @@ export default function InvitationWizard() {
         >
           {'<-'} Communications
         </button>
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>
+        <h1 style={{ fontFamily: FONT_HEADING, margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>
           Create Invitation Campaign
         </h1>
         <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>Build and send invitation campaigns step by step.</p>

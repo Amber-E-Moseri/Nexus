@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { supabase } from '../../lib/supabase'
+import { FONT_HEADING } from '../../lib/fonts'
 import { getEmailTemplates, createEmailTemplate } from '../../features/communications'
 import TemplateEditor from '../../features/communications/components/TemplateEditor'
 import { Search, Palette, Eye, Copy, Edit3, Trash2 } from 'lucide-react'
 
-const PRIMARY = '#4C2A92'
-const BORDER = '#EDE8DC'
-const TEXT = '#2D2A22'
-const MUTED = '#9E9488'
-const BG = '#F4F1EA'
+const PRIMARY = 'var(--purple-700)'
+const BORDER = 'var(--border-1)'
+const TEXT = 'var(--ink-1)'
+const MUTED = 'var(--ink-3)'
+const BG = 'var(--surface-sub)'
 
 const CATEGORIES = [
   { key: 'all', label: 'All Templates' },
@@ -129,7 +130,7 @@ export default function EmailTemplatesPage() {
           <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>Email Templates</span>
         </div>
         <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: TEXT }}>Email Templates</h1>
+          <h1 style={{ fontFamily: FONT_HEADING, margin: 0, fontSize: 20, fontWeight: 800, color: TEXT }}>Email Templates</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: MUTED }}>Browse, customize, and save email templates for campaigns.</p>
         </div>
       </div>
@@ -208,7 +209,7 @@ export default function EmailTemplatesPage() {
                   {template.html_content?.substring(0, 80).replace(/<[^>]*>/g, '') || 'Click to customize'}
                 </div>
                 {template.is_system ? (
-                  <div style={{ fontSize: 11, color: '#2D8653', fontWeight: 600, marginBottom: 12 }}>✓ System Template</div>
+                  <div style={{ fontSize: 11, color: 'var(--sage)', fontWeight: 600, marginBottom: 12 }}>✓ System Template</div>
                 ) : (
                   <div style={{ fontSize: 11, color: PRIMARY, fontWeight: 600, marginBottom: 12 }}>★ Your Custom Template</div>
                 )}
@@ -311,7 +312,7 @@ export default function EmailTemplatesPage() {
                         flex: isMobile ? '1 1 calc(50% - 4px)' : 1,
                         border: `1px solid ${BORDER}`,
                         background: '#FFFFFF',
-                        color: '#C94830',
+                        color: 'var(--coral-dark)',
                         borderRadius: 6,
                         padding: isMobile ? '6px 8px' : '8px 10px',
                         fontSize: isMobile ? 11 : 12,
@@ -413,7 +414,7 @@ export default function EmailTemplatesPage() {
             padding: '12px 16px',
             fontSize: 13,
             fontWeight: 600,
-            color: toast.type === 'success' ? '#2D8653' : '#C94830',
+            color: toast.type === 'success' ? 'var(--sage)' : 'var(--coral-dark)',
             zIndex: 100,
             boxShadow: '0 4px 12px rgba(14,14,30,0.1)',
             animation: 'slideIn 0.3s ease-out',

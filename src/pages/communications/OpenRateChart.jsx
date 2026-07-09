@@ -1,8 +1,8 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
-const PRIMARY = '#4C2A92'
-const BORDER = '#EDE8DC'
-const MUTED = '#9E9488'
+const PRIMARY = 'var(--purple-700)'
+const BORDER = 'var(--border-1)'
+const MUTED = 'var(--ink-3)'
 
 export default function OpenRateChart({ data }) {
   return (

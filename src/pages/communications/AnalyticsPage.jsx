@@ -2,16 +2,17 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { supabase } from '../../lib/supabase'
+import { FONT_HEADING } from '../../lib/fonts'
 
 const OpenRateChart = lazy(() => import('./OpenRateChart'))
 
-const PRIMARY = '#4C2A92'
-const BORDER  = '#EDE8DC'
-const TEXT    = '#2D2A22'
-const MUTED   = '#9E9488'
-const BG      = '#F4F1EA'
-const SUCCESS = '#2D6A4F'
-const ERROR   = '#C94830'
+const PRIMARY = 'var(--purple-700)'
+const BORDER  = 'var(--border-1)'
+const TEXT    = 'var(--ink-1)'
+const MUTED   = 'var(--ink-3)'
+const BG      = 'var(--surface-sub)'
+const SUCCESS = 'var(--sage)'
+const ERROR   = 'var(--coral-dark)'
 const CAMPAIGN_SELECT = 'id, name, status, sent_at, scheduled_at, recipient_count, sent_count, open_count, failed_count'
 const SEND_SELECT = 'id, campaign_id, recipient_email, recipient_name, status, opened_at, error_message, created_at'
 const AB_TEST_SELECT = 'id, campaign_id, subject_a, subject_b, split_percent, metric, test_duration_hours, winner_subject, open_rate_a, open_rate_b'
@@ -650,7 +651,7 @@ export default function AnalyticsPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', paddingBottom: 14 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: TEXT }}>
+            <h1 style={{ fontFamily: FONT_HEADING, margin: 0, fontSize: 20, fontWeight: 800, color: TEXT }}>
               {selectedCampaign ? selectedCampaign.name : 'Email Analytics'}
             </h1>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: MUTED }}>
@@ -713,7 +714,7 @@ export default function AnalyticsPage() {
                 <div style={{ fontSize: 13, fontWeight: 800, color: TEXT, marginBottom: 14 }}>
                   Open Rate by Campaign (last {openRateData.length})
                 </div>
-                <Suspense fallback={<div style={{ height: 200, background: '#F4F1EA', borderRadius: 8 }} />}>
+                <Suspense fallback={<div style={{ height: 200, background: 'var(--surface-sub)', borderRadius: 8 }} />}>
                   <OpenRateChart data={openRateData} />
                 </Suspense>
               </div>
@@ -776,7 +777,7 @@ export default function AnalyticsPage() {
                 ))}
               </div>
 
-              <div style={{ flex: '1 1 320px', background: 'linear-gradient(135deg, #4C2A92, #6B3FD4)', borderRadius: 16, padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ flex: '1 1 320px', background: 'linear-gradient(135deg, var(--purple-700), var(--purple-500))', borderRadius: 16, padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.12em', color: 'rgba(255,255,255,0.6)' }}>Deliverability tip</div>
                 <div style={{ fontSize: 14, color: '#FFFFFF', lineHeight: 1.6, fontWeight: 500 }}>{TIPS[tipIndex]}</div>
                 <div style={{ display: 'flex', gap: 5, marginTop: 4 }}>

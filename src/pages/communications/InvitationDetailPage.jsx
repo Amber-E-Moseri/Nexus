@@ -2,15 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Copy, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { FONT_HEADING } from '../../lib/fonts'
 
-const PRIMARY = '#4C2A92'
-const BORDER = '#EDE8DC'
-const TEXT = '#2D2A22'
-const MUTED = '#9E9488'
-const BG = '#F4F1EA'
-const SUCCESS = '#2D6A4F'
+const PRIMARY = 'var(--purple-700)'
+const BORDER = 'var(--border-1)'
+const TEXT = 'var(--ink-1)'
+const MUTED = 'var(--ink-3)'
+const BG = 'var(--surface-sub)'
+const SUCCESS = 'var(--sage)'
 const WARNING = '#92400E'
-const ERROR = '#C94830'
+const ERROR = 'var(--coral-dark)'
 const CAMPAIGN_SELECT = 'id, name, status, sent_at'
 const RECIPIENT_SELECT = 'id, campaign_id, full_name, email, token, status, sent_at, opened_at, rsvp_at, created_at'
 
@@ -26,7 +27,7 @@ function StatCard({ label, value, percentage, color }) {
 
 function StatusBadge({ status }) {
   const statusMap = {
-    pending:  { bg: '#F4F1EA', color: MUTED },
+    pending:  { bg: 'var(--surface-sub)', color: MUTED },
     sent:     { bg: '#EBF7F1', color: SUCCESS },
     opened:   { bg: '#E8EEFA', color: '#1A56DB' },
     rsvp_yes: { bg: '#D1FAE5', color: '#059669' },
@@ -312,7 +313,7 @@ export default function InvitationDetailPage() {
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: TEXT, margin: 0 }}>{campaign.name}</h1>
+          <h1 style={{ fontFamily: FONT_HEADING, fontSize: 28, fontWeight: 800, color: TEXT, margin: 0 }}>{campaign.name}</h1>
           <span style={{ display: 'inline-block', borderRadius: 999, padding: '4px 12px', fontSize: 11, fontWeight: 700, background: '#EBF7F1', color: SUCCESS }}>
             {campaign.status.toUpperCase()}
           </span>

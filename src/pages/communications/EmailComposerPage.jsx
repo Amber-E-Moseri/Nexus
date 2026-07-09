@@ -91,12 +91,12 @@ function TextArea(props) {
 
 function StatusBadge({ status }) {
   const tone = {
-    draft: { bg: '#F4F1EA', fg: '#7A6F5E' },
-    scheduled: { bg: '#E8EEFF', fg: '#2E5BCE' },
-    sending: { bg: '#FEF8E7', fg: '#C47E0A' },
-    sent: { bg: '#EBF7F1', fg: '#2D8653' },
-    failed: { bg: '#FEF0ED', fg: '#C94830' },
-  }[status] ?? { bg: '#F4F1EA', fg: '#7A6F5E' }
+    draft: { bg: 'var(--surface-sub)', fg: 'var(--text-secondary)' },
+    scheduled: { bg: 'var(--accent-blue-tint)', fg: 'var(--accent-blue-text)' },
+    sending: { bg: 'var(--amber-light)', fg: 'var(--amber-hover)' },
+    sent: { bg: 'var(--sage-light)', fg: 'var(--sage)' },
+    failed: { bg: 'var(--coral-light)', fg: 'var(--coral-dark)' },
+  }[status] ?? { bg: 'var(--surface-sub)', fg: 'var(--text-secondary)' }
 
   return (
     <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: tone.bg, color: tone.fg }}>
@@ -352,7 +352,7 @@ function ContactManagerModal({ open, onClose, sources, onRefresh, profile }) {
       const categoryRows = categories.map((category) => ({
         id: category.id,
         name: category.name.trim(),
-        color: category.color || '#4C2A92',
+        color: category.color || 'var(--purple-700)',
         created_by: profile?.id ?? null,
       }))
 
@@ -426,7 +426,7 @@ function ContactManagerModal({ open, onClose, sources, onRefresh, profile }) {
 
         <div className="max-h-[62vh] overflow-y-auto px-6 py-5">
           {error ? (
-            <div className="mb-4 rounded-2xl border border-[#F5C4B8] bg-[#FEF0ED] px-4 py-3 text-[12.5px] text-[#C94830]">
+            <div className="mb-4 rounded-2xl border border-[var(--fs-danger-bd)] bg-[var(--coral-light)] px-4 py-3 text-[12.5px] text-[var(--coral-dark)]">
               {error}
             </div>
           ) : null}
@@ -465,7 +465,7 @@ function ContactManagerModal({ open, onClose, sources, onRefresh, profile }) {
                     <button
                       type="button"
                       onClick={() => setContacts((current) => current.filter((item) => item.id !== contact.id))}
-                      className="rounded-xl border border-[var(--border)] px-3 py-2 text-[12px] font-semibold text-[#C94830]"
+                      className="rounded-xl border border-[var(--border)] px-3 py-2 text-[12px] font-semibold text-[var(--coral-dark)]"
                     >
                       Remove
                     </button>
@@ -501,7 +501,7 @@ function ContactManagerModal({ open, onClose, sources, onRefresh, profile }) {
                   <button
                     type="button"
                     onClick={() => removeCategory(category.id)}
-                    className="rounded-xl border border-[var(--border)] px-3 py-2 text-[12px] font-semibold text-[#C94830]"
+                    className="rounded-xl border border-[var(--border)] px-3 py-2 text-[12px] font-semibold text-[var(--coral-dark)]"
                   >
                     Remove
                   </button>
@@ -1041,7 +1041,7 @@ export default function EmailComposerPage() {
         </div>
       ) : null}
       {error ? (
-        <div className="rounded-2xl border border-[#F5C4B8] bg-[#FEF0ED] px-4 py-3 text-[12.5px] text-[#C94830]">
+        <div className="rounded-2xl border border-[var(--fs-danger-bd)] bg-[var(--coral-light)] px-4 py-3 text-[12.5px] text-[var(--coral-dark)]">
           {error}
         </div>
       ) : null}

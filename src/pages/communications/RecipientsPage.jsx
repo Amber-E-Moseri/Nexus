@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { supabase } from '../../lib/supabase'
+import { FONT_HEADING } from '../../lib/fonts'
 
-const PRIMARY = '#4C2A92'
-const BORDER  = '#EDE8DC'
-const TEXT    = '#2D2A22'
-const MUTED   = '#9E9488'
-const BG      = '#F4F1EA'
+const PRIMARY = 'var(--purple-700)'
+const BORDER  = 'var(--border-1)'
+const TEXT    = 'var(--ink-1)'
+const MUTED   = 'var(--ink-3)'
+const BG      = 'var(--surface-sub)'
 const SURFACE = '#FFFFFF'
 
 function Modal({ title, wide, onClose, children }) {
@@ -210,7 +211,7 @@ export default function RecipientsPage() {
           <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>Recipients</span>
         </div>
         <div style={{ marginBottom: 14 }}>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: TEXT }}>Recipients Management</h1>
+          <h1 style={{ fontFamily: FONT_HEADING, margin: 0, fontSize: 20, fontWeight: 800, color: TEXT }}>Recipients Management</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: MUTED }}>Manage email subscribers and suppression list.</p>
         </div>
 
@@ -347,7 +348,7 @@ export default function RecipientsPage() {
                             Reactivate
                           </button>
                         ) : (
-                          <button type="button" onClick={() => handleSuppress(profile.id)} style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                          <button type="button" onClick={() => handleSuppress(profile.id)} style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                             Suppress
                           </button>
                         )}
@@ -418,7 +419,7 @@ export default function RecipientsPage() {
                                 Reactivate
                               </button>
                             ) : (
-                              <button type="button" onClick={() => handleSuppress(profile.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                              <button type="button" onClick={() => handleSuppress(profile.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                                 Suppress
                               </button>
                             )}

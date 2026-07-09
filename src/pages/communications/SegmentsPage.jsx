@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { supabase } from '../../lib/supabase'
+import { FONT_HEADING } from '../../lib/fonts'
 import SegmentBuilderAdvanced from '../../features/communications/components/SegmentBuilderAdvanced'
 import { Eye, Edit2, Trash2 } from 'lucide-react'
 
-const PRIMARY = '#4C2A92'
-const BORDER  = '#EDE8DC'
-const TEXT    = '#2D2A22'
-const MUTED   = '#9E9488'
-const BG      = '#F4F1EA'
+const PRIMARY = 'var(--purple-700)'
+const BORDER  = 'var(--border-1)'
+const TEXT    = 'var(--ink-1)'
+const MUTED   = 'var(--ink-3)'
+const BG      = 'var(--surface-sub)'
 
 function Modal({ title, onClose, children }) {
   return (
@@ -152,7 +153,7 @@ export default function SegmentsPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, paddingBottom: 14 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: TEXT }}>Saved Segments</h1>
+            <h1 style={{ fontFamily: FONT_HEADING, margin: 0, fontSize: 20, fontWeight: 800, color: TEXT }}>Saved Segments</h1>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: MUTED }}>Reusable recipient groups for campaigns.</p>
           </div>
           <button type="button" onClick={openCreate} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 9, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
@@ -175,7 +176,7 @@ export default function SegmentsPage() {
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 800, color: TEXT }}>{seg.name}</div>
                   {seg.description ? <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>{seg.description}</div> : null}
-                  <div style={{ fontSize: 12, color: '#9E9488', marginTop: 4 }}>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 4 }}>
                     ~{seg.estimated_count ?? 0} recipients
                   </div>
                 </div>
@@ -190,7 +191,7 @@ export default function SegmentsPage() {
                     type="button"
                     onClick={() => handleDelete(seg)}
                     disabled={deleting === seg.id}
-                    style={{ flex: isMobile ? '1 1 calc(50% - 3px)' : 'initial', border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#C94830', borderRadius: 8, padding: isMobile ? '6px 8px' : '6px 12px', fontSize: isMobile ? 11 : 12, fontWeight: 700, cursor: deleting === seg.id ? 'not-allowed' : 'pointer', opacity: deleting === seg.id ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                    style={{ flex: isMobile ? '1 1 calc(50% - 3px)' : 'initial', border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 8, padding: isMobile ? '6px 8px' : '6px 12px', fontSize: isMobile ? 11 : 12, fontWeight: 700, cursor: deleting === seg.id ? 'not-allowed' : 'pointer', opacity: deleting === seg.id ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
                   >
                     <Trash2 size={isMobile ? 12 : 14} /> {deleting === seg.id ? 'Deleting...' : 'Delete'}
                   </button>
