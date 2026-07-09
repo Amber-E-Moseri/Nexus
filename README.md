@@ -243,7 +243,6 @@ See `docs/decision-catalog.md` for 35+ documented decisions with rationale.
 | `VITE_SUPABASE_URL` | Supabase project URL used by the frontend client | Supabase project settings |
 | `VITE_SUPABASE_ANON_KEY` | Public anon key for the frontend Supabase client | Supabase project API settings |
 | `VITE_MEETING_OS_URL` | URL for the embedded Meeting OS app | Deployed Meeting OS URL or `/apps/meeting-os/dist/index.html` |
-| `VITE_MAIL_OS_URL` | URL for the embedded BLW Mail app | Default is `/apps/mail/index.html` in this repo |
 
 ## Edge functions
 
@@ -432,9 +431,6 @@ Complete documentation is available in the `docs/` directory:
 
 - **BLW CAN Map**: `apps/map/`
   Campus outreach map for Canadian post-secondary coverage. Exposed in the main shell through the CAN Map page.
-
-- **BLW Mail**: `public/apps/mail/`
-  Embedded communications tool used by leadership roles for outbound email workflows.
 
 - **Foundation School**: external
   Connected through launch links and integration metadata. It remains an external system rather than a merged codebase.

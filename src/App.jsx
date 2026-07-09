@@ -33,11 +33,15 @@ const MinistryCalendar = lazyRoute('/calendar', () => import('./pages/calendar/M
 const CalendarManagementPage = lazy(() => import('./pages/calendar/CalendarManagementPage'))
 const CalendarReviewPage = lazy(() => import('./pages/calendar/CalendarReviewPage'))
 const CalendarSettingsPage = lazy(() => import('./pages/calendar/CalendarSettingsPage'))
-const CommunicationsPage = lazyRoute('/communications', () => import('./pages/communications/CommunicationsPage'))
+const CommunicationsLayout = lazyRoute('/communications', () => import('./pages/communications/CommunicationsLayout'))
+const CommunicationsOverview = lazy(() => import('./pages/communications/CommunicationsOverview'))
 const RecipientsPage = lazy(() => import('./pages/communications/RecipientsPage'))
 const AnalyticsPage = lazy(() => import('./pages/communications/AnalyticsPage'))
 const CampaignPage = lazy(() => import('./pages/communications/CampaignPage'))
+const EmailComposerPage = lazy(() => import('./pages/communications/EmailComposerPage'))
+const EmailTemplatesPage = lazy(() => import('./pages/communications/EmailTemplatesPage'))
 const SegmentsPage = lazy(() => import('./pages/communications/SegmentsPage'))
+const AbsenteeFollowUpPage = lazy(() => import('./pages/communications/AbsenteeFollowUpPage'))
 const DeptSpace = lazy(() => import('./pages/dept/DeptSpace'))
 const FlockView = lazyRoute('/flock', () => import('./pages/flock/FlockView'))
 const FlockCRMPage = lazyRoute('/flock-crm', () => import('./pages/flock/FlockCRMPage'))
@@ -86,6 +90,7 @@ const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
 const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
 const InvitationWizard = lazy(() => import('./pages/communications/InvitationWizard'))
 const InvitationDetailPage = lazy(() => import('./pages/communications/InvitationDetailPage'))
+const InvitationsListPage = lazy(() => import('./pages/communications/InvitationsListPage'))
 const InstagramGradingPage = lazyRoute('/instagram', () => import('./features/instagram/pages/InstagramGradingPage'))
 const HelpPage = lazyRoute('/help', () => import('./pages/HelpPage'))
 
@@ -309,59 +314,24 @@ export default function App() {
           <Route
             path="/communications"
             element={
-              <ProtectedRoute roles={['super_admin', 'ors']}>
-                <CommunicationsPage />
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'ors', 'dept_lead', 'programs']}>
+                <CommunicationsLayout />
               </ProtectedRoute>
             }
-          />
-          <Route
-            path="/communications/recipients"
-            element={
-              <ProtectedRoute roles={['super_admin', 'ors']}>
-                <RecipientsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/communications/campaigns"
-            element={
-              <ProtectedRoute roles={['super_admin', 'ors']}>
-                <CampaignPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/communications/segments"
-            element={
-              <ProtectedRoute roles={['super_admin', 'ors']}>
-                <SegmentsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/communications/analytics"
-            element={
-              <ProtectedRoute roles={['super_admin', 'ors']}>
-                <AnalyticsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/communications/invitations/new"
-            element={
-              <ProtectedRoute roles={['super_admin', 'ors']}>
-                <InvitationWizard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/communications/invitations/:id"
-            element={
-              <ProtectedRoute roles={['super_admin', 'ors']}>
-                <InvitationDetailPage />
-              </ProtectedRoute>
-            }
-          />
+          >
+            <Route index element={<CommunicationsOverview />} />
+            <Route path="campaigns" element={<CampaignPage />} />
+            <Route path="compose" element={<EmailComposerPage />} />
+            <Route path="campaigns/:campaignId/edit" element={<EmailComposerPage />} />
+            <Route path="templates" element={<EmailTemplatesPage />} />
+            <Route path="recipients" element={<RecipientsPage />} />
+            <Route path="segments" element={<SegmentsPage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="absentees" element={<AbsenteeFollowUpPage />} />
+            <Route path="invitations" element={<InvitationsListPage />} />
+            <Route path="invitations/new" element={<InvitationWizard />} />
+            <Route path="invitations/:id" element={<InvitationDetailPage />} />
+          </Route>
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/personal-integrations" element={<PersonalIntegrationsPage />} />
           <Route

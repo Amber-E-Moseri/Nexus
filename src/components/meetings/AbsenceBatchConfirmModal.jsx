@@ -1,8 +1,8 @@
-const PRIMARY = '#4C2A92'
-const BORDER = '#EDE8DC'
-const TEXT = '#2D2A22'
-const MUTED = '#9E9488'
-const BG = '#F4F1EA'
+const PRIMARY = 'var(--purple-700)'
+const BORDER = 'var(--border-1)'
+const TEXT = 'var(--ink-1)'
+const MUTED = 'var(--ink-3)'
+const BG = 'var(--surface-sub)'
 
 export default function AbsenceBatchConfirmModal({ absentees, onConfirm, onCancel, meetingName, loading }) {
   return (

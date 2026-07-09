@@ -5,6 +5,7 @@ import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
 import { useToast } from '../../../context/ToastContext'
 import AbsenceBatchConfirmModal from '../../../components/meetings/AbsenceBatchConfirmModal'
+import { resolveAbsentRecipients, defaultAbsenceEmail } from '../lib/absentee-recipients'
 import { exportReportToGoogleDrive, checkGoogleDriveAuth } from '../lib/google-drive-service'
 import AttendanceTrendsView from './AttendanceTrendsView'
 
@@ -1567,34 +1568,21 @@ export default function MeetingReportTab() {
       return
     }
 
-    // Use rosterByKey Map for O(1) lookup instead of O(n²) roster.find()
-    const rosterMap = new Map(roster.map((r) => [normalizeNameKey(r.full_name), r]))
+    // Shared resolver: cross-references absent names against the roster and
+    // returns { name, email } recipients (see features/meetings/lib/absentee-recipients).
+    const recipients = resolveAbsentRecipients(report.absent.map((person) => person.name), roster)
 
-    const absentWithEmails = report.absent.filter((person) => {
-      const rosterMatch = rosterMap.get(normalizeNameKey(person.name))
-      return rosterMatch?.email
-    })
-
-    if (absentWithEmails.length === 0) {
+    if (recipients.length === 0) {
       showToast('No email addresses found for absent members.', { tone: 'warning' })
       return
     }
 
-    const recipients = absentWithEmails.map((person) => {
-      const rosterMatch = rosterMap.get(normalizeNameKey(person.name))
-      return {
-        name: person.name,
-        email: rosterMatch.email,
-      }
-    })
-
-    const defaultSubject = `We missed you at ${report.label}`
-    const defaultBody = `Hi {{name}}, we missed you at ${report.label}. Please review the meeting attendance report.`
+    const defaults = defaultAbsenceEmail(report.label)
 
     setEmailEditor({
       recipients,
-      subject: defaultSubject,
-      body: defaultBody,
+      subject: defaults.subject,
+      body: defaults.body,
     })
     setShowEmailEditor(true)
   }
