@@ -38,6 +38,7 @@ import SpaceModal from '../../features/spaces/components/SpaceModal'
 import SprintModal from '../../features/sprints/components/SprintModal'
 import { useSprints } from '../../features/sprints/SprintsContext'
 import { CACHE_KEYS, getItemSafe, setItemSafe } from '../../lib/cacheUtils'
+import { preloadRoute } from '../../lib/routePreload'
 import { RegionalUpdateCompose } from '../../features/regional-updates/components/RegionalUpdateCompose'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 
@@ -137,6 +138,7 @@ const SidebarItem = memo(function SidebarItem({
       className={active ? 'sidebar-item sidebar-item--active' : 'sidebar-item'}
       onClick={handleActivate}
       onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleActivate() } }}
+      onMouseEnter={to ? () => preloadRoute(to) : undefined}
     >
       {glyph ? (
         glyph

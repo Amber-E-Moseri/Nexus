@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { preloadOnIdle, registerRoutePreload } from './lib/routePreload'
 import AppError from './components/layout/AppError'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import Shell from './components/layout/Shell'
@@ -17,49 +18,56 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     .catch(err => console.warn('[PWA] Service Worker registration failed:', err))
 }
 
-const Dashboard = lazy(() => import('./pages/Dashboard'))
-const Inbox = lazy(() => import('./pages/Inbox'))
+// lazyRoute registers the import for hover/idle prefetching (BLW-07);
+// plain lazy() routes load on first navigation only.
+function lazyRoute(pathPrefix, importFn) {
+  registerRoutePreload(pathPrefix, importFn)
+  return lazy(importFn)
+}
+
+const Dashboard = lazyRoute('/dashboard', () => import('./pages/Dashboard'))
+const Inbox = lazyRoute('/inbox', () => import('./pages/Inbox'))
 const ActivateInvitation = lazy(() => import('./pages/ActivateInvitation'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
-const MinistryCalendar = lazy(() => import('./pages/calendar/MinistryCalendar'))
+const MinistryCalendar = lazyRoute('/calendar', () => import('./pages/calendar/MinistryCalendar'))
 const CalendarManagementPage = lazy(() => import('./pages/calendar/CalendarManagementPage'))
 const CalendarReviewPage = lazy(() => import('./pages/calendar/CalendarReviewPage'))
 const CalendarSettingsPage = lazy(() => import('./pages/calendar/CalendarSettingsPage'))
-const CommunicationsPage = lazy(() => import('./pages/communications/CommunicationsPage'))
+const CommunicationsPage = lazyRoute('/communications', () => import('./pages/communications/CommunicationsPage'))
 const RecipientsPage = lazy(() => import('./pages/communications/RecipientsPage'))
 const AnalyticsPage = lazy(() => import('./pages/communications/AnalyticsPage'))
 const CampaignPage = lazy(() => import('./pages/communications/CampaignPage'))
 const SegmentsPage = lazy(() => import('./pages/communications/SegmentsPage'))
 const DeptSpace = lazy(() => import('./pages/dept/DeptSpace'))
-const FlockView = lazy(() => import('./pages/flock/FlockView'))
-const FlockCRMPage = lazy(() => import('./pages/flock/FlockCRMPage'))
+const FlockView = lazyRoute('/flock', () => import('./pages/flock/FlockView'))
+const FlockCRMPage = lazyRoute('/flock-crm', () => import('./pages/flock/FlockCRMPage'))
 const Login = lazy(() => import('./pages/Login'))
-const CanMapPage = lazy(() => import('./pages/map/CanMapPage'))
-const MeetingsModule = lazy(() => import('./pages/meetings/MeetingsModule'))
+const CanMapPage = lazyRoute('/map', () => import('./pages/map/CanMapPage'))
+const MeetingsModule = lazyRoute('/meetings', () => import('./pages/meetings/MeetingsModule'))
 const MeetingDetailView = lazy(() => import('./pages/meetings/MeetingDetailView'))
 const MeetingWizardPage = lazy(() => import('./pages/meetings/MeetingWizardPage'))
 const ExpectedAttendeesPage = lazy(() => import('./pages/meetings/ExpectedAttendeesPage'))
 const AbsenceEmailLogPage = lazy(() => import('./pages/meetings/AbsenceEmailLogPage'))
 const AttendanceTrendsDashboard = lazy(() => import('./pages/AttendanceTrendsDashboard'))
-const MyTasks = lazy(() => import('./pages/personal/MyTasks'))
-const Planner = lazy(() => import('./pages/Planner'))
+const MyTasks = lazyRoute('/my-tasks', () => import('./pages/personal/MyTasks'))
+const Planner = lazyRoute('/planner', () => import('./pages/Planner'))
 const AllPeoplePage = lazy(() => import('./pages/people/AllPeoplePage'))
 const DepartmentsPage = lazy(() => import('./pages/people/DepartmentsPage'))
 const InvitationsPage = lazy(() => import('./pages/people/InvitationsPage'))
 const PastoralAssignmentsPage = lazy(() => import('./pages/people/PastoralAssignmentsPage'))
 const PermissionsPage = lazy(() => import('./pages/people/PermissionsPage'))
-const UsersPage = lazy(() => import('./pages/people/UsersPage'))
+const UsersPage = lazyRoute('/people', () => import('./pages/people/UsersPage'))
 const AutomationsPage = lazy(() => import('./pages/platform/AutomationsPage'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const ConfirmInvite = lazy(() => import('./pages/auth/ConfirmInvite'))
 const SetPassword = lazy(() => import('./pages/auth/SetPassword'))
 const SignupInvite = lazy(() => import('./pages/auth/SignupInvite'))
 const SpacesList = lazy(() => import('./pages/spaces/SpacesList'))
-const SpaceOverview = lazy(() => import('./pages/spaces/SpaceOverview'))
+const SpaceOverview = lazyRoute('/spaces', () => import('./pages/spaces/SpaceOverview'))
 const SprintOverview = lazy(() => import('./pages/sprints/SprintOverview'))
-const SprintsList = lazy(() => import('./pages/sprints/SprintsList'))
-const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
-const Settings = lazy(() => import('./pages/settings/Settings'))
+const SprintsList = lazyRoute('/sprints', () => import('./pages/sprints/SprintsList'))
+const NotificationsPage = lazyRoute('/notifications', () => import('./pages/NotificationsPage'))
+const Settings = lazyRoute('/settings', () => import('./pages/settings/Settings'))
 const IntegrationStatusPage = lazy(() => import('./pages/settings/IntegrationStatusPage'))
 const GoogleDriveAuthCallback = lazy(() => import('./pages/auth/GoogleDriveAuthCallback'))
 const GoogleCalendarCallback = lazy(() => import('./pages/auth/GoogleCalendarCallback'))
@@ -78,14 +86,20 @@ const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
 const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
 const InvitationWizard = lazy(() => import('./pages/communications/InvitationWizard'))
 const InvitationDetailPage = lazy(() => import('./pages/communications/InvitationDetailPage'))
-const InstagramGradingPage = lazy(() => import('./features/instagram/pages/InstagramGradingPage'))
-const HelpPage = lazy(() => import('./pages/HelpPage'))
+const InstagramGradingPage = lazyRoute('/instagram', () => import('./features/instagram/pages/InstagramGradingPage'))
+const HelpPage = lazyRoute('/help', () => import('./pages/HelpPage'))
 
 function onError(error, errorInfo) {
   console.error('[AppErrorBoundary]', error, errorInfo)
 }
 
 export default function App() {
+  // Warm the most likely first destinations once the browser goes idle after
+  // initial paint (BLW-07); sidebar hover preloads the rest on intent.
+  useEffect(() => {
+    preloadOnIdle(['/dashboard', '/inbox', '/my-tasks'])
+  }, [])
+
   return (
     <ErrorBoundary FallbackComponent={AppError} onError={onError}>
       <OfflineIndicator />
