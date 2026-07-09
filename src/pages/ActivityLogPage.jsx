@@ -130,24 +130,36 @@ export default function ActivityLogPage() {
       const nextUsers = userRows ?? []
       const nextUserIds = role === 'dept_lead' ? nextUsers.map((entry) => entry.id) : null
 
-      let actionQuery = supabase
-        .from('activity_log')
-        .select('action')
-        .order('timestamp', { ascending: false })
-        .limit(1000)
+      // Distinct action names come from a server-side aggregate (BLW-10);
+      // fall back to scanning recent rows if the RPC isn't deployed yet.
+      let nextActions = []
+      const { data: actionNames, error: rpcError } = await supabase.rpc('get_activity_actions', {
+        p_user_ids: nextUserIds,
+      })
 
-      if (nextUserIds) {
-        actionQuery = nextUserIds.length > 0 ? actionQuery.in('user_id', nextUserIds) : actionQuery.eq('user_id', '00000000-0000-0000-0000-000000000000')
+      if (!rpcError) {
+        nextActions = (actionNames ?? []).filter(Boolean)
+      } else {
+        let actionQuery = supabase
+          .from('activity_log')
+          .select('action')
+          .order('timestamp', { ascending: false })
+          .limit(1000)
+
+        if (nextUserIds) {
+          actionQuery = nextUserIds.length > 0 ? actionQuery.in('user_id', nextUserIds) : actionQuery.eq('user_id', '00000000-0000-0000-0000-000000000000')
+        }
+
+        const { data: actionRows, error: actionsError } = await actionQuery
+        if (actionsError) throw actionsError
+        nextActions = Array.from(new Set((actionRows ?? []).map((entry) => entry.action).filter(Boolean))).sort()
       }
-
-      const { data: actionRows, error: actionsError } = await actionQuery
-      if (actionsError) throw actionsError
 
       if (!active) return
 
       setUsers(nextUsers)
       setAccessibleUserIds(nextUserIds)
-      setActions(Array.from(new Set((actionRows ?? []).map((entry) => entry.action).filter(Boolean))).sort())
+      setActions(nextActions)
     }
 
     loadFilterOptions().catch((error) => {
