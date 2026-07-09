@@ -1,7 +1,7 @@
 // Service Worker for PWA: offline support, caching, and push notifications
 // Version: 1.0.0 (increment on deploy for cache busting)
 
-const CACHE_VERSION = 'v1.0.3';
+const CACHE_VERSION = 'v1.0.4';
 const STATIC_CACHE = `nexus-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `nexus-dynamic-${CACHE_VERSION}`;
 const API_CACHE = `nexus-api-${CACHE_VERSION}`;
@@ -72,6 +72,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Auth and realtime traffic must NEVER be cached (BLW-14): a cached token
+  // response would be replayed after expiry and break session refresh.
+  if (url.pathname.includes('/auth/v1/') || url.pathname.includes('/realtime/v1/')) {
+    return; // let the browser handle it directly
+  }
+
   // API calls: Network-first, fall back to cache
   if (url.pathname.startsWith('/api/') || url.origin.includes('supabase')) {
     event.respondWith(networkFirstStrategy(request, API_CACHE));
@@ -102,35 +108,44 @@ self.addEventListener('fetch', (event) => {
  * Best for: static assets, images, fonts
  */
 function cacheFirstStrategy(request, cacheName) {
-  return caches.match(request).then((response) => {
-    if (response) {
+  return caches.match(request).then((cached) => {
+    if (cached) {
       // Check cache metadata for expiration
-      const metadata = response.headers.get('sw-cached-at');
+      const metadata = cached.headers.get('sw-cached-at');
       const isExpired = metadata && Date.now() - parseInt(metadata) > CACHE_EXPIRY.ASSET;
       if (!isExpired) {
-        return response;
+        return cached;
       }
     }
 
-    return fetch(request).then((response) => {
-      if (!response || response.status !== 200 || response.type === 'error') {
-        return response;
-      }
+    return fetch(request)
+      .then((response) => {
+        if (!response || response.status !== 200 || response.type === 'error') {
+          return response;
+        }
 
-      const responseToCache = response.clone();
-      caches.open(cacheName).then((cache) => {
-        // Add cache timestamp metadata
-        const clonedResponse = new Response(responseToCache.body, {
-          status: responseToCache.status,
-          statusText: responseToCache.statusText,
-          headers: new Headers(responseToCache.headers),
+        const responseToCache = response.clone();
+        caches.open(cacheName).then((cache) => {
+          // Add cache timestamp metadata
+          const clonedResponse = new Response(responseToCache.body, {
+            status: responseToCache.status,
+            statusText: responseToCache.statusText,
+            headers: new Headers(responseToCache.headers),
+          });
+          clonedResponse.headers.set('sw-cached-at', Date.now().toString());
+          cache.put(request, clonedResponse);
         });
-        clonedResponse.headers.set('sw-cached-at', Date.now().toString());
-        cache.put(request, clonedResponse);
-      });
 
-      return response;
-    });
+        return response;
+      })
+      .catch((err) => {
+        // Offline with an expired copy: stale beats broken (BLW-14) —
+        // Vite assets are content-hashed, so staleness is cosmetic.
+        if (cached) {
+          return cached;
+        }
+        throw err;
+      });
   });
 }
 
@@ -161,13 +176,12 @@ function networkFirstStrategy(request, cacheName) {
     })
     .catch(() => {
       return caches.match(request).then((response) => {
+        // Offline: serve whatever we have, even past the freshness window —
+        // the app shows the offline indicator, and stale data beats a 503
+        // (BLW-14). With nothing cached, fail gracefully with a 503 the
+        // client-side error handling can surface.
         if (response) {
-          // Use cached response but check if it's still valid
-          const metadata = response.headers.get('sw-cached-at');
-          const isExpired = metadata && Date.now() - parseInt(metadata) > CACHE_EXPIRY.API;
-          if (!isExpired) {
-            return response;
-          }
+          return response;
         }
         return new Response('Network error and no cache available', {
           status: 503,
