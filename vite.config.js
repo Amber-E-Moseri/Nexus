@@ -5,6 +5,12 @@ import path from 'path'
 import { visualizer } from 'rollup-plugin-visualizer'
 
 export default defineConfig({
+  test: {
+    // Only the repo's own tests — stale agent worktrees under .claude/ carry
+    // copies of tests/ that otherwise get collected and hang the run.
+    include: ['tests/**/*.test.js'],
+    exclude: ['**/node_modules/**', '**/.claude/**'],
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
