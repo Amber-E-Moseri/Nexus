@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { format, isToday, isTomorrow, parseISO } from 'date-fns'
 import { NavLink } from 'react-router-dom'
 import { getUpcomingEvents } from '../../calendar'
@@ -12,26 +12,14 @@ function dateLabel(dateStr) {
 }
 
 export default function UpcomingEventsWidget() {
-  const [events, setEvents] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let active = true
-    async function load() {
-      setLoading(true)
-      try {
-        const data = await getUpcomingEvents(5)
-        if (active) {
-          const filtered = (data ?? []).filter((e) => e.status === 'approved')
-          setEvents(filtered)
-        }
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-    load()
-    return () => { active = false }
-  }, [])
+  // Shared query cache (BLW-05)
+  const { data: events = [], isPending: loading } = useQuery({
+    queryKey: ['upcoming-events', 5],
+    queryFn: async () => {
+      const data = await getUpcomingEvents(5)
+      return (data ?? []).filter((e) => e.status === 'approved')
+    },
+  })
 
   if (loading) return <div style={{ fontSize: 12.5, color: '#9E9488' }}>Loading…</div>
   if (events.length === 0) return (

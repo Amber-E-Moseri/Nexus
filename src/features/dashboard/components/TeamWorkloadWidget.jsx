@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { getTeamWorkload } from '../lib/dashboard-queries'
 
 function UtilizationBar({ percent, name }) {
@@ -51,28 +51,17 @@ function UtilizationBar({ percent, name }) {
 }
 
 export default function TeamWorkloadWidget({ departmentId }) {
-  const [members, setMembers] = useState([])
-  const [loading, setLoading] = useState(true)
+  // Shared query cache (BLW-05): repeat mounts within staleTime reuse the
+  // cached result instead of refetching.
+  const { data: members = [], isPending: loading } = useQuery({
+    queryKey: ['team-workload', departmentId],
+    enabled: Boolean(departmentId),
+    queryFn: () => getTeamWorkload(departmentId).then((data) => data ?? []),
+  })
 
-  useEffect(() => {
-    if (!departmentId) {
-      setLoading(false)
-      return
-    }
-
-    let active = true
-    getTeamWorkload(departmentId)
-      .then(data => {
-        if (active) setMembers(data ?? [])
-      })
-      .catch(() => {
-        if (active) setMembers([])
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => { active = false }
-  }, [departmentId])
+  if (!departmentId) return (
+    <div style={{ fontSize: 13, color: '#9E9488', padding: '20px 0', textAlign: 'center' }}>No team members</div>
+  )
 
   if (loading) return <div style={{ fontSize: 12.5, color: '#9E9488' }}>Loading…</div>
   if (members.length === 0) return (

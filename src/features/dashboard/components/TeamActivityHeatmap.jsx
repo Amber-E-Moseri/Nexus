@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../../hooks/useAuth'
 import { getTeamActivityHeatmap } from '../lib/dashboard-queries'
 
@@ -30,29 +30,17 @@ function HeatmapCell({ count, maxCount }) {
 
 export default function TeamActivityHeatmap() {
   const { profile } = useAuth()
-  const [data, setData] = useState([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!profile?.department_id) {
-      setLoading(false)
-      return
-    }
+  // Shared query cache (BLW-05)
+  const { data = [], isPending: loading } = useQuery({
+    queryKey: ['team-activity-heatmap', profile?.department_id],
+    enabled: Boolean(profile?.department_id),
+    queryFn: () => getTeamActivityHeatmap(profile.department_id).then((rows) => rows ?? []),
+  })
 
-    let active = true
-    getTeamActivityHeatmap(profile.department_id)
-      .then(data => {
-        if (active) setData(data ?? [])
-      })
-      .catch(() => {
-        if (active) setData([])
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => { active = false }
-  }, [profile?.department_id])
-
+  if (!profile?.department_id) return (
+    <div style={{ fontSize: 13, color: '#9E9488', padding: '20px 0', textAlign: 'center' }}>No activity data</div>
+  )
   if (loading) return <div style={{ fontSize: 12.5, color: '#9E9488' }}>Loading…</div>
   if (data.length === 0) return (
     <div style={{ fontSize: 13, color: '#9E9488', padding: '20px 0', textAlign: 'center' }}>No activity data</div>

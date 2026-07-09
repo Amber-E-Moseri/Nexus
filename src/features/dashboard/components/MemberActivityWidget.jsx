@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { formatDistanceToNow, parseISO } from 'date-fns'
 import { supabase } from '../../../lib/supabase'
 
@@ -22,41 +22,33 @@ function initials(name = '') {
 }
 
 export default function MemberActivityWidget({ role, userId, departmentId }) {
-  const [members, setMembers] = useState([])
-  const [loading, setLoading] = useState(true)
+  // Shared query cache (BLW-05)
+  const { data: members = [], isPending: loading } = useQuery({
+    queryKey: ['member-activity', role, userId, departmentId ?? null],
+    enabled: role !== 'member',
+    queryFn: async () => {
+      let query = supabase
+        .from('users')
+        .select('id, name, avatar_url, role, last_active_at, department_id')
+        .order('last_active_at', { ascending: false, nullsFirst: false })
+        .limit(20)
 
-  useEffect(() => {
-    let active = true
-    async function load() {
-      setLoading(true)
-      try {
-        let query = supabase
-          .from('users')
-          .select('id, name, avatar_url, role, last_active_at, department_id')
-          .order('last_active_at', { ascending: false, nullsFirst: false })
-          .limit(20)
-
-        if (role === 'dept_lead' && departmentId) {
-          query = query.eq('department_id', departmentId)
-        } else if (role === 'pastor') {
-          const { data: flockRows } = await supabase
-            .from('pastor_members')
-            .select('member_id')
-            .eq('pastor_id', userId)
-          const ids = (flockRows ?? []).map(r => r.member_id)
-          if (ids.length === 0) { if (active) { setMembers([]); setLoading(false) } return }
-          query = query.in('id', ids)
-        }
-
-        const { data } = await query
-        if (active) setMembers(data ?? [])
-      } finally {
-        if (active) setLoading(false)
+      if (role === 'dept_lead' && departmentId) {
+        query = query.eq('department_id', departmentId)
+      } else if (role === 'pastor') {
+        const { data: flockRows } = await supabase
+          .from('pastor_members')
+          .select('member_id')
+          .eq('pastor_id', userId)
+        const ids = (flockRows ?? []).map(r => r.member_id)
+        if (ids.length === 0) return []
+        query = query.in('id', ids)
       }
-    }
-    load()
-    return () => { active = false }
-  }, [role, userId, departmentId])
+
+      const { data } = await query
+      return data ?? []
+    },
+  })
 
   // SCOPING FIX: member — org-wide activity widget should not be visible to members
   if (role === 'member') {

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { ChevronDown } from 'lucide-react'
 import { getUserActionItems } from '../lib/dashboard-queries'
 import { updateTask } from '../../../features/tasks'
@@ -24,28 +25,21 @@ function deriveStatusKey(item) {
   return 'on_track'
 }
 
-export default function ActionItemsWidget() {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
+export default function ActionItemsWidget({ userId }) {
   const [updating, setUpdating] = useState(null)
 
-  function reload() {
-    setLoading(true)
-    getUserActionItems()
-      .then(data => setItems(data ?? []))
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false))
-  }
-
-  useEffect(() => {
-    reload()
-  }, [])
+  // Shared query cache (BLW-05); the RPC scopes to auth.uid(), the key keeps
+  // cache entries per signed-in user.
+  const { data: items = [], isPending: loading, refetch } = useQuery({
+    queryKey: ['action-items', userId ?? 'me'],
+    queryFn: () => getUserActionItems().then((data) => data ?? []),
+  })
 
   async function handleStatusChange(taskId, newStatus) {
     setUpdating(taskId)
     try {
       await updateTask(taskId, { statusCategory: newStatus === 'completed' ? 'completed' : 'open' })
-      reload()
+      refetch()
     } catch (error) {
       console.error('Failed to update task status:', error)
     } finally {

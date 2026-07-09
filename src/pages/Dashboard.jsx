@@ -5,6 +5,7 @@ import { endOfWeek, isBefore, isEqual, parseISO, startOfDay, startOfWeek } from 
 import { AnimatePresence, motion } from 'framer-motion'
 import { BellRing, ChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/NotificationsContext'
 import { useToast } from '../context/ToastContext'
@@ -493,16 +494,14 @@ function QuickActionsWidget({ role }) {
 
 function MySpacesWidget({ userId, role, departmentId }) {
   const navigate = useNavigate()
-  const [spaces, setSpaces] = useState(null)
 
-  useEffect(() => {
-    if (!userId || !role) return
-    let active = true
-    getMySpaces(userId, role, departmentId)
-      .then((rows) => { if (active) setSpaces(rows.slice(0, 6)) })
-      .catch(() => { if (active) setSpaces([]) })
-    return () => { active = false }
-  }, [userId, role, departmentId])
+  // Shared query cache (BLW-05) — same key any page fetching the user's
+  // spaces can reuse.
+  const { data: spaces = null } = useQuery({
+    queryKey: ['my-spaces', userId, role, departmentId ?? null],
+    enabled: Boolean(userId && role),
+    queryFn: () => getMySpaces(userId, role, departmentId).then((rows) => rows.slice(0, 6)).catch(() => []),
+  })
 
   if (spaces === null) {
     return <div style={{ fontSize: 13, color: 'var(--ink-3)', padding: '8px 0' }}>Loading…</div>

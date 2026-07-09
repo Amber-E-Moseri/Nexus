@@ -1,29 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth'
 import { getPersonalReminders, createPersonalReminder, completePersonalReminder } from '../lib/dashboard-queries'
 
 export default function PersonalRemindersWidget() {
   const { profile } = useAuth()
-  const [reminders, setReminders] = useState([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [note, setNote] = useState('')
   const [remindAt, setRemindAt] = useState('')
   const [saving, setSaving] = useState(false)
 
-  function load() {
-    if (!profile?.id) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    getPersonalReminders(profile.id)
-      .then(data => setReminders(data ?? []))
-      .catch(() => setReminders([]))
-      .finally(() => setLoading(false))
-  }
+  const remindersKey = ['personal-reminders', profile?.id]
 
-  useEffect(load, [profile?.id])
+  // Shared query cache (BLW-05)
+  const { data: reminders = [], isPending: loading } = useQuery({
+    queryKey: remindersKey,
+    enabled: Boolean(profile?.id),
+    queryFn: () => getPersonalReminders(profile.id).then((data) => data ?? []),
+  })
 
   async function handleAdd(e) {
     e.preventDefault()
@@ -33,18 +28,19 @@ export default function PersonalRemindersWidget() {
       await createPersonalReminder(profile.id, note.trim(), remindAt ? new Date(remindAt).toISOString() : null)
       setNote('')
       setRemindAt('')
-      load()
+      queryClient.invalidateQueries({ queryKey: remindersKey })
     } finally {
       setSaving(false)
     }
   }
 
   async function handleComplete(id) {
-    setReminders(prev => prev.filter(r => r.id !== id))
+    // Optimistic remove; refetch restores truth on failure
+    queryClient.setQueryData(remindersKey, (prev = []) => prev.filter((r) => r.id !== id))
     try {
       await completePersonalReminder(id)
     } catch {
-      load()
+      queryClient.invalidateQueries({ queryKey: remindersKey })
     }
   }
 

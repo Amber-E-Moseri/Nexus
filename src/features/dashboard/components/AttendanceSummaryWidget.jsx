@@ -1,65 +1,38 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { NavLink } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 
+const EMPTY_SUMMARY = { rate30: null, rate60: null, topMembers: [], bottomMembers: [] }
+
 export default function AttendanceSummaryWidget({ role, userId, departmentId }) {
-  const [data, setData] = useState({
-    rate30: null,
-    rate60: null,
-    topMembers: [],
-    bottomMembers: [],
-  })
-  const [loading, setLoading] = useState(true)
+  const isVisible = role === 'super_admin' || role === 'dept_lead'
 
-  useEffect(() => {
-    // Visible to super_admin and dept_lead only
-    if (role !== 'super_admin' && role !== 'dept_lead') {
-      setLoading(false)
-      return
-    }
+  // Shared query cache (BLW-05)
+  const { data = EMPTY_SUMMARY, isPending: loading } = useQuery({
+    queryKey: ['attendance-summary', role, departmentId ?? null],
+    enabled: isVisible,
+    queryFn: async () => {
+      const [data30, data60] = await Promise.all([
+        supabase.rpc('get_department_attendance_summary', {
+          p_department_id: role === 'dept_lead' ? departmentId : null,
+          p_days_back: 30,
+        }),
+        supabase.rpc('get_department_attendance_summary', {
+          p_department_id: role === 'dept_lead' ? departmentId : null,
+          p_days_back: 60,
+        }),
+      ])
 
-    let active = true
-
-    async function load() {
-      setLoading(true)
-      try {
-        const [data30, data60] = await Promise.all([
-          supabase.rpc('get_department_attendance_summary', {
-            p_department_id: role === 'dept_lead' ? departmentId : null,
-            p_days_back: 30,
-          }),
-          supabase.rpc('get_department_attendance_summary', {
-            p_department_id: role === 'dept_lead' ? departmentId : null,
-            p_days_back: 60,
-          }),
-        ])
-
-        if (!active) return
-
-        const rate30 = data30.data?.[0]?.overall_rate_pct ?? null
-        const rate60 = data60.data?.[0]?.overall_rate_pct ?? null
-
-        // Get top 3 and bottom 3 members from the 30-day data (already sorted by rate desc)
-        const memberData = data30.data ?? []
-        const topMembers = memberData.slice(0, 3)
-        const bottomMembers = memberData.slice(-3).reverse()
-
-        if (active) {
-          setData({
-            rate30,
-            rate60,
-            topMembers,
-            bottomMembers,
-          })
-        }
-      } finally {
-        if (active) setLoading(false)
+      // Top 3 and bottom 3 members from the 30-day data (already sorted by rate desc)
+      const memberData = data30.data ?? []
+      return {
+        rate30: data30.data?.[0]?.overall_rate_pct ?? null,
+        rate60: data60.data?.[0]?.overall_rate_pct ?? null,
+        topMembers: memberData.slice(0, 3),
+        bottomMembers: memberData.slice(-3).reverse(),
       }
-    }
-
-    load()
-    return () => { active = false }
-  }, [role, userId, departmentId])
+    },
+  })
 
   // Hide for member and pastor roles
   if (role !== 'super_admin' && role !== 'dept_lead') {

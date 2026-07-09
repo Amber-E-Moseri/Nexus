@@ -1,32 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../../hooks/useAuth'
 import { getTeamVelocity } from '../lib/dashboard-queries'
 
 export default function TeamVelocityWidget() {
   const { profile } = useAuth()
-  const [sprints, setSprints] = useState([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!profile?.department_id) {
-      setLoading(false)
-      return
-    }
+  // Shared query cache (BLW-05)
+  const { data: sprints = [], isPending: loading } = useQuery({
+    queryKey: ['team-velocity', profile?.department_id, 4],
+    enabled: Boolean(profile?.department_id),
+    queryFn: () => getTeamVelocity(profile.department_id, 4).then((data) => (data ?? []).reverse()),
+  })
 
-    let active = true
-    getTeamVelocity(profile.department_id, 4)
-      .then(data => {
-        if (active) setSprints((data ?? []).reverse())
-      })
-      .catch(() => {
-        if (active) setSprints([])
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => { active = false }
-  }, [profile?.department_id])
-
+  if (!profile?.department_id) return (
+    <div style={{ fontSize: 13, color: '#9E9488', padding: '20px 0', textAlign: 'center' }}>No sprint data</div>
+  )
   if (loading) return <div style={{ fontSize: 12.5, color: '#9E9488' }}>Loading…</div>
   if (sprints.length === 0) return (
     <div style={{ fontSize: 13, color: '#9E9488', padding: '20px 0', textAlign: 'center' }}>No sprint data</div>

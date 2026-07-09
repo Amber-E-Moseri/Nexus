@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../../hooks/useAuth'
 import { getPastoralMembers } from '../lib/dashboard-queries'
 
@@ -39,29 +39,17 @@ function AttendanceIndicator({ percent }) {
 
 export default function PastoralMembersWidget() {
   const { profile } = useAuth()
-  const [members, setMembers] = useState([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!profile?.id) {
-      setLoading(false)
-      return
-    }
+  // Shared query cache (BLW-05)
+  const { data: members = [], isPending: loading } = useQuery({
+    queryKey: ['pastoral-members', profile?.id],
+    enabled: Boolean(profile?.id),
+    queryFn: () => getPastoralMembers(profile.id).then((data) => data ?? []),
+  })
 
-    let active = true
-    getPastoralMembers(profile.id)
-      .then(data => {
-        if (active) setMembers(data ?? [])
-      })
-      .catch(() => {
-        if (active) setMembers([])
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => { active = false }
-  }, [profile?.id])
-
+  if (!profile?.id) return (
+    <div style={{ fontSize: 13, color: '#9E9488', padding: '20px 0', textAlign: 'center' }}>No members assigned</div>
+  )
   if (loading) return <div style={{ fontSize: 12.5, color: '#9E9488' }}>Loading…</div>
   if (members.length === 0) return (
     <div style={{ fontSize: 13, color: '#9E9488', padding: '20px 0', textAlign: 'center' }}>No members assigned</div>

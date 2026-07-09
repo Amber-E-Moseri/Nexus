@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { NavLink } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
@@ -9,37 +9,28 @@ function formatMeetingDate(dateStr) {
 }
 
 export default function UpcomingMeetingsWidget({ role, userId, departmentId }) {
-  const [meetings, setMeetings] = useState([])
-  const [loading, setLoading] = useState(true)
+  // Shared query cache (BLW-05)
+  const { data: meetings = [], isPending: loading } = useQuery({
+    queryKey: ['upcoming-meetings', role, departmentId ?? null],
+    queryFn: async () => {
+      const now = new Date().toISOString()
+      let query = supabase
+        .from('meetings')
+        .select('id, title, department_id, date, departments!inner(id, name, color)')
+        .gt('date', now)
+        .order('date', { ascending: true })
+        .limit(5)
 
-  useEffect(() => {
-    let active = true
-    async function load() {
-      setLoading(true)
-      try {
-        const now = new Date().toISOString()
-        let query = supabase
-          .from('meetings')
-          .select('id, title, department_id, date, departments!inner(id, name, color)')
-          .gt('date', now)
-          .order('date', { ascending: true })
-          .limit(5)
-
-        // SCOPING FIX: dept_lead — filter to own department
-        if (role === 'dept_lead' && departmentId) {
-          query = query.eq('department_id', departmentId)
-        }
-        // member and pastor: show all upcoming meetings (meetings are visible to all authenticated users)
-
-        const { data } = await query
-        if (active) setMeetings(data ?? [])
-      } finally {
-        if (active) setLoading(false)
+      // SCOPING FIX: dept_lead — filter to own department
+      if (role === 'dept_lead' && departmentId) {
+        query = query.eq('department_id', departmentId)
       }
-    }
-    load()
-    return () => { active = false }
-  }, [role, userId, departmentId])
+      // member and pastor: show all upcoming meetings (meetings are visible to all authenticated users)
+
+      const { data } = await query
+      return data ?? []
+    },
+  })
 
   if (loading) return <div style={{ fontSize: 12.5, color: '#9E9488' }}>Loading…</div>
   if (meetings.length === 0) return (
