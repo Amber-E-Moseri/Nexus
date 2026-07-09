@@ -124,7 +124,7 @@ export default function UnifiedMeetingsView({
   onStartLive,
 }) {
   const navigate = useNavigate()
-  const { meetings, loading, removeMeeting } = useMeetings()
+  const { meetings, loading, removeMeeting, hasMore, loadMore, totalCount: totalMeetingCount } = useMeetings()
   const [activeType, setActiveType] = useState('all')
   const [viewMode, setViewMode] = useState('list')
   const [stats, setStats] = useState(null)
@@ -427,6 +427,27 @@ export default function UnifiedMeetingsView({
             showAttendance
           />
         )}
+
+        {hasMore ? (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
+            <button
+              type="button"
+              onClick={loadMore}
+              style={{
+                border: '1px solid var(--border)',
+                background: 'white',
+                color: 'var(--accent)',
+                borderRadius: 9,
+                padding: '8px 18px',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              Load older meetings ({meetings.length} of {totalMeetingCount})
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   )

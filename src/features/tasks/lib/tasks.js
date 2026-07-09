@@ -768,7 +768,9 @@ export async function removeDependency(dependencyId) {
   if (error) throw error
 }
 
-export async function getLinkableTasks({ departmentId = null, sprintId = null, excludeTaskId }) {
+// The 50-row cap is a picker default, not a hard wall: pass `search` to
+// filter server-side so any task is reachable by title (BLW-16).
+export async function getLinkableTasks({ departmentId = null, sprintId = null, excludeTaskId, search = '' }) {
   let query = supabase
     .from('tasks')
     .select(`
@@ -780,6 +782,10 @@ export async function getLinkableTasks({ departmentId = null, sprintId = null, e
     .neq('id', excludeTaskId)
     .order('created_at', { ascending: false })
     .limit(50)
+
+  if (search.trim()) {
+    query = query.ilike('title', `%${search.trim()}%`)
+  }
 
   if (sprintId) {
     query = query.eq('sprint_id', sprintId).eq('task_type', 'sprint')

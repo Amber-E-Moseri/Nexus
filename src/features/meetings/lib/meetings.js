@@ -2,8 +2,12 @@ import { supabase } from '../../../lib/supabase'
 import { getDefaultTaskStatusId, normalizeTaskRows } from '../../../lib/taskStatuses.js'
 import { recordActivity } from '../../../lib/activityFeed'
 
-export async function getDeptMeetings(departmentId) {
-  if (!departmentId) return []
+export const MEETINGS_PAGE_SIZE = 50
+
+// BLW-16: paged instead of a silent .limit(50) cap — returns the total count
+// so callers can offer "load more" until every meeting is reachable.
+export async function getDeptMeetings(departmentId, { limit = MEETINGS_PAGE_SIZE, offset = 0 } = {}) {
+  if (!departmentId) return { meetings: [], totalCount: 0 }
 
   let query = supabase
     .from('meetings')
@@ -25,18 +29,18 @@ export async function getDeptMeetings(departmentId) {
       creator:users!created_by(id, name),
       attendance:meeting_attendance(user_id, status, attendee:users(id, name)),
       agendas(id, title, start_time, end_time, location, moderator_name, theme, created_by, agenda_items(id, segment, notes, duration_minutes, sort_order, is_pinned))
-    `)
+    `, { count: 'exact' })
 
   if (departmentId !== 'all') {
     query = query.eq('department_id', departmentId)
   }
 
-  const { data, error } = await query
+  const { data, count, error } = await query
     .order('date', { ascending: false })
-    .limit(50)
+    .range(offset, offset + limit - 1)
 
   if (error) throw error
-  return data ?? []
+  return { meetings: data ?? [], totalCount: count ?? 0 }
 }
 
 export async function createMeeting(meetingData) {

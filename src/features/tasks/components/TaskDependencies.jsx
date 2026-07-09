@@ -17,6 +17,7 @@ export default function TaskDependencies({ taskId, departmentId, sprintId }) {
   const [selectedId, setSelectedId] = useState('')
   const [selectedType, setSelectedType] = useState('blocking')
   const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     let active = true
@@ -38,6 +39,24 @@ export default function TaskDependencies({ taskId, departmentId, sprintId }) {
       active = false
     }
   }, [taskId, departmentId, sprintId])
+
+  // The picker shows the 50 most recent tasks; searching filters server-side
+  // so older tasks stay reachable (BLW-16).
+  useEffect(() => {
+    let active = true
+    const timer = setTimeout(() => {
+      getLinkableTasks({ departmentId, sprintId, excludeTaskId: taskId, search })
+        .then((tasks) => {
+          if (active) setLinkable(tasks)
+        })
+        .catch(() => {})
+    }, 250)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [search, taskId, departmentId, sprintId])
 
   async function handleAdd() {
     if (!selectedId) return
@@ -129,6 +148,17 @@ export default function TaskDependencies({ taskId, departmentId, sprintId }) {
             border: '0.5px solid var(--border)',
           }}
         >
+          <input
+            type="text"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search tasks by title…"
+            style={{
+              width: '100%', fontSize: 11, padding: '5px 6px', borderRadius: 6,
+              border: '1px solid var(--border)', background: 'white', outline: 'none',
+              marginBottom: 6,
+            }}
+          />
           <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
             <select
               value={selectedType}
