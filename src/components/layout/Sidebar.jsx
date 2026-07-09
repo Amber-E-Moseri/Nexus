@@ -109,57 +109,45 @@ const SidebarSectionLabel = memo(function SidebarSectionLabel({ children, onAdd 
   )
 })
 
+// Styling lives in .sidebar-item classes (index.css) so re-renders don't
+// rebuild style objects and hover doesn't mutate the DOM (BLW-04). Prefer the
+// `to` prop over an inline onClick closure for plain navigation items — a
+// stable string keeps React.memo effective when the parent re-renders.
 const SidebarItem = memo(function SidebarItem({
   active,
   label,
   icon: Icon,
   badge,
   glyph,
+  to,
   onClick,
   trailing,
 }) {
-  const itemStyle = useMemo(() => ({
-    ...ITEM_BASE_STYLE,
-    borderLeft: `3px solid ${active ? '#4C2A92' : 'transparent'}`,
-    background: active ? '#EDE8F8' : 'transparent',
-    color: active ? '#4C2A92' : '#1C1610',
-    fontWeight: active ? 700 : 500,
-  }), [active])
+  const navigate = useNavigate()
+
+  function handleActivate() {
+    if (onClick) onClick()
+    else if (to) navigate(to)
+  }
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onClick?.() } }}
-      style={itemStyle}
-      onMouseEnter={(event) => {
-        if (!active) event.currentTarget.style.background = '#F2EEE6'
-      }}
-      onMouseLeave={(event) => {
-        if (!active) event.currentTarget.style.background = 'transparent'
-      }}
+      className={active ? 'sidebar-item sidebar-item--active' : 'sidebar-item'}
+      onClick={handleActivate}
+      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleActivate() } }}
     >
       {glyph ? (
         glyph
       ) : Icon ? (
         <Icon size={15} style={{ opacity: 0.85, color: 'inherit', flexShrink: 0 }} />
       ) : null}
-      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span className="sidebar-item__label">
         {label}
       </span>
       {badge > 0 ? (
-        <span
-          style={{
-            background: '#F06449',
-            color: '#FFFFFF',
-            fontSize: 9.5,
-            fontWeight: 700,
-            borderRadius: 999,
-            padding: '1px 6px',
-            lineHeight: 1.3,
-          }}
-        >
+        <span className="sidebar-item__badge">
           {badge}
         </span>
       ) : null}
@@ -595,39 +583,39 @@ export default function Sidebar() {
           active={isPathActive(location.pathname, '/dashboard')}
           icon={LayoutGrid}
           label="Dashboard"
-          onClick={() => go('/dashboard')}
+          to="/dashboard"
         />
         <SidebarItem
           active={isPathActive(location.pathname, '/inbox')}
           icon={Bell}
           label="Inbox"
           badge={inboxCount > 0 ? inboxCount : 0}
-          onClick={() => go('/inbox')}
+          to="/inbox"
         />
         <SidebarItem
           active={isPathActive(location.pathname, '/my-tasks')}
           icon={Check}
           label="My Tasks"
-          onClick={() => go('/my-tasks')}
+          to="/my-tasks"
         />
         <SidebarItem
           active={isPathActive(location.pathname, '/planner')}
           icon={CalendarDays}
           label="Planner"
-          onClick={() => go('/planner')}
+          to="/planner"
         />
         <SidebarItem
           active={isPathActive(location.pathname, '/calendar')}
           icon={CalendarDays}
           label="Ministry Calendar"
-          onClick={() => go('/calendar')}
+          to="/calendar"
         />
         {(['regional_secretary', 'pastor', 'super_admin'].includes(role)) ? (
           <SidebarItem
             active={isPathActive(location.pathname, '/flock')}
             icon={Users}
             label="My Flock"
-            onClick={() => go('/flock')}
+            to="/flock"
           />
         ) : null}
 
@@ -1070,7 +1058,7 @@ export default function Sidebar() {
           glyph={
             <span style={{ width: 20, flex: '0 0 20px', textAlign: 'center', fontSize: 14, opacity: 0.7 }}>◈</span>
           }
-          onClick={() => go('/sprints')}
+          to="/sprints"
         />
 
         <SidebarSectionLabel>Platform</SidebarSectionLabel>
@@ -1115,25 +1103,25 @@ export default function Sidebar() {
               <SidebarItem
                 active={isPathActive(location.pathname, '/meetings/wizard')}
                 label="Plan meeting"
-                onClick={() => go('/meetings/wizard')}
+                to="/meetings/wizard"
               />
             ) : null}
             <SidebarItem
               active={isPathActive(location.pathname, '/meetings/expected-attendees')}
               label="Attendee Roster"
-              onClick={() => go('/meetings/expected-attendees')}
+              to="/meetings/expected-attendees"
             />
             {(showAdminPlatform || role === 'pastor') ? (
               <SidebarItem
                 active={isPathActive(location.pathname, '/meetings/attendance-trends')}
                 label="Attendance Trends"
-                onClick={() => go('/meetings/attendance-trends')}
+                to="/meetings/attendance-trends"
               />
             ) : null}
             <SidebarItem
               active={isPathActive(location.pathname, '/meetings/absence-email-log')}
               label="Absence Email Send Log"
-              onClick={() => go('/meetings/absence-email-log')}
+              to="/meetings/absence-email-log"
             />
           </>
         ) : null}
@@ -1179,22 +1167,22 @@ export default function Sidebar() {
             <SidebarItem
               active={isPathActive(location.pathname, '/communications/campaigns')}
               label="Campaigns"
-              onClick={() => go('/communications/campaigns')}
+              to="/communications/campaigns"
             />
             <SidebarItem
               active={isPathActive(location.pathname, '/communications/segments')}
               label="Segments"
-              onClick={() => go('/communications/segments')}
+              to="/communications/segments"
             />
             <SidebarItem
               active={isPathActive(location.pathname, '/communications/recipients')}
               label="Recipients"
-              onClick={() => go('/communications/recipients')}
+              to="/communications/recipients"
             />
             <SidebarItem
               active={isPathActive(location.pathname, '/communications/analytics')}
               label="Analytics"
-              onClick={() => go('/communications/analytics')}
+              to="/communications/analytics"
             />
           </>
         ) : null}
@@ -1203,21 +1191,21 @@ export default function Sidebar() {
             active={isPathActive(location.pathname, '/instagram')}
             icon={Image}
             label="Instagram Grading"
-            onClick={() => go('/instagram')}
+            to="/instagram"
           />
         )}
         <SidebarItem
           active={isPathActive(location.pathname, '/map')}
           icon={Map}
           label="CAN Map"
-          onClick={() => go('/map')}
+          to="/map"
         />
         {['super_admin', 'ors'].includes(role) && (
           <SidebarItem
             active={isPathActive(location.pathname, '/settings/campus-photos')}
             icon={Image}
             label="Campus Photos"
-            onClick={() => go('/settings/campus-photos')}
+            to="/settings/campus-photos"
           />
         )}
         {FLOCK_CRM_CONFIG.checkAccess(role) ? (
@@ -1227,7 +1215,7 @@ export default function Sidebar() {
               active={isPathActive(location.pathname, '/flock-crm')}
               icon={Phone}
               label="Flock CRM — Pastoral Outreach"
-              onClick={() => go('/flock-crm')}
+              to="/flock-crm"
             />
           </div>
         ) : null}
@@ -1258,13 +1246,13 @@ export default function Sidebar() {
               active={isPathActive(location.pathname, '/settings')}
               icon={Settings}
               label="Settings"
-              onClick={() => go('/settings')}
+              to="/settings"
             />
             <SidebarItem
               active={isPathActive(location.pathname, '/people')}
               icon={Users2}
               label="People Management"
-              onClick={() => go('/people/users')}
+              to="/people/users"
             />
           </>
         ) : null}
@@ -1272,7 +1260,7 @@ export default function Sidebar() {
           active={isPathActive(location.pathname, '/help')}
           icon={HelpCircle}
           label="Help & FAQ"
-          onClick={() => go('/help')}
+          to="/help"
         />
       </div>
 

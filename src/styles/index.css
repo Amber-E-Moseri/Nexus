@@ -351,3 +351,46 @@ code, kbd { font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospa
 .cu-menu-item { transition: background .12s, color .12s; }
 .cu-menu-item[data-highlighted] { background: var(--purple-tint); color: var(--purple-700); outline: none; }
 .cu-menu-item-danger[data-highlighted] { background: var(--accent-red-tint); color: var(--accent-red-text); }
+
+/* ── BLW-04: Sidebar nav items — CSS classes replace per-render inline styles
+      and JS hover mutations in Sidebar.jsx SidebarItem ─────────────────── */
+.sidebar-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  margin-bottom: 2px;
+  border: none;
+  border-left: 3px solid transparent;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink-1, #1C1610);
+  font-weight: 500;
+}
+.sidebar-item:hover:not(.sidebar-item--active) { background: var(--sidebar-hover); }
+.sidebar-item--active {
+  border-left-color: var(--sidebar-active);
+  background: var(--sidebar-section);
+  color: var(--sidebar-active);
+  font-weight: 700;
+}
+.sidebar-item__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-item__badge {
+  background: var(--coral);
+  color: #FFFFFF;
+  font-size: 9.5px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 6px;
+  line-height: 1.3;
+}
