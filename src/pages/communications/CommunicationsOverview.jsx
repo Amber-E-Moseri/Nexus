@@ -8,7 +8,7 @@ import {
   getBounceMetrics,
   retryCampaign,
 } from '../../features/communications/lib/communications'
-import { Send, Clock, AlertTriangle, MailX, Users, FileText, BarChart3, UserX } from 'lucide-react'
+import { Send, Clock, AlertTriangle, MailX, Users, FileText, BarChart3, UserX, Link2, Check } from 'lucide-react'
 
 const PRIMARY = 'var(--purple-700)'
 const BORDER = 'var(--border-1)'
@@ -87,6 +87,19 @@ export default function CommunicationsOverview() {
   const [bounces, setBounces] = useState({ total_bounced: 0, suppressed_count: 0 })
   const [recent, setRecent] = useState([])
   const [retrying, setRetrying] = useState(null)
+  const [copied, setCopied] = useState(false)
+
+  const signupUrl = `${window.location.origin}/subscribe`
+
+  async function copySignupLink() {
+    try {
+      await navigator.clipboard.writeText(signupUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      window.prompt('Copy the public signup link:', signupUrl)
+    }
+  }
 
   async function loadAll() {
     setLoading(true)
@@ -241,6 +254,15 @@ export default function CommunicationsOverview() {
                   {label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={copySignupLink}
+                title={signupUrl}
+                style={{ flex: '1 1 200px', display: 'flex', alignItems: 'center', gap: 10, background: copied ? 'var(--accent-green-tint)' : '#FFFFFF', border: `1px solid ${copied ? 'var(--accent-green-text)' : BORDER}`, borderRadius: 14, padding: '14px 16px', fontSize: 13, fontWeight: 700, color: copied ? 'var(--accent-green-text)' : TEXT, cursor: 'pointer', textAlign: 'left' }}
+              >
+                {copied ? <Check size={16} style={{ flexShrink: 0 }} /> : <Link2 size={16} style={{ color: PRIMARY, flexShrink: 0 }} />}
+                {copied ? 'Signup link copied' : 'Share signup form'}
+              </button>
             </div>
           </div>
         )}

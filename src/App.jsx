@@ -88,6 +88,7 @@ const CampusEditsPage = lazy(() => import('./pages/admin/CampusEditsPage'))
 const CampusPhotosSettings = lazy(() => import('./pages/settings/CampusPhotosSettings'))
 const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
 const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
+const SubscribePage = lazy(() => import('./pages/communications/SubscribePage'))
 const InvitationWizard = lazy(() => import('./pages/communications/InvitationWizard'))
 const InvitationDetailPage = lazy(() => import('./pages/communications/InvitationDetailPage'))
 const InvitationsListPage = lazy(() => import('./pages/communications/InvitationsListPage'))
@@ -127,6 +128,7 @@ export default function App() {
       <Route path="/auth/teams-callback" element={<TeamsCallback />} />
       <Route path="/reports/:share_token" element={<MeetingReportPublicPage />} />
       <Route path="/rsvp" element={<RSVPPage />} />
+      <Route path="/subscribe" element={<SubscribePage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>
