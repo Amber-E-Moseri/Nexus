@@ -1,4 +1,4 @@
-import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { touchLastActive } from '../lib/people/api'
 import { supabase } from '../lib/supabase'
 import { clearAllAppCache } from '../lib/cacheUtils'
@@ -37,6 +37,14 @@ export function AuthProvider({ children }) {
   const [jwtRole, setJwtRole] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isRecoveryMode, setIsRecoveryMode] = useState(false)
+
+  // Mirror of `profile` readable from the onAuthStateChange closure (BLW-06):
+  // SIGNED_IN also fires on session restore and tab refocus, where the
+  // profile is already loaded and refetching is wasted work.
+  const profileRef = useRef(null)
+  useEffect(() => {
+    profileRef.current = profile
+  }, [profile])
 
   const refreshProfile = useCallback(
     async (userId) => {
@@ -129,6 +137,13 @@ export function AuthProvider({ children }) {
         // Only fetch profile on SIGNED_IN (initial login). On TOKEN_REFRESHED
         // and other events, keep the cached profile to avoid unnecessary DB queries.
         if (event === 'SIGNED_IN') {
+          // Session restore / tab refocus also emit SIGNED_IN — skip the
+          // refetch when the loaded profile already matches this user (BLW-06)
+          if (profileRef.current?.id === session.user.id) {
+            touchLastActive().catch(() => {})
+            setLoading(false)
+            return
+          }
           setLoading(true)
           try {
             const nextProfile = await fetchProfile(session.user.id)
