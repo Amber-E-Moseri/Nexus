@@ -8,7 +8,7 @@ export default defineConfig({
   test: {
     // Only the repo's own tests — stale agent worktrees under .claude/ carry
     // copies of tests/ that otherwise get collected and hang the run.
-    include: ['tests/**/*.test.js'],
+    include: ['tests/**/*.test.{js,jsx}'],
     exclude: ['**/node_modules/**', '**/.claude/**'],
   },
   resolve: {

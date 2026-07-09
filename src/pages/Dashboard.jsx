@@ -39,6 +39,7 @@ import EmbedWidget from '../features/dashboard/components/EmbedWidget'
 import { RegionalUpdateWidget } from '../features/regional-updates/components/RegionalUpdateWidget'
 import { getDashboardPresets } from '../features/dashboard/lib/dashboard-queries'
 import { useDashboardData } from '../features/dashboard/hooks/useDashboardData'
+import WidgetErrorBoundary from '../features/dashboard/components/WidgetErrorBoundary'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
 
 const heroStagger = {
@@ -651,11 +652,13 @@ function WidgetCard({ widgetKey, role, userId, departmentId, config, onConfigCha
           ✕
         </button>
       </div>
-      {configurable ? (
-        <Component config={config} onConfigChange={onConfigChange} />
-      ) : (
-        <Component role={role} userId={userId} departmentId={departmentId} data={data} />
-      )}
+      <WidgetErrorBoundary resetKeys={[widgetKey, data]}>
+        {configurable ? (
+          <Component config={config} onConfigChange={onConfigChange} />
+        ) : (
+          <Component role={role} userId={userId} departmentId={departmentId} data={data} />
+        )}
+      </WidgetErrorBoundary>
     </motion.div>
   )
 }
