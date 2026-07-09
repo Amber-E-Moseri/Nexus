@@ -812,10 +812,15 @@ export default function CampaignPage() {
   const [toast, setToast] = useState(null)
   const [hoveredId, setHoveredId] = useState(null)
   const [abTestCampaignIds, setAbTestCampaignIds] = useState(new Set())
+  const [totalCount, setTotalCount] = useState(0)
+  const [page, setPage] = useState(0)
 
-  async function loadCampaigns() {
+  // BLW-11: campaigns load in pages instead of the whole table at once.
+  const PAGE_SIZE = 25
+
+  async function loadCampaigns(nextPage = 0) {
     setLoading(true)
-    let query = supabase.from('communication_campaigns').select(CAMPAIGN_SELECT)
+    let query = supabase.from('communication_campaigns').select(CAMPAIGN_SELECT, { count: 'exact' })
 
     if (view === 'scheduled') {
       query = query.eq('status', 'scheduled').order('scheduled_at', { ascending: true })
@@ -826,15 +831,24 @@ export default function CampaignPage() {
       query = query.order(sortBy, { ascending: sortAsc })
     }
 
-    const { data } = await query
-    setCampaigns(data ?? [])
+    query = query.range(nextPage * PAGE_SIZE, nextPage * PAGE_SIZE + PAGE_SIZE - 1)
+
+    const { data, count } = await query
+    const rows = data ?? []
+    setCampaigns((prev) => (nextPage === 0 ? rows : [...prev, ...rows]))
+    setTotalCount(count ?? 0)
+    setPage(nextPage)
     setLoading(false)
 
-    const ids = (data ?? []).map((c) => c.id)
+    const ids = rows.map((c) => c.id)
     if (ids.length > 0) {
       const { data: abRows } = await supabase.from('communication_ab_tests').select('campaign_id').in('campaign_id', ids)
-      setAbTestCampaignIds(new Set((abRows ?? []).map((r) => r.campaign_id)))
-    } else {
+      setAbTestCampaignIds((prev) => {
+        const next = nextPage === 0 ? new Set() : new Set(prev)
+        for (const row of abRows ?? []) next.add(row.campaign_id)
+        return next
+      })
+    } else if (nextPage === 0) {
       setAbTestCampaignIds(new Set())
     }
   }
@@ -1292,6 +1306,19 @@ export default function CampaignPage() {
             </table>
           </div>
         )}
+
+        {campaigns.length > 0 && campaigns.length < totalCount ? (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
+            <button
+              type="button"
+              onClick={() => loadCampaigns(page + 1)}
+              disabled={loading}
+              style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--accent)', borderRadius: 9, padding: '8px 18px', fontSize: 13, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer' }}
+            >
+              {loading ? 'Loading…' : `Load more (${campaigns.length} of ${totalCount})`}
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {modal?.mode === 'report' ? (

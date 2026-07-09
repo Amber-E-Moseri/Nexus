@@ -44,6 +44,10 @@ export default function RecipientsPage() {
   const [filterSubscribed, setFilterSubscribed] = useState('')
   const [selectedRows, setSelectedRows] = useState(new Set())
   const [selectAll, setSelectAll] = useState(false)
+  // BLW-11: render the member list in windows so large rosters don't put
+  // every row in the DOM at once. Filters/search still cover all rows.
+  const RECIPIENT_WINDOW = 100
+  const [visibleCount, setVisibleCount] = useState(RECIPIENT_WINDOW)
 
   async function loadData() {
     setLoading(true)
@@ -102,6 +106,16 @@ export default function RecipientsPage() {
 
     return result
   }, [profiles, suppressedIds, filterDept, filterSubscribed, searchText])
+
+  const visibleProfiles = useMemo(
+    () => filteredProfiles.slice(0, visibleCount),
+    [filteredProfiles, visibleCount],
+  )
+
+  // Changing any filter resets the window
+  useEffect(() => {
+    setVisibleCount(RECIPIENT_WINDOW)
+  }, [filterDept, filterSubscribed, searchText, tab])
 
   async function handleSuppress(profileId) {
     await supabase.from('communication_unsubscribes').insert({
@@ -302,7 +316,7 @@ export default function RecipientsPage() {
                   />
                   <span style={{ fontSize: 12, fontWeight: 600, color: MUTED }}>Select all</span>
                 </div>
-                {filteredProfiles.map((profile) => {
+                {visibleProfiles.map((profile) => {
                   const isSelected = selectedRows.has(profile.id)
                   const isSuppressed = suppressedIds.has(profile.id)
                   const dept = departments.find((d) => d.id === profile.department_id)
@@ -344,6 +358,15 @@ export default function RecipientsPage() {
                 {filteredProfiles.length === 0 && (
                   <div style={{ padding: 20, textAlign: 'center', color: MUTED, fontSize: 13 }}>No members found.</div>
                 )}
+                {filteredProfiles.length > visibleProfiles.length && (
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((count) => count + RECIPIENT_WINDOW)}
+                    style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: TEXT, borderRadius: 8, padding: '8px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Show more ({visibleProfiles.length} of {filteredProfiles.length})
+                  </button>
+                )}
               </div>
             ) : (
               // Desktop table layout
@@ -367,7 +390,7 @@ export default function RecipientsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredProfiles.map((profile) => {
+                    {visibleProfiles.map((profile) => {
                       const isSelected = selectedRows.has(profile.id)
                       const isSuppressed = suppressedIds.has(profile.id)
                       const dept = departments.find((d) => d.id === profile.department_id)
@@ -408,6 +431,19 @@ export default function RecipientsPage() {
                         <td colSpan={7} style={{ padding: 20, textAlign: 'center', color: MUTED, fontSize: 13 }}>No members found.</td>
                       </tr>
                   ) : null}
+                    {filteredProfiles.length > visibleProfiles.length ? (
+                      <tr>
+                        <td colSpan={7} style={{ padding: 14, textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => setVisibleCount((count) => count + RECIPIENT_WINDOW)}
+                            style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: TEXT, borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            Show more ({visibleProfiles.length} of {filteredProfiles.length})
+                          </button>
+                        </td>
+                      </tr>
+                    ) : null}
                   </tbody>
                 </table>
               </div>

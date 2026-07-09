@@ -123,7 +123,15 @@ function RecipientDrawer({ recipient, onClose }) {
   )
 }
 
+// BLW-11: render recipients in windows of 100 — large invite lists (1000+)
+// otherwise put every row in the DOM at once.
+const RECIPIENT_WINDOW = 100
+
 function RecipientTable({ recipients, onRowClick }) {
+  const [visibleCount, setVisibleCount] = useState(RECIPIENT_WINDOW)
+  const visible = recipients.slice(0, visibleCount)
+  const remaining = recipients.length - visible.length
+
   return (
     <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
@@ -137,7 +145,7 @@ function RecipientTable({ recipients, onRowClick }) {
           </tr>
         </thead>
         <tbody>
-          {recipients.map((r) => (
+          {visible.map((r) => (
             <tr
               key={r.id}
               onClick={() => onRowClick(r)}
@@ -168,6 +176,17 @@ function RecipientTable({ recipients, onRowClick }) {
       {recipients.length === 0 && (
         <div style={{ padding: 40, textAlign: 'center', color: MUTED }}>
           No recipients yet
+        </div>
+      )}
+      {remaining > 0 && (
+        <div style={{ padding: 14, textAlign: 'center', borderTop: `1px solid ${BORDER}` }}>
+          <button
+            type="button"
+            onClick={() => setVisibleCount((count) => count + RECIPIENT_WINDOW)}
+            style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: TEXT, borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+          >
+            Show {Math.min(remaining, RECIPIENT_WINDOW)} more ({visible.length} of {recipients.length})
+          </button>
         </div>
       )}
     </div>
