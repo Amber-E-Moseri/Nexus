@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { updateTask } from '../../../features/tasks'
 
+import { groupOverdueByMember } from '../lib/overdue'
+
 function initials(name = '') {
   return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('') || '?'
 }
@@ -18,7 +20,7 @@ function Avatar({ name }) {
   )
 }
 
-export default function OverdueByMemberWidget({ role, userId, departmentId }) {
+export default function OverdueByMemberWidget({ role, userId, departmentId, data }) {
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(null)
@@ -26,6 +28,14 @@ export default function OverdueByMemberWidget({ role, userId, departmentId }) {
 
   useEffect(() => {
     let active = true
+
+    // Served by the consolidated get_dashboard_data RPC (BLW-02)
+    if (Array.isArray(data)) {
+      setMembers(groupOverdueByMember(data))
+      setLoading(false)
+      return
+    }
+
     async function load() {
       // This rollup is admin/lead/pastor-only by product design (see render
       // gate below) — skip the fetch entirely for members rather than
@@ -40,7 +50,7 @@ export default function OverdueByMemberWidget({ role, userId, departmentId }) {
         const today = new Date().toISOString().slice(0, 10)
         let query = supabase
           .from('tasks')
-          .select('id, assignee_id, assignee:users!assignee_id(id, name), due_date, status')
+          .select('id, title, assignee_id, assignee:users!assignee_id(id, name), due_date, status')
           .lt('due_date', today)
           .not('status', 'in', '("done","completed","cancelled")')
           .not('assignee_id', 'is', null)
@@ -59,24 +69,17 @@ export default function OverdueByMemberWidget({ role, userId, departmentId }) {
           query = query.in('assignee_id', ids)
         }
 
-        const { data } = await query
+        const { data: rows } = await query
         if (!active) return
 
-        const map = {}
-        for (const task of (data ?? [])) {
-          const id = task.assignee_id
-          const name = task.assignee?.name ?? 'Unknown'
-          if (!map[id]) map[id] = { id, name, tasks: [] }
-          map[id].tasks.push(task)
-        }
-        setMembers(Object.values(map).sort((a, b) => b.tasks.length - a.tasks.length))
+        setMembers(groupOverdueByMember(rows ?? []))
       } finally {
         if (active) setLoading(false)
       }
     }
     load()
     return () => { active = false }
-  }, [role, userId, departmentId])
+  }, [role, userId, departmentId, data])
 
   // Overdue-by-member rollup is admin/lead/pastor-only by product design
   // (RLS already scopes the underlying tasks query to the member's own

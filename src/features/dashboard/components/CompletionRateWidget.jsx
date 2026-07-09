@@ -2,12 +2,24 @@ import { useEffect, useState } from 'react'
 import { startOfWeek, subWeeks } from 'date-fns'
 import { supabase } from '../../../lib/supabase'
 
-export default function CompletionRateWidget({ role, userId, departmentId }) {
+export default function CompletionRateWidget({ role, userId, departmentId, data: serverData }) {
   const [data, setData] = useState({ completedThisWeek: 0, createdThisWeek: 0, completedLastWeek: 0 })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let active = true
+
+    // Served by the consolidated get_dashboard_data RPC (BLW-02)
+    if (serverData) {
+      setData({
+        completedThisWeek: serverData.completed_this_week ?? 0,
+        createdThisWeek: serverData.created_this_week ?? 0,
+        completedLastWeek: serverData.completed_last_week ?? 0,
+      })
+      setLoading(false)
+      return
+    }
+
     async function load() {
       setLoading(true)
       try {
@@ -30,12 +42,13 @@ export default function CompletionRateWidget({ role, userId, departmentId }) {
           return query
         }
 
+        // tasks has completed_at, not updated_at — filtering on updated_at made
+        // these queries error out and read as 0 forever.
         const q1 = await applyRoleFilter(
           supabase
             .from('tasks')
             .select('id', { count: 'exact', head: true })
-            .in('status', ['done', 'completed'])
-            .gte('updated_at', weekStart)
+            .gte('completed_at', weekStart)
             .eq('is_personal', false),
         )
         const q2 = await applyRoleFilter(
@@ -49,9 +62,8 @@ export default function CompletionRateWidget({ role, userId, departmentId }) {
           supabase
             .from('tasks')
             .select('id', { count: 'exact', head: true })
-            .in('status', ['done', 'completed'])
-            .gte('updated_at', lastWeekStart)
-            .lt('updated_at', weekStart)
+            .gte('completed_at', lastWeekStart)
+            .lt('completed_at', weekStart)
             .eq('is_personal', false),
         )
         const [completedRes, createdRes, lastWeekRes] = await Promise.allSettled([q1, q2, q3])
@@ -68,7 +80,7 @@ export default function CompletionRateWidget({ role, userId, departmentId }) {
     }
     load()
     return () => { active = false }
-  }, [role, userId, departmentId])
+  }, [role, userId, departmentId, serverData])
 
   if (loading) return <div style={{ fontSize: 12.5, color: '#9E9488' }}>Loading…</div>
 

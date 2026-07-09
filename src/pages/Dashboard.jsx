@@ -37,6 +37,7 @@ import GoalsWidget from '../features/dashboard/components/GoalsWidget'
 import EmbedWidget from '../features/dashboard/components/EmbedWidget'
 import { RegionalUpdateWidget } from '../features/regional-updates/components/RegionalUpdateWidget'
 import { getDashboardPresets } from '../features/dashboard/lib/dashboard-queries'
+import { useDashboardData } from '../features/dashboard/hooks/useDashboardData'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
 
 const heroStagger = {
@@ -87,7 +88,7 @@ const CUSTOM_STAT_OPTIONS = [
 
 const CUSTOM_STAT_KEY = 'dashboard_custom_stat_v1'
 
-function useCustomStat(userId, unreadCount) {
+function useCustomStat(userId, unreadCount, serverStats) {
   const [statKey, setStatKey] = useState(() => localStorage.getItem(CUSTOM_STAT_KEY) ?? 'meetings_this_week')
   const [value, setValue] = useState(null)
 
@@ -103,6 +104,12 @@ function useCustomStat(userId, unreadCount) {
 
     if (statKey === 'unread_notifications') {
       setValue(unreadCount ?? 0)
+      return
+    }
+
+    // Served by the consolidated get_dashboard_data RPC (BLW-02)
+    if (serverStats && statKey in serverStats) {
+      setValue(serverStats[statKey] ?? 0)
       return
     }
 
@@ -129,7 +136,7 @@ function useCustomStat(userId, unreadCount) {
 
     load()
     return () => { active = false }
-  }, [statKey, userId, unreadCount])
+  }, [statKey, userId, unreadCount, serverStats])
 
   const meta = CUSTOM_STAT_OPTIONS.find((o) => o.key === statKey) ?? CUSTOM_STAT_OPTIONS[0]
   return { meta, value, statKey, choose }
@@ -261,12 +268,24 @@ function CustomHeroStatCard({ meta, value, statKey, onChoose, onClick }) {
 
 // ─── Org stats ───────────────────────────────────────────────────────────────
 
-function useOrgStats(userId) {
+function useOrgStats(userId, heroStats) {
   const [stats, setStats] = useState({ spaces: null, openTasks: null, myDue: null, activeSprints: null })
 
   useEffect(() => {
     if (!userId) return
     let active = true
+
+    // Served by the consolidated get_dashboard_data RPC (BLW-02); the legacy
+    // get_dashboard_stats call below remains as a fallback.
+    if (heroStats) {
+      setStats({
+        spaces: heroStats.space_count ?? 0,
+        openTasks: heroStats.open_task_count ?? 0,
+        myDue: heroStats.my_due_task_count ?? 0,
+        activeSprints: heroStats.active_sprint_count ?? 0,
+      })
+      return
+    }
 
     async function load() {
       const { data, error } = await supabase.rpc('get_dashboard_stats', { p_user_id: userId })
@@ -290,7 +309,7 @@ function useOrgStats(userId) {
 
     load()
     return () => { active = false }
-  }, [userId])
+  }, [userId, heroStats])
 
   return stats
 }
@@ -344,13 +363,23 @@ function HeroStatCard({ label, value, sub, bg, blobColor, onClick }) {
 
 // ─── Inline widgets ───────────────────────────────────────────────────────────
 
-function MyTasksSummaryWidget({ userId }) {
+function MyTasksSummaryWidget({ userId, data }) {
   const navigate = useNavigate()
   const [counts, setCounts] = useState({ today: null, overdue: null, thisWeek: null })
 
   useEffect(() => {
     if (!userId) return
     let active = true
+
+    // Served by the consolidated get_dashboard_data RPC (BLW-02)
+    if (data) {
+      setCounts({
+        today: data.today ?? 0,
+        overdue: data.overdue ?? 0,
+        thisWeek: data.this_week ?? 0,
+      })
+      return
+    }
 
     getMyTasks(userId)
       .then((tasks) => {
@@ -375,7 +404,7 @@ function MyTasksSummaryWidget({ userId }) {
       .catch(() => {})
 
     return () => { active = false }
-  }, [userId])
+  }, [userId, data])
 
   const stats = [
     { label: 'Today', value: counts.today, color: 'var(--purple-700)' },
@@ -583,7 +612,7 @@ function mergeWithAllKeys(rows) {
 
 // ─── Widget card ──────────────────────────────────────────────────────────────
 
-function WidgetCard({ widgetKey, role, userId, departmentId, config, onConfigChange, onUnpin }) {
+function WidgetCard({ widgetKey, role, userId, departmentId, config, onConfigChange, onUnpin, data }) {
   const meta = WIDGET_META[widgetKey]
   if (!meta) return null
   const { title, Component, configurable } = meta
@@ -626,7 +655,7 @@ function WidgetCard({ widgetKey, role, userId, departmentId, config, onConfigCha
       {configurable ? (
         <Component config={config} onConfigChange={onConfigChange} />
       ) : (
-        <Component role={role} userId={userId} departmentId={departmentId} />
+        <Component role={role} userId={userId} departmentId={departmentId} data={data} />
       )}
     </motion.div>
   )
@@ -857,9 +886,10 @@ export default function Dashboard() {
   const { unreadCount } = useNotifications()
   const { showToast } = useToast()
   const location = useLocation()
-  const orgStats = useOrgStats(profile?.id)
+  const dashboardData = useDashboardData(profile?.id, role, profile?.department_id)
+  const orgStats = useOrgStats(profile?.id, dashboardData?.hero)
   const navigate = useNavigate()
-  const customStat = useCustomStat(profile?.id, unreadCount)
+  const customStat = useCustomStat(profile?.id, unreadCount, dashboardData?.custom_stats)
   const [prefs, setPrefs] = useState([])
   const [loadingPrefs, setLoadingPrefs] = useState(true)
   const [showCustomize, setShowCustomize] = useState(false)
@@ -1086,6 +1116,7 @@ export default function Dashboard() {
                 config={pref.config}
                 onConfigChange={(config) => handleConfigChange(pref.widget_key, config)}
                 onUnpin={handleUnpin}
+                data={dashboardData?.[pref.widget_key]}
               />
             ))}
           </motion.div>

@@ -9,12 +9,21 @@ const STATUS_COLORS = {
   review:   { bg: '#FFF8EC', text: '#D17A1C' },
 }
 
-export default function SprintProgressWidget({ role, userId, departmentId }) {
+export default function SprintProgressWidget({ role, userId, departmentId, data }) {
   const [sprints, setSprints] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let active = true
+
+    // Served by the consolidated get_dashboard_data RPC (BLW-02): rows already
+    // carry total/completed counts, role-scoped server-side.
+    if (Array.isArray(data)) {
+      setSprints(data.slice(0, 3))
+      setLoading(false)
+      return
+    }
+
     async function load() {
       setLoading(true)
       try {
@@ -89,7 +98,7 @@ export default function SprintProgressWidget({ role, userId, departmentId }) {
     }
     load()
     return () => { active = false }
-  }, [role, userId, departmentId])
+  }, [role, userId, departmentId, data])
 
   if (loading) return <div style={{ fontSize: 12.5, color: '#9E9488' }}>Loading…</div>
   if (sprints.length === 0) return (
