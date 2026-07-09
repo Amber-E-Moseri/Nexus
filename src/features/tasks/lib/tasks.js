@@ -275,7 +275,8 @@ export async function getFlockTasks(pastorId) {
     .select(`
       member:users!member_id(
         tasks:tasks!assignee_id(
-          *,
+          ${TASK_COLS},
+          subtask_count:tasks!parent_task_id(count),
           ${TASK_STATUS_SELECT},
           ${TASK_LIST_SELECT},
           assignee:users!assignee_id(id, name, avatar_url),
@@ -309,6 +310,20 @@ export async function getTaskById(taskId) {
 
   if (error) throw error
   return normalizeTaskResult(data)
+}
+
+// Lazy-load subtasks for a single task. List queries only return counts
+// (subtask_count); detail views call this on open/expand.
+export async function getSubtasks(parentTaskId) {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(SUBTASK_SELECT)
+    .eq('parent_task_id', parentTaskId)
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return normalizeTaskResultList(data)
 }
 
 export async function createTask(taskData) {

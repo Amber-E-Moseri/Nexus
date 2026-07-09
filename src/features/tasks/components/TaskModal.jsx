@@ -15,7 +15,7 @@ import {
 } from '../../../lib/activityLog'
 import { normalizeTaskFieldSettings } from '../../../lib/taskFieldSettings'
 import { FONT_BODY, FONT_HEADING } from '../../../lib/fonts'
-import { createTask, deleteTask, getTaskBlockers, updateTask } from '../lib/tasks'
+import { createTask, deleteTask, getSubtasks, getTaskBlockers, updateTask } from '../lib/tasks'
 import {
   getTaskStatusId,
   getTaskStatusLabel,
@@ -385,6 +385,23 @@ export default function TaskModal({
   useEffect(() => {
     setTaskMilestone(task?.milestone || null)
   }, [task?.milestone])
+
+  // List queries only carry subtask counts; fetch the actual subtasks when the
+  // modal opens on an existing task (BLW-01 lazy load).
+  useEffect(() => {
+    if (mode !== 'edit' || !task?.id) return
+    let active = true
+    getSubtasks(task.id)
+      .then((rows) => {
+        if (active) setSubtasks(rows)
+      })
+      .catch((err) => {
+        console.error('[TaskModal] Failed to load subtasks:', err)
+      })
+    return () => {
+      active = false
+    }
+  }, [mode, task?.id])
 
   async function handleSave() {
     if (!title.trim()) {
