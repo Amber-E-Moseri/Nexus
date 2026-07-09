@@ -197,6 +197,24 @@ export async function getOrgStatusParent(deptStatus) {
   if (!deptStatus) return null
   if (deptStatus.is_org_status) return null // Org statuses have no parent
 
+  // Pre-joined by get_task_status_hierarchy (BLW-08)
+  if (deptStatus.org_parent !== undefined) {
+    if (!deptStatus.org_parent) {
+      console.error(
+        `[Status Hierarchy] Dept status ${deptStatus.id} (${deptStatus.name}) has a broken org mapping: ${deptStatus.hierarchy_error ?? 'org parent missing'}`,
+      )
+      return null
+    }
+    return normalizeTaskStatusDefinition(deptStatus.org_parent)
+  }
+
+  if (!deptStatus.org_status_id) {
+    console.error(
+      `[Status Hierarchy] Dept status ${deptStatus.id} (${deptStatus.name}) is missing org_status_id — the CHECK constraint should prevent this row.`,
+    )
+    return null
+  }
+
   const { data, error } = await supabase
     .from('task_status_definitions')
     .select('*')
@@ -204,7 +222,7 @@ export async function getOrgStatusParent(deptStatus) {
     .single()
 
   if (error) {
-    console.warn(`[Status Hierarchy] Could not fetch org parent for ${deptStatus.id}:`, error)
+    console.error(`[Status Hierarchy] Could not fetch org parent for ${deptStatus.id}:`, error)
     return null
   }
 
@@ -212,39 +230,33 @@ export async function getOrgStatusParent(deptStatus) {
 }
 
 export async function getStatusHierarchy({ departmentId = null } = {}) {
-  // Fetch org statuses (canonical)
-  const { data: orgStatuses, error: orgError } = await supabase
-    .from('task_status_definitions')
-    .select('*')
-    .eq('is_org_status', true)
-    .eq('active', true)
-    .order('sort_order')
+  // Server-side join (BLW-08): one RPC returns org statuses plus dept
+  // statuses pre-joined with their org parent. Broken mappings arrive as
+  // hierarchy_error instead of silently resolving to null.
+  const { data, error } = await supabase.rpc('get_task_status_hierarchy', {
+    p_department_id: departmentId,
+  })
 
-  if (orgError) throw orgError
+  if (error) throw error
 
-  // Fetch dept-specific statuses
-  let deptQuery = supabase
-    .from('task_status_definitions')
-    .select('*')
-    .eq('is_org_status', false)
-    .eq('active', true)
-
-  if (departmentId) {
-    deptQuery = deptQuery.eq('department_id', departmentId)
-  }
-
-  const { data: deptStatuses, error: deptError } = await deptQuery.order('sort_order')
-  if (deptError) throw deptError
-
-  // Map dept statuses to their org parents
   const hierarchy = {
-    orgStatuses: (orgStatuses ?? []).map(normalizeTaskStatusDefinition),
-    deptStatuses: (deptStatuses ?? []).map(normalizeTaskStatusDefinition),
+    orgStatuses: (data?.org_statuses ?? []).map(normalizeTaskStatusDefinition),
+    deptStatuses: (data?.dept_statuses ?? []).map((status) => ({
+      ...normalizeTaskStatusDefinition(status),
+      org_parent: normalizeTaskStatusDefinition(status.org_parent),
+    })),
     byOrgParent: {},
+    errors: [],
   }
 
-  // Group dept statuses by their org parent
   for (const deptStatus of hierarchy.deptStatuses) {
+    if (deptStatus.hierarchy_error) {
+      console.error(
+        `[Status Hierarchy] Dept status ${deptStatus.id} (${deptStatus.name}): ${deptStatus.hierarchy_error}`,
+      )
+      hierarchy.errors.push({ statusId: deptStatus.id, error: deptStatus.hierarchy_error })
+      continue
+    }
     const parentId = deptStatus.org_status_id
     if (!hierarchy.byOrgParent[parentId]) {
       hierarchy.byOrgParent[parentId] = []
