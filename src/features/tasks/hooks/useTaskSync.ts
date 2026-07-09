@@ -56,7 +56,9 @@ export function useTaskSync(userId: string | undefined, onTaskUpdate?: (task: an
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      // removeChannel (not just unsubscribe) so the closed channel is also
+      // dropped from the client's channel registry (BLW-03)
+      supabase.removeChannel(subscription)
     }
   }, [userId, handleRealtimeUpdate])
 }
@@ -102,7 +104,7 @@ export function useTaskSyncAll(userId: string | undefined, onTaskUpdate?: (task:
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      supabase.removeChannel(subscription)
     }
   }, [userId, handleRealtimeUpdate])
 }

@@ -138,7 +138,7 @@ export default function InvitationsListPage() {
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      supabase.removeChannel(subscription)
     }
   }, [profile?.id])
 

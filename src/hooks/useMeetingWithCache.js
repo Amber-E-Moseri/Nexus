@@ -95,9 +95,10 @@ export function useMeetingWithCache(meetingId) {
       setIsLoading(false)
     }
 
-    // Cleanup on unmount
+    // Cleanup on unmount — removeChannel also drops the channel from the
+    // client registry, not just the socket subscription (BLW-03)
     return () => {
-      subscription.unsubscribe()
+      supabase.removeChannel(subscription)
     }
   }, [meetingId])
 

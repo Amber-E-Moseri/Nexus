@@ -38,7 +38,7 @@ export function useRegionalUpdatesList() {
       .subscribe()
 
     return () => {
-      channel.unsubscribe()
+      supabase.removeChannel(channel)
     }
   }, [])
 

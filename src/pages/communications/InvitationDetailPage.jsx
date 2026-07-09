@@ -227,7 +227,7 @@ export default function InvitationDetailPage() {
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      supabase.removeChannel(subscription)
     }
   }, [campaignId])
 

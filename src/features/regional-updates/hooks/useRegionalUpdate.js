@@ -40,7 +40,7 @@ export function useRegionalUpdate() {
       .subscribe()
 
     return () => {
-      channel.unsubscribe()
+      supabase.removeChannel(channel)
     }
   }, [])
 

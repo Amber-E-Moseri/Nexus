@@ -132,8 +132,8 @@ export function CampusDetailModal({ campus, isOpen, onClose }) {
       .subscribe()
 
     return () => {
-      logsSubscription.unsubscribe()
-      requestsSubscription.unsubscribe()
+      supabase.removeChannel(logsSubscription)
+      supabase.removeChannel(requestsSubscription)
     }
   }, [isOpen, campus?.id])
 
