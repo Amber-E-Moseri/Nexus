@@ -42,15 +42,8 @@ import { useDashboardData } from '../features/dashboard/hooks/useDashboardData'
 import WidgetErrorBoundary from '../features/dashboard/components/WidgetErrorBoundary'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
 
-const heroStagger = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.06, delayChildren: 0.04 } },
-}
-
-const heroEnter = {
-  hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 380, damping: 32 } },
-}
+// BLW-12: enter animations are CSS (.dash-stagger in index.css); Framer
+// Motion remains only for the gesture-driven customize panel.
 
 function greetingForHour() {
   const h = new Date().getHours()
@@ -149,12 +142,10 @@ function CustomHeroStatCard({ meta, value, statKey, onChoose, onClick }) {
 
   return (
     <div style={{ position: 'relative' }}>
-      <motion.button
+      <button
         type="button"
         onClick={onClick}
-        variants={heroEnter}
-        whileHover={{ y: -2 }}
-        whileTap={{ scale: 0.99 }}
+        className="hero-stat-card"
         style={{
           position: 'relative',
           overflow: 'hidden',
@@ -213,7 +204,7 @@ function CustomHeroStatCard({ meta, value, statKey, onChoose, onClick }) {
         <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: 'rgba(255,255,255,.72)', marginTop: 8, fontWeight: 500, position: 'relative' }}>
           {meta.sub}
         </div>
-      </motion.button>
+      </button>
 
       {showPicker && (
         <>
@@ -318,12 +309,10 @@ function useOrgStats(userId, heroStats) {
 
 function HeroStatCard({ label, value, sub, bg, blobColor, onClick }) {
   return (
-    <motion.button
+    <button
       type="button"
       onClick={onClick}
-      variants={heroEnter}
-      whileHover={onClick ? { y: -2 } : undefined}
-      whileTap={onClick ? { scale: 0.99 } : undefined}
+      className={onClick ? 'hero-stat-card' : undefined}
       style={{
         position: 'relative',
         overflow: 'hidden',
@@ -359,7 +348,7 @@ function HeroStatCard({ label, value, sub, bg, blobColor, onClick }) {
       <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: 'rgba(255,255,255,.72)', marginTop: 8, fontWeight: 500, position: 'relative' }}>
         {sub}
       </div>
-    </motion.button>
+    </button>
   )
 }
 
@@ -618,8 +607,7 @@ function WidgetCard({ widgetKey, role, userId, departmentId, config, onConfigCha
   const { title, Component, configurable } = meta
 
   return (
-    <motion.div
-      variants={heroEnter}
+    <div
       style={{
         background: 'var(--surface-card)',
         border: '1px solid var(--border-1)',
@@ -659,7 +647,7 @@ function WidgetCard({ widgetKey, role, userId, departmentId, config, onConfigCha
           <Component role={role} userId={userId} departmentId={departmentId} data={data} />
         )}
       </WidgetErrorBoundary>
-    </motion.div>
+    </div>
   )
 }
 
@@ -1045,12 +1033,7 @@ export default function Dashboard() {
 
         {/* ── Hero stat cards — semantic accent mapping: purple anchor /
             blue progress / orange priority / green active ── */}
-        <motion.div
-          variants={heroStagger}
-          initial="hidden"
-          animate="show"
-          style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}
-        >
+        <div className="dash-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
           <CustomHeroStatCard
             meta={customStat.meta}
             value={customStat.value}
@@ -1082,7 +1065,7 @@ export default function Dashboard() {
             blobColor="rgba(255,255,255,.15)"
             onClick={() => navigate('/sprints')}
           />
-        </motion.div>
+        </div>
 
         {visibleWidgets.length === 0 ? (
           <div
@@ -1107,7 +1090,7 @@ export default function Dashboard() {
             to add some.
           </div>
         ) : (
-          <motion.div variants={heroStagger} initial="hidden" animate="show" className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2 dash-stagger">
             {visibleWidgets.map((pref) => (
               <WidgetCard
                 key={pref.widget_key}
@@ -1121,7 +1104,7 @@ export default function Dashboard() {
                 data={dashboardData?.[pref.widget_key]}
               />
             ))}
-          </motion.div>
+          </div>
         )}
 
         {/* ════════════════════════════════════════════════════════════ */}
