@@ -23,16 +23,13 @@ export default function ApiPermissionsSection() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
-  // Only super admins can access this
-  if (role !== 'super_admin') {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-        <p className="text-sm text-red-800">You don't have permission to manage API permissions.</p>
-      </div>
-    )
-  }
+  const isSuperAdmin = role === 'super_admin'
 
+  // Hooks must run on every render (BLW-13: these effects used to sit below
+  // the unauthorized early-return, which crashes React when role resolves
+  // after first render).
   useEffect(() => {
+    if (!isSuperAdmin) return
     const searchUsers = async () => {
       if (!searchInput.trim()) {
         setUsers([])
@@ -48,9 +45,10 @@ export default function ApiPermissionsSection() {
 
     const timer = setTimeout(searchUsers, 300)
     return () => clearTimeout(timer)
-  }, [searchInput])
+  }, [searchInput, isSuperAdmin])
 
   useEffect(() => {
+    if (!isSuperAdmin) return
     const loadPermissions = async () => {
       if (!selectedUser) {
         setUserPermissions([])
@@ -67,7 +65,16 @@ export default function ApiPermissionsSection() {
     }
 
     loadPermissions()
-  }, [selectedUser])
+  }, [selectedUser, isSuperAdmin])
+
+  // Only super admins can access this
+  if (!isSuperAdmin) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+        <p className="text-sm text-red-800">You don't have permission to manage API permissions.</p>
+      </div>
+    )
+  }
 
   async function handleGrantPermission() {
     if (!selectedUser || !selectedPermission) {

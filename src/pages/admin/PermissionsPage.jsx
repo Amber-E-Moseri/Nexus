@@ -32,7 +32,23 @@ export default function PermissionsPage() {
     member: 'Member',
   };
 
-  if (!authLoading && !hasPermission) {
+  const authorized = authLoading || hasPermission;
+
+  // Hooks must run on every render (BLW-13: these effects used to sit below
+  // the unauthorized early-return, which crashes React when permission state
+  // resolves after first render).
+  useEffect(() => {
+    if (!authorized) return;
+    loadAllPermissions();
+    loadCategories();
+  }, [authorized]);
+
+  useEffect(() => {
+    if (!authorized) return;
+    loadRolePermissions(selectedRole);
+  }, [selectedRole, authorized]);
+
+  if (!authorized) {
     return (
       <div className="permissions-page unauthorized">
         <h1>Unauthorized</h1>
@@ -40,15 +56,6 @@ export default function PermissionsPage() {
       </div>
     );
   }
-
-  useEffect(() => {
-    loadAllPermissions();
-    loadCategories();
-  }, []);
-
-  useEffect(() => {
-    loadRolePermissions(selectedRole);
-  }, [selectedRole]);
 
   const loadRolePermissions = async () => {
     setLoading(true);

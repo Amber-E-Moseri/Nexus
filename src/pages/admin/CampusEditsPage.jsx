@@ -18,8 +18,18 @@ export default function CampusEditsPage() {
   const [approvalAction, setApprovalAction] = useState(null) // 'approve' | 'reject'
   const [submitting, setSubmitting] = useState(false)
 
+  const authorized = authLoading || hasPermission
+
+  // Fetch edits for current tab. Hooks must run on every render (BLW-13:
+  // this effect used to sit below the unauthorized early-return, which
+  // crashes React when permission state resolves after first render).
+  useEffect(() => {
+    if (!authorized) return
+    fetchEdits(tab)
+  }, [tab, authorized])
+
   // Check authorization
-  if (!authLoading && !hasPermission) {
+  if (!authorized) {
     return (
       <div
         style={{
@@ -33,11 +43,6 @@ export default function CampusEditsPage() {
       </div>
     )
   }
-
-  // Fetch edits for current tab
-  useEffect(() => {
-    fetchEdits(tab)
-  }, [tab])
 
   const fetchEdits = async (status) => {
     setLoading(true)

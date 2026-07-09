@@ -31,6 +31,8 @@ import TaskFiles from './TaskFiles'
 import SubtaskList from './SubtaskList'
 import { TasksContext } from '../TasksContext'
 
+const EMPTY_STATUSES = []
+
 const inputStyle = {
   width: '100%',
   fontSize: 13,
@@ -249,7 +251,9 @@ export default function TaskModal({
 }) {
   const { profile, role } = useAuth()
   const ctx = useContext(TasksContext)
-  const contextStatuses = ctx?.statuses ?? []
+  // Stable fallback identity — a fresh [] here re-triggers the status-loading
+  // effect (which sets state) on every render, looping the fetch (BLW-13)
+  const contextStatuses = ctx?.statuses ?? EMPTY_STATUSES
   const visibleFields = normalizeTaskFieldSettings(fieldSettings)
 
   const [title, setTitle] = useState(task?.title ?? '')
