@@ -12,16 +12,19 @@ export function InboxCountProvider({ children }) {
 
   // Only count assigned task comments separately; use NotificationsContext for
   // notifications so we don't duplicate the realtime subscription.
+  //
+  // BLW-09: the count follows a realtime subscription on the user's assigned
+  // comments instead of a 60s polling interval, so the badge reflects actual
+  // inbox changes as they happen (and no query fires when nothing changed).
   useEffect(() => {
+    if (!user?.id) {
+      setAssignedCommentCount(0)
+      return
+    }
+
     let active = true
-    let intervalId
 
     async function refreshAssignedComments() {
-      if (!user?.id) {
-        if (active) setAssignedCommentCount(0)
-        return
-      }
-
       const { count } = await supabase
         .from('task_comments')
         .select('id', { count: 'exact', head: true })
@@ -37,13 +40,20 @@ export function InboxCountProvider({ children }) {
       if (active) setAssignedCommentCount(0)
     })
 
-    intervalId = window.setInterval(() => {
-      refreshAssignedComments().catch(() => {})
-    }, 60000)
+    const channel = supabase
+      .channel(`inbox-assigned-comments-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'task_comments', filter: `assigned_to=eq.${user.id}` },
+        () => {
+          refreshAssignedComments().catch(() => {})
+        },
+      )
+      .subscribe()
 
     return () => {
       active = false
-      window.clearInterval(intervalId)
+      supabase.removeChannel(channel)
     }
   }, [user?.id])
 

@@ -69,9 +69,18 @@ src/
 - Fallback to direct DB lookup if claims absent (pre-hook sessions)
 - Super admin can cross departments; regular users are scoped to their department
 
-**2. Contexts**
-- `TasksContext` — manages task state, filters, bulk operations
-- `AuthContext` — user identity, permissions, logout flow
+**2. Contexts & State Ownership (BLW-09)**
+
+Rule of thumb for where state lives:
+- **Server data → React Query** (`@tanstack/react-query`, client configured in `src/lib/queryClient.js`). Anything fetched from Supabase belongs in a `useQuery` hook with a stable key — don't copy it into a context just to share it. Realtime handlers push updates via `queryClient.invalidateQueries`.
+- **Global contexts (justified):**
+  - `AuthContext` — identity/session; genuinely global.
+  - `NotificationsContext` — owns the single notifications realtime subscription.
+  - `InboxCountContext` — derives the inbox badge from NotificationsContext + a realtime subscription on assigned comments (no polling).
+  - `ToastContext` — imperative UI API, no data.
+- **Scoped contexts:** `TasksContext`, `SidebarContext`, `SearchContext`, `AgendaBuilderContext` hold view/UI state for their feature area. Keep them mounted as low in the tree as possible; don't add server data to them.
+- **Everything else → local component state.**
+- Do **not** add `setInterval` polling for data freshness — subscribe to `postgres_changes` (with `supabase.removeChannel` cleanup) or rely on React Query staleTime.
 
 **3. React Router**
 - App.jsx lazy-loads all pages for code splitting
