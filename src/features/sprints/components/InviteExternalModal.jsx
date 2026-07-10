@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { inviteExternalToSprint } from '../lib/sprints'
+import { useEffect, useState } from 'react'
+import { getSprintInvitePermissions, inviteExternalToSprint } from '../lib/sprints'
 import { useToast } from '../../../context/ToastContext'
 
 const TOKENS = {
@@ -14,7 +14,7 @@ const TOKENS = {
   errorBg: '#FFE5E5',
 }
 
-export default function InviteExternalModal({ sprintId, sprintEndDate, sprintName, onClose, onSuccess }) {
+export default function InviteExternalModal({ sprintId, sprintEndDate, sprintName, canInvite: canInviteProp = null, canAssignPrivilegedRoles: canAssignPrivilegedRolesProp = null, onClose, onSuccess }) {
   const { showToast } = useToast()
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -23,11 +23,63 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
   const [endDate, setEndDate] = useState(sprintEndDate ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [checkingPermission, setCheckingPermission] = useState(canInviteProp === null || canAssignPrivilegedRolesProp === null)
+  const [canInvite, setCanInvite] = useState(canInviteProp ?? false)
+  const [canAssignPrivilegedRoles, setCanAssignPrivilegedRoles] = useState(canAssignPrivilegedRolesProp ?? false)
+
+  useEffect(() => {
+    let active = true
+
+    if (canInviteProp !== null && canAssignPrivilegedRolesProp !== null) {
+      setCanInvite(Boolean(canInviteProp))
+      setCanAssignPrivilegedRoles(Boolean(canAssignPrivilegedRolesProp))
+      setCheckingPermission(false)
+      return () => { active = false }
+    }
+
+    setCheckingPermission(true)
+    getSprintInvitePermissions(sprintId)
+      .then((permissions) => {
+        if (!active) return
+        setCanInvite(permissions.canInvite)
+        setCanAssignPrivilegedRoles(permissions.canAssignPrivilegedRoles)
+        setError(permissions.canInvite ? null : 'You do not have permission to invite members to this sprint.')
+      })
+      .catch(() => {
+        if (!active) return
+        setCanInvite(false)
+        setCanAssignPrivilegedRoles(false)
+        setError('Unable to verify sprint invite permission.')
+      })
+      .finally(() => {
+        if (active) setCheckingPermission(false)
+      })
+
+    return () => { active = false }
+  }, [canAssignPrivilegedRolesProp, canInviteProp, sprintId])
+
+  useEffect(() => {
+    if (!canAssignPrivilegedRoles && ['manager', 'owner'].includes(role)) {
+      setRole('contributor')
+    }
+  }, [canAssignPrivilegedRoles, role])
+
+  const inviteDisabled = checkingPermission || !canInvite || loading || !email || (expiryMode === 'on_date' && !endDate)
 
   const handleInvite = async () => {
     try {
       setLoading(true)
       setError(null)
+
+      if (!canInvite) {
+        setError('You do not have permission to invite members to this sprint.')
+        return
+      }
+
+      if (['manager', 'owner'].includes(role) && !canAssignPrivilegedRoles) {
+        setError('Only the sprint owner or a super admin can assign manager or owner access.')
+        return
+      }
 
       await inviteExternalToSprint({
         email: email.trim(),
@@ -144,7 +196,7 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
           >
             <option value="contributor">Contributor</option>
             <option value="viewer">Viewer</option>
-            <option value="manager">Manager</option>
+            {canAssignPrivilegedRoles && <option value="manager">Manager</option>}
           </select>
         </div>
 
@@ -247,20 +299,20 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
           </button>
           <button
             onClick={handleInvite}
-            disabled={loading || !email || (expiryMode === 'on_date' && !endDate)}
+            disabled={inviteDisabled}
             style={{
               flex: 1,
               padding: '10px 16px',
               borderRadius: '8px',
-              background: loading || !email || (expiryMode === 'on_date' && !endDate) ? `${TOKENS.primary}99` : TOKENS.primary,
+              background: inviteDisabled ? `${TOKENS.primary}99` : TOKENS.primary,
               color: 'white',
               border: 'none',
               fontSize: '13px',
               fontWeight: 600,
-              cursor: loading || !email || !endDate ? 'not-allowed' : 'pointer',
+              cursor: inviteDisabled ? 'not-allowed' : 'pointer',
               fontFamily: 'DM Sans, system-ui, sans-serif',
               transition: 'all 0.12s',
-              opacity: loading || !email || !endDate ? 0.6 : 1,
+              opacity: inviteDisabled ? 0.6 : 1,
             }}
           >
             {loading ? 'Inviting…' : 'Invite'}

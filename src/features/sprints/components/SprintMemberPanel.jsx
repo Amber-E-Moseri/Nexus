@@ -699,6 +699,11 @@ export default function SprintMemberPanel({
           sprintId={sprintId}
           sprintEndDate={sprintEndDate}
           sprintName={sprintName}
+          canInvite={Boolean(canEdit && !isArchived)}
+          canAssignPrivilegedRoles={Boolean(
+            profile?.role === 'super_admin' ||
+            members?.some((member) => member.user_id === profile?.id && member.role === 'owner')
+          )}
           onClose={() => setShowInviteModal(false)}
           onSuccess={() => onChanged?.()}
         />

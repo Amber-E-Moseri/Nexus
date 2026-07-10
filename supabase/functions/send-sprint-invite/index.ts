@@ -17,6 +17,10 @@ function generateToken(): string {
   return crypto.getRandomValues(new Uint8Array(24)).reduce((a, b) => a + b.toString(16).padStart(2, '0'), '')
 }
 
+function isValidSprintRole(role: string): boolean {
+  return ['owner', 'manager', 'contributor', 'viewer'].includes(role)
+}
+
 function emailHtml({
   name,
   sprintName,
@@ -121,19 +125,61 @@ Deno.serve(async (req) => {
     return jsonResponse(400, { error: 'email, sprintId and sprintName are required' })
   }
 
-  const { email, name, sprintId, sprintName, role, membershipEndDate } = body
+  const { email, name, sprintId, sprintName, membershipEndDate } = body
   const cleanEmail = email.trim().toLowerCase()
   const cleanName = name?.trim() || cleanEmail.split('@')[0]
+  const requestedRole = body.role || 'contributor'
+
+  if (!isValidSprintRole(requestedRole)) {
+    return jsonResponse(400, { error: `Invalid sprint role: ${requestedRole}` })
+  }
 
   // 1. Validate sprint exists
   const { data: sprint, error: sprintError } = await adminClient
     .from('sprints')
-    .select('id')
+    .select('id, created_by')
     .eq('id', sprintId)
     .single()
 
   if (sprintError || !sprint) {
     return jsonResponse(400, { error: 'Sprint not found' })
+  }
+
+  const [{ data: callerProfile, error: callerProfileError }, { data: callerMember, error: callerMemberError }] = await Promise.all([
+    adminClient
+      .from('users')
+      .select('role')
+      .eq('id', callerId)
+      .maybeSingle(),
+    adminClient
+      .from('sprint_members')
+      .select('role')
+      .eq('sprint_id', sprintId)
+      .eq('user_id', callerId)
+      .maybeSingle(),
+  ])
+
+  if (callerProfileError) {
+    return jsonResponse(500, { error: `Failed to verify caller role: ${callerProfileError.message}` })
+  }
+
+  if (callerMemberError) {
+    return jsonResponse(500, { error: `Failed to verify sprint membership: ${callerMemberError.message}` })
+  }
+
+  const callerRole = callerProfile?.role
+  const isSuperAdmin = callerRole === 'super_admin'
+  const isDeptLead = callerRole === 'dept_lead'
+  const isSprintOwner = sprint.created_by === callerId || callerMember?.role === 'owner'
+  const isSprintManager = callerMember?.role === 'manager'
+  const canInvite = isSuperAdmin || isDeptLead || isSprintOwner || isSprintManager
+
+  if (!canInvite) {
+    return jsonResponse(403, { error: 'You do not have permission to invite members to this sprint' })
+  }
+
+  if (['owner', 'manager'].includes(requestedRole) && !isSuperAdmin && !isSprintOwner) {
+    return jsonResponse(403, { error: 'Only the sprint owner or a super admin can assign manager or owner access' })
   }
 
   // 2. Generate invite token
@@ -152,12 +198,25 @@ Deno.serve(async (req) => {
       // (owner/manager/contributor/viewer) — never a platform users.role.
       metadata: {
         name: cleanName,
-        role: role || 'contributor',
+        role: requestedRole,
         membership_end_date: membershipEndDate ?? null,
       },
     })
 
   if (tokenError) return jsonResponse(502, { error: `Failed to create invite token: ${tokenError.message}` })
+
+  const { error: auditError } = await adminClient
+    .from('activity_log')
+    .insert({
+      user_id: callerId,
+      action: 'sprint_external_invite_created',
+      entity_type: 'sprint',
+      entity_id: sprintId,
+    })
+
+  if (auditError) {
+    console.error('Failed to write sprint invite audit log:', auditError)
+  }
 
   // 3. Send email with signup link
   const signupUrl = `${appUrl.replace(/\/$/, '')}/signup?invite=${token}&email=${encodeURIComponent(cleanEmail)}`

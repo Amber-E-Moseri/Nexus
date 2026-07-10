@@ -185,6 +185,9 @@ export default function SprintOverview() {
   const canManage = role === 'super_admin' || detail?.members?.some(
     (member) => member.user?.id === profile?.id && ['owner', 'manager'].includes(member.role),
   )
+  const canAssignPrivilegedSprintRoles = role === 'super_admin' || detail?.members?.some(
+    (member) => member.user?.id === profile?.id && member.role === 'owner',
+  )
   const canCreateSprint = role === 'super_admin' || role === 'dept_lead'
 
   async function loadDetail() {
@@ -563,6 +566,8 @@ export default function SprintOverview() {
           sprintId={detail.sprint.id}
           sprintName={detail.sprint.name}
           sprintEndDate={detail.sprint.end_date}
+          canInvite={Boolean(canManage && !isArchived)}
+          canAssignPrivilegedRoles={Boolean(canAssignPrivilegedSprintRoles)}
           onClose={() => setShowInviteExternalModal(false)}
           onSuccess={() => { setShowInviteExternalModal(false); loadDetail() }}
         />
