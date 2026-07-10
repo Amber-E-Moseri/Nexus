@@ -4,6 +4,7 @@ import { STATUS, STATUS_ORDER, NEEDS_PLAN_COLOR } from './data/status'
 import { PrayerRequestsTab } from './tabs/PrayerRequestsTab'
 import { PrayerActivityTab } from './tabs/PrayerActivityTab'
 import { PrayerTimer } from './PrayerTimer'
+import { SpotifyPlayer } from './SpotifyPlayer'
 
 const EDITABLE_FIELDS = [
   'status', 'contact_name', 'contact_phone', 'notes', 'strategy',
@@ -218,6 +219,10 @@ function InfoTab({ campus }) {
           style={{ width: '100%', height: 180, objectFit: 'cover', borderRadius: 10 }}
           onError={(e) => { e.target.style.display = 'none' }}
         />
+      )}
+
+      {campus.spotify_playlist_id && (
+        <SpotifyPlayer playlistId={campus.spotify_playlist_id} />
       )}
     </div>
   )

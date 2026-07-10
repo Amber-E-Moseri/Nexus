@@ -13,6 +13,7 @@ import { CampusPanel } from './CampusPanel'
 import { RegionalView } from './RegionalView'
 import { PrayerMode } from './PrayerMode'
 import { MapSettingsView } from './MapSettingsView'
+import { HubDetailsPanel } from './HubDetailsPanel'
 import '../../styles/BLWMap.css'
 import '../../styles/blw-map-parity.css'
 
@@ -55,6 +56,7 @@ export function BLWMap() {
   const [regionalOpen, setRegionalOpen] = useState(false)
   const [prayerOpen, setPrayerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [selectedHubName, setSelectedHubName] = useState(null)
 
   const canEdit = useCanEditCampus()
 
@@ -107,6 +109,15 @@ export function BLWMap() {
     const pct = tot ? Math.round((reached / tot) * 100) : 0
     return { est, pio, inf, nr, np, tot, pct }
   }, [campuses, groupView])
+
+  // Hub stats: count campuses per hub
+  const hubStats = useMemo(() => {
+    const stats = {}
+    Object.keys(HUBS).forEach((hubName) => {
+      stats[hubName] = campuses.filter((c) => c.nearestHubName === hubName && c.lat && c.lng).length
+    })
+    return stats
+  }, [campuses])
 
   // ── Load + realtime ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -253,8 +264,9 @@ export function BLWMap() {
           opacity: 0.8,
           fillColor: col,
           fillOpacity: 0.06,
-          interactive: false,
+          interactive: true,
         })
+        circle.on('click', () => setSelectedHubName(name))
         const outerR = Math.min(Math.max(h.radius * 111000, 25000), 40000)
         const outer = L.circle([h.lat, h.lng], {
           radius: outerR,
@@ -265,21 +277,41 @@ export function BLWMap() {
           interactive: false,
           dashArray: '5,6',
         })
-        const label = L.marker([h.lat, h.lng], {
+        const labelEl = L.marker([h.lat, h.lng], {
           icon: L.divIcon({
             className: 'hub-label',
-            html: `<div style="color:${col};padding:1px 6px;background:rgba(255,255,255,.92);border-radius:3px;font-size:9px;font-weight:600;white-space:nowrap;border:1px solid ${col}30;font-family:${THEME.fontBody};box-shadow:0 1px 3px rgba(0,0,0,.12)">${name}</div>`,
+            html: `<div style="color:${col};padding:2px 6px;background:rgba(255,255,255,.92);border-radius:3px;font-size:9px;font-weight:600;white-space:nowrap;border:1px solid ${col}30;font-family:${THEME.fontBody};box-shadow:0 1px 3px rgba(0,0,0,.12);cursor:pointer;display:flex;align-items:center;gap:4px"><span>${name}</span><span style="background:${col};color:#fff;padding:1px 3px;border-radius:2px;font-size:8px;font-weight:700">0</span></div>`,
             iconAnchor: [0, 0],
           }),
-          interactive: false,
+          interactive: true,
           zIndexOffset: -100,
         })
-        hubLayersRef.current[name] = { circle, outer, label }
+        labelEl.on('click', () => setSelectedHubName(name))
+        hubLayersRef.current[name] = { circle, outer, label: labelEl }
       })
     }
     updateHubVisibility()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading])
+
+  // Update hub labels with campus counts
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map) return
+    Object.entries(hubLayersRef.current).forEach(([name, { label }]) => {
+      if (!label) return
+      const h = HUBS[name]
+      if (!h) return
+      const col = GROUP_COLORS[h.group] || '#888'
+      const campusCount = hubStats[name] || 0
+      const icon = L.divIcon({
+        className: 'hub-label',
+        html: `<div style="color:${col};padding:2px 6px;background:rgba(255,255,255,.92);border-radius:3px;font-size:9px;font-weight:600;white-space:nowrap;border:1px solid ${col}30;font-family:${THEME.fontBody};box-shadow:0 1px 3px rgba(0,0,0,.12);cursor:pointer;display:flex;align-items:center;gap:4px"><span>${name}</span><span style="background:${col};color:#fff;padding:1px 3px;border-radius:2px;font-size:8px;font-weight:700">${campusCount}</span></div>`,
+        iconAnchor: [0, 0],
+      })
+      label.setIcon(icon)
+    })
+  }, [hubStats])
 
   // ── Markers ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -495,7 +527,7 @@ export function BLWMap() {
         )}
       </div>
 
-      {/* Side panel */}
+      {/* Side panel - Campus */}
       <div className={`blw-side-panel${panelOpen && selectedCampus ? ' open' : ''}`}>
         {selectedCampus && (
           <CampusPanel
@@ -508,6 +540,15 @@ export function BLWMap() {
           />
         )}
       </div>
+
+      {/* Side panel - Hub */}
+      {selectedHubName && (
+        <HubDetailsPanel
+          hubName={selectedHubName}
+          campuses={campuses}
+          onClose={() => setSelectedHubName(null)}
+        />
+      )}
 
       {settingsOpen && <MapSettingsView campuses={campuses} onClose={() => setSettingsOpen(false)} />}
       {regionalOpen && <RegionalView campuses={campuses} onClose={() => setRegionalOpen(false)} />}
