@@ -902,7 +902,7 @@ export default function Sidebar() {
                 <div style={{ marginTop: 8, fontSize: 11, color: 'var(--ink-3)' }}>{quickAddSaving ? 'Saving…' : 'Press Enter to save'}</div>
               </motion.div>
             ) : null}
-            <SidebarSpaceTree spaceId={space.id} spaceName={space.name} isActive={isPathActive(location.pathname, `/spaces/${space.id}`)} />
+            <SidebarSpaceTree spaceId={space.id} spaceName={space.name} isActive={isPathActive(location.pathname, `/spaces/${space.id}`)} canManage={canManageSpaces} />
           </div>
         ))}
         {archivedSpaces.length > 0 ? (
