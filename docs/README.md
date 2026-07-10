@@ -26,7 +26,9 @@ Feature-specific implementation guides and checklists.
 - `features/SPRINT_ENHANCEMENT_STATUS.md` - Sprint enhancement tracking
 - `features/SPRINT_MODAL_ENHANCEMENT_SUMMARY.md` - Sprint modal improvements
 - `features/COMMUNICATIONS_SYSTEM_COMPLETE.md` - Email communications system
-- `features/NATIVE_COMMUNICATIONS_README.md` - Native communications platform
+- `features/NATIVE_COMMUNICATIONS_README.md` - Native Nexus communications hub (replaces iframe; includes mailing-list signup)
+- `features/TASK_FOLLOWERS_IMPLEMENTATION.md` - Task followers + activity-feed fan-out
+- `features/ICAL_FEED.md` - Personal iCal calendar feed + token regeneration
 - `features/CALENDAR_IMPLEMENTATION_GUIDE.md` - Calendar feature implementation
 - `features/CALENDAR_STATUS_2026_06_25.md` - Current calendar feature status
 - `features/CALENDAR_WEEK_1_2_SUMMARY.md` - Calendar Phase 1-2 summary
@@ -34,6 +36,7 @@ Feature-specific implementation guides and checklists.
 - `features/CALENDAR_WEEK_4_SUMMARY.md` - Calendar Phase 4 summary
 - `features/MEETINGS_CHECKLIST_UPDATED.md` - Meetings feature checklist
 - `features/PLANNER_FILTERS_IMPLEMENTATION.md` - Planner filter implementation
+- `features/WEEKLY_WINS.md` - Weekly Wins board (leadership summary, ships with Planner)
 - `features/MILESTONE_INTEGRATION_SUMMARY.md` - Milestone integration overview
 - `features/MILESTONE_INTEGRATION_VERIFICATION.md` - Milestone verification
 
@@ -164,6 +167,6 @@ Historical documents, analysis, and reference materials.
 
 ---
 
-**Last Updated:** 2026-06-26  
-**Documentation Version:** 2.0  
+**Last Updated:** 2026-07-09  
+**Documentation Version:** 2.1  
 **Total Docs:** 100+

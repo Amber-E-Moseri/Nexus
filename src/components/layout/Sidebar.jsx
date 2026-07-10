@@ -1432,6 +1432,148 @@ export default function Sidebar() {
             />
           </>
         ) : null}
+        {/* Tools & Resources - SOPs and Tools */}
+        {(() => {
+          const sops = integrations.filter((i) => i.type === 'sop')
+          const colorMap = {
+            default: { bg: '#FDF3DC', bgHover: '#FBE8B8', color: '#B45309' },
+          }
+          const showCollapse = sops.length > 2
+
+          return sops.length > 0 ? (
+            <>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  color: '#9E9488',
+                  margin: '8px 0 6px',
+                  cursor: showCollapse ? 'pointer' : 'default',
+                }}
+                onClick={() => showCollapse && setToolsExpanded(!toolsExpanded)}
+              >
+                <span>Tools & Resources</span>
+                {showCollapse && (
+                  <ChevronDown
+                    size={12}
+                    style={{
+                      transform: toolsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.15s',
+                    }}
+                  />
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
+                {sops.map((sop, idx) => {
+                  const colors = colorMap.default
+                  const isHidden = showCollapse && !toolsExpanded && idx >= 2
+                  return !isHidden ? (
+                    <a
+                      key={sop.id}
+                      href={sop.launch_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={sop.description || sop.name}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '8px 10px',
+                        borderRadius: 6,
+                        background: colors.bg,
+                        color: colors.color,
+                        textDecoration: 'none',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = colors.bgHover
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = colors.bg
+                      }}
+                    >
+                      <span style={{ fontSize: 14 }}>{sop.icon_emoji || '📋'}</span>
+                      <span>{sop.name}</span>
+                    </a>
+                  ) : null
+                })}
+              </div>
+            </>
+          ) : null
+        })()}
+        {(() => {
+          const allSops = Object.values(spaceSops).flat()
+          if (allSops.length === 0) return null
+          const showCollapse = allSops.length > 3
+          return (
+            <>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  color: '#9E9488',
+                  margin: '8px 0 4px',
+                  cursor: showCollapse ? 'pointer' : 'default',
+                }}
+                onClick={() => showCollapse && setToolsExpanded((v) => !v)}
+              >
+                <span>SOPs</span>
+                {showCollapse && (
+                  <ChevronDown
+                    size={12}
+                    style={{
+                      transform: toolsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.15s',
+                    }}
+                  />
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 4 }}>
+                {allSops.map((sop, idx) => {
+                  if (showCollapse && !toolsExpanded && idx >= 3) return null
+                  return (
+                    <a
+                      key={sop.id}
+                      href={sop.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={sop.title}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '5px 8px',
+                        borderRadius: 6,
+                        textDecoration: 'none',
+                        color: 'var(--ink-2)',
+                        fontSize: 12,
+                        fontWeight: 500,
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(237,232,248,1)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                    >
+                      {sopIcon(sop.file_type, 12)}
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sop.title}</span>
+                    </a>
+                  )
+                })}
+              </div>
+            </>
+          )
+        })()}
         <SidebarItem
           active={isPathActive(location.pathname, '/help')}
           icon={HelpCircle}
@@ -1439,84 +1581,6 @@ export default function Sidebar() {
           to="/help"
         />
       </div>
-
-      {/* Tools & Resources - SOPs and Tools */}
-      {(() => {
-        const sops = integrations.filter((i) => i.type === 'sop')
-        const colorMap = {
-          default: { bg: '#FDF3DC', bgHover: '#FBE8B8', color: '#B45309' },
-        }
-        const showCollapse = sops.length > 2
-
-        return sops.length > 0 ? (
-          <div style={{ padding: '12px 16px', borderTop: '1px solid #EDE8DC' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                fontSize: 10,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                color: '#9E9488',
-                marginBottom: 8,
-                cursor: showCollapse ? 'pointer' : 'default',
-              }}
-              onClick={() => showCollapse && setToolsExpanded(!toolsExpanded)}
-            >
-              <span>Tools & Resources</span>
-              {showCollapse && (
-                <ChevronDown
-                  size={12}
-                  style={{
-                    transform: toolsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.15s',
-                  }}
-                />
-              )}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {sops.map((sop, idx) => {
-                const colors = colorMap.default
-                const isHidden = showCollapse && !toolsExpanded && idx >= 2
-                return !isHidden ? (
-                  <a
-                    key={sop.id}
-                    href={sop.launch_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={sop.description || sop.name}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '8px 10px',
-                      borderRadius: 6,
-                      background: colors.bg,
-                      color: colors.color,
-                      textDecoration: 'none',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = colors.bgHover
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = colors.bg
-                    }}
-                  >
-                    <span style={{ fontSize: 14 }}>{sop.icon_emoji || '📋'}</span>
-                    <span>{sop.name}</span>
-                  </a>
-                ) : null
-              })}
-            </div>
-          </div>
-        ) : null
-      })()}
 
       <div style={{ borderTop: '1px solid #EDE8DC', padding: 10, marginTop: 'auto' }}>
         <div

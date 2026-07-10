@@ -123,7 +123,7 @@ function RowContent({
   isHovering = false,
   isMobile = false,
 }) {
-  const subtaskCount = task.subtask_count ?? task.subtasks?.length ?? 0
+  const subtaskCount = (Array.isArray(task.subtask_count) ? task.subtask_count[0]?.count : task.subtask_count) ?? task.subtasks?.length ?? 0
 
   return (
     <div

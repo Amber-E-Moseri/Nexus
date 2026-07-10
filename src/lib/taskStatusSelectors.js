@@ -21,7 +21,7 @@ export function selectActiveTaskStatuses(statuses = []) {
 // pointing at any of them still land in the merged group.
 export function dedupeTaskStatuses(statuses = []) {
   const byKey = new Map()
-  for (const status of statuses) {
+  for (const status of sortTaskStatuses(statuses)) {
     const key = `${status.category}|${(status.name ?? '').trim().toLowerCase()}`
     const existing = byKey.get(key)
     if (existing) {
