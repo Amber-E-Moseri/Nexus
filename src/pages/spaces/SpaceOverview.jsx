@@ -21,7 +21,6 @@ import SpaceIntegrationsTab from '../../features/spaces/components/SpaceIntegrat
 import SpaceModal from '../../features/spaces/components/SpaceModal'
 import SpaceStatusSettings from '../../features/spaces/components/SpaceStatusSettings'
 import SprintModal from '../../features/sprints/components/SprintModal'
-import AssignedToMeToggle from '../../features/tasks/components/AssignedToMeToggle'
 import KanbanBoard from '../../features/tasks/components/KanbanBoard'
 import TaskFilters from '../../features/tasks/components/TaskFilters'
 import TaskListView from '../../features/tasks/components/TaskListView'
@@ -276,32 +275,66 @@ function TaskFieldSettingsEditor({ value, onChange }) {
 
 function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings, selectedFolder, selectedList }) {
   const mediaSpace = isMediaDepartment(space)
-  const openTasks = mediaSpace ? 0 : tasks.filter((task) => task.status_category !== 'completed').length
   const activeSprints = mediaSpace ? 0 : sprints.filter((sprint) => sprint.status === 'active').length
   const effectiveListsCount = mediaSpace ? 0 : listsCount
+
+  // Task status breakdown
+  const tasksByStatus = mediaSpace ? {} : tasks.reduce((acc, task) => {
+    const key = task.status_category || 'open'
+    acc[key] = (acc[key] ?? 0) + 1
+    return acc
+  }, {})
+
   const recentActivity = (mediaSpace ? [] : [...tasks])
     .sort((left, right) => new Date(right.updated_at ?? right.created_at ?? 0) - new Date(left.updated_at ?? left.created_at ?? 0))
     .slice(0, 4)
   const visibleMeetings = mediaSpace ? [] : meetings.slice(0, 3)
 
+  const statusSummary = [
+    { key: 'open', label: 'Not Started', count: tasksByStatus['open'] ?? 0 },
+    { key: 'in_progress', label: 'In Progress', count: tasksByStatus['in_progress'] ?? 0 },
+    { key: 'review', label: 'In Review', count: tasksByStatus['review'] ?? 0 },
+    { key: 'blocked', label: 'Blocked', count: tasksByStatus['blocked'] ?? 0 },
+    { key: 'completed', label: 'Completed', count: tasksByStatus['completed'] ?? 0 },
+  ]
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {selectedList ? (
         <div className="rounded-[20px] border border-[var(--border)] bg-white px-5 py-4 text-sm text-[var(--text-secondary)] shadow-[var(--card-shadow)]">
           Viewing tasks for <span className="font-semibold text-[var(--text-primary)]">{selectedFolder?.name ?? 'Folder'}</span> → <span className="font-semibold text-[var(--text-primary)]">{selectedList.name}</span>
         </div>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-4">
+      <section>
+        <div className="mb-3 text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide">Space at a glance</div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {statusSummary.map((status) => (
+            <div key={status.key} className="rounded-[18px] border border-[var(--border)] bg-white p-4 shadow-[var(--card-shadow)] transition-all hover:shadow-[0_8px_16px_rgba(14,14,30,0.12)]">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-semibold uppercase text-[var(--text-tertiary)] tracking-[0.08em]">{status.label}</div>
+                  <div className="mt-2 text-[32px] font-semibold leading-none text-[var(--text-primary)]">{status.count}</div>
+                </div>
+                <div className="h-3 w-3 rounded-full" style={{ background: STATUS_ACCENT[status.key] ?? '#E5E7EB' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-3">
         {[
-          { label: 'Open tasks', value: openTasks },
-          { label: 'Active sprints', value: activeSprints },
-          { label: 'Lists', value: effectiveListsCount },
-          { label: 'Members', value: members.length },
+          { label: 'Lists', value: effectiveListsCount, icon: '📋' },
+          { label: 'Active sprints', value: activeSprints, icon: '🏃' },
+          { label: 'Members', value: members.length, icon: '👥' },
         ].map((item) => (
-          <div key={item.label} className="rounded-[22px] border border-[var(--border)] bg-white px-5 py-4 shadow-[var(--card-shadow)]">
-            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">{item.label}</div>
-            <div className="mt-2 text-[42px] font-semibold leading-none text-[var(--text-primary)]">{item.value}</div>
+          <div key={item.label} className="flex items-center gap-3 rounded-[18px] border border-[var(--border)] bg-white px-4 py-4 shadow-[var(--card-shadow)]">
+            <div className="text-2xl">{item.icon}</div>
+            <div className="min-w-0">
+              <div className="text-xs font-semibold uppercase text-[var(--text-tertiary)] tracking-[0.08em]">{item.label}</div>
+              <div className="mt-1 text-[24px] font-semibold text-[var(--text-primary)]">{item.value}</div>
+            </div>
           </div>
         ))}
       </section>
@@ -913,8 +946,6 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
   const [modal, setModal] = useState(null)
   const [boardFiltersOpen, setBoardFiltersOpen] = useState(false)
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
-  const assignedToMe = Boolean(profile?.id) && filters.assigneeId === profile.id
-  const toggleAssignedToMe = () => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))
 
   const selectedList = useMemo(() => lists.find((list) => list.id === selectedListId) ?? null, [lists, selectedListId])
   const selectedFolder = useMemo(
@@ -1023,8 +1054,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
         ) : null}
 
         {viewMode === 'kanban' ? (
-          <div className="flex items-center justify-end gap-2">
-            <AssignedToMeToggle active={assignedToMe} onClick={toggleAssignedToMe} />
+          <div className="flex items-center justify-end">
             <div className="relative">
               <button
                 type="button"
@@ -1045,14 +1075,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
           </div>
         ) : null}
 
-        {viewMode === 'list' ? (
-          <div className="space-y-3">
-            <div className="flex items-center justify-end">
-              <AssignedToMeToggle active={assignedToMe} onClick={toggleAssignedToMe} />
-            </div>
-            <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={visibleStatuses} tasks={visibleTasks} />
-          </div>
-        ) : null}
+        {viewMode === 'list' ? <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={visibleStatuses} tasks={visibleTasks} /> : null}
 
         {viewMode === 'kanban' ? (
           <div className="min-h-[520px]">
