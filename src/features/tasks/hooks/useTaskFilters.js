@@ -12,7 +12,6 @@ const EMPTY_FILTERS = {
   hasComments: false,
   hasDependencies: false,
   showDone: true,
-  milestoneStatus: [],
 }
 
 function startOfDay(date) {
@@ -65,49 +64,6 @@ export function useTaskFilters(tasks = []) {
         }
       }
 
-      if (filters.milestoneStatus.length > 0) {
-        let matchesMilestoneFilter = false
-        for (const filter of filters.milestoneStatus) {
-          if (filter === 'no_milestone' && !task.milestone_id) {
-            matchesMilestoneFilter = true
-            break
-          }
-          if (filter === 'milestone_overdue') {
-            const today = startOfDay(new Date())
-            if (task.milestone_due_date) {
-              const due = startOfDay(new Date(task.milestone_due_date))
-              if (due < today) {
-                matchesMilestoneFilter = true
-                break
-              }
-            }
-          }
-          if (filter === 'milestone_today') {
-            const today = startOfDay(new Date())
-            if (task.milestone_due_date) {
-              const due = startOfDay(new Date(task.milestone_due_date))
-              const tomorrow = new Date(today)
-              tomorrow.setDate(tomorrow.getDate() + 1)
-              if (due >= today && due < tomorrow) {
-                matchesMilestoneFilter = true
-                break
-              }
-            }
-          }
-          if (filter === 'milestone_upcoming') {
-            const today = startOfDay(new Date())
-            if (task.milestone_due_date) {
-              const due = startOfDay(new Date(task.milestone_due_date))
-              if (due > today) {
-                matchesMilestoneFilter = true
-                break
-              }
-            }
-          }
-        }
-        if (!matchesMilestoneFilter) return false
-      }
-
       return true
     })
   }, [tasks, filters])
@@ -127,8 +83,7 @@ export function useTaskFilters(tasks = []) {
       filters.source.length > 0 ||
       filters.hasComments ||
       filters.hasDependencies ||
-      !filters.showDone ||
-      filters.milestoneStatus.length > 0
+      !filters.showDone
     )
   }
 

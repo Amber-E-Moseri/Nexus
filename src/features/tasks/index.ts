@@ -17,7 +17,7 @@ export { default as TaskCalendarView } from './components/TaskCalendarView'
 export { TasksProvider, TasksContext, useTasks } from './TasksContext'
 
 // Export hooks
-export { useMyTasks, getMilestoneForTask, saveMilestone } from './hooks/useMyTasks'
+export { useMyTasks } from './hooks/useMyTasks'
 
 // Export all lib functions
 export * from './lib/tasks'
