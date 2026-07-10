@@ -537,7 +537,7 @@ create policy "campus_edits_select_own_or_admin" on public.campus_edits
   for select to authenticated
   using (
     auth.uid() = submitted_by
-    or public.current_user_role() = 'super_admin'
+    or public.current_user_role() in ('super_admin', 'regional_secretary')
     or public.has_space_role_anywhere(auth.uid(), 'ors')
   );
 
@@ -545,7 +545,7 @@ drop policy if exists "campus_edits_update_admin_only" on public.campus_edits;
 create policy "campus_edits_update_admin_only" on public.campus_edits
   for update to authenticated
   using (
-    public.current_user_role() = 'super_admin'
+    public.current_user_role() in ('super_admin', 'regional_secretary')
     or public.has_space_role_anywhere(auth.uid(), 'ors')
   );
 
@@ -553,11 +553,11 @@ drop policy if exists "campuses_edit_admin_ors" on public.campuses;
 create policy "campuses_edit_admin_ors" on public.campuses
   for update to authenticated
   using (
-    public.current_user_role() = 'super_admin'
+    public.current_user_role() in ('super_admin', 'regional_secretary')
     or public.has_space_role_anywhere(auth.uid(), 'ors')
   )
   with check (
-    public.current_user_role() = 'super_admin'
+    public.current_user_role() in ('super_admin', 'regional_secretary')
     or public.has_space_role_anywhere(auth.uid(), 'ors')
   );
 

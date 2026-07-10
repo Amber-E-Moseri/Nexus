@@ -52,6 +52,7 @@ export function BLWMap() {
     }
   }, [profile?.group_name])
   const [subgroupFilter, setSubgroupFilter] = useState('all')
+  const [hubFilter, setHubFilter] = useState('all') // 'all' | <hub name>
   const [showHubs, setShowHubs] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [regionalOpen, setRegionalOpen] = useState(false)
@@ -72,6 +73,21 @@ export function BLWMap() {
     [campuses]
   )
 
+  // Hub options scoped to the active group view, so the dropdown doesn't list
+  // hubs from other regions once a group is selected.
+  const hubOptions = useMemo(
+    () =>
+      Object.keys(HUBS)
+        .filter((name) => groupView === 'all' || HUBS[name].group === groupView)
+        .sort(),
+    [groupView]
+  )
+
+  // Reset the hub filter if it no longer applies to the selected group view.
+  useEffect(() => {
+    if (hubFilter !== 'all' && !hubOptions.includes(hubFilter)) setHubFilter('all')
+  }, [hubOptions, hubFilter])
+
   const filteredCampuses = useMemo(() => {
     const q = searchTerm.trim().toLowerCase()
     return campuses.filter((c) => {
@@ -83,6 +99,7 @@ export function BLWMap() {
         return false
       }
       if (subgroupFilter !== 'all' && c.subgroup !== subgroupFilter) return false
+      if (hubFilter !== 'all' && c.nearestHubName !== hubFilter) return false
       if (q) {
         const hay = [c.institution, c.campus, c.nearestHubName, c.province, c.group, c.subgroup]
           .filter(Boolean)
@@ -92,7 +109,7 @@ export function BLWMap() {
       }
       return true
     })
-  }, [campuses, activeFilter, subgroupFilter, searchTerm, groupView])
+  }, [campuses, activeFilter, subgroupFilter, hubFilter, searchTerm, groupView])
 
   // Tally ignores the status filter (like the original) but respects the group view,
   // so a group view shows that group's reach numbers.
@@ -206,6 +223,12 @@ export function BLWMap() {
   }, [selectedId])
 
   // ── Hub layers ───────────────────────────────────────────────────────────────
+  // Circles/outer rings show whenever the Hubs toggle is on — the user opted
+  // in explicitly, so there's no need to also gate on zoom (that previously
+  // meant toggling Hubs on did nothing until you zoomed to z>=6, unlike
+  // RegionalView, which always renders hub circles). Labels stay zoom-gated
+  // when the toggle is off, so they still auto-appear on deep zoom without
+  // cluttering the all-Canada view.
   const updateHubVisibility = () => {
     const map = mapInstanceRef.current
     if (!map) return
@@ -213,8 +236,9 @@ export function BLWMap() {
     Object.entries(hubLayersRef.current).forEach(([name, { circle, outer, label }]) => {
       const inGroup =
         groupViewRef.current === 'all' || HUBS[name]?.group === groupViewRef.current
-      const showCircle = inGroup && showHubsRef.current && z >= 6
-      const showLabel = inGroup && ((showHubsRef.current && z >= 8) || z >= 9)
+      const inHubFilter = hubFilterRef.current === 'all' || hubFilterRef.current === name
+      const showCircle = inGroup && inHubFilter && showHubsRef.current
+      const showLabel = inGroup && inHubFilter && (showHubsRef.current || z >= 9)
       toggleLayer(map, circle, showCircle)
       toggleLayer(map, outer, showCircle)
       toggleLayer(map, label, showLabel)
@@ -226,6 +250,13 @@ export function BLWMap() {
     updateHubVisibility()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showHubs])
+
+  const hubFilterRef = useRef(hubFilter)
+  useEffect(() => {
+    hubFilterRef.current = hubFilter
+    updateHubVisibility()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hubFilter])
 
   // ── Group view: scope hubs + zoom to the group's territory ────────────────
   const groupViewRef = useRef(groupView)
@@ -477,6 +508,22 @@ export function BLWMap() {
           <button className={`blwp-chip${showHubs ? ' on hubs' : ''}`} onClick={() => setShowHubs((v) => !v)}>
             ◎ Hubs
           </button>
+          {hubOptions.length > 0 && (
+            <select
+              className={`blwp-chip blwp-subgroup-select${hubFilter !== 'all' ? ' on' : ''}`}
+              value={hubFilter}
+              onChange={(e) => {
+                const val = e.target.value
+                setHubFilter(val)
+                if (val !== 'all') setShowHubs(true)
+              }}
+            >
+              <option value="all">All Hubs</option>
+              {hubOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Map — position:absolute so height is never dependent on flex chain */}
