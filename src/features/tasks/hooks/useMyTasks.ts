@@ -31,27 +31,45 @@ interface UseMyTasksReturn {
  * Fetches all personal tasks: created_by, assigned_to, or owned spaces
  * Includes real-time sync
  */
+const TASK_SELECT = `
+  id, title, description, priority, status, status_id, due_date, created_at,
+  department_id, assignee_id, created_by, task_type, sprint_id, list_id,
+  source, meeting_id, parent_task_id, completed_at,
+  subtask_count:tasks!parent_task_id(count),
+  status_definition:task_status_definitions!status_id(
+    id, name, color, category, legacy_key, department_id
+  ),
+  assignee:users!assignee_id(id, name, avatar_url),
+  creator:users!created_by(id, name),
+  space:departments(id, name, color),
+  comments:task_comments(count),
+  files:task_files(count),
+  dependencies:task_dependencies!task_id(count)
+`
+
 export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange?: [Date, Date]): UseMyTasksReturn {
   const { showToast } = useToast()
   const [tasks, setTasks] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
-  const TASK_SELECT = `
-    id, title, description, priority, status, status_id, due_date, created_at,
-    department_id, assignee_id, created_by, task_type, sprint_id, list_id,
-    source, meeting_id, parent_task_id, completed_at,
-    subtask_count:tasks!parent_task_id(count),
-    status_definition:task_status_definitions!status_id(
-      id, name, color, category, legacy_key, department_id
-    ),
-    assignee:users!assignee_id(id, name, avatar_url),
-    creator:users!created_by(id, name),
-    space:departments(id, name, color),
-    comments:task_comments(count),
-    files:task_files(count),
-    dependencies:task_dependencies!task_id(count)
-  `
+  // Create a stable dependency key from filter values to avoid unnecessary re-renders
+  const filterKey = useMemo(() => {
+    const key = {
+      status: filters?.status,
+      assignee: filters?.assignee,
+      space: filters?.space,
+      dateRange: filters?.dateRange,
+      priority: filters?.priority,
+      taskType: filters?.taskType,
+      source: filters?.source,
+      dueDateRange: filters?.dueDateRange,
+      showDone: filters?.showDone,
+      hasComments: filters?.hasComments,
+      hasDependencies: filters?.hasDependencies,
+    }
+    return JSON.stringify(key)
+  }, [filters])
 
   // Fetch tasks
   const load = useCallback(async () => {
@@ -94,8 +112,8 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
       if (filters?.priority && filters.priority.length > 0) {
         filtered = filtered.filter((t) => filters.priority.includes(t.priority))
       }
-      if (filters?.assigneeId) {
-        filtered = filtered.filter((t) => t.assignee_id === filters.assigneeId)
+      if (filters?.assignee) {
+        filtered = filtered.filter((t) => t.assignee_id === filters.assignee)
       }
       if (filters?.taskType && filters.taskType.length > 0) {
         filtered = filtered.filter((t) => filters.taskType.includes(t.task_type))
@@ -136,10 +154,10 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
         filtered = filtered.filter((t) => !isTaskCompleted(t))
       }
       if (filters?.hasComments) {
-        filtered = filtered.filter((t) => t.comments?.count > 0)
+        filtered = filtered.filter((t) => (t.comments?.[0]?.count ?? 0) > 0)
       }
       if (filters?.hasDependencies) {
-        filtered = filtered.filter((t) => t.dependencies?.count > 0)
+        filtered = filtered.filter((t) => (t.dependencies?.[0]?.count ?? 0) > 0)
       }
       setTasks(filtered)
     } catch (err) {
@@ -149,18 +167,18 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     } finally {
       setIsLoading(false)
     }
-  }, [userId, filters?.status, filters?.assignee, filters?.space, dateRange, filters?.dateRange, filters?.priority, filters?.taskType, filters?.source, filters?.dueDateRange, filters?.showDone, filters?.hasComments, filters?.hasDependencies, showToast])
+  }, [userId, filters, dateRange, showToast])
 
-  // Initial load
+  // Initial load + refetch when filters change
   useEffect(() => {
     load()
-  }, [load])
+  }, [userId, filterKey, dateRange])
 
   // Real-time sync for tasks
-  // Realtime postgres_changes filters only support a single column=op.value
-  // clause, not the or(...) syntax used for PostgREST queries — so this
-  // needs two separate subscriptions (created_by and assignee_id) rather
-  // than one filter with an or().
+  // Subscribe only to tasks assigned to this user. We do not subscribe to
+  // created_by because delegated tasks (created by user, assigned to someone
+  // else) are excluded from My Tasks — patching them in would contradict the
+  // fetch query.
   useEffect(() => {
     if (!userId) return
 
@@ -168,29 +186,14 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
       if (payload.eventType === 'DELETE') {
         setTasks((prev) => prev.filter((t) => t.id !== payload.old.id))
       } else if (payload.eventType === 'INSERT') {
-        // New task created — patch it in without a full refetch
-        setTasks((prev) => [...prev, payload.new])
+        // Realtime payload has only flat fields; re-fetch to get relations
+        load()
       } else if (payload.eventType === 'UPDATE') {
-        // Task updated — patch the changed row
         setTasks((prev) =>
           prev.map((t) => (t.id === payload.new.id ? { ...t, ...payload.new } : t)),
         )
       }
     }
-
-    const createdSubscription = supabase
-      .channel(`tasks:created_by:${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'tasks',
-          filter: `created_by=eq.${userId}`,
-        },
-        handlePayload,
-      )
-      .subscribe()
 
     const assignedSubscription = supabase
       .channel(`tasks:assignee_id:${userId}`)
@@ -207,7 +210,6 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
       .subscribe()
 
     return () => {
-      supabase.removeChannel(createdSubscription)
       supabase.removeChannel(assignedSubscription)
     }
   }, [userId, load])

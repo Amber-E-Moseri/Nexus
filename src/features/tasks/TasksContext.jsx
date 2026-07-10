@@ -11,28 +11,6 @@ export function TasksProvider({ departmentId, sprintId, children }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const loadStatuses = useCallback(async () => {
-    // Load both global and department-specific statuses
-    const statusPromises = [listTaskStatuses()]
-    if (departmentId) {
-      statusPromises.push(listTaskStatuses({ departmentId }))
-    }
-    const allResults = await Promise.all(statusPromises)
-
-    // Deduplicate by category + legacy_key, preferring dept-specific over global
-    const statusMap = new Map()
-    for (let i = allResults.length - 1; i >= 0; i--) {
-      const statusList = allResults[i]
-      for (const status of statusList) {
-        const key = `${status.category}:${status.legacy_key || status.name}`
-        if (!statusMap.has(key)) {
-          statusMap.set(key, status)
-        }
-      }
-    }
-    setStatuses(Array.from(statusMap.values()))
-  }, [departmentId, sprintId])
-
   const loadTasks = useCallback(async () => {
     try {
       setLoading(true)
@@ -93,14 +71,6 @@ export function TasksProvider({ departmentId, sprintId, children }) {
       }
 
       const finalStatuses = selectActiveTaskStatuses(Array.from(statusMap.values()))
-      console.log('[TasksContext] Space/Sprint statuses:', {
-        sprintId,
-        departmentId,
-        globalStatusCount: statusResults[0]?.length || 0,
-        deptStatusCount: statusResults[1]?.length || 0,
-        finalCount: finalStatuses.length,
-        statuses: finalStatuses.map(s => ({ id: s.id, name: s.name, dept: s.department_id ? 'DEPT' : 'GLOBAL' }))
-      })
       setStatuses(finalStatuses)
       setTasks(taskData)
     } catch (err) {
@@ -122,9 +92,21 @@ export function TasksProvider({ departmentId, sprintId, children }) {
       if (payload.eventType === 'DELETE') {
         setTasks((prev) => prev.filter((t) => t.id !== payload.old.id))
       } else if (payload.eventType === 'INSERT') {
-        setTasks((prev) => [...prev, payload.new])
+        // Realtime payload has only flat fields; re-fetch to get full relations
+        loadTasks()
       } else if (payload.eventType === 'UPDATE') {
-        setTasks((prev) => prev.map((t) => (t.id === payload.new.id ? { ...t, ...payload.new } : t)))
+        // Merge realtime update with existing task, preserving relations from old task
+        setTasks((prev) => prev.map((t) => {
+          if (t.id === payload.new.id) {
+            const merged = { ...t, ...payload.new }
+            // If status_id changed, invalidate status cache to force re-lookup on next render
+            if (t.status_id !== payload.new.status_id) {
+              merged.status_definition = null
+            }
+            return merged
+          }
+          return t
+        }))
       }
     }
 
@@ -139,7 +121,7 @@ export function TasksProvider({ departmentId, sprintId, children }) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [departmentId, sprintId])
+  }, [departmentId, sprintId, loadTasks])
 
   const moveTask = useCallback(
     async (taskId, nextStatus) => {
@@ -175,6 +157,55 @@ export function TasksProvider({ departmentId, sprintId, children }) {
     },
     [loadTasks, statuses],
   )
+
+  const reloadStatuses = useCallback(() => {
+    // Extract and re-run just the status loading portion of loadTasks
+    const load = async () => {
+      try {
+        const statusPromises = [listTaskStatuses()]
+        if (departmentId) {
+          statusPromises.push(listTaskStatuses({ departmentId }))
+        }
+        const statusResults = await Promise.all(statusPromises)
+        const statusMap = new Map()
+        for (let i = statusResults.length - 1; i >= 0; i--) {
+          const statusList = statusResults[i]
+          for (const status of statusList) {
+            const key = `${status.category}:${status.legacy_key || status.name}`
+            if (!statusMap.has(key)) {
+              statusMap.set(key, status)
+            }
+          }
+        }
+        if (!Array.from(statusMap.values()).some(s => s.category === 'open')) {
+          try {
+            const allStatuses = await listTaskStatuses({ departmentId, includeInactive: true })
+            const openStatus = allStatuses.find(s => s.category === 'open')
+            if (openStatus) {
+              statusMap.set(`open:${openStatus.legacy_key || openStatus.name}`, { ...openStatus, active: true })
+            }
+          } catch { /* ignore */ }
+          if (!Array.from(statusMap.values()).some(s => s.category === 'open')) {
+            statusMap.set('open:to_do', {
+              id: '__fallback_todo',
+              name: 'To Do',
+              color: '#378ADD',
+              category: 'open',
+              legacy_key: 'to_do',
+              is_default: true,
+              active: true,
+              sort_order: 0,
+            })
+          }
+        }
+        const finalStatuses = selectActiveTaskStatuses(Array.from(statusMap.values()))
+        setStatuses(finalStatuses)
+      } catch (err) {
+        setError(err.message)
+      }
+    }
+    load()
+  }, [departmentId])
 
   const addTask = useCallback(
     async (taskData) => {
@@ -246,19 +277,29 @@ export function TasksProvider({ departmentId, sprintId, children }) {
 
   const defaultStatus = selectDefaultStatus(statuses)
 
-  const value = useMemo(() => ({
+  // Split context into data and actions to reduce re-renders
+  // Data changes less frequently than actions
+  const dataValue = useMemo(() => ({
     tasks,
     statuses,
     defaultStatusId: defaultStatus?.id ?? null,
     loading,
     error,
+  }), [tasks, statuses, defaultStatus, loading, error])
+
+  const actionsValue = useMemo(() => ({
     moveTask,
     addTask,
     editTask,
     removeTask,
     reload: loadTasks,
-    reloadStatuses: loadStatuses,
-  }), [tasks, statuses, defaultStatus, loading, error, moveTask, addTask, editTask, removeTask, loadTasks, loadStatuses])
+    reloadStatuses,
+  }), [moveTask, addTask, editTask, removeTask, loadTasks, reloadStatuses])
+
+  const value = useMemo(() => ({
+    ...dataValue,
+    ...actionsValue,
+  }), [dataValue, actionsValue])
 
   return (
     <TasksContext.Provider value={value}>
