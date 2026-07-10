@@ -196,6 +196,7 @@ function FullTranscriptView({ cleanedTranscript, chapters = [], onSave, onDiscar
 // ── Organized View (Meeting Minutes) ──────────────────────────────────
 
 function OrganizedView({ results, onSaveToMinutes, onDiscard, saving }) {
+  const [detailedNotesExpanded, setDetailedNotesExpanded] = useState(false)
   const [summary, setSummary] = useState(results.summary)
   const [decisions, setDecisions] = useState(
     Array.isArray(results.decisions)
@@ -285,6 +286,72 @@ function OrganizedView({ results, onSaveToMinutes, onDiscard, saving }) {
               <strong>{issue.participant_name}</strong> ({issue.type}): {issue.action}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Detailed Notes */}
+      {results.detailed_notes && (
+        <div style={{ marginBottom: 24 }}>
+          <button
+            onClick={() => setDetailedNotesExpanded(!detailedNotesExpanded)}
+            style={{
+              display: 'block',
+              marginBottom: 8,
+              padding: '8px 12px',
+              fontSize: 13,
+              fontWeight: 600,
+              color: '#4C2A92',
+              background: 'transparent',
+              border: '1px solid #EDE8DC',
+              borderRadius: 6,
+              cursor: 'pointer',
+              width: '100%',
+              textAlign: 'left',
+            }}
+          >
+            {detailedNotesExpanded ? '▼' : '▶'} Detailed Notes
+          </button>
+          {detailedNotesExpanded && (
+            <div
+              style={{
+                background: '#F9F8F6',
+                border: '1px solid #EDE8DC',
+                borderRadius: 6,
+                padding: 12,
+                fontSize: 13,
+                lineHeight: 1.6,
+                color: '#2D2A22',
+                whiteSpace: 'pre-wrap',
+                wordWrap: 'break-word',
+                maxHeight: '400px',
+                overflow: 'auto',
+              }}
+            >
+              {results.detailed_notes}
+              {results.scripture_references && results.scripture_references.length > 0 && (
+                <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #E9E4D8' }}>
+                  <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 12, textTransform: 'uppercase', color: '#9E9488' }}>
+                    Scripture References
+                  </div>
+                  {results.scripture_references.map((ref, i) => (
+                    <div key={i} style={{ fontSize: 12, marginBottom: 6, color: '#5C524C' }}>
+                      <strong>{ref.citation}</strong>
+                      {ref.confidence === 'confirmed' && ref.verse_text && (
+                        <div style={{ marginTop: 2, fontStyle: 'italic', color: '#7A7168' }}>
+                          "{ref.verse_text}"
+                        </div>
+                      )}
+                      {ref.confidence === 'unconfirmed' && (
+                        <div style={{ marginTop: 2, fontSize: 11, color: '#A89A8A' }}>
+                          [citation unconfirmed — verse text not verified]
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

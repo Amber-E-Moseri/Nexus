@@ -13,6 +13,7 @@ import MembersPanel from '../../components/settings/MembersPanel'
 import ApiDocumentationPage from '../ApiDocumentationPage'
 import ActivityFeedWidget from '../../features/dashboard/components/ActivityFeedWidget'
 import ApiPermissionsSection from './ApiPermissionsSection'
+import ApiKeyManager from '../../features/automations/components/ApiKeyManager'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 
 const TABS = ['Profile', 'Notifications', 'Integrations', 'Automations', 'Members', 'Activity Log', 'API Permissions', 'Organisation', 'API', 'Danger Zone']
@@ -68,6 +69,7 @@ export default function Settings() {
     if (tab === 'Members') return role === 'super_admin' || role === 'dept_lead'
     if (tab === 'Activity Log') return role === 'super_admin' || role === 'dept_lead'
     if (tab === 'API Permissions') return role === 'super_admin'
+    if (tab === 'API') return role === 'super_admin' || role === 'dept_lead'
     if (tab === 'Organisation' || tab === 'Danger Zone') return role === 'super_admin'
     return true
   })
@@ -481,8 +483,20 @@ export default function Settings() {
         </div>
       ) : null}
 
-      {activeTab === 'API' ? (
-        <ApiDocumentationPage />
+      {activeTab === 'API' && (role === 'super_admin' || role === 'dept_lead') ? (
+        <div role="tabpanel" id="tabpanel-api" aria-labelledby="tab-api" tabIndex={0} className="space-y-6">
+          <ApiKeyManager
+            departmentId={profile?.department_id}
+            currentUserId={user?.id}
+            canManage={role === 'super_admin' || role === 'dept_lead'}
+          />
+          <div className="mt-8 pt-8 border-t border-[var(--border)]">
+            <h2 style={{ fontFamily: FONT_HEADING, fontSize: 16, fontWeight: 600, color: 'var(--ink-1)', marginBottom: 16 }}>
+              API Documentation
+            </h2>
+            <ApiDocumentationPage />
+          </div>
+        </div>
       ) : null}
 
       {activeTab === 'Danger Zone' && role === 'super_admin' ? (

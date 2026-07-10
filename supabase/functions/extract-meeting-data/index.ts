@@ -391,6 +391,12 @@ ${transcriptForPrompt}`;
           };
     }
 
+    // Gate detailed_notes and scripture_references: only populate for qualified meetings
+    if (extracted.content_type !== "meeting" || extracted.confidence < 0.6) {
+      extracted.detailed_notes = null;
+      extracted.scripture_references = [];
+    }
+
     await setCachedExtraction(transcriptHash, extracted);
 
     const outputMode = extracted.content_type === "meeting" && extracted.confidence >= 0.6 ? "organized" : "full_transcript";

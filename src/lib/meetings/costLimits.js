@@ -7,7 +7,7 @@ import { supabase } from '../supabase'
 const LIMITS = {
   // Daily limits
   maxDailyProcesses: 50, // Max 50 transcriptions per day
-  maxDailySpend: 0.50, // Max $0.50 per day (1000+ transcripts)
+  maxDailySpend: 1.50, // Max $1.50 per day (raised for detailed_notes + scripture extraction)
 
   // Per-transcript limits
   maxTranscriptChars: 50000, // Max 50K characters (~12,000 words, 30 min meeting)
