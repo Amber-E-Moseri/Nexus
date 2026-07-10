@@ -1,5 +1,4 @@
 import { supabase } from '../../../lib/supabase'
-import { hasPermission } from '../../../lib/permissions'
 import { createNotification } from '../../notifications/lib/notifications'
 
 export async function getCalendarEvents(startDate, endDate) {
@@ -270,36 +269,108 @@ export async function getEventsBySubscriptionToken(token) {
 
 // ---- Permissions Management ----
 
+async function getOrgWideCalendarPermission(userId) {
+  const { data, error } = await supabase
+    .from('calendar_permissions')
+    .select('id')
+    .eq('user_id', userId)
+    .is('space_id', null)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
 export async function grantCalendarPermission(userId) {
+  const grantorId = (await supabase.auth.getUser()).data.user.id
+  const existing = await getOrgWideCalendarPermission(userId)
+
+  if (existing) {
+    const { error } = await supabase
+      .from('calendar_permissions')
+      .update({ can_manage: true, granted_by: grantorId, granted_at: new Date().toISOString() })
+      .eq('id', existing.id)
+
+    if (error) throw error
+    return
+  }
+
   const { error } = await supabase
     .from('calendar_permissions')
-    .upsert(
-      { user_id: userId, can_manage: true, granted_by: (await supabase.auth.getUser()).data.user.id },
-      { onConflict: 'user_id' }
-    )
+    .insert({ user_id: userId, can_manage: true, granted_by: grantorId })
 
   if (error) throw error
 }
 
 export async function revokeCalendarPermission(userId) {
+  const { data: targetUser, error: userError } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (userError) throw userError
+  if (targetUser?.role === 'super_admin') {
+    throw new Error('Super admins have calendar manager access by role and cannot be revoked here.')
+  }
+
+  const existing = await getOrgWideCalendarPermission(userId)
+
+  if (existing) {
+    const { error } = await supabase
+      .from('calendar_permissions')
+      .update({ can_manage: false })
+      .eq('id', existing.id)
+
+    if (error) throw error
+    return
+  }
+
   const { error } = await supabase
     .from('calendar_permissions')
-    .upsert(
-      { user_id: userId, can_manage: false },
-      { onConflict: 'user_id' }
-    )
+    .insert({ user_id: userId, can_manage: false })
 
   if (error) throw error
 }
 
 export async function getCalendarPermissions() {
-  const { data, error } = await supabase
+  const { data: permissionRows, error } = await supabase
     .from('calendar_permissions')
     .select('id, user_id, can_manage, granted_at, users!calendar_permissions_user_id_fkey(id, name, email)')
     .order('granted_at', { ascending: false })
 
   if (error) throw error
-  return data ?? []
+
+  const { data: superAdmins, error: adminError } = await supabase
+    .from('users')
+    .select('id, name, email')
+    .eq('role', 'super_admin')
+
+  if (adminError) throw adminError
+
+  const rows = permissionRows ?? []
+  const explicitRowsByUser = new Map(rows.map((row) => [row.user_id, row]))
+  const superAdminIds = new Set((superAdmins ?? []).map((user) => user.id))
+
+  const inheritedRows = (superAdmins ?? []).map((user) => {
+    const explicitRow = explicitRowsByUser.get(user.id)
+
+    return {
+      ...(explicitRow ?? {}),
+      id: explicitRow?.id ?? `super-admin:${user.id}`,
+      user_id: user.id,
+      can_manage: true,
+      granted_at: explicitRow?.granted_at ?? null,
+      users: user,
+      source: 'role',
+      inherited: true,
+    }
+  })
+
+  return [
+    ...inheritedRows,
+    ...rows.filter((row) => !superAdminIds.has(row.user_id)),
+  ]
 }
 
 // ---- Space Task Feed Subscriptions ----

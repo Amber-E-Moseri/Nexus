@@ -116,10 +116,10 @@ export default function CalendarSettingsPanel({ programsMembers = [] }) {
         </div>
       )}
 
-      {/* Explicitly granted permissions */}
+      {/* Explicit and inherited permissions */}
       <div style={{ padding: '16px' }}>
         <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '8px' }}>
-          Manually Granted
+          Calendar Managers
         </div>
 
         {loading ? (
@@ -159,28 +159,44 @@ export default function CalendarSettingsPanel({ programsMembers = [] }) {
                       {perm.users?.email}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleToggle(perm.user_id, perm.can_manage)}
-                    disabled={saving === perm.user_id}
-                    title={perm.can_manage ? 'Revoke write access' : 'Grant write access'}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      cursor: saving === perm.user_id ? 'not-allowed' : 'pointer',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      opacity: saving === perm.user_id ? 0.6 : 1,
-                      backgroundColor: perm.can_manage ? '#FEE2E2' : '#D1FAE5',
-                      color: perm.can_manage ? '#DC2626' : '#059669',
-                    }}
-                  >
-                    {perm.can_manage ? <X size={12} /> : <Check size={12} />}
-                    {perm.can_manage ? 'Revoke' : 'Grant'}
-                  </button>
+                  {perm.inherited ? (
+                    <div
+                      title="Inherited from super_admin role"
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        backgroundColor: '#DBEAFE',
+                        color: '#2563EB',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Role
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleToggle(perm.user_id, perm.can_manage)}
+                      disabled={saving === perm.user_id}
+                      title={perm.can_manage ? 'Revoke write access' : 'Grant write access'}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        cursor: saving === perm.user_id ? 'not-allowed' : 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        opacity: saving === perm.user_id ? 0.6 : 1,
+                        backgroundColor: perm.can_manage ? '#FEE2E2' : '#D1FAE5',
+                        color: perm.can_manage ? '#DC2626' : '#059669',
+                      }}
+                    >
+                      {perm.can_manage ? <X size={12} /> : <Check size={12} />}
+                      {perm.can_manage ? 'Revoke' : 'Grant'}
+                    </button>
+                  )}
                 </div>
               ))}
           </div>

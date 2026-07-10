@@ -688,6 +688,39 @@ export async function getSprintReview(sprintId) {
 // Temporary Sprint Invites
 // ─────────────────────────────────────────────────────────────
 
+export async function getSprintInvitePermissions(sprintId) {
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) throw authError
+
+  const userId = authData?.user?.id
+  if (!userId || !sprintId) {
+    return { canInvite: false, canAssignPrivilegedRoles: false }
+  }
+
+  const [
+    { data: canManage, error: manageError },
+    { data: sprint, error: sprintError },
+    { data: profile, error: profileError },
+  ] = await Promise.all([
+    supabase.rpc('can_manage_sprint', { p_sprint_id: sprintId }),
+    supabase.from('sprints').select('created_by').eq('id', sprintId).maybeSingle(),
+    supabase.from('users').select('role').eq('id', userId).maybeSingle(),
+  ])
+
+  if (manageError) throw manageError
+  if (sprintError) throw sprintError
+  if (profileError) throw profileError
+
+  const isSuperAdmin = profile?.role === 'super_admin'
+  const isDeptLead = profile?.role === 'dept_lead'
+  const isSprintOwner = sprint?.created_by === userId
+
+  return {
+    canInvite: Boolean(canManage || isSuperAdmin || isDeptLead),
+    canAssignPrivilegedRoles: Boolean(isSuperAdmin || isSprintOwner),
+  }
+}
+
 export async function inviteExternalToSprint(payload) {
   const {
     email,
@@ -709,9 +742,18 @@ export async function inviteExternalToSprint(payload) {
       const ctx = await error.context?.json?.()
       if (ctx?.error) detail = ctx.error
     } catch {}
+    if (/permission|authorized|forbidden/i.test(detail)) {
+      throw new Error("You don't have permission to invite members to this sprint. Only sprint owners, managers, and authorized admins can invite external members.")
+    }
     throw new Error(detail)
   }
-  if (!data?.sent) throw new Error(data?.error ?? 'Invite failed')
+  if (!data?.sent) {
+    const detail = data?.error ?? 'Invite failed'
+    if (/permission|authorized|forbidden/i.test(detail)) {
+      throw new Error("You don't have permission to invite members to this sprint. Only sprint owners, managers, and authorized admins can invite external members.")
+    }
+    throw new Error(detail)
+  }
 
   return { isNewUser: true }
 }

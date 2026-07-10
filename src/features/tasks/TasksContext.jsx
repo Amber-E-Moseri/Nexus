@@ -95,18 +95,8 @@ export function TasksProvider({ departmentId, sprintId, children }) {
         // Realtime payload has only flat fields; re-fetch to get full relations
         loadTasks()
       } else if (payload.eventType === 'UPDATE') {
-        // Merge realtime update with existing task, preserving relations from old task
-        setTasks((prev) => prev.map((t) => {
-          if (t.id === payload.new.id) {
-            const merged = { ...t, ...payload.new }
-            // If status_id changed, invalidate status cache to force re-lookup on next render
-            if (t.status_id !== payload.new.status_id) {
-              merged.status_definition = null
-            }
-            return merged
-          }
-          return t
-        }))
+        // Realtime payload has only flat fields; re-fetch to avoid stale joined relations.
+        loadTasks()
       }
     }
 

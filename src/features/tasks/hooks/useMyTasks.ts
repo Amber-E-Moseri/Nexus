@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useAuth } from '../../../hooks/useAuth'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useToast } from '../../../context/ToastContext'
 import { supabase } from '../../../lib/supabase'
 import { normalizeTaskRows, isTaskCompleted } from '../../../lib/taskStatuses'
@@ -47,6 +46,12 @@ const TASK_SELECT = `
   dependencies:task_dependencies!task_id(count)
 `
 
+function toDateOnly(value: Date | string | null | undefined) {
+  if (!value) return null
+  if (value instanceof Date) return value.toISOString().split('T')[0]
+  return value.slice(0, 10)
+}
+
 export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange?: [Date, Date]): UseMyTasksReturn {
   const { showToast } = useToast()
   const [tasks, setTasks] = useState<any[]>([])
@@ -84,13 +89,18 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
       // Filter by user
       query = query.or(`created_by.eq.${userId},assignee_id.eq.${userId}`)
 
-      // Filter by date range if provided
-      const actualDateRange = dateRange || filters?.dateRange
-      if (actualDateRange) {
-        const [start, end] = actualDateRange
-        const startISO = start.toISOString().split('T')[0]
-        const endISO = end.toISOString().split('T')[0]
-        query = query.gte('due_date', startISO).lte('due_date', endISO)
+      // Filter by date range if provided. The hook arg is a Date tuple; filters.dateRange is a form object.
+      if (dateRange) {
+        const [start, end] = dateRange
+        const startISO = toDateOnly(start)
+        const endISO = toDateOnly(end)
+        if (startISO) query = query.gte('due_date', startISO)
+        if (endISO) query = query.lte('due_date', endISO)
+      } else if (filters?.dateRange?.startDate || filters?.dateRange?.endDate) {
+        const startISO = toDateOnly(filters.dateRange.startDate)
+        const endISO = toDateOnly(filters.dateRange.endDate)
+        if (startISO) query = query.gte('due_date', startISO)
+        if (endISO) query = query.lte('due_date', endISO)
       }
 
       // Order by due date, then creation
@@ -169,6 +179,12 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     }
   }, [userId, filters, dateRange, showToast])
 
+  const loadRef = useRef(load)
+
+  useEffect(() => {
+    loadRef.current = load
+  }, [load])
+
   // Initial load + refetch when filters change
   useEffect(() => {
     load()
@@ -185,13 +201,9 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     const handlePayload = (payload) => {
       if (payload.eventType === 'DELETE') {
         setTasks((prev) => prev.filter((t) => t.id !== payload.old.id))
-      } else if (payload.eventType === 'INSERT') {
+      } else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
         // Realtime payload has only flat fields; re-fetch to get relations
-        load()
-      } else if (payload.eventType === 'UPDATE') {
-        setTasks((prev) =>
-          prev.map((t) => (t.id === payload.new.id ? { ...t, ...payload.new } : t)),
-        )
+        loadRef.current()
       }
     }
 
@@ -212,7 +224,7 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     return () => {
       supabase.removeChannel(assignedSubscription)
     }
-  }, [userId, load])
+  }, [userId])
 
   return {
     tasks,

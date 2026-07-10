@@ -235,9 +235,10 @@ export default function ProfileSection({
           <label className="space-y-1">
             <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">Role</span>
             <input
-              className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] px-3 py-2.5 text-sm"
+              className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] px-3 py-2.5 text-sm opacity-60 cursor-not-allowed"
               value={role?.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) ?? ''}
               readOnly
+              disabled
             />
           </label>
 
