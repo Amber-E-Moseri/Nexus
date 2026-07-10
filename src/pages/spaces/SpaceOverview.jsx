@@ -852,7 +852,7 @@ function FolderTree({
 
           {folders.length === 0 ? <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-6 text-sm text-[var(--text-tertiary)]">No folders yet. Create one to organize lists in this space.</div> : null}
 
-          {unfoldedLists.length > 0 ? (
+          {(unfoldedLists.length > 0 || canManage) ? (
             <UnfoldedListsDropZone
               lists={unfoldedLists}
               selectedListId={selectedListId}
@@ -869,9 +869,14 @@ function FolderTree({
           ) : null}
 
           {canManage ? (
-            <button type="button" onClick={onNewFolder} className="w-full rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]">
-              + Add Folder
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={onNewFolder} className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
+                + Add Folder
+              </button>
+              <button type="button" onClick={onNewUnfoldedList} className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
+                + Add List
+              </button>
+            </div>
           ) : null}
         </div>
       </SortableContext>
