@@ -348,7 +348,7 @@ function SpaceSopCard({ spaceId, spaceName, canManage }) {
   )
 }
 
-function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings, selectedFolder, selectedList, canManage }) {
+function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings, selectedFolder, selectedList, canManage, onSelectList, onTreeDataChange }) {
   const mediaSpace = isMediaDepartment(space)
   const activeSprints = mediaSpace ? 0 : sprints.filter((sprint) => sprint.status === 'active').length
   const effectiveListsCount = mediaSpace ? 0 : listsCount
@@ -414,6 +414,21 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
         ))}
       </section>
 
+      <section className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+        <div className="mb-1 text-lg font-semibold text-[var(--text-primary)]">Folders &amp; Lists</div>
+        <p className="mb-4 text-sm text-[var(--text-secondary)]">
+          Organize this space: create lists inside folders, drag lists between folders, and control who can see private lists.
+        </p>
+        <SpaceOrganizerPanel
+          spaceId={space.id}
+          selectedListId={selectedList?.id ?? null}
+          onSelectList={onSelectList}
+          canManage={canManage}
+          onTreeDataChange={onTreeDataChange}
+          members={members}
+        />
+      </section>
+
       <section className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
           <div className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Recent Activity</div>
@@ -468,10 +483,12 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
   )
 }
 
-function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, onMoveList, onDelete }) {
+function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, onMoveList, onDelete, onShare, onToggleVisibility }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({ id: list.id })
   const style = { transform: CSS.Transform.toString(transform), opacity: isDragging ? 0.5 : 1 }
   const [menuOpen, setMenuOpen] = useState(false)
+  const [updating, setUpdating] = useState(false)
+  const isPrivate = list.visibility === 'private'
 
   return (
     <div ref={setNodeRef} style={style} className={['flex items-center gap-2 rounded-xl px-3 py-2', isSelected ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]' : ''].join(' ')}>
@@ -491,6 +508,7 @@ function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, on
       >
         <span>📋</span>
         <span className="truncate">{list.name}</span>
+        {isPrivate ? <span title="Private list" className="text-xs text-[var(--text-tertiary)]">🔒</span> : null}
       </button>
       {canEditList(list) ? (
         <div className="relative">
@@ -510,7 +528,7 @@ function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, on
                   side="bottom"
                   align="end"
                   sideOffset={4}
-                  className="min-w-[120px] rounded-lg border border-[var(--border)] bg-white shadow-lg"
+                  className="min-w-[160px] rounded-lg border border-[var(--border)] bg-white shadow-lg"
                   style={{ zIndex: 50 }}
                 >
                   <DropdownMenu.Item
@@ -520,6 +538,29 @@ function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, on
                     <span>✏️</span>
                     <span>Edit</span>
                   </DropdownMenu.Item>
+                  {onToggleVisibility ? (
+                    <DropdownMenu.Item
+                      onSelect={async () => {
+                        setUpdating(true)
+                        try { await onToggleVisibility(list, isPrivate ? 'public' : 'private') }
+                        finally { setUpdating(false); setMenuOpen(false) }
+                      }}
+                      disabled={updating}
+                      className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none disabled:opacity-50"
+                    >
+                      <span>{isPrivate ? '🔓' : '🔒'}</span>
+                      <span>{isPrivate ? 'Make Public' : 'Make Private'}</span>
+                    </DropdownMenu.Item>
+                  ) : null}
+                  {onShare && isPrivate ? (
+                    <DropdownMenu.Item
+                      onSelect={() => { onShare(list); setMenuOpen(false) }}
+                      className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none"
+                    >
+                      <span>👥</span>
+                      <span>Share</span>
+                    </DropdownMenu.Item>
+                  ) : null}
                   <DropdownMenu.Item
                     onSelect={() => { onDelete?.(list); setMenuOpen(false) }}
                     className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[#DC2626] hover:bg-[#FEE2E2] focus:outline-none"
@@ -537,7 +578,7 @@ function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, on
   )
 }
 
-function UnfoldedListsDropZone({ lists, selectedListId, onSelectList, onEditList, canEditList, onMoveList, onDeleteList, onNewUnfoldedList, canManage }) {
+function UnfoldedListsDropZone({ lists, selectedListId, onSelectList, onEditList, canEditList, onMoveList, onDeleteList, onNewUnfoldedList, canManage, onShareList, onToggleListVisibility }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'unfolded' })
 
   return (
@@ -555,7 +596,7 @@ function UnfoldedListsDropZone({ lists, selectedListId, onSelectList, onEditList
       </div>
       <div className="space-y-2">
         {lists.map((list) => (
-          <DraggableListItem key={list.id} list={list} isSelected={selectedListId === list.id} onSelect={onSelectList} onEdit={onEditList} canEditList={canEditList} onMoveList={onMoveList} onDelete={onDeleteList} />
+          <DraggableListItem key={list.id} list={list} isSelected={selectedListId === list.id} onSelect={onSelectList} onEdit={onEditList} canEditList={canEditList} onMoveList={onMoveList} onDelete={onDeleteList} onShare={onShareList} onToggleVisibility={onToggleListVisibility} />
         ))}
       </div>
     </div>
@@ -682,6 +723,9 @@ function FolderTree({
   onMoveList,
   onDeleteFolder,
   onDeleteList,
+  onShareFolder,
+  onShareList,
+  onToggleListVisibility,
 }) {
   const listsByFolder = useMemo(
     () => folders.reduce((acc, folder) => ({ ...acc, [folder.id]: lists.filter((list) => list.folder_id === folder.id) }), {}),
@@ -734,9 +778,10 @@ function FolderTree({
                   canEditFolder={canEditFolder}
                   canManage={canManage}
                   onNewList={onNewList}
+                  onShare={onShareFolder}
                 >
                   {folderLists.map((list) => (
-                    <DraggableListItem key={list.id} list={list} isSelected={selectedListId === list.id} onSelect={onSelectList} onEdit={onEditList} canEditList={canEditList} onMoveList={onMoveList} onDelete={onDeleteList} />
+                    <DraggableListItem key={list.id} list={list} isSelected={selectedListId === list.id} onSelect={onSelectList} onEdit={onEditList} canEditList={canEditList} onMoveList={onMoveList} onDelete={onDeleteList} onShare={onShareList} onToggleVisibility={onToggleListVisibility} />
                   ))}
                   {folderLists.length === 0 ? <div className="rounded-xl bg-white px-3 py-2 text-xs text-[var(--text-tertiary)]">No lists in this folder yet.</div> : null}
                 </DroppableFolder>
@@ -757,6 +802,8 @@ function FolderTree({
               onDeleteList={onDeleteList}
               onNewUnfoldedList={onNewUnfoldedList}
               canManage={canManage}
+              onShareList={onShareList}
+              onToggleListVisibility={onToggleListVisibility}
             />
           ) : null}
 
@@ -772,7 +819,86 @@ function FolderTree({
 }
 
 
-function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage, onTreeDataChange }) {
+function ShareModal({ kind, item, members, onClose }) {
+  const { profile } = useAuth()
+  const [shares, setShares] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState(null)
+
+  const loadShares = kind === 'folder' ? getFolderShares : getListShares
+  const addShare = kind === 'folder' ? shareFolderWithUser : shareListWithUser
+  const removeShare = kind === 'folder' ? removeFolderShare : removeListShare
+
+  async function refresh() {
+    setLoading(true)
+    try { setShares(await loadShares(item.id)) }
+    catch { setShares([]) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { refresh() }, [item.id])
+
+  const sharedUserIds = new Set(shares.map((s) => s.user_id))
+  const eligibleMembers = members.filter((m) => m.id !== item.created_by && m.id !== profile?.id)
+
+  async function toggle(memberId, isShared) {
+    setBusyId(memberId)
+    try {
+      if (isShared) await removeShare(item.id, memberId)
+      else await addShare(item.id, memberId)
+      await refresh()
+    } catch (err) {
+      window.alert(`Failed to update share: ${err.message}`)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <ModalShell title={`Share ${kind} — ${item.name}`} onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-sm text-[var(--text-secondary)]">
+          This {kind} is private. Choose who can access it besides you and space managers.
+        </p>
+        {loading ? (
+          <div className="py-6 text-center text-sm text-[var(--text-tertiary)]">Loading…</div>
+        ) : eligibleMembers.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-6 text-center text-sm text-[var(--text-tertiary)]">
+            No other members to share with.
+          </div>
+        ) : (
+          <div className="max-h-[320px] space-y-1.5 overflow-y-auto">
+            {eligibleMembers.map((member) => {
+              const isShared = sharedUserIds.has(member.id)
+              return (
+                <button
+                  key={member.id}
+                  type="button"
+                  onClick={() => toggle(member.id, isShared)}
+                  disabled={busyId === member.id}
+                  className={['flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors disabled:opacity-50', isShared ? 'border-[var(--accent)] bg-[var(--accent-light)]' : 'border-[var(--border)] bg-white hover:bg-[var(--surface-hover)]'].join(' ')}
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-semibold text-white" style={{ background: member.avatar_color ?? '#5B34C7' }}>
+                    {getInitials(member.name ?? member.email)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-[var(--text-primary)]">{member.name ?? member.email}</div>
+                    {member.name ? <div className="truncate text-xs text-[var(--text-tertiary)]">{member.email}</div> : null}
+                  </div>
+                  <span className={['text-xs font-semibold', isShared ? 'text-[var(--accent)]' : 'text-[var(--text-tertiary)]'].join(' ')}>
+                    {isShared ? '✓ Shared' : 'Share'}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </ModalShell>
+  )
+}
+
+function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage, onTreeDataChange, members = [] }) {
   const { effectiveRole, profile } = useAuth()
   const [folders, setFolders] = useState([])
   const [lists, setLists] = useState([])
@@ -787,6 +913,7 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
   const [folderFieldSettings, setFolderFieldSettings] = useState(() => normalizeTaskFieldSettings({}))
   const [listFieldSettings, setListFieldSettings] = useState(() => normalizeTaskFieldSettings({}))
   const [treeSaving, setTreeSaving] = useState(false)
+  const [sharingItem, setSharingItem] = useState(null)
 
   async function loadTree() {
     setTreeLoading(true)
@@ -912,6 +1039,16 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
     }
   }
 
+  async function handleToggleListVisibility(list, nextVisibility) {
+    try {
+      await updateListVisibility(list.id, nextVisibility)
+      await loadTree()
+    } catch (err) {
+      console.error('Failed to update list visibility:', err)
+      window.alert(`Failed to update visibility: ${err.message}`)
+    }
+  }
+
   async function handleDeleteFolder(folder) {
     if (!window.confirm(`Delete folder "${folder.name}"? This will also delete all lists inside it.`)) return
     try {
@@ -963,8 +1100,20 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
           onMoveList={handleMoveList}
           onDeleteFolder={handleDeleteFolder}
           onDeleteList={handleDeleteList}
+          onShareFolder={(folder) => setSharingItem({ kind: 'folder', item: folder })}
+          onShareList={(list) => setSharingItem({ kind: 'list', item: list })}
+          onToggleListVisibility={handleToggleListVisibility}
         />
       )}
+
+      {sharingItem ? (
+        <ShareModal
+          kind={sharingItem.kind}
+          item={sharingItem.item}
+          members={members}
+          onClose={() => setSharingItem(null)}
+        />
+      ) : null}
 
       {folderModalOpen ? (
         <ModalShell title="New Folder" onClose={() => setFolderModalOpen(false)}>
@@ -1379,7 +1528,6 @@ export default function SpaceOverview() {
   const [selectedFolderId, setSelectedFolderId] = useState(null)
   const [calendarTaskModal, setCalendarTaskModal] = useState(null)
   const [treeData, setTreeData] = useState({ folders: [], lists: [] })
-  const [organizerOpen, setOrganizerOpen] = useState(false)
   const [showStatusesModal, setShowStatusesModal] = useState(false)
 
   const canManageStatuses = effectiveRole === 'super_admin' || effectiveRole === 'dept_lead'
@@ -1408,7 +1556,7 @@ export default function SpaceOverview() {
     }
     const openOrganizer = params.get('organizer')
     if (openOrganizer === 'true') {
-      setOrganizerOpen(true)
+      setActiveTab('Overview')
     }
   }, [location.search])
 
@@ -1456,6 +1604,11 @@ export default function SpaceOverview() {
     getSpaceMeetings(spaceId).then(setSpaceMeetings).catch(() => setSpaceMeetings([]))
     getSpaceTasks(spaceId).then(setSpaceTasks).catch(() => setSpaceTasks([]))
     getSpaceListsCount(spaceId).then(setListsCount).catch(() => setListsCount(0))
+    // Load the folder/list tree at the parent so Board/List tabs have it even
+    // when the Overview tab (which hosts the organizer) hasn't mounted yet.
+    Promise.all([getFolders(spaceId), getLists(spaceId)])
+      .then(([folders, lists]) => setTreeData({ folders: folders ?? [], lists: lists ?? [] }))
+      .catch(() => setTreeData({ folders: [], lists: [] }))
   }, [detail?.space, spaceId])
 
   useEffect(() => {
@@ -1510,7 +1663,7 @@ export default function SpaceOverview() {
 
   const tabContent = (
     <>
-      {activeTab === 'Overview' ? <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}><SpaceOverviewTab space={space} listsCount={listsCount} members={spaceMembers} tasks={overviewTasks} sprints={spaceSprints} meetings={spaceMeetings} selectedFolder={selectedFolder} selectedList={selectedList} canManage={canManage} /></div> : null}
+      {activeTab === 'Overview' ? <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}><SpaceOverviewTab space={space} listsCount={listsCount} members={spaceMembers} tasks={overviewTasks} sprints={spaceSprints} meetings={spaceMeetings} selectedFolder={selectedFolder} selectedList={selectedList} canManage={canManage} onSelectList={(id) => { setSelectedListId(id); setSelectedFolderId(null); setActiveTab('List'); navigate(`/spaces/${spaceId}?list=${id}`) }} onTreeDataChange={(next) => { setTreeData(next); setListsCount(next.lists.length) }} /></div> : null}
       {activeTab === 'Board' ? <div role="tabpanel" id="tabpanel-board" aria-labelledby="tab-board" tabIndex={0}><TasksProvider departmentId={spaceId}><SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="kanban" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} /></TasksProvider></div> : null}
       {activeTab === 'List' ? <div role="tabpanel" id="tabpanel-list" aria-labelledby="tab-list" tabIndex={0}><TasksProvider departmentId={spaceId}><SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="list" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} /></TasksProvider></div> : null}
       {activeTab === 'Calendar' ? (
@@ -1639,41 +1792,7 @@ export default function SpaceOverview() {
               )
             })}
           </div>
-          <button
-            type="button"
-            onClick={() => setOrganizerOpen((v) => !v)}
-            title="Folders & Lists"
-            className="ml-auto flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium transition-colors hover:bg-[var(--surface-secondary)]"
-            style={{ color: organizerOpen ? 'var(--accent)' : 'var(--text-secondary)', borderColor: organizerOpen ? 'var(--accent)' : 'var(--border)', marginRight: 2 }}
-          >
-            <span style={{ fontSize: 16, letterSpacing: 1 }}>···</span>
-            <span className="text-xs">Lists</span>
-          </button>
         </div>
-
-        {organizerOpen ? (
-          <div
-            className="absolute right-0 z-30 mt-1 w-80 overflow-hidden rounded-[20px] border border-[var(--border)] bg-white shadow-[0_8px_32px_rgba(14,14,30,0.14)]"
-            style={{ top: '100%' }}
-          >
-            <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
-              <span className="text-sm font-semibold text-[var(--text-primary)]">Folders &amp; Lists</span>
-              <button type="button" onClick={() => setOrganizerOpen(false)} className="text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">✕</button>
-            </div>
-            <div className="max-h-[min(520px,80vh)] overflow-y-auto p-3">
-              <SpaceOrganizerPanel
-                spaceId={spaceId}
-                selectedListId={selectedListId}
-                onSelectList={(id) => { setSelectedListId(id); setSelectedFolderId(null); setActiveTab('List'); setOrganizerOpen(false); navigate(`/spaces/${spaceId}?list=${id}`) }}
-                canManage={canManage}
-                onTreeDataChange={(next) => {
-                  setTreeData(next)
-                  setListsCount(next.lists.length)
-                }}
-              />
-            </div>
-          </div>
-        ) : null}
       </div>
 
       {/* DEBUG BANNER — remove after testing */}

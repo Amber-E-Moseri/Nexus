@@ -211,7 +211,7 @@ export const VISIBILITY_LABELS = {
 export async function getFolders(departmentId) {
   const { data, error } = await supabase
     .from('folders')
-    .select('id, name, sort_order, created_by, task_field_settings')
+    .select('id, name, sort_order, created_by, task_field_settings, visibility')
     .eq('department_id', departmentId)
     .order('sort_order')
 
@@ -222,7 +222,7 @@ export async function getFolders(departmentId) {
 export async function getLists(departmentId, folderId = null) {
   let query = supabase
     .from('lists')
-    .select('id, name, sort_order, folder_id, created_by, task_field_settings')
+    .select('id, name, sort_order, folder_id, created_by, task_field_settings, visibility')
     .eq('department_id', departmentId)
 
   if (folderId) {
