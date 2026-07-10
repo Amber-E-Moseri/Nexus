@@ -1,9 +1,9 @@
 ﻿import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Download, Settings } from 'lucide-react'
+import { Download, Settings, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../../hooks/useAuth'
-import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingEvents, getEventTypes, getOrCreateSubscription } from '../../features/calendar'
+import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingEvents, getEventTypes, getOrCreateSubscription, getMinistryCalendarSources, syncCalendarSource } from '../../features/calendar'
 import { getVisibleCategoriesForDept } from '../../features/calendar/hooks/useCategoryVisibility'
 import { getHiddenSourceIdsForDept } from '../../features/calendar/lib/calendar'
 import { supabase } from '../../lib/supabase'
@@ -37,6 +37,7 @@ export default function MinistryCalendar() {
   const [selectedEventTypes, setSelectedEventTypes] = useState(new Set())
   const [hiddenCategories, setHiddenCategories] = useState(null) // null = no restrictions
   const [hiddenSourceIds, setHiddenSourceIds] = useState(new Set())
+  const [syncing, setSyncing] = useState(false)
 
   async function resolveOrgId() {
     if (profile?.org_id) return profile.org_id
@@ -172,6 +173,28 @@ export default function MinistryCalendar() {
       setYear(year + 1)
     } else {
       setMonth(month + 1)
+    }
+  }
+
+  async function handleSyncAllSources() {
+    setSyncing(true)
+    try {
+      const sources = await getMinistryCalendarSources()
+      let syncCount = 0
+      for (const source of sources) {
+        try {
+          await syncCalendarSource(source.id)
+          syncCount++
+        } catch (err) {
+          console.error(`Failed to sync ${source.display_name}:`, err)
+        }
+      }
+      showToast(`Synced ${syncCount} calendar source${syncCount !== 1 ? 's' : ''}`, { tone: 'success' })
+      await loadCalendar()
+    } catch (err) {
+      showToast('Failed to sync calendars', { tone: 'error' })
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -364,6 +387,34 @@ export default function MinistryCalendar() {
               <Download size={14} style={{ color: 'var(--text-secondary)' }} />
               Export
             </motion.button>
+
+            {['super_admin', 'regional_secretary'].includes(effectiveRole) && (
+              <motion.button
+                onClick={handleSyncAllSources}
+                disabled={syncing}
+                whileHover={!syncing ? { backgroundColor: '#F2EEE6' } : {}}
+                whileTap={!syncing ? { scale: 0.97 } : {}}
+                title="Sync all Google Calendar sources (pull new events, push approved events)"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '7px',
+                  padding: '9px 14px',
+                  backgroundColor: 'var(--surface-secondary)',
+                  color: syncing ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  cursor: syncing ? 'not-allowed' : 'pointer',
+                  fontWeight: 600,
+                  fontSize: '13.5px',
+                  fontFamily: FONT_BODY,
+                  opacity: syncing ? 0.6 : 1,
+                }}
+              >
+                <RefreshCw size={14} style={{ color: syncing ? 'var(--text-tertiary)' : 'var(--text-secondary)', animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
+                {syncing ? 'Syncing...' : 'Sync'}
+              </motion.button>
+            )}
 
             {canApprove && pendingCount > 0 && (
               <motion.button
