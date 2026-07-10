@@ -121,22 +121,6 @@ Deno.serve(async (request) => {
 
       if (sendRecord.campaign_id) {
         await supabase.rpc('increment_campaign_open_count', { campaign_id: sendRecord.campaign_id })
-          .catch(() => {
-            // Fallback: manual increment
-            supabase
-              .from('communication_campaigns')
-              .select('open_count')
-              .eq('id', sendRecord.campaign_id)
-              .single()
-              .then(({ data }) => {
-                if (data) {
-                  supabase
-                    .from('communication_campaigns')
-                    .update({ open_count: (data.open_count ?? 0) + 1 })
-                    .eq('id', sendRecord.campaign_id)
-                }
-              })
-          })
       }
       break
     }
@@ -183,7 +167,7 @@ Deno.serve(async (request) => {
         await supabase
           .from('communication_unsubscribes')
           .upsert(
-            { email: sendRecord.recipient_email.toLowerCase(), unsubscribed_via: 'hard_bounce' },
+            { email: sendRecord.recipient_email.toLowerCase(), unsubscribed_via: 'bounce' },
             { onConflict: 'email' },
           )
       }
