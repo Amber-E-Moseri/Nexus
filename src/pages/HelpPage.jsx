@@ -127,27 +127,47 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: 'What shows up on the Ministry Calendar?',
-        a: 'Region-wide events — services, outreach, department activities — pulled from internal submissions and connected external calendars (Google, Outlook), filterable by category.',
+        a: 'Region-wide events — services, outreach, department activities — pulled from internal submissions and connected external Google calendars, filterable by category and source.',
       },
       {
         q: 'How do I submit an event for approval?',
-        a: 'Create the event from the Ministry Calendar; depending on your role it either publishes directly or enters a review queue.',
+        a: 'Click "+ Add Event" on the Ministry Calendar; depending on your role it either publishes directly or enters a review queue for dept_lead/super_admin/regional_secretary approval.',
       },
       {
         q: 'Who approves calendar submissions?',
         a: 'super_admin, regional_secretary, and dept_lead can review pending submissions at Calendar Review before they go live region-wide.',
       },
       {
+        q: 'How do I connect Google Calendar to the Ministry Calendar?',
+        a: 'super_admin only: go to Calendar Settings → Ministry Calendar Sources → "Connect Google Account" and sign in with a shared Google account. This connection covers all sources (org calendar, Birthdays, Holidays, etc.) — each is connected once.',
+      },
+      {
+        q: 'What are Calendar Sources?',
+        a: 'A source is a Google calendar (e.g., primary account, Birthdays, shared team calendars) synced into NEXUS. After connecting a Google account, super_admin must add specific sources via "Add calendar" and hit Sync to pull events in.',
+      },
+      {
+        q: 'How do I control which departments can see a Google Calendar source?',
+        a: 'In Calendar Settings, each source has a "Everyone" / "N depts" button. Click it to expand department access controls — toggle checkboxes to hide or show that source to each department. No restrictions = everyone sees it; some checked = only those departments see it.',
+      },
+      {
+        q: 'Can I push Nexus events back to Google Calendar?',
+        a: 'Yes — in Calendar Settings, each source has a "Push" toggle. When enabled, approved Nexus events sync to that Google calendar. Only sources you own (not read-only shared calendars) can have push enabled.',
+      },
+      {
+        q: 'How often does Google Calendar sync?',
+        a: 'Click "Sync now" (↻ button) next to a source to pull the latest events immediately. Automatic background sync is not yet enabled.',
+      },
+      {
         q: 'How do I subscribe to specific event categories?',
-        a: 'Use the subscription manager to pick which calendar categories sync to your personal view or connected external calendar, instead of seeing every region-wide event.',
+        a: 'Use the subscription manager to pick which event categories (Personal Events, Team Meetings, etc.) sync to your personal iCal feed or connected external calendar, instead of seeing every event.',
       },
       {
         q: 'Can I subscribe to the calendar in Apple Calendar, Google Calendar, or Outlook?',
-        a: 'Yes — NEXUS generates a personal iCal feed URL you can paste into any calendar app that supports iCal subscriptions. The feed auto-updates as events are added or changed. Regenerate the token any time from your Calendar settings if you need to revoke a shared link.',
+        a: 'Yes — NEXUS generates a personal iCal feed URL you can paste into any calendar app that supports iCal subscriptions. The feed auto-updates as events are added or changed. Regenerate the token any time from Calendar Settings if you need to revoke a shared link.',
       },
       {
         q: 'Where are calendar admin settings?',
-        a: 'Calendar Management and Calendar Settings (both dept_lead/super_admin only) control source connections, sync behavior, and category visibility rules.',
+        a: 'Calendar Settings (dept_lead/super_admin only) manages Ministry Calendar Sources (Google connections, sync, push, and per-department visibility), Event Categories (category names and colors), and Event Category Visibility (which departments see which categories). Calendar Review (approval queue) is a separate tab for approving pending submissions.',
       },
     ],
   },
