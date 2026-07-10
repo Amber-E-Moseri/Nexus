@@ -105,21 +105,37 @@ export default function FlockCallsDueWidget({ role }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {due.map((person) => (
-            <NavLink
+            <div
               key={person.id}
-              to="/flock-crm"
-              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 8, background: '#FAFAF8', textDecoration: 'none' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 8, background: '#FAFAF8' }}
             >
-              <span style={{ width: 26, height: 26, borderRadius: 8, background: '#F3EEFF', color: PURPLE, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                <Phone size={12} />
-              </span>
-              <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#2D2A22', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {person.name}
-              </span>
+              {person.phone ? (
+                <a
+                  href={`tel:${person.phone}`}
+                  title={`Call ${person.name} — ${person.phone}`}
+                  style={{ width: 26, height: 26, borderRadius: 8, background: PURPLE, color: '#FFFFFF', display: 'grid', placeItems: 'center', flexShrink: 0 }}
+                >
+                  <Phone size={12} />
+                </a>
+              ) : (
+                <span style={{ width: 26, height: 26, borderRadius: 8, background: '#F3EEFF', color: PURPLE, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                  <Phone size={12} />
+                </span>
+              )}
+              <NavLink to="/flock-crm" style={{ flex: 1, minWidth: 0, textDecoration: 'none' }}>
+                <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#2D2A22', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {person.name}
+                </span>
+                {(person.fellowship || person.phone) && (
+                  <span style={{ display: 'block', fontSize: 11, color: '#9E9488', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {person.fellowship || person.phone}
+                  </span>
+                )}
+              </NavLink>
               <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#FDEEEA', color: '#C94830', flexShrink: 0 }}>
                 {person.status || 'Due'}
               </span>
-            </NavLink>
+            </div>
           ))}
         </div>
       )}

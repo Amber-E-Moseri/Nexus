@@ -323,17 +323,39 @@ create policy "admins_insert_notifications" on public.app_notifications
 drop policy if exists "tasks_select_lead" on public.tasks;
 create policy "tasks_select_lead" on public.tasks
   for select to authenticated
-  using (public.has_space_role(auth.uid(), department_id, 'dept_lead'));
+  using (
+    deleted_at is null
+    and public.has_space_role(auth.uid(), department_id, 'dept_lead')
+  );
 
+-- tasks_update_delete was a single `for all` policy, so its USING clause
+-- also gated plain SELECT (permissive policies OR together) with no
+-- deleted_at check — letting creators/dept_leads/super_admins see
+-- soft-deleted rows the dedicated tasks_select_* policies correctly hide.
+-- Split into tasks_update / tasks_delete (no `for select`) so SELECT
+-- visibility comes only from the tasks_select_* policies above. Deliberately
+-- no deleted_at restriction on the write policies themselves: soft-deleting
+-- writes deleted_at on a currently-live row (fine), and hard-deleting an
+-- already-soft-deleted row (trash purge) must remain possible.
 drop policy if exists "tasks_update_delete" on public.tasks;
-create policy "tasks_update_delete" on public.tasks
-  for all to authenticated
+drop policy if exists "tasks_update" on public.tasks;
+create policy "tasks_update" on public.tasks
+  for update to authenticated
   using (
     created_by = auth.uid()
     or public.current_user_role() = 'super_admin'
     or public.has_space_role(auth.uid(), department_id, 'dept_lead')
   )
   with check (
+    created_by = auth.uid()
+    or public.current_user_role() = 'super_admin'
+    or public.has_space_role(auth.uid(), department_id, 'dept_lead')
+  );
+
+drop policy if exists "tasks_delete" on public.tasks;
+create policy "tasks_delete" on public.tasks
+  for delete to authenticated
+  using (
     created_by = auth.uid()
     or public.current_user_role() = 'super_admin'
     or public.has_space_role(auth.uid(), department_id, 'dept_lead')

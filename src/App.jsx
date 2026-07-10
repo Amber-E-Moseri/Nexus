@@ -157,6 +157,7 @@ export default function App() {
           />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/my-tasks" element={<MyTasks />} />
+          <Route path="/my-tasks/:view" element={<MyTasks />} />
           <Route path="/planner" element={<Planner />} />
           <Route path="/calendar" element={<MinistryCalendar />} />
           <Route

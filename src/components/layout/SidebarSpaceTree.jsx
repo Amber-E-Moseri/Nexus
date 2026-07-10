@@ -16,6 +16,7 @@ import { CACHE_KEYS, getItemSafe, setItemSafe } from '../../lib/cacheUtils'
 import { FONT_BODY } from '../../lib/fonts'
 import { deleteFolder, deleteList, updateFolder, updateList } from '../../features/spaces'
 import { updateFolderVisibility, updateListVisibility } from '../../features/spaces/lib/spaces.js'
+import CreateListModal from '../../features/spaces/components/CreateListModal'
 
 const HOVER_BG = 'rgba(237, 232, 248, 1)'
 const HOVER_BG_OFF = 'rgba(237, 232, 248, 0)'
@@ -61,7 +62,7 @@ const MENU_ITEM_STYLE = {
 }
 
 // Small hover-reveal "⋯" menu shared by folder + list rows.
-function QuickMenu({ label, isPrivate, onRename, onToggleVisibility, onDelete }) {
+function QuickMenu({ label, isPrivate, onAddList, onRename, onToggleVisibility, onDelete }) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
@@ -76,6 +77,13 @@ function QuickMenu({ label, isPrivate, onRename, onToggleVisibility, onDelete })
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content side="bottom" align="end" sideOffset={4} style={MENU_CONTENT_STYLE}>
+          {onAddList ? (
+            <DropdownMenu.Item style={MENU_ITEM_STYLE} onSelect={onAddList}
+              onMouseEnter={(e) => { e.currentTarget.style.background = HOVER_BG }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}>
+              ➕ Add list
+            </DropdownMenu.Item>
+          ) : null}
           <DropdownMenu.Item style={MENU_ITEM_STYLE} onSelect={onRename}
             onMouseEnter={(e) => { e.currentTarget.style.background = HOVER_BG }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}>
@@ -97,13 +105,15 @@ function QuickMenu({ label, isPrivate, onRename, onToggleVisibility, onDelete })
   )
 }
 
-export default function SidebarSpaceTree({ spaceId, spaceName, isActive, canManage = false }) {
+export default function SidebarSpaceTree({ spaceId, spaceName, spaceColor, isActive, canManage = false, refreshToken = 0 }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const [folders, setFolders] = useState([])
   const [lists, setLists] = useState([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState({})
+  // folder id to preselect in the Create List modal; false = closed
+  const [addListFolderId, setAddListFolderId] = useState(false)
 
   const listsByFolder = useMemo(
     () => folders.reduce((acc, folder) => ({ ...acc, [folder.id]: lists.filter((list) => list.folder_id === folder.id) }), {}),
@@ -130,7 +140,7 @@ export default function SidebarSpaceTree({ spaceId, spaceName, isActive, canMana
 
   useEffect(() => {
     loadTree()
-  }, [spaceId])
+  }, [spaceId, refreshToken])
 
   useEffect(() => {
     if (profile?.id) {
@@ -271,6 +281,7 @@ export default function SidebarSpaceTree({ spaceId, spaceName, isActive, canMana
                   <QuickMenu
                     label={folder.name}
                     isPrivate={folder.visibility === 'private'}
+                    onAddList={() => setAddListFolderId(folder.id)}
                     onRename={() => renameFolder(folder)}
                     onToggleVisibility={() => toggleFolderVisibility(folder)}
                     onDelete={() => removeFolder(folder)}
@@ -302,6 +313,18 @@ export default function SidebarSpaceTree({ spaceId, spaceName, isActive, canMana
       })}
 
       {unfoldedLists.map((list) => renderListRow(list, 8))}
+
+      {addListFolderId !== false ? (
+        <CreateListModal
+          space={{ id: spaceId, name: spaceName, color: spaceColor }}
+          defaultFolderId={addListFolderId}
+          onCreated={async (list) => {
+            await loadTree()
+            navigateToList(list.id)
+          }}
+          onClose={() => setAddListFolderId(false)}
+        />
+      ) : null}
     </div>
   )
 }

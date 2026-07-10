@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, ChevronDown, ChevronRight, RefreshCw, Search, Sparkles, UserPlus, Users, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Mail, Pencil, Phone, RefreshCw, Search, Sparkles, UserPlus, Users, X } from 'lucide-react'
 import { callFlockCRM as callFlockAPI, flockCard, initials, FLOCK } from '../../lib/flockSupabase'
 
 const inputStyle = {
@@ -40,12 +40,24 @@ function todayIso() {
   return new Date().toISOString().split('T')[0]
 }
 
+function dueBucket(p) {
+  if (p.active === false) return 'paused'
+  if (p.dueStatus === 'Overdue' || (p.nextDueDate && p.nextDueDate < todayIso())) return 'overdue'
+  if (p.nextDueDate && p.nextDueDate === todayIso()) return 'today'
+  if (p.nextDueDate) return 'onTrack'
+  return 'noCalls'
+}
+
+const DUE_BUCKETS = {
+  overdue: { label: 'Overdue', fg: FLOCK.red, bg: FLOCK.redTint },
+  today: { label: 'Due today', fg: FLOCK.amber, bg: FLOCK.amberTint },
+  onTrack: { label: 'On track', fg: FLOCK.green, bg: FLOCK.greenTint },
+  noCalls: { label: 'No calls yet', fg: FLOCK.purple, bg: FLOCK.purpleTint },
+  paused: { label: 'Paused', fg: FLOCK.muted, bg: '#F2F0F7' },
+}
+
 function dueBadge(p) {
-  if (p.active === false) return { label: 'Paused', fg: FLOCK.muted, bg: '#F2F0F7' }
-  if (p.dueStatus === 'Overdue' || (p.nextDueDate && p.nextDueDate < todayIso())) return { label: 'Overdue', fg: FLOCK.red, bg: FLOCK.redTint }
-  if (p.nextDueDate && p.nextDueDate === todayIso()) return { label: 'Due today', fg: FLOCK.amber, bg: FLOCK.amberTint }
-  if (p.nextDueDate) return { label: 'On track', fg: FLOCK.green, bg: FLOCK.greenTint }
-  return { label: 'No calls yet', fg: FLOCK.purple, bg: FLOCK.purpleTint }
+  return DUE_BUCKETS[dueBucket(p)]
 }
 
 /** Highlight case-insensitive matches of `q` inside `text`. */
@@ -101,7 +113,7 @@ function InteractionCard({ i }) {
   )
 }
 
-const BLANK_PERSON = { name: '', role: '', fellowship: '', cadence: '28' }
+const BLANK_PERSON = { name: '', role: '', fellowship: '', phone: '', email: '', cadence: '28' }
 
 function AddPersonForm({ onAdded, onCancel }) {
   const [form, setForm] = useState(BLANK_PERSON)
@@ -121,6 +133,8 @@ function AddPersonForm({ onAdded, onCancel }) {
           name,
           role: form.role.trim(),
           fellowship: form.fellowship.trim(),
+          phone: form.phone.trim(),
+          email: form.email.trim(),
           priority: '',
           cadenceDays: parseInt(form.cadence, 10) > 0 ? parseInt(form.cadence, 10) : 28,
         }),
@@ -162,6 +176,14 @@ function AddPersonForm({ onAdded, onCancel }) {
           <input type="text" value={form.fellowship} onChange={set('fellowship')} placeholder="e.g. U of Manitoba" style={{ ...inputStyle, width: '100%' }} />
         </div>
         <div>
+          <label style={labelStyle}>Phone — optional</label>
+          <input type="tel" value={form.phone} onChange={set('phone')} placeholder="e.g. (204) 555-0123" style={{ ...inputStyle, width: '100%', fontFamily: FLOCK.fontMono }} />
+        </div>
+        <div>
+          <label style={labelStyle}>Email — optional</label>
+          <input type="email" value={form.email} onChange={set('email')} placeholder="e.g. john@example.com" style={{ ...inputStyle, width: '100%' }} />
+        </div>
+        <div>
           <label style={labelStyle}>Call every (days)</label>
           <input type="number" min="1" max="365" value={form.cadence} onChange={set('cadence')} style={{ ...inputStyle, width: '100%', fontFamily: FLOCK.fontMono }} />
         </div>
@@ -178,10 +200,83 @@ function AddPersonForm({ onAdded, onCancel }) {
   )
 }
 
+function EditPersonForm({ person, onSaved, onCancel }) {
+  const [form, setForm] = useState({
+    name: person.name || '',
+    role: person.role || '',
+    fellowship: person.fellowship || '',
+    phone: person.phone || '',
+    email: person.email || '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+
+  const submit = async () => {
+    if (!form.name.trim() || saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await callFlockAPI('updatePerson', {
+        payload: JSON.stringify({ personId: person.id, ...form }),
+      })
+      if (!res || !res.success) throw new Error('Save failed')
+      onSaved({
+        name: form.name.trim(),
+        role: form.role.trim(),
+        fellowship: form.fellowship.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+      })
+    } catch (e) {
+      setError('Error: ' + String(e.message || e))
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: '12px', padding: '14px', background: FLOCK.surface, borderRadius: '12px' }}>
+      {error && <div style={{ fontSize: '13px', color: FLOCK.red }}>{error}</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
+        <div>
+          <label style={labelStyle}>Full name *</label>
+          <input type="text" value={form.name} onChange={set('name')} style={{ ...inputStyle, width: '100%' }} />
+        </div>
+        <div>
+          <label style={labelStyle}>Role</label>
+          <input type="text" value={form.role} onChange={set('role')} placeholder="e.g. Cell leader" style={{ ...inputStyle, width: '100%' }} />
+        </div>
+        <div>
+          <label style={labelStyle}>Fellowship</label>
+          <input type="text" value={form.fellowship} onChange={set('fellowship')} placeholder="e.g. U of Manitoba" style={{ ...inputStyle, width: '100%' }} />
+        </div>
+        <div>
+          <label style={labelStyle}>Phone</label>
+          <input type="tel" value={form.phone} onChange={set('phone')} placeholder="e.g. (204) 555-0123" style={{ ...inputStyle, width: '100%', fontFamily: FLOCK.fontMono }} />
+        </div>
+        <div>
+          <label style={labelStyle}>Email</label>
+          <input type="email" value={form.email} onChange={set('email')} placeholder="e.g. john@example.com" style={{ ...inputStyle, width: '100%' }} />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '10px' }}>
+        <button type="button" onClick={submit} disabled={saving || !form.name.trim()} style={btnPrimary({ padding: '8px 14px', opacity: saving || !form.name.trim() ? 0.6 : 1, cursor: saving ? 'wait' : 'pointer' })}>
+          {saving ? 'Saving…' : 'Save details'}
+        </button>
+        <button type="button" onClick={onCancel} style={btnGhost({ padding: '8px 14px' })}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function PersonCard({ person, expanded, onToggle, onLogCall, onPatched }) {
   const [interactions, setInteractions] = useState(null)
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [historyError, setHistoryError] = useState(null)
+  const [editing, setEditing] = useState(false)
 
   const [days, setDays] = useState(String(parseInt(person.cadenceDays, 10) || 28))
   const [savingCad, setSavingCad] = useState(false)
@@ -265,6 +360,39 @@ function PersonCard({ person, expanded, onToggle, onLogCall, onPatched }) {
 
       {expanded && (
         <div style={{ padding: '0 16px 16px', display: 'grid', gap: '14px' }}>
+          {/* Contact details */}
+          {editing ? (
+            <EditPersonForm
+              person={person}
+              onCancel={() => setEditing(false)}
+              onSaved={(patch) => {
+                onPatched(person.id, patch)
+                setEditing(false)
+              }}
+            />
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', paddingTop: '4px', fontSize: '13px', fontFamily: FLOCK.fontBody }}>
+              {person.phone ? (
+                <a href={`tel:${person.phone}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: FLOCK.purple, fontWeight: 600, textDecoration: 'none', fontFamily: FLOCK.fontMono }}>
+                  <Phone size={13} />
+                  {person.phone}
+                </a>
+              ) : (
+                <span style={{ color: FLOCK.muted }}>No phone on file</span>
+              )}
+              {person.email && (
+                <a href={`mailto:${person.email}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: FLOCK.purple, fontWeight: 600, textDecoration: 'none' }}>
+                  <Mail size={13} />
+                  {person.email}
+                </a>
+              )}
+              <button type="button" onClick={() => setEditing(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', cursor: 'pointer', color: FLOCK.muted, fontSize: '12px', fontWeight: 600, fontFamily: FLOCK.fontBody, padding: 0 }}>
+                <Pencil size={12} />
+                Edit details
+              </button>
+            </div>
+          )}
+
           {/* Quick actions */}
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', paddingTop: '4px' }}>
             <button type="button" onClick={() => onLogCall(person)} style={btnPrimary({ padding: '9px 14px' })}>
@@ -325,6 +453,7 @@ export default function FlockPeoplePanel({ preselectId = null, startAdding = fal
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [query, setQuery] = useState('')
+  const [bucketFilter, setBucketFilter] = useState('all')
   const [expandedId, setExpandedId] = useState(preselectId)
   const [showAdd, setShowAdd] = useState(startAdding)
   const [noteResults, setNoteResults] = useState(null)
@@ -386,11 +515,20 @@ export default function FlockPeoplePanel({ preselectId = null, startAdding = fal
     })
   }
 
+  const bucketCounts = useMemo(() => {
+    const counts = { all: people.length, overdue: 0, today: 0, onTrack: 0, noCalls: 0, paused: 0 }
+    for (const p of people) counts[dueBucket(p)] += 1
+    return counts
+  }, [people])
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return people
-    return people.filter((p) => String(p.name || '').toLowerCase().includes(q))
-  }, [people, query])
+    return people.filter((p) => {
+      if (bucketFilter !== 'all' && dueBucket(p) !== bucketFilter) return false
+      if (q && !String(p.name || '').toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [people, query, bucketFilter])
 
   return (
     <div style={{ display: 'grid', gap: '16px', position: 'relative' }}>
@@ -423,6 +561,47 @@ export default function FlockPeoplePanel({ preselectId = null, startAdding = fal
         />
       </div>
 
+      {people.length > 0 && (
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {[
+            { key: 'all', label: 'All' },
+            { key: 'overdue', label: DUE_BUCKETS.overdue.label },
+            { key: 'today', label: DUE_BUCKETS.today.label },
+            { key: 'onTrack', label: DUE_BUCKETS.onTrack.label },
+            { key: 'noCalls', label: DUE_BUCKETS.noCalls.label },
+            { key: 'paused', label: DUE_BUCKETS.paused.label },
+          ].filter((b) => b.key === 'all' || bucketCounts[b.key] > 0).map((b) => {
+            const active = bucketFilter === b.key
+            const tone = b.key === 'all' ? { fg: FLOCK.text, bg: FLOCK.surface } : DUE_BUCKETS[b.key]
+            return (
+              <button
+                key={b.key}
+                type="button"
+                onClick={() => setBucketFilter(b.key)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '999px',
+                  border: `1px solid ${active ? tone.fg : FLOCK.border}`,
+                  background: active ? tone.bg : FLOCK.card,
+                  color: active ? tone.fg : FLOCK.muted,
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontFamily: FLOCK.fontBody,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {b.label}
+                <span style={{ opacity: 0.75 }}>{bucketCounts[b.key]}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {error && <div style={{ fontSize: '13px', color: FLOCK.red }}>{error}</div>}
 
       {loading ? (
@@ -441,8 +620,11 @@ export default function FlockPeoplePanel({ preselectId = null, startAdding = fal
         </div>
       ) : (
         <>
-          {filtered.length === 0 && query.trim() && (
-            <div style={{ fontSize: '13px', color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>No people named “{query.trim()}”.</div>
+          {filtered.length === 0 && (query.trim() || bucketFilter !== 'all') && (
+            <div style={{ fontSize: '13px', color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
+              {query.trim() ? `No people named "${query.trim()}"` : `No one in "${DUE_BUCKETS[bucketFilter]?.label ?? bucketFilter}"`}
+              {query.trim() && bucketFilter !== 'all' ? ` in "${DUE_BUCKETS[bucketFilter]?.label ?? bucketFilter}"` : ''}.
+            </div>
           )}
           <div style={{ display: 'grid', gap: '10px' }}>
             {filtered.map((person) => (

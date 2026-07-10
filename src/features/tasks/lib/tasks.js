@@ -138,6 +138,7 @@ export async function getDeptTasks(departmentId) {
     .eq('department_id', departmentId)
     .eq('is_personal', false)
     .is('parent_task_id', null)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -161,6 +162,7 @@ export async function getSprintTasks(sprintId) {
     .eq('sprint_id', sprintId)
     .eq('task_type', 'sprint')
     .is('parent_task_id', null)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -174,6 +176,7 @@ export async function getPersonalTasks(userId) {
     .eq('assignee_id', userId)
     .eq('is_personal', true)
     .is('parent_task_id', null)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -208,6 +211,7 @@ export async function getMyTasks(userId) {
     .eq('is_personal', false)
     .is('sprint_id', null)
     .is('parent_task_id', null)
+    .is('deleted_at', null)
 
   if (spaceError) throw spaceError
 
@@ -227,6 +231,7 @@ export async function getMyTasks(userId) {
     .eq('assignee_id', userId)
     .eq('is_personal', true)
     .is('parent_task_id', null)
+    .is('deleted_at', null)
 
   if (personalError) throw personalError
 
@@ -248,6 +253,7 @@ export async function getMyTasks(userId) {
       .in('sprint_id', sprintIds)
       .eq('assignee_id', userId)
       .is('parent_task_id', null)
+      .is('deleted_at', null)
 
     if (error2) throw error2
     sprintTasks = tasks ?? []
@@ -290,7 +296,11 @@ export async function getFlockTasks(pastorId) {
 
   if (error) throw error
 
-  const tasks = (data ?? []).flatMap((assignment) => assignment.member?.tasks ?? [])
+  // deleted_at can't be filtered inside the nested member.tasks embed via
+  // .is(), so drop soft-deleted rows client-side after the flatMap.
+  const tasks = (data ?? [])
+    .flatMap((assignment) => assignment.member?.tasks ?? [])
+    .filter((task) => !task.deleted_at)
   return normalizeTaskResultList(tasks)
 }
 
@@ -319,6 +329,7 @@ export async function getSubtasks(parentTaskId) {
     .from('tasks')
     .select(SUBTASK_SELECT)
     .eq('parent_task_id', parentTaskId)
+    .is('deleted_at', null)
     .order('sort_order', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true })
 
@@ -779,6 +790,7 @@ export async function getLinkableTasks({ departmentId = null, sprintId = null, e
     `)
     .eq('is_personal', false)
     .is('parent_task_id', null)
+    .is('deleted_at', null)
     .neq('id', excludeTaskId)
     .order('created_at', { ascending: false })
     .limit(50)

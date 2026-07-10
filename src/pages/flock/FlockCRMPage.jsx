@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
-import { AlertCircle, CheckSquare, Home, Phone, Plus, RefreshCw, Settings as SettingsIcon, ShieldCheck, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { AlertCircle, CheckSquare, ChevronDown, ChevronRight, Home, Mail, Phone, Plus, RefreshCw, Settings as SettingsIcon, ShieldCheck, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { FLOCK_CRM_CONFIG } from '../../lib/permissions'
-import { callFlockCRM as callFlockAPI, flockCard, formatTimeAgo, FLOCK } from '../../lib/flockSupabase'
+import { supabase } from '../../lib/supabase'
+import { callFlockCRM as callFlockAPI, flockCard, formatTimeAgo, initials, FLOCK } from '../../lib/flockSupabase'
 import FlockTodosPanel from '../../components/flock/FlockTodosPanel'
 import FlockPeoplePanel from '../../components/flock/FlockPeoplePanel'
 import FlockAiLogPanel from '../../components/flock/FlockAiLogPanel'
@@ -30,6 +31,12 @@ function StatTile({ label, value, tone, note }) {
       </div>
     </div>
   )
+}
+
+function statusBadge(status) {
+  if (status === 'Overdue' || status === 'Call Back') return { label: status === 'Call Back' ? 'Callback due' : 'Overdue', fg: FLOCK.red, bg: FLOCK.redTint }
+  if (status === 'Due today' || status === 'Today') return { label: 'Due today', fg: FLOCK.amber, bg: FLOCK.amberTint }
+  return { label: status || 'Due', fg: FLOCK.purple, bg: FLOCK.purpleTint }
 }
 
 function DuePersonCard({ person, expanded, onExpand, onRefresh, onOpenPerson, todos = [] }) {
@@ -75,34 +82,58 @@ function DuePersonCard({ person, expanded, onExpand, onRefresh, onOpenPerson, to
   }
 
   const personTodos = todos.filter((t) => t.personId === person.id) || []
+  const badge = statusBadge(person.status)
 
   return (
-    <div style={flockCard({ padding: '16px', cursor: 'pointer', fontFamily: FLOCK.fontBody })}>
+    <div style={flockCard({ padding: 0, overflow: 'hidden', fontFamily: FLOCK.fontBody })}>
       <div
+        role="button"
+        tabIndex={0}
         onClick={() => onExpand(!expanded)}
-        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', userSelect: 'none' }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onExpand(!expanded) } }}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer', userSelect: 'none' }}
       >
-        <div style={{ flex: 1 }}>
+        <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: FLOCK.purpleTint, color: FLOCK.purple, display: 'grid', placeItems: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>
+          {initials(person.name || person.firstName)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '14px', fontWeight: 700, color: FLOCK.text }}>{person.name || person.firstName}</div>
           {(person.fellowship || person.phone || person.email) && (
-            <div style={{ fontSize: '12px', color: FLOCK.muted, marginTop: '4px' }}>
-              {person.fellowship || <span style={{ fontFamily: FLOCK.fontMono }}>{person.phone}</span>}
-              {person.email ? ` • ${person.email}` : ''}
+            <div style={{ fontSize: '12px', color: FLOCK.muted, marginTop: '3px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+              {person.fellowship && <span>{person.fellowship}</span>}
+              {person.phone && (
+                <a
+                  href={`tel:${person.phone}`}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ fontFamily: FLOCK.fontMono, color: FLOCK.purple, fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <Phone size={11} />
+                  {person.phone}
+                </a>
+              )}
+              {person.email && (
+                <a
+                  href={`mailto:${person.email}`}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ color: FLOCK.purple, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <Mail size={11} />
+                  {person.email}
+                </a>
+              )}
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
           {personTodos.length > 0 && (
-            <div style={{ fontSize: '11px', color: FLOCK.green, fontWeight: 700, background: FLOCK.greenTint, padding: '4px 8px', borderRadius: '6px' }}>
+            <span style={{ fontSize: '11px', color: FLOCK.green, fontWeight: 700, background: FLOCK.greenTint, padding: '3px 8px', borderRadius: '999px', whiteSpace: 'nowrap' }}>
               {personTodos.length} todo{personTodos.length !== 1 ? 's' : ''}
-            </div>
+            </span>
           )}
-          <div style={{ fontSize: '11px', color: FLOCK.red, fontWeight: 700 }}>
-            {person.status === 'Call Back' ? 'Callback Due' : person.status}
-          </div>
-          <div style={{ color: FLOCK.muted, fontSize: '16px' }}>
-            {expanded ? '▼' : '▶'}
-          </div>
+          <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '999px', color: badge.fg, background: badge.bg, whiteSpace: 'nowrap' }}>
+            {badge.label}
+          </span>
+          {expanded ? <ChevronDown size={16} color={FLOCK.muted} /> : <ChevronRight size={16} color={FLOCK.muted} />}
         </div>
       </div>
 
@@ -114,7 +145,7 @@ function DuePersonCard({ person, expanded, onExpand, onRefresh, onOpenPerson, to
               placeholder="Log call note..."
               value={callNote}
               onChange={(e) => setCallNote(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleLogCall()}
+              onKeyDown={(e) => e.key === 'Enter' && handleLogCall()}
               style={{
                 flex: 1,
                 padding: '8px 12px',
@@ -208,7 +239,7 @@ function DuePersonCard({ person, expanded, onExpand, onRefresh, onOpenPerson, to
               placeholder="Add new todo..."
               value={newTodo}
               onChange={(e) => setNewTodo(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleAddTodo()}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddTodo()}
               style={{
                 flex: 1,
                 padding: '8px 12px',
@@ -257,7 +288,6 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
     if (!FLOCK_CRM_CONFIG.checkAccess(role)) return
 
     try {
-      setLoading(true)
       const [statsRes, duePeopleRes, todosRes] = await Promise.all([
         callFlockAPI('quickStats'),
         callFlockAPI('duePeople'),
@@ -285,8 +315,33 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
 
   useEffect(() => {
     fetchData()
-    const timer = setInterval(fetchData, 60000)
-    return () => clearInterval(timer)
+
+    // Refresh on flock table changes (RLS scopes events to this pastor's rows)
+    // instead of polling. Debounced: one logged call touches several tables.
+    let debounce = null
+    const scheduleReload = () => {
+      clearTimeout(debounce)
+      debounce = setTimeout(fetchData, 400)
+    }
+
+    const channel = supabase
+      .channel('flock-home-panel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'flock_contacts' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'flock_interactions' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'flock_todos' }, scheduleReload)
+      .subscribe()
+
+    // Catch date rollovers / missed events when the user returns to the tab.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchData()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      clearTimeout(debounce)
+      supabase.removeChannel(channel)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role])
 

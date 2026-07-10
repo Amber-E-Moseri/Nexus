@@ -235,7 +235,7 @@ export async function getLists(departmentId, folderId = null) {
   return data ?? []
 }
 
-export async function createFolder(departmentId, name, createdBy) {
+export async function createFolder(departmentId, name, createdBy, extra = {}) {
   const { data: maxOrder } = await supabase
     .from('folders')
     .select('sort_order')
@@ -253,6 +253,8 @@ export async function createFolder(departmentId, name, createdBy) {
       department_id: departmentId,
       sort_order: nextOrder,
       created_by: createdBy,
+      ...(extra.description ? { description: extra.description } : {}),
+      ...(extra.visibility ? { visibility: extra.visibility } : {}),
     })
     .select()
     .single()
@@ -282,7 +284,7 @@ export async function deleteFolder(folderId) {
   if (error) throw error
 }
 
-export async function createList(departmentId, name, folderId = null, createdBy) {
+export async function createList(departmentId, name, folderId = null, createdBy, extra = {}) {
   let query = supabase.from('lists').select('sort_order')
 
   if (folderId) {
@@ -303,6 +305,7 @@ export async function createList(departmentId, name, folderId = null, createdBy)
       folder_id: folderId ?? null,
       sort_order: nextOrder,
       created_by: createdBy,
+      ...(extra.visibility ? { visibility: extra.visibility } : {}),
     })
     .select()
     .single()

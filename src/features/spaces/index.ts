@@ -1,4 +1,6 @@
 export { default as SpaceModal } from './components/SpaceModal'
+export { default as CreateListModal } from './components/CreateListModal'
+export { default as CreateFolderModal } from './components/CreateFolderModal'
 export { default as SpaceIntegrationsTab } from './components/SpaceIntegrationsTab'
 export { default as SpaceAutomationsTab } from './components/SpaceAutomationsTab'
 export { default as SpaceStatusSettings } from './components/SpaceStatusSettings'

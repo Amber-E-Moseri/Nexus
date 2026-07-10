@@ -2,6 +2,7 @@
 import {
   Archive,
   Bell,
+  CalendarClock,
   CalendarDays,
   Check,
   ChevronDown,
@@ -21,7 +22,6 @@ import {
   Settings,
   EyeOff,
   Trash2,
-  UserCheck,
   Users,
   Users2,
   Image,
@@ -37,8 +37,11 @@ import { FLOCK_CRM_CONFIG, hasSpaceRole } from '../../lib/permissions.js'
 import { INSTAGRAM_GRADING_ENABLED } from '../../config/features.js'
 import SidebarSpaceTree from './SidebarSpaceTree'
 import SpaceModal from '../../features/spaces/components/SpaceModal'
+import CreateListModal from '../../features/spaces/components/CreateListModal'
+import CreateFolderModal from '../../features/spaces/components/CreateFolderModal'
 import SprintModal from '../../features/sprints/components/SprintModal'
 import { useSprints } from '../../features/sprints/SprintsContext'
+import { useMyTaskCounts } from '../../features/tasks/hooks/useMyTaskCounts'
 import { CACHE_KEYS, getItemSafe, setItemSafe } from '../../lib/cacheUtils'
 import { preloadRoute } from '../../lib/routePreload'
 import { RegionalUpdateCompose } from '../../features/regional-updates/components/RegionalUpdateCompose'
@@ -227,6 +230,7 @@ export default function Sidebar() {
   const { profile, role, signOut } = useAuth()
   const { inboxCount } = useInboxCount()
   const { activeSprints, planningSprints } = useSprints()
+  const myTaskCounts = useMyTaskCounts(profile?.id)
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -241,17 +245,17 @@ export default function Sidebar() {
   const [archivedOpen, setArchivedOpen] = useState(false)
   const [showSpaceModal, setShowSpaceModal] = useState(false)
   const [showSprintModal, setShowSprintModal] = useState(false)
+  const [myTasksExpanded, setMyTasksExpanded] = useState(false)
   const [meetingsExpanded, setMeetingsExpanded] = useState(false)
   const [communicationsExpanded, setCommunicationsExpanded] = useState(false)
   const [editingSpace, setEditingSpace] = useState(null)
   const [hoveredSpaceId, setHoveredSpaceId] = useState(null)
   const [inlineRenameId, setInlineRenameId] = useState(null)
   const [inlineRenameValue, setInlineRenameValue] = useState('')
-  const [quickAddSpaceId, setQuickAddSpaceId] = useState(null)
-  const [quickAddListName, setQuickAddListName] = useState('')
-  const [quickAddSaving, setQuickAddSaving] = useState(false)
-  const [quickAddType, setQuickAddType] = useState(null)
-  const [quickAddFolderName, setQuickAddFolderName] = useState('')
+  // { type: 'list' | 'folder', space } → which create modal is open
+  const [createModal, setCreateModal] = useState(null)
+  // spaceId → bump count; forces SidebarSpaceTree reload after create
+  const [treeVersions, setTreeVersions] = useState({})
   const [openQuickAddMenuId, setOpenQuickAddMenuId] = useState(null)
   const [spaceActionsOpenId, setSpaceActionsOpenId] = useState(null)
   const [openSpaceMenuId, setOpenSpaceMenuId] = useState(null)
@@ -355,13 +359,16 @@ export default function Sidebar() {
     function handleDocumentClick(event) {
       if (!sidebarRef.current?.contains(event.target) && !openSpaceMenuId && !openQuickAddMenuId) {
         setSpaceActionsOpenId(null)
-        setQuickAddSpaceId(null)
       }
     }
 
     document.addEventListener('mousedown', handleDocumentClick)
     return () => document.removeEventListener('mousedown', handleDocumentClick)
   }, [openSpaceMenuId, openQuickAddMenuId])
+
+  function bumpTreeVersion(spaceId) {
+    setTreeVersions((current) => ({ ...current, [spaceId]: (current[spaceId] ?? 0) + 1 }))
+  }
 
   async function handleArchiveSpace(space) {
     const { error } = await supabase.from('departments').update({ status: 'archived' }).eq('id', space.id)
@@ -410,106 +417,6 @@ export default function Sidebar() {
 
   function handleHideSpace(spaceId) {
     setHiddenSpaceIds((current) => (current.includes(spaceId) ? current : [...current, spaceId]))
-  }
-
-  async function handleDeleteSpace(space) {
-    if (!window.confirm(`Delete ${space.name}? This cannot be undone.`)) return
-    const { error } = await supabase.from('departments').delete().eq('id', space.id)
-    if (error) throw error
-    await loadSpaces()
-  }
-
-  async function handleQuickAddFolder(space) {
-    const name = quickAddFolderName.trim()
-    if (!name) return
-    setQuickAddSaving(true)
-    try {
-      const { data: maxOrder } = await supabase
-        .from('folders')
-        .select('sort_order')
-        .eq('department_id', space.id)
-        .order('sort_order', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      const { error: folderError } = await supabase
-        .from('folders')
-        .insert({
-          name,
-          department_id: space.id,
-          sort_order: (maxOrder?.sort_order ?? -1) + 1,
-          created_by: profile?.id ?? null,
-        })
-
-      if (folderError) throw folderError
-
-      setQuickAddFolderName('')
-      setQuickAddType(null)
-      setQuickAddSpaceId(null)
-      navigate(`/spaces/${space.id}`)
-    } finally {
-      setQuickAddSaving(false)
-    }
-  }
-
-  async function handleQuickAddList(space) {
-    const name = quickAddListName.trim()
-    if (!name) return
-    setQuickAddSaving(true)
-    try {
-      const { data: existingFolders, error: folderError } = await supabase
-        .from('folders')
-        .select('id, sort_order')
-        .eq('department_id', space.id)
-        .order('sort_order')
-
-      if (folderError) throw folderError
-
-      let folderId = existingFolders?.[0]?.id ?? null
-
-      if (!folderId) {
-        const { data: folder, error: createFolderError } = await supabase
-          .from('folders')
-          .insert({
-            name: 'General',
-            department_id: space.id,
-            sort_order: 0,
-            created_by: profile?.id ?? null,
-          })
-          .select('id')
-          .single()
-
-        if (createFolderError) throw createFolderError
-        folderId = folder.id
-      }
-
-      const { data: maxOrder } = await supabase
-        .from('lists')
-        .select('sort_order')
-        .eq('department_id', space.id)
-        .order('sort_order', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      const { error: listError } = await supabase
-        .from('lists')
-        .insert({
-          name,
-          department_id: space.id,
-          folder_id: folderId,
-          sort_order: (maxOrder?.sort_order ?? -1) + 1,
-          created_by: profile?.id ?? null,
-        })
-
-      if (listError) throw listError
-
-      setQuickAddListName('')
-      setQuickAddType(null)
-      setQuickAddSpaceId(null)
-      navigate(`/spaces/${space.id}`)
-    } finally {
-      setQuickAddSaving(false)
-    }
   }
 
   return (
@@ -605,12 +512,53 @@ export default function Sidebar() {
           badge={inboxCount > 0 ? inboxCount : 0}
           to="/inbox"
         />
-        <SidebarItem
-          active={isPathActive(location.pathname, '/my-tasks')}
-          icon={Check}
-          label="My Tasks"
-          to="/my-tasks"
-        />
+        <div
+          style={{
+            ...ITEM_BASE_STYLE,
+            borderLeft: location.pathname === '/my-tasks' ? '3px solid #4C2A92' : '3px solid transparent',
+            background: location.pathname === '/my-tasks' ? '#EDE8F8' : 'transparent',
+            color: location.pathname === '/my-tasks' ? '#4C2A92' : '#1C1610',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}
+          onMouseEnter={(e) => {
+            if (location.pathname !== '/my-tasks') e.currentTarget.style.background = '#F2EEE6'
+          }}
+          onMouseLeave={(e) => {
+            if (location.pathname !== '/my-tasks') e.currentTarget.style.background = 'transparent'
+          }}
+        >
+          <Check size={15} style={{ opacity: 0.85, flexShrink: 0 }} />
+          <button
+            type="button"
+            onClick={() => go('/my-tasks')}
+            style={{ flex: 1, border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'inherit', fontSize: 'inherit' }}
+          >
+            My Tasks
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setMyTasksExpanded(!myTasksExpanded)
+            }}
+            style={{ border: 'none', background: 'none', padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'inherit' }}
+          >
+            <ChevronDown size={15} style={{ opacity: 0.85, transform: myTasksExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+          </button>
+        </div>
+        {myTasksExpanded ? (
+          <div style={{ paddingLeft: 18 }}>
+            <SidebarItem
+              active={isPathActive(location.pathname, '/my-tasks/today')}
+              icon={CalendarClock}
+              label="Today & Tomorrow"
+              badge={myTaskCounts.todayTomorrow}
+              to="/my-tasks/today"
+            />
+          </div>
+        ) : null}
         <SidebarItem
           active={isPathActive(location.pathname, '/planner')}
           icon={CalendarDays}
@@ -677,7 +625,7 @@ export default function Sidebar() {
                 />
               ) : space.name}
               glyph={<SpaceGlyph color={space.color} label={space.name?.charAt(0)?.toUpperCase() ?? '?'} />}
-              trailing={canManageSpaces && (hoveredSpaceId === space.id || quickAddSpaceId === space.id || openSpaceMenuId === space.id || openQuickAddMenuId === space.id) ? (
+              trailing={canManageSpaces && (hoveredSpaceId === space.id || openSpaceMenuId === space.id || openQuickAddMenuId === space.id) ? (
                 <motion.div
                   initial={{ opacity: 0, x: 4 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -729,26 +677,24 @@ export default function Sidebar() {
                         }}
                       >
                         <DropdownMenu.Item
-                          onSelect={() => {
-                            setQuickAddSpaceId(space.id)
-                            setQuickAddType('folder')
-                            setQuickAddFolderName('')
-                          }}
-                          className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
-                        >
-                          <Folder size={14} />
-                          <span>Create folder</span>
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                          onSelect={() => {
-                            setQuickAddSpaceId(space.id)
-                            setQuickAddType('list')
-                            setQuickAddListName('')
-                          }}
+                          onSelect={() => setCreateModal({ type: 'list', space })}
                           className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                         >
                           <LayoutGrid size={14} />
-                          <span>Create list</span>
+                          <div>
+                            <div>List</div>
+                            <div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>Track tasks, projects & more</div>
+                          </div>
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          onSelect={() => setCreateModal({ type: 'folder', space })}
+                          className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                        >
+                          <Folder size={14} />
+                          <div>
+                            <div>Folder</div>
+                            <div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>Group Lists & more</div>
+                          </div>
                         </DropdownMenu.Item>
                       </DropdownMenu.Content>
                     </DropdownMenu.Portal>
@@ -850,59 +796,14 @@ export default function Sidebar() {
               ) : null}
               onClick={() => go(`/spaces/${space.id}`)}
             />
-            {quickAddSpaceId === space.id ? (
-              <motion.div
-                initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ type: 'spring', stiffness: 480, damping: 34 }}
-                style={{
-                  marginTop: 4,
-                  marginLeft: 34,
-                  marginRight: 8,
-                  background: '#FFFFFF',
-                  border: '1px solid var(--border-1)',
-                  borderRadius: 10,
-                  padding: 10,
-                  boxShadow: '0 8px 28px rgba(28,22,16,.10)',
-                }}
-              >
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#7A6F5E', marginBottom: 6 }}>
-                  {quickAddType === 'folder' ? `New folder in ${space.name}` : `New list in ${space.name}`}
-                </div>
-                <input
-                  autoFocus
-                  value={quickAddType === 'folder' ? quickAddFolderName : quickAddListName}
-                  onChange={(event) => quickAddType === 'folder' ? setQuickAddFolderName(event.target.value) : setQuickAddListName(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      if (quickAddType === 'folder') {
-                        handleQuickAddFolder(space).catch(console.error)
-                      } else {
-                        handleQuickAddList(space).catch(console.error)
-                      }
-                    }
-                    if (event.key === 'Escape') {
-                      setQuickAddSpaceId(null)
-                      setQuickAddListName('')
-                      setQuickAddFolderName('')
-                      setQuickAddType(null)
-                    }
-                  }}
-                  placeholder={quickAddType === 'folder' ? 'Folder name' : 'List name'}
-                  style={{
-                    width: '100%',
-                    border: '1px solid #D9D1C3',
-                    borderRadius: 8,
-                    padding: '7px 9px',
-                    fontSize: 12,
-                    background: '#FFFFFF',
-                  }}
-                />
-                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--ink-3)' }}>{quickAddSaving ? 'Saving…' : 'Press Enter to save'}</div>
-              </motion.div>
-            ) : null}
-            <SidebarSpaceTree spaceId={space.id} spaceName={space.name} isActive={isPathActive(location.pathname, `/spaces/${space.id}`)} canManage={canManageSpaces} />
+            <SidebarSpaceTree
+              spaceId={space.id}
+              spaceName={space.name}
+              spaceColor={space.color}
+              isActive={isPathActive(location.pathname, `/spaces/${space.id}`)}
+              canManage={canManageSpaces}
+              refreshToken={treeVersions[space.id] ?? 0}
+            />
           </div>
         ))}
         {archivedSpaces.length > 0 ? (
@@ -1461,6 +1362,26 @@ export default function Sidebar() {
       </div>
 
       {showSpaceModal ? <SpaceModal onSaved={loadSpaces} onClose={() => setShowSpaceModal(false)} /> : null}
+      {createModal?.type === 'list' ? (
+        <CreateListModal
+          space={createModal.space}
+          onCreated={(list) => {
+            bumpTreeVersion(createModal.space.id)
+            navigate(`/spaces/${createModal.space.id}?list=${list.id}`)
+          }}
+          onClose={() => setCreateModal(null)}
+        />
+      ) : null}
+      {createModal?.type === 'folder' ? (
+        <CreateFolderModal
+          space={createModal.space}
+          onCreated={() => {
+            bumpTreeVersion(createModal.space.id)
+            navigate(`/spaces/${createModal.space.id}`)
+          }}
+          onClose={() => setCreateModal(null)}
+        />
+      ) : null}
       {editingSpace ? <SpaceModal mode="edit" space={editingSpace} onSaved={async () => { setEditingSpace(null); await loadSpaces() }} onClose={() => setEditingSpace(null)} /> : null}
       {showSprintModal ? (
         <SprintModal

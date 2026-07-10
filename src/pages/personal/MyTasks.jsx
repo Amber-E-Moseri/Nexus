@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../hooks/useAuth'
 import { useDeptMembers } from '../../hooks/useDeptMembers'
@@ -12,6 +12,7 @@ import TaskModal from '../../features/tasks/components/TaskModal'
 import KanbanBoard from '../../features/tasks/components/KanbanBoard'
 import TaskListView from '../../features/tasks/components/TaskListView'
 import TaskFilters from '../../features/tasks/components/TaskFilters'
+import { EMPTY_FILTERS, applyTaskFilters } from '../../features/tasks/hooks/useTaskFilters'
 import { getTaskTypeInfo } from '../../features/tasks/lib/task-types'
 import { isDelegatedTask } from '../../features/tasks/lib/tasks'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
@@ -20,26 +21,74 @@ function loadViewMode() {
   return localStorage.getItem('blw_mytasks_view') ?? 'list'
 }
 
+// Sidebar quick views (/my-tasks/:view) → useMyTasks scope + header copy.
+// Unknown :view values fall through to the default (unscoped) My Tasks.
+const QUICK_VIEWS = {
+  today: {
+    scope: 'today_tomorrow',
+    title: 'Today & Tomorrow',
+    subtitle: 'Assigned tasks due today or tomorrow.',
+  },
+}
+
 export default function MyTasks() {
   const { profile, role } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const { tasks, isLoading, refetch } = useMyTasks(profile?.id || '')
+  const { view } = useParams()
+  const quickView = QUICK_VIEWS[view] ?? null
+  const hookFilters = useMemo(
+    () => (quickView ? { scope: quickView.scope } : undefined),
+    [quickView],
+  )
+  const { tasks, isLoading, refetch } = useMyTasks(profile?.id || '', hookFilters)
   const [statuses, setStatuses] = useState([])
   const [departments, setDepartments] = useState([])
   const [modal, setModal] = useState(null)
   const [viewMode, setViewMode] = useState(loadViewMode)
   const [activeTab, setActiveTab] = useState('mine')
-  const [filters, setFilters] = useState({})
-  const [boardFiltersOpen, setBoardFiltersOpen] = useState(false)
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const deptMembers = useDeptMembers(profile?.department_id)
+
+  // My Tasks spans every space, so equivalent statuses ("To Do", "Done") exist
+  // once per department under different ids. Collapse them by name for the
+  // filter chips and expand a selected chip back to its whole name group when
+  // filtering, so a chip matches tasks from all spaces.
+  const statusGroups = useMemo(() => {
+    const idsByName = new Map()
+    const display = []
+    for (const status of statuses) {
+      const key = (status.name ?? '').trim().toLowerCase()
+      if (!idsByName.has(key)) {
+        idsByName.set(key, [])
+        display.push(status)
+      }
+      idsByName.get(key).push(status.id)
+    }
+    const idToGroup = {}
+    for (const ids of idsByName.values()) {
+      for (const id of ids) idToGroup[id] = ids
+    }
+    return { display, idToGroup }
+  }, [statuses])
 
   // "Mine" = personal tasks + tasks assigned to me by others (assignee_id === me).
   // "Delegated" = tasks I created for someone else — tracked separately so
   // they don't inflate my own to-do totals.
   const myTasks = tasks.filter((t) => t.assignee_id === profile?.id)
   const delegatedTasks = tasks.filter((t) => isDelegatedTask(t, profile?.id))
-  const tabTasks = activeTab === 'delegated' ? delegatedTasks : myTasks
+  // Quick views are assignee-scoped at the query level, so the Delegated tab
+  // doesn't apply — pin them to "mine".
+  const effectiveTab = quickView ? 'mine' : activeTab
+  const tabTasks = effectiveTab === 'delegated' ? delegatedTasks : myTasks
+
+  // Apply the filter panel to whichever tab is showing. Status ids expand to
+  // their name group first (see statusGroups above).
+  const expandedFilters = filters.status.length > 0
+    ? { ...filters, status: [...new Set(filters.status.flatMap((id) => statusGroups.idToGroup[id] ?? [id]))] }
+    : filters
+  const visibleTasks = applyTaskFilters(tabTasks, expandedFilters)
 
   async function loadMetadata() {
     if (!profile?.id) return
@@ -67,9 +116,9 @@ export default function MyTasks() {
     const params = new URLSearchParams(location.search)
     if (params.get('new') === 'true') {
       setModal({ mode: 'create' })
-      navigate('/my-tasks', { replace: true })
+      navigate(location.pathname, { replace: true })
     }
-  }, [location.search, navigate])
+  }, [location.search, location.pathname, navigate])
 
   function setView(mode) {
     setViewMode(mode)
@@ -86,10 +135,23 @@ export default function MyTasks() {
     refetch()
   }
 
-  const hasActiveFilters = () => Object.values(filters).some((v) => v !== undefined && v !== null && v !== false && (!Array.isArray(v) || v.length > 0))
+  // Mirrors useTaskFilters.hasActiveFilters — a generic truthiness sweep
+  // misfires on EMPTY_FILTERS' showDone:true default and dateRange object.
+  const hasActiveFilters = () =>
+    filters.status.length > 0 ||
+    filters.priority.length > 0 ||
+    filters.assigneeId != null ||
+    filters.dueDateRange != null ||
+    filters.dateRange?.startDate != null ||
+    filters.dateRange?.endDate != null ||
+    filters.taskType.length > 0 ||
+    filters.source.length > 0 ||
+    filters.hasComments ||
+    filters.hasDependencies ||
+    !filters.showDone
 
   function clearFilters() {
-    setFilters({})
+    setFilters(EMPTY_FILTERS)
   }
 
   const departmentOptions = departments.map((d) => ({ id: d.id, name: d.name, color: d.color }))
@@ -100,8 +162,8 @@ export default function MyTasks() {
       <div className="space-y-5" style={{ fontFamily: FONT_BODY }}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl" style={{ fontFamily: FONT_HEADING, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ink-1)' }}>My Tasks</h1>
-            <p className="mt-1 text-sm" style={{ color: 'var(--ink-2)' }}>Everything assigned to you across departments and programs.</p>
+            <h1 className="text-2xl" style={{ fontFamily: FONT_HEADING, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ink-1)' }}>{quickView?.title ?? 'My Tasks'}</h1>
+            <p className="mt-1 text-sm" style={{ color: 'var(--ink-2)' }}>{quickView?.subtitle ?? 'Everything assigned to you across departments and programs.'}</p>
           </div>
 
           <div className="flex items-center gap-1 p-[3px]" style={{ background: 'var(--surface-sub)', border: '1px solid var(--border-1)', borderRadius: 10 }}>
@@ -124,6 +186,8 @@ export default function MyTasks() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-3">
+        {quickView ? <span /> : (
         <div className="flex items-center gap-1 p-[3px]" style={{ background: 'var(--surface-sub)', border: '1px solid var(--border-1)', borderRadius: 10, width: 'fit-content' }}>
           {[
             { id: 'mine', label: 'My Tasks', count: myTasks.length },
@@ -145,68 +209,64 @@ export default function MyTasks() {
             </button>
           ))}
         </div>
+        )}
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((current) => !current)}
+              className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
+              style={{ border: '1px solid var(--border-1)', background: 'var(--surface-card)', color: 'var(--ink-1)', transition: 'border-color .13s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--purple-500)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-1)' }}
+            >
+              <SlidersHorizontal size={14} />
+              <span>Filter</span>
+              {hasActiveFilters() ? <span style={{ color: 'var(--purple-500)' }}>(active)</span> : null}
+            </button>
+
+            {filtersOpen ? (
+              <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[640px] max-w-[80vw] max-h-[70vh] overflow-y-auto rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--shadow-lg)]">
+                <TaskFilters forceExpanded filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={statusGroups.display} tasks={tabTasks} />
+              </div>
+            ) : null}
+          </div>
+        </div>
 
         {isLoading ? (
           <div className="flex justify-center py-16">
             <LoadingSpinner label="Loading tasks" />
           </div>
         ) : viewMode === 'board' ? (
-          <>
-            <div className="flex items-center justify-end">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setBoardFiltersOpen((current) => !current)}
-                  className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
-                  style={{ border: '1px solid var(--border-1)', background: 'var(--surface-card)', color: 'var(--ink-1)', transition: 'border-color .13s' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--purple-500)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-1)' }}
-                >
-                  <SlidersHorizontal size={14} />
-                  <span>Filter</span>
-                  {hasActiveFilters ? <span style={{ color: 'var(--purple-500)' }}>(active)</span> : null}
-                </button>
-
-                {boardFiltersOpen ? (
-                  <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[640px] max-w-[80vw] rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--shadow-lg)]">
-                    <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={statuses} tasks={tabTasks} />
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            <div className="min-h-[520px]">
-              <TasksProvider>
-                <KanbanBoard
-                  filteredTasks={tabTasks}
-                  departmentId={null}
-                  spaceName="My Tasks"
-                  departments={departmentOptions}
-                  statusesOverride={statuses}
-                  onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: activeTab === 'delegated' })}
-                  onCreateTask={() => setModal({ mode: 'create' })}
-                  readOnly={activeTab === 'delegated'}
-                />
-              </TasksProvider>
-            </div>
-          </>
-        ) : (
-          <>
-            <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={statuses} tasks={tabTasks} />
-            <div className="min-h-[520px] rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--card-shadow)]">
-              <TaskListView
-                tasks={tabTasks}
-                statuses={statuses}
+          <div className="min-h-[520px]">
+            <TasksProvider>
+              <KanbanBoard
+                filteredTasks={visibleTasks}
+                departmentId={null}
+                spaceName="My Tasks"
                 departments={departmentOptions}
-                canAddTask={activeTab === 'mine'}
+                statusesOverride={statuses}
+                onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab === 'delegated' })}
                 onCreateTask={() => setModal({ mode: 'create' })}
-                onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: activeTab === 'delegated' })}
-                onTaskStatusChange={undefined}
-                people={memberMap}
-                priorities={{}}
-                teamMembers={Object.values(memberMap)}
+                readOnly={effectiveTab === 'delegated'}
               />
-            </div>
-          </>
+            </TasksProvider>
+          </div>
+        ) : (
+          <div className="min-h-[520px] rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--card-shadow)]">
+            <TaskListView
+              tasks={visibleTasks}
+              statuses={statuses}
+              departments={departmentOptions}
+              canAddTask={effectiveTab === 'mine'}
+              onCreateTask={() => setModal({ mode: 'create' })}
+              onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab === 'delegated' })}
+              onTaskStatusChange={undefined}
+              people={memberMap}
+              priorities={{}}
+              teamMembers={Object.values(memberMap)}
+            />
+          </div>
         )}
       </div>
 

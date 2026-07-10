@@ -62,17 +62,33 @@ function todayIso() {
 
 // ── Contacts ──────────────────────────────────────────────────────────────────
 
+// phone/email columns ship in migration 20261221000000. Until it's applied
+// remotely, retry once without them so the CRM keeps working.
+let hasContactDetailCols = true
+
+function missingDetailCols(error) {
+  return hasContactDetailCols && error && /column|phone|email/i.test(error.message) && /phone|email/i.test(error.message)
+}
+
+const CONTACT_BASE_COLS = 'id, full_name, role, fellowship, cadence_days, active, next_due_date, due_status, priority, notes'
+
 async function getContacts() {
-  const { data, error } = await supabase
+  let res = await supabase
     .from('flock_contacts')
-    .select('id, full_name, role, fellowship, cadence_days, active, next_due_date, due_status, priority, notes')
+    .select(hasContactDetailCols ? `${CONTACT_BASE_COLS}, phone, email` : CONTACT_BASE_COLS)
     .order('full_name')
-  if (error) throw new Error(error.message)
-  return (data || []).map(c => ({
+  if (res.error && missingDetailCols(res.error)) {
+    hasContactDetailCols = false
+    res = await supabase.from('flock_contacts').select(CONTACT_BASE_COLS).order('full_name')
+  }
+  if (res.error) throw new Error(res.error.message)
+  return (res.data || []).map(c => ({
     id: c.id,
     name: c.full_name,
     role: c.role || '',
     fellowship: c.fellowship || '',
+    phone: c.phone || '',
+    email: c.email || '',
     cadenceDays: c.cadence_days,
     active: c.active !== false,
     nextDueDate: c.next_due_date || '',
@@ -82,20 +98,47 @@ async function getContacts() {
   }))
 }
 
-async function addContact({ name, role, fellowship, priority, cadenceDays }) {
-  const { data, error } = await supabase
-    .from('flock_contacts')
-    .insert({
-      full_name: name,
-      role: role || null,
-      fellowship: fellowship || null,
-      priority: priority || null,
-      cadence_days: parseInt(cadenceDays, 10) || 28,
-    })
-    .select('id')
-    .single()
-  if (error) throw new Error(error.message)
-  return { success: true, personId: data.id }
+function contactDetailFields({ phone, email }) {
+  if (!hasContactDetailCols) return {}
+  return { phone: (phone || '').trim() || null, email: (email || '').trim() || null }
+}
+
+async function addContact({ name, role, fellowship, priority, cadenceDays, phone, email }) {
+  const row = {
+    full_name: name,
+    role: role || null,
+    fellowship: fellowship || null,
+    priority: priority || null,
+    cadence_days: parseInt(cadenceDays, 10) || 28,
+    ...contactDetailFields({ phone, email }),
+  }
+  let res = await supabase.from('flock_contacts').insert(row).select('id').single()
+  if (res.error && missingDetailCols(res.error)) {
+    hasContactDetailCols = false
+    const { phone: _p, email: _e, ...legacy } = row
+    res = await supabase.from('flock_contacts').insert(legacy).select('id').single()
+  }
+  if (res.error) throw new Error(res.error.message)
+  return { success: true, personId: res.data.id }
+}
+
+async function updateContact({ personId, name, role, fellowship, phone, email }) {
+  if (!personId) throw new Error('Missing person id')
+  if (!String(name || '').trim()) throw new Error('Name is required')
+  const patch = {
+    full_name: String(name).trim(),
+    role: (role || '').trim() || null,
+    fellowship: (fellowship || '').trim() || null,
+    ...contactDetailFields({ phone, email }),
+  }
+  let res = await supabase.from('flock_contacts').update(patch).eq('id', personId)
+  if (res.error && missingDetailCols(res.error)) {
+    hasContactDetailCols = false
+    const { phone: _p, email: _e, ...legacy } = patch
+    res = await supabase.from('flock_contacts').update(legacy).eq('id', personId)
+  }
+  if (res.error) throw new Error(res.error.message)
+  return { success: true }
 }
 
 async function updateCadence({ personId, cadenceDays }) {
@@ -189,7 +232,9 @@ async function saveInteraction({ personId, fullName, result, summary, nextAction
 
 async function searchInteractions({ query }) {
   if (!query || String(query).trim().length < 2) return { results: [], total: 0 }
-  const q = String(query).trim()
+  // Strip characters that PostgREST parses as .or() filter syntax.
+  const q = String(query).trim().replace(/[,()"]/g, ' ').trim()
+  if (q.length < 2) return { results: [], total: 0 }
   const { data, error } = await supabase
     .from('flock_interactions')
     .select('id, contact_id, contact_name, interacted_at, result, outcome_type, summary, next_action')
@@ -339,21 +384,27 @@ async function quickStats() {
 
 async function duePeople() {
   const today = todayIso()
-  const { data, error } = await supabase
+  const baseCols = 'id, full_name, next_due_date, due_status, fellowship'
+  const query = (cols) => supabase
     .from('flock_contacts')
-    .select('id, full_name, next_due_date, due_status, fellowship')
+    .select(cols)
     .eq('active', true)
     .lte('next_due_date', today)
     .order('next_due_date')
     .limit(20)
-  if (error) throw new Error(error.message)
+  let res = await query(hasContactDetailCols ? `${baseCols}, phone, email` : baseCols)
+  if (res.error && missingDetailCols(res.error)) {
+    hasContactDetailCols = false
+    res = await query(baseCols)
+  }
+  if (res.error) throw new Error(res.error.message)
   return {
-    due: (data || []).map(p => ({
+    due: (res.data || []).map(p => ({
       id: p.id,
       name: p.full_name,
       status: p.due_status || 'Overdue',
-      phone: null,
-      email: null,
+      phone: p.phone || null,
+      email: p.email || null,
       fellowship: p.fellowship || '',
     })),
   }
@@ -408,6 +459,11 @@ export async function callFlockCRM(action, params = {}) {
     case 'addPerson': {
       const p = JSON.parse(params.payload || '{}')
       return addContact(p)
+    }
+
+    case 'updatePerson': {
+      const p = JSON.parse(params.payload || '{}')
+      return updateContact(p)
     }
 
     case 'saveCadence':

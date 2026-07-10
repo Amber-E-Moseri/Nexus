@@ -131,7 +131,7 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
 
   function toggleMulti(key, value) {
     setFilters((prev) => {
-      const arr = prev[key]
+      const arr = prev[key] ?? []
       return {
         ...prev,
         [key]: arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value],
@@ -198,7 +198,7 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
                 <FilterPill
                   key={status.id}
                   label={status.name}
-                  active={filters.status.includes(status.id)}
+                  active={(filters.status ?? []).includes(status.id)}
                   onClick={() => toggleMulti('status', status.id)}
                   onRemove={() => toggleMulti('status', status.id)}
                 />
@@ -338,7 +338,7 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
                 <FilterPill
                   key={priority.value}
                   label={priority.label}
-                  active={filters.priority.includes(priority.value)}
+                  active={(filters.priority ?? []).includes(priority.value)}
                   onClick={() => toggleMulti('priority', priority.value)}
                   onRemove={() => toggleMulti('priority', priority.value)}
                 />
@@ -378,7 +378,7 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
                   <FilterPill
                     key={option.value}
                     label={option.label}
-                    active={filters.taskType.includes(option.value)}
+                    active={(filters.taskType ?? []).includes(option.value)}
                     onClick={() => toggleMulti('taskType', option.value)}
                     onRemove={() => toggleMulti('taskType', option.value)}
                   />
@@ -395,7 +395,7 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
                   <FilterPill
                     key={source}
                     label={SOURCE_LABELS[source] ?? source}
-                    active={filters.source.includes(source)}
+                    active={(filters.source ?? []).includes(source)}
                     onClick={() => toggleMulti('source', source)}
                     onRemove={() => toggleMulti('source', source)}
                   />

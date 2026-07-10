@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useToast } from '../../../context/ToastContext'
 import { supabase } from '../../../lib/supabase'
-import { normalizeTaskRows, isTaskCompleted } from '../../../lib/taskStatuses'
+import { normalizeTaskRows, isTaskCompleted, isTaskActionable } from '../../../lib/taskStatuses'
+
+// Quick-view scope (sidebar shortcut). Assignee-only — delegated tasks
+// (created for someone else) are excluded, which matches the realtime
+// subscription below, so the scoped view stays fully live.
+// - 'today_tomorrow': assigned tasks due today or tomorrow (local timezone),
+//   completed/cancelled excluded.
+export type MyTasksScope = 'today_tomorrow'
 
 interface UseMyTasksFilter {
+  scope?: MyTasksScope | null
   space?: string | null
   status?: string[] | null
   assignee?: string | null
@@ -52,6 +60,20 @@ function toDateOnly(value: Date | string | null | undefined) {
   return value.slice(0, 10)
 }
 
+// Local-timezone date string — toISOString() would shift to UTC and flip the
+// day near midnight for users west of Greenwich.
+export function localDateOnly(date: Date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
+export function localTomorrowDateOnly(date: Date = new Date()) {
+  const tomorrow = new Date(date)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  return localDateOnly(tomorrow)
+}
+
 export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange?: [Date, Date]): UseMyTasksReturn {
   const { showToast } = useToast()
   const [tasks, setTasks] = useState<any[]>([])
@@ -61,6 +83,7 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
   // Create a stable dependency key from filter values to avoid unnecessary re-renders
   const filterKey = useMemo(() => {
     const key = {
+      scope: filters?.scope,
       status: filters?.status,
       assignee: filters?.assignee,
       space: filters?.space,
@@ -84,10 +107,19 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
 
     try {
       // Build base query: created_by OR assigned_to OR space owner
-      let query = supabase.from('tasks').select(TASK_SELECT)
+      let query = supabase.from('tasks').select(TASK_SELECT).is('deleted_at', null)
 
-      // Filter by user
-      query = query.or(`created_by.eq.${userId},assignee_id.eq.${userId}`)
+      // Filter by user. Quick-view scopes are assignee-only; the default view
+      // also includes tasks the user created (for the Delegated tab).
+      if (filters?.scope) {
+        query = query.eq('assignee_id', userId)
+      } else {
+        query = query.or(`created_by.eq.${userId},assignee_id.eq.${userId}`)
+      }
+
+      if (filters?.scope === 'today_tomorrow') {
+        query = query.gte('due_date', localDateOnly()).lte('due_date', localTomorrowDateOnly())
+      }
 
       // Filter by date range if provided. The hook arg is a Date tuple; filters.dateRange is a form object.
       if (dateRange) {
@@ -115,6 +147,11 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
 
       // Apply client-side filters if needed
       let filtered = normalizedTasks
+
+      if (filters?.scope === 'today_tomorrow') {
+        // A completed or cancelled task shouldn't linger in this view
+        filtered = filtered.filter((t) => t.due_date && isTaskActionable(t))
+      }
 
       if (filters?.status && filters.status.length > 0) {
         filtered = filtered.filter((t) => filters.status.includes(t.status_id))
@@ -194,7 +231,9 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
   // Subscribe only to tasks assigned to this user. We do not subscribe to
   // created_by because delegated tasks (created by user, assigned to someone
   // else) are excluded from My Tasks — patching them in would contradict the
-  // fetch query.
+  // fetch query. Quick-view scopes are assignee-only, so this filter covers
+  // them fully; INSERT/UPDATE re-fetches through load(), which re-applies the
+  // scope's server + client filters.
   useEffect(() => {
     if (!userId) return
 
