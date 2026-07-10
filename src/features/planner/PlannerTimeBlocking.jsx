@@ -22,7 +22,7 @@ import {
   toISODate,
   MINUTES_PER_DAY,
 } from './lib/timeBlockUtils'
-import { BG, BORDER, TEXT } from './lib/plannerTheme'
+import { BG, BORDER, MUTED, TEXT } from './lib/plannerTheme'
 
 // Stable filter object: useMyTasks re-fetches when filter identity fields
 // change. We want done tasks too (for the "Done this week" KPI) and filter
