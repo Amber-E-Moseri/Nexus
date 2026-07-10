@@ -308,7 +308,7 @@ export default function TopBar({ onOpenMobileMenu }) {
           borderBottom: '1px solid var(--topbar-border)',
         }}
       >
-        <div className="flex h-[52px] items-center justify-between gap-2 px-5">
+        <div className="flex h-[52px] items-center gap-2 px-5">
           {/* Mobile Menu Button */}
           <button
             onClick={onOpenMobileMenu}
@@ -318,7 +318,7 @@ export default function TopBar({ onOpenMobileMenu }) {
             <Menu size={20} className="text-[var(--text-primary)]" />
           </button>
 
-          <nav className="flex min-w-0 items-center gap-0.5 text-[12.5px] truncate" aria-label="Breadcrumb">
+          <nav className="flex min-w-0 flex-1 items-center gap-0.5 text-[12.5px] truncate" aria-label="Breadcrumb">
             <span
               className="cursor-pointer font-semibold text-[var(--text-tertiary)] transition-colors hover:text-[var(--accent)] whitespace-nowrap"
               onClick={() => navigate('/dashboard')}
@@ -439,12 +439,13 @@ export default function TopBar({ onOpenMobileMenu }) {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="hidden items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12px] font-bold text-white transition sm:flex"
+              className="flex items-center gap-1.5 rounded-[8px] px-2 py-1.5 text-[12px] font-bold text-white transition sm:px-3"
               style={{ background: 'var(--amber)' }}
               onClick={() => setShowNewTaskModal(true)}
+              aria-label="New Task"
             >
               <Plus size={14} />
-              New Task
+              <span className="hidden sm:inline">New Task</span>
             </button>
 
             <button

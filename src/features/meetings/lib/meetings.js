@@ -209,6 +209,10 @@ export async function createTasksFromActionItems(meetingId, departmentId, action
       priority: 'medium',
       created_by: createdBy,
       is_personal: false,
+      // Optional sprint linkage (from the extraction UI's per-item sprint picker).
+      // A sprint-linked task must be task_type='sprint' for the sprint boards + RLS.
+      sprint_id: item.sprintId || null,
+      task_type: item.sprintId ? 'sprint' : 'space',
     }
   })
 

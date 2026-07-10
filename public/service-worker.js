@@ -25,6 +25,17 @@ const CACHE_EXPIRY = {
   ASSET: 7 * 24 * 60 * 1000, // 7 days for assets
 };
 
+async function createCacheableResponse(response) {
+  const headers = new Headers(response.headers);
+  headers.set('sw-cached-at', Date.now().toString());
+
+  return new Response(await response.blob(), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 // Install event: cache essential assets
 self.addEventListener('install', (event) => {
   console.log('[Service Worker] Installing v1.0.0');
@@ -125,15 +136,9 @@ function cacheFirstStrategy(request, cacheName) {
         }
 
         const responseToCache = response.clone();
-        caches.open(cacheName).then((cache) => {
-          // Add cache timestamp metadata
-          const clonedResponse = new Response(responseToCache.body, {
-            status: responseToCache.status,
-            statusText: responseToCache.statusText,
-            headers: new Headers(responseToCache.headers),
-          });
-          clonedResponse.headers.set('sw-cached-at', Date.now().toString());
-          cache.put(request, clonedResponse);
+        caches.open(cacheName).then(async (cache) => {
+          const cacheableResponse = await createCacheableResponse(responseToCache);
+          cache.put(request, cacheableResponse);
         });
 
         return response;
@@ -161,15 +166,9 @@ function networkFirstStrategy(request, cacheName) {
       }
 
       const responseToCache = response.clone();
-      caches.open(cacheName).then((cache) => {
-        // Add cache timestamp for API expiration
-        const clonedResponse = new Response(responseToCache.body, {
-          status: responseToCache.status,
-          statusText: responseToCache.statusText,
-          headers: new Headers(responseToCache.headers),
-        });
-        clonedResponse.headers.set('sw-cached-at', Date.now().toString());
-        cache.put(request, clonedResponse);
+      caches.open(cacheName).then(async (cache) => {
+        const cacheableResponse = await createCacheableResponse(responseToCache);
+        cache.put(request, cacheableResponse);
       });
 
       return response;
@@ -203,15 +202,9 @@ function htmlFirstStrategy(request) {
       }
 
       const responseToCache = response.clone();
-      caches.open(DYNAMIC_CACHE).then((cache) => {
-        // Add cache timestamp for HTML expiration
-        const clonedResponse = new Response(responseToCache.body, {
-          status: responseToCache.status,
-          statusText: responseToCache.statusText,
-          headers: new Headers(responseToCache.headers),
-        });
-        clonedResponse.headers.set('sw-cached-at', Date.now().toString());
-        cache.put(request, clonedResponse);
+      caches.open(DYNAMIC_CACHE).then(async (cache) => {
+        const cacheableResponse = await createCacheableResponse(responseToCache);
+        cache.put(request, cacheableResponse);
       });
 
       return response;

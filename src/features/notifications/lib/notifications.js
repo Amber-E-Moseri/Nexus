@@ -127,6 +127,9 @@ export const NOTIFICATION_TYPES = {
   task_due_soon: { label: 'Task due date approaching', icon: '⏰', description: 'When a task is due soon' },
   sprint_added: { label: 'Added to a sprint', icon: '⚡', description: 'When you are added to a sprint' },
   sprint_status: { label: 'Sprint status changed', icon: '🔄', description: 'When sprint status changes' },
+  sprint_access_requested: { label: 'Sprint access requested', icon: '🔐', description: 'When someone requests access to a sprint you manage' },
+  sprint_access_approved: { label: 'Sprint access approved', icon: '✅', description: 'When your sprint access request is approved' },
+  sprint_access_rejected: { label: 'Sprint access rejected', icon: '❌', description: 'When your sprint access request is rejected' },
   mention: { label: "I'm @mentioned", icon: '@', description: 'When someone mentions you in a comment' },
   invitation_accepted: { label: 'Invitation accepted', icon: '✅', description: 'When a user accepts their invitation' },
   meeting_created: { label: 'Meeting created', icon: '🎙', description: 'When a meeting is created in your department' },
@@ -219,6 +222,12 @@ export function formatNotificationMessage(notification) {
       return `You were added to sprint "${payload.sprint_name ?? 'a sprint'}"`
     case 'sprint_status':
       return `Sprint "${payload.sprint_name}" moved to ${payload.new_status}`
+    case 'sprint_access_requested':
+      return `${payload.requester_name ?? 'Someone'} requested access to "${payload.sprint_name ?? 'a sprint'}"`
+    case 'sprint_access_approved':
+      return `Your request to join "${payload.sprint_name ?? 'a sprint'}" was approved`
+    case 'sprint_access_rejected':
+      return `Your request to join "${payload.sprint_name ?? 'a sprint'}" was rejected${payload.message ? `: ${payload.message}` : ''}`
     case 'invitation_accepted':
       return `${payload.user_name ?? 'A user'} accepted their invitation`
     case 'meeting_created':

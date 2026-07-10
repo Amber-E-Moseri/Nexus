@@ -110,6 +110,8 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
     return <div className="p-6 text-sm text-[var(--coral-dark)]">Failed to load sprint tasks: {error}</div>
   }
 
+  const hasTeams = Boolean(teamsWithMembers?.length)
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
@@ -137,6 +139,44 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
         </div>
 
         <div className="flex items-center gap-2">
+          {hasTeams && view !== 'review' ? (
+            <div className="flex items-center gap-1 rounded-[10px] bg-[var(--surface-secondary)] p-[3px]">
+              <button
+                type="button"
+                onClick={() => setTeamView('my')}
+                style={{
+                  padding: '4px 12px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  border: 'none',
+                  background: teamView === 'my' ? 'white' : 'transparent',
+                  color: teamView === 'my' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                  boxShadow: teamView === 'my' ? '0 1px 3px rgba(20,20,43,0.1)' : 'none',
+                }}
+              >
+                My Team
+              </button>
+              <button
+                type="button"
+                onClick={() => setTeamView('all')}
+                style={{
+                  padding: '4px 12px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  border: 'none',
+                  background: teamView === 'all' ? 'white' : 'transparent',
+                  color: teamView === 'all' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                  boxShadow: teamView === 'all' ? '0 1px 3px rgba(20,20,43,0.1)' : 'none',
+                }}
+              >
+                All Teams
+              </button>
+            </div>
+          ) : null}
           <AssignedToMeToggle active={assignedToMe} onClick={toggleAssignedToMe} />
           {canEdit ? (
             <button
@@ -163,71 +203,22 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
       </div>
 
       <div className="flex-1 overflow-hidden px-5 pb-5 pt-4">
-        {view === 'kanban' && teamsWithMembers && teamsWithMembers.length > 0 ? (
-          <div className="flex flex-1 flex-col overflow-hidden">
-            {/* Team View Tabs */}
-            <div className="mb-4 flex gap-2 border-b border-[var(--border)]">
-              <button
-                onClick={() => setTeamView('my')}
-                style={{
-                  padding: '8px 12px',
-                  fontSize: 13,
-                  fontWeight: 500,
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: teamView === 'my' ? '2px solid var(--accent)' : 'none',
-                  color: teamView === 'my' ? 'var(--accent)' : 'var(--text-tertiary)',
-                  cursor: 'pointer',
-                }}
-              >
-                My Team
-              </button>
-              <button
-                onClick={() => setTeamView('all')}
-                style={{
-                  padding: '8px 12px',
-                  fontSize: 13,
-                  fontWeight: 500,
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: teamView === 'all' ? '2px solid var(--accent)' : 'none',
-                  color: teamView === 'all' ? 'var(--accent)' : 'var(--text-tertiary)',
-                  cursor: 'pointer',
-                }}
-              >
-                All Teams
-              </button>
-            </div>
-
-            {/* Board Content */}
-            <div className="flex-1 overflow-hidden">
-              {teamView === 'my' ? (
-                <KanbanBoard
-                  filteredTasks={getMyTeamTasks()}
-                  onTaskClick={(task) => setModal({ mode: 'edit', task })}
-                  onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, subtasks: draft.subtasks }) : undefined}
-                  readOnly={!canEdit}
-                  teamMembers={members}
-                />
-              ) : (
-                <AllTeamsBoard
-                  tasks={filtered}
-                  tasksByTeam={getTasksByTeam}
-                  sprint={sprint}
-                  currentUser={profile}
-                  onTaskClick={(task) => setModal({ mode: 'edit', task })}
-                  onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, subtasks: draft.subtasks }) : undefined}
-                  readOnly={!canEdit}
-                  teamMembers={members}
-                  statuses={statuses}
-                />
-              )}
-            </div>
-          </div>
+        {view === 'kanban' && hasTeams && teamView === 'all' ? (
+          <AllTeamsBoard
+            tasks={filtered}
+            tasksByTeam={getTasksByTeam}
+            sprint={sprint}
+            currentUser={profile}
+            onTaskClick={(task) => setModal({ mode: 'edit', task })}
+            onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, subtasks: draft.subtasks }) : undefined}
+            readOnly={!canEdit}
+            teamMembers={members}
+            statuses={statuses}
+          />
         ) : view === 'kanban' ? (
           <div className="h-full overflow-hidden">
             <KanbanBoard
-              filteredTasks={filtered}
+              filteredTasks={hasTeams && teamView === 'my' ? getMyTeamTasks() : filtered}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
               onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, subtasks: draft.subtasks }) : undefined}
               readOnly={!canEdit}
@@ -237,7 +228,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
         ) : view === 'list' ? (
           <div className="h-full overflow-hidden rounded-[16px] border border-[var(--border)] bg-white">
             <TaskListView
-              tasks={filtered}
+              tasks={hasTeams && teamView === 'my' ? getMyTeamTasks() : filtered}
               statuses={statuses}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
               onTaskStatusChange={canEdit ? handleTaskStatusChange : undefined}

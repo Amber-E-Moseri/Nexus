@@ -11,6 +11,7 @@ import {
   reactivateTemporaryMember,
   getPendingSprintInvitations,
 } from '../lib/sprints'
+import { getSprintAccessRequests, approveSprintAccessRequest, rejectSprintAccessRequest } from '../../../lib/people/api'
 import InviteExternalModal from './InviteExternalModal'
 
 const ROLE_OPTIONS = ['owner', 'manager', 'contributor', 'viewer']
@@ -65,6 +66,8 @@ export default function SprintMemberPanel({
   const { profile } = useAuth()
   const [orgUsers, setOrgUsers] = useState([])
   const [pendingInvitations, setPendingInvitations] = useState([])
+  const [accessRequests, setAccessRequests] = useState([])
+  const [respondingRequestId, setRespondingRequestId] = useState(null)
   const [selectedUserId, setSelectedUserId] = useState('')
   const [selectedRole, setSelectedRole] = useState('contributor')
   const [selectedTeamIds, setSelectedTeamIds] = useState([])
@@ -88,6 +91,38 @@ export default function SprintMemberPanel({
       .catch(() => setPendingInvitations([]))
       .finally(() => setLoadingPending(false))
   }, [sprintId, onChanged])
+
+  useEffect(() => {
+    if (!canEdit || isArchived) return
+    getSprintAccessRequests(sprintId)
+      .then((requests) => setAccessRequests(requests.filter((request) => request.status === 'pending')))
+      .catch(() => setAccessRequests([]))
+  }, [sprintId, canEdit, isArchived, onChanged])
+
+  async function handleApproveRequest(request) {
+    setRespondingRequestId(request.id)
+    try {
+      await approveSprintAccessRequest(request.id)
+      setAccessRequests((prev) => prev.filter((r) => r.id !== request.id))
+      await onChanged?.()
+    } catch (err) {
+      alert(`Error approving request: ${err.message}`)
+    } finally {
+      setRespondingRequestId(null)
+    }
+  }
+
+  async function handleRejectRequest(request) {
+    setRespondingRequestId(request.id)
+    try {
+      await rejectSprintAccessRequest(request.id)
+      setAccessRequests((prev) => prev.filter((r) => r.id !== request.id))
+    } catch (err) {
+      alert(`Error rejecting request: ${err.message}`)
+    } finally {
+      setRespondingRequestId(null)
+    }
+  }
 
   const existingUserIds = useMemo(() => new Set(members.map((member) => member.user?.id)), [members])
   const addableUsers = orgUsers.filter((user) => !existingUserIds.has(user.id))
@@ -163,6 +198,87 @@ export default function SprintMemberPanel({
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
+      {/* Access Requests Section */}
+      {canEdit && accessRequests.length > 0 && (
+        <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>
+          <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 600, color: TOKENS.textPrimary, margin: 0 }}>Access Requests</div>
+              <div style={{ fontSize: 14, color: TOKENS.textSecondary, margin: '6px 0 0' }}>
+                People asking to join this sprint.
+              </div>
+            </div>
+            <Badge tone="planning">{accessRequests.length} pending</Badge>
+          </div>
+
+          <div style={{ display: 'grid', gap: 12 }}>
+            {accessRequests.map((request) => (
+              <div
+                key={request.id}
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 12,
+                  borderRadius: 16,
+                  border: `1px solid ${TOKENS.border}`,
+                  background: TOKENS.surfaceTertiary,
+                  padding: '12px 16px',
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: TOKENS.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {request.user?.name ?? request.user?.email ?? '—'}
+                  </div>
+                  <div style={{ fontSize: 12, color: TOKENS.textTertiary }}>
+                    Requested {new Date(request.requested_at).toLocaleDateString()}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleApproveRequest(request)}
+                  disabled={respondingRequestId === request.id}
+                  style={{
+                    borderRadius: 10,
+                    border: 'none',
+                    background: TOKENS.primary,
+                    padding: '8px 14px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'white',
+                    cursor: respondingRequestId === request.id ? 'not-allowed' : 'pointer',
+                    opacity: respondingRequestId === request.id ? 0.6 : 1,
+                    fontFamily: 'DM Sans, system-ui, sans-serif',
+                  }}
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRejectRequest(request)}
+                  disabled={respondingRequestId === request.id}
+                  style={{
+                    borderRadius: 10,
+                    border: `1px solid ${TOKENS.border}`,
+                    background: 'white',
+                    padding: '8px 14px',
+                    fontSize: 13,
+                    color: TOKENS.textSecondary,
+                    fontWeight: 500,
+                    cursor: respondingRequestId === request.id ? 'not-allowed' : 'pointer',
+                    opacity: respondingRequestId === request.id ? 0.6 : 1,
+                    fontFamily: 'DM Sans, system-ui, sans-serif',
+                  }}
+                >
+                  Reject
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Pending Invitations Section */}
       {pendingInvitations.length > 0 && (
         <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>

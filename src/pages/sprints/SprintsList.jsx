@@ -4,8 +4,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import SprintCard from '../../features/sprints/components/SprintCard'
 import SprintModal from '../../features/sprints/components/SprintModal'
 import { useAuth } from '../../hooks/useAuth'
-import { deleteSprint, duplicateSprint, getAllSprints, getMySprints, restoreSprint, listSprintTeamsIndependent } from '../../features/sprints'
-import { getSprintTasks } from '../../features/sprints/lib/sprints'
+import { deleteSprint, duplicateSprint, getAllSprints, restoreSprint } from '../../features/sprints'
+import { getSprintTasks, getMySprintMembershipIds } from '../../features/sprints/lib/sprints'
+import { requestSprintAccess, getMySprintAccessRequests } from '../../lib/people/api'
 import { supabase } from '../../lib/supabase'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 
@@ -45,59 +46,60 @@ export default function SprintsList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [sprints, setSprints] = useState([])
   const [filter, setFilter] = useState('all')
-  const [view, setView] = useState('all')
   const [query, setQuery] = useState('')
   const [showModal, setShowModal] = useState(searchParams.get('new') === 'true')
   const [loading, setLoading] = useState(true)
+  const [myMemberSprintIds, setMyMemberSprintIds] = useState(new Set())
+  const [myRequestsBySprintId, setMyRequestsBySprintId] = useState({})
 
   async function loadSprints() {
     setLoading(true)
     try {
-      const sprintData = role === 'super_admin' ? await getAllSprints() : await getMySprints()
+      // Everyone sees every sprint; access to open one is checked separately
+      // via sprint membership (super_admin always has access).
+      const [sprintData, membershipIds, myRequests] = await Promise.all([
+        getAllSprints(),
+        role === 'super_admin' ? Promise.resolve([]) : getMySprintMembershipIds(),
+        role === 'super_admin' ? Promise.resolve([]) : getMySprintAccessRequests(),
+      ])
 
-      // Fetch task counts, department info, and team data for each sprint
+      const memberIdSet = new Set(membershipIds)
+      setMyMemberSprintIds(memberIdSet)
+      setMyRequestsBySprintId(
+        Object.fromEntries(myRequests.map((request) => [request.sprint_id, request])),
+      )
+
+      // Fetch task counts and department info for each sprint the viewer can
+      // actually open — skip it for locked sprints (RLS would return an
+      // incomplete/misleading count anyway, and there's no board to preview).
       const enrichedSprints = await Promise.all(
         sprintData.map(async (sprint) => {
+          const hasAccess = role === 'super_admin' || memberIdSet.has(sprint.id)
+
+          let deptName = null
+          if (sprint.department_id) {
+            const { data: dept } = await supabase
+              .from('departments')
+              .select('name')
+              .eq('id', sprint.department_id)
+              .single()
+            deptName = dept?.name
+          }
+
+          if (!hasAccess) {
+            return { ...sprint, task_count: 0, completed_count: 0, department_name: deptName, has_access: false }
+          }
+
           try {
             const tasks = await getSprintTasks(sprint.id)
             const completed = tasks.filter((t) => t.status_definition?.category === 'completed').length
-
-            // Fetch department name if sprint has a department
-            let deptName = null
-            if (sprint.department_id) {
-              const { data: dept } = await supabase
-                .from('departments')
-                .select('name')
-                .eq('id', sprint.department_id)
-                .single()
-              deptName = dept?.name
-            }
-
-            // Fetch teams and check if user is in any team
-            let isUserInTeam = false
-            try {
-              const teams = await listSprintTeamsIndependent(sprint.id)
-              for (const team of teams) {
-                const { data: members } = await supabase
-                  .from('sprint_team_members')
-                  .select('user_id')
-                  .eq('team_id', team.id)
-
-                if (members?.some((m) => m.user_id === profile?.id)) {
-                  isUserInTeam = true
-                  break
-                }
-              }
-            } catch {
-              // If team fetch fails, continue without team info
-            }
 
             return {
               ...sprint,
               task_count: tasks.length,
               completed_count: completed,
               department_name: deptName,
-              is_user_in_team: isUserInTeam,
+              has_access: true,
             }
           } catch (err) {
             console.error(`Failed to load details for sprint ${sprint.id}:`, err)
@@ -105,8 +107,8 @@ export default function SprintsList() {
               ...sprint,
               task_count: 0,
               completed_count: 0,
-              department_name: null,
-              is_user_in_team: false,
+              department_name: deptName,
+              has_access: true,
             }
           }
         })
@@ -147,16 +149,10 @@ export default function SprintsList() {
         result = result.filter((sprint) => sprint.status === filter)
       }
 
-      // Apply view filter
-      if (view === 'my-team') {
-        result = result.filter((sprint) => sprint.is_user_in_team)
-      }
-
       return result
     },
-    [filter, searched, view],
+    [filter, searched],
   )
-
 
   async function handleDuplicate(sprintId) {
     await duplicateSprint(sprintId, profile.id)
@@ -172,6 +168,15 @@ export default function SprintsList() {
     if (!window.confirm(`Delete "${sprintName}"? This cannot be undone.`)) return
     await deleteSprint(sprintId)
     await loadSprints()
+  }
+
+  async function handleRequestAccess(sprintId) {
+    try {
+      await requestSprintAccess(sprintId)
+      await loadSprints()
+    } catch (err) {
+      alert(err.message ?? 'Failed to request access')
+    }
   }
 
   function closeModal() {
@@ -205,40 +210,6 @@ export default function SprintsList() {
       </div>
 
       <div className="flex gap-2 flex-wrap items-center">
-        <div className="flex gap-1 p-1" style={{ background: 'var(--surface-sub)', border: '1px solid var(--border-1)', borderRadius: 10 }}>
-          <button
-            onClick={() => setView('all')}
-            style={{
-              padding: '6px 12px',
-              fontSize: 13,
-              fontWeight: view === 'all' ? 600 : 500,
-              borderRadius: 6,
-              border: 'none',
-              background: view === 'all' ? 'var(--surface-card)' : 'transparent',
-              color: view === 'all' ? 'var(--purple-700)' : 'var(--ink-3)',
-              boxShadow: view === 'all' ? '0 1px 2px rgba(28,22,16,0.06)' : 'none',
-              cursor: 'pointer',
-            }}
-          >
-            All Sprints
-          </button>
-          <button
-            onClick={() => setView('my-team')}
-            style={{
-              padding: '6px 12px',
-              fontSize: 13,
-              fontWeight: view === 'my-team' ? 600 : 500,
-              borderRadius: 6,
-              border: 'none',
-              background: view === 'my-team' ? 'var(--surface-card)' : 'transparent',
-              color: view === 'my-team' ? 'var(--purple-700)' : 'var(--ink-3)',
-              boxShadow: view === 'my-team' ? '0 1px 2px rgba(28,22,16,0.06)' : 'none',
-              cursor: 'pointer',
-            }}
-          >
-            My Teams
-          </button>
-        </div>
         <input
           type="search"
           value={query}
@@ -267,17 +238,24 @@ export default function SprintsList() {
         </div>
       ) : filtered.length > 0 ? (
         <motion.div variants={gridStagger} initial="hidden" animate="show" className="grid gap-4 lg:grid-cols-3">
-          {filtered.map((sprint) => (
-            <motion.div key={sprint.id} variants={cardEnter}>
-              <SprintCard
-                sprint={sprint}
-                onClick={() => navigate(`/sprints/${sprint.id}`)}
-                onDuplicate={canCreate ? handleDuplicate : undefined}
-                onRestore={canCreate ? handleRestore : undefined}
-                onDelete={canCreate ? handleDelete : undefined}
-              />
-            </motion.div>
-          ))}
+          {filtered.map((sprint) => {
+            const hasAccess = role === 'super_admin' || myMemberSprintIds.has(sprint.id)
+            const accessRequest = myRequestsBySprintId[sprint.id]
+            return (
+              <motion.div key={sprint.id} variants={cardEnter}>
+                <SprintCard
+                  sprint={sprint}
+                  hasAccess={hasAccess}
+                  accessRequestStatus={accessRequest?.status ?? null}
+                  onClick={hasAccess ? () => navigate(`/sprints/${sprint.id}`) : undefined}
+                  onRequestAccess={!hasAccess ? () => handleRequestAccess(sprint.id) : undefined}
+                  onDuplicate={canCreate ? handleDuplicate : undefined}
+                  onRestore={canCreate ? handleRestore : undefined}
+                  onDelete={canCreate ? handleDelete : undefined}
+                />
+              </motion.div>
+            )
+          })}
         </motion.div>
       ) : (
         <EmptyState />

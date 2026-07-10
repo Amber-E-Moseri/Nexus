@@ -14,7 +14,6 @@ interface UseMyTasksFilter {
   dueDateRange?: string | null
   taskType?: string[] | null
   source?: string[] | null
-  milestoneStatus?: string[] | null
   showDone?: boolean
   hasComments?: boolean
   hasDependencies?: boolean
@@ -22,7 +21,6 @@ interface UseMyTasksFilter {
 
 interface UseMyTasksReturn {
   tasks: any[]
-  milestones: any[]
   isLoading: boolean
   error: Error | null
   refetch: () => Promise<void>
@@ -31,19 +29,19 @@ interface UseMyTasksReturn {
 /**
  * Unified hook for My Tasks and Planner pages
  * Fetches all personal tasks: created_by, assigned_to, or owned spaces
- * Includes real-time sync for both tasks and milestones
+ * Includes real-time sync
  */
 export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange?: [Date, Date]): UseMyTasksReturn {
   const { showToast } = useToast()
   const [tasks, setTasks] = useState<any[]>([])
-  const [milestones, setMilestones] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
   const TASK_SELECT = `
     id, title, description, priority, status, status_id, due_date, created_at,
     department_id, assignee_id, created_by, task_type, sprint_id, list_id,
-    source, meeting_id,
+    source, meeting_id, parent_task_id, completed_at,
+    subtask_count:tasks!parent_task_id(count),
     status_definition:task_status_definitions!status_id(
       id, name, color, category, legacy_key, department_id
     ),
@@ -55,7 +53,7 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     dependencies:task_dependencies!task_id(count)
   `
 
-  // Fetch tasks and milestones
+  // Fetch tasks
   const load = useCallback(async () => {
     if (!userId) return
     setIsLoading(true)
@@ -84,28 +82,11 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
 
       if (tasksError) throw tasksError
 
-      // Fetch milestones for this user
-      const { data: milestonesData, error: milestonesError } = await supabase
-        .from('task_milestones')
-        .select('id, task_id, user_id, milestone_date, label, created_at, updated_at')
-        .eq('user_id', userId)
-
-      if (milestonesError) throw milestonesError
-
       // Normalize task rows (status handling, etc.)
       const normalizedTasks = normalizeTaskRows(tasksData || [])
 
-      // Attach milestone data to each task for easier access
-      const milestoneMap = Object.fromEntries(
-        (milestonesData || []).map((m) => [m.task_id, m])
-      )
-      const tasksWithMilestones = normalizedTasks.map((task) => ({
-        ...task,
-        milestone: milestoneMap[task.id] || null,
-      }))
-
       // Apply client-side filters if needed
-      let filtered = tasksWithMilestones
+      let filtered = normalizedTasks
 
       if (filters?.status && filters.status.length > 0) {
         filtered = filtered.filter((t) => filters.status.includes(t.status_id))
@@ -160,34 +141,7 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
       if (filters?.hasDependencies) {
         filtered = filtered.filter((t) => t.dependencies?.count > 0)
       }
-      if (filters?.milestoneStatus && filters.milestoneStatus.length > 0) {
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const todayISO = today.toISOString().split('T')[0]
-
-        filtered = filtered.filter((t) => {
-          const milestone = t.milestone
-          for (const statusFilter of filters.milestoneStatus) {
-            if (statusFilter === 'no_milestone' && !milestone) return true
-            if (statusFilter === 'milestone_overdue' && milestone) {
-              const milestoneDate = milestone.milestone_date.slice(0, 10)
-              if (milestoneDate < todayISO && !isTaskCompleted(t)) return true
-            }
-            if (statusFilter === 'milestone_today' && milestone) {
-              const milestoneDate = milestone.milestone_date.slice(0, 10)
-              if (milestoneDate === todayISO) return true
-            }
-            if (statusFilter === 'milestone_upcoming' && milestone) {
-              const milestoneDate = milestone.milestone_date.slice(0, 10)
-              if (milestoneDate > todayISO) return true
-            }
-          }
-          return false
-        })
-      }
-
       setTasks(filtered)
-      setMilestones(milestonesData || [])
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to load tasks')
       setError(error)
@@ -195,7 +149,7 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     } finally {
       setIsLoading(false)
     }
-  }, [userId, filters?.status, filters?.assignee, filters?.space, dateRange, filters?.dateRange, filters?.priority, filters?.taskType, filters?.source, filters?.dueDateRange, filters?.showDone, filters?.hasComments, filters?.hasDependencies, filters?.milestoneStatus, showToast])
+  }, [userId, filters?.status, filters?.assignee, filters?.space, dateRange, filters?.dateRange, filters?.priority, filters?.taskType, filters?.source, filters?.dueDateRange, filters?.showDone, filters?.hasComments, filters?.hasDependencies, showToast])
 
   // Initial load
   useEffect(() => {
@@ -258,100 +212,10 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     }
   }, [userId, load])
 
-  // Real-time sync for milestones
-  useEffect(() => {
-    if (!userId) return
-
-    const milestoneSubscription = supabase
-      .channel(`task_milestones:user:${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'task_milestones',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          if (payload.eventType === 'DELETE') {
-            setMilestones((prev) => prev.filter((m) => m.id !== payload.old.id))
-          } else if (payload.eventType === 'INSERT') {
-            setMilestones((prev) => [...prev, payload.new])
-          } else {
-            setMilestones((prev) =>
-              prev.map((m) => (m.id === payload.new.id ? payload.new : m)),
-            )
-          }
-        },
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(milestoneSubscription)
-    }
-  }, [userId])
-
   return {
     tasks,
-    milestones,
     isLoading,
     error,
     refetch: load,
   }
-}
-
-/**
- * Helper to get milestone for a specific task
- */
-export function getMilestoneForTask(milestones: any[], taskId: string) {
-  return milestones.find((m) => m.task_id === taskId)
-}
-
-/**
- * Save or update milestone
- */
-export async function saveMilestone(
-  taskId: string,
-  userId: string,
-  milestoneDate: string | null,
-  label?: string,
-) {
-  if (!milestoneDate) {
-    // Delete milestone
-    const { error } = await supabase
-      .from('task_milestones')
-      .delete()
-      .eq('task_id', taskId)
-      .eq('user_id', userId)
-    if (error) throw error
-    return null
-  }
-
-  // Upsert milestone
-  const { data, error } = await supabase.from('task_milestones').upsert(
-    {
-      task_id: taskId,
-      user_id: userId,
-      milestone_date: milestoneDate,
-      label: label || null,
-    },
-    { onConflict: 'task_id,user_id' },
-  ).select().single()
-
-  if (error) throw error
-
-  // Create reminders for the milestone
-  if (data?.id) {
-    try {
-      await supabase.rpc('create_milestone_reminders', {
-        p_task_milestone_id: data.id,
-        p_user_id: userId,
-      })
-    } catch (reminderError) {
-      console.error('Failed to create milestone reminders:', reminderError)
-      // Don't throw - milestone was saved successfully
-    }
-  }
-
-  return data
 }

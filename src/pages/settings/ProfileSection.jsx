@@ -16,6 +16,8 @@ function getInitials(name = '') {
 export default function ProfileSection({
   name,
   setName,
+  groupName,
+  setGroupName,
   role,
   user,
   profile,
@@ -246,6 +248,20 @@ export default function ProfileSection({
               value={Intl.DateTimeFormat().resolvedOptions().timeZone}
               readOnly
             />
+          </label>
+
+          <label className="space-y-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">Ministry group</span>
+            <select
+              className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm"
+              value={groupName ?? ''}
+              onChange={(event) => setGroupName(event.target.value)}
+            >
+              <option value="">No group</option>
+              <option value="Central">Central</option>
+              <option value="Central-East">Central-East</option>
+              <option value="West">West</option>
+            </select>
           </label>
 
         </div>

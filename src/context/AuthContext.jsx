@@ -14,7 +14,7 @@ function getJwtRole(session) {
 async function fetchProfile(userId) {
   const { data, error } = await supabase
     .from('users')
-    .select('id, name, email, role, department_id, avatar_url, status, first_name, last_name, last_active_at')
+    .select('id, name, email, role, department_id, avatar_url, status, first_name, last_name, group_name, last_active_at')
     .eq('id', userId)
     .single()
 
@@ -28,7 +28,17 @@ async function fetchProfile(userId) {
     throw error
   }
 
-  return data
+  // Space roles (Phase 3 permission model): ors/programs/media/dept_lead are
+  // granted per-space via the space_roles table, not users.role. Attached to
+  // the profile so hasSpaceRole()/route guards can resolve them without extra
+  // fetches. A failure here degrades to "no space roles" rather than blocking
+  // sign-in.
+  const { data: spaceRoles } = await supabase
+    .from('space_roles')
+    .select('space_id, role')
+    .eq('user_id', userId)
+
+  return { ...data, space_roles: spaceRoles ?? [] }
 }
 
 export function AuthProvider({ children }) {

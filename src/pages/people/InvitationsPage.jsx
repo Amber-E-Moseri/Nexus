@@ -86,6 +86,7 @@ export default function InvitationsPage() {
     departmentId: '',
     role: 'member',
     assignedPastorId: '',
+    groupName: '',
     message: '',
   })
   const [csvRows, setCsvRows] = useState([])
@@ -206,6 +207,7 @@ export default function InvitationsPage() {
         lastName: '',
         email: '',
         assignedPastorId: '',
+        groupName: '',
         message: '',
       }))
       setFormOpen(false)
@@ -351,6 +353,16 @@ export default function InvitationsPage() {
                       {pastor.name}
                     </option>
                   ))}
+              </select>
+              <select
+                value={form.groupName}
+                onChange={(event) => setForm((current) => ({ ...current, groupName: event.target.value }))}
+                className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] md:col-span-2"
+              >
+                <option value="">Ministry group (optional)</option>
+                <option value="Central">Central</option>
+                <option value="Central-East">Central-East</option>
+                <option value="West">West</option>
               </select>
               <textarea
                 value={form.message}

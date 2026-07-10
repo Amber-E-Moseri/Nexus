@@ -65,7 +65,8 @@ export default memo(function PlainKanbanBoard({
   const boardStatuses = statusesOverride?.length ? statusesOverride : statuses
 
   function taskMatchesStatus(task, status) {
-    return task.status_id === status.id || (!task.status_id && task.status === status.legacy_key)
+    const ids = status._mergedIds ?? [status.id]
+    return ids.includes(task.status_id) || (!task.status_id && task.status === status.legacy_key)
   }
 
   return (

@@ -4,6 +4,7 @@ export const TRIGGER_LABELS = {
   task_status_change: 'Task status changes',
   task_assigned: 'Task is assigned',
   task_overdue: 'Task becomes overdue',
+  delegated_task_due_soon: 'Delegated task due soon',
   meeting_created: 'Meeting is logged',
 }
 

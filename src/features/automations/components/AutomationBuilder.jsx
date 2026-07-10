@@ -173,6 +173,10 @@ function normalizeTriggerConfig(triggerType, currentConfig = {}) {
     return { status: currentConfig.status ?? '' }
   }
 
+  if (triggerType === 'delegated_task_due_soon') {
+    return { days_before: currentConfig.days_before ?? 1 }
+  }
+
   return {}
 }
 
@@ -402,6 +406,25 @@ export default function AutomationBuilder({
                   {SPRINT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
                 </select>
               ) : null}
+
+              {triggerType === 'delegated_task_due_soon' ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                    Days before due date
+                    <input
+                      type="number"
+                      min={0}
+                      max={30}
+                      value={triggerConfig.days_before ?? 1}
+                      onChange={(event) => setTriggerConfig({ days_before: Number(event.target.value) })}
+                      className={INPUT_CLASS}
+                    />
+                  </label>
+                  <p className="text-xs text-[var(--text-secondary)] self-center">
+                    Fires for tasks the automation's department created for someone else, exactly this many days before they're due.
+                  </p>
+                </div>
+              ) : null}
             </StepCard>
 
             <StepConnector />
@@ -508,6 +531,8 @@ export default function AutomationBuilder({
                         className={INPUT_CLASS}
                       >
                         <option value="">Select user</option>
+                        <option value="created_by">Task creator</option>
+                        <option value="assigned_to">Task assignee</option>
                         {scopedUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
                       </select>
                       <input

@@ -55,39 +55,54 @@ function invitationEmailHtml({
   inviteMessage?: string | null
 }) {
   const safeInviteMessage = inviteMessage ? escapeHtml(inviteMessage) : null
+  const currentYear = new Date().getFullYear()
 
   return `
-    <div style="font-family: Arial, sans-serif; background: #f6f4ff; padding: 32px; color: #14142b;">
-      <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 20px; padding: 32px; border: 1px solid #e8e7f2;">
-        <div style="font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: #7b68ee;">BLW CAN NEXUS</div>
-        <h1 style="margin: 16px 0 12px; font-size: 28px; line-height: 1.2;">Activate your account</h1>
-        <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.7;">
-          Hello ${recipientName},
-        </p>
-        <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.7;">
-          You have been invited to join BLW CAN NEXUS as <strong>${roleLabel}</strong> in the
-          <strong>${departmentName}</strong> department.
-        </p>
-        ${
-          safeInviteMessage
-            ? `<p style="margin: 0 0 16px; font-size: 15px; line-height: 1.7;">${safeInviteMessage}</p>`
-            : ''
-        }
-        <p style="margin: 0 0 24px; font-size: 15px; line-height: 1.7;">
-          Use the button below to create your password and activate your account. This invitation expires on
-          <strong>${expiresAt}</strong>.
-        </p>
-        <div style="margin: 0 0 24px;">
-          <a href="${activationUrl}" style="display: inline-block; background: #7b68ee; color: #ffffff; text-decoration: none; font-weight: 700; border-radius: 14px; padding: 14px 24px;">
-            Activate Your Account
-          </a>
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 32px 16px; background: #F7F5F0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #1C1610;">
+        <div style="max-width: 560px; margin: 0 auto; background: #FFFFFF; border-radius: 14px; overflow: hidden; border: 1px solid #E9E4D8;">
+          <div style="background: #4C2A92; padding: 28px 32px; text-align: center;">
+            <div style="font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: #E8A020;">BLW CAN NEXUS</div>
+            <h1 style="margin: 10px 0 0; font-size: 22px; line-height: 1.3; color: #FFFFFF; font-weight: 700;">You're invited</h1>
+          </div>
+          <div style="padding: 32px;">
+            <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.7;">
+              Hello ${recipientName},
+            </p>
+            <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.7;">
+              You have been invited to join <strong>BLW CAN NEXUS</strong> as <strong>${roleLabel}</strong> in the
+              <strong>${departmentName}</strong> department.
+            </p>
+            ${
+              safeInviteMessage
+                ? `<p style="margin: 0 0 16px; padding: 12px 16px; background: #F9F7F3; border-left: 3px solid #4C2A92; border-radius: 4px; font-size: 14px; line-height: 1.6; color: #7A6F5E;">${safeInviteMessage}</p>`
+                : ''
+            }
+            <p style="margin: 0 0 24px; font-size: 15px; line-height: 1.7;">
+              Use the button below to create your password and activate your account. This invitation expires on
+              <strong>${expiresAt}</strong>.
+            </p>
+            <div style="margin: 0 0 24px; text-align: center;">
+              <a href="${activationUrl}" style="display: inline-block; background: #E8A020; color: #1C1610; text-decoration: none; font-weight: 700; border-radius: 8px; padding: 13px 28px; font-size: 14.5px;">
+                Activate Your Account
+              </a>
+            </div>
+            <p style="margin: 0 0 8px; font-size: 13px; color: #7A6F5E;">If the button does not work, use this link:</p>
+            <p style="margin: 0; font-size: 13px; line-height: 1.6; word-break: break-all; color: #4C2A92;">
+              ${activationUrl}
+            </p>
+          </div>
+          <div style="background: #F9F7F3; border-top: 1px solid #E9E4D8; padding: 16px; text-align: center; font-size: 12px; color: #B0A696;">
+            © ${currentYear} BLW CAN NEXUS. All rights reserved.
+          </div>
         </div>
-        <p style="margin: 0 0 8px; font-size: 14px; color: #4e4b6a;">If the button does not work, use this link:</p>
-        <p style="margin: 0; font-size: 14px; line-height: 1.6; word-break: break-all; color: #4e4b6a;">
-          ${activationUrl}
-        </p>
-      </div>
-    </div>
+      </body>
+    </html>
   `
 }
 

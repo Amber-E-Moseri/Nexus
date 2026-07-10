@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { getAllDepartments } from '../../features/automations'
-import { hasFeatureRole } from '../../lib/permissions'
+import { hasSpaceRole } from '../../lib/permissions.js'
 import MeetingModal from '../../features/meetings/components/MeetingModal'
 import UnifiedMeetingsView from '../../features/meetings/components/UnifiedMeetingsView'
 import LiveMinutesMode from '../../features/meetings/components/LiveMinutesMode'
@@ -13,17 +13,17 @@ import ExpectedAttendeesPage from './ExpectedAttendeesPage'
 
 function MeetingsModuleFallback() {
   const navigate = useNavigate()
-  const { profile, role, user } = useAuth()
+  const { profile, role } = useAuth()
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [departments, setDepartments] = useState([])
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(profile?.department_id ?? '')
   const [showModal, setShowModal] = useState(false)
   const [liveSession, setLiveSession] = useState(null)
   const isSuperAdmin = role === 'super_admin'
-  const userDeptName = departments.find((d) => d.id === profile?.department_id)?.name
   const canManage = ['super_admin', 'dept_lead'].includes((role ?? '').toLowerCase()) ||
-                    isOrsUser(role, userDeptName) ||
-                    hasFeatureRole(user, selectedDepartmentId, 'programs')
+                    hasSpaceRole(profile, null, 'ors') ||
+                    hasSpaceRole(profile, null, 'dept_lead') ||
+                    hasSpaceRole(profile, selectedDepartmentId || null, 'programs')
 
   useEffect(() => {
     let active = true
@@ -138,16 +138,9 @@ const TABS = [
   { key: 'roster', label: '⚙ Roster', restricted: true },
 ]
 
-// Department names that identify ORS users (mirrors the meetings RLS policies,
-// which grant ORS access by department, not by the users.role column)
-const ORS_DEPT_NAMES = ['ors', 'ors projects']
-
-export function isOrsUser(role, departmentName) {
-  return (
-    (role ?? '').toLowerCase() === 'ors' ||
-    ORS_DEPT_NAMES.includes((departmentName ?? '').toLowerCase())
-  )
-}
+// ORS identity is a space_roles grant (Phase 3) — the old department-name
+// dual identity ("member of a dept named ORS counts as ORS") is retired on
+// both the RLS side (has_space_role swap) and here.
 
 function TabBar({ active, onChange, visibleTabs }) {
   const isMobile = useMediaQuery('(max-width: 640px)')
@@ -180,43 +173,18 @@ function TabBar({ active, onChange, visibleTabs }) {
 }
 
 export default function MeetingsModule() {
-  const { role, user, profile } = useAuth()
+  const { role, profile } = useAuth()
   const meetingOsUrl = import.meta.env.VITE_MEETING_OS_URL
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [searchParams, setSearchParams] = useSearchParams()
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState('')
-  const [userDeptName, setUserDeptName] = useState(null)
-
-  // Resolve the user's department name — ORS access is department-based
-  // (matching the meetings RLS policies), not just the users.role column.
-  useEffect(() => {
-    if (!profile?.department_id) {
-      setUserDeptName(null)
-      return
-    }
-
-    let active = true
-    getAllDepartments()
-      .then((depts) => {
-        if (!active) return
-        const dept = (depts ?? []).find((d) => d.id === profile.department_id)
-        setUserDeptName(dept?.name ?? null)
-      })
-      .catch(() => {
-        if (active) setUserDeptName(null)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [profile?.department_id])
 
   // Check if user has access to report/roster tabs
   const normalizedRole = (role ?? '').toLowerCase()
   const canViewReportRoster =
-    ['super_admin', 'regional_secretary', 'programs'].includes(normalizedRole) ||
-    isOrsUser(role, userDeptName) ||
-    (normalizedRole === 'dept_lead' && hasFeatureRole(user, selectedDepartmentId, 'programs'))
+    ['super_admin', 'regional_secretary'].includes(normalizedRole) ||
+    hasSpaceRole(profile, null, 'ors') ||
+    hasSpaceRole(profile, null, 'programs') ||
+    hasSpaceRole(profile, null, 'dept_lead')
 
   // Filter tabs based on access
   const visibleTabs = TABS.filter(tab => !tab.restricted || canViewReportRoster)

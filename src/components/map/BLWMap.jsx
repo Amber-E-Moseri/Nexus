@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../hooks/useAuth'
 import { useCanEditCampus } from '../../hooks/useCanEditCampus'
 import { deriveCampus } from './data/deriveCampus'
 import { HUBS, GROUP_COLORS } from './data/hubs'
@@ -33,6 +34,20 @@ export function BLWMap() {
   const [panelOpen, setPanelOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [activeFilter, setActiveFilter] = useState('all') // 'all' | <status> | 'needs_plan'
+  const [groupView, setGroupView] = useState('all') // 'all' | <group name>
+
+  // Default to the signed-in user's ministry group once (surface-level gate:
+  // they land on their territory; the All Regions toggle stays available).
+  const { profile } = useAuth()
+  const groupDefaultApplied = useRef(false)
+  useEffect(() => {
+    if (groupDefaultApplied.current) return
+    const g = profile?.group_name
+    if (g && GROUP_COLORS[g]) {
+      groupDefaultApplied.current = true
+      setGroupView(g)
+    }
+  }, [profile?.group_name])
   const [subgroupFilter, setSubgroupFilter] = useState('all')
   const [showHubs, setShowHubs] = useState(false)
   const [showKey, setShowKey] = useState(false)
@@ -55,6 +70,7 @@ export function BLWMap() {
     const q = searchTerm.trim().toLowerCase()
     return campuses.filter((c) => {
       if (!c.lat || !c.lng) return false
+      if (groupView !== 'all' && c.group !== groupView) return false
       if (activeFilter === 'needs_plan') {
         if (!c.needs_plan) return false
       } else if (activeFilter !== 'all' && c.status !== activeFilter) {
@@ -70,11 +86,14 @@ export function BLWMap() {
       }
       return true
     })
-  }, [campuses, activeFilter, subgroupFilter, searchTerm])
+  }, [campuses, activeFilter, subgroupFilter, searchTerm, groupView])
 
-  // Tally always reflects the full dataset (not the active status filter), like the original.
+  // Tally ignores the status filter (like the original) but respects the group view,
+  // so a group view shows that group's reach numbers.
   const tally = useMemo(() => {
-    const scoped = campuses.filter((c) => c.lat && c.lng)
+    const scoped = campuses.filter(
+      (c) => c.lat && c.lng && (groupView === 'all' || c.group === groupView)
+    )
     const count = (s) => scoped.filter((c) => c.status === s).length
     const est = count('Established Fellowship')
     const pio = count('Pioneering Fellowship')
@@ -85,7 +104,7 @@ export function BLWMap() {
     const reached = scoped.filter((c) => isReached(c.status)).length
     const pct = tot ? Math.round((reached / tot) * 100) : 0
     return { est, pio, inf, nr, np, tot, pct }
-  }, [campuses])
+  }, [campuses, groupView])
 
   // ── Load + realtime ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -176,9 +195,11 @@ export function BLWMap() {
     const map = mapInstanceRef.current
     if (!map) return
     const z = map.getZoom()
-    Object.values(hubLayersRef.current).forEach(({ circle, outer, label }) => {
-      const showCircle = showHubsRef.current && z >= 6
-      const showLabel = (showHubsRef.current && z >= 8) || z >= 9
+    Object.entries(hubLayersRef.current).forEach(([name, { circle, outer, label }]) => {
+      const inGroup =
+        groupViewRef.current === 'all' || HUBS[name]?.group === groupViewRef.current
+      const showCircle = inGroup && showHubsRef.current && z >= 6
+      const showLabel = inGroup && ((showHubsRef.current && z >= 8) || z >= 9)
       toggleLayer(map, circle, showCircle)
       toggleLayer(map, outer, showCircle)
       toggleLayer(map, label, showLabel)
@@ -190,6 +211,30 @@ export function BLWMap() {
     updateHubVisibility()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showHubs])
+
+  // ── Group view: scope hubs + zoom to the group's territory ────────────────
+  const groupViewRef = useRef(groupView)
+  useEffect(() => {
+    groupViewRef.current = groupView
+    updateHubVisibility()
+    const map = mapInstanceRef.current
+    if (!map) return
+    if (groupView === 'all') {
+      map.flyTo([58, -96], 4, { duration: 0.8 })
+      return
+    }
+    const pts = campuses.filter((c) => c.lat && c.lng && c.group === groupView)
+    if (pts.length) {
+      map.flyToBounds(L.latLngBounds(pts.map((c) => [c.lat, c.lng])), {
+        padding: [56, 56],
+        maxZoom: 9,
+        duration: 0.8,
+      })
+    }
+    // `loading` included so the initial group default (applied before campuses
+    // arrive) still zooms once data is in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupView, loading])
 
   useEffect(() => {
     const map = mapInstanceRef.current
@@ -327,8 +372,29 @@ export function BLWMap() {
           </div>
         </div>
 
-        {/* Filter chips */}
+        {/* Group views — primary lens; each group zooms to its territory */}
         <div className="blwp-chips">
+          <button
+            className={`blwp-chip${groupView === 'all' ? ' on' : ''}`}
+            onClick={() => setGroupView('all')}
+          >
+            🍁 All Regions
+          </button>
+          {Object.keys(GROUP_COLORS).map((g) => (
+            <button
+              key={g}
+              className={`blwp-chip blwp-group${groupView === g ? ' on' : ''}`}
+              style={groupView === g ? { background: GROUP_COLORS[g], borderColor: GROUP_COLORS[g], color: '#fff' } : undefined}
+              onClick={() => setGroupView(g)}
+            >
+              <span className="blwp-cd" style={{ background: groupView === g ? '#fff' : GROUP_COLORS[g] }} />
+              {g}
+            </button>
+          ))}
+        </div>
+
+        {/* Filter chips */}
+        <div className="blwp-chips blwp-chips-2">
           <button className={`blwp-chip${activeFilter === 'all' ? ' on' : ''}`} onClick={() => setActiveFilter('all')}>All</button>
           {STATUS_ORDER.map((s) => (
             <button
@@ -393,6 +459,12 @@ export function BLWMap() {
 
         {/* Tally */}
         <div className="blwp-tally">
+          {groupView !== 'all' && (
+            <div className="blwp-tally-item" style={{ background: `${GROUP_COLORS[groupView]}14` }}>
+              <div className="blwp-tally-num" style={{ color: GROUP_COLORS[groupView], fontSize: 12 }}>{groupView}</div>
+              <div className="blwp-tally-lbl">Group</div>
+            </div>
+          )}
           <div className="blwp-tally-item"><div className="blwp-tally-num">{tally.tot}</div><div className="blwp-tally-lbl">Total</div></div>
           <div className="blwp-tally-item"><div className="blwp-tally-dot" style={{ background: STATUS['Established Fellowship'].color }} /><div className="blwp-tally-num">{tally.est}</div><div className="blwp-tally-lbl">Est.</div></div>
           <div className="blwp-tally-item"><div className="blwp-tally-dot" style={{ background: STATUS['Pioneering Fellowship'].color }} /><div className="blwp-tally-num">{tally.pio}</div><div className="blwp-tally-lbl">Pio.</div></div>

@@ -39,14 +39,20 @@ export default function SubscribePage() {
         setState('error')
         return
       }
-      setState(data?.status === 'already_subscribed' ? 'already' : 'success')
+      setState(
+        data?.status === 'already_subscribed'
+          ? 'already'
+          : data?.status === 'pending_confirmation'
+          ? 'pending_confirmation'
+          : 'success'
+      )
     } catch (err) {
       setErrorMessage(err?.message ?? 'Something went wrong. Please try again.')
       setState('error')
     }
   }
 
-  const isDone = state === 'success' || state === 'already'
+  const isDone = state === 'success' || state === 'already' || state === 'pending_confirmation'
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app, #FAFAF8)', padding: 20 }}>
@@ -56,12 +62,13 @@ export default function SubscribePage() {
             {ORG_NAME}
           </div>
           <h1 style={{ fontFamily: FONT_HEADING, margin: '10px 0 6px', fontSize: 24, fontWeight: 800, color: TEXT, letterSpacing: '-0.01em' }}>
-            {isDone ? 'You’re all set' : 'Join our mailing list'}
+            {isDone ? 'Check your email' : 'Join our mailing list'}
           </h1>
           <p style={{ margin: 0, fontSize: 14, color: MUTED, lineHeight: 1.5 }}>
-            {state === 'success' && 'Thanks for subscribing — you’ll hear from us soon.'}
-            {state === 'already' && 'You’re already on the list. Nothing more to do!'}
-            {!isDone && 'Get announcements, events, and updates delivered to your inbox.'}
+            {state === 'success' && "Thanks for subscribing — you'll hear from us soon."}
+            {state === 'already' && "You're already on the list. Nothing more to do!"}
+            {state === 'pending_confirmation' && 'A confirmation link has been sent to your email. Click it to activate your subscription.'}
+            {state !== 'success' && state !== 'already' && state !== 'pending_confirmation' && 'Get announcements, events, and updates delivered to your inbox.'}
           </p>
         </div>
 

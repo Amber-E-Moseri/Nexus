@@ -14,6 +14,25 @@ export function selectActiveTaskStatuses(statuses = []) {
   return sortTaskStatuses(statuses).filter((status) => status.active !== false)
 }
 
+// Org-wide statuses and their per-department children can share the same
+// name/category (e.g. global "Cancelled" + a department's own "Cancelled"
+// row), which would otherwise render as duplicate columns/sections. Collapse
+// those into a single entry, tracking every underlying status id so tasks
+// pointing at any of them still land in the merged group.
+export function dedupeTaskStatuses(statuses = []) {
+  const byKey = new Map()
+  for (const status of statuses) {
+    const key = `${status.category}|${(status.name ?? '').trim().toLowerCase()}`
+    const existing = byKey.get(key)
+    if (existing) {
+      existing._mergedIds.push(status.id)
+    } else {
+      byKey.set(key, { ...status, _mergedIds: [status.id] })
+    }
+  }
+  return [...byKey.values()]
+}
+
 export function selectDefaultStatus(statuses = [], preferredCategory = 'open') {
   const active = selectActiveTaskStatuses(statuses)
   return (

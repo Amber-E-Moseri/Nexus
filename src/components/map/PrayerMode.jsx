@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import L from 'leaflet'
+import { useAuth } from '../../hooks/useAuth'
 import { STATUS, STATUS_ORDER, NEEDS_PLAN_COLOR } from './data/status'
 import { PHOTO_CACHE } from './data/photoCache'
 import { GROUP_COLORS } from './data/hubs'
@@ -51,7 +52,12 @@ export function PrayerMode({ campuses, onClose }) {
   const markersRef = useRef({}) // id -> circleMarker
 
   const [statusFilter, setStatusFilter] = useState('all')
-  const [regionFilter, setRegionFilter] = useState('all')
+  // Default the region to the signed-in user's ministry group; they can still
+  // switch to All Regions with the existing filter.
+  const { profile } = useAuth()
+  const [regionFilter, setRegionFilter] = useState(() =>
+    profile?.group_name && REGIONS.includes(profile.group_name) ? profile.group_name : 'all'
+  )
   const [prList, setPrList] = useState([])
   const [idx, setIdx] = useState(0)
 

@@ -30,6 +30,8 @@ import PastoralMembersWidget from '../features/dashboard/components/PastoralMemb
 import AbsentMembersWidget from '../features/dashboard/components/AbsentMembersWidget'
 import TeamActivityHeatmap from '../features/dashboard/components/TeamActivityHeatmap'
 import TeamVelocityWidget from '../features/dashboard/components/TeamVelocityWidget'
+import FlockCallsDueWidget from '../features/dashboard/components/FlockCallsDueWidget'
+import WeeklyWinsWidget from '../features/dashboard/components/WeeklyWinsWidget'
 import PersonalRemindersWidget from '../features/dashboard/components/PersonalRemindersWidget'
 import TeamAvailabilityWidget from '../features/dashboard/components/TeamAvailabilityWidget'
 import ChartWidget from '../features/dashboard/components/ChartWidget'
@@ -569,6 +571,7 @@ const WIDGET_META = {
   action_items:           { title: 'My Action Items',           Component: ActionItemsWidget },
   team_workload:          { title: 'Team Workload',             Component: TeamWorkloadWidget },
   pastoral_members:       { title: 'Pastoral Members',          Component: PastoralMembersWidget },
+  flock_calls_due:        { title: 'Flock Calls Due',           Component: FlockCallsDueWidget },
   absent_members_alert:   { title: 'Absent Members Alert',      Component: AbsentMembersWidget },
   team_activity_heatmap:  { title: 'Team Activity Heatmap',     Component: TeamActivityHeatmap },
   team_velocity:          { title: 'Team Velocity Trend',       Component: TeamVelocityWidget },
@@ -579,6 +582,7 @@ const WIDGET_META = {
   chart_widget:           { title: 'Chart',                     Component: ChartWidget, configurable: true },
   calculation_widget:     { title: 'Calculation',                Component: CalculationWidget, configurable: true },
   goals:                  { title: 'Goals & OKRs',              Component: GoalsWidget },
+  weekly_wins:            { title: 'Wins This Week',            Component: WeeklyWinsWidget },
   embed:                  { title: 'Embed Content',            Component: EmbedWidget },
 }
 

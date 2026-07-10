@@ -36,31 +36,47 @@ export function canAccessFlockCRM(userRole) {
 }
 
 /**
- * Check if user has a feature role in a specific space
- * Feature roles: 'ORS', 'programs', 'media'
- *
- * @param {Object} user - User object with feature_roles array
- * @param {string|null} spaceId - Space ID to check. If null, checks globally.
- * @param {string} featureRole - Feature role to check ('ORS', 'programs', 'media')
- * @returns {boolean}
+ * Space roles that can be granted per-space via the space_roles table
+ * (Phase 3 permission model). users.role never holds these values anymore —
+ * the 20261215000003 migration shrank the base-role set to
+ * super_admin/dept_lead/pastor/regional_secretary/member, and dept_lead as a
+ * base role is a label only (its authority comes from a space_roles row).
  */
-export function hasFeatureRole(user, spaceId, featureRole) {
-  if (!user?.feature_roles) return false
+export const SPACE_ROLES = ['ors', 'programs', 'media', 'dept_lead']
 
-  if (spaceId) {
-    const spaceRoles = user.feature_roles.find(r => r.space_id === spaceId)
-    return spaceRoles?.roles?.includes(featureRole) ?? false
-  }
+/**
+ * Check if user holds a space role, per the profile's space_roles rows
+ * (attached in AuthContext from the space_roles table; shape
+ * [{ space_id, role }]).
+ *
+ * @param {Object} user - profile object carrying space_roles
+ * @param {string|null} spaceId - space to check; null = "in any space"
+ * @param {string} spaceRole - 'ors' | 'programs' | 'media' | 'dept_lead'
+ */
+export function hasSpaceRole(user, spaceId, spaceRole) {
+  const rows = user?.space_roles
+  if (!Array.isArray(rows) || rows.length === 0) return false
 
-  return user.feature_roles.some(r => r.roles?.includes(featureRole))
+  const wanted = String(spaceRole).toLowerCase()
+  return rows.some(
+    (r) => r.role?.toLowerCase() === wanted && (!spaceId || r.space_id === spaceId)
+  )
 }
 
 /**
- * Get effective role for a user in a specific space
- *
- * @param {Object} user - User object
- * @param {string} spaceId - Space ID
- * @returns {string} - Effective role name
+ * Back-compat alias — call sites written against the dead feature_roles JSONB
+ * (which was empty for every live user) keep working, now backed by the real
+ * space_roles rows. Role names are matched case-insensitively so legacy 'ORS'
+ * arguments still resolve.
+ */
+export function hasFeatureRole(user, spaceId, featureRole) {
+  return hasSpaceRole(user, spaceId, featureRole)
+}
+
+/**
+ * Get effective role for a user in a specific space.
+ * Space-role grants (space_roles rows) outrank the base role except for
+ * super_admin/regional_secretary, which are org-wide by design.
  */
 export function getEffectiveRole(user, spaceId) {
   const ROLE_HIERARCHY = ['super_admin', 'regional_secretary', 'dept_lead', 'pastor', 'ors', 'programs', 'media', 'member']
@@ -68,11 +84,11 @@ export function getEffectiveRole(user, spaceId) {
   const roles = []
 
   if (user.role) roles.push(user.role)
-  if (user.base_roles) roles.push(...user.base_roles)
 
-  if (spaceId && user.feature_roles) {
-    const spaceRoles = user.feature_roles.find(r => r.space_id === spaceId)
-    if (spaceRoles?.roles) roles.push(...spaceRoles.roles.map(r => r.toLowerCase()))
+  if (Array.isArray(user.space_roles)) {
+    for (const r of user.space_roles) {
+      if (!spaceId || r.space_id === spaceId) roles.push(r.role?.toLowerCase())
+    }
   }
 
   for (const role of ROLE_HIERARCHY) {
@@ -88,8 +104,8 @@ export function getEffectiveRole(user, spaceId) {
  * Everyone else filtered by tag visibility.
  */
 export function canSeeCalendarEvent(user, event) {
-  if (['super_admin', 'ors'].includes(user.role)) return true
-  if (hasFeatureRole(user, null, 'programs')) return true
+  if (user.role === 'super_admin') return true
+  if (hasSpaceRole(user, null, 'ors') || hasSpaceRole(user, null, 'programs')) return true
 
   if (!event.tags || event.tags.length === 0) return true
 

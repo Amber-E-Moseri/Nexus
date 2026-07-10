@@ -46,7 +46,21 @@ function calculateSprintHealth(sprint, progress) {
   }
 }
 
-export default function SprintCard({ sprint, onClick, onDuplicate, onRestore, onDelete }) {
+const ACCESS_REQUEST_LABELS = {
+  pending: 'Request pending',
+  rejected: 'Request denied — try again',
+}
+
+export default function SprintCard({
+  sprint,
+  onClick,
+  onDuplicate,
+  onRestore,
+  onDelete,
+  hasAccess = true,
+  accessRequestStatus = null,
+  onRequestAccess,
+}) {
   const [menuOpen, setMenuOpen] = useState(false)
   const isArchived = sprint.status === 'archived'
   const taskCount = sprint.task_count || 0
@@ -68,13 +82,13 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore, on
         border: `2px solid ${STATUS_COLORS[sprint.status] || '#E9E4D8'}`,
         borderRadius: 16,
         padding: '20px',
-        cursor: 'pointer',
-        opacity: isArchived ? 0.72 : 1,
+        cursor: hasAccess ? 'pointer' : 'default',
+        opacity: isArchived ? 0.72 : hasAccess ? 1 : 0.85,
         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         boxShadow: isArchived ? 'none' : '0 2px 8px rgba(28,22,16,0.08)',
       }}
       onMouseEnter={(e) => {
-        if (!isArchived) {
+        if (!isArchived && hasAccess) {
           e.currentTarget.style.boxShadow = '0 12px 32px rgba(28,22,16,0.15)'
           e.currentTarget.style.transform = 'translateY(-4px)'
           e.currentTarget.style.borderColor = 'var(--accent)'
@@ -89,7 +103,7 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore, on
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
-            {isArchived ? '📦 ' : shouldAutoStartSprint(sprint) ? '⚡ ' : ''}{sprint.name}
+            {!hasAccess ? '🔒 ' : isArchived ? '📦 ' : shouldAutoStartSprint(sprint) ? '⚡ ' : ''}{sprint.name}
           </div>
           {sprint.department_name && (
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
@@ -124,13 +138,52 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore, on
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {health && (
-            <span style={{ fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 6, background: health.color, color: 'white' }}>
-              {health.status}
-            </span>
-          )}
-          <div style={{ position: 'relative' }}>
-          {onDuplicate || onRestore || onDelete ? (
+          {!hasAccess ? (
+            accessRequestStatus === 'pending' || accessRequestStatus === 'rejected' ? (
+              <button
+                type="button"
+                disabled={accessRequestStatus === 'pending'}
+                onClick={(e) => { e.stopPropagation(); onRequestAccess?.() }}
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: '5px 10px',
+                  borderRadius: 6,
+                  border: '1px solid var(--border-1)',
+                  background: accessRequestStatus === 'pending' ? 'var(--surface-sub)' : 'white',
+                  color: accessRequestStatus === 'pending' ? 'var(--text-tertiary)' : 'var(--coral)',
+                  cursor: accessRequestStatus === 'pending' ? 'default' : 'pointer',
+                }}
+              >
+                {ACCESS_REQUEST_LABELS[accessRequestStatus]}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onRequestAccess?.() }}
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: '5px 10px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: 'var(--purple-700)',
+                  color: 'white',
+                  cursor: 'pointer',
+                }}
+              >
+                Request access
+              </button>
+            )
+          ) : (
+            <>
+              {health && (
+                <span style={{ fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 6, background: health.color, color: 'white' }}>
+                  {health.status}
+                </span>
+              )}
+              <div style={{ position: 'relative' }}>
+              {onDuplicate || onRestore || onDelete ? (
             <>
               <button
                 type="button"
@@ -184,7 +237,9 @@ export default function SprintCard({ sprint, onClick, onDuplicate, onRestore, on
               ) : null}
             </>
           ) : null}
-          </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

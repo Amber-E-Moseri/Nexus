@@ -35,6 +35,7 @@ export default function Settings() {
   const [departments, setDepartments] = useState([])
   const [prefs, setPrefs] = useState({})
   const [name, setName] = useState(profile?.name ?? '')
+  const [groupName, setGroupName] = useState(profile?.group_name ?? '')
   const [profileMessage, setProfileMessage] = useState('')
   const [profileSaving, setProfileSaving] = useState(false)
   const [passwordMessage, setPasswordMessage] = useState('')
@@ -82,6 +83,10 @@ export default function Settings() {
   }, [profile?.name])
 
   useEffect(() => {
+    setGroupName(profile?.group_name ?? '')
+  }, [profile?.group_name])
+
+  useEffect(() => {
     let active = true
 
     async function loadSettingsData() {
@@ -115,7 +120,7 @@ export default function Settings() {
     setProfileSaving(true)
     setProfileMessage('')
 
-    const payload = { name: name.trim() }
+    const payload = { name: name.trim(), group_name: groupName || null }
 
     const { error } = await supabase.from('users').update(payload).eq('id', profile.id)
 
@@ -342,6 +347,8 @@ export default function Settings() {
           <ProfileSection
             name={name}
             setName={setName}
+            groupName={groupName}
+            setGroupName={setGroupName}
             role={role}
             user={user}
             profile={profile}

@@ -59,6 +59,7 @@ export async function createInvitation(payload) {
     p_role: payload.role,
     p_assigned_pastor_id: payload.assignedPastorId || null,
     p_message: payload.message || null,
+    p_group_name: payload.groupName || null,
   })
 
   if (error) throw error
@@ -195,16 +196,22 @@ export async function touchLastActive() {
 }
 
 export async function requestSprintAccess(sprintId) {
-  const { data, error } = await supabase
-    .from('sprint_access_requests')
-    .insert({
-      sprint_id: sprintId,
-      user_id: (await supabase.auth.getUser()).data.user?.id,
-    })
-    .select()
+  const { data, error } = await supabase.rpc('request_sprint_access', {
+    p_sprint_id: sprintId,
+  })
 
   if (error) throw error
-  return data?.[0] ?? null
+  return data
+}
+
+export async function getMySprintAccessRequests() {
+  const { data, error } = await supabase
+    .from('sprint_access_requests')
+    .select('sprint_id, status, requested_at, response_message')
+    .order('requested_at', { ascending: false })
+
+  if (error) throw error
+  return data ?? []
 }
 
 export async function getSprintAccessRequests(sprintId) {

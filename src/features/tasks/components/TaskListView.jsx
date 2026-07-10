@@ -2,7 +2,7 @@ import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useMemo, useState } from 'react'
 import { formatDueDate } from '../../../lib/dateUtils'
-import { isTaskCompleted, getTaskStatusCategory, STATUS_CATEGORIES } from '../../../lib/taskStatuses'
+import { isTaskCompleted, getTaskStatusCategory, STATUS_CATEGORIES, dedupeTaskStatuses } from '../../../lib/taskStatuses'
 import { PRIORITY_STYLES } from '../../../lib/priorities'
 import { useDndSensors } from '../../../dnd'
 import InlineTaskComposer from './InlineTaskComposer'
@@ -10,8 +10,9 @@ import SortableTaskRow from '../../../dnd/SortableTaskRow'
 import { TaskRowGhost } from '../../../dnd/SortableTaskRow'
 
 function taskMatchesStatus(task, status) {
-  // Match by status_id first
-  if (task.status_id === status.id) return true
+  // Match by status_id first (or any id merged into this status by dedupeTaskStatuses)
+  const ids = status._mergedIds ?? [status.id]
+  if (ids.includes(task.status_id)) return true
 
   // For legacy statuses without status_id, match by legacy_key
   if (!task.status_id && task.status === status.legacy_key) return true
@@ -49,9 +50,11 @@ export default function TaskListView({
     [tasks],
   )
 
+  const dedupedStatuses = useMemo(() => dedupeTaskStatuses(statuses), [statuses])
+
   const grouped = useMemo(() => {
     const matchedIds = new Set()
-    const groups = statuses.map((status) => {
+    const groups = dedupedStatuses.map((status) => {
       const items = sorted.filter((task) => taskMatchesStatus(task, status))
       items.forEach((task) => matchedIds.add(task.id))
       return { status, items }
@@ -60,7 +63,7 @@ export default function TaskListView({
     const ungrouped = sorted.filter((task) => !matchedIds.has(task.id))
     if (ungrouped.length > 0) {
       console.log('[TaskListView] Ungrouped tasks:', ungrouped.length, 'out of', sorted.length)
-      console.log('[TaskListView] Available statuses:', statuses.map(s => ({ id: s.id, name: s.name, category: s.category, legacy_key: s.legacy_key, dept: s.department_id ? 'DEPT' : 'GLOBAL' })))
+      console.log('[TaskListView] Available statuses:', dedupedStatuses.map(s => ({ id: s.id, name: s.name, category: s.category, legacy_key: s.legacy_key, dept: s.department_id ? 'DEPT' : 'GLOBAL' })))
       console.log('[TaskListView] Ungrouped task details:', ungrouped.map(t => ({
         title: t.title,
         status: t.status,
@@ -75,7 +78,7 @@ export default function TaskListView({
     }
 
     return groups
-  }, [sorted, statuses])
+  }, [sorted, dedupedStatuses])
 
   function handleDragStart({ active }) {
     setActiveTaskId(active.id)

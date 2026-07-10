@@ -159,6 +159,11 @@
 }
 .blwp-chips::-webkit-scrollbar { display: none; }
 
+/* Second chip row (status filters) sits below the group-view row */
+.blwp-chips-2 {
+  top: 100px;
+}
+
 .blwp-chip {
   display: flex;
   align-items: center;
@@ -753,6 +758,7 @@
   .blwp-navpills { margin-left: 0; }
   .blwp-navpill { padding: 0 10px; height: 38px; font-size: 11px; }
   .blwp-chips { top: 108px; padding: 0 10px; }
+  .blwp-chips-2 { top: 142px; }
   .blwp-chip { font-size: 11px; padding: 4px 10px; }
   .blwp-tally { bottom: 16px; }
   .blwp-tally-num { font-size: 14px; }

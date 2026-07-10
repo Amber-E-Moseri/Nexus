@@ -505,3 +505,32 @@ export async function syncCalendarSource(sourceId) {
   if (data?.error) throw new Error(data.error)
   return data
 }
+
+export async function getMyGoogleCalendarConnection(userId) {
+  const { data, error } = await supabase
+    .from('google_calendar_tokens')
+    .select('user_id, sync_tasks_enabled, last_synced_at, tasks_synced, needs_reauth')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+export async function setSyncTasksEnabled(userId, enabled) {
+  const { error } = await supabase
+    .from('google_calendar_tokens')
+    .update({ sync_tasks_enabled: enabled })
+    .eq('user_id', userId)
+
+  if (error) throw error
+}
+
+export async function syncMyTasksToGoogleCalendar(userId) {
+  const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
+    body: { action: 'sync_my_tasks', payload: { user_id: userId } },
+  })
+  if (error) throw new Error(error.message)
+  if (data?.error) throw new Error(data.error)
+  return data
+}

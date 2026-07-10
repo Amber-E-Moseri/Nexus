@@ -5,7 +5,7 @@ import { useDeptMembers } from '../../../hooks/useDeptMembers'
 import { PRIORITIES } from '../../../lib/constants'
 import { createNotification } from '../../notifications'
 import { getMySpaces, SPACE_TYPE_ICONS } from '../../spaces'
-import { getSprintMembers } from '../../sprints'
+import { getSprintMembers, SprintPicker } from '../../sprints'
 import { supabase } from '../../../lib/supabase'
 import {
   formatActivityDateTime,
@@ -24,11 +24,11 @@ import {
   selectActiveTaskStatuses,
 } from '../../../lib/taskStatuses'
 import AssigneeSelector from './AssigneeSelector'
-import MilestoneCreator from './MilestoneCreator'
 import TaskComments from './TaskComments'
 import TaskDependencies from './TaskDependencies'
 import TaskFiles from './TaskFiles'
 import SubtaskList from './SubtaskList'
+import TaskFollowToggle from './TaskFollowToggle'
 import { TasksContext } from '../TasksContext'
 
 const EMPTY_STATUSES = []
@@ -53,40 +53,6 @@ const labelStyle = {
   textTransform: 'uppercase',
   letterSpacing: '0.08em',
   marginBottom: 6,
-}
-
-function getMilestoneCountdown(milestoneDate) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const milestone = new Date(milestoneDate)
-  milestone.setHours(0, 0, 0, 0)
-
-  const daysDiff = Math.floor((milestone - today) / (1000 * 60 * 60 * 24))
-
-  if (daysDiff < 0) return `${Math.abs(daysDiff)} days overdue`
-  if (daysDiff === 0) return 'Due today'
-  if (daysDiff === 1) return '1 day remaining'
-  return `${daysDiff} days remaining`
-}
-
-function getMilestoneStatusColor(milestoneDate) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const milestone = new Date(milestoneDate)
-  milestone.setHours(0, 0, 0, 0)
-
-  const daysDiff = Math.floor((milestone - today) / (1000 * 60 * 60 * 24))
-
-  if (daysDiff < 0) {
-    return { bg: '#FEE2E2', border: '#FCA5A5', text: '#991B1B' } // Red for overdue
-  }
-  if (daysDiff === 0) {
-    return { bg: '#FEF3C7', border: '#FCD34D', text: '#92400E' } // Yellow for today
-  }
-  if (daysDiff <= 3) {
-    return { bg: '#FEF3C7', border: '#FCD34D', text: '#92400E' } // Yellow for soon
-  }
-  return { bg: '#DBEAFE', border: '#93C5FD', text: '#1E40AF' } // Blue for upcoming
 }
 
 function TaskActivityLog({ taskId }) {
@@ -244,7 +210,6 @@ export default function TaskModal({
   listId,
   isPersonal = false,
   isReadOnly = false,
-  allowMilestoneEdit = false,
   onClose,
   onSaved,
   onDeleted,
@@ -269,13 +234,13 @@ export default function TaskModal({
   const [subtasks, setSubtasks] = useState(task?.subtasks ?? [])
   const [spaces, setSpaces] = useState([])
   const [selectedSpaceId, setSelectedSpaceId] = useState(departmentId ?? '')
+  const [selectedSprintId, setSelectedSprintId] = useState(sprintId ?? task?.sprint_id ?? '')
   const deptMembers = useDeptMembers(departmentId)
   const [members, setMembers] = useState(sprintId ? [] : deptMembers)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState(null)
   const [blockers, setBlockers] = useState([])
-  const [taskMilestone, setTaskMilestone] = useState(task?.milestone || null)
 
   const titleRef = useRef(null)
 
@@ -386,10 +351,6 @@ export default function TaskModal({
     }
   }, [mode, task?.id])
 
-  useEffect(() => {
-    setTaskMilestone(task?.milestone || null)
-  }, [task?.milestone])
-
   // List queries only carry subtask counts; fetch the actual subtasks when the
   // modal opens on an existing task (BLW-01 lazy load).
   useEffect(() => {
@@ -421,6 +382,11 @@ export default function TaskModal({
       const previousAssigneeId = task?.assignee_id ?? null
       const selectedStatus = statuses.find((entry) => entry.id === statusId) ?? selectDefaultStatus(statuses)
 
+      // Sprint linkage is now driven by the in-modal picker (falling back to a
+      // sprint passed in via props / the existing task). A sprint-linked task is
+      // task_type='sprint' with no department, matching the sprint boards + RLS.
+      const effectiveSprintId = personal ? null : (selectedSprintId || null)
+
       const payload = {
         title: title.trim(),
         description: description.trim() || null,
@@ -431,10 +397,10 @@ export default function TaskModal({
         due_date: dueDate || null,
         is_personal: personal,
         source: 'manual',
-        department_id: personal ? departmentId ?? null : sprintId ? null : (selectedSpaceId || departmentId) ?? null,
-        sprint_id: personal ? null : sprintId ?? task?.sprint_id ?? null,
-        list_id: personal ? null : listId ?? task?.list_id ?? null,
-        task_type: personal ? 'personal' : sprintId || task?.sprint_id ? 'sprint' : 'space',
+        department_id: personal ? departmentId ?? null : effectiveSprintId ? null : (selectedSpaceId || departmentId) ?? null,
+        sprint_id: effectiveSprintId,
+        list_id: personal || effectiveSprintId ? null : listId ?? task?.list_id ?? null,
+        task_type: personal ? 'personal' : effectiveSprintId ? 'sprint' : 'space',
       }
 
       if (mode === 'create') {
@@ -537,21 +503,26 @@ export default function TaskModal({
             <Dialog.Title style={{ fontFamily: FONT_HEADING, fontSize: 15, fontWeight: 600, color: 'var(--ink-1)', margin: 0 }}>
               {mode === 'create' ? 'New task' : 'Edit task'}
             </Dialog.Title>
-            <Dialog.Close
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: 'var(--text-tertiary)',
-                fontSize: 20,
-                lineHeight: 1,
-                padding: '2px 6px',
-                borderRadius: 6,
-              }}
-              aria-label="Close"
-            >
-              ×
-            </Dialog.Close>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {mode !== 'create' && task?.id && profile?.id && task.assignee_id !== profile.id && (
+                <TaskFollowToggle taskId={task.id} userId={profile.id} />
+              )}
+              <Dialog.Close
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-tertiary)',
+                  fontSize: 20,
+                  lineHeight: 1,
+                  padding: '2px 6px',
+                  borderRadius: 6,
+                }}
+                aria-label="Close"
+              >
+                ×
+              </Dialog.Close>
+            </div>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
@@ -616,15 +587,21 @@ export default function TaskModal({
               />
             </div>
 
-            <div style={{ marginBottom: 18 }}>
-              <label style={labelStyle}>Link to sprint</label>
-              <div style={{ color: '#9CA3AF', fontSize: 13 }}>
-                {sprintId ? `Linked to sprint ${sprintId}` : 'Not linked'}
+            {!personal && (
+              <div style={{ marginBottom: 18 }}>
+                <label style={labelStyle}>Link to sprint</label>
+                <SprintPicker
+                  spaceId={selectedSpaceId || departmentId}
+                  value={selectedSprintId}
+                  onChange={(id) => setSelectedSprintId(id || '')}
+                  disabled={isReadOnly}
+                  placeholder="No sprint — space board only"
+                />
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                  Only sprints in this space that you can add tasks to are shown.
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>
-                Sprint linking is managed at the list/folder level
-              </div>
-            </div>
+            )}
 
             <div style={{ marginBottom: 18 }}>
               <label style={labelStyle}>Status</label>
@@ -707,44 +684,6 @@ export default function TaskModal({
                 <label htmlFor="is-personal" style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: isReadOnly ? 'default' : 'pointer' }}>
                   Private task (visible only to me)
                 </label>
-              </div>
-            ) : null}
-
-            {mode === 'edit' && task?.id && profile?.id ? (
-              <div style={{ marginBottom: 18, paddingBottom: 18, borderBottom: '1px solid var(--border)' }}>
-                <label style={labelStyle}>Personal Target Date</label>
-
-                {taskMilestone && (
-                  <div
-                    style={{
-                      marginBottom: 12,
-                      padding: '10px 12px',
-                      borderRadius: 8,
-                      background: getMilestoneStatusColor(taskMilestone.milestone_date).bg,
-                      border: `1px solid ${getMilestoneStatusColor(taskMilestone.milestone_date).border}`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: getMilestoneStatusColor(taskMilestone.milestone_date).text, marginBottom: 2 }}>
-                        {getMilestoneCountdown(taskMilestone.milestone_date)}
-                      </div>
-                      <div style={{ fontSize: 12, color: getMilestoneStatusColor(taskMilestone.milestone_date).text }}>
-                        {taskMilestone.label} • {new Date(taskMilestone.milestone_date).toLocaleDateString('en-CA')}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <MilestoneCreator
-                  task={task}
-                  userId={profile.id}
-                  currentMilestone={taskMilestone}
-                  onSave={(milestone) => setTaskMilestone(milestone)}
-                  readOnly={isReadOnly && !allowMilestoneEdit}
-                />
               </div>
             ) : null}
 

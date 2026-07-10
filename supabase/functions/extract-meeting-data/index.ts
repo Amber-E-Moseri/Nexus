@@ -145,10 +145,33 @@ Determine content_type: "meeting" | "raw_note" | "list_data" | "other"
 === STEP 2 — Extract Based on Classification ===
 - If content_type is NOT "meeting", OR confidence < 0.6:
     → Only return cleaned_transcript, chapters, and content_type fields.
-    → Leave summary, decisions, action_items, key_topics as empty/null.
+    → Leave summary, decisions, action_items, key_topics, detailed_notes,
+      scripture_references as empty/null.
     → This prevents forced meeting structure for non-meeting content.
 - If content_type IS "meeting" with confidence >= 0.6:
-    → Populate all fields including summary, decisions, action_items, key_topics.
+    → Populate all fields including summary, decisions, action_items, key_topics,
+      detailed_notes, and scripture_references.
+
+=== DETAILED NOTES RULES (only apply if content_type = meeting, confidence >= 0.6) ===
+- "detailed_notes" is the full-detail record layer — NOT a second summary.
+  * "summary" stays a short compressed synthesis (unchanged behavior).
+  * "detailed_notes" is a near-verbatim, cleaned-up account of the meeting in
+    markdown: chronological, organized under topic headings (## Heading).
+  * Remove filler, false starts, crosstalk, and repetition — but cut NOTHING
+    substantive. Preserve every decision, number, name, commitment, and nuance.
+  * Attribute statements to speakers where the transcript makes the speaker clear
+    (e.g. "**Amber:** proposed moving the launch to Friday").
+- Reference any scripture inline in the detailed_notes prose at the point it comes
+  up (e.g. "opened with **John 3:16**"), AND list it in scripture_references.
+
+=== SCRIPTURE RULES (only apply if content_type = meeting, confidence >= 0.6) ===
+- Populate "verse_text" ONLY when you are certain of the exact wording. If there
+  is ANY doubt, set verse_text to null and confidence to "unconfirmed".
+- NEVER reconstruct or paraphrase scripture from memory to fill verse_text. An
+  unconfirmed citation with null verse_text is REQUIRED over a fluent but
+  possibly-wrong quote — this is treated as an official ministry record.
+- "citation" is always required (Book Chapter:Verse). "confidence" is "confirmed"
+  only when verse_text is exact; otherwise "unconfirmed".
 
 === SPACE SUGGESTION RULES (only apply if content_type = meeting) ===
 - Only suggest spaces from the meeting's linked_spaces: ${linkedSpacesJson}
@@ -181,6 +204,14 @@ Return ONLY valid JSON (no markdown, no extra text):
   "cleaned_transcript": "string with filler removed, or null if content_type != meeting",
   "chapters": [{ "title": "string", "start_marker": "string" }],
   "summary": "string or null",
+  "detailed_notes": "markdown string (chronological, topic-headed, near-verbatim) or null if content_type != meeting",
+  "scripture_references": [
+    {
+      "verse_text": "string or null — full verse text ONLY when certain of exact wording",
+      "citation": "string — Book Chapter:Verse",
+      "confidence": "confirmed" | "unconfirmed"
+    }
+  ],
   "decisions": [{ "decision": "string", "context": "string" }],
   "action_items": [
     {
@@ -240,7 +271,9 @@ ${transcriptForPrompt}`;
         },
         body: JSON.stringify({
           model: "claude-haiku-4-5-20251001",
-          max_tokens: 4096,
+          // 8192: detailed_notes is near-verbatim and is the dominant output-token
+          // driver; 4096 truncated long meetings mid-JSON. See costLimits note.
+          max_tokens: 8192,
           stream: true,
           messages: [{ role: "user", content: prompt }],
         }),
@@ -325,7 +358,7 @@ ${transcriptForPrompt}`;
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 4096,
+        max_tokens: 8192, // headroom for detailed_notes (see streaming path)
         messages: [{ role: "user", content: prompt }],
       }),
     });

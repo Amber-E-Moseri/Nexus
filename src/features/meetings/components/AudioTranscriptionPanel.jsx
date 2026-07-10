@@ -4,6 +4,7 @@ import { useAuth } from '../../../hooks/useAuth'
 import { createTasksFromActionItems } from '../lib/meetings'
 import { processSSELines } from '../../../lib/meetings/sseParser'
 import { getAllDepartments, getAllUsers } from '../../automations/lib/automations'
+import { SprintPicker } from '../../sprints'
 
 // Accept any audio type — browser MIME strings vary (audio/x-m4a, audio/x-mpeg, etc.)
 const isAudioType = (type) => type.startsWith('audio/') || type === 'video/webm'
@@ -41,6 +42,21 @@ function matchDepartmentByName(name, departments) {
   const n = normalizeName(name)
   if (!n) return null
   return departments.find((d) => normalizeName(d.name) === n) ?? null
+}
+
+// Resolve an action item's assignee + department for the merge form pre-fill.
+// Department is DETERMINISTIC when the owner resolves to a real user: we use that
+// user's actual department membership rather than the AI's fuzzy space guess. The
+// AI-suggested space (matchDepartmentByName) is only a fallback for owners we can't
+// resolve to a known user (ambiguous/external names).
+function resolveAssignment(item, directory) {
+  const user = matchUserByName(item.owner, directory.users)
+  const aiDeptId = matchDepartmentByName(item.suggested_space, directory.departments)?.id ?? null
+  return {
+    assigneeId: user?.id ?? null,
+    departmentId: user?.department_id ?? aiDeptId,
+    sprintId: null,
+  }
 }
 
 
@@ -207,12 +223,7 @@ export default function AudioTranscriptionPanel({
       setExtractedData({ ...result, truncated: wasTruncated })
       if (result.action_items?.length) {
         setSelectedActionItems(new Set(result.action_items.map((_, i) => i)))
-        setActionAssignments(
-          result.action_items.map((item) => ({
-            assigneeId: matchUserByName(item.owner, directory.users)?.id ?? null,
-            departmentId: matchDepartmentByName(item.suggested_space, directory.departments)?.id ?? null,
-          })),
-        )
+        setActionAssignments(result.action_items.map((item) => resolveAssignment(item, directory)))
       } else {
         setActionAssignments([])
       }
@@ -365,10 +376,7 @@ export default function AudioTranscriptionPanel({
           if (extractData.extracted.action_items?.length) {
             setSelectedActionItems(new Set(extractData.extracted.action_items.map((_, i) => i)))
             setActionAssignments(
-              extractData.extracted.action_items.map((item) => ({
-                assigneeId: matchUserByName(item.owner, directory.users)?.id ?? null,
-                departmentId: matchDepartmentByName(item.suggested_space, directory.departments)?.id ?? null,
-              })),
+              extractData.extracted.action_items.map((item) => resolveAssignment(item, directory)),
             )
           }
           // Clear any timeout error if the fallback succeeded
@@ -572,6 +580,7 @@ export default function AudioTranscriptionPanel({
             title: item.title,
             assigneeId: assignment.assigneeId ?? null,
             departmentId: assignment.departmentId ?? null,
+            sprintId: assignment.sprintId ?? null,
             dueDate: item.due_date ?? null,
             description: item.owner && item.owner !== 'TBD' && !assignment.assigneeId ? `Owner: ${item.owner}` : null,
           }
@@ -763,7 +772,7 @@ export default function AudioTranscriptionPanel({
             </>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} orgDirectory={orgDirectory} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} />}
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} } @keyframes spin { to{transform:rotate(360deg)} }`}</style>
       </div>
     )
@@ -818,7 +827,7 @@ export default function AudioTranscriptionPanel({
             </div>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} orgDirectory={orgDirectory} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} />}
       </div>
     )
   }
@@ -876,7 +885,7 @@ export default function AudioTranscriptionPanel({
             </div>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} orgDirectory={orgDirectory} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} />}
       </div>
     )
   }
@@ -884,8 +893,117 @@ export default function AudioTranscriptionPanel({
   return null
 }
 
+// ── Detailed notes (markdown) with inline scripture ──────────────────────────────
+
+const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+// Inline scripture citation with a confidence badge. Confirmed refs expose the
+// verse text on hover; unconfirmed refs never show reconstructed text — the badge
+// makes clear the wording wasn't verified.
+function ScriptureChip({ refItem }) {
+  const confirmed = refItem?.confidence === 'confirmed' && refItem?.verse_text
+  return (
+    <span
+      title={confirmed ? refItem.verse_text : 'Citation not verified — verse text unconfirmed'}
+      style={{
+        fontWeight: 600,
+        color: confirmed ? '#2E7D32' : '#9E5C3C',
+        borderBottom: `1px dotted ${confirmed ? '#2E7D32' : '#9E5C3C'}`,
+        cursor: 'help',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {refItem.citation}
+      <sup style={{ fontSize: 9, marginLeft: 2 }}>{confirmed ? '✓' : '?'}</sup>
+    </span>
+  )
+}
+
+// Split a line into text, **bold**, and scripture-citation nodes so citations are
+// highlighted inline exactly where they appear in the notes prose.
+function tokenizeInline(text, refs) {
+  const citations = (refs || []).map((r) => r?.citation).filter(Boolean)
+  const alt = citations.map(escapeRegExp).sort((a, b) => b.length - a.length).join('|')
+  const re = new RegExp(`\\*\\*(.+?)\\*\\*${alt ? `|(${alt})` : ''}`, 'g')
+  const nodes = []
+  let last = 0
+  let key = 0
+  let m
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index))
+    if (m[1] !== undefined) {
+      nodes.push(<strong key={key++}>{m[1]}</strong>)
+    } else if (m[2] !== undefined) {
+      const ref = refs.find((r) => r.citation === m[2])
+      nodes.push(<ScriptureChip key={key++} refItem={ref} />)
+    }
+    last = m.index + m[0].length
+  }
+  if (last < text.length) nodes.push(text.slice(last))
+  return nodes
+}
+
+function DetailedNotes({ notes, scriptureRefs = [], s }) {
+  const [open, setOpen] = useState(false)
+  if (!notes || !notes.trim()) return null
+
+  const lines = notes.split('\n')
+  // Any citation the model didn't weave into the prose still gets surfaced inline
+  // at the foot of the notes so no reference is silently dropped.
+  const mentioned = new Set()
+  const notesText = notes
+  for (const r of scriptureRefs) {
+    if (r?.citation && notesText.includes(r.citation)) mentioned.add(r.citation)
+  }
+  const unmentioned = scriptureRefs.filter((r) => r?.citation && !mentioned.has(r.citation))
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{ ...s.extractLabel, background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+      >
+        {open ? '▾' : '▸'} Detailed Notes
+      </button>
+      {open && (
+        <div style={{ ...s.transcriptBox, maxHeight: 360, marginTop: 8 }}>
+          {lines.map((line, i) => {
+            if (/^#{1,3}\s+/.test(line)) {
+              return (
+                <div key={i} style={{ fontWeight: 700, fontSize: 13, color: '#4C2A92', margin: '12px 0 4px' }}>
+                  {line.replace(/^#{1,3}\s+/, '')}
+                </div>
+              )
+            }
+            if (line.trim() === '') return <div key={i} style={{ height: 6 }} />
+            const isList = /^\s*[-*]\s+/.test(line)
+            const content = isList ? line.replace(/^\s*[-*]\s+/, '') : line
+            return (
+              <p key={i} style={{ margin: isList ? '2px 0 2px 12px' : '4px 0', fontSize: 13, lineHeight: 1.6, color: '#2D2A22' }}>
+                {isList ? '• ' : ''}
+                {tokenizeInline(content, scriptureRefs)}
+              </p>
+            )
+          })}
+          {unmentioned.length > 0 && (
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#7A6F5E' }}>
+              Also referenced:{' '}
+              {unmentioned.map((r, i) => (
+                <span key={r.citation}>
+                  {i > 0 ? ', ' : ''}
+                  <ScriptureChip refItem={r} />
+                </span>
+              ))}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Transcript + extracted data card ─────────────────────────────────────────────
-function TranscriptCard({ transcript, extractedData, extracting, selectedItems, toggleItem, onMerge, merging, mergeSuccess, error, s, orgDirectory, assignments, onAssignmentChange }) {
+function TranscriptCard({ transcript, extractedData, extracting, selectedItems, toggleItem, onMerge, merging, mergeSuccess, error, s, orgDirectory, departmentId, assignments, onAssignmentChange }) {
   return (
     <div style={s.card}>
       <h3 style={s.title}>Transcript</h3>
@@ -908,6 +1026,8 @@ function TranscriptCard({ transcript, extractedData, extracting, selectedItems, 
 
       {!extracting && extractedData && (
         <div style={s.extractSection}>
+          <DetailedNotes notes={extractedData.detailed_notes} scriptureRefs={extractedData.scripture_references} s={s} />
+
           {extractedData.summary && (
             <>
               <div style={s.extractLabel}>Summary</div>
@@ -971,7 +1091,12 @@ function TranscriptCard({ transcript, extractedData, extracting, selectedItems, 
                       <select
                         aria-label="Space"
                         value={assignment.departmentId ?? ''}
-                        onChange={(e) => onAssignmentChange(i, 'departmentId', e.target.value)}
+                        onChange={(e) => {
+                          // Changing the space invalidates a sprint picked from the
+                          // previous space (sprints are space-scoped).
+                          onAssignmentChange(i, 'departmentId', e.target.value)
+                          if (assignment.sprintId) onAssignmentChange(i, 'sprintId', '')
+                        }}
                         style={{ flex: 1, padding: '6px 8px', fontSize: 12, border: '1px solid #E9E4D8', borderRadius: 6, background: '#fff', color: '#2D2A22' }}
                       >
                         <option value="">This meeting's space</option>
@@ -979,6 +1104,15 @@ function TranscriptCard({ transcript, extractedData, extracting, selectedItems, 
                           <option key={d.id} value={d.id}>{d.name}</option>
                         ))}
                       </select>
+                    </div>
+                    <div style={{ marginTop: 8, marginLeft: 26 }} onClick={(e) => e.stopPropagation()}>
+                      <SprintPicker
+                        spaceId={assignment.departmentId || departmentId}
+                        value={assignment.sprintId ?? ''}
+                        onChange={(sprintId) => onAssignmentChange(i, 'sprintId', sprintId)}
+                        placeholder="No sprint — space board only"
+                        style={{ fontSize: 12 }}
+                      />
                     </div>
                   </label>
                 )

@@ -96,6 +96,7 @@ type TriggerConditions = {
   to_status?: string
   any_status_change?: boolean
   department_id?: string
+  days_before?: number
 }
 
 // The "IF conditions" step in AutomationBuilder — up to 3 field/operator/value
@@ -181,6 +182,11 @@ function evaluateTriggerConditions(
     // task_overdue doesn't need special trigger conditions,
     // just basic department scoping (handled elsewhere)
     return true
+  }
+
+  if (triggerType === 'delegated_task_due_soon') {
+    const daysBefore = typeof conditions.days_before === 'number' ? conditions.days_before : 1
+    return newRecord.days_until_due === daysBefore
   }
 
   return true
@@ -392,7 +398,7 @@ Deno.serve(async (req) => {
   if (triggerType === 'task_status_change' || triggerType === 'task_assigned') {
     newRecord = typeof body.new_record === 'object' && body.new_record ? (body.new_record as Record<string, unknown>) : null
     oldRecord = typeof body.old_record === 'object' && body.old_record ? (body.old_record as Record<string, unknown>) : null
-  } else if (triggerType === 'meeting_created' || triggerType === 'task_overdue') {
+  } else if (triggerType === 'meeting_created' || triggerType === 'task_overdue' || triggerType === 'delegated_task_due_soon') {
     newRecord = typeof body.record === 'object' && body.record ? (body.record as Record<string, unknown>) : null
   }
 

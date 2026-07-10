@@ -1,4 +1,5 @@
 import UserIntegrationsManager from '../../features/user-integrations/components/UserIntegrationsManager'
+import TaskCalendarSyncPanel from '../../features/user-integrations/components/TaskCalendarSyncPanel'
 
 export default function PersonalIntegrationsPage() {
   return (
@@ -11,6 +12,7 @@ export default function PersonalIntegrationsPage() {
       </div>
 
       <UserIntegrationsManager />
+      <TaskCalendarSyncPanel />
     </div>
   )
 }

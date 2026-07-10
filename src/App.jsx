@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { preloadOnIdle, registerRoutePreload } from './lib/routePreload'
+import { INSTAGRAM_GRADING_ENABLED } from './config/features.js'
 import AppError from './components/layout/AppError'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import Shell from './components/layout/Shell'
@@ -89,6 +90,7 @@ const CampusPhotosSettings = lazy(() => import('./pages/settings/CampusPhotosSet
 const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
 const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
 const SubscribePage = lazy(() => import('./pages/communications/SubscribePage'))
+const ConfirmSubscriptionPage = lazy(() => import('./pages/communications/ConfirmSubscriptionPage'))
 const InvitationWizard = lazy(() => import('./pages/communications/InvitationWizard'))
 const InvitationDetailPage = lazy(() => import('./pages/communications/InvitationDetailPage'))
 const InvitationsListPage = lazy(() => import('./pages/communications/InvitationsListPage'))
@@ -129,6 +131,7 @@ export default function App() {
       <Route path="/reports/:share_token" element={<MeetingReportPublicPage />} />
       <Route path="/rsvp" element={<RSVPPage />} />
       <Route path="/subscribe" element={<SubscribePage />} />
+      <Route path="/confirm-subscription/:token" element={<ConfirmSubscriptionPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>
@@ -346,12 +349,19 @@ export default function App() {
           />
           <Route path="/settings/api-docs" element={<ApiDocumentationPage />} />
           <Route path="/help" element={<HelpPage />} />
+          {/* Instagram Grading is paused (2026-07-09). Re-enable via the
+              INSTAGRAM_GRADING_ENABLED flag in src/config/features.js. While
+              disabled, the route redirects to the dashboard. */}
           <Route
             path="/instagram"
             element={
-              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'media']}>
-                <InstagramGradingPage />
-              </ProtectedRoute>
+              INSTAGRAM_GRADING_ENABLED ? (
+                <ProtectedRoute roles={['super_admin', 'regional_secretary', 'media']}>
+                  <InstagramGradingPage />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/dashboard" replace />
+              )
             }
           />
         </Route>

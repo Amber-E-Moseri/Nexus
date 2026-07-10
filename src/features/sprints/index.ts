@@ -9,6 +9,7 @@ export { default as AssignTeamToSprintModal } from './components/AssignTeamToSpr
 export { default as InviteExternalModal } from './components/InviteExternalModal'
 export { default as SprintReviewView } from './components/SprintReviewView'
 export { default as SprintTaskBoard } from './components/SprintTaskBoard'
+export { default as SprintPicker, invalidateSprintPickerCache } from './components/SprintPicker'
 export { SprintsProvider, SprintsContext } from './SprintsContext'
 
 // Export all lib functions

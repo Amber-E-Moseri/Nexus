@@ -1073,49 +1073,11 @@ export async function deleteSprintGoal(goalId) {
   if (error) throw error
 }
 
-export async function requestSprintAccess(sprintId) {
+export async function getMySprintMembershipIds() {
   const { data, error } = await supabase
-    .from('sprint_access_requests')
-    .insert({ sprint_id: sprintId })
-    .select()
-    .single()
+    .from('sprint_members')
+    .select('sprint_id')
 
   if (error) throw error
-  return data
-}
-
-export async function getSprintAccessRequests(sprintId) {
-  const { data, error } = await supabase
-    .from('sprint_access_requests')
-    .select('id, user_id, status, created_at, user:users(id, name, email)')
-    .eq('sprint_id', sprintId)
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false })
-
-  if (error) throw error
-  return data ?? []
-}
-
-export async function approveSprintAccessRequest(requestId) {
-  const { data, error } = await supabase
-    .from('sprint_access_requests')
-    .update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: (await supabase.auth.getUser()).data.user.id })
-    .eq('id', requestId)
-    .select()
-    .single()
-
-  if (error) throw error
-  return data
-}
-
-export async function rejectSprintAccessRequest(requestId) {
-  const { data, error } = await supabase
-    .from('sprint_access_requests')
-    .update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: (await supabase.auth.getUser()).data.user.id })
-    .eq('id', requestId)
-    .select()
-    .single()
-
-  if (error) throw error
-  return data
+  return (data ?? []).map((row) => row.sprint_id)
 }

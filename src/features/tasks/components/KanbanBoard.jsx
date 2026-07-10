@@ -2,6 +2,7 @@ import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { dedupeTaskStatuses } from '../../../lib/taskStatuses'
 import { useDndSensors } from '../../../dnd'
 import { useTasks } from '../TasksContext'
 import KanbanColumn from './KanbanColumn'
@@ -17,7 +18,8 @@ const STATUS_CATEGORY_DOT_COLORS = {
 }
 
 function taskMatchesStatus(task, status) {
-  return task.status_id === status.id || (!task.status_id && task.status === status.legacy_key)
+  const ids = status._mergedIds ?? [status.id]
+  return ids.includes(task.status_id) || (!task.status_id && task.status === status.legacy_key)
 }
 
 function mapStatusForBoard(status) {
@@ -74,7 +76,7 @@ export default function KanbanBoard({
         ? spaceStatuses
         : statuses
 
-    return source.map(mapStatusForBoard)
+    return dedupeTaskStatuses(source.map(mapStatusForBoard))
   }, [spaceStatuses, statuses, statusesOverride])
 
   // Memoize task grouping by status to avoid O(n×columns) filtering on every render.
@@ -104,7 +106,7 @@ export default function KanbanBoard({
     const overTask = tasks.find((t) => t.id === over.id)
     if (overTask) {
       const col = boardStatuses.find(
-        (s) => s.id === overTask.status_id || s.legacy_key === overTask.status
+        (s) => (s._mergedIds ?? [s.id]).includes(overTask.status_id) || s.legacy_key === overTask.status
       )
       setOverColumnId(col?.id ?? null)
     } else {
@@ -131,7 +133,7 @@ export default function KanbanBoard({
     if (!task || !destinationStatus) return
 
     const isSameStatus =
-      task.status_id === destinationStatus.id ||
+      (destinationStatus._mergedIds ?? [destinationStatus.id]).includes(task.status_id) ||
       (!task.status_id && task.status === destinationStatus.legacy_key)
 
     if (!isSameStatus) {

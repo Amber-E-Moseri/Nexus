@@ -10,6 +10,7 @@ import {
   selectDeptStatuses,
   selectStatusByOrgParent,
   selectHierarchyMap,
+  dedupeTaskStatuses,
 } from './taskStatusSelectors'
 
 export const STATUS_CATEGORIES = {
@@ -351,4 +352,5 @@ export {
   selectDeptStatuses,
   selectStatusByOrgParent,
   selectHierarchyMap,
+  dedupeTaskStatuses,
 }

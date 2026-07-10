@@ -933,6 +933,177 @@ async function listExternalEvents(payload: Record<string, string>) {
   return json(200, { events })
 }
 
+// ── sync_my_tasks: push a user's assigned + followed tasks as all-day events ──
+
+function addOneDay(dateOnly: string): string {
+  const d = new Date(`${dateOnly}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
+async function putTaskEvent(
+  userId: string,
+  accessToken: string,
+  googleEventId: string | null,
+  task: { title: string; due_date: string; priority: string | null },
+): Promise<string> {
+  const body = {
+    summary: task.title,
+    description: `Synced from Nexus${task.priority ? ` • Priority: ${task.priority}` : ''}`,
+    start: { date: task.due_date },
+    end:   { date: addOneDay(task.due_date) },
+  }
+
+  const baseUrl = 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
+  const url     = googleEventId ? `${baseUrl}/${googleEventId}` : baseUrl
+  const method  = googleEventId ? 'PATCH' : 'POST'
+  const headers = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+
+  let res: Response
+  try {
+    res = await gcalFetch(url, { method, headers, body: JSON.stringify(body) })
+  } catch (err) {
+    if (err instanceof NonRetryableError && (err.statusCode === 401 || err.statusCode === 403)) {
+      res = await retryAfterRefresh(userId, async () =>
+        gcalFetch(url, {
+          method,
+          headers: { Authorization: `Bearer ${await getValidToken(userId)}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      )
+    } else {
+      throw err
+    }
+  }
+
+  const event = await res.json()
+  return event.id
+}
+
+async function deleteTaskEvent(userId: string, accessToken: string, googleEventId: string): Promise<void> {
+  const url     = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${googleEventId}`
+  const headers = { Authorization: `Bearer ${accessToken}` }
+
+  try {
+    await gcalFetch(url, { method: 'DELETE', headers })
+  } catch (err) {
+    if (err instanceof NonRetryableError && err.statusCode === 410) return // already gone
+    if (err instanceof NonRetryableError && (err.statusCode === 401 || err.statusCode === 403)) {
+      await retryAfterRefresh(userId, async () =>
+        gcalFetch(url, { method: 'DELETE', headers: { Authorization: `Bearer ${await getValidToken(userId)}` } })
+      )
+      return
+    }
+    throw err
+  }
+}
+
+async function syncMyTasks(payload: Record<string, string>) {
+  const { user_id } = payload
+  if (!user_id) return json(400, { error: 'user_id is required' })
+
+  const supabase = adminClient()
+
+  const { data: tokenRow } = await supabase
+    .from('google_calendar_tokens')
+    .select('sync_tasks_enabled')
+    .eq('user_id', user_id)
+    .maybeSingle()
+
+  if (!tokenRow) return json(400, { error: 'Google Calendar is not connected' })
+  if (!tokenRow.sync_tasks_enabled) return json(400, { error: 'Task sync is not enabled' })
+
+  const access_token = await getValidToken(user_id)
+  if (!access_token) return json(401, { error: 'reauth_required' })
+
+  const { data: follows } = await supabase
+    .from('task_follows')
+    .select('task_id')
+    .eq('user_id', user_id)
+
+  const followedIds = (follows ?? []).map((f) => f.task_id)
+
+  let taskQuery = supabase
+    .from('tasks')
+    .select(`
+      id, title, due_date, priority, assignee_id,
+      status_definition:task_status_definitions!status_id(category)
+    `)
+    .is('deleted_at', null)
+    .not('due_date', 'is', null)
+
+  taskQuery = followedIds.length > 0
+    ? taskQuery.or(`assignee_id.eq.${user_id},id.in.(${followedIds.join(',')})`)
+    : taskQuery.eq('assignee_id', user_id)
+
+  const { data: candidateTasks, error: taskError } = await taskQuery
+  if (taskError) return json(500, { error: taskError.message })
+
+  const inScopeTasks = (candidateTasks ?? []).filter((t) => {
+    const category = (t.status_definition as { category?: string } | null)?.category
+    return category !== 'completed' && category !== 'cancelled'
+  })
+  const inScopeIds = new Set(inScopeTasks.map((t) => t.id))
+
+  const { data: syncRows } = await supabase
+    .from('task_calendar_sync')
+    .select('task_id, google_event_id')
+    .eq('user_id', user_id)
+
+  const existingByTaskId = new Map((syncRows ?? []).map((r) => [r.task_id, r.google_event_id]))
+
+  let created = 0
+  let updated = 0
+  let deleted = 0
+  let errors  = 0
+
+  for (const task of inScopeTasks) {
+    const existingEventId = existingByTaskId.get(task.id) ?? null
+    try {
+      const googleEventId = await putTaskEvent(user_id, access_token, existingEventId, {
+        title:    task.title,
+        due_date: task.due_date,
+        priority: task.priority ?? null,
+      })
+      await supabase.from('task_calendar_sync').upsert({
+        user_id, task_id: task.id, google_event_id: googleEventId, synced_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,task_id' })
+      existingEventId ? updated++ : created++
+    } catch (err) {
+      errors++
+      console.error(`[google-calendar-sync] sync_my_tasks push failed for task ${task.id}:`, String(err))
+      await recordSyncFailure({
+        userId: user_id, eventId: task.id, googleEventId: existingEventId,
+        errorCode: err instanceof NonRetryableError ? err.statusCode : null,
+        errorMessage: String(err),
+        payload: { action: 'sync_my_tasks_push', task_id: task.id },
+        retryCount: err instanceof MaxRetriesExceededError ? GCAL_RETRY_OPTIONS.maxRetries : 0,
+      })
+    }
+  }
+
+  // Delete propagation: drop events for tasks no longer in scope
+  // (unassigned, unfollowed, due date cleared, completed/cancelled, deleted).
+  for (const row of syncRows ?? []) {
+    if (inScopeIds.has(row.task_id)) continue
+    try {
+      await deleteTaskEvent(user_id, access_token, row.google_event_id)
+      await supabase.from('task_calendar_sync').delete().eq('user_id', user_id).eq('task_id', row.task_id)
+      deleted++
+    } catch (err) {
+      errors++
+      console.error(`[google-calendar-sync] sync_my_tasks delete failed for task ${row.task_id}:`, String(err))
+    }
+  }
+
+  await supabase.from('google_calendar_tokens').update({
+    last_synced_at: new Date().toISOString(),
+    tasks_synced:   inScopeTasks.length,
+  }).eq('user_id', user_id)
+
+  return json(200, { created, updated, deleted, errors })
+}
+
 // ── Multi-source auto-sync (cron) ─────────────────────────────────────────────
 
 async function runMultiSourceAutoSync(): Promise<void> {
@@ -1009,6 +1180,7 @@ Deno.serve(async (req) => {
       case 'update_source':              return await updateSource(payload)
       case 'remove_source':              return await removeSource(payload as Record<string, string>)
       case 'sync_one_source':            return await syncOneSource(payload as Record<string, string>)
+      case 'sync_my_tasks':              return await syncMyTasks(payload as Record<string, string>)
       default:                           return json(400, { error: `Unknown action: ${action}` })
     }
   } catch (err) {

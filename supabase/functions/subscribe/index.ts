@@ -29,6 +29,14 @@ function normalizeEmail(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
 }
 
+function generateConfirmToken(): string {
+  // Random 32-char alphanumeric token for confirmation links.
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  const buf = new Uint8Array(24)
+  crypto.getRandomValues(buf)
+  return Array.from(buf, (b) => chars[b % chars.length]).join('')
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -82,7 +90,7 @@ Deno.serve(async (req) => {
     // Already on the list? Treat as success (idempotent) without duplicating.
     const { data: existing } = await supabase
       .from('communication_contacts')
-      .select('id')
+      .select('id, status')
       .ilike('email', email)
       .maybeSingle()
 
@@ -90,18 +98,60 @@ Deno.serve(async (req) => {
       return jsonResponse(200, { success: true, status: 'already_subscribed' })
     }
 
+    // Fetch double_opt_in_enabled setting (singleton row).
+    const { data: settings } = await supabase
+      .from('communication_settings')
+      .select('double_opt_in_enabled')
+      .maybeSingle()
+
+    const doubleOptInEnabled = settings?.double_opt_in_enabled ?? false
+
+    if (doubleOptInEnabled) {
+      // Create contact as pending; send confirmation email.
+      const confirmToken = generateConfirmToken()
+      const { error: insertError } = await supabase
+        .from('communication_contacts')
+        .insert({
+          full_name: fullName || email,
+          email,
+          source: 'public_signup',
+          status: 'pending',
+          confirm_token: confirmToken,
+          notes: 'Self-service signup (pending confirmation)',
+        })
+
+      if (insertError) {
+        if (insertError.code === '23505') {
+          return jsonResponse(200, { success: true, status: 'already_subscribed' })
+        }
+        return jsonResponse(500, { error: insertError.message })
+      }
+
+      // Send confirmation email (non-blocking; don't fail if email send fails).
+      const frontendUrl = ALLOWED_ORIGIN || 'https://app.blwcannexus.ca'
+      const confirmUrl = `${frontendUrl}/confirm-subscription/${confirmToken}`
+      fetch(new URL('./send-confirm-email', `${Deno.env.get('SUPABASE_URL') || ''}/functions/v1/`).toString(), {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY') || ''}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, full_name: fullName, confirm_url: confirmUrl }),
+      }).catch((err) => console.error('Failed to send confirm email:', err))
+
+      return jsonResponse(200, { success: true, status: 'pending_confirmation' })
+    }
+
+    // Immediate subscribe (double opt-in disabled).
     const { error: insertError } = await supabase
       .from('communication_contacts')
       .insert({
         full_name: fullName || email,
         email,
         source: 'public_signup',
+        status: 'active',
         subscribed_at: new Date().toISOString(),
         notes: 'Self-service signup',
       })
 
     if (insertError) {
-      // Unique-index race → someone inserted between our check and insert.
       if (insertError.code === '23505') {
         return jsonResponse(200, { success: true, status: 'already_subscribed' })
       }
