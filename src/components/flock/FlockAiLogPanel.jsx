@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
-import { AlertCircle, Check, Sparkles, Wand2, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { AlertCircle, Check, Mic, Square, UserPlus, Wand2, X } from 'lucide-react'
 import { callFlockCRM as callFlockAPI, flockCard, FLOCK } from '../../lib/flockSupabase'
+import { useAuth } from '../../hooks/useAuth'
 
 const RESULTS = ['Reached', 'No Answer', 'Left Message', 'Rescheduled Call']
 const NEXT_ACTIONS = ['None', 'Callback', 'Follow-up']
 
-/* ── Heuristic parsers ported from app-core.js (client-side, no LLM) ── */
+/* ── Heuristic parsers ── */
 function detectResult(lower) {
   const noAnswer = /(voicemail|left a message|left message|left them a message|went to voicemail|no answer|didn.t pick|did not pick|didn.t answer|did not answer|not available|couldn.t reach|could not reach|no response|never answered|never picked|didn.t get through|did not get through)/
   const reached = /(spoke|talked|chatted|connected|reached|answered|picked up|pick up|she picked|he picked|they picked|caught up|had a call|had a chat|had a conversation|great call|good call|nice call|quick call|long call|good chat|great chat|nice chat|she said|he said|they said|she told|he told|they told|she mentioned|he mentioned|they mentioned|graduating|told me|let me know|shared|mentioned|praying|discussed|talked about|spoke about|we talked|we spoke|we chatted|we discussed)/
@@ -23,14 +24,10 @@ function detectNextAction(lower) {
   return 'None'
 }
 
-/** Lightweight natural-date parser (chrono-node is not a dependency). */
 function parseNaturalDate(text) {
   const lower = text.toLowerCase()
   const now = new Date()
-  const at9 = (d) => {
-    d.setHours(9, 0, 0, 0)
-    return d
-  }
+  const at9 = (d) => { d.setHours(9, 0, 0, 0); return d }
   if (/\btomorrow\b/.test(lower)) return at9(new Date(now.getTime() + 86400000))
   if (/\btoday\b/.test(lower)) return at9(new Date(now))
   const inN = lower.match(/in (\d+)\s*(day|days|week|weeks|month|months)/)
@@ -49,7 +46,7 @@ function parseNaturalDate(text) {
     const target = days.indexOf(dayMatch[2])
     const d = new Date(now)
     let delta = (target - d.getDay() + 7) % 7
-    if (delta === 0 || dayMatch[1]) delta += 7 // "next" or same-day → following week
+    if (delta === 0 || dayMatch[1]) delta += 7
     d.setDate(d.getDate() + delta)
     return at9(d)
   }
@@ -79,23 +76,67 @@ function extractTodos(text) {
   return todos.slice(0, 5)
 }
 
-function matchPerson(lower, people) {
-  let bestScore = 0
-  let match = { personId: '', personName: '' }
-  people.forEach((p) => {
-    const nameLower = String(p.name || '').toLowerCase()
-    const parts = nameLower.split(/\s+/)
-    let score = 0
-    parts.forEach((part) => {
-      if (part.length > 1 && lower.indexOf(part) >= 0) score++
-    })
-    if (parts[0] && parts[0].length > 1 && lower.indexOf(parts[0]) >= 0) score += 0.5
-    if (score > bestScore) {
-      bestScore = score
-      match = { personId: p.id, personName: p.name }
+/** Levenshtein edit distance — used to tolerate typos/mis-transcriptions in names. */
+function levenshtein(a, b) {
+  if (a === b) return 0
+  if (!a.length) return b.length
+  if (!b.length) return a.length
+  const prev = Array(b.length + 1)
+  for (let j = 0; j <= b.length; j++) prev[j] = j
+  for (let i = 1; i <= a.length; i++) {
+    let prevDiag = prev[0]
+    prev[0] = i
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = prev[j]
+      prev[j] = a[i - 1] === b[j - 1] ? prevDiag : 1 + Math.min(prev[j], prev[j - 1], prevDiag)
+      prevDiag = tmp
     }
-  })
-  return match
+  }
+  return prev[b.length]
+}
+
+/** Best token-level similarity (0..1) between a name part and any word in the text. */
+function bestWordSimilarity(part, words) {
+  let best = 0
+  for (const w of words) {
+    if (w.length < 2) continue
+    if (w === part) return 1
+    const dist = levenshtein(part, w)
+    const sim = 1 - dist / Math.max(part.length, w.length)
+    if (sim > best) best = sim
+  }
+  return best
+}
+
+/**
+ * Fuzzy-matches spoken/typed text against known contacts. Tolerates minor
+ * transcription errors (Levenshtein) instead of requiring an exact substring.
+ * Returns the top match plus enough info to detect "no confident match" and
+ * "two names tied" so the UI can ask rather than silently guessing.
+ */
+function matchPerson(lower, people) {
+  const words = lower.split(/[^a-z0-9']+/).filter(Boolean)
+  const scored = people.map((p) => {
+    const nameLower = String(p.name || '').toLowerCase()
+    const parts = nameLower.split(/\s+/).filter((s) => s.length > 1)
+    if (!parts.length) return { id: p.id, name: p.name, score: 0 }
+    // Exact substring match still wins outright (fast path, no false negatives).
+    const exactHits = parts.filter((part) => lower.indexOf(part) >= 0).length
+    const fuzzySum = parts.reduce((sum, part) => sum + bestWordSimilarity(part, words), 0)
+    const score = exactHits === parts.length ? 1 : fuzzySum / parts.length
+    return { id: p.id, name: p.name, score }
+  }).sort((a, b) => b.score - a.score)
+
+  const top = scored[0]
+  const second = scored[1]
+  const CONFIDENT = 0.72
+  const AMBIGUOUS_GAP = 0.08
+
+  if (!top || top.score < CONFIDENT) {
+    return { personId: '', personName: '', confidence: top?.score || 0, ambiguous: false, candidates: scored.slice(0, 3) }
+  }
+  const ambiguous = !!second && top.score - second.score < AMBIGUOUS_GAP && second.score >= CONFIDENT
+  return { personId: top.id, personName: top.name, confidence: top.score, ambiguous, candidates: scored.slice(0, 3) }
 }
 
 function toDatetimeLocal(d) {
@@ -104,23 +145,9 @@ function toDatetimeLocal(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-const DRAFT_KEY = 'ct-ai-log-draft'
-
-function loadDraft() {
-  try {
-    return localStorage.getItem(DRAFT_KEY) || ''
-  } catch {
-    return ''
-  }
-}
-function saveDraft(text) {
-  try {
-    if (text) localStorage.setItem(DRAFT_KEY, text)
-    else localStorage.removeItem(DRAFT_KEY)
-  } catch {
-    /* ignore quota / private-mode errors */
-  }
-}
+const DRAFT_KEY = 'ct-voice-log-draft'
+function loadDraft() { try { return localStorage.getItem(DRAFT_KEY) || '' } catch { return '' } }
+function saveDraft(text) { try { if (text) localStorage.setItem(DRAFT_KEY, text); else localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ } }
 
 const inputStyle = {
   padding: '10px 12px',
@@ -135,16 +162,73 @@ const inputStyle = {
 }
 const labelStyle = { fontSize: '12px', fontWeight: 700, color: FLOCK.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px', display: 'block' }
 
+// Voice recording state machine
+function useVoiceInput(onTranscript) {
+  const [listening, setListening] = useState(false)
+  const [supported, setSupported] = useState(false)
+  const recognitionRef = useRef(null)
+
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    setSupported(!!SpeechRecognition)
+  }, [])
+
+  const start = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) return
+    const r = new SpeechRecognition()
+    r.continuous = true
+    r.interimResults = true
+    r.lang = 'en-US'
+
+    let finalTranscript = ''
+    r.onresult = (e) => {
+      let interim = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript + ' '
+        else interim += e.results[i][0].transcript
+      }
+      onTranscript(finalTranscript + interim)
+    }
+    r.onend = () => { setListening(false); recognitionRef.current = null }
+    r.onerror = () => { setListening(false); recognitionRef.current = null }
+    r.start()
+    recognitionRef.current = r
+    setListening(true)
+  }
+
+  const stop = () => {
+    recognitionRef.current?.stop()
+    setListening(false)
+  }
+
+  return { listening, supported, start, stop }
+}
+
+/** Best-effort guess at a name mentioned after "called"/"with"/"to", for quick-add prefill. */
+function guessNameFromText(text) {
+  const m = text.match(/\b(?:called|call with|spoke (?:to|with)|talked (?:to|with)|with)\s+([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+)?)/)
+  return m ? m[1] : ''
+}
+
 export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
+  const { profile } = useAuth()
   const [people, setPeople] = useState([])
-  // Person carried over from a "Log a call" click elsewhere (due card, People tab).
   const [forPerson, setForPerson] = useState(preselect)
   const [text, setText] = useState(loadDraft)
   const [parsing, setParsing] = useState(false)
   const [parsed, setParsed] = useState(null)
+  const [matchInfo, setMatchInfo] = useState(null)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   const [success, setSuccess] = useState(false)
+  const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [quickAddName, setQuickAddName] = useState('')
+  const [quickAddSaving, setQuickAddSaving] = useState(false)
+
+  const { listening, supported, start, stop } = useVoiceInput((transcript) => {
+    setText(transcript)
+  })
 
   useEffect(() => {
     callFlockAPI('people')
@@ -152,19 +236,11 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
       .catch(() => setPeople([]))
   }, [])
 
-  // Draft restore: persist the in-progress description so a reload/tab-switch
-  // mid-call doesn't lose what was typed (parity with the standalone app's
-  // draft-restore behavior — full offline queueing is out of scope, see brief).
-  useEffect(() => {
-    saveDraft(text)
-  }, [text])
+  useEffect(() => { saveDraft(text) }, [text])
 
   const runParse = () => {
     const desc = text.trim()
-    if (!desc) {
-      setMsg({ type: 'error', text: 'Please describe the call first.' })
-      return
-    }
+    if (!desc) { setMsg({ type: 'error', text: 'Please describe the call first.' }); return }
     setParsing(true)
     setMsg(null)
     const lower = desc.toLowerCase()
@@ -173,8 +249,10 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
     const dt = parseNaturalDate(desc)
     if (dt && nextAction === 'None') nextAction = 'Follow-up'
     let person = matchPerson(lower, people)
-    // No name in the text? Fall back to the person this log was opened for.
-    if (!person.personId && forPerson) person = { personId: forPerson.id, personName: forPerson.name }
+    if (!person.personId && forPerson) person = { personId: forPerson.id, personName: forPerson.name, confidence: 1, ambiguous: false, candidates: [] }
+    setMatchInfo(person)
+    setQuickAddOpen(false)
+    setQuickAddName(person.personId ? '' : guessNameFromText(desc))
     setParsed({
       personId: person.personId || '',
       personName: person.personName || '',
@@ -187,19 +265,36 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
     setParsing(false)
   }
 
-  const patch = (key, value) => setParsed((p) => ({ ...p, [key]: value }))
+  const patch = (key, value) => {
+    setParsed((p) => ({ ...p, [key]: value }))
+    if (key === 'personId') setQuickAddOpen(false)
+  }
+
+  const quickAddPerson = async () => {
+    const name = quickAddName.trim()
+    if (!name || quickAddSaving) return
+    setQuickAddSaving(true)
+    setMsg(null)
+    try {
+      const res = await callFlockAPI('addPerson', { payload: JSON.stringify({ name, cadenceDays: 28 }) })
+      if (!res || res.success !== true) throw new Error((res && res.error) || 'Could not add person')
+      const newPerson = { id: res.personId, name }
+      setPeople((cur) => [...cur, newPerson].sort((a, b) => String(a.name).localeCompare(String(b.name))))
+      patch('personId', res.personId)
+      patch('personName', name)
+      setQuickAddOpen(false)
+    } catch (e) {
+      setMsg({ type: 'error', text: 'Error: ' + String(e.message || e) })
+    } finally {
+      setQuickAddSaving(false)
+    }
+  }
 
   const save = async () => {
     if (!parsed || saving) return
-    if (!parsed.personId) {
-      setMsg({ type: 'error', text: 'Please pick which person this call was with.' })
-      return
-    }
+    if (!parsed.personId) { setMsg({ type: 'error', text: 'Please pick which person this call was with.' }); return }
     const needsDate = parsed.nextAction === 'Callback' || parsed.nextAction === 'Follow-up'
-    if (needsDate && !parsed.nextActionDateTime) {
-      setMsg({ type: 'error', text: `${parsed.nextAction} needs a date/time.` })
-      return
-    }
+    if (needsDate && !parsed.nextActionDateTime) { setMsg({ type: 'error', text: `${parsed.nextAction} needs a date/time.` }); return }
     setSaving(true)
     setMsg(null)
     try {
@@ -211,6 +306,7 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
           summary: parsed.summary,
           nextAction: parsed.nextAction,
           nextActionDateTime: parsed.nextActionDateTime ? new Date(parsed.nextActionDateTime).toISOString() : '',
+          loggedBy: profile?.name || profile?.email || 'Pastor',
         }),
       })
       if (!res || res.success !== true) throw new Error((res && res.error) || 'Save failed')
@@ -220,15 +316,13 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
         try {
           await callFlockAPI('saveTodos', {
             payload: JSON.stringify({
-              interactionId: res.interactionId || 'ai-' + Date.now(),
+              interactionId: res.interactionId || 'log-' + Date.now(),
               personId: parsed.personId,
               personName: parsed.personName,
               todos: keptTodos.map((t) => ({ text: t.text.trim(), dueDate: '' })),
             }),
           })
-        } catch {
-          /* non-fatal: interaction already saved */
-        }
+        } catch { /* non-fatal */ }
       }
       saveDraft('')
       setSuccess(true)
@@ -245,6 +339,7 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
     setMsg(null)
     setSuccess(false)
     setForPerson(null)
+    if (listening) stop()
   }
 
   if (success) {
@@ -254,14 +349,14 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
           <Check size={28} />
         </div>
         <div style={{ fontSize: '18px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Call logged.</div>
-        <div style={{ fontSize: '13px', color: FLOCK.muted, marginTop: '6px' }}>Interaction saved to {parsed?.personName || 'the call list'}.</div>
+        <div style={{ fontSize: '13px', color: FLOCK.muted, marginTop: '6px' }}>Interaction saved for {parsed?.personName || 'this person'}.</div>
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '22px', flexWrap: 'wrap' }}>
           <button type="button" onClick={reset} style={{ padding: '11px 18px', background: FLOCK.purple, color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: FLOCK.fontBody }}>
             Log another call
           </button>
           {onOpenPerson && parsed?.personId && (
             <button type="button" onClick={() => onOpenPerson(parsed.personId)} style={{ padding: '11px 18px', background: FLOCK.card, color: FLOCK.text, border: `1px solid ${FLOCK.borderStrong}`, borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: FLOCK.fontBody }}>
-              View {parsed?.personName ? `${parsed.personName.split(' ')[0]}’s` : 'their'} notes
+              View {parsed?.personName ? `${parsed.personName.split(' ')[0]}'s` : 'their'} notes
             </button>
           )}
         </div>
@@ -273,10 +368,12 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
     <div style={{ display: 'grid', gap: '16px', maxWidth: '620px' }}>
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Sparkles size={20} color={FLOCK.purple} />
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>AI Log Assistant</h2>
+          <Mic size={20} color={FLOCK.purple} />
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Quick Call Log</h2>
         </div>
-        <p style={{ margin: '4px 0 0', fontSize: '13px', color: FLOCK.muted }}>Describe the call in plain language and it fills in the details for you.</p>
+        <p style={{ margin: '4px 0 0', fontSize: '13px', color: FLOCK.muted }}>
+          Speak or type what happened on the call — Nexus will fill in the details.
+        </p>
       </div>
 
       {msg && (
@@ -295,22 +392,59 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
             </button>
           </div>
         )}
+
+        {/* Voice recording strip */}
+        {supported && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '10px', background: listening ? FLOCK.redTint : FLOCK.purpleTint, border: `1px solid ${listening ? FLOCK.red + '44' : FLOCK.purple + '44'}`, transition: 'background 0.2s' }}>
+            <button
+              type="button"
+              onClick={listening ? stop : start}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '7px',
+                padding: '8px 14px', border: 'none', borderRadius: '8px',
+                background: listening ? FLOCK.red : FLOCK.purple,
+                color: '#FFFFFF', fontSize: '13px', fontWeight: 700,
+                cursor: 'pointer', fontFamily: FLOCK.fontBody,
+              }}
+            >
+              {listening ? <><Square size={13} /> Stop recording</> : <><Mic size={13} /> Speak your log</>}
+            </button>
+            <span style={{ fontSize: '12px', color: listening ? FLOCK.red : FLOCK.purple, fontWeight: 600 }}>
+              {listening ? 'Listening… speak naturally about the call' : 'Tap to dictate, or type below'}
+            </span>
+            {listening && (
+              <span style={{ marginLeft: 'auto', display: 'flex', gap: '3px', alignItems: 'center' }}>
+                {[0, 1, 2].map((i) => (
+                  <span key={i} style={{ display: 'block', width: '4px', borderRadius: '2px', background: FLOCK.red, animation: `pulse-bar 0.8s ease-in-out ${i * 0.15}s infinite alternate`, height: `${10 + i * 4}px` }} />
+                ))}
+              </span>
+            )}
+          </div>
+        )}
+
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={4}
-          placeholder="e.g. Called Sarah, she picked up. Doing well, graduating in spring. Will follow up next Tuesday and send her the retreat info."
+          placeholder={supported ? 'Or type here — e.g. "Called Sarah, she picked up. Graduating in spring. Will follow up next Tuesday."' : 'e.g. Called Sarah, she picked up. Doing well, graduating in spring. Will follow up next Tuesday.'}
           style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
         />
-        <button
-          type="button"
-          onClick={runParse}
-          disabled={parsing || !text.trim()}
-          style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '10px 18px', background: FLOCK.purple, color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: parsing ? 'wait' : 'pointer', opacity: parsing || !text.trim() ? 0.6 : 1, fontFamily: FLOCK.fontBody }}
-        >
-          <Wand2 size={15} />
-          {parsing ? 'Parsing…' : 'Parse'}
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={runParse}
+            disabled={parsing || !text.trim()}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '10px 18px', background: FLOCK.purple, color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: parsing ? 'wait' : 'pointer', opacity: parsing || !text.trim() ? 0.6 : 1, fontFamily: FLOCK.fontBody }}
+          >
+            <Wand2 size={15} />
+            {parsing ? 'Parsing…' : 'Parse & review'}
+          </button>
+          {text && (
+            <button type="button" onClick={() => setText('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: FLOCK.muted, fontSize: '12px', fontFamily: FLOCK.fontBody }}>
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       {parsed && (
@@ -322,32 +456,78 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
             <select value={parsed.personId} onChange={(e) => patch('personId', e.target.value)} style={inputStyle}>
               <option value="">— pick a person —</option>
               {people.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
+                <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
+
+            {/* Ambiguous match: two contacts scored close together — ask instead of guessing. */}
+            {matchInfo?.ambiguous && matchInfo.candidates.length > 1 && (
+              <div style={{ marginTop: '8px', padding: '10px 12px', borderRadius: '8px', background: FLOCK.amberTint, display: 'grid', gap: '6px' }}>
+                <div style={{ fontSize: '12px', color: FLOCK.text, fontWeight: 600 }}>Did you mean one of these?</div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {matchInfo.candidates.filter((c) => c.score >= 0.6).map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => { patch('personId', c.id); patch('personName', c.name); setMatchInfo((m) => ({ ...m, ambiguous: false })) }}
+                      style={{ padding: '6px 12px', borderRadius: '999px', border: `1px solid ${FLOCK.purple}`, background: FLOCK.card, color: FLOCK.purple, fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* No confident match: offer to add this person on the spot instead of leaving the field blank. */}
+            {!parsed.personId && !matchInfo?.ambiguous && (
+              <div style={{ marginTop: '8px' }}>
+                {!quickAddOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => setQuickAddOpen(true)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', color: FLOCK.purple, fontSize: '12px', fontWeight: 600, fontFamily: FLOCK.fontBody, padding: 0 }}
+                  >
+                    <UserPlus size={13} />
+                    Didn't find them? Add as a new person
+                  </button>
+                ) : (
+                  <div style={{ padding: '10px 12px', borderRadius: '8px', background: FLOCK.surface, display: 'grid', gap: '8px' }}>
+                    <div style={{ fontSize: '12px', color: FLOCK.text, fontWeight: 600 }}>Add new contact</div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="text"
+                        value={quickAddName}
+                        onChange={(e) => setQuickAddName(e.target.value)}
+                        placeholder="Full name"
+                        style={{ ...inputStyle, flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={quickAddPerson}
+                        disabled={!quickAddName.trim() || quickAddSaving}
+                        style={{ padding: '9px 16px', background: FLOCK.purple, color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: quickAddSaving ? 'wait' : 'pointer', opacity: !quickAddName.trim() || quickAddSaving ? 0.6 : 1, fontFamily: FLOCK.fontBody, whiteSpace: 'nowrap' }}
+                      >
+                        {quickAddSaving ? 'Adding…' : 'Add & select'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
               <label style={labelStyle}>Result</label>
               <select value={parsed.result} onChange={(e) => patch('result', e.target.value)} style={inputStyle}>
-                {RESULTS.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
+                {RESULTS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <div>
               <label style={labelStyle}>Next action</label>
               <select value={parsed.nextAction} onChange={(e) => patch('nextAction', e.target.value)} style={inputStyle}>
-                {NEXT_ACTIONS.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
+                {NEXT_ACTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
           </div>
@@ -366,7 +546,7 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
 
           {parsed.todos.length > 0 && (
             <div>
-              <label style={labelStyle}>Suggested to-dos</label>
+              <label style={labelStyle}>Suggested follow-ups</label>
               <div style={{ display: 'grid', gap: '6px' }}>
                 {parsed.todos.map((t, idx) => (
                   <label key={idx} style={{ display: 'flex', gap: '9px', alignItems: 'flex-start', fontSize: '13px', color: FLOCK.text, background: FLOCK.surface, padding: '9px 11px', borderRadius: '8px', cursor: 'pointer' }}>
@@ -393,6 +573,13 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes pulse-bar {
+          from { opacity: 0.5; transform: scaleY(0.7); }
+          to   { opacity: 1;   transform: scaleY(1.1); }
+        }
+      `}</style>
     </div>
   )
 }

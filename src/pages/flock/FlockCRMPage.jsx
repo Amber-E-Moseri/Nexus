@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckSquare, ChevronDown, ChevronRight, Home, Mail, Phone, Plus, RefreshCw, Settings as SettingsIcon, ShieldCheck, Sparkles, Trash2, UserPlus, Users } from 'lucide-react'
+import { AlertCircle, CheckSquare, ChevronDown, ChevronRight, Home, Mail, Mic, Phone, Plus, RefreshCw, Settings as SettingsIcon, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { FLOCK_CRM_CONFIG } from '../../lib/permissions'
 import { supabase } from '../../lib/supabase'
 import { callFlockCRM as callFlockAPI, flockCard, formatTimeAgo, initials, FLOCK } from '../../lib/flockSupabase'
+import { createNotification } from '../../features/notifications'
 import FlockTodosPanel from '../../components/flock/FlockTodosPanel'
 import FlockPeoplePanel from '../../components/flock/FlockPeoplePanel'
 import FlockAiLogPanel from '../../components/flock/FlockAiLogPanel'
@@ -19,7 +20,7 @@ function StatTile({ label, value, tone, note }) {
   const palette = tones[tone] ?? tones.violet
 
   return (
-    <div style={flockCard({ padding: '18px', background: palette.bg, borderColor: 'transparent' })}>
+    <div className="flock-stat-tile" style={{ ...flockCard({ padding: '18px', background: palette.bg, borderColor: 'transparent' }), transition: 'transform 0.15s ease, box-shadow 0.15s ease' }}>
       <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
         {label}
       </div>
@@ -87,11 +88,12 @@ function DuePersonCard({ person, expanded, onExpand, onRefresh, onOpenPerson, to
   return (
     <div style={flockCard({ padding: 0, overflow: 'hidden', fontFamily: FLOCK.fontBody })}>
       <div
+        className="flock-due-row"
         role="button"
         tabIndex={0}
         onClick={() => onExpand(!expanded)}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onExpand(!expanded) } }}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer', userSelect: 'none' }}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer', userSelect: 'none', transition: 'background 0.15s ease' }}
       >
         <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: FLOCK.purpleTint, color: FLOCK.purple, display: 'grid', placeItems: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>
           {initials(person.name || person.firstName)}
@@ -275,7 +277,7 @@ function DuePersonCard({ person, expanded, onExpand, onRefresh, onOpenPerson, to
 }
 
 function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
-  const { role } = useAuth()
+  const { role, user } = useAuth()
   const [stats, setStats] = useState({ today: 0, overdue: 0, week: 0, total: 0 })
   const [duePeople, setDuePeople] = useState([])
   const [todos, setTodos] = useState([])
@@ -294,17 +296,29 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
         callFlockAPI('getTodos'),
       ])
 
-      setStats({
+      const newStats = {
         today: Number(statsRes.today ?? 0),
         overdue: Number(statsRes.callbacks ?? 0),
         week: Number(statsRes.week ?? 0),
         total: Number(statsRes.total ?? 0),
-      })
-
+      }
+      setStats(newStats)
       setDuePeople((duePeopleRes.due || []).slice(0, 20))
       setTodos(todosRes.todos || [])
       setLastUpdated(new Date())
       setError(null)
+
+      // Push a Nexus notification once per session-day when there are overdue/due follow-ups
+      if (user?.id && (newStats.overdue > 0 || newStats.today > 0)) {
+        const key = `flock-notif-${user.id}-${new Date().toDateString()}`
+        if (!sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, '1')
+          const parts = []
+          if (newStats.overdue > 0) parts.push(`${newStats.overdue} overdue follow-up${newStats.overdue !== 1 ? 's' : ''}`)
+          if (newStats.today > 0) parts.push(`${newStats.today} due today`)
+          createNotification(user.id, 'flock_followup_due', { message: parts.join(' · '), overdue: newStats.overdue, today: newStats.today }).catch(() => {})
+        }
+      }
     } catch (nextError) {
       console.error('Flock API error:', nextError)
       setError(nextError.message)
@@ -350,6 +364,7 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
         <button
           type="button"
+          className="flock-btn-primary"
           onClick={() => onLogCall()}
           style={{
             border: 'none',
@@ -364,13 +379,15 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
             alignItems: 'center',
             gap: '8px',
             fontFamily: FLOCK.fontBody,
+            transition: 'transform 0.12s ease, box-shadow 0.12s ease',
           }}
         >
-          <Sparkles size={14} />
+          <Mic size={14} />
           Log a Call
         </button>
         <button
           type="button"
+          className="flock-btn-secondary"
           onClick={onAddPerson}
           style={{
             border: `1px solid ${FLOCK.borderStrong}`,
@@ -385,6 +402,7 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
             alignItems: 'center',
             gap: '8px',
             fontFamily: FLOCK.fontBody,
+            transition: 'background 0.12s ease, border-color 0.12s ease',
           }}
         >
           <UserPlus size={14} />
@@ -392,6 +410,7 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
         </button>
         <button
           type="button"
+          className="flock-btn-secondary"
           onClick={fetchData}
           style={{
             border: `1px solid ${FLOCK.borderStrong}`,
@@ -406,6 +425,7 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
             alignItems: 'center',
             gap: '8px',
             fontFamily: FLOCK.fontBody,
+            transition: 'background 0.12s ease, border-color 0.12s ease',
           }}
         >
           <RefreshCw size={14} />
@@ -490,10 +510,10 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
 
 const TABS = [
   { id: 'home', label: 'Home', icon: Home },
-  { id: 'ai-log', label: 'Log a Call', icon: Sparkles },
+  { id: 'ai-log', label: 'Log a Call', icon: Mic },
   { id: 'people', label: 'People', icon: Users },
   { id: 'todos', label: 'To-Dos', icon: CheckSquare },
-  { id: 'settings', label: 'Settings', icon: SettingsIcon },
+  { id: 'settings', label: 'Preferences', icon: SettingsIcon },
 ]
 
 export default function FlockCRMPage() {
@@ -575,6 +595,7 @@ export default function FlockCRMPage() {
               <button
                 key={tab.id}
                 type="button"
+                className={isActive ? '' : 'flock-tab'}
                 onClick={() => setActiveTab(tab.id)}
                 style={{
                   display: 'inline-flex',
@@ -589,6 +610,7 @@ export default function FlockCRMPage() {
                   fontWeight: 600,
                   cursor: 'pointer',
                   fontFamily: FLOCK.fontBody,
+                  transition: 'background 0.12s ease, color 0.12s ease, border-color 0.12s ease',
                 }}
               >
                 <Icon size={14} />
@@ -600,6 +622,14 @@ export default function FlockCRMPage() {
       </section>
 
       <div>{renderPanel()}</div>
+
+      <style>{`
+        .flock-stat-tile:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.08); }
+        .flock-due-row:hover { background: ${FLOCK.surface}; }
+        .flock-btn-primary:hover { box-shadow: 0 4px 12px ${FLOCK.purple}44; transform: translateY(-1px); }
+        .flock-btn-secondary:hover { background: ${FLOCK.surface}; border-color: ${FLOCK.purple}; }
+        .flock-tab:hover { background: ${FLOCK.surface}; border-color: ${FLOCK.purple}; color: ${FLOCK.text}; }
+      `}</style>
     </div>
   )
 }
