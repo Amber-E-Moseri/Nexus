@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useEffect, useMemo, useState } from 'react'
-import { deleteApiKey, generateApiKey, getDeptApiKeys, revokeApiKey } from '../../../lib/apiKeys'
+import { deleteApiKey, generateApiKey, getDeptApiKeys, regenerateApiKey, revokeApiKey, toggleApiKeyDisabled } from '../../../lib/apiKeys'
 import { FONT_BODY, FONT_HEADING, FONT_MONO } from '../../../lib/fonts'
 
 const INPUT_CLASS =
@@ -19,6 +19,7 @@ function formatDateTime(value) {
 
 function getKeyStatus(key) {
   if (key.revoked) return { label: 'Revoked', style: { background: 'var(--accent-red-tint)', color: 'var(--accent-red-text)' } }
+  if (key.disabled) return { label: 'Disabled', style: { background: 'var(--surface-secondary, #f3f4f6)', color: 'var(--ink-3)' } }
   if (key.expires_at && new Date(key.expires_at).getTime() < Date.now()) {
     return { label: 'Expired', style: { background: 'var(--accent-yellow-tint)', color: 'var(--accent-yellow-text)' } }
   }
@@ -54,6 +55,7 @@ export default function ApiKeyManager({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [generatedKey, setGeneratedKey] = useState('')
+  const [regeneratingId, setRegeneratingId] = useState(null)
   const [revealKey, setRevealKey] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -174,11 +176,81 @@ export default function ApiKeyManager({
                 <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '3px 10px', ...status.style }}>
                   {status.label}
                 </span>
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {/* Regenerate */}
+                  {canManage && !key.revoked && (
+                    <button
+                      type="button"
+                      disabled={saving || regeneratingId === key.id}
+                      onClick={async () => {
+                        if (!window.confirm(`Regenerate "${key.name}"? The current key will stop working immediately.`)) return
+                        setRegeneratingId(key.id)
+                        try {
+                          const newFullKey = await regenerateApiKey(key.id)
+                          setGeneratedKey(newFullKey)
+                          setOpen(true)
+                          await loadKeys()
+                        } catch (nextError) {
+                          setError(nextError.message)
+                        } finally {
+                          setRegeneratingId(null)
+                        }
+                      }}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: '4px 10px',
+                        borderRadius: 8,
+                        border: '1px solid var(--border-1)',
+                        background: 'transparent',
+                        color: 'var(--ink-2)',
+                        cursor: 'pointer',
+                        opacity: saving || regeneratingId === key.id ? 0.5 : 1,
+                        transition: 'color .12s, border-color .12s',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--purple-700)'; e.currentTarget.style.borderColor = 'var(--purple-700)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--ink-2)'; e.currentTarget.style.borderColor = 'var(--border-1)' }}
+                    >
+                      {regeneratingId === key.id ? 'Rotating…' : 'Regenerate'}
+                    </button>
+                  )}
+                  {/* Disable / Enable */}
+                  {canManage && !key.revoked && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={async () => {
+                        setSaving(true)
+                        try {
+                          await toggleApiKeyDisabled(key.id, !key.disabled)
+                          await loadKeys()
+                        } catch (nextError) {
+                          setError(nextError.message)
+                        } finally {
+                          setSaving(false)
+                        }
+                      }}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: '4px 10px',
+                        borderRadius: 8,
+                        border: `1px solid ${key.disabled ? 'var(--accent-green)' : 'var(--border-1)'}`,
+                        background: 'transparent',
+                        color: key.disabled ? 'var(--accent-green-text)' : 'var(--ink-2)',
+                        cursor: 'pointer',
+                        transition: 'color .12s, border-color .12s',
+                      }}
+                    >
+                      {key.disabled ? 'Enable' : 'Disable'}
+                    </button>
+                  )}
+                  {/* Revoke */}
                   <button
                     type="button"
-                    disabled={key.revoked}
+                    disabled={key.revoked || !canManage}
                     onClick={async () => {
+                      if (!window.confirm(`Revoke "${key.name}"? This cannot be undone.`)) return
                       setSaving(true)
                       try {
                         await revokeApiKey(key.id)
@@ -197,45 +269,48 @@ export default function ApiKeyManager({
                       border: '1px solid var(--accent-red)',
                       background: 'transparent',
                       color: 'var(--accent-red-text)',
-                      cursor: key.revoked ? 'not-allowed' : 'pointer',
-                      opacity: key.revoked ? 0.35 : 1,
+                      cursor: key.revoked || !canManage ? 'not-allowed' : 'pointer',
+                      opacity: key.revoked || !canManage ? 0.35 : 1,
                       transition: 'background .12s',
                     }}
-                    onMouseEnter={(e) => { if (!key.revoked) e.currentTarget.style.background = 'var(--accent-red-tint)' }}
+                    onMouseEnter={(e) => { if (!key.revoked && canManage) e.currentTarget.style.background = 'var(--accent-red-tint)' }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                   >
                     Revoke
                   </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!window.confirm(`Delete "${key.name}"?`)) return
-                      setSaving(true)
-                      try {
-                        await deleteApiKey(key.id)
-                        await loadKeys()
-                      } catch (nextError) {
-                        setError(nextError.message)
-                      } finally {
-                        setSaving(false)
-                      }
-                    }}
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      padding: '4px 10px',
-                      borderRadius: 8,
-                      border: '1px solid var(--border-1)',
-                      background: 'transparent',
-                      color: 'var(--ink-2)',
-                      cursor: 'pointer',
-                      transition: 'color .12s, border-color .12s',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-red-text)'; e.currentTarget.style.borderColor = 'var(--accent-red)' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--ink-2)'; e.currentTarget.style.borderColor = 'var(--border-1)' }}
-                  >
-                    Delete
-                  </button>
+                  {/* Delete */}
+                  {canManage && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!window.confirm(`Delete "${key.name}"?`)) return
+                        setSaving(true)
+                        try {
+                          await deleteApiKey(key.id)
+                          await loadKeys()
+                        } catch (nextError) {
+                          setError(nextError.message)
+                        } finally {
+                          setSaving(false)
+                        }
+                      }}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: '4px 10px',
+                        borderRadius: 8,
+                        border: '1px solid var(--border-1)',
+                        background: 'transparent',
+                        color: 'var(--ink-2)',
+                        cursor: 'pointer',
+                        transition: 'color .12s, border-color .12s',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-red-text)'; e.currentTarget.style.borderColor = 'var(--accent-red)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--ink-2)'; e.currentTarget.style.borderColor = 'var(--border-1)' }}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -304,7 +379,7 @@ export default function ApiKeyManager({
           >
             <div className="flex items-center justify-between border-b border-[var(--border-1)] px-5 py-4">
               <Dialog.Title className="text-sm" style={{ fontFamily: FONT_HEADING, fontWeight: 600, color: 'var(--ink-1)' }}>
-                Generate API key
+                {generatedKey ? 'Copy your new API key' : 'Generate API key'}
               </Dialog.Title>
               <Dialog.Close className="rounded-lg px-2 py-1 text-[var(--text-tertiary)]">×</Dialog.Close>
             </div>

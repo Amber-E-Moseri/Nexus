@@ -11,7 +11,7 @@ async function hashValue(value) {
 export async function getDeptApiKeys(departmentId) {
   const { data, error } = await supabase
     .from('api_keys')
-    .select('id, name, key_prefix, permissions, last_used_at, expires_at, revoked, created_at')
+    .select('id, name, key_prefix, permissions, last_used_at, expires_at, revoked, disabled, created_at')
     .eq('department_id', departmentId)
     .order('created_at', { ascending: false })
 
@@ -46,6 +46,32 @@ export async function generateApiKey(name, departmentId, createdBy, permissions,
 export async function revokeApiKey(keyId) {
   const { error } = await supabase.from('api_keys').update({ revoked: true }).eq('id', keyId)
   if (error) throw error
+}
+
+export async function toggleApiKeyDisabled(keyId, disabled) {
+  const { error } = await supabase.from('api_keys').update({ disabled }).eq('id', keyId)
+  if (error) throw error
+}
+
+export async function regenerateApiKey(keyId) {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  const randomHex = Array.from(bytes).map((byte) => byte.toString(16).padStart(2, '0')).join('')
+  const fullKey = `blwk_${randomHex}`
+  const keyHash = await hashValue(fullKey)
+
+  const { error } = await supabase
+    .from('api_keys')
+    .update({
+      key_prefix: fullKey.slice(0, 12),
+      key_hash: keyHash,
+      last_used_at: null,
+      revoked: false,
+      disabled: false,
+    })
+    .eq('id', keyId)
+
+  if (error) throw error
+  return fullKey
 }
 
 export async function deleteApiKey(keyId) {

@@ -141,7 +141,7 @@ Deno.serve(async (request) => {
   const keyHash = await hashApiKey(apiKey)
   const { data: keyRecord, error: keyError } = await supabase
     .from('api_keys')
-    .select('id, department_id, sprint_id, permissions, revoked, expires_at')
+    .select('id, department_id, sprint_id, permissions, revoked, disabled, expires_at')
     .eq('key_hash', keyHash)
     .single()
 
@@ -151,6 +151,10 @@ Deno.serve(async (request) => {
 
   if (keyRecord.revoked) {
     return jsonResponse(401, { error: 'API key has been revoked' })
+  }
+
+  if (keyRecord.disabled) {
+    return jsonResponse(401, { error: 'API key is disabled' })
   }
 
   if (keyRecord.expires_at && new Date(keyRecord.expires_at).getTime() < Date.now()) {
