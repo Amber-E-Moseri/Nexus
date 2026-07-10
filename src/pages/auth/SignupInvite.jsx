@@ -14,6 +14,7 @@ export default function SignupInvite() {
   const [sprintName, setSprintName] = useState(null)
   const [role, setRole] = useState(null)
   const [userName, setUserName] = useState(null)
+  const [membershipEndDate, setMembershipEndDate] = useState(null)
 
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -33,7 +34,7 @@ export default function SignupInvite() {
     const validateInvite = async () => {
       const { data, error: fetchError } = await supabase
         .from('sprint_invite_tokens')
-        .select('id, sprint_id, expires_at, used_at')
+        .select('id, sprint_id, expires_at, used_at, metadata')
         .eq('token', inviteToken)
         .eq('email', inviteEmail)
         .maybeSingle()
@@ -76,8 +77,13 @@ export default function SignupInvite() {
         setSprintName(sprint.name)
       }
 
-      setUserName(inviteEmail.split('@')[0])
-      setRole('member') // Default role
+      // Use the role/name the inviter chose (persisted in token metadata).
+      // Fall back to 'contributor' — a valid sprint_members role — never
+      // 'member', which the sprint_members_role_check constraint rejects.
+      const meta = data.metadata ?? {}
+      setUserName(meta.name || inviteEmail.split('@')[0])
+      setRole(meta.role || 'contributor')
+      setMembershipEndDate(meta.membership_end_date ?? null)
       setValidating(false)
     }
 
@@ -131,7 +137,8 @@ export default function SignupInvite() {
           email: inviteEmail,
           name: userName || inviteEmail.split('@')[0],
           sprint_id: sprintId,
-          role: role || 'member',
+          role: role || 'contributor',
+          membership_end_date: membershipEndDate,
           invite_token: inviteToken,
         },
       })

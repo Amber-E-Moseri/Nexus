@@ -146,6 +146,15 @@ Deno.serve(async (req) => {
       token,
       email: cleanEmail,
       created_by: callerId,
+      // Persist what the inviter chose so signup can provision it. Without
+      // this the role/name/end-date were dropped and signup fell back to an
+      // invalid sprint role. `role` here is a sprint_members role
+      // (owner/manager/contributor/viewer) — never a platform users.role.
+      metadata: {
+        name: cleanName,
+        role: role || 'contributor',
+        membership_end_date: membershipEndDate ?? null,
+      },
     })
 
   if (tokenError) return jsonResponse(502, { error: `Failed to create invite token: ${tokenError.message}` })

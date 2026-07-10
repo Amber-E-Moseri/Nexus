@@ -35,6 +35,7 @@ Deno.serve(async (req) => {
     name: string
     sprint_id: string
     role: string
+    membership_end_date?: string | null
     invite_token: string
   } | null
 
@@ -46,32 +47,49 @@ Deno.serve(async (req) => {
 
   // Provision the app-layer user row before inserting into sprint_members.
   // sprint_members.user_id references public.users(id), so this must exist first.
-  const { error: profileError } = await adminClient
+  //
+  // Only create the row if it's absent — never overwrite an existing one. A
+  // blind upsert here would reset an already-active user back to
+  // pending_activation / is_temporary on a re-invite. A new invitee who just
+  // set a password is activated, so provision them as 'active' (they're still
+  // a temporary/external sprint guest via is_temporary).
+  const { data: existing, error: lookupError } = await adminClient
     .from('users')
-    .upsert(
-      {
+    .select('id')
+    .eq('id', body.user_id)
+    .maybeSingle()
+
+  if (lookupError) {
+    console.error('Failed to look up user profile:', lookupError)
+    return jsonResponse(500, { error: `Failed to look up user profile: ${lookupError.message}` })
+  }
+
+  if (!existing) {
+    const { error: profileError } = await adminClient
+      .from('users')
+      .insert({
         id: body.user_id,
         email: body.email.toLowerCase(),
         name: body.name || body.email.split('@')[0],
-        status: 'pending_activation',
+        status: 'active',
         is_temporary: true,
-      },
-      { onConflict: 'id' },
-    )
+      })
 
-  if (profileError) {
-    console.error('Failed to provision user profile:', profileError)
-    return jsonResponse(500, { error: `Failed to provision user profile: ${profileError.message}` })
+    if (profileError) {
+      console.error('Failed to provision user profile:', profileError)
+      return jsonResponse(500, { error: `Failed to provision user profile: ${profileError.message}` })
+    }
   }
 
-  // Add user to sprint
+  // Add user to sprint. Fall back to 'contributor' — a valid sprint_members
+  // role — never 'member', which sprint_members_role_check rejects (23514).
   const { error: insertError } = await adminClient
     .from('sprint_members')
     .insert({
       user_id: body.user_id,
       sprint_id: body.sprint_id,
-      role: body.role || 'member',
-      membership_end_date: null,
+      role: body.role || 'contributor',
+      membership_end_date: body.membership_end_date ?? null,
       is_temporary: false,
     })
 
