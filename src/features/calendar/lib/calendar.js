@@ -146,13 +146,9 @@ export async function approveEvent(eventId) {
     .single()
 
   if (event?.created_by) {
-    await createNotification({
-      recipient_id: event.created_by,
-      type: 'calendar_event_approved',
-      related_resource_type: 'calendar_event',
-      related_resource_id: eventId,
-      title: `Event approved: ${event.title}`,
-      description: `Your calendar event "${event.title}" has been approved.`,
+    await createNotification(event.created_by, 'event_approved', {
+      event_id: eventId,
+      event_title: event.title,
     }).catch(() => {})
   }
 
@@ -172,13 +168,10 @@ export async function rejectEvent(eventId, rejectionNote) {
     .single()
 
   if (event?.created_by) {
-    await createNotification({
-      recipient_id: event.created_by,
-      type: 'calendar_event_rejected',
-      related_resource_type: 'calendar_event',
-      related_resource_id: eventId,
-      title: `Event not approved: ${event.title}`,
-      description: `Your calendar event was declined. Reason: ${rejectionNote}`,
+    await createNotification(event.created_by, 'event_rejected', {
+      event_id: eventId,
+      event_title: event.title,
+      rejection_note: rejectionNote,
     }).catch(() => {})
   }
 

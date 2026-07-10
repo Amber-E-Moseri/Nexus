@@ -1,58 +1,37 @@
-import { useEffect, useState } from 'react'
 import { AlertCircle, Check } from 'lucide-react'
-import { FLOCK_CRM_CONFIG } from '../../lib/permissions'
 
-export default function FlockNotificationsSection() {
-  const [notifications, setNotifications] = useState([])
-  const [loading, setLoading] = useState(true)
+/**
+ * Alert strip for Flock CRM dashboard surfaces. Pure presentation — the
+ * parent owns the (realtime-updated) stats from callFlockCRM('quickStats')
+ * and passes them down; renders nothing when there is nothing to flag.
+ */
+export default function FlockNotificationsSection({ stats }) {
+  const alerts = []
 
-  useEffect(() => {
-    fetchNotifications()
-    const interval = setInterval(fetchNotifications, 60000)
-    return () => clearInterval(interval)
-  }, [])
+  const dueToday = stats?.today || 0
+  const overdue = stats?.callbacks || 0
 
-  const fetchNotifications = async () => {
-    try {
-      const response = await fetch(`${FLOCK_CRM_CONFIG.apiUrl}?action=quickStats`)
-      if (!response.ok) return
-
-      const data = await response.json()
-      const alerts = []
-
-      if (data.today > 0) {
-        alerts.push({
-          id: 'due-today',
-          type: 'info',
-          message: `You have ${data.today} people due today`,
-          action: 'Open Flock CRM'
-        })
-      }
-
-      if (data.callbacks > 0) {
-        alerts.push({
-          id: 'overdue',
-          type: 'warning',
-          message: `${data.callbacks} follow-up(s) overdue`,
-          action: 'View Overdue'
-        })
-      }
-
-      setNotifications(alerts)
-    } catch (error) {
-      console.error('Error fetching Flock notifications:', error)
-    } finally {
-      setLoading(false)
-    }
+  if (dueToday > 0) {
+    alerts.push({
+      id: 'due-today',
+      type: 'info',
+      message: `You have ${dueToday} ${dueToday === 1 ? 'person' : 'people'} due today`,
+    })
   }
 
-  if (loading || notifications.length === 0) {
-    return null
+  if (overdue > 0) {
+    alerts.push({
+      id: 'overdue',
+      type: 'warning',
+      message: `${overdue} follow-up${overdue === 1 ? '' : 's'} overdue`,
+    })
   }
+
+  if (alerts.length === 0) return null
 
   return (
-    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      {notifications.map((notif) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {alerts.map((notif) => (
         <div
           key={notif.id}
           style={{

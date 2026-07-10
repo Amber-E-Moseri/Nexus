@@ -50,6 +50,7 @@ export async function createNotification(userId, type, payload) {
     .single()
 
   if (error) throw error
+  dispatchPush(userId, data)
   return data
 }
 
@@ -86,7 +87,13 @@ export async function createMentionNotifications(commenterId, commenterName, men
     .insert(notificationsToInsert)
     .select()
 
-  if (error) console.error('Failed to insert mention notifications:', error)
+  if (error) {
+    console.error('Failed to insert mention notifications:', error)
+  } else {
+    for (const notification of inserted ?? []) {
+      dispatchPush(notification.user_id, notification)
+    }
+  }
   return inserted || []
 }
 
@@ -206,6 +213,21 @@ export async function sendTaskPushNotification(userId, data) {
     console.error('Failed to send push notification:', err)
     return { error: err.message }
   }
+}
+
+// Fire-and-forget: mobile push is best-effort and must never block or fail
+// in-app notification creation. sendTaskPushNotification already no-ops
+// server-side when the user has no active push subscription.
+function dispatchPush(userId, notification) {
+  if (typeof userId !== 'string' || !notification) return
+  const def = NOTIFICATION_TYPES[notification.type]
+  sendTaskPushNotification(userId, {
+    taskId: notification.payload?.task_id,
+    title: def?.label ?? 'BLW CAN NEXUS',
+    message: formatNotificationMessage(notification),
+    url: '/inbox',
+    type: notification.type,
+  }).catch(() => {})
 }
 
 export function formatNotificationMessage(notification) {

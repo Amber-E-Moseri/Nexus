@@ -1,26 +1,10 @@
-import { FLOCK_CRM_CONFIG } from './permissions'
-
 /**
- * Shared Flock CRM (Pastoral CRM) front-end plumbing.
+ * Shared Flock CRM (Pastoral CRM) style tokens and display helpers.
  *
- * `callFlockAPI` is the single action-caller for the live GAS web app — every
- * Flock surface in Nexus routes through it. Do NOT introduce a second HTTP
- * client or a duplicate config; add new actions by calling this with the
- * matching GAS action name (see code.gs in the standalone app).
+ * The data layer lives in src/lib/flockSupabase.js (`callFlockCRM`) — every
+ * Flock surface routes through it. The old Google Apps Script caller that
+ * lived here has been retired; do NOT reintroduce an HTTP client for Flock.
  */
-export async function callFlockAPI(action, params = {}) {
-  if (!FLOCK_CRM_CONFIG.apiUrl) throw new Error('Flock API URL not configured')
-  const url = new URL(FLOCK_CRM_CONFIG.apiUrl)
-  url.searchParams.append('action', action)
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== null && value !== undefined) {
-      url.searchParams.append(key, typeof value === 'object' ? JSON.stringify(value) : value)
-    }
-  }
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`API error: ${response.statusText}`)
-  return response.json()
-}
 
 /**
  * Locked ClickUp-refresh palette + typography for every Flock surface.

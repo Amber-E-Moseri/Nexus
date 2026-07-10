@@ -254,7 +254,7 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
   const [expandedPerson, setExpandedPerson] = useState(null)
 
   const fetchData = async () => {
-    if (!FLOCK_CRM_CONFIG.enabled || !FLOCK_CRM_CONFIG.checkAccess(role)) return
+    if (!FLOCK_CRM_CONFIG.checkAccess(role)) return
 
     try {
       setLoading(true)
@@ -480,15 +480,6 @@ export default function FlockCRMPage() {
       default:
         return <HomePanel onLogCall={openLogCall} onAddPerson={openAddPerson} onOpenPerson={openPersonNotes} />
     }
-  }
-
-  if (!FLOCK_CRM_CONFIG.enabled) {
-    return (
-      <div style={{ padding: '24px', textAlign: 'center', fontFamily: FLOCK.fontBody }}>
-        <h2>Flock CRM Unavailable</h2>
-        <p>Flock CRM is not currently enabled.</p>
-      </div>
-    )
   }
 
   if (!FLOCK_CRM_CONFIG.checkAccess(role)) {

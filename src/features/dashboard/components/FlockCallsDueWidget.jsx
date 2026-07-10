@@ -3,6 +3,8 @@ import { NavLink } from 'react-router-dom'
 import { Phone } from 'lucide-react'
 import { callFlockCRM } from '../../../lib/flockSupabase'
 import { FLOCK_CRM_CONFIG } from '../../../lib/permissions'
+import { supabase } from '../../../lib/supabase'
+import FlockNotificationsSection from '../../../components/flock/FlockNotificationsSection'
 
 const PURPLE = '#4C2A92'
 
@@ -16,15 +18,17 @@ function StatChip({ label, value, fg, bg }) {
 }
 
 export default function FlockCallsDueWidget({ role }) {
-  const hasAccess = FLOCK_CRM_CONFIG.enabled && FLOCK_CRM_CONFIG.checkAccess(role)
+  const hasAccess = FLOCK_CRM_CONFIG.checkAccess(role)
   const [stats, setStats] = useState(null)
   const [due, setDue] = useState([])
   const [loading, setLoading] = useState(hasAccess)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    if (!hasAccess) return
+    if (!hasAccess) return undefined
     let active = true
+    let debounce = null
+
     async function load() {
       try {
         const [statsRes, dueRes] = await Promise.all([
@@ -41,11 +45,34 @@ export default function FlockCallsDueWidget({ role }) {
         if (active) setLoading(false)
       }
     }
+
     load()
-    const timer = setInterval(load, 60000)
+
+    // Refresh on flock table changes (RLS scopes events to the pastor's own
+    // rows). Debounced: a logged call touches contacts + interactions + todos.
+    const scheduleReload = () => {
+      clearTimeout(debounce)
+      debounce = setTimeout(load, 400)
+    }
+
+    const channel = supabase
+      .channel('flock-calls-due-widget')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'flock_contacts' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'flock_interactions' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'flock_todos' }, scheduleReload)
+      .subscribe()
+
+    // Catch date rollovers / missed events when the user returns to the tab.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
     return () => {
       active = false
-      clearInterval(timer)
+      clearTimeout(debounce)
+      supabase.removeChannel(channel)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [hasAccess])
 
@@ -68,6 +95,8 @@ export default function FlockCallsDueWidget({ role }) {
         <StatChip label="Due today" value={stats?.today ?? 0} fg={PURPLE} bg="#F3EEFF" />
         <StatChip label="Overdue" value={stats?.callbacks ?? 0} fg="#C94830" bg="#FDEEEA" />
       </div>
+
+      <FlockNotificationsSection stats={stats} />
 
       {dueCount === 0 ? (
         <div style={{ fontSize: 13, color: '#9E9488', padding: '10px 0', textAlign: 'center' }}>

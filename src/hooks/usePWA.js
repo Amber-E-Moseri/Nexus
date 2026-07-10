@@ -92,69 +92,12 @@ export function usePWA() {
     }
   }, [deferredPrompt])
 
-  // Subscribe to push notifications
-  const subscribeToPush = useCallback(async () => {
-    try {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        throw new Error('Push notifications not supported')
-      }
-
-      const registration = await navigator.serviceWorker.ready
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: process.env.REACT_APP_VAPID_PUBLIC_KEY,
-      })
-
-      // Send subscription to backend
-      const response = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(subscription),
-      })
-
-      return await response.json()
-    } catch (err) {
-      console.error('Failed to subscribe to push:', err)
-      throw err
-    }
-  }, [])
-
-  // Request notification permission
-  const requestNotificationPermission = useCallback(async () => {
-    if (!('Notification' in window)) {
-      throw new Error('Notifications not supported')
-    }
-
-    if (Notification.permission === 'granted') {
-      return 'granted'
-    }
-
-    if (Notification.permission !== 'denied') {
-      const permission = await Notification.requestPermission()
-      if (permission === 'granted') {
-        await subscribeToPush()
-      }
-      return permission
-    }
-
-    return 'denied'
-  }, [subscribeToPush])
-
-  // Check if notification permission granted
-  const notificationPermission = () => {
-    if (!('Notification' in window)) return 'denied'
-    return Notification.permission
-  }
-
   return {
     isInstallable,
     isInstalled,
     isOnline,
     serviceWorkerReady,
     install,
-    subscribeToPush,
-    requestNotificationPermission,
-    notificationPermission: notificationPermission(),
     hasDeferredPrompt: !!deferredPrompt,
   }
 }

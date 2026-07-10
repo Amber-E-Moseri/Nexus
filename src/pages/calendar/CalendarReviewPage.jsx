@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { hasPermission } from '../../lib/permissions'
 import { getMonthEvents, getPendingApprovals, approveEvent, rejectEvent } from '../../features/calendar'
-import { createNotification } from '../../features/notifications'
 import { useToast } from '../../context/ToastContext'
 import EventDetailModal from '../../features/calendar/components/EventDetailModal'
 
@@ -68,18 +67,6 @@ export default function CalendarReviewPage() {
     try {
       await approveEvent(event.id, profile.id)
 
-      // Create notification
-      if (event.created_by) {
-        await createNotification({
-          recipient_id: event.created_by,
-          type: 'calendar_event_approved',
-          related_resource_type: 'calendar_event',
-          related_resource_id: event.id,
-          title: `Event approved: ${event.title}`,
-          description: 'Your calendar event has been approved.',
-        }).catch(() => {})
-      }
-
       showToast('Event approved', { tone: 'success' })
       loadEvents()
     } catch (err) {
@@ -96,18 +83,6 @@ export default function CalendarReviewPage() {
 
     try {
       await rejectEvent(event.id, rejectionNote)
-
-      // Create notification
-      if (event.created_by) {
-        await createNotification({
-          recipient_id: event.created_by,
-          type: 'calendar_event_rejected',
-          related_resource_type: 'calendar_event',
-          related_resource_id: event.id,
-          title: `Event rejected: ${event.title}`,
-          description: `Your calendar event was rejected. Reason: ${rejectionNote}`,
-        }).catch(() => {})
-      }
 
       showToast('Event rejected', { tone: 'success' })
       setRejectingEventId(null)
