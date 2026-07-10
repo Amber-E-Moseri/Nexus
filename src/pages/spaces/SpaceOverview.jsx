@@ -1340,15 +1340,16 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
+            title="Filter for your tasks"
             onClick={() => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))}
-            className={[
-              'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold transition-all"
+            style={
               filters.assigneeId === profile?.id
-                ? 'border-[var(--accent)] bg-[var(--accent-light)] text-[var(--accent)]'
-                : 'border-[var(--border)] bg-white text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]',
-            ].join(' ')}
+                ? { background: '#1C1610', color: '#fff', boxShadow: '0 0 0 2px #1C1610' }
+                : { background: 'var(--surface-tertiary)', color: 'var(--text-secondary)', border: '1.5px solid var(--border)' }
+            }
           >
-            Assigned to me
+            {getInitials(profile?.name ?? profile?.email)}
           </button>
 
           <div className="relative">
