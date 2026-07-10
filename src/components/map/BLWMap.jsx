@@ -12,6 +12,7 @@ import { THEME } from './data/theme'
 import { CampusPanel } from './CampusPanel'
 import { RegionalView } from './RegionalView'
 import { PrayerMode } from './PrayerMode'
+import { MapSettingsView } from './MapSettingsView'
 import '../../styles/BLWMap.css'
 import '../../styles/blw-map-parity.css'
 
@@ -53,6 +54,7 @@ export function BLWMap() {
   const [showKey, setShowKey] = useState(false)
   const [regionalOpen, setRegionalOpen] = useState(false)
   const [prayerOpen, setPrayerOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const canEdit = useCanEditCampus()
 
@@ -356,9 +358,14 @@ export function BLWMap() {
           </div>
           <div className="blwp-navpills">
             {canEdit && (
-              <button className="blwp-navpill" onClick={() => setRegionalOpen(true)}>
-                🌐 Regional
-              </button>
+              <>
+                <button className="blwp-navpill" onClick={() => setSettingsOpen(true)}>
+                  ⚙️ Settings
+                </button>
+                <button className="blwp-navpill" onClick={() => setRegionalOpen(true)}>
+                  🌐 Regional
+                </button>
+              </>
             )}
             <button className="blwp-navpill blwp-prayer" onClick={() => setPrayerOpen(true)}>
               🙏 Prayer
@@ -502,6 +509,7 @@ export function BLWMap() {
         )}
       </div>
 
+      {settingsOpen && <MapSettingsView campuses={campuses} onClose={() => setSettingsOpen(false)} />}
       {regionalOpen && <RegionalView campuses={campuses} onClose={() => setRegionalOpen(false)} />}
       {prayerOpen && <PrayerMode campuses={campuses} onClose={() => setPrayerOpen(false)} />}
     </div>
