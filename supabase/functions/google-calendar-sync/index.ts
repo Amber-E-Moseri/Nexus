@@ -30,6 +30,28 @@ function adminClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 }
 
+// Idempotent vault write: creates a secret, or updates it in place if one with
+// the same name already exists. Uses the vault_upsert_secret RPC because the
+// `vault` schema is not exposed to PostgREST — direct .from('vault.secrets')
+// calls silently no-op, which is what caused the duplicate-name collisions.
+async function vaultUpsertSecret(name: string, value: string): Promise<string | null> {
+  const { data, error } = await adminClient()
+    .rpc('vault_upsert_secret', { secret_name: name, secret_value: value })
+  if (error || !data) {
+    console.error(`[vault] Failed to upsert secret ${name}:`, error?.message)
+    return null
+  }
+  return data as string
+}
+
+async function deleteVaultSecretByName(secretName: string) {
+  const { error } = await adminClient()
+    .rpc('vault_delete_secret', { secret_name: secretName })
+  if (error) {
+    console.error(`[vault] Failed to delete secret by name ${secretName}:`, error.message)
+  }
+}
+
 // ── Dead-letter: record a failure after all retries are exhausted ─────────────
 // NOTE: previously inserted an `org_id` key that was never a real column on
 // sync_failures — every call silently failed (console.error'd, never
@@ -158,14 +180,10 @@ async function getValidToken(userId: string): Promise<string | null> {
   const tokens = await res.json()
   const newExpiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
 
-  // Store new access token in Vault
-  const { data: newVaultId, error: vaultError } = await supabase
-    .rpc('vault_create_secret', {
-      secret_name: `google_calendar_access_${userId}`,
-      secret_value: tokens.access_token,
-    })
-  if (vaultError || !newVaultId) {
-    console.error('Failed to store new access token in vault:', vaultError)
+  // Store new access token in Vault (idempotent upsert by name — no pre-delete needed)
+  const newVaultId = await vaultUpsertSecret(`google_calendar_access_${userId}`, tokens.access_token)
+  if (!newVaultId) {
+    console.error('Failed to store new access token in vault')
     return null
   }
 
@@ -255,14 +273,10 @@ async function getValidConnectionToken(): Promise<string | null> {
   const tokens    = await res.json()
   const newExpiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
 
-  // Store new access token in Vault
-  const { data: newVaultId, error: vaultError } = await supabase
-    .rpc('vault_create_secret', {
-      secret_name: 'google_calendar_ministry_access',
-      secret_value: tokens.access_token,
-    })
-  if (vaultError || !newVaultId) {
-    console.error('Failed to store new ministry connection access token in vault:', vaultError)
+  // Store new access token in Vault (idempotent upsert by name — no pre-delete needed)
+  const newVaultId = await vaultUpsertSecret('google_calendar_ministry_access', tokens.access_token)
+  if (!newVaultId) {
+    console.error('Failed to store new ministry connection access token in vault')
     return null
   }
 
@@ -299,28 +313,19 @@ async function exchangeCodeForConnection(payload: Record<string, string>) {
 
   const supabase = adminClient()
 
-  // Store tokens in Vault (never in plaintext)
-  const { data: accessVaultId, error: accessVaultError } = await supabase
-    .rpc('vault_create_secret', {
-      secret_name: 'google_calendar_ministry_access',
-      secret_value: tokens.access_token,
-    })
-  if (accessVaultError || !accessVaultId) {
-    return json(500, { error: `Failed to store access token in vault: ${accessVaultError?.message}` })
+  // Store tokens in Vault (idempotent upsert by name — updates in place if a
+  // secret with this name already exists, so re-connecting never collides).
+  const accessVaultId = await vaultUpsertSecret('google_calendar_ministry_access', tokens.access_token)
+  if (!accessVaultId) {
+    return json(500, { error: 'Failed to store access token in vault' })
   }
 
-  const { data: refreshVaultId, error: refreshVaultError } = await supabase
-    .rpc('vault_create_secret', {
-      secret_name: 'google_calendar_ministry_refresh',
-      secret_value: tokens.refresh_token,
-    })
-  if (refreshVaultError || !refreshVaultId) {
-    return json(500, { error: `Failed to store refresh token in vault: ${refreshVaultError?.message}` })
+  const refreshVaultId = await vaultUpsertSecret('google_calendar_ministry_refresh', tokens.refresh_token)
+  if (!refreshVaultId) {
+    return json(500, { error: 'Failed to store refresh token in vault' })
   }
 
-  // True singleton, enforced by a UNIQUE ((true)) index — a partial/expression
-  // index isn't usable as a PostgREST upsert onConflict target, so replace
-  // the row outright. No concurrent admin OAuth flows are expected.
+  // True singleton, enforced by a UNIQUE ((true)) index — replace the row outright.
   await supabase.from('ministry_calendar_connection').delete().not('id', 'is', null)
   const { error } = await supabase.from('ministry_calendar_connection').insert({
     access_token_vault_id:  accessVaultId,
@@ -331,6 +336,7 @@ async function exchangeCodeForConnection(payload: Record<string, string>) {
   })
 
   if (error) return json(500, { error: error.message })
+
   return json(200, { success: true })
 }
 
@@ -696,23 +702,16 @@ async function exchangeCode(payload: Record<string, string>) {
 
   const supabase = adminClient()
 
-  // Store tokens in Vault (never in plaintext)
-  const { data: accessVaultId, error: accessVaultError } = await supabase
-    .rpc('vault_create_secret', {
-      secret_name: `google_calendar_access_${user_id}`,
-      secret_value: tokens.access_token,
-    })
-  if (accessVaultError || !accessVaultId) {
-    return json(500, { error: `Failed to store access token in vault: ${accessVaultError?.message}` })
+  // Store tokens in Vault (idempotent upsert by name — updates in place if a
+  // secret with this name already exists, so re-connecting never collides).
+  const accessVaultId = await vaultUpsertSecret(`google_calendar_access_${user_id}`, tokens.access_token)
+  if (!accessVaultId) {
+    return json(500, { error: 'Failed to store access token in vault' })
   }
 
-  const { data: refreshVaultId, error: refreshVaultError } = await supabase
-    .rpc('vault_create_secret', {
-      secret_name: `google_calendar_refresh_${user_id}`,
-      secret_value: tokens.refresh_token,
-    })
-  if (refreshVaultError || !refreshVaultId) {
-    return json(500, { error: `Failed to store refresh token in vault: ${refreshVaultError?.message}` })
+  const refreshVaultId = await vaultUpsertSecret(`google_calendar_refresh_${user_id}`, tokens.refresh_token)
+  if (!refreshVaultId) {
+    return json(500, { error: 'Failed to store refresh token in vault' })
   }
 
   // Delete existing row (upsert via unique user_id) and insert with vault references

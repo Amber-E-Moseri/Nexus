@@ -122,6 +122,17 @@ Deno.serve(async (req) => {
 
     const now = new Date().toISOString()
 
+    // Best-effort campus name for notification/activity copy — never blocks the approve/reject path.
+    const { data: campusRow } = await supabase
+      .from('campuses')
+      .select('name, institution')
+      .eq('id', edit.campus_id)
+      .maybeSingle()
+    const campusLabel =
+      campusRow?.institution && campusRow.institution !== campusRow?.name
+        ? `${campusRow.institution} — ${campusRow.name}`
+        : campusRow?.name || campusRow?.institution || 'Campus'
+
     if (action === 'approve') {
       // Update campuses table with new value
       const updatePayload: Record<string, unknown> = {}
@@ -154,6 +165,26 @@ Deno.serve(async (req) => {
         throw new Error(`Failed to approve edit: ${approveError.message}`)
       }
 
+      // Notify the submitter + surface on the dashboard activity feed. Best-effort:
+      // the edit itself already succeeded, so a failure here must not roll it back.
+      await supabase.from('notifications').insert({
+        user_id: edit.submitted_by,
+        type: 'campus_edit_approved',
+        payload: {
+          campus_id: edit.campus_id,
+          campus_name: campusLabel,
+          field_name: edit.field_name,
+          new_value: edit.new_value,
+        },
+      }).then(({ error }) => { if (error) console.error('Failed to insert notification:', error) })
+
+      await supabase.from('activity_log').insert({
+        user_id: userInfo.userId,
+        action: 'campus_edit_approved',
+        entity_type: 'campus',
+        entity_id: edit.campus_id,
+      }).then(({ error }) => { if (error) console.error('Failed to insert activity log:', error) })
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -181,6 +212,17 @@ Deno.serve(async (req) => {
         console.error('Error rejecting edit:', rejectError)
         throw new Error(`Failed to reject edit: ${rejectError.message}`)
       }
+
+      await supabase.from('notifications').insert({
+        user_id: edit.submitted_by,
+        type: 'campus_edit_rejected',
+        payload: {
+          campus_id: edit.campus_id,
+          campus_name: campusLabel,
+          field_name: edit.field_name,
+          notes: notes || null,
+        },
+      }).then(({ error }) => { if (error) console.error('Failed to insert notification:', error) })
 
       return new Response(
         JSON.stringify({

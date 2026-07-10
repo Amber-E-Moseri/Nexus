@@ -74,6 +74,13 @@ export default function CampusPhotosSettings() {
     }
   }
 
+  const displayName = (c) => {
+    if (c.institution && c.institution !== c.name) {
+      return `${c.institution} — ${c.name}`
+    }
+    return c.name
+  }
+
   const filteredCampuses = campuses.filter((c) => {
     if (!filter) return true
     const q = filter.toLowerCase()
@@ -151,7 +158,7 @@ export default function CampusPhotosSettings() {
                 {campus.photo_url ? (
                   <img
                     src={campus.photo_url}
-                    alt={campus.name}
+                    alt={displayName(campus)}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     onError={(e) => {
                       e.target.replaceWith(Object.assign(document.createElement('div'), {
@@ -167,7 +174,7 @@ export default function CampusPhotosSettings() {
 
               {/* Info + actions */}
               <div style={{ padding: '12px', flex: 1 }}>
-                <div style={{ fontWeight: '600', fontSize: '13px', marginBottom: '2px' }}>{campus.name}</div>
+                <div style={{ fontWeight: '600', fontSize: '13px', marginBottom: '2px' }}>{displayName(campus)}</div>
                 <div style={{ fontSize: '11px', color: '#999', marginBottom: '10px' }}>
                   {campus.group_name || 'Unknown region'}
                 </div>

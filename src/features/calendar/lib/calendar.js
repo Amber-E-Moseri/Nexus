@@ -7,7 +7,8 @@ export async function getCalendarEvents(startDate, endDate) {
     .select(`
       id, title, description, event_type, start_date, end_date,
       all_day, location, zoom_join_url, space_id, sprint_id, created_by, created_at,
-      status, department_id, approved_by, approved_at, rejection_note, is_org_wide
+      status, department_id, approved_by, approved_at, rejection_note, is_org_wide,
+      source_id
     `)
     .gte('start_date', startDate.toISOString())
     .lte('start_date', endDate.toISOString())
@@ -19,13 +20,40 @@ export async function getCalendarEvents(startDate, endDate) {
   return data ?? []
 }
 
+// Returns a Set of source IDs hidden from the given department.
+// Empty Set = no restrictions (all sources visible).
+// Super admins should skip this call entirely (pass null departmentId).
+export async function getHiddenSourceIdsForDept(departmentId) {
+  if (!departmentId) return new Set()
+
+  const { data } = await supabase
+    .from('ministry_calendar_source_dept_visibility')
+    .select('source_id, department_id')
+
+  if (!data || data.length === 0) return new Set()
+
+  // Build source → allowed dept set
+  const sourceMap = {}
+  for (const row of data) {
+    if (!sourceMap[row.source_id]) sourceMap[row.source_id] = new Set()
+    sourceMap[row.source_id].add(row.department_id)
+  }
+
+  // A source is hidden if it has restrictions and this dept isn't listed
+  const hidden = new Set()
+  for (const [sourceId, allowed] of Object.entries(sourceMap)) {
+    if (!allowed.has(departmentId)) hidden.add(sourceId)
+  }
+  return hidden
+}
+
 export async function getUpcomingEvents(limit = 5) {
   const now = new Date()
   const future = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
 
   const { data, error } = await supabase
     .from('calendar_events')
-    .select('id, title, event_type, start_date, end_date, all_day, location, zoom_join_url, sprint_id, space_id, status, department_id')
+    .select('id, title, event_type, start_date, end_date, all_day, location, zoom_join_url, sprint_id, space_id, status, department_id, source_id')
     .gte('start_date', now.toISOString())
     .lte('start_date', future.toISOString())
     .eq('status', 'approved')
@@ -491,7 +519,16 @@ export async function exchangeMinistryCalendarConnectionCode({ code, userId }) {
       payload: { code, redirect_uri: redirectUri, user_id: userId },
     },
   })
-  if (error) throw new Error(error.message)
+  if (error) {
+    // Supabase wraps non-2xx responses in FunctionsHttpError with a generic message.
+    // Try to read the actual JSON body from the response for a real error message.
+    let message = error.message
+    try {
+      const body = await error.context?.json?.()
+      if (body?.error) message = body.error
+    } catch { /* ignore — use generic message */ }
+    throw new Error(message)
+  }
   if (data?.error) throw new Error(data.error)
   return data
 }

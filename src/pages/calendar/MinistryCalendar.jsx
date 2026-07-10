@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingEvents, getEventTypes, getOrCreateSubscription } from '../../features/calendar'
 import { getVisibleCategoriesForDept } from '../../features/calendar/hooks/useCategoryVisibility'
+import { getHiddenSourceIdsForDept } from '../../features/calendar/lib/calendar'
 import { supabase } from '../../lib/supabase'
 import { hasPermission } from '../../lib/permissions'
 import { useToast } from '../../context/ToastContext'
@@ -35,6 +36,7 @@ export default function MinistryCalendar() {
   const [eventTypes, setEventTypes] = useState([])
   const [selectedEventTypes, setSelectedEventTypes] = useState(new Set())
   const [hiddenCategories, setHiddenCategories] = useState(null) // null = no restrictions
+  const [hiddenSourceIds, setHiddenSourceIds] = useState(new Set())
 
   async function resolveOrgId() {
     if (profile?.org_id) return profile.org_id
@@ -48,14 +50,23 @@ export default function MinistryCalendar() {
 
   async function loadDeptVisibility() {
     // Super admins see everything — skip filter.
-    if (effectiveRole === 'super_admin') { setHiddenCategories(null); return }
+    if (effectiveRole === 'super_admin') {
+      setHiddenCategories(null)
+      setHiddenSourceIds(new Set())
+      return
+    }
     try {
-      const orgId = await resolveOrgId()
+      const [orgId, hiddenSources] = await Promise.all([
+        resolveOrgId(),
+        getHiddenSourceIdsForDept(profile?.department_id ?? null),
+      ])
       const hidden = await getVisibleCategoriesForDept(orgId, profile?.department_id ?? null)
       setHiddenCategories(hidden)
+      setHiddenSourceIds(hiddenSources)
     } catch (err) {
       console.error('Failed to load dept visibility:', err)
-      setHiddenCategories(null) // fail open
+      setHiddenCategories(null)
+      setHiddenSourceIds(new Set())
     }
   }
 
@@ -165,8 +176,13 @@ export default function MinistryCalendar() {
   }
 
   const filteredEvents = events.filter((e) => {
-    if (!selectedEventTypes.has(e.event_type)) return false
-    if (hiddenCategories && hiddenCategories.has(e.event_type)) return false
+    // Google-synced events (source_id set) have event_type='event' which isn't
+    // a custom Nexus type — skip the type filter and use source visibility instead.
+    if (!e.source_id) {
+      if (!selectedEventTypes.has(e.event_type)) return false
+      if (hiddenCategories && hiddenCategories.has(e.event_type)) return false
+    }
+    if (e.source_id && hiddenSourceIds.has(e.source_id)) return false
     return true
   })
 
@@ -378,8 +394,11 @@ export default function MinistryCalendar() {
             year={year}
             month={month}
             upcomingEvents={upcoming.filter((e) => {
-              if (!selectedEventTypes.has(e.event_type)) return false
-              if (hiddenCategories && hiddenCategories.has(e.event_type)) return false
+              if (!e.source_id) {
+                if (!selectedEventTypes.has(e.event_type)) return false
+                if (hiddenCategories && hiddenCategories.has(e.event_type)) return false
+              }
+              if (e.source_id && hiddenSourceIds.has(e.source_id)) return false
               return true
             })}
             highlightedEventId={location.state?.highlightedEventId ?? null}

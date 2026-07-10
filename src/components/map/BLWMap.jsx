@@ -13,6 +13,7 @@ import { CampusPanel } from './CampusPanel'
 import { RegionalView } from './RegionalView'
 import { PrayerMode } from './PrayerMode'
 import { MapSettingsView } from './MapSettingsView'
+import { GroupStatsView } from './GroupStatsView'
 import { HubDetailsPanel } from './HubDetailsPanel'
 import '../../styles/BLWMap.css'
 import '../../styles/blw-map-parity.css'
@@ -56,6 +57,7 @@ export function BLWMap() {
   const [regionalOpen, setRegionalOpen] = useState(false)
   const [prayerOpen, setPrayerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [groupStatsOpen, setGroupStatsOpen] = useState(false)
   const [selectedHubName, setSelectedHubName] = useState(null)
 
   const canEdit = useCanEditCampus()
@@ -266,7 +268,7 @@ export function BLWMap() {
           fillOpacity: 0.06,
           interactive: true,
         })
-        circle.on('click', () => setSelectedHubName(name))
+        circle.on('click', () => { setSelectedHubName(name); setPanelOpen(false); setSelectedId(null) })
         const outerR = Math.min(Math.max(h.radius * 111000, 25000), 40000)
         const outer = L.circle([h.lat, h.lng], {
           radius: outerR,
@@ -286,7 +288,7 @@ export function BLWMap() {
           interactive: true,
           zIndexOffset: -100,
         })
-        labelEl.on('click', () => setSelectedHubName(name))
+        labelEl.on('click', () => { setSelectedHubName(name); setPanelOpen(false); setSelectedId(null) })
         hubLayersRef.current[name] = { circle, outer, label: labelEl }
       })
     }
@@ -352,6 +354,7 @@ export function BLWMap() {
       marker.on('click', () => {
         setSelectedId(c.id)
         setPanelOpen(true)
+        setSelectedHubName(null)
       })
       marker.addTo(map)
       markersRef.current[c.id] = { marker, campus: c }
@@ -399,6 +402,9 @@ export function BLWMap() {
                 </button>
               </>
             )}
+            <button className="blwp-navpill" onClick={() => setGroupStatsOpen(true)}>
+              📊 Stats
+            </button>
             <button className="blwp-navpill blwp-prayer" onClick={() => setPrayerOpen(true)}>
               🙏 Prayer
             </button>
@@ -551,6 +557,7 @@ export function BLWMap() {
       )}
 
       {settingsOpen && <MapSettingsView campuses={campuses} onClose={() => setSettingsOpen(false)} />}
+      {groupStatsOpen && <GroupStatsView campuses={campuses} onClose={() => setGroupStatsOpen(false)} />}
       {regionalOpen && <RegionalView campuses={campuses} onClose={() => setRegionalOpen(false)} />}
       {prayerOpen && <PrayerMode campuses={campuses} onClose={() => setPrayerOpen(false)} />}
     </div>

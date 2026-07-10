@@ -4,13 +4,19 @@
 // If NONE are checked the category still exists; admins should always leave at least one checked.
 
 import { useState } from 'react'
-import { Globe, Lock } from 'lucide-react'
+import { Globe, Lock, Plus, Trash2 } from 'lucide-react'
 import { useCategoryVisibility } from '../hooks/useCategoryVisibility'
+import { createEventType, deleteEventType } from '../lib/calendar'
 
 export default function CategoryVisibilityConfig() {
-  const { matrix, categories, departments, loading, error, toggleVisibility, makeOrgWide } = useCategoryVisibility()
+  const { matrix, categories, departments, loading, error, toggleVisibility, makeOrgWide, reload } = useCategoryVisibility()
   const [busyCell, setBusyCell] = useState(null)
   const [savedRow, setSavedRow] = useState(null)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatColor, setNewCatColor] = useState('#6366F1')
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(null)
 
   function isOrgWide(catName) {
     const row = matrix[catName] ?? {}
@@ -41,6 +47,35 @@ export default function CategoryVisibilityConfig() {
       // error in hook state
     } finally {
       setBusyCell((k) => (k === `orgwide:${catName}` ? null : k))
+    }
+  }
+
+  async function handleAddCategory() {
+    if (!newCatName.trim()) return
+    setSaving(true)
+    try {
+      await createEventType({ name: newCatName, color: newCatColor })
+      setNewCatName('')
+      setNewCatColor('#6366F1')
+      setShowAddForm(false)
+      await reload()
+    } catch (err) {
+      console.error('Failed to create category:', err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeleteCategory(catId, catName) {
+    if (!window.confirm(`Delete "${catName}" and all its visibility rules?`)) return
+    setDeleting(catId)
+    try {
+      await deleteEventType(catId)
+      await reload()
+    } catch (err) {
+      console.error('Failed to delete category:', err)
+    } finally {
+      setDeleting(null)
     }
   }
 
@@ -81,16 +116,80 @@ export default function CategoryVisibilityConfig() {
           <div>Create event types before configuring visibility.</div>
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
-                  Category
-                </th>
-                <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
-                  Scope
-                </th>
+        <>
+          {!showAddForm ? (
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowAddForm(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 12px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: 'var(--accent)',
+                  color: 'white',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <Plus size={14} /> Add Category
+              </button>
+            </div>
+          ) : (
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>
+                  Category Name
+                </label>
+                <input
+                  type="text"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  placeholder="e.g., Birthday"
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 12, boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>
+                  Color
+                </label>
+                <input
+                  type="color"
+                  value={newCatColor}
+                  onChange={(e) => setNewCatColor(e.target.value)}
+                  style={{ width: 40, height: 32, borderRadius: 6, border: '1px solid var(--border)', cursor: 'pointer' }}
+                />
+              </div>
+              <button
+                onClick={handleAddCategory}
+                disabled={saving || !newCatName.trim()}
+                style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: 'white', fontSize: 12, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}
+              >
+                {saving ? 'Adding...' : 'Add'}
+              </button>
+              <button
+                onClick={() => setShowAddForm(false)}
+                disabled={saving}
+                style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'white', color: 'var(--text-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+                    Category
+                  </th>
+                  <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+                    Scope
+                  </th>
                 {departments.map((dept) => (
                   <th
                     key={dept.id}
@@ -110,6 +209,9 @@ export default function CategoryVisibilityConfig() {
                     </div>
                   </th>
                 ))}
+                <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-tertiary)' }}>
+                  Delete
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -186,12 +288,35 @@ export default function CategoryVisibilityConfig() {
                         </td>
                       )
                     })}
+
+                    {/* Delete button */}
+                    <td style={{ padding: '11px 12px', textAlign: 'center' }}>
+                      <button
+                        onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                        disabled={deleting === cat.id || !!busyCell}
+                        title={`Delete ${cat.name}`}
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: 4,
+                          border: '1px solid #FECACA',
+                          background: '#FEE2E2',
+                          color: '#DC2626',
+                          cursor: deleting === cat.id ? 'not-allowed' : 'pointer',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          opacity: deleting === cat.id ? 0.6 : 1,
+                        }}
+                      >
+                        {deleting === cat.id ? 'Deleting...' : <Trash2 size={13} />}
+                      </button>
+                    </td>
                   </tr>
                 )
               })}
             </tbody>
-          </table>
-        </div>
+            </table>
+          </div>
+        </>
       )}
 
       {categories.length > 0 && (

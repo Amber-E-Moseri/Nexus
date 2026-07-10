@@ -4,9 +4,9 @@ import { ArrowLeft } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import CalendarSettingsPanel from '../../features/calendar/components/CalendarSettingsPanel'
-import { SubscriptionManager } from '../../features/calendar/components'
-import { CalendarSourcesAdminPanel } from '../../features/calendar/components'
-import { CategoryVisibilityConfig } from '../../features/calendar/components'
+import { SubscriptionManager } from '../../features/calendar/components/SubscriptionManager'
+import CalendarSourcesAdminPanel from '../../features/calendar/components/CalendarSourcesAdminPanel'
+import CategoryVisibilityConfig from '../../features/calendar/components/CategoryVisibilityConfig'
 
 // Ministry Calendar settings.
 // Super admins manage write access, iCal subscriptions, and the Google Calendar

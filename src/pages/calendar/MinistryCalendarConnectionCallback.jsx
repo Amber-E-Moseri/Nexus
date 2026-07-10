@@ -30,7 +30,7 @@ export default function MinistryCalendarConnectionCallback() {
       }
     }
 
-    if (profile !== undefined) {
+    if (profile?.id) {
       handleCallback()
     }
   }, [searchParams, profile, navigate])

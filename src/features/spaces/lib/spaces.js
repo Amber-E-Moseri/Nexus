@@ -139,7 +139,7 @@ export async function getSpaceSprints(spaceId) {
 export async function getSpaceMeetings(spaceId) {
   const { data, error } = await supabase
     .from('meetings')
-    .select('id, title, description, date, location, organizer_id, department_id, created_at, status')
+    .select('id, title, date, department_id, created_at, status')
     .eq('department_id', spaceId)
     .order('date', { ascending: false })
 

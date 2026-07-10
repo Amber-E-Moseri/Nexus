@@ -18,6 +18,7 @@ export const ACTIVITY_ACTION_LABELS = {
   pastor_assignment_changed: 'updated pastoral assignment',
   calendar_event_approved: 'approved calendar event',
   calendar_event_rejected: 'rejected calendar event',
+  campus_edit_approved: 'approved a map edit for',
 }
 
 export const ACTIVITY_ENTITY_LABELS = {
@@ -27,6 +28,7 @@ export const ACTIVITY_ENTITY_LABELS = {
   meeting: 'Meeting',
   sprint: 'Sprint',
   calendar_event: 'Calendar Event',
+  campus: 'Campus',
 }
 
 export const ACTIVITY_ENTITY_OPTIONS = [

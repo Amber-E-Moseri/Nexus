@@ -24,7 +24,7 @@ export function HubDetailsPanel({ hubName, campuses, onClose }) {
   const reachPct = hubCampuses.length ? Math.round((reached / hubCampuses.length) * 100) : 0
 
   return (
-    <div className="blw-side-panel open" style={{ zIndex: 100 }}>
+    <div className="blw-side-panel open">
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Header */}
         <div
@@ -186,10 +186,9 @@ export function HubDetailsPanel({ hubName, campuses, onClose }) {
                     />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, color: '#202124' }}>
-                        {campus.institution}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#9aa0a6', marginTop: 2 }}>
-                        {campus.campus}
+                        {campus.institution && campus.institution !== campus.campus
+                          ? `${campus.institution} — ${campus.campus}`
+                          : campus.campus || campus.institution}
                       </div>
                       <div style={{ fontSize: 10, color: '#9aa0a6', marginTop: 2 }}>
                         {campus.status}

@@ -11,20 +11,19 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../hooks/useAuth'
 import { getEventTypes } from '../lib/calendar'
 
+// Default org_id for category visibility when no explicit org exists.
+// This is a well-known UUID that allows visibility configuration to work
+// without requiring full organization setup during initial deployment.
+const DEFAULT_ORG_ID = '00000000-0000-0000-0000-000000000000'
+
 async function resolveOrgId(profile) {
   if (profile?.org_id) return profile.org_id
 
-  if (profile?.department_id) {
-    const { data } = await supabase
-      .from('departments')
-      .select('organization_id')
-      .eq('id', profile.department_id)
-      .maybeSingle()
-    if (data?.organization_id) return data.organization_id
-  }
-
-  // Don't fall back to grabbing any random organization — it may not be correct
-  return null
+  // NOTE: departments has no organization_id column (this deployment is
+  // single-tenant — confirmed in 20261108000002_fix_notify_sync_failure.sql).
+  // Selecting it 400s, so we go straight to the well-known default org, which
+  // lets visibility configuration work without full organization setup.
+  return DEFAULT_ORG_ID
 }
 
 export function useCategoryVisibility() {
@@ -40,32 +39,33 @@ export function useCategoryVisibility() {
     setLoading(true)
     setError(null)
     try {
-      const [resolvedOrg, cats, deptsResult] = await Promise.all([
-        resolveOrgId(profile),
-        getEventTypes(),
-        supabase.from('departments').select('id, name, color').order('name'),
-      ])
+      let resolvedOrg, cats, deptsResult
+
+      try {
+        resolvedOrg = await resolveOrgId(profile)
+      } catch (e) {
+        console.error('Failed to resolve org:', e)
+        resolvedOrg = null
+      }
+
+      try {
+        cats = await getEventTypes()
+      } catch (e) {
+        console.error('Failed to load event types:', e)
+        cats = []
+      }
+
+      try {
+        const result = await supabase.from('departments').select('id, name, color').order('name')
+        deptsResult = result
+      } catch (e) {
+        console.error('Failed to load departments:', e)
+        deptsResult = { data: [], error: e }
+      }
 
       const depts = deptsResult.data ?? []
       setCategories(cats)
       setDepartments(depts)
-
-      // If org_id cannot be resolved, default to org-wide (no restrictions).
-      // This allows the UI to work while org setup is in progress.
-      if (!resolvedOrg) {
-        setOrgId(null)
-        // Build matrix with all categories visible to all depts (org-wide)
-        const nextMatrix = {}
-        for (const cat of cats) {
-          nextMatrix[cat.name] = {}
-          for (const dept of depts) {
-            nextMatrix[cat.name][dept.id] = true
-          }
-        }
-        setMatrix(nextMatrix)
-        return
-      }
-
       setOrgId(resolvedOrg)
 
       // Load all dept-visibility rows for this org.
@@ -108,11 +108,6 @@ export function useCategoryVisibility() {
   useEffect(() => { load() }, [load])
 
   const toggleVisibility = useCallback(async (categoryName, deptId, currentValue) => {
-    if (!orgId) {
-      setError('Cannot configure visibility without an organization. Please contact an administrator.')
-      throw new Error('Organization not configured')
-    }
-
     const nextValue = !currentValue
 
     // Determine if this category is currently org-wide (all depts true).
@@ -186,10 +181,6 @@ export function useCategoryVisibility() {
 
   // Make a category org-wide (remove all restrictions).
   const makeOrgWide = useCallback(async (categoryName) => {
-    if (!orgId) {
-      setError('Cannot configure visibility without an organization. Please contact an administrator.')
-      throw new Error('Organization not configured')
-    }
     const { error: err } = await supabase
       .from('calendar_category_dept_visibility')
       .delete()

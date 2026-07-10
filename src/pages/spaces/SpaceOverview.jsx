@@ -359,6 +359,8 @@ const WIDGET_LABELS = {
 const DEFAULT_WIDGETS = { glance: true, metrics: true, organizer: true, activity: true, sops: true }
 
 function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings, selectedFolder, selectedList, canManage, onSelectList, onTreeDataChange }) {
+  const { profile } = useAuth()
+  const [calFeedOpen, setCalFeedOpen] = useState(false)
   const WIDGET_KEY = `nexus_overview_widgets_${space.id}`
   const [widgetConfig, setWidgetConfig] = useState(() => {
     try {
@@ -404,7 +406,16 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
         </div>
       ) : null}
 
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          title="Sync tasks to calendar"
+          onClick={() => setCalFeedOpen(true)}
+          className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)] hover:bg-[var(--surface-hover)]"
+        >
+          <CalendarDays size={13} />
+          Sync to Calendar
+        </button>
         <div className="relative">
           <button
             type="button"
@@ -541,6 +552,10 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
       ) : null}
 
       {widgetConfig.sops !== false ? <SpaceSopCard spaceId={space.id} spaceName={space.name} canManage={canManage} /> : null}
+
+      {calFeedOpen ? (
+        <GlobalTaskFeedPanel userId={profile?.id} onClose={() => setCalFeedOpen(false)} />
+      ) : null}
     </div>
   )
 }
@@ -1343,11 +1358,11 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
           <button
             type="button"
             title="Sync tasks to calendar"
+            aria-label="Sync tasks to calendar"
             onClick={() => setCalFeedOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
           >
             <CalendarDays size={14} />
-            <span>Sync to Calendar</span>
           </button>
 
           <button

@@ -49,8 +49,7 @@ export function RegionalView({ campuses, onClose }) {
       const m = L.marker([c.lat, c.lng], { icon: getIcon(c, false) })
       m.bindPopup(
         `<div style="padding:10px 12px;min-width:180px">
-          <div style="font-size:13px;font-weight:700">${c.institution}</div>
-          ${c.campus ? `<div style="font-size:11px;color:#1a73e8;font-weight:500;margin-top:1px">${c.campus}</div>` : ''}
+          <div style="font-size:13px;font-weight:700">${c.institution && c.institution !== c.campus ? `${c.institution} — ${c.campus || ''}` : c.campus || c.institution || ''}</div>
           <div style="font-size:11px;color:#5f6368;margin-top:1px">${[c.province, c.group].filter(Boolean).join(' · ')}</div>
           <div style="font-size:11px;font-weight:600;margin-top:5px;color:${c.needs_plan ? NEEDS_PLAN_COLOR : STATUS[c.status]?.color || '#888'}">
             ${c.needs_plan ? '🔷 Needs Plan' : (STATUS[c.status]?.emoji || '') + ' ' + c.status}

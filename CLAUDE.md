@@ -184,11 +184,37 @@ await supabase
 **Key Migrations:**
 - `20260618000001_configurable_task_statuses.sql` — initial status schema
 - `20260702000000_status_hierarchy_interactive_option_b.sql` — two-tier hierarchy with CHECK constraint
+- `20261224000000_fix_calendar_event_types_manage_policy.sql` — backfills `can_manage=true` and adds JWT-role fallback to event-type manage policy
+- `20261224000001_vault_upsert_secret.sql` — `vault_upsert_secret` + `vault_delete_secret` RPCs (idempotent; replaces delete-then-create pattern that caused `secrets_name_idx` collisions)
+- `20261224000002_calendar_source_dept_visibility.sql` — per-source dept visibility junction table (same semantics as category visibility: no rows = org-wide)
+- `20261224000004_fix_calendar_push_and_sync_filter.sql` — drops single-push-per-org index; allows multiple sources to have push enabled simultaneously
 
 **Before running migrations:**
 1. Test locally with `supabase start` (spins up local Postgres)
 2. Preview with `supabase db diff --name "migration_name"`
 3. Push to remote: `supabase db push`
+
+## Ministry Calendar — Google Sync Architecture
+
+**Connection model:** One shared Google account connection (`ministry_calendar_connection` singleton) covers all sources. Connecting ≠ importing — you must add calendars as sources and sync them separately.
+
+**Sources (`ministry_calendar_sources`):** Each row is a Google calendar linked to the connection. Sync pulls Google → `calendar_events` with `source_id` set and `event_type = 'event'` (not a custom Nexus type). Multiple sources can have `push_enabled = true` simultaneously.
+
+**Vault pattern — CRITICAL:** The `vault` schema is NOT exposed to PostgREST. Never use `.from('vault.secrets')` or `.schema('vault').from('secrets')` — both silently no-op. All vault access must go through SECURITY DEFINER RPCs:
+- `vault_create_secret(name, value)` — creates (errors on duplicate name)
+- `vault_upsert_secret(name, value)` — idempotent create-or-update ← **always use this**
+- `vault_get_secret(id)` — decrypt by UUID
+- `vault_delete_secret(name)` — delete by name
+
+**Event filtering:** Google-synced events (`source_id IS NOT NULL`) bypass the event-type filter in `MinistryCalendar.jsx` — they use source-level visibility (`ministry_calendar_source_dept_visibility`) instead. Only locally-created events are filtered by `selectedEventTypes` / `hiddenCategories`.
+
+**Visibility tables:**
+- `calendar_category_dept_visibility` — per-category dept access (no rows = org-wide)
+- `ministry_calendar_source_dept_visibility` — per-source dept access (no rows = org-wide)
+
+**Auth gotcha:** The OAuth callback page (`MinistryCalendarConnectionCallback`) runs its effect only when `profile?.id` is truthy. Never use `profile !== undefined` — that fires when profile is `null` (still loading) and causes a premature "user not authenticated" error followed by a re-run when the real profile loads.
+
+**calendar_permissions dual-column trap:** The table has both a text `permission` column and a boolean `can_manage` column (two migrations defined it differently). The RLS policy on `calendar_event_types` gates management on `can_manage = true`. Always ensure `can_manage = true` is set for admins — the text column alone is not enough.
 
 ## Important Notes
 

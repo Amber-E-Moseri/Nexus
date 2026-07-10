@@ -95,8 +95,11 @@ export function CampusPanel({ campus, canEdit, onClose, onSaved }) {
       {/* Header */}
       <div className="blwp-panel-head">
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="blwp-p-inst">{campus.institution}</div>
-          <div className="blwp-p-campus">{campus.campus || 'Main Campus'}</div>
+          <div className="blwp-p-inst">
+            {campus.institution && campus.institution !== campus.campus
+              ? `${campus.institution} — ${campus.campus || 'Main Campus'}`
+              : campus.campus || campus.institution || 'Main Campus'}
+          </div>
           {sub && <div className="blwp-p-meta">{sub}</div>}
         </div>
         <button className="blw-panel-close" onClick={onClose} aria-label="Close">✕</button>

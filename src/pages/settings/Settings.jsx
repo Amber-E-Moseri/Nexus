@@ -20,7 +20,7 @@ const TABS = ['Profile', 'Notifications', 'Integrations', 'Automations', 'Member
 const EXPORT_TABLE_SELECT = {
   profiles: 'id, full_name, email, department_id, role, status, created_at',
   tasks: 'id, title, description, status, status_id, priority, assignee_id, department_id, sprint_id, due_date, completed_at, created_by, created_at',
-  meetings: 'id, title, description, date, location, organizer_id, department_id, created_at, status',
+  meetings: 'id, title, date, department_id, created_at, status',
   meeting_attendance_reports: 'id, meeting_id, created_by, label, report_date, subgroup_filter, reach_pct, expected_count, attended_count, absent_count, unexpected_count, present_names, absent_names, unexpected_names, created_at',
   sprints: 'id, name, description, goal, status, start_date, end_date, department_id, created_by, created_at, archived_at, is_archived',
   sprint_members: 'id, sprint_id, user_id, role, joined_at, created_at',

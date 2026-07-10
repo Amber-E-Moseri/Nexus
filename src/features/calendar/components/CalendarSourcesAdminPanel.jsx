@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { CalendarPlus, RefreshCw, Trash2, Link as LinkIcon } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { CalendarPlus, RefreshCw, Trash2, Link as LinkIcon, Users, ChevronDown, ChevronUp } from 'lucide-react'
 import {
   getMinistryCalendarConnectionStatus,
   getMinistryCalendarConnectOAuthUrl,
@@ -11,6 +11,7 @@ import {
   removeCalendarSource,
   syncCalendarSource,
 } from '../lib/calendar'
+import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../hooks/useAuth'
 import { useToast } from '../../../context/ToastContext'
 import Toggle from './Toggle'
@@ -30,6 +31,84 @@ export default function CalendarSourcesAdminPanel() {
   const [busySourceId, setBusySourceId] = useState(null)
   const [needs_reauth, setNeedsReauth] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
+
+  // Per-source dept visibility
+  const [departments, setDepartments] = useState([])
+  const [visibilityRows, setVisibilityRows] = useState([]) // { source_id, department_id }[]
+  const [expandedSource, setExpandedSource] = useState(null) // source id with open visibility panel
+  const [visibilityBusy, setVisibilityBusy] = useState(false)
+
+  const loadVisibility = useCallback(async () => {
+    const [deptRes, visRes] = await Promise.all([
+      supabase.from('departments').select('id, name, color').order('name'),
+      supabase.from('ministry_calendar_source_dept_visibility').select('source_id, department_id'),
+    ])
+    setDepartments(deptRes.data ?? [])
+    setVisibilityRows(visRes.data ?? [])
+  }, [])
+
+  // Returns whether a dept is currently allowed to see a source.
+  // No rows for a source = org-wide = all true.
+  function isDeptAllowed(sourceId, deptId) {
+    const restricted = visibilityRows.filter(r => r.source_id === sourceId)
+    if (restricted.length === 0) return true // org-wide
+    return restricted.some(r => r.department_id === deptId)
+  }
+
+  async function handleToggleDeptVisibility(sourceId, deptId, currentlyAllowed) {
+    setVisibilityBusy(true)
+    try {
+      const restricted = visibilityRows.filter(r => r.source_id === sourceId)
+      const isOrgWide = restricted.length === 0
+
+      if (currentlyAllowed) {
+        // Removing access from this dept
+        if (isOrgWide) {
+          // Was org-wide: insert rows for all OTHER depts, leaving this one out
+          const others = departments.filter(d => d.id !== deptId)
+          if (others.length > 0) {
+            await supabase.from('ministry_calendar_source_dept_visibility')
+              .upsert(others.map(d => ({ source_id: sourceId, department_id: d.id })), { onConflict: 'source_id,department_id' })
+          }
+        } else {
+          // Already restricted: just remove this dept
+          await supabase.from('ministry_calendar_source_dept_visibility')
+            .delete().eq('source_id', sourceId).eq('department_id', deptId)
+        }
+      } else {
+        // Granting access to this dept
+        await supabase.from('ministry_calendar_source_dept_visibility')
+          .upsert({ source_id: sourceId, department_id: deptId }, { onConflict: 'source_id,department_id' })
+
+        // If all depts are now checked, delete all rows (back to org-wide)
+        const newRows = visibilityRows.filter(r => !(r.source_id === sourceId && r.department_id === deptId))
+        newRows.push({ source_id: sourceId, department_id: deptId })
+        const nowAllowed = departments.every(d =>
+          newRows.some(r => r.source_id === sourceId && r.department_id === d.id)
+        )
+        if (nowAllowed) {
+          await supabase.from('ministry_calendar_source_dept_visibility')
+            .delete().eq('source_id', sourceId)
+        }
+      }
+      await loadVisibility()
+    } catch (err) {
+      showToast(err.message || 'Failed to update visibility', { tone: 'error' })
+    } finally {
+      setVisibilityBusy(false)
+    }
+  }
+
+  async function handleMakeOrgWide(sourceId) {
+    setVisibilityBusy(true)
+    try {
+      await supabase.from('ministry_calendar_source_dept_visibility')
+        .delete().eq('source_id', sourceId)
+      await loadVisibility()
+    } finally {
+      setVisibilityBusy(false)
+    }
+  }
 
   function isReauthRequiredError(err) {
     return err?.message?.includes('reauth_required')
@@ -55,6 +134,7 @@ export default function CalendarSourcesAdminPanel() {
 
   useEffect(() => {
     load()
+    loadVisibility()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -371,61 +451,145 @@ export default function CalendarSourcesAdminPanel() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {sources.map((source) => (
-                  <div key={source.id} style={{
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '10px', borderRadius: '8px', backgroundColor: 'var(--surface-tertiary)', fontSize: '13px',
-                  }}>
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: source.color || 'var(--accent)', flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{source.display_name}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                        {source.last_sync_error
-                          ? <span style={{ color: '#DC2626' }}>Error: {source.last_sync_error}</span>
-                          : source.last_synced_at
-                            ? `Last synced ${new Date(source.last_synced_at).toLocaleString()}`
-                            : 'Never synced'}
-                        {source.is_read_only && ' · Read-only'}
+                {sources.map((source) => {
+                  const isExpanded = expandedSource === source.id
+                  const restricted = visibilityRows.filter(r => r.source_id === source.id)
+                  const isOrgWide = restricted.length === 0
+                  return (
+                    <div key={source.id} style={{
+                      borderRadius: '8px', backgroundColor: 'var(--surface-tertiary)',
+                      border: '1px solid var(--border-light)', overflow: 'hidden',
+                    }}>
+                      {/* Source row */}
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '10px', fontSize: '13px',
+                      }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: source.color || 'var(--accent)', flexShrink: 0 }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{source.display_name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                            {source.last_sync_error
+                              ? <span style={{ color: '#DC2626' }}>Error: {source.last_sync_error}</span>
+                              : source.last_synced_at
+                                ? `Last synced ${new Date(source.last_synced_at).toLocaleString()}`
+                                : 'Never synced'}
+                            {source.is_read_only && ' · Read-only'}
+                          </div>
+                        </div>
+
+                        {/* Who can see this */}
+                        <button
+                          onClick={() => setExpandedSource(isExpanded ? null : source.id)}
+                          title="Configure which departments can see this calendar"
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                            padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)',
+                            backgroundColor: isExpanded ? 'var(--accent-light)' : 'white',
+                            color: isExpanded ? 'var(--accent)' : 'var(--text-secondary)',
+                            fontSize: '11px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <Users size={11} />
+                          {isOrgWide ? 'Everyone' : `${restricted.length} dept${restricted.length !== 1 ? 's' : ''}`}
+                          {isExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                        </button>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title="Push approved events to this calendar">
+                          <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>Push</span>
+                          <Toggle
+                            checked={source.push_enabled}
+                            disabled={busySourceId === source.id || source.is_read_only}
+                            onChange={() => handleTogglePush(source)}
+                            label={`Push approved events to ${source.display_name}`}
+                          />
+                        </div>
+
+                        <button
+                          onClick={() => handleSyncNow(source)}
+                          disabled={busySourceId === source.id}
+                          title="Sync now"
+                          style={{
+                            display: 'flex', alignItems: 'center', padding: '5px',
+                            borderRadius: '6px', border: 'none', backgroundColor: 'white',
+                            color: 'var(--text-secondary)', cursor: busySourceId === source.id ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          <RefreshCw size={13} />
+                        </button>
+
+                        <button
+                          onClick={() => handleRemove(source)}
+                          disabled={busySourceId === source.id}
+                          title="Remove"
+                          style={{
+                            display: 'flex', alignItems: 'center', padding: '5px',
+                            borderRadius: '6px', border: 'none', backgroundColor: '#FEE2E2',
+                            color: '#DC2626', cursor: busySourceId === source.id ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
+
+                      {/* Department visibility panel (expands below the row) */}
+                      {isExpanded && (
+                        <div style={{
+                          padding: '10px 14px 12px',
+                          borderTop: '1px solid var(--border-light)',
+                          backgroundColor: 'white',
+                        }}>
+                          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px' }}>
+                            Who can see this calendar
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                            {departments.map((dept) => {
+                              const allowed = isDeptAllowed(source.id, dept.id)
+                              return (
+                                <label
+                                  key={dept.id}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    padding: '4px 10px', borderRadius: '20px', cursor: visibilityBusy ? 'not-allowed' : 'pointer',
+                                    border: `1px solid ${allowed ? 'var(--accent)' : 'var(--border)'}`,
+                                    backgroundColor: allowed ? 'var(--accent-light)' : 'white',
+                                    fontSize: '12px', fontWeight: 500,
+                                    color: allowed ? 'var(--accent)' : 'var(--text-secondary)',
+                                    opacity: visibilityBusy ? 0.6 : 1,
+                                    userSelect: 'none',
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={allowed}
+                                    disabled={visibilityBusy}
+                                    onChange={() => handleToggleDeptVisibility(source.id, dept.id, allowed)}
+                                    style={{ display: 'none' }}
+                                  />
+                                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: dept.color ? `#${dept.color.replace('#','')}` : 'var(--accent)', flexShrink: 0 }} />
+                                  {dept.name}
+                                </label>
+                              )
+                            })}
+                          </div>
+                          {!isOrgWide && (
+                            <button
+                              onClick={() => handleMakeOrgWide(source.id)}
+                              disabled={visibilityBusy}
+                              style={{
+                                fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)',
+                                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                                textDecoration: 'underline',
+                              }}
+                            >
+                              Reset to visible to everyone
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title="Push approved events to this calendar">
-                      <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>Push</span>
-                      <Toggle
-                        checked={source.push_enabled}
-                        disabled={busySourceId === source.id || source.is_read_only}
-                        onChange={() => handleTogglePush(source)}
-                        label={`Push approved events to ${source.display_name}`}
-                      />
-                    </div>
-
-                    <button
-                      onClick={() => handleSyncNow(source)}
-                      disabled={busySourceId === source.id}
-                      title="Sync now"
-                      style={{
-                        display: 'flex', alignItems: 'center', padding: '5px',
-                        borderRadius: '6px', border: 'none', backgroundColor: 'white',
-                        color: 'var(--text-secondary)', cursor: busySourceId === source.id ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      <RefreshCw size={13} />
-                    </button>
-
-                    <button
-                      onClick={() => handleRemove(source)}
-                      disabled={busySourceId === source.id}
-                      title="Remove"
-                      style={{
-                        display: 'flex', alignItems: 'center', padding: '5px',
-                        borderRadius: '6px', border: 'none', backgroundColor: '#FEE2E2',
-                        color: '#DC2626', cursor: busySourceId === source.id ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </>

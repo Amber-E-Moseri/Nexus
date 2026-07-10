@@ -146,15 +146,14 @@ export function CampusDetailModal({ campus, isOpen, onClose }) {
           <div className="campus-modal-header">
             <div className="campus-modal-header-content">
               <Dialog.Title className="campus-modal-title">
-                {isEditing ? 'Edit Campus' : campus?.name || campus?.institution}
+                {isEditing
+                  ? 'Edit Campus'
+                  : campus?.institution && campus.institution !== campus?.name
+                    ? `${campus.institution} — ${campus.name}`
+                    : campus?.name || campus?.institution}
               </Dialog.Title>
-              {!isEditing && campus && (
-                <>
-                  {campus.institution && campus.name !== campus.institution && (
-                    <p className="campus-modal-subtitle">{campus.institution}</p>
-                  )}
-                  {campus.hub && <p className="campus-modal-hub">📍 {campus.hub}</p>}
-                </>
+              {!isEditing && campus?.hub && (
+                <p className="campus-modal-hub">📍 {campus.hub}</p>
               )}
             </div>
             <div className="campus-modal-actions">

@@ -287,41 +287,44 @@ export default function CalendarSidebar({
       <motion.div variants={sectionEnter} style={{ paddingBottom: 6 }}>
         <SectionLabel>Event Types</SectionLabel>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {eventTypes.map((type) => (
-            <motion.label
-              key={type}
-              initial={{ backgroundColor: HOVER_BG_OFF }}
-              whileHover={{ backgroundColor: HOVER_BG }}
-              transition={{ duration: 0.13 }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 9,
-                padding: '5px 14px',
-                minHeight: 28,
-                cursor: 'pointer',
-                fontSize: 13,
-                color: 'var(--text-primary)',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={selectedEventTypes.has(type)}
-                onChange={(e) => onToggleType(type, e.target.checked)}
-                style={{ cursor: 'pointer', accentColor: 'var(--accent)', width: 13, height: 13, margin: 0, flexShrink: 0 }}
-              />
-              <span
+          {eventTypes.map((type) => {
+            const typeName = typeof type === 'string' ? type : type.name
+            return (
+              <motion.label
+                key={typeName}
+                initial={{ backgroundColor: HOVER_BG_OFF }}
+                whileHover={{ backgroundColor: HOVER_BG }}
+                transition={{ duration: 0.13 }}
                 style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  backgroundColor: EVENT_COLORS[type],
-                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 9,
+                  padding: '5px 14px',
+                  minHeight: 28,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  color: 'var(--text-primary)',
                 }}
-              />
-              <span style={{ textTransform: 'capitalize', flex: 1, fontWeight: 450 }}>{type}</span>
-            </motion.label>
-          ))}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedEventTypes.has(typeName)}
+                  onChange={(e) => onToggleType(typeName, e.target.checked)}
+                  style={{ cursor: 'pointer', accentColor: 'var(--accent)', width: 13, height: 13, margin: 0, flexShrink: 0 }}
+                />
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    backgroundColor: EVENT_COLORS[typeName],
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ textTransform: 'capitalize', flex: 1, fontWeight: 450 }}>{typeName}</span>
+              </motion.label>
+            )
+          })}
         </div>
       </motion.div>
 

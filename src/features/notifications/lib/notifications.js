@@ -144,6 +144,8 @@ export const NOTIFICATION_TYPES = {
   event_approval_pending: { label: 'Calendar event awaiting approval', icon: '📅', description: 'When a calendar event needs your approval' },
   event_approved: { label: 'Calendar event approved', icon: '✅', description: 'When your calendar event is approved' },
   event_rejected: { label: 'Calendar event rejected', icon: '❌', description: 'When your calendar event is rejected' },
+  campus_edit_approved: { label: 'Map edit approved', icon: '✅', description: 'When your campus map edit is approved' },
+  campus_edit_rejected: { label: 'Map edit rejected', icon: '❌', description: 'When your campus map edit is rejected' },
   meeting_reminder: { label: 'Meeting reminder', icon: '🔔', description: 'Reminder 1 hour before a meeting' },
   system: { label: 'System notification', icon: '🔔', description: 'Important system-wide announcements' },
   calendar_sync_failure: { label: 'Calendar sync failed', icon: '⚠️', description: 'When the Google Calendar sync fails for a space you manage' },
@@ -262,6 +264,10 @@ export function formatNotificationMessage(notification) {
       return `Your event "${payload.event_title ?? 'Untitled'}" was approved`
     case 'event_rejected':
       return `Your event "${payload.event_title ?? 'Untitled'}" was rejected`
+    case 'campus_edit_approved':
+      return `Your edit to "${payload.campus_name ?? 'a campus'}" (${payload.field_name ?? 'field'}) was approved`
+    case 'campus_edit_rejected':
+      return `Your edit to "${payload.campus_name ?? 'a campus'}" was rejected${payload.notes ? `: ${payload.notes}` : ''}`
     case 'calendar_sync_failure':
       return `Google Calendar sync failed: ${payload.error_message ?? 'unknown error'}`
     case 'system':
