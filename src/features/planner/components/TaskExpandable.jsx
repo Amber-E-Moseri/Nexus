@@ -1,7 +1,7 @@
 import { useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { BORDER, MUTED, PRIORITY_DOT, TEXT, spaceColor } from '../lib/plannerTheme'
+import { BORDER, MUTED, PRIORITY_DOT, TEXT, spaceColor, BG } from '../lib/plannerTheme'
 
 // Sidebar task row: draggable into the grid, expandable to reveal subtasks
 // (which are themselves draggable). Subtasks load lazily on first expand.
@@ -34,14 +34,14 @@ export default function TaskExpandable({
           display: 'flex',
           alignItems: 'center',
           gap: 6,
-          background: '#fff',
+          background: 'white',
           border: `1px solid ${BORDER}`,
           borderRadius: 8,
           padding: isSubtask ? '5px 8px' : '7px 9px',
           marginLeft: isSubtask ? 18 : 0,
           cursor: 'grab',
           userSelect: 'none',
-          boxShadow: '0 1px 2px rgba(28,22,16,.04)',
+          boxShadow: 'var(--card-shadow)',
         }}
       >
         {!isSubtask && subtaskCount > 0 && (
@@ -72,7 +72,7 @@ export default function TaskExpandable({
             onClick={(e) => { e.stopPropagation(); onToggleExpand(task) }}
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
-            style={{ border: `1px solid ${BORDER}`, background: '#F4F1EA', color: MUTED, fontSize: 9.5, fontWeight: 700, borderRadius: 5, padding: '0 5px', cursor: 'pointer', flexShrink: 0 }}
+            style={{ border: `1px solid ${BORDER}`, background: BG, color: MUTED, fontSize: 9.5, fontWeight: 700, borderRadius: 5, padding: '0 5px', cursor: 'pointer', flexShrink: 0 }}
           >
             [{subtaskCount}]
           </button>

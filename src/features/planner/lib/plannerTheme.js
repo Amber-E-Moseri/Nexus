@@ -1,13 +1,17 @@
-// Shared visual constants for the time-blocking Planner, matching the
-// existing Nexus palette used by the legacy Planner.
-export const PRIMARY = '#4C2A92'
-export const BORDER = '#EDE8DC'
-export const TEXT = '#2D2A22'
-export const MUTED = '#9E9488'
-export const BG = '#F4F1EA'
-export const SLOT_HOVER = '#EDE8F8'
+// Design tokens for the time-blocking Planner, using CSS variables from the system design.
+export const PRIMARY = 'var(--accent)'
+export const BORDER = 'var(--border)'
+export const TEXT = 'var(--text-primary)'
+export const MUTED = 'var(--text-secondary)'
+export const BG = 'var(--bg-app)'
+export const SLOT_HOVER = 'var(--accent-light)'
 
-export const PRIORITY_DOT = { urgent: '#C94830', high: '#E8A020', medium: '#4C2A92', low: '#9E9488' }
+export const PRIORITY_DOT = {
+  urgent: '#C94830',
+  high: '#E8A020',
+  medium: 'var(--accent)',
+  low: 'var(--text-secondary)'
+}
 
 export const HOUR_HEIGHT = 60 // px per hour row
 export const DAY_START_HOUR = 6 // 6 AM (user-configurable in Phase 2)

@@ -51,7 +51,7 @@ function AllDayCell({ dateISO, blocks, taskById, severityByBlockId, onBlockClick
               fontSize: 10.5,
               fontWeight: 600,
               color: TEXT,
-              background: '#fff',
+              background: 'white',
               border: `1px solid ${BORDER}`,
               borderLeft: `3px solid ${severityByBlockId[b.id] ? '#C94830' : PRIMARY}`,
               borderRadius: 5,
@@ -109,7 +109,7 @@ export default function PlannerGrid({
           const iso = toISODate(d)
           const isToday = iso === todayISO
           return (
-            <div key={iso} style={{ flex: 1, minWidth: 0, textAlign: 'center', padding: '8px 0 6px', borderLeft: `1px solid ${BORDER}`, background: isToday ? '#F6F2FE' : 'transparent' }}>
+            <div key={iso} style={{ flex: 1, minWidth: 0, textAlign: 'center', padding: '8px 0 6px', borderLeft: `1px solid ${BORDER}`, background: isToday ? SLOT_HOVER : 'transparent' }}>
               <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: isToday ? PRIMARY : MUTED }}>
                 {DAY_NAMES[d.getDay()]}
               </div>
@@ -144,7 +144,7 @@ export default function PlannerGrid({
       <div style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
         {timeBlocks.length === 0 && (
           <div style={{ position: 'absolute', top: 18, left: 0, right: 0, textAlign: 'center', pointerEvents: 'none', zIndex: 2 }}>
-            <span style={{ background: '#F6F2FE', color: PRIMARY, fontSize: 12, fontWeight: 600, borderRadius: 999, padding: '6px 14px' }}>
+            <span style={{ background: SLOT_HOVER, color: PRIMARY, fontSize: 12, fontWeight: 600, borderRadius: 999, padding: '6px 14px' }}>
               No time blocks yet. Drag a task from the sidebar to get started.
             </span>
           </div>
@@ -169,7 +169,7 @@ export default function PlannerGrid({
             const nowMin = now.getHours() * 60 + now.getMinutes()
             const showNowLine = isToday && nowMin >= gridTop && nowMin < DAY_END_HOUR * 60
             return (
-              <div key={iso} style={{ flex: 1, minWidth: 0, position: 'relative', borderLeft: `1px solid ${BORDER}`, background: isToday ? '#FBF9FF' : 'transparent' }}>
+              <div key={iso} style={{ flex: 1, minWidth: 0, position: 'relative', borderLeft: `1px solid ${BORDER}`, background: isToday ? SLOT_HOVER : 'transparent' }}>
                 {HOURS.map((h) => (
                   <DroppableSlot key={h} id={`slot:${iso}:${h}`} height={HOUR_HEIGHT} borderTop={`1px solid ${BORDER}`} />
                 ))}

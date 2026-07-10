@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import TaskExpandable from './TaskExpandable'
 import WinsSheet from '../../wins/components/WinsSheet'
-import { BORDER, MUTED, PRIMARY, PRIORITY_DOT, TEXT } from '../lib/plannerTheme'
+import { BORDER, MUTED, PRIMARY, PRIORITY_DOT, TEXT, SLOT_HOVER } from '../lib/plannerTheme'
 
 function TaskGroup({ name, count, defaultOpen, children }) {
   const [open, setOpen] = useState(defaultOpen)
@@ -24,7 +24,7 @@ function TaskGroup({ name, count, defaultOpen, children }) {
 
 function KpiTile({ label, value, accent }) {
   return (
-    <div style={{ flex: '1 1 45%', background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '8px 10px' }}>
+    <div style={{ flex: '1 1 45%', background: 'white', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '8px 10px' }}>
       <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: MUTED }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 800, color: accent, marginTop: 2, lineHeight: 1 }}>{value}</div>
     </div>
@@ -68,7 +68,7 @@ export default function PlannerSidebar({
                 alignItems: 'center',
                 gap: 5,
                 border: `1px solid ${priorityFilter.has(p) ? PRIMARY : BORDER}`,
-                background: priorityFilter.has(p) ? '#F6F2FE' : '#fff',
+                background: priorityFilter.has(p) ? SLOT_HOVER : 'white',
                 borderRadius: 999,
                 padding: '3px 9px',
                 fontSize: 10.5,
@@ -129,7 +129,7 @@ export default function PlannerSidebar({
       </div>
 
       {/* Weekly wins / testimonies (department-shared, follows visible week) */}
-      <div style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '8px 10px' }}>
+      <div style={{ background: 'white', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '8px 10px' }}>
         <button
           type="button"
           onClick={() => setWinsOpen((o) => !o)}

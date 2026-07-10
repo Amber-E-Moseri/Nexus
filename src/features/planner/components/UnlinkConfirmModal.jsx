@@ -12,7 +12,7 @@ export default function UnlinkConfirmModal({ subtaskTitle, parentTitle, onUnlink
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ background: '#fff', borderRadius: 16, padding: 24, width: 420, maxWidth: '90vw', border: `1px solid ${BORDER}`, boxShadow: '0 12px 32px rgba(28,22,16,.18)' }}
+        style={{ background: 'white', borderRadius: 16, padding: 24, width: 420, maxWidth: '90vw', border: `1px solid ${BORDER}`, boxShadow: 'var(--shadow-lg)' }}
       >
         <div style={{ fontSize: 16, fontWeight: 700, color: TEXT, marginBottom: 8 }}>Unlink subtask?</div>
         <div style={{ fontSize: 13, color: TEXT, marginBottom: 4 }}>
@@ -34,6 +34,6 @@ export default function UnlinkConfirmModal({ subtaskTitle, parentTitle, onUnlink
 function btnStyle(kind) {
   const base = { borderRadius: 8, padding: '8px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }
   if (kind === 'primary') return { ...base, background: PRIMARY, color: '#fff', border: `1px solid ${PRIMARY}` }
-  if (kind === 'secondary') return { ...base, background: '#fff', color: PRIMARY, border: `1px solid ${PRIMARY}` }
+  if (kind === 'secondary') return { ...base, background: 'white', color: PRIMARY, border: `1px solid ${PRIMARY}` }
   return { ...base, background: 'transparent', color: MUTED, border: '1px solid transparent' }
 }

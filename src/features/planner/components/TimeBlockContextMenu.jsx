@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BORDER, MUTED, TEXT } from '../lib/plannerTheme'
+import { BORDER, MUTED, TEXT, BG } from '../lib/plannerTheme'
 import { minutesToTime, parseTimeToMinutes, MINUTES_PER_DAY } from '../lib/timeBlockUtils'
 
 const DURATIONS = [
@@ -54,10 +54,10 @@ export default function TimeBlockContextMenu({ x, y, block, onSetDuration, onDel
         top: Math.min(y, window.innerHeight - 320),
         left: Math.min(x, window.innerWidth - 200),
         zIndex: 400,
-        background: '#fff',
+        background: 'white',
         border: `1px solid ${BORDER}`,
         borderRadius: 10,
-        boxShadow: '0 8px 24px rgba(28,22,16,.16)',
+        boxShadow: 'var(--shadow-lg)',
         padding: '6px 0',
         width: 180,
       }}
@@ -73,7 +73,7 @@ export default function TimeBlockContextMenu({ x, y, block, onSetDuration, onDel
               type="button"
               role="menuitem"
               style={itemStyle}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#F4F1EA' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = BG }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
               onClick={() => {
                 const start = parseTimeToMinutes(block.scheduled_start_time)
@@ -93,7 +93,7 @@ export default function TimeBlockContextMenu({ x, y, block, onSetDuration, onDel
             style={{ ...itemStyle, color: MUTED, cursor: 'default' }}
           >
             Sync to calendar
-            <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, background: '#F4F1EA', borderRadius: 4, padding: '1px 5px' }}>SOON</span>
+            <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, background: BG, borderRadius: 4, padding: '1px 5px' }}>SOON</span>
           </button>
           <button
             type="button"

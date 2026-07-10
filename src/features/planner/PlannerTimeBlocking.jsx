@@ -382,14 +382,14 @@ export default function PlannerTimeBlocking() {
 
         <DragOverlay dropAnimation={null}>
           {dragTask ? (
-            <div style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 8, padding: '7px 10px', fontSize: 12.5, fontWeight: 600, color: TEXT, boxShadow: '0 6px 18px rgba(28,22,16,.18)', width: 200 }}>
+            <div style={{ background: 'white', border: `1px solid ${BORDER}`, borderRadius: 8, padding: '7px 10px', fontSize: 12.5, fontWeight: 600, color: TEXT, boxShadow: 'var(--shadow)', width: 200 }}>
               {dragTask.title}
             </div>
           ) : null}
         </DragOverlay>
       </DndContext>
 
-      {tasksLoading && <div style={{ position: 'fixed', bottom: 16, right: 20, fontSize: 11.5, color: '#9E9488' }}>Loading tasks…</div>}
+      {tasksLoading && <div style={{ position: 'fixed', bottom: 16, right: 20, fontSize: 11.5, color: MUTED }}>Loading tasks…</div>}
 
       {unlinkPrompt && (
         <UnlinkConfirmModal

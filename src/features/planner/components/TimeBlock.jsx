@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
-import { HOUR_HEIGHT, PRIORITY_DOT, spaceColor, TEXT } from '../lib/plannerTheme'
+import { HOUR_HEIGHT, PRIORITY_DOT, spaceColor, TEXT, MUTED } from '../lib/plannerTheme'
 import { SEVERITY_COLOR } from '../lib/warningEngine'
 import {
   blockDurationMinutes,
@@ -99,7 +99,7 @@ export default function TimeBlock({ block, task, severity, linked, style, onClic
         {linked && <span title="Linked to parent block" style={{ fontSize: 9, flexShrink: 0 }}>🔗</span>}
       </div>
       {previewDuration >= 30 && (
-        <div style={{ fontSize: 10, color: '#6B6355', marginTop: 1 }}>
+        <div style={{ fontSize: 10, color: MUTED, marginTop: 1 }}>
           {formatTimeRange(block.scheduled_start_time, resizeDelta === null ? block.scheduled_end_time : endPreview)}
         </div>
       )}
