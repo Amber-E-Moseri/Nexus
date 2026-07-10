@@ -2,7 +2,6 @@
 import {
   Archive,
   Bell,
-  BookOpen,
   CalendarDays,
   Check,
   ChevronDown,
@@ -37,7 +36,6 @@ import { supabase } from '../../lib/supabase'
 import { FLOCK_CRM_CONFIG, hasSpaceRole } from '../../lib/permissions.js'
 import { INSTAGRAM_GRADING_ENABLED } from '../../config/features.js'
 import SidebarSpaceTree from './SidebarSpaceTree'
-import SpaceSopModal, { sopIcon } from './SpaceSopModal'
 import SpaceModal from '../../features/spaces/components/SpaceModal'
 import SprintModal from '../../features/sprints/components/SprintModal'
 import { useSprints } from '../../features/sprints/SprintsContext'
@@ -225,112 +223,6 @@ const EmojiGlyph = memo(function EmojiGlyph({ emoji }) {
   )
 })
 
-
-const SpaceSopInline = memo(function SpaceSopInline({ spaceId, sops, expanded, onToggle, onManage, canManage }) {
-  if (sops.length === 0 && !canManage) return null
-
-  return (
-    <div style={{ marginLeft: 12, marginBottom: 4 }}>
-      <button
-        type="button"
-        onClick={onToggle}
-        style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 5,
-          padding: '3px 8px',
-          border: 'none',
-          background: 'none',
-          cursor: 'pointer',
-          color: 'var(--ink-3)',
-          fontSize: 11,
-          fontFamily: 'inherit',
-          borderRadius: 5,
-          textAlign: 'left',
-        }}
-      >
-        <motion.span
-          animate={{ rotate: expanded ? 90 : 0 }}
-          transition={{ type: 'spring', stiffness: 480, damping: 32 }}
-          style={{ display: 'inline-flex', flexShrink: 0 }}
-        >
-          <ChevronRight size={12} />
-        </motion.span>
-        <BookOpen size={11} style={{ flexShrink: 0, color: 'var(--ink-3)' }} />
-        <span style={{ fontWeight: 500 }}>SOPs</span>
-        {sops.length > 0 ? <span style={{ marginLeft: 3, background: 'rgba(76,42,146,0.10)', color: '#4C2A92', borderRadius: 4, padding: '0 4px', fontSize: 10, fontWeight: 700 }}>{sops.length}</span> : null}
-        {canManage && sops.length === 0 ? <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--ink-3)', fontStyle: 'italic' }}>Add</span> : null}
-      </button>
-      <AnimatePresence initial={false}>
-        {expanded ? (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 36 }}
-            style={{ overflow: 'hidden' }}
-          >
-            {sops.map((sop) => (
-              <a
-                key={sop.id}
-                href={sop.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={sop.url}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 7,
-                  paddingLeft: 28,
-                  padding: '4px 8px 4px 28px',
-                  borderRadius: 6,
-                  marginBottom: 1,
-                  textDecoration: 'none',
-                  color: 'var(--ink-2)',
-                  fontSize: 11,
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(237,232,248,1)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-              >
-                {sopIcon(sop.file_type, 11)}
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sop.title}</span>
-              </a>
-            ))}
-            {canManage ? (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onManage() }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  paddingLeft: 28,
-                  padding: '3px 8px 3px 28px',
-                  border: 'none',
-                  background: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--ink-3)',
-                  fontSize: 10,
-                  fontFamily: 'inherit',
-                  borderRadius: 5,
-                  width: '100%',
-                  textAlign: 'left',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#4C2A92' }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--ink-3)' }}
-              >
-                <Plus size={10} />
-                Manage SOPs
-              </button>
-            ) : null}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </div>
-  )
-})
-
 export default function Sidebar() {
   const { profile, role, signOut } = useAuth()
   const { inboxCount } = useInboxCount()
@@ -364,9 +256,6 @@ export default function Sidebar() {
   const [spaceActionsOpenId, setSpaceActionsOpenId] = useState(null)
   const [openSpaceMenuId, setOpenSpaceMenuId] = useState(null)
   const [toolsExpanded, setToolsExpanded] = useState(false)
-  const [sopModalSpaceId, setSopModalSpaceId] = useState(null)
-  const [spaceSops, setSpaceSops] = useState({})
-  const [expandedSops, setExpandedSops] = useState({})
   const [hiddenSpaceIds, setHiddenSpaceIds] = useState(() => {
     // Defer to profile load, will initialize after
     return []
@@ -395,33 +284,11 @@ export default function Sidebar() {
     setSpaceGroups(groups)
   }
 
-  async function loadSpaceSops(spaceIds) {
-    if (!spaceIds || spaceIds.length === 0) return
-    const { data } = await supabase
-      .from('space_sops')
-      .select('*')
-      .in('space_id', spaceIds)
-      .order('sort_order')
-    if (data) {
-      const bySpace = {}
-      for (const sop of data) {
-        if (!bySpace[sop.space_id]) bySpace[sop.space_id] = []
-        bySpace[sop.space_id].push(sop)
-      }
-      setSpaceSops(bySpace)
-    }
-  }
-
   useEffect(() => {
     loadSpaces().catch((error) => {
       console.error('Failed to load spaces', error)
     })
   }, [profile?.department_id, profile?.id, role])
-
-  useEffect(() => {
-    const ids = SPACE_GROUPS.flatMap((g) => spaceGroups[g] ?? []).map((s) => s.id)
-    loadSpaceSops(ids).catch(console.error)
-  }, [spaceGroups])
 
   useEffect(() => {
     if (profile?.id) {
@@ -946,13 +813,6 @@ export default function Sidebar() {
                           <span>Task Statuses</span>
                         </DropdownMenu.Item>
                         <DropdownMenu.Item
-                          onSelect={() => setSopModalSpaceId(space.id)}
-                          className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
-                        >
-                          <BookOpen size={14} />
-                          <span>Manage SOPs</span>
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
                           onSelect={() => handleHideSpace(space.id)}
                           className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                         >
@@ -1043,14 +903,6 @@ export default function Sidebar() {
               </motion.div>
             ) : null}
             <SidebarSpaceTree spaceId={space.id} spaceName={space.name} isActive={isPathActive(location.pathname, `/spaces/${space.id}`)} />
-            <SpaceSopInline
-              spaceId={space.id}
-              sops={spaceSops[space.id] ?? []}
-              expanded={expandedSops[space.id] ?? false}
-              onToggle={() => setExpandedSops((s) => ({ ...s, [space.id]: !s[space.id] }))}
-              onManage={() => setSopModalSpaceId(space.id)}
-              canManage={canManageSpaces}
-            />
           </div>
         ))}
         {archivedSpaces.length > 0 ? (
@@ -1509,71 +1361,6 @@ export default function Sidebar() {
             </>
           ) : null
         })()}
-        {(() => {
-          const allSops = Object.values(spaceSops).flat()
-          if (allSops.length === 0) return null
-          const showCollapse = allSops.length > 3
-          return (
-            <>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  fontSize: 10,
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  color: '#9E9488',
-                  margin: '8px 0 4px',
-                  cursor: showCollapse ? 'pointer' : 'default',
-                }}
-                onClick={() => showCollapse && setToolsExpanded((v) => !v)}
-              >
-                <span>SOPs</span>
-                {showCollapse && (
-                  <ChevronDown
-                    size={12}
-                    style={{
-                      transform: toolsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.15s',
-                    }}
-                  />
-                )}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 4 }}>
-                {allSops.map((sop, idx) => {
-                  if (showCollapse && !toolsExpanded && idx >= 3) return null
-                  return (
-                    <a
-                      key={sop.id}
-                      href={sop.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={sop.title}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '5px 8px',
-                        borderRadius: 6,
-                        textDecoration: 'none',
-                        color: 'var(--ink-2)',
-                        fontSize: 12,
-                        fontWeight: 500,
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(237,232,248,1)' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                    >
-                      {sopIcon(sop.file_type, 12)}
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sop.title}</span>
-                    </a>
-                  )
-                })}
-              </div>
-            </>
-          )
-        })()}
         <SidebarItem
           active={isPathActive(location.pathname, '/help')}
           icon={HelpCircle}
@@ -1673,18 +1460,6 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {sopModalSpaceId ? (
-        <SpaceSopModal
-          spaceId={sopModalSpaceId}
-          spaceName={displaySpaces.find((s) => s.id === sopModalSpaceId)?.name ?? ''}
-          userId={profile?.id}
-          onClose={() => {
-            setSopModalSpaceId(null)
-            const ids = SPACE_GROUPS.flatMap((g) => spaceGroups[g] ?? []).map((s) => s.id)
-            loadSpaceSops(ids).catch(console.error)
-          }}
-        />
-      ) : null}
       {showSpaceModal ? <SpaceModal onSaved={loadSpaces} onClose={() => setShowSpaceModal(false)} /> : null}
       {editingSpace ? <SpaceModal mode="edit" space={editingSpace} onSaved={async () => { setEditingSpace(null); await loadSpaces() }} onClose={() => setEditingSpace(null)} /> : null}
       {showSprintModal ? (

@@ -29,8 +29,10 @@ import { TasksProvider, useTasks } from '../../features/tasks/TasksContext'
 import { useTaskFilters } from '../../features/tasks/hooks/useTaskFilters'
 import { mergeTaskFieldSettings, normalizeTaskFieldSettings, TASK_FIELD_OPTIONS } from '../../lib/taskFieldSettings'
 import FileList from '../../components/files/FileList'
+import { supabase } from '../../lib/supabase'
+import SpaceSopModal, { sopIcon } from '../../components/layout/SpaceSopModal'
 
-const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Sprints', 'Meetings', 'Automations', 'Members']
+const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Meetings', 'Automations', 'Members']
 
 const STATUS_ACCENT = {
   open: '#C9BEAD',
@@ -273,7 +275,80 @@ function TaskFieldSettingsEditor({ value, onChange }) {
   )
 }
 
-function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings, selectedFolder, selectedList }) {
+function SpaceSopCard({ spaceId, spaceName, canManage }) {
+  const { profile } = useAuth()
+  const [sops, setSops] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
+
+  async function loadSops() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('space_sops')
+      .select('*')
+      .eq('space_id', spaceId)
+      .order('sort_order')
+    setSops(data ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    loadSops().catch(() => setSops([]))
+  }, [spaceId])
+
+  return (
+    <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="text-lg font-semibold text-[var(--text-primary)]">SOPs &amp; Resources</div>
+        {canManage ? (
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]"
+          >
+            Manage
+          </button>
+        ) : null}
+      </div>
+
+      {loading ? (
+        <div className="text-sm text-[var(--text-tertiary)]">Loading…</div>
+      ) : sops.length === 0 ? (
+        <div className="rounded-[18px] border border-dashed border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-8 text-center text-sm text-[var(--text-tertiary)]">
+          {canManage ? 'No SOPs yet. Click "Manage" to add standard operating procedures and resources for this space.' : 'No SOPs yet.'}
+        </div>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {sops.map((sop) => (
+            <a
+              key={sop.id}
+              href={sop.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={sop.url}
+              className="flex items-center gap-2.5 rounded-[14px] border border-[var(--border)] bg-[var(--surface-tertiary)] px-3.5 py-2.5 text-sm text-[var(--text-primary)] transition-colors hover:border-[var(--accent)] hover:bg-[var(--accent-light)]"
+            >
+              {sopIcon(sop.file_type, 15)}
+              <span className="flex-1 truncate font-medium">{sop.title}</span>
+              <span className="text-xs text-[var(--text-tertiary)]">↗</span>
+            </a>
+          ))}
+        </div>
+      )}
+
+      {modalOpen ? (
+        <SpaceSopModal
+          spaceId={spaceId}
+          spaceName={spaceName}
+          userId={profile?.id}
+          onClose={() => { setModalOpen(false); loadSops().catch(() => {}) }}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings, selectedFolder, selectedList, canManage }) {
   const mediaSpace = isMediaDepartment(space)
   const activeSprints = mediaSpace ? 0 : sprints.filter((sprint) => sprint.status === 'active').length
   const effectiveListsCount = mediaSpace ? 0 : listsCount
@@ -387,6 +462,8 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
           </div>
         </div>
       </section>
+
+      <SpaceSopCard spaceId={space.id} spaceName={space.name} canManage={canManage} />
     </div>
   )
 }
@@ -1433,7 +1510,7 @@ export default function SpaceOverview() {
 
   const tabContent = (
     <>
-      {activeTab === 'Overview' ? <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}><SpaceOverviewTab space={space} listsCount={listsCount} members={spaceMembers} tasks={overviewTasks} sprints={spaceSprints} meetings={spaceMeetings} selectedFolder={selectedFolder} selectedList={selectedList} /></div> : null}
+      {activeTab === 'Overview' ? <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}><SpaceOverviewTab space={space} listsCount={listsCount} members={spaceMembers} tasks={overviewTasks} sprints={spaceSprints} meetings={spaceMeetings} selectedFolder={selectedFolder} selectedList={selectedList} canManage={canManage} /></div> : null}
       {activeTab === 'Board' ? <div role="tabpanel" id="tabpanel-board" aria-labelledby="tab-board" tabIndex={0}><TasksProvider departmentId={spaceId}><SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="kanban" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} /></TasksProvider></div> : null}
       {activeTab === 'List' ? <div role="tabpanel" id="tabpanel-list" aria-labelledby="tab-list" tabIndex={0}><TasksProvider departmentId={spaceId}><SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="list" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} /></TasksProvider></div> : null}
       {activeTab === 'Calendar' ? (
