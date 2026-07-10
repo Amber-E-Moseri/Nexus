@@ -39,7 +39,11 @@ const FAQ_SECTIONS = [
       },
       {
         q: 'What is Planner for?',
-        a: 'Planner is a super_admin-only cross-team scheduling view for laying out work across departments and sprints at a glance.',
+        a: 'Planner is a super_admin-only cross-team scheduling view for laying out work across departments and sprints at a glance. It also includes a Weekly Wins board where teams log highlight achievements each week — visible to leadership without digging into task lists.',
+      },
+      {
+        q: 'What are Task Followers?',
+        a: 'Any team member can follow a task to stay updated on it without being the assignee. Followers receive activity-feed notifications when the task is updated, commented on, or status-changed. Add or remove yourself via the task detail panel.',
       },
     ],
   },
@@ -138,6 +142,10 @@ const FAQ_SECTIONS = [
         a: 'Use the subscription manager to pick which calendar categories sync to your personal view or connected external calendar, instead of seeing every region-wide event.',
       },
       {
+        q: 'Can I subscribe to the calendar in Apple Calendar, Google Calendar, or Outlook?',
+        a: 'Yes — NEXUS generates a personal iCal feed URL you can paste into any calendar app that supports iCal subscriptions. The feed auto-updates as events are added or changed. Regenerate the token any time from your Calendar settings if you need to revoke a shared link.',
+      },
+      {
         q: 'Where are calendar admin settings?',
         a: 'Calendar Management and Calendar Settings (both dept_lead/super_admin only) control source connections, sync behavior, and category visibility rules.',
       },
@@ -149,7 +157,7 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: 'Who can access Communications?',
-        a: 'super_admin, ors, and anyone with the "programs" feature role. It\'s where region-wide email campaigns and invitations are built and tracked.',
+        a: 'super_admin, ors, and anyone with the "programs" feature role. It\'s the native hub for region-wide email campaigns, invitations, and the public mailing-list signup — all built and tracked in one place without leaving NEXUS.',
       },
       {
         q: 'What are Campaigns, Segments, and Recipients?',
@@ -162,6 +170,10 @@ const FAQ_SECTIONS = [
       {
         q: 'What is the Invitation / RSVP flow?',
         a: 'Invitation Wizard builds an event invitation with a trackable link; recipients RSVP on a public page (no login needed) and responses roll up into per-invitation analytics on the Invitation Detail page.',
+      },
+      {
+        q: 'What is the Mailing List signup form?',
+        a: 'A public-facing form (no login required) where anyone can subscribe to region communications. Submissions feed directly into the Recipients list. Share the link externally — from a bulletin, social post, or event page.',
       },
     ],
   },

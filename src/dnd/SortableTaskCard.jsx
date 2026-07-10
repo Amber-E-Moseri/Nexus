@@ -121,7 +121,7 @@ function SortableTaskCardComponent({
   const assignee = useMemo(() => getAssignee(task, people), [people, task])
   const statusColor = getStatusColor(task, statuses)
   const listLabel = getListLabel(task).toUpperCase()
-  const subtaskCount = task.subtask_count ?? task.subtasks?.length ?? 0
+  const subtaskCount = (Array.isArray(task.subtask_count) ? task.subtask_count[0]?.count : task.subtask_count) ?? task.subtasks?.length ?? 0
   const commentCount = task.comment_count ?? task.comments?.[0]?.count ?? task.comments?.length ?? 0
 
   useEffect(() => {

@@ -61,8 +61,8 @@ export function DragOverlayTaskCard({ task }) {
   if (!task) return null
 
   const assignees    = task.assignees ?? (task.assignee ? [task.assignee] : [])
-  const subtaskCount = task.subtask_count ?? task.subtasks?.length ?? 0
-  const commentCount = task.comment_count ?? task.comments?.length ?? 0
+  const subtaskCount = (Array.isArray(task.subtask_count) ? task.subtask_count[0]?.count : task.subtask_count) ?? task.subtasks?.length ?? 0
+  const commentCount = task.comment_count ?? task.comments?.[0]?.count ?? 0
   const dueDate      = task.due_date ? new Date(task.due_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : null
   const listLabel    = task.list_name ?? task.list?.name ?? task.status ?? ''
 

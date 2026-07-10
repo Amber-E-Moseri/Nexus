@@ -569,55 +569,84 @@ create policy "prayer_requests_delete_own_or_admin" on public.prayer_requests
   );
 
 -- ─── 10. meeting_minutes + dead org_members policies ─────────
+-- Guarded: some remotes never materialized these tables (ledger entries
+-- were repaired in without the DDL running), and policy DDL errors on a
+-- missing relation even with `if exists`.
 
-drop policy if exists "minutes_insert_require_permission" on public.meeting_minutes;
-create policy "minutes_insert_require_permission" on public.meeting_minutes
-  for insert to authenticated
-  with check (
-    created_by = auth.uid()
-    and (
-      public.current_user_role() = 'super_admin'
-      or public.has_space_role_anywhere(auth.uid(), 'ors')
-      or public.has_space_role_anywhere(auth.uid(), 'dept_lead')
-      or public.has_space_role_anywhere(auth.uid(), 'programs')
-    )
-  );
+do $$
+begin
+  if to_regclass('public.meeting_minutes') is not null then
+    execute 'drop policy if exists "minutes_insert_require_permission" on public.meeting_minutes';
+    execute $pol$
+      create policy "minutes_insert_require_permission" on public.meeting_minutes
+        for insert to authenticated
+        with check (
+          created_by = auth.uid()
+          and (
+            public.current_user_role() = 'super_admin'
+            or public.has_space_role_anywhere(auth.uid(), 'ors')
+            or public.has_space_role_anywhere(auth.uid(), 'dept_lead')
+            or public.has_space_role_anywhere(auth.uid(), 'programs')
+          )
+        )
+    $pol$;
+  end if;
+end $$;
 
 -- Dead policies referencing org_members.role='organizational_rep_secretary'
 -- (a vocabulary that matches nothing in this system):
-drop policy if exists "ORS can link action items to tasks" on public.meeting_action_items;
-drop policy if exists "ors_view_all_transcriptions" on public.meeting_transcriptions;
+do $$
+begin
+  if to_regclass('public.meeting_transcriptions') is not null then
+    execute 'drop policy if exists "ors_view_all_transcriptions" on public.meeting_transcriptions';
+    execute $pol$
+      create policy "ors_view_all_transcriptions" on public.meeting_transcriptions
+        for select to authenticated
+        using (public.has_space_role_anywhere(auth.uid(), 'ors'))
+    $pol$;
+  end if;
 
-create policy "ors_view_all_transcriptions" on public.meeting_transcriptions
-  for select to authenticated
-  using (public.has_space_role_anywhere(auth.uid(), 'ors'));
-
-create policy "ors_link_action_items" on public.meeting_action_items
-  for update to authenticated
-  using (public.has_space_role_anywhere(auth.uid(), 'ors'))
-  with check (public.has_space_role_anywhere(auth.uid(), 'ors'));
+  if to_regclass('public.meeting_action_items') is not null then
+    execute 'drop policy if exists "ORS can link action items to tasks" on public.meeting_action_items';
+    execute 'drop policy if exists "ors_link_action_items" on public.meeting_action_items';
+    execute $pol$
+      create policy "ors_link_action_items" on public.meeting_action_items
+        for update to authenticated
+        using (public.has_space_role_anywhere(auth.uid(), 'ors'))
+        with check (public.has_space_role_anywhere(auth.uid(), 'ors'))
+    $pol$;
+  end if;
+end $$;
 
 -- ─── 11. integration_requests dept_lead authority ────────────
 
-drop policy if exists "integration_requests_select_leads" on public.integration_requests;
-create policy "integration_requests_select_leads" on public.integration_requests
-  for select to authenticated
-  using (
-    public.current_user_role() = 'super_admin'
-    or public.has_space_role(auth.uid(), department_id, 'dept_lead')
-  );
-
-drop policy if exists "integration_requests_update" on public.integration_requests;
-create policy "integration_requests_update" on public.integration_requests
-  for update to authenticated
-  using (
-    public.current_user_role() = 'super_admin'
-    or public.has_space_role(auth.uid(), department_id, 'dept_lead')
-  )
-  with check (
-    public.current_user_role() = 'super_admin'
-    or public.has_space_role(auth.uid(), department_id, 'dept_lead')
-  );
+do $$
+begin
+  if to_regclass('public.integration_requests') is not null then
+    execute 'drop policy if exists "integration_requests_select_leads" on public.integration_requests';
+    execute $pol$
+      create policy "integration_requests_select_leads" on public.integration_requests
+        for select to authenticated
+        using (
+          public.current_user_role() = 'super_admin'
+          or public.has_space_role(auth.uid(), department_id, 'dept_lead')
+        )
+    $pol$;
+    execute 'drop policy if exists "integration_requests_update" on public.integration_requests';
+    execute $pol$
+      create policy "integration_requests_update" on public.integration_requests
+        for update to authenticated
+        using (
+          public.current_user_role() = 'super_admin'
+          or public.has_space_role(auth.uid(), department_id, 'dept_lead')
+        )
+        with check (
+          public.current_user_role() = 'super_admin'
+          or public.has_space_role(auth.uid(), department_id, 'dept_lead')
+        )
+    $pol$;
+  end if;
+end $$;
 
 -- ─── 12. can_manage_space(): drop dual identity ──────────────
 -- Department-space management now comes ONLY from space_roles (or

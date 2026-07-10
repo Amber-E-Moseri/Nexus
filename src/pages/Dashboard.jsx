@@ -1046,9 +1046,9 @@ export default function Dashboard() {
             onClick={() => navigate(customStat.meta.path)}
           />
           <HeroStatCard
-            label="Open Tasks"
+            label="My Open Tasks"
             value={orgStats.openTasks}
-            sub="in progress & queued"
+            sub="assigned to you, not done"
             bg="var(--accent-blue)"
             blobColor="rgba(255,255,255,.10)"
             onClick={() => navigate('/my-tasks')}
