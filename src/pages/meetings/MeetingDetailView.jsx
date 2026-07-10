@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
+import { useToast } from '../../context/ToastContext'
+import { hasSpaceRole } from '../../lib/permissions.js'
 import { MeetingsProvider } from '../../features/meetings/MeetingsContext'
 import ActionItemBridge from '../../features/meetings/components/ActionItemBridge'
 import AudioTranscriptionPanel from '../../features/meetings/components/AudioTranscriptionPanel'
@@ -10,6 +12,7 @@ import MeetingDocsTab from '../../features/meetings/components/MeetingDocsTab'
 import MeetingSummaryEditor from '../../features/meetings/components/MeetingSummaryEditor'
 import GenerateMeetingDocButton from '../../features/meetings/components/GenerateMeetingDocButton'
 import { createTasksFromActionItems } from '../../features/meetings/lib/meetings'
+import { resolveAssignment, getOrgDepartments, getOrgUsers } from '../../features/meetings/lib/ownerMatching'
 
 // exact colors from the HTML reference
 const FS = {
@@ -47,6 +50,7 @@ function MeetingDetailViewInner() {
   const { meetingId } = useParams()
   const navigate      = useNavigate()
   const { role, profile } = useAuth()
+  const { showToast } = useToast()
 
   const [meeting, setMeeting]   = useState(null)
   const [agenda, setAgenda]     = useState([])
@@ -78,6 +82,7 @@ function MeetingDetailViewInner() {
   const [editedTranscript, setEditedTranscript]   = useState('')
   const [savingTranscript, setSavingTranscript]   = useState(false)
   const [showRawTranscript, setShowRawTranscript] = useState(false)  // WIN 1: toggle polished/raw
+  const [exportingPdf, setExportingPdf]           = useState(false)
   const [context, setContext]                     = useState('')      // WIN 2: meeting context
   const [contextChanged, setContextChanged]       = useState(false)
 
@@ -88,7 +93,10 @@ function MeetingDetailViewInner() {
   const [cacheStatus, setCacheStatus] = useState('') // empty, 'saving', 'saved'
 
   const isMobile  = useMediaQuery('(max-width: 640px)')
-  const canManage = ['super_admin', 'dept_lead', 'ors'].includes(role)
+  // ORS identity is a space_roles grant (Phase 3) — role === 'ors' no longer exists.
+  const canManage = ['super_admin', 'dept_lead'].includes((role ?? '').toLowerCase()) ||
+                    hasSpaceRole(profile, null, 'ors') ||
+                    hasSpaceRole(profile, null, 'dept_lead')
   const isLive    = mode === 'live'
   const isPrep    = mode === 'prep'
   const isPost    = mode === 'post'
@@ -238,7 +246,7 @@ function MeetingDetailViewInner() {
     const now = new Date().toISOString()
     const { error } = await supabase
       .from('meetings').update({ status: 'in_progress', started_at: now }).eq('id', meetingId)
-    if (error) { alert(error.message); return }
+    if (error) { showToast(`Couldn't start the meeting: ${error.message}`, { tone: 'error' }); return }
     startRef.current = Date.now()
     setElapsed(0)
     setMode('live')
@@ -251,7 +259,7 @@ function MeetingDetailViewInner() {
     setRecording(false)
     const { error } = await supabase
       .from('meetings').update({ status: 'completed', ended_at: new Date().toISOString() }).eq('id', meetingId)
-    if (error) { alert(error.message); return }
+    if (error) { showToast(`Couldn't end the meeting: ${error.message}`, { tone: 'error' }); return }
     setMode('post')
     setActiveTab('audio')
   }
@@ -264,10 +272,43 @@ function MeetingDetailViewInner() {
       next_steps: nextStepsText,
     }).eq('id', meetingId)
     setSaving(false)
-    if (error) { alert(error.message); return }
+    if (error) { showToast(`Couldn't save minutes: ${error.message}`, { tone: 'error' }); return }
     localStorage.removeItem(`meeting_draft_${meetingId}`)
     setPublished(true)
     setTimeout(() => setPublished(false), 3000)
+  }
+
+  async function exportPdf() {
+    setExportingPdf(true)
+    try {
+      const { generateMinutesPDF, generateMinutesPDFFilename } = await import('../../lib/meetings/pdfGeneration')
+      const splitLines = (text) => (text || '')
+        .split('\n')
+        .map((line) => line.replace(/^[•\-*]\s*/, '').trim())
+        .filter(Boolean)
+      const blob = await generateMinutesPDF({
+        // meeting.summary holds the raw transcript — deliberately NOT a fallback here
+        summary: meeting?.meeting_notes || minutesText || '',
+        decisions: splitLines(decisionsText),
+        nextSteps: splitLines(nextStepsText),
+        actionItems: actionItems.map((t) => ({
+          action: t.title,
+          owner: t.assignee?.name || 'Unassigned',
+          dueDate: t.due_date,
+        })),
+      }, meeting)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = generateMinutesPDFFilename(meeting)
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('Minutes PDF downloaded', { tone: 'success' })
+    } catch (err) {
+      showToast(`PDF export failed: ${err.message}`, { tone: 'error' })
+    } finally {
+      setExportingPdf(false)
+    }
   }
 
   async function runAiExtraction() {
@@ -291,10 +332,16 @@ function MeetingDetailViewInner() {
       if (extracted?.action_items?.length) {
         setSelectedAiActionItems(new Set(extracted.action_items.map((_, i) => i)))
       }
-      // Save summary back to meeting
-      if (extracted?.summary) {
-        await supabase.from('meetings').update({ summary: extracted.summary }).eq('id', meetingId)
-        setMeeting(m => ({ ...m, summary: extracted.summary }))
+      // Save the AI summary to meeting_notes — never to `summary`, which holds
+      // the transcript (overwriting it would destroy the transcript and make
+      // re-running extraction operate on the summary instead). Manual edits to
+      // meeting_notes win: only fill it when empty.
+      if (extracted?.summary && !meeting?.meeting_notes) {
+        const { error: notesErr } = await supabase
+          .from('meetings')
+          .update({ meeting_notes: extracted.summary })
+          .eq('id', meetingId)
+        if (!notesErr) setMeeting(m => ({ ...m, meeting_notes: extracted.summary }))
       }
       // Auto-populate minutes fields if empty
       if (extracted?.decisions?.length && !decisionsText) {
@@ -330,14 +377,28 @@ function MeetingDetailViewInner() {
     setMergingAiActions(true)
     setAiError('')
     try {
+      // Resolve AI-suggested owners against the real org directory so tasks
+      // land assigned (and on the assignee's board) instead of always unassigned.
+      let directory = { departments: [], users: [] }
+      try {
+        const [departments, users] = await Promise.all([getOrgDepartments(), getOrgUsers()])
+        directory = { departments, users }
+      } catch {
+        // degrade to unassigned tasks rather than failing the merge
+      }
       const items = aiResult.action_items
         .filter((_, i) => selectedAiActionItems.has(i))
-        .map((item) => ({
-          title: item.title,
-          assigneeId: null,
-          dueDate: item.due_date ?? null,
-          description: item.owner && item.owner !== 'TBD' ? `Owner: ${item.owner}` : null,
-        }))
+        .map((item) => {
+          const assignment = resolveAssignment(item, directory)
+          return {
+            title: item.title,
+            assigneeId: assignment.assigneeId,
+            departmentId: assignment.departmentId,
+            dueDate: item.due_date ?? null,
+            // Keep the AI's owner name visible when we couldn't match a real user
+            description: item.owner && item.owner !== 'TBD' && !assignment.assigneeId ? `Owner: ${item.owner}` : null,
+          }
+        })
       if (!items.length) { setMergingAiActions(false); return }
       await createTasksFromActionItems(meetingId, meeting.department_id, items, profile?.id)
       setAiMergeSuccess(true)
@@ -446,8 +507,12 @@ function MeetingDetailViewInner() {
           {/* Post: export buttons */}
           {isPost && canManage && (
             <>
-              <button style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}>
-                📤 Export PDF
+              <button
+                onClick={exportPdf}
+                disabled={exportingPdf}
+                style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor: exportingPdf ? 'wait' : 'pointer', opacity: exportingPdf ? 0.7 : 1 }}
+              >
+                {exportingPdf ? '⏳ Exporting…' : '📤 Export PDF'}
               </button>
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <button onClick={publishMinutes} disabled={saving} style={{ padding:'7px 13px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}>

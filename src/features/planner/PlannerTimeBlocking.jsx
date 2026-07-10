@@ -6,6 +6,7 @@ import { useMyTasks } from '../tasks/hooks/useMyTasks'
 import { getSubtasks } from '../tasks/lib/tasks'
 import { isTaskCancelled, isTaskCompleted } from '../../lib/taskStatuses'
 import TaskModal from '../tasks/components/TaskModal'
+import GlobalTaskFeedPanel from '../calendar/components/GlobalTaskFeedPanel'
 import PlannerHeader from './components/PlannerHeader'
 import PlannerSidebar from './components/PlannerSidebar'
 import PlannerGrid from './components/PlannerGrid'
@@ -53,6 +54,7 @@ export default function PlannerTimeBlocking() {
   const [unlinkPrompt, setUnlinkPrompt] = useState(null) // { block, move }
   const [contextMenu, setContextMenu] = useState(null) // { x, y, block }
   const [dismissedWarnings, setDismissedWarnings] = useState(() => new Set())
+  const [calendarPanelOpen, setCalendarPanelOpen] = useState(false)
 
   // ---- Task lookups -------------------------------------------------------
   const taskById = useMemo(() => {
@@ -345,7 +347,7 @@ export default function PlannerTimeBlocking() {
 
   return (
     <div style={{ padding: '18px 22px', background: BG, minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PlannerHeader weekStart={weekStart} onWeekChange={setWeekStart} />
+      <PlannerHeader weekStart={weekStart} onWeekChange={setWeekStart} onSyncToCalendar={() => setCalendarPanelOpen(true)} />
       <WarningBanner warnings={bannerWarnings} onDismiss={(key) => setDismissedWarnings((prev) => new Set(prev).add(key))} />
 
       <DndContext
@@ -433,6 +435,10 @@ export default function PlannerTimeBlocking() {
           onDeleted={() => setModalTask(null)}
         />
       ) : null}
+
+      {calendarPanelOpen && (
+        <GlobalTaskFeedPanel userId={userId} onClose={() => setCalendarPanelOpen(false)} />
+      )}
     </div>
   )
 }

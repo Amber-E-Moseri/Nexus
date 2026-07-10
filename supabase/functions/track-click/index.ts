@@ -1,10 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SUPABASE_URL          = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 serve(async (req) => {
-  // Only POST/GET allowed
   if (req.method === "OPTIONS") {
     return new Response("OK", {
       headers: {
@@ -16,10 +15,10 @@ serve(async (req) => {
   }
 
   try {
-    const url = new URL(req.url);
-    const campaignId = url.searchParams.get("campaign");
+    const url            = new URL(req.url);
+    const campaignId     = url.searchParams.get("campaign");
     const recipientEmail = url.searchParams.get("email");
-    const originalUrl = url.searchParams.get("url");
+    const originalUrl    = url.searchParams.get("url");
 
     if (!campaignId || !recipientEmail || !originalUrl) {
       return new Response(
@@ -28,35 +27,32 @@ serve(async (req) => {
       );
     }
 
-    // Decode URL
     const decodedUrl = decodeURIComponent(originalUrl);
 
-    // Log the click to Supabase
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/campaign_link_clicks`, {
+    // Use the record_campaign_click RPC so click_count increments correctly
+    // on repeated clicks, and so the service role key bypasses RLS.
+    const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/record_campaign_click`, {
       method: "POST",
       headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        apikey:         SUPABASE_SERVICE_ROLE_KEY,
+        Authorization:  `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        campaign_id: campaignId,
-        recipient_email: recipientEmail,
-        link_url: decodedUrl,
-        clicked_at: new Date().toISOString(),
-        click_count: 1,
+        p_campaign_id:     campaignId,
+        p_recipient_email: recipientEmail,
+        p_link_url:        decodedUrl,
       }),
     });
 
-    if (!response.ok) {
-      console.error("[track-click] Upsert failed:", await response.text());
+    if (!rpcRes.ok) {
+      console.error("[track-click] RPC failed:", await rpcRes.text());
     }
 
-    // Redirect to original URL (302 = temporary, cacheable)
     return new Response(null, {
       status: 302,
       headers: {
-        Location: decodedUrl,
+        Location:        decodedUrl,
         "Cache-Control": "no-cache, no-store, must-revalidate",
       },
     });

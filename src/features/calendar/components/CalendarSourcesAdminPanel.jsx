@@ -3,6 +3,7 @@ import { CalendarPlus, RefreshCw, Trash2, Link as LinkIcon } from 'lucide-react'
 import {
   getMinistryCalendarConnectionStatus,
   getMinistryCalendarConnectOAuthUrl,
+  disconnectMinistryCalendar,
   listAvailableCalendarSources,
   getMinistryCalendarSources,
   addCalendarSource,
@@ -28,6 +29,7 @@ export default function CalendarSourcesAdminPanel() {
   const [pickerLoading, setPickerLoading] = useState(false)
   const [busySourceId, setBusySourceId] = useState(null)
   const [needs_reauth, setNeedsReauth] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
 
   function isReauthRequiredError(err) {
     return err?.message?.includes('reauth_required')
@@ -57,6 +59,25 @@ export default function CalendarSourcesAdminPanel() {
   }, [])
 
   function handleConnect() {
+    window.location.href = getMinistryCalendarConnectOAuthUrl()
+  }
+
+  async function handleDisconnect() {
+    if (!window.confirm('Disconnect Google Calendar? All synced sources will be removed.')) return
+
+    setDisconnecting(true)
+    try {
+      await disconnectMinistryCalendar()
+      await load()
+      showToast('Google Calendar disconnected', { tone: 'success' })
+    } catch (err) {
+      showToast(err.message || 'Failed to disconnect', { tone: 'error' })
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
+  function handleReconnect() {
     window.location.href = getMinistryCalendarConnectOAuthUrl()
   }
 
@@ -170,6 +191,22 @@ export default function CalendarSourcesAdminPanel() {
       </div>
 
       <div style={{ padding: '16px' }}>
+        {!loading && !connected && (
+          <div style={{
+            marginBottom: '16px',
+            padding: '12px 14px',
+            borderRadius: '8px',
+            border: '1px solid #DBEAFE',
+            backgroundColor: '#EFF6FF',
+            fontSize: '13px',
+            color: '#1E40AF',
+            lineHeight: '1.5',
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: '4px' }}>ℹ️ Google Calendar is in testing mode</div>
+            <div>Your Google account email must be added to the approved list to connect. If you can't sign in with Google, contact <strong>ORS</strong> — note that your Nexus email and Google account email may differ.</div>
+          </div>
+        )}
+
         {loading ? (
           <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
             Loading...
@@ -232,20 +269,49 @@ export default function CalendarSourcesAdminPanel() {
               </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '8px', flexWrap: 'wrap' }}>
               <div style={{ fontSize: '12px', color: '#059669', fontWeight: 600 }}>✓ Google account connected</div>
-              <button
-                onClick={handleOpenPicker}
-                disabled={pickerLoading}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border)',
-                  backgroundColor: 'white', color: 'var(--text-primary)',
-                  fontSize: '12px', fontWeight: 600, cursor: pickerLoading ? 'not-allowed' : 'pointer',
-                }}
-              >
-                <CalendarPlus size={13} /> {pickerLoading ? 'Loading...' : 'Add a calendar'}
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={handleOpenPicker}
+                  disabled={pickerLoading}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border)',
+                    backgroundColor: 'white', color: 'var(--text-primary)',
+                    fontSize: '12px', fontWeight: 600, cursor: pickerLoading ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <CalendarPlus size={13} /> {pickerLoading ? 'Loading...' : 'Add calendar'}
+                </button>
+                <button
+                  onClick={handleReconnect}
+                  disabled={disconnecting}
+                  title="Connect a different Google account"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border)',
+                    backgroundColor: 'white', color: 'var(--text-primary)',
+                    fontSize: '12px', fontWeight: 600, cursor: disconnecting ? 'not-allowed' : 'pointer',
+                    opacity: disconnecting ? 0.5 : 1,
+                  }}
+                >
+                  <LinkIcon size={13} /> Reconnect
+                </button>
+                <button
+                  onClick={handleDisconnect}
+                  disabled={disconnecting}
+                  title="Disconnect Google Calendar"
+                  style={{
+                    padding: '6px 12px', borderRadius: '6px', border: '1px solid #FECACA',
+                    backgroundColor: '#FEE2E2', color: '#DC2626',
+                    fontSize: '12px', fontWeight: 600, cursor: disconnecting ? 'not-allowed' : 'pointer',
+                    opacity: disconnecting ? 0.5 : 1,
+                  }}
+                >
+                  {disconnecting ? 'Disconnecting...' : 'Disconnect'}
+                </button>
+              </div>
             </div>
 
             {picker && (

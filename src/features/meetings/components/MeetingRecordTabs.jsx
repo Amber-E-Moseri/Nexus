@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
+import { hasSpaceRole } from '../../../lib/permissions.js'
 import { getMeetingTasks } from '../lib/meetings'
 import { getTaskStatusColor, isTaskCompleted } from '../../../lib/taskStatuses'
 import AudioTranscriptionPanel from './AudioTranscriptionPanel'
@@ -13,7 +14,10 @@ export default function MeetingRecordTabs({ meeting }) {
   const [tasksError, setTasksError] = useState(null)
   const [audioItemsAdded, setAudioItemsAdded] = useState(0)
 
-  const canRecord = role && ['super_admin', 'dept_lead', 'ors'].includes(role)
+  // ORS identity is a space_roles grant (Phase 3) — role === 'ors' no longer exists.
+  const canRecord = ['super_admin', 'dept_lead'].includes((role ?? '').toLowerCase()) ||
+                    hasSpaceRole(profile, null, 'ors') ||
+                    hasSpaceRole(profile, null, 'dept_lead')
 
   useEffect(() => {
     let active = true

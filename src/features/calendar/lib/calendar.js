@@ -506,6 +506,16 @@ export async function getMinistryCalendarConnectionStatus() {
   return data
 }
 
+export async function disconnectMinistryCalendar() {
+  // Delete the connection record and all associated sources
+  const { error: connErr } = await supabase
+    .from('ministry_calendar_connection')
+    .delete()
+    .not('id', 'is', null)  // delete all rows for this org/user
+
+  if (connErr) throw connErr
+}
+
 export async function listAvailableCalendarSources() {
   const { data, error } = await supabase.functions.invoke('google-calendar-sync', {
     body: { action: 'list_available_calendars', payload: {} },

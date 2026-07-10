@@ -1,22 +1,29 @@
-// Task Feed Subscription Panel
-// Slide-out panel that lets a user subscribe to their per-space task feeds
-// (My Tasks / Created Tasks) as read-only iCal calendars.
+// GlobalTaskFeedPanel
+// Slide-out panel for cross-space calendar feed subscriptions:
+//   All My Tasks, All Followed Tasks, My Planner Schedule.
+// Accessible from the Planner page header and user settings.
 
-import { X, Copy, Check, Calendar, Apple, CheckCircle2, Circle, Loader2 } from 'lucide-react'
-import { getTaskFeedUrl } from '../lib/calendar'
-import { useTaskFeedSubscriptions } from '../../tasks/hooks/useTaskFeedSubscriptions'
+import { useState, useEffect, useCallback } from 'react'
+import { X, Copy, Calendar, Apple, CheckCircle2, Circle, Loader2, Check } from 'lucide-react'
+import { getOrCreateTaskFeedToken, getTaskFeedUrl } from '../lib/calendar'
+import { supabase } from '../../../lib/supabase'
 import { useToast } from '../../../context/ToastContext'
 
-const FEEDS = [
+const GLOBAL_FEEDS = [
   {
-    type: 'my_tasks',
-    name: 'My Tasks',
-    description: 'Your assigned tasks in this space as a calendar feed.',
+    type: 'all_my_tasks',
+    name: 'All My Tasks',
+    description: 'Every task assigned to you across all spaces, sorted by due date.',
   },
   {
-    type: 'followed_tasks',
-    name: 'Followed Tasks',
-    description: 'Tasks you follow in this space as a calendar feed.',
+    type: 'all_followed_tasks',
+    name: 'All Followed Tasks',
+    description: 'Tasks you follow across all spaces — stay informed on due dates.',
+  },
+  {
+    type: 'planner',
+    name: 'My Planner Schedule',
+    description: 'Your time-blocked schedule from the Planner with exact start and end times.',
   },
 ]
 
@@ -26,6 +33,25 @@ function formatDate(value) {
     return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
   } catch {
     return null
+  }
+}
+
+function secondaryBtn(busy) {
+  return {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: '8px 10px',
+    borderRadius: 8,
+    border: '1px solid var(--border)',
+    background: 'white',
+    color: 'var(--text-secondary)',
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: busy ? 'wait' : 'pointer',
+    opacity: busy ? 0.7 : 1,
   }
 }
 
@@ -44,16 +70,13 @@ function FeedCard({ feed, subscription, busy, onCopy, onGoogle, onApple }) {
         gap: 12,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-        <div>
-          <h4 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{feed.name}</h4>
-          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            {feed.description}
-          </p>
-        </div>
+      <div>
+        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{feed.name}</h4>
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          {feed.description}
+        </p>
       </div>
 
-      {/* Status indicator */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600 }}>
         {active ? (
           <>
@@ -99,21 +122,11 @@ function FeedCard({ feed, subscription, busy, onCopy, onGoogle, onApple }) {
         </button>
 
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onGoogle}
-            style={secondaryBtn(busy)}
-          >
+          <button type="button" disabled={busy} onClick={onGoogle} style={secondaryBtn(busy)}>
             <Calendar size={14} />
             Google
           </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onApple}
-            style={secondaryBtn(busy)}
-          >
+          <button type="button" disabled={busy} onClick={onApple} style={secondaryBtn(busy)}>
             <Apple size={14} />
             Apple
           </button>
@@ -123,37 +136,38 @@ function FeedCard({ feed, subscription, busy, onCopy, onGoogle, onApple }) {
   )
 }
 
-function secondaryBtn(busy) {
-  return {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    padding: '8px 10px',
-    borderRadius: 8,
-    border: '1px solid var(--border)',
-    background: 'white',
-    color: 'var(--text-secondary)',
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: busy ? 'wait' : 'pointer',
-    opacity: busy ? 0.7 : 1,
-  }
-}
-
-export default function TaskFeedSubscriptionPanel({ spaceId, userId, onClose }) {
+export default function GlobalTaskFeedPanel({ userId, onClose }) {
   const { showToast } = useToast()
-  const { subscriptions, getOrCreateToken, myTasksLoading, followedTasksLoading } = useTaskFeedSubscriptions(userId, spaceId)
+  const [subscriptions, setSubscriptions] = useState([])
+  const [busyType, setBusyType] = useState(null)
 
-  const subscriptionFor = (type) => subscriptions.find((s) => s.feed_type === type)
-  const isFeedBusy = (type) => (type === 'my_tasks' ? myTasksLoading : followedTasksLoading)
+  const loadSubscriptions = useCallback(async () => {
+    if (!userId) return
+    const { data } = await supabase
+      .from('task_feed_subscriptions')
+      .select('id, feed_type, token, created_at')
+      .eq('user_id', userId)
+      .is('space_id', null)
+    setSubscriptions(data ?? [])
+  }, [userId])
 
-  // Ensure a token exists, returning the full feed URL.
+  useEffect(() => {
+    loadSubscriptions()
+  }, [loadSubscriptions])
+
+  const subFor = (type) => subscriptions.find((s) => s.feed_type === type)
+
   async function ensureUrl(feedType) {
-    const existing = subscriptionFor(feedType)?.token
-    const token = existing ?? (await getOrCreateToken(feedType))
-    return getTaskFeedUrl(token)
+    const existing = subFor(feedType)?.token
+    if (existing) return getTaskFeedUrl(existing)
+    setBusyType(feedType)
+    try {
+      const token = await getOrCreateTaskFeedToken(userId, null, feedType)
+      await loadSubscriptions()
+      return getTaskFeedUrl(token)
+    } finally {
+      setBusyType(null)
+    }
   }
 
   async function handleCopy(feedType) {
@@ -161,8 +175,7 @@ export default function TaskFeedSubscriptionPanel({ spaceId, userId, onClose }) 
       const url = await ensureUrl(feedType)
       await navigator.clipboard.writeText(url)
       showToast('Feed link copied to clipboard', { tone: 'success' })
-    } catch (e) {
-      console.error('Failed to copy feed link:', e)
+    } catch {
       showToast('Could not copy feed link', { tone: 'error' })
     }
   }
@@ -171,8 +184,7 @@ export default function TaskFeedSubscriptionPanel({ spaceId, userId, onClose }) 
     try {
       const url = await ensureUrl(feedType)
       window.open(`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}`, '_blank', 'noopener')
-    } catch (e) {
-      console.error('Failed to open Google Calendar:', e)
+    } catch {
       showToast('Could not open Google Calendar', { tone: 'error' })
     }
   }
@@ -182,8 +194,7 @@ export default function TaskFeedSubscriptionPanel({ spaceId, userId, onClose }) 
       const url = await ensureUrl(feedType)
       const webcal = `webcal://${url.replace(/^https?:\/\//, '')}`
       window.open(webcal, '_blank', 'noopener')
-    } catch (e) {
-      console.error('Failed to open Apple Calendar:', e)
+    } catch {
       showToast('Could not open Apple Calendar', { tone: 'error' })
     }
   }
@@ -193,9 +204,9 @@ export default function TaskFeedSubscriptionPanel({ spaceId, userId, onClose }) 
       style={{ position: 'fixed', inset: 0, display: 'flex', zIndex: 60 }}
       role="dialog"
       aria-modal="true"
-      aria-label="Subscribe to task feeds"
+      aria-label="Sync tasks to calendar"
     >
-      <style>{`@keyframes tfspin{to{transform:rotate(360deg)}}.spin{animation:tfspin .7s linear infinite}`}</style>
+      <style>{`@keyframes gtfspin{to{transform:rotate(360deg)}}.spin{animation:gtfspin .7s linear infinite}`}</style>
       <div style={{ flex: 1, background: 'rgba(28,22,16,0.32)' }} onClick={onClose} />
       <div
         style={{
@@ -219,10 +230,10 @@ export default function TaskFeedSubscriptionPanel({ spaceId, userId, onClose }) 
         >
           <div>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-              Subscribe to Task Feeds
+              Sync Tasks to Calendar
             </h3>
             <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
-              Add your space tasks to your calendar app.
+              Subscribe to live iCal feeds in Google, Apple, or Outlook.
             </p>
           </div>
           <button
@@ -244,12 +255,12 @@ export default function TaskFeedSubscriptionPanel({ spaceId, userId, onClose }) 
         </div>
 
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {FEEDS.map((feed) => (
+          {GLOBAL_FEEDS.map((feed) => (
             <FeedCard
               key={feed.type}
               feed={feed}
-              subscription={subscriptionFor(feed.type)}
-              busy={isFeedBusy(feed.type)}
+              subscription={subFor(feed.type)}
+              busy={busyType === feed.type}
               onCopy={() => handleCopy(feed.type)}
               onGoogle={() => handleGoogle(feed.type)}
               onApple={() => handleApple(feed.type)}
@@ -271,7 +282,8 @@ export default function TaskFeedSubscriptionPanel({ spaceId, userId, onClose }) 
           >
             <Check size={15} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 1 }} />
             <span>
-              These feeds are read-only. Changes made in your calendar app will not sync back to Nexus.
+              These are live read-only feeds — your calendar app refreshes them automatically every 15 minutes.
+              Changes in Nexus appear in your calendar soon after.
             </span>
           </div>
         </div>

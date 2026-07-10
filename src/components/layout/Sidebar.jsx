@@ -12,6 +12,7 @@ import {
   Folder,
   HelpCircle,
   LayoutGrid,
+  Lock,
   Mail,
   MailPlus,
   Map,
@@ -518,6 +519,7 @@ export default function Sidebar() {
             borderLeft: location.pathname === '/my-tasks' ? '3px solid #4C2A92' : '3px solid transparent',
             background: location.pathname === '/my-tasks' ? '#EDE8F8' : 'transparent',
             color: location.pathname === '/my-tasks' ? '#4C2A92' : '#1C1610',
+            fontWeight: location.pathname === '/my-tasks' ? 700 : 500,
             display: 'flex',
             alignItems: 'center',
             gap: 10,
@@ -560,8 +562,14 @@ export default function Sidebar() {
           </div>
         ) : null}
         <SidebarItem
+          active={isPathActive(location.pathname, '/personal-list')}
+          icon={Lock}
+          label="Personal List"
+          to="/personal-list"
+        />
+        <SidebarItem
           active={isPathActive(location.pathname, '/planner')}
-          icon={CalendarDays}
+          icon={Clock}
           label="Planner"
           to="/planner"
         />

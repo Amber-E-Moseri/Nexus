@@ -4,15 +4,11 @@ import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../context/ToastContext'
 import { getEventTypes as fetchEventTypes, createEventType, updateEventType, deleteEventType } from '../../features/calendar'
 
-const EVENT_TYPE_COLORS = {
-  conference: '#6366F1',
-  program: '#8B5CF6',
-  training: '#EC4899',
-  prayer: '#06B6D4',
-  graduation: '#10B981',
-  event: '#F59E0B',
-  deadline: '#EF4444',
-}
+const PRESET_COLORS = [
+  '#7C3AED', '#6366F1', '#2563EB', '#06B6D4', '#059669',
+  '#10B981', '#D97706', '#F59E0B', '#EC4899', '#DB2777',
+  '#DC2626', '#EF4444', '#4C2A92', '#374151', '#6B7280',
+]
 
 export default function CalendarManagementPage() {
   const { role } = useAuth()
@@ -194,23 +190,59 @@ export default function CalendarManagementPage() {
                 display: 'block',
                 fontSize: '12px',
                 fontWeight: 600,
-                marginBottom: '6px',
+                marginBottom: '8px',
                 color: 'var(--text-primary)'
               }}>
                 Color
               </label>
-              <input
-                type="color"
-                value={formData.color}
-                onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                style={{
-                  width: '100%',
-                  height: '40px',
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                {PRESET_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, color: c })}
+                    title={c}
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      background: c,
+                      border: formData.color === c ? '3px solid var(--text-primary)' : '2px solid transparent',
+                      outline: formData.color === c ? `2px solid ${c}` : 'none',
+                      outlineOffset: 1,
+                      cursor: 'pointer',
+                      padding: 0,
+                      flexShrink: 0,
+                      transition: 'transform 0.1s',
+                      transform: formData.color === c ? 'scale(1.15)' : 'scale(1)',
+                    }}
+                  />
+                ))}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginLeft: 4,
+                  padding: '4px 10px',
+                  borderRadius: 8,
                   border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-              />
+                  background: 'white',
+                  fontSize: 12,
+                  color: 'var(--text-secondary)',
+                }}>
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: '50%',
+                      background: formData.color,
+                      display: 'inline-block',
+                      flexShrink: 0,
+                    }}
+                  />
+                  {formData.color}
+                </div>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '8px' }}>

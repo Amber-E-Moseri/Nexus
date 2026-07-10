@@ -106,17 +106,27 @@ export async function ensureNexusReportFolder(accessToken) {
  * Creates a formatted PDF document from the report data
  */
 export async function generateReportPdf(report, reportElement) {
+  let restoreDisplay = null
   try {
     let canvas
 
     // If an HTML element is provided, convert it to canvas
     if (reportElement && typeof reportElement === 'object' && reportElement.nodeType === 1) {
+      // #print-report is `display: none` outside of @media print, which makes
+      // html2canvas render a blank canvas. Force it visible for the capture.
+      const priorDisplay = reportElement.style.display
+      reportElement.style.display = 'block'
+      restoreDisplay = () => { reportElement.style.display = priorDisplay }
+
       canvas = await html2canvas(reportElement, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
       })
+
+      restoreDisplay()
+      restoreDisplay = null
     } else {
       // Fallback: Create a simple formatted text document
       canvas = await createSimpleReportCanvas(report)
@@ -140,22 +150,23 @@ export async function generateReportPdf(report, reportElement) {
     const imgWidth = pageWidth - padding * 2
     const imgHeight = imgWidth / ratio
 
-    let yPosition = padding
+    // Slice the full-length image into page-sized chunks. jsPDF has no native
+    // clipping for addImage, so each page redraws the same full image shifted
+    // upward by one page height — the page boundaries themselves crop it.
+    const contentHeightPerPage = pageHeight - padding * 2
+    const totalPages = Math.max(1, Math.ceil(imgHeight / contentHeightPerPage))
 
-    // Add image, handling multiple pages if needed
-    pdf.addImage(imgData, 'PNG', padding, yPosition, imgWidth, imgHeight)
-
-    let currentHeight = imgHeight + padding
-    while (currentHeight > pageHeight - padding) {
-      pdf.addPage()
-      yPosition = -currentHeight + pageHeight
+    for (let page = 0; page < totalPages; page++) {
+      if (page > 0) pdf.addPage()
+      const yPosition = padding - page * contentHeightPerPage
       pdf.addImage(imgData, 'PNG', padding, yPosition, imgWidth, imgHeight)
-      currentHeight -= pageHeight - padding * 2
     }
 
     return pdf.output('blob')
   } catch (err) {
     throw new Error(`Failed to generate PDF: ${err.message}`)
+  } finally {
+    if (restoreDisplay) restoreDisplay()
   }
 }
 

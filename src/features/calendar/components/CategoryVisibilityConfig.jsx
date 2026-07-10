@@ -1,122 +1,113 @@
-// Category Visibility Config
-// Matrix of event categories x roles. Each cell toggles whether that role can
-// see the category in their calendar feed / iCal subscription. Saves on toggle.
+// Category visibility by department/space.
+// Each row = an event category. Each column = a department.
+// Checked = that dept can see the category. If ALL are checked → org-wide (no restriction rows).
+// If NONE are checked the category still exists; admins should always leave at least one checked.
 
 import { useState } from 'react'
-import { Check, CalendarCog } from 'lucide-react'
+import { Globe, Lock } from 'lucide-react'
 import { useCategoryVisibility } from '../hooks/useCategoryVisibility'
-import Toggle from './Toggle'
-
-const ROLE_COLUMNS = [
-  { key: 'member', label: 'Member' },
-  { key: 'pastor', label: 'Pastor' },
-  { key: 'dept_lead', label: 'Dept Lead' },
-  { key: 'regional_secretary', label: 'Regional Sec.' },
-  { key: 'super_admin', label: 'Super Admin' },
-]
 
 export default function CategoryVisibilityConfig() {
-  const { matrix, categories, loading, error, toggleVisibility } = useCategoryVisibility()
-  const [savedCategory, setSavedCategory] = useState(null)
-  const [savingCell, setSavingCell] = useState(null)
+  const { matrix, categories, departments, loading, error, toggleVisibility, makeOrgWide } = useCategoryVisibility()
+  const [busyCell, setBusyCell] = useState(null)
+  const [savedRow, setSavedRow] = useState(null)
 
-  async function handleToggle(category, role, currentValue) {
-    const cellKey = `${category}:${role}`
-    setSavingCell(cellKey)
+  function isOrgWide(catName) {
+    const row = matrix[catName] ?? {}
+    return Object.values(row).every(Boolean)
+  }
+
+  async function handleToggle(catName, deptId, current) {
+    const key = `${catName}:${deptId}`
+    setBusyCell(key)
     try {
-      await toggleVisibility(category, role, currentValue)
-      setSavedCategory(category)
-      setTimeout(() => {
-        setSavedCategory((c) => (c === category ? null : c))
-      }, 2000)
+      await toggleVisibility(catName, deptId, current)
+      setSavedRow(catName)
+      setTimeout(() => setSavedRow((r) => (r === catName ? null : r)), 1800)
     } catch {
-      // error surfaced via the hook's error state below
+      // error in hook state
     } finally {
-      setSavingCell((k) => (k === cellKey ? null : k))
+      setBusyCell((k) => (k === key ? null : k))
+    }
+  }
+
+  async function handleMakeOrgWide(catName) {
+    setBusyCell(`orgwide:${catName}`)
+    try {
+      await makeOrgWide(catName)
+      setSavedRow(catName)
+      setTimeout(() => setSavedRow((r) => (r === catName ? null : r)), 1800)
+    } catch {
+      // error in hook state
+    } finally {
+      setBusyCell((k) => (k === `orgwide:${catName}` ? null : k))
     }
   }
 
   return (
-    <div
-      style={{
-        borderRadius: 12,
-        border: '1px solid var(--border)',
-        background: 'white',
-        overflow: 'hidden',
-        boxShadow: 'var(--card-shadow)',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: 16,
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--surface-tertiary)',
-        }}
-      >
-        <CalendarCog size={18} style={{ color: 'var(--accent)' }} />
+    <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'white', overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: 16, borderBottom: '1px solid var(--border)', background: 'var(--surface-tertiary)' }}>
+        <Lock size={18} style={{ color: 'var(--accent)', marginTop: 2, flexShrink: 0 }} />
         <div>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
             Event Category Visibility
           </h3>
-          <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '2px 0 0' }}>
-            Control which roles can see each event category in their calendar feed and iCal subscriptions.
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '3px 0 0' }}>
+            Control which departments/spaces can see each event category. A category with all spaces checked is org-wide (visible to everyone). Uncheck a space to hide that category from its members.
           </p>
         </div>
       </div>
 
+      {!loading && categories.length > 0 && !error && Object.keys(matrix).every(cat => Object.values(matrix[cat] || {}).every(Boolean)) && (
+        <div style={{ padding: '12px 16px', background: '#F5F3FF', color: '#6B5B95', fontSize: 12.5, fontWeight: 500, borderBottom: '1px solid var(--border)' }}>
+          ℹ️ All categories are currently visible org-wide. Restrictions can be configured once your organization is fully set up.
+        </div>
+      )}
+
       {error && (
-        <div style={{ padding: '12px 16px', background: '#FEF0ED', color: '#C94830', fontSize: 12.5, fontWeight: 600 }}>
+        <div style={{ padding: '10px 16px', background: '#FEF0ED', color: '#C94830', fontSize: 12.5, fontWeight: 600 }}>
           {error}
         </div>
       )}
 
       {loading ? (
         <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-          Loading categories…
+          Loading…
         </div>
       ) : categories.length === 0 ? (
         <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
           <div style={{ fontSize: 24, marginBottom: 8 }}>🗂️</div>
-          <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
-            No event categories yet
-          </div>
-          <div>Create event types in the Ministry Calendar before configuring visibility.</div>
+          <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>No event categories yet</div>
+          <div>Create event types before configuring visibility.</div>
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th
-                  style={{
-                    textAlign: 'left',
-                    padding: '10px 16px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    color: 'var(--text-tertiary)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
+                <th style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
                   Category
                 </th>
-                {ROLE_COLUMNS.map((col) => (
+                <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+                  Scope
+                </th>
+                {departments.map((dept) => (
                   <th
-                    key={col.key}
-                    style={{
-                      textAlign: 'center',
-                      padding: '10px 12px',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      color: 'var(--text-tertiary)',
-                      whiteSpace: 'nowrap',
-                    }}
+                    key={dept.id}
+                    style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}
                   >
-                    {col.label}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          background: dept.color ? `#${dept.color.replace('#', '')}` : 'var(--accent)',
+                          display: 'inline-block',
+                        }}
+                      />
+                      {dept.name}
+                    </div>
                   </th>
                 ))}
               </tr>
@@ -124,50 +115,74 @@ export default function CategoryVisibilityConfig() {
             <tbody>
               {categories.map((cat) => {
                 const row = matrix[cat.name] ?? {}
+                const orgWide = isOrgWide(cat.name)
                 return (
-                  <tr key={cat.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: '50%',
-                            background: cat.color || '#5B34C7',
-                            flexShrink: 0,
-                          }}
-                        />
+                  <tr key={cat.id} style={{ borderBottom: '1px solid var(--border)', background: orgWide ? 'transparent' : '#FDFAF7' }}>
+                    {/* Category label */}
+                    <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: cat.color || '#5B34C7', flexShrink: 0, display: 'inline-block' }} />
                         <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{cat.name}</span>
-                        {savedCategory === cat.name && (
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 3,
-                              fontSize: 11,
-                              fontWeight: 600,
-                              color: '#2D8653',
-                            }}
-                          >
-                            <Check size={12} /> Saved
-                          </span>
+                        {savedRow === cat.name && (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#2D8653' }}>✓ Saved</span>
                         )}
                       </div>
                     </td>
-                    {ROLE_COLUMNS.map((col) => {
-                      const isSuperAdmin = col.key === 'super_admin'
-                      const checked = isSuperAdmin ? true : row[col.key] ?? true
-                      const cellKey = `${cat.name}:${col.key}`
+
+                    {/* Org-wide badge / make org-wide button */}
+                    <td style={{ padding: '11px 12px', textAlign: 'center' }}>
+                      {orgWide ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', background: 'var(--surface-secondary)', borderRadius: 6, padding: '2px 7px', whiteSpace: 'nowrap' }}>
+                          <Globe size={11} /> Org-wide
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleMakeOrgWide(cat.name)}
+                          disabled={!!busyCell}
+                          title="Remove restrictions — make visible to everyone"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: 'var(--accent)',
+                            background: 'var(--accent-light)',
+                            border: 'none',
+                            borderRadius: 6,
+                            padding: '3px 8px',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            opacity: busyCell ? 0.5 : 1,
+                          }}
+                        >
+                          <Globe size={11} /> Make org-wide
+                        </button>
+                      )}
+                    </td>
+
+                    {/* Per-dept checkboxes */}
+                    {departments.map((dept) => {
+                      const checked = row[dept.id] ?? true
+                      const cellKey = `${cat.name}:${dept.id}`
+                      const busy = busyCell === cellKey
                       return (
-                        <td key={col.key} style={{ padding: '12px', textAlign: 'center' }}>
-                          <div style={{ display: 'flex', justifyContent: 'center' }}>
-                            <Toggle
-                              checked={checked}
-                              disabled={isSuperAdmin || savingCell === cellKey}
-                              onChange={() => handleToggle(cat.name, col.key, checked)}
-                              label={`${cat.name} visible to ${col.label}`}
-                            />
-                          </div>
+                        <td key={dept.id} style={{ padding: '11px 12px', textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={busy || !!busyCell}
+                            onChange={() => handleToggle(cat.name, dept.id, checked)}
+                            style={{
+                              width: 15,
+                              height: 15,
+                              cursor: busy || busyCell ? 'not-allowed' : 'pointer',
+                              accentColor: 'var(--accent)',
+                              opacity: busy ? 0.4 : 1,
+                            }}
+                            title={checked ? `Hide from ${dept.name}` : `Show to ${dept.name}`}
+                          />
                         </td>
                       )
                     })}
@@ -180,16 +195,8 @@ export default function CategoryVisibilityConfig() {
       )}
 
       {categories.length > 0 && (
-        <div
-          style={{
-            padding: '12px 16px',
-            borderTop: '1px solid var(--border)',
-            fontSize: 11.5,
-            color: 'var(--text-tertiary)',
-            background: 'var(--surface-tertiary)',
-          }}
-        >
-          Categories with no rule are visible to everyone (fail open). Super Admin always sees every category.
+        <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', fontSize: 11.5, color: 'var(--text-tertiary)', background: 'var(--surface-tertiary)' }}>
+          Checked = visible to that space. Unchecked = hidden. "Org-wide" means no restrictions — all spaces see it. Super admins always see every category.
         </div>
       )}
     </div>

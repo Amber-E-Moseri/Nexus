@@ -6,6 +6,7 @@ import App from './App'
 import { AuthProvider } from './context/AuthContext'
 import { NotificationsProvider } from './context/NotificationsContext'
 import { InboxCountProvider } from './context/InboxCountContext'
+import { ToastProvider } from './context/ToastContext'
 import { queryClient } from './lib/queryClient'
 import './styles/index.css'
 
@@ -16,7 +17,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <AuthProvider>
           <NotificationsProvider>
             <InboxCountProvider>
-              <App />
+              <ToastProvider>
+                <App />
+              </ToastProvider>
             </InboxCountProvider>
           </NotificationsProvider>
         </AuthProvider>

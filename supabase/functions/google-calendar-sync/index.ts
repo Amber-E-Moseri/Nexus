@@ -1190,13 +1190,14 @@ Deno.serve(async (req) => {
 })
 
 // ── 15-minute multi-source auto-sync cron ─────────────────────────────────────
-
-if (Deno.env.get('ENABLE_AUTO_SYNC') === 'true') {
-  Deno.cron('google-calendar-auto-sync', '*/15 * * * *', async () => {
-    try {
-      await runMultiSourceAutoSync()
-    } catch (err) {
-      console.error('[auto-sync] Unhandled error in cron handler:', String(err))
-    }
-  })
-}
+// NOTE: Deno.cron not available in Supabase Edge Runtime v2.1.4. Auto-sync disabled for now.
+// TODO: Re-enable when Supabase updates to Deno v1.40+
+// if (Deno.env.get('ENABLE_AUTO_SYNC') === 'true') {
+//   Deno.cron('google-calendar-auto-sync', '*/15 * * * *', async () => {
+//     try {
+//       await runMultiSourceAutoSync()
+//     } catch (err) {
+//       console.error('[auto-sync] Unhandled error in cron handler:', String(err))
+//     }
+//   })
+// }

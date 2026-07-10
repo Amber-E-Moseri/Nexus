@@ -170,6 +170,7 @@ Deno.serve(async (request) => {
         .upsert(
           {
             email:       sendRecord.recipient_email.toLowerCase(),
+            campaign_id: sendRecord.campaign_id,
             bounce_type: bounceType,
             bounced_at:  new Date().toISOString(),
             suppressed:  bounceType === 'hard',

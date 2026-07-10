@@ -101,20 +101,30 @@ export default function CalendarGrid({
               <div
                 key={day.toISOString()}
                 id={dayId}
-                className="min-h-[132px] rounded-[18px] border border-[var(--border)] p-2 transition-colors"
+                className="group min-h-[132px] rounded-[18px] border border-[var(--border)] p-2 transition-colors hover:border-[var(--border-hover,var(--border))]"
                 style={{ background: inMonth ? 'white' : 'var(--surface-tertiary)' }}
               >
                 <div className="mb-2 flex items-center justify-between">
                   <div
-                    className="flex h-7 w-7 items-center justify-center rounded-full text-sm"
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium"
                     style={{
-                      color: inMonth ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                      border: isToday ? '2px solid var(--accent)' : '2px solid transparent',
-                      background: isToday ? 'var(--accent-light)' : 'transparent',
+                      color: isToday ? 'white' : inMonth ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                      background: isToday ? 'var(--accent)' : 'transparent',
+                      fontWeight: isToday ? 700 : undefined,
                     }}
                   >
                     {day.getDate()}
                   </div>
+                  {canEdit && !isToday && inMonth && dayEvents.length === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => onDayClick?.(day)}
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-xs text-[var(--text-tertiary)] opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 hover:bg-[var(--surface-secondary)]"
+                      title="Add event"
+                    >
+                      +
+                    </button>
+                  )}
                 </div>
 
                 <div className="space-y-1">
@@ -128,18 +138,9 @@ export default function CalendarGrid({
                     <CalendarEventChip key={event.id} event={event} onClick={onEventClick} />
                   ))}
                   {hiddenCount > 0 ? (
-                    <button type="button" onClick={() => onDayClick?.(day)} className="text-xs text-[var(--text-tertiary)]">
+                    <button type="button" onClick={() => onDayClick?.(day)} className="text-xs font-medium text-[var(--accent)] opacity-70 hover:opacity-100">
                       +{hiddenCount} more
                     </button>
-                  ) : null}
-                  {dayEvents.length === 0 ? (
-                    <div className="pt-1 text-[10px] text-[var(--text-placeholder)]">
-                      <span
-                        className="inline-block h-2 w-2 rounded-full"
-                        style={{ background: EVENT_COLORS.event }}
-                      />{' '}
-                      No events
-                    </div>
                   ) : null}
                 </div>
               </div>

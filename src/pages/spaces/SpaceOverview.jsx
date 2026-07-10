@@ -2,7 +2,7 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { SlidersHorizontal, Settings, GripVertical } from 'lucide-react'
+import { SlidersHorizontal, Settings, GripVertical, CalendarDays } from 'lucide-react'
 import { DndContext, closestCenter, useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -31,6 +31,7 @@ import { mergeTaskFieldSettings, normalizeTaskFieldSettings, TASK_FIELD_OPTIONS 
 import FileList from '../../components/files/FileList'
 import { supabase } from '../../lib/supabase'
 import SpaceSopModal, { sopIcon } from '../../components/layout/SpaceSopModal'
+import GlobalTaskFeedPanel from '../../features/calendar/components/GlobalTaskFeedPanel'
 
 const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Meetings', 'Automations', 'Members']
 
@@ -1237,6 +1238,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
   const { tasks, loading, error, statuses, addTask, moveTask } = useTasks()
   const [modal, setModal] = useState(null)
   const [boardFiltersOpen, setBoardFiltersOpen] = useState(false)
+  const [calFeedOpen, setCalFeedOpen] = useState(false)
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
 
   const selectedList = useMemo(() => lists.find((list) => list.id === selectedListId) ?? null, [lists, selectedListId])
@@ -1340,6 +1342,16 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
+            title="Sync tasks to calendar"
+            onClick={() => setCalFeedOpen(true)}
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
+          >
+            <CalendarDays size={14} />
+            <span>Sync to Calendar</span>
+          </button>
+
+          <button
+            type="button"
             title="Filter for your tasks"
             onClick={() => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))}
             className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold transition-all"
@@ -1416,6 +1428,9 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
           fieldSettings={effectiveFieldSettings}
           onClose={() => setModal(null)}
         />
+      ) : null}
+      {calFeedOpen ? (
+        <GlobalTaskFeedPanel userId={profile?.id} onClose={() => setCalFeedOpen(false)} />
       ) : null}
     </>
   )

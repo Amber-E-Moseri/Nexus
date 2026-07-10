@@ -219,6 +219,7 @@ export default function MeetingsModule() {
       nextParams.set('tab', 'roster')
     } else if (nextTab === 'report') {
       nextParams.delete('tab')
+      nextParams.set('report', '1')
     } else {
       nextParams.delete('tab')
       nextParams.delete('report')

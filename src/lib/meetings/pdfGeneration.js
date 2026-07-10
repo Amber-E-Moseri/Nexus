@@ -1,5 +1,4 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 
 /**
  * Generate meeting minutes PDF
@@ -105,42 +104,83 @@ export async function generateMinutesPDF(minutesData, meeting, agendaRows = []) 
 
     y += 7;
 
-    const actionTableData = minutesData.actionItems.map((item) => [
-      item.action || '',
-      item.owner || 'Unassigned',
-      item.dueDate ? new Date(item.dueDate).toLocaleDateString() : 'No date',
-    ]);
+    // Simple hand-drawn table (jspdf-autotable is not a dependency)
+    const cols = [
+      { header: 'Action', x: 15, width: 100 },
+      { header: 'Owner', x: 115, width: 40 },
+      { header: 'Due Date', x: 155, width: 40 },
+    ];
+    const drawTableHeader = () => {
+      doc.setFillColor(...colors.header);
+      doc.rect(15, y - 4.5, pageWidth - 30, 7, 'F');
+      doc.setTextColor(...colors.headerText);
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(10);
+      cols.forEach((c) => doc.text(c.header, c.x + 2, y));
+      y += 7;
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(...colors.text);
+    };
+    drawTableHeader();
 
-    doc.autoTable({
-      head: [['Action', 'Owner', 'Due Date']],
-      body: actionTableData,
-      startY: y,
-      margin: 15,
-      theme: 'grid',
-      headStyles: {
-        fillColor: colors.header,
-        textColor: colors.headerText,
-        fontSize: 10,
-        fontStyle: 'bold',
-      },
-      bodyStyles: {
-        fontSize: 9,
-        textColor: colors.text,
-      },
-      alternateRowStyles: {
-        fillColor: colors.lightBg,
-      },
-      columnStyles: {
-        0: { cellWidth: 80 },
-        1: { cellWidth: 40 },
-        2: { cellWidth: 40 },
-      },
+    minutesData.actionItems.forEach((item, idx) => {
+      const cells = [
+        item.action || '',
+        item.owner || 'Unassigned',
+        item.dueDate ? new Date(item.dueDate).toLocaleDateString() : 'No date',
+      ];
+      const wrapped = cells.map((text, i) => doc.splitTextToSize(String(text), cols[i].width - 4));
+      const rowLines = Math.max(...wrapped.map((w) => w.length));
+      const rowHeight = rowLines * 4.5 + 3;
+
+      if (y + rowHeight > pageHeight - 15) {
+        doc.addPage();
+        y = 20;
+        drawTableHeader();
+      }
+
+      if (idx % 2 === 1) {
+        doc.setFillColor(...colors.lightBg);
+        doc.rect(15, y - 4, pageWidth - 30, rowHeight, 'F');
+      }
+      wrapped.forEach((lines, i) => doc.text(lines, cols[i].x + 2, y));
+      y += rowHeight;
+    });
+    y += 5;
+  }
+
+  // Next Steps Section (if available)
+  if (minutesData.nextSteps && minutesData.nextSteps.length > 0) {
+    y += 8;
+    if (y > pageHeight - 30) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(...colors.text);
+    doc.text('Next Steps', 15, y);
+
+    y += 7;
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(10);
+
+    minutesData.nextSteps.forEach((step) => {
+      if (y > pageHeight - 20) {
+        doc.addPage();
+        y = 20;
+      }
+      const lines = doc.splitTextToSize(`• ${step}`, pageWidth - 30);
+      doc.text(lines, 15, y);
+      y += lines.length * 5 + 2;
     });
   }
 
   // Key Points Section (if available)
   if (minutesData.keyPoints && minutesData.keyPoints.length > 0) {
-    y = doc.lastAutoTable.finalY + 10 || y + 10;
+    y += 10;
 
     if (y > pageHeight - 40) {
       doc.addPage();

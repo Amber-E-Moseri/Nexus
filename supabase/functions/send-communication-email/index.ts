@@ -761,8 +761,6 @@ Deno.serve(async (request) => {
       nextRetryAt = new Date(Date.now() + backoffSeconds * 1000).toISOString()
     }
 
-    const bouncedCount = to.length - filteredRecipients.length - (to.length - filteredRecipients.length)
-
     await supabase
       .from('communication_campaigns')
       .update({

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
 import { BORDER, MUTED, PRIMARY, TEXT } from '../lib/plannerTheme'
 import { addDays, toISODate, fromISODate, startOfWeek } from '../lib/timeBlockUtils'
 
@@ -23,7 +23,7 @@ const navBtn = {
 }
 
 // Week navigation and date-picker week jump.
-export default function PlannerHeader({ weekStart, onWeekChange }) {
+export default function PlannerHeader({ weekStart, onWeekChange, onSyncToCalendar }) {
   const [pickerOpen, setPickerOpen] = useState(false)
 
   return (
@@ -68,6 +68,17 @@ export default function PlannerHeader({ weekStart, onWeekChange }) {
       >
         Today
       </button>
+      {onSyncToCalendar && (
+        <button
+          type="button"
+          onClick={onSyncToCalendar}
+          title="Sync to your calendar app"
+          style={{ border: `1px solid ${BORDER}`, background: 'white', color: TEXT, borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+        >
+          <CalendarDays size={14} />
+          Sync to Calendar
+        </button>
+      )}
     </div>
   )
 }

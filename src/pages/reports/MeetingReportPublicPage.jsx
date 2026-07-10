@@ -64,47 +64,6 @@ function dateStamp(value) {
   return date.toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-async function copyToClipboard(text) {
-  if (!text) {
-    console.error('No text provided to copy')
-    return false
-  }
-
-  // Try modern clipboard API
-  try {
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-      await navigator.clipboard.writeText(text)
-      console.log('Copied via Clipboard API')
-      return true
-    }
-  } catch (err) {
-    console.warn('Clipboard API error:', err.message)
-  }
-
-  // Fallback: textarea selection method
-  try {
-    const textarea = document.createElement('textarea')
-    textarea.value = text
-    textarea.setAttribute('readonly', '')
-    textarea.style.position = 'fixed'
-    textarea.style.top = '0'
-    textarea.style.left = '0'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    textarea.setSelectionRange(0, 99999)
-
-    const success = document.execCommand('copy')
-    document.body.removeChild(textarea)
-
-    console.log('Fallback copy result:', success)
-    return success
-  } catch (err) {
-    console.error('Fallback copy failed:', err.message)
-    return false
-  }
-}
-
 function ListTable({ title, count, tone, data }) {
   const personList = Array.isArray(data) && data.length > 0
     ? typeof data[0] === 'string'
@@ -167,7 +126,6 @@ export default function MeetingReportPublicPage() {
   // Read activeSubgroup from URL params on mount
   useEffect(() => {
     const subgroupFromUrl = searchParams.get('subgroup') || ''
-    console.log('Reading subgroup from URL:', subgroupFromUrl)
     if (subgroupFromUrl !== activeSubgroup) {
       setActiveSubgroup(subgroupFromUrl)
     }
@@ -177,27 +135,18 @@ export default function MeetingReportPublicPage() {
   // Lock activeSubgroup to subgroup_filter on shared links (only if not already set from URL)
   useEffect(() => {
     if (isSharedLink && report?.subgroup_filter && !activeSubgroup) {
-      console.log('Shared link detected - locking to subgroup_filter:', report.subgroup_filter)
       setActiveSubgroup(report.subgroup_filter)
     }
   }, [report, isSharedLink, activeSubgroup])
 
   // Sync activeSubgroup with URL query parameter using browser history API
   useEffect(() => {
-    console.log('useEffect fired. isInitialMount:', isInitialMount.current, 'activeSubgroup:', activeSubgroup)
-    if (isInitialMount.current) {
-      console.log('Skipping - still on initial mount')
-      return
-    }
-
-    console.log('✓ activeSubgroup changed to:', activeSubgroup)
+    if (isInitialMount.current) return
 
     if (activeSubgroup) {
       const newUrl = `${window.location.pathname}?subgroup=${encodeURIComponent(activeSubgroup)}`
-      console.log('✓ Updating URL to:', newUrl)
       window.history.replaceState(null, '', newUrl)
     } else {
-      console.log('✓ Clearing URL params')
       window.history.replaceState(null, '', window.location.pathname)
     }
   }, [activeSubgroup])
@@ -233,17 +182,11 @@ export default function MeetingReportPublicPage() {
       if (!active) return
 
       if (error || !data) {
-        console.error('Report lookup error:', error)
-        console.error('Data:', data)
-        console.log('Looking for share_token:', share_token)
         setReport(null)
         setNotFound(true)
         setLoading(false)
         return
       }
-
-      console.log('Report found:', data)
-      console.log('Meeting data:', meetingData)
 
       // Combine report and meeting data, rename by_subgroup to bySubgroup for consistency
       const reportWithMeeting = {
@@ -458,11 +401,7 @@ export default function MeetingReportPublicPage() {
             </div>
             <button
               type="button"
-              onClick={() => {
-                const url = window.location.href
-                console.log('Copy button clicked, URL:', url)
-                setShowLinkModal(true)
-              }}
+              onClick={() => setShowLinkModal(true)}
               className="public-report-actions"
               style={{
                 display: 'inline-flex',
@@ -629,29 +568,15 @@ export default function MeetingReportPublicPage() {
                 type="button"
                 onClick={() => {
                   const text = window.location.href
-                  console.log('Copy button clicked, URL:', text)
 
-                  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-                    console.log('Attempting Clipboard API...')
-                    navigator.clipboard.writeText(text)
-                      .then(() => {
-                        console.log('✓ Clipboard API succeeded')
-                        setCopiedLink(true)
-                        setTimeout(() => setCopiedLink(false), 2000)
-                        setTimeout(() => setShowLinkModal(false), 800)
-                      })
-                      .catch(err => {
-                        console.error('✗ Clipboard API failed:', err)
-                        fallbackCopy(text)
-                      })
-                  } else {
-                    console.log('Clipboard API not available, using fallback')
-                    fallbackCopy(text)
+                  function onCopied() {
+                    setCopiedLink(true)
+                    setTimeout(() => setCopiedLink(false), 2000)
+                    setTimeout(() => setShowLinkModal(false), 800)
                   }
 
                   function fallbackCopy(str) {
                     try {
-                      console.log('Attempting execCommand fallback...')
                       const el = document.createElement('textarea')
                       el.value = str
                       el.style.position = 'absolute'
@@ -662,19 +587,17 @@ export default function MeetingReportPublicPage() {
                       el.setSelectionRange(0, 99999)
                       const result = document.execCommand('copy')
                       document.body.removeChild(el)
-                      console.log('execCommand result:', result)
-                      if (result) {
-                        console.log('✓ Fallback copy succeeded')
-                        setCopiedLink(true)
-                        setTimeout(() => setCopiedLink(false), 2000)
-                        setTimeout(() => setShowLinkModal(false), 800)
-                      } else {
-                        throw new Error('execCommand returned false')
-                      }
-                    } catch (fallbackErr) {
-                      console.error('✗ Fallback copy failed:', fallbackErr)
+                      if (result) onCopied()
+                      else throw new Error('execCommand returned false')
+                    } catch {
                       alert('Copy failed. Please select the link above and use Ctrl+C (or Cmd+C on Mac) to copy.')
                     }
+                  }
+
+                  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    navigator.clipboard.writeText(text).then(onCopied).catch(() => fallbackCopy(text))
+                  } else {
+                    fallbackCopy(text)
                   }
                 }}
                 style={{

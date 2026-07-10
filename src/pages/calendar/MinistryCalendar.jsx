@@ -4,6 +4,8 @@ import { Download, Settings } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent, getMonthEvents, getUpcomingEvents, getPendingEvents, getEventTypes, getOrCreateSubscription } from '../../features/calendar'
+import { getVisibleCategoriesForDept } from '../../features/calendar/hooks/useCategoryVisibility'
+import { supabase } from '../../lib/supabase'
 import { hasPermission } from '../../lib/permissions'
 import { useToast } from '../../context/ToastContext'
 import CalendarView from '../../features/calendar/components/CalendarView'
@@ -32,7 +34,30 @@ export default function MinistryCalendar() {
   const [pendingCount, setPendingCount] = useState(0)
   const [eventTypes, setEventTypes] = useState([])
   const [selectedEventTypes, setSelectedEventTypes] = useState(new Set())
-  const [deptOnly, setDeptOnly] = useState(false)
+  const [hiddenCategories, setHiddenCategories] = useState(null) // null = no restrictions
+
+  async function resolveOrgId() {
+    if (profile?.org_id) return profile.org_id
+    if (profile?.department_id) {
+      const { data } = await supabase.from('departments').select('organization_id').eq('id', profile.department_id).maybeSingle()
+      if (data?.organization_id) return data.organization_id
+    }
+    const { data } = await supabase.from('departments').select('organization_id').not('organization_id', 'is', null).limit(1).maybeSingle()
+    return data?.organization_id ?? null
+  }
+
+  async function loadDeptVisibility() {
+    // Super admins see everything — skip filter.
+    if (effectiveRole === 'super_admin') { setHiddenCategories(null); return }
+    try {
+      const orgId = await resolveOrgId()
+      const hidden = await getVisibleCategoriesForDept(orgId, profile?.department_id ?? null)
+      setHiddenCategories(hidden)
+    } catch (err) {
+      console.error('Failed to load dept visibility:', err)
+      setHiddenCategories(null) // fail open
+    }
+  }
 
   async function loadCalendar() {
     setLoading(true)
@@ -71,6 +96,10 @@ export default function MinistryCalendar() {
   useEffect(() => {
     loadEventTypes()
   }, [])
+
+  useEffect(() => {
+    if (profile?.id) loadDeptVisibility()
+  }, [effectiveRole, profile?.id, profile?.department_id])
 
   useEffect(() => {
     loadCalendar()
@@ -137,7 +166,7 @@ export default function MinistryCalendar() {
 
   const filteredEvents = events.filter((e) => {
     if (!selectedEventTypes.has(e.event_type)) return false
-    if (deptOnly && !e.department_id) return false
+    if (hiddenCategories && hiddenCategories.has(e.event_type)) return false
     return true
   })
 
@@ -197,8 +226,8 @@ export default function MinistryCalendar() {
       if (!profile?.id) throw new Error('User not authenticated')
       const subscription = await getOrCreateSubscription(
         profile.id,
-        deptOnly ? 'department' : 'all',
-        deptOnly ? (profile?.department_id ?? null) : null,
+        'all',
+        null,
       )
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-ical?token=${subscription.token}`
       await navigator.clipboard.writeText(url)
@@ -252,7 +281,8 @@ export default function MinistryCalendar() {
           month={month}
           onPrevMonth={goPrevMonth}
           onNextMonth={goNextMonth}
-          eventTypes={eventTypes}
+          events={filteredEvents}
+          eventTypes={hiddenCategories ? eventTypes.filter((t) => !hiddenCategories.has(t)) : eventTypes}
           selectedEventTypes={selectedEventTypes}
           onToggleType={(type, checked) => {
             const newSet = new Set(selectedEventTypes)
@@ -263,8 +293,6 @@ export default function MinistryCalendar() {
             }
             setSelectedEventTypes(newSet)
           }}
-          deptOnly={deptOnly}
-          onDeptOnlyChange={setDeptOnly}
           onShare={copySubscribeLink}
           onDownload={downloadICS}
           onOpenSettings={effectiveRole === 'super_admin' ? () => navigate('/calendar/settings') : undefined}
@@ -294,8 +322,8 @@ export default function MinistryCalendar() {
 
             <SubscribeButton
               userId={profile?.id}
-              deptOnly={deptOnly}
-              departmentId={profile?.department_id}
+              deptOnly={false}
+              departmentId={null}
             />
 
             <motion.button
@@ -349,7 +377,11 @@ export default function MinistryCalendar() {
             loading={loading}
             year={year}
             month={month}
-            upcomingEvents={upcoming.filter((e) => selectedEventTypes.has(e.event_type) && (!deptOnly || e.department_id))}
+            upcomingEvents={upcoming.filter((e) => {
+              if (!selectedEventTypes.has(e.event_type)) return false
+              if (hiddenCategories && hiddenCategories.has(e.event_type)) return false
+              return true
+            })}
             highlightedEventId={location.state?.highlightedEventId ?? null}
             onEventClick={setSelectedEvent}
             onDayClick={(day) => {

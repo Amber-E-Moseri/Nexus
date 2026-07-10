@@ -9,7 +9,6 @@ import { motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight, Share2, Download, Settings } from 'lucide-react'
 import { EVENT_COLORS } from './CalendarEventCard'
 import CalendarSourcesPanel from './CalendarSourcesPanel'
-import Toggle from './Toggle'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
 
 // Hex literals inside framer-motion animate targets mirror existing tokens
@@ -113,16 +112,98 @@ export function SectionLabel({ children }) {
   )
 }
 
+const MINI_DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+
+function miniStartOfGrid(year, month) {
+  const first = new Date(year, month, 1)
+  const offset = (first.getDay() + 6) % 7
+  first.setDate(first.getDate() - offset)
+  return first
+}
+
+function sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
+function MiniCalendarGrid({ year, month, events = [], onDayClick }) {
+  const gridStart = miniStartOfGrid(year, month)
+  const today = new Date()
+  const days = Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(gridStart)
+    d.setDate(gridStart.getDate() + i)
+    return d
+  })
+
+  return (
+    <div style={{ padding: '4px 10px 10px', fontFamily: FONT_BODY }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px' }}>
+        {MINI_DAYS.map((d, i) => (
+          <div key={i} style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', padding: '2px 0 4px', letterSpacing: '0.04em' }}>
+            {d}
+          </div>
+        ))}
+        {days.map((day) => {
+          const inMonth = day.getMonth() === month
+          const isToday = sameDay(day, today)
+          const dayEvents = events.filter((e) => sameDay(new Date(e.start_date), day))
+          const dots = dayEvents.slice(0, 3)
+
+          return (
+            <div
+              key={day.toISOString()}
+              onClick={() => onDayClick?.(day)}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                padding: '2px 0',
+                cursor: onDayClick ? 'pointer' : 'default',
+                borderRadius: 4,
+                opacity: inMonth ? 1 : 0.3,
+              }}
+            >
+              <div style={{
+                width: 22,
+                height: 22,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                fontSize: 11,
+                fontWeight: isToday ? 700 : 400,
+                color: isToday ? 'white' : 'var(--text-primary)',
+                background: isToday ? 'var(--accent)' : 'transparent',
+              }}>
+                {day.getDate()}
+              </div>
+              <div style={{ display: 'flex', gap: 2, marginTop: 1, minHeight: 5 }}>
+                {dots.map((e, i) => (
+                  <span key={i} style={{
+                    width: 4,
+                    height: 4,
+                    borderRadius: '50%',
+                    background: e.color ?? EVENT_COLORS[e.event_type] ?? EVENT_COLORS.event,
+                    display: 'block',
+                  }} />
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function CalendarSidebar({
   year,
   month,
   onPrevMonth,
   onNextMonth,
+  events,
   eventTypes,
   selectedEventTypes,
   onToggleType,
-  deptOnly,
-  onDeptOnlyChange,
   onShare,
   onDownload,
   onOpenSettings,
@@ -197,6 +278,11 @@ export default function CalendarSidebar({
         </motion.div>
       </motion.div>
 
+      {/* Mini calendar grid */}
+      <motion.div variants={sectionEnter} style={{ borderBottom: '1px solid var(--border-light)' }}>
+        <MiniCalendarGrid year={year} month={month} events={events} />
+      </motion.div>
+
       {/* Event type filters */}
       <motion.div variants={sectionEnter} style={{ paddingBottom: 6 }}>
         <SectionLabel>Event Types</SectionLabel>
@@ -244,34 +330,6 @@ export default function CalendarSidebar({
         <CalendarSourcesPanel />
       </motion.div>
 
-      {/* View filters */}
-      <motion.div variants={sectionEnter} style={{ borderTop: '1px solid var(--border-light)', paddingBottom: 8 }}>
-        <SectionLabel>Filters</SectionLabel>
-        <motion.div
-          initial={{ backgroundColor: HOVER_BG_OFF }}
-          whileHover={{ backgroundColor: HOVER_BG }}
-          transition={{ duration: 0.13 }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 9,
-            padding: '5px 14px',
-            minHeight: 28,
-          }}
-        >
-          <span
-            onClick={() => onDeptOnlyChange(!deptOnly)}
-            style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 450, userSelect: 'none' }}
-          >
-            My department only
-          </span>
-          <Toggle
-            checked={deptOnly}
-            onChange={() => onDeptOnlyChange(!deptOnly)}
-            label="Show only my department's events"
-          />
-        </motion.div>
-      </motion.div>
     </motion.aside>
   )
 }

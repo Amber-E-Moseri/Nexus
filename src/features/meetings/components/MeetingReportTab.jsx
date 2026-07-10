@@ -2088,12 +2088,20 @@ export default function MeetingReportTab() {
             <div className="print-section print-no-break" style={{ marginTop: 0 }}>
               <div style={{ width: '100%', background: '#3D1A78', color: 'white', padding: '20px 22px', boxSizing: 'border-box' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: '0.01em' }}>BLW CAN NEXUS</div>
-                    <div style={{ fontSize: 13, marginTop: 5, opacity: 0.92 }}>
-                      {printingSubgroup ? `${printingSubgroup} Attendance Report` : 'Regional Attendance Report'}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                    <img
+                      src="/logo-purple-192.png"
+                      alt=""
+                      crossOrigin="anonymous"
+                      style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0, display: 'block' }}
+                    />
+                    <div>
+                      <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: '0.01em' }}>BLW CAN NEXUS</div>
+                      <div style={{ fontSize: 13, marginTop: 5, opacity: 0.92 }}>
+                        {printingSubgroup ? `${printingSubgroup} Attendance Report` : 'Regional Attendance Report'}
+                      </div>
+                      <div style={{ fontSize: 11, marginTop: 8, color: '#E8DFFF' }}>{report.label}</div>
                     </div>
-                    <div style={{ fontSize: 11, marginTop: 8, color: '#E8DFFF' }}>{report.label}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ display: 'inline-block', border: '1px solid rgba(255,255,255,0.45)', borderRadius: 999, padding: '5px 12px', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>

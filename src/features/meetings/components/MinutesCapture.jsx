@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { supabase } from '../../../lib/supabase'
 import { useHasPermission } from '../../../hooks/useHasPermission'
 import {
   createMinutes,
