@@ -115,7 +115,7 @@ function SectionTitle({ children }) {
   )
 }
 
-export default function TaskFilters({ filters, setFilters, clearFilters, hasActiveFilters, members = [], statuses = [], tasks = [] }) {
+export default function TaskFilters({ filters, setFilters, clearFilters, hasActiveFilters, members = [], statuses = [], tasks = [], forceExpanded = false }) {
   const [showFilters, setShowFilters] = useState(false)
   const availableSources = Array.from(new Set(tasks.map((task) => task.source ?? 'manual')))
   const availableTypes = Array.from(new Set(tasks.map((task) => task.task_type).filter(Boolean)))
@@ -149,45 +149,47 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
 
   return (
     <div style={{ display: 'grid', gap: 14 }}>
-      <button
-        type="button"
-        onClick={() => setShowFilters(!showFilters)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '8px 12px',
-          borderRadius: 10,
-          border: hasActiveFilters() ? '1px solid var(--accent)' : '1px solid var(--border)',
-          background: hasActiveFilters() ? 'var(--accent-light)' : 'white',
-          color: hasActiveFilters() ? 'var(--accent)' : 'var(--text-primary)',
-          cursor: 'pointer',
-          transition: 'all 0.15s',
-        }}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <line x1="4" y1="6" x2="20" y2="6" />
-          <line x1="4" y1="12" x2="20" y2="12" />
-          <line x1="4" y1="18" x2="20" y2="18" />
-        </svg>
-        {hasActiveFilters() && (
-          <span
-            style={{
-              marginLeft: 'auto',
-              fontSize: 11,
-              fontWeight: 700,
-              background: 'var(--accent)',
-              color: 'white',
-              borderRadius: 999,
-              padding: '2px 6px',
-            }}
-          >
-            {Object.values(filters).flat().filter(Boolean).length}
-          </span>
-        )}
-      </button>
+      {!forceExpanded ? (
+        <button
+          type="button"
+          onClick={() => setShowFilters(!showFilters)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 12px',
+            borderRadius: 10,
+            border: hasActiveFilters() ? '1px solid var(--accent)' : '1px solid var(--border)',
+            background: hasActiveFilters() ? 'var(--accent-light)' : 'white',
+            color: hasActiveFilters() ? 'var(--accent)' : 'var(--text-primary)',
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="18" x2="20" y2="18" />
+          </svg>
+          {hasActiveFilters() && (
+            <span
+              style={{
+                marginLeft: 'auto',
+                fontSize: 11,
+                fontWeight: 700,
+                background: 'var(--accent)',
+                color: 'white',
+                borderRadius: 999,
+                padding: '2px 6px',
+              }}
+            >
+              {Object.values(filters).flat().filter(Boolean).length}
+            </span>
+          )}
+        </button>
+      ) : null}
 
-      {showFilters && (
+      {(showFilters || forceExpanded) && (
         <div style={{ display: 'grid', gap: 14 }}>
           <div style={{ display: 'grid', gap: 10 }}>
             <SectionTitle>Status</SectionTitle>

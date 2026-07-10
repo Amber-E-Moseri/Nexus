@@ -348,7 +348,29 @@ function SpaceSopCard({ spaceId, spaceName, canManage }) {
   )
 }
 
+const WIDGET_LABELS = {
+  glance: 'Space at a glance',
+  metrics: 'Lists / Sprints / Members',
+  organizer: 'Folders & Lists',
+  activity: 'Recent Activity & Meetings',
+  sops: 'SOPs & Resources',
+}
+const DEFAULT_WIDGETS = { glance: true, metrics: true, organizer: true, activity: true, sops: true }
+
 function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings, selectedFolder, selectedList, canManage, onSelectList, onTreeDataChange }) {
+  const WIDGET_KEY = `nexus_overview_widgets_${space.id}`
+  const [widgetConfig, setWidgetConfig] = useState(() => {
+    try {
+      const stored = localStorage.getItem(WIDGET_KEY)
+      return stored ? { ...DEFAULT_WIDGETS, ...JSON.parse(stored) } : DEFAULT_WIDGETS
+    } catch { return DEFAULT_WIDGETS }
+  })
+  const [customizeOpen, setCustomizeOpen] = useState(false)
+
+  useEffect(() => {
+    try { localStorage.setItem(WIDGET_KEY, JSON.stringify(widgetConfig)) } catch {}
+  }, [widgetConfig])
+
   const mediaSpace = isMediaDepartment(space)
   const activeSprints = mediaSpace ? 0 : sprints.filter((sprint) => sprint.status === 'active').length
   const effectiveListsCount = mediaSpace ? 0 : listsCount
@@ -381,104 +403,143 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
         </div>
       ) : null}
 
-      <section>
-        <div className="mb-3 text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide">Space at a glance</div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {statusSummary.map((status) => (
-            <div key={status.key} className="rounded-[18px] border border-[var(--border)] bg-white p-4 shadow-[var(--card-shadow)] transition-all hover:shadow-[0_8px_16px_rgba(14,14,30,0.12)]">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-xs font-semibold uppercase text-[var(--text-tertiary)] tracking-[0.08em]">{status.label}</div>
-                  <div className="mt-2 text-[32px] font-semibold leading-none text-[var(--text-primary)]">{status.count}</div>
+      <div className="flex items-center justify-end">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setCustomizeOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)] hover:bg-[var(--surface-hover)]"
+          >
+            <Settings size={12} />
+            Customize
+          </button>
+          {customizeOpen ? (
+            <div className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[220px] rounded-[14px] border border-[var(--border)] bg-white p-3 shadow-[0_8px_24px_rgba(14,14,30,0.14)]">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">Visible widgets</div>
+              <div className="space-y-1">
+                {Object.entries(WIDGET_LABELS).map(([key, label]) => (
+                  <label key={key} className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
+                    <input
+                      type="checkbox"
+                      checked={widgetConfig[key] !== false}
+                      onChange={() => setWidgetConfig((prev) => ({ ...prev, [key]: !prev[key] }))}
+                      className="h-3.5 w-3.5 rounded"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {widgetConfig.glance !== false ? (
+        <section>
+          <div className="mb-3 text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide">Space at a glance</div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {statusSummary.map((status) => (
+              <div key={status.key} className="rounded-[18px] border border-[var(--border)] bg-white p-4 shadow-[var(--card-shadow)] transition-all hover:shadow-[0_8px_16px_rgba(14,14,30,0.12)]">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-semibold uppercase text-[var(--text-tertiary)] tracking-[0.08em]">{status.label}</div>
+                    <div className="mt-2 text-[32px] font-semibold leading-none text-[var(--text-primary)]">{status.count}</div>
+                  </div>
+                  <div className="h-3 w-3 rounded-full" style={{ background: STATUS_ACCENT[status.key] ?? '#E5E7EB' }} />
                 </div>
-                <div className="h-3 w-3 rounded-full" style={{ background: STATUS_ACCENT[status.key] ?? '#E5E7EB' }} />
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {widgetConfig.metrics !== false ? (
+        <section className="grid gap-4 sm:grid-cols-3">
+          {[
+            { label: 'Lists', value: effectiveListsCount, icon: '📋' },
+            { label: 'Active sprints', value: activeSprints, icon: '🏃' },
+            { label: 'Members', value: members.length, icon: '👥' },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center gap-3 rounded-[18px] border border-[var(--border)] bg-white px-4 py-4 shadow-[var(--card-shadow)]">
+              <div className="text-2xl">{item.icon}</div>
+              <div className="min-w-0">
+                <div className="text-xs font-semibold uppercase text-[var(--text-tertiary)] tracking-[0.08em]">{item.label}</div>
+                <div className="mt-1 text-[24px] font-semibold text-[var(--text-primary)]">{item.value}</div>
               </div>
             </div>
           ))}
-        </div>
-      </section>
+        </section>
+      ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        {[
-          { label: 'Lists', value: effectiveListsCount, icon: '📋' },
-          { label: 'Active sprints', value: activeSprints, icon: '🏃' },
-          { label: 'Members', value: members.length, icon: '👥' },
-        ].map((item) => (
-          <div key={item.label} className="flex items-center gap-3 rounded-[18px] border border-[var(--border)] bg-white px-4 py-4 shadow-[var(--card-shadow)]">
-            <div className="text-2xl">{item.icon}</div>
-            <div className="min-w-0">
-              <div className="text-xs font-semibold uppercase text-[var(--text-tertiary)] tracking-[0.08em]">{item.label}</div>
-              <div className="mt-1 text-[24px] font-semibold text-[var(--text-primary)]">{item.value}</div>
+      {widgetConfig.organizer !== false ? (
+        <section className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+          <div className="mb-1 text-lg font-semibold text-[var(--text-primary)]">Folders &amp; Lists</div>
+          <p className="mb-4 text-sm text-[var(--text-secondary)]">
+            Organize this space: create lists inside folders, drag lists between folders, and control who can see private lists.
+          </p>
+          <SpaceOrganizerPanel
+            spaceId={space.id}
+            selectedListId={selectedList?.id ?? null}
+            onSelectList={onSelectList}
+            canManage={canManage}
+            onTreeDataChange={onTreeDataChange}
+            members={members}
+          />
+        </section>
+      ) : null}
+
+      {widgetConfig.activity !== false ? (
+        <section className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
+          <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+            <div className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Recent Activity</div>
+            <div className="space-y-4">
+              {recentActivity.map((task, index) => {
+                const member = members.find((item) => item.id === task.assignee_id) ?? members[index % Math.max(members.length, 1)]
+                return (
+                  <div key={task.id} className="flex items-start gap-3">
+                    <div
+                      className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
+                      style={{ background: member?.avatar_color ?? '#5B34C7' }}
+                    >
+                      {getInitials(member?.name ?? task.title)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm text-[var(--text-primary)]">
+                        <span className="font-semibold">{member?.name ?? 'Team member'}</span> updated <span className="font-medium">"{task.title}"</span>
+                      </div>
+                      <div className="mt-1 text-xs text-[var(--text-tertiary)]">{formatRelativeTime(task.updated_at ?? task.created_at)}</div>
+                    </div>
+                  </div>
+                )
+              })}
+              {recentActivity.length === 0 ? (
+                <div className="flex min-h-[240px] items-center justify-center rounded-[20px] border border-dashed border-[var(--border)] bg-[var(--surface-tertiary)] p-6 text-center text-sm text-[var(--text-tertiary)]">
+                  No recent activity yet.
+                </div>
+              ) : null}
             </div>
           </div>
-        ))}
-      </section>
 
-      <section className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-        <div className="mb-1 text-lg font-semibold text-[var(--text-primary)]">Folders &amp; Lists</div>
-        <p className="mb-4 text-sm text-[var(--text-secondary)]">
-          Organize this space: create lists inside folders, drag lists between folders, and control who can see private lists.
-        </p>
-        <SpaceOrganizerPanel
-          spaceId={space.id}
-          selectedListId={selectedList?.id ?? null}
-          onSelectList={onSelectList}
-          canManage={canManage}
-          onTreeDataChange={onTreeDataChange}
-          members={members}
-        />
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
-        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <div className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Recent Activity</div>
-          <div className="space-y-4">
-            {recentActivity.map((task, index) => {
-              const member = members.find((item) => item.id === task.assignee_id) ?? members[index % Math.max(members.length, 1)]
-              return (
-                <div key={task.id} className="flex items-start gap-3">
-                  <div
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
-                    style={{ background: member?.avatar_color ?? '#5B34C7' }}
-                  >
-                    {getInitials(member?.name ?? task.title)}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm text-[var(--text-primary)]">
-                      <span className="font-semibold">{member?.name ?? 'Team member'}</span> updated <span className="font-medium">"{task.title}"</span>
-                    </div>
-                    <div className="mt-1 text-xs text-[var(--text-tertiary)]">{formatRelativeTime(task.updated_at ?? task.created_at)}</div>
-                  </div>
+          <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+            <div className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Upcoming Meetings</div>
+            <div className="space-y-3">
+              {visibleMeetings.map((meeting) => (
+                <div key={meeting.id} className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+                  <div className="font-medium text-[var(--text-primary)]">{meeting.title}</div>
+                  <div className="mt-1 text-xs text-[var(--text-tertiary)]">{formatDateTime(meeting.date)}</div>
                 </div>
-              )
-            })}
-            {recentActivity.length === 0 ? (
-              <div className="flex min-h-[240px] items-center justify-center rounded-[20px] border border-dashed border-[var(--border)] bg-[var(--surface-tertiary)] p-6 text-center text-sm text-[var(--text-tertiary)]">
-                No recent activity yet.
-              </div>
-            ) : null}
+              ))}
+              {visibleMeetings.length === 0 ? (
+                <div className="flex min-h-[240px] items-center justify-center rounded-2xl bg-[var(--surface-tertiary)] px-4 py-6 text-center text-sm text-[var(--text-tertiary)]">
+                  No upcoming meetings.
+                </div>
+              ) : null}
+            </div>
           </div>
-        </div>
+        </section>
+      ) : null}
 
-        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <div className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Upcoming Meetings</div>
-          <div className="space-y-3">
-            {visibleMeetings.map((meeting) => (
-              <div key={meeting.id} className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
-                <div className="font-medium text-[var(--text-primary)]">{meeting.title}</div>
-                <div className="mt-1 text-xs text-[var(--text-tertiary)]">{formatDateTime(meeting.date)}</div>
-              </div>
-            ))}
-            {visibleMeetings.length === 0 ? (
-              <div className="flex min-h-[240px] items-center justify-center rounded-2xl bg-[var(--surface-tertiary)] px-4 py-6 text-center text-sm text-[var(--text-tertiary)]">
-                No upcoming meetings.
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      <SpaceSopCard spaceId={space.id} spaceName={space.name} canManage={canManage} />
+      {widgetConfig.sops !== false ? <SpaceSopCard spaceId={space.id} spaceName={space.name} canManage={canManage} /> : null}
     </div>
   )
 }
@@ -1271,37 +1332,38 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
           </div>
         ) : null}
 
-        {viewMode !== 'kanban' ? (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm text-[var(--text-secondary)]">
-              {selectedList ? `${selectedFolder?.name ?? ''} → ${selectedList.name}` : selectedFolder ? `${selectedFolder.name} — filtered` : 'All tasks in this space'}
-            </div>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))}
+            className={[
+              'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+              filters.assigneeId === profile?.id
+                ? 'border-[var(--accent)] bg-[var(--accent-light)] text-[var(--accent)]'
+                : 'border-[var(--border)] bg-white text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]',
+            ].join(' ')}
+          >
+            Assigned to me
+          </button>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setBoardFiltersOpen((current) => !current)}
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
+            >
+              <SlidersHorizontal size={14} />
+              <span>Filter</span>
+              {activeFilterCount > 0 ? <span className="text-[var(--accent)]">({activeFilterCount})</span> : null}
+            </button>
+
+            {boardFiltersOpen ? (
+              <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[640px] max-w-[80vw] rounded-[16px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-lg)]">
+                <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={members} statuses={visibleStatuses} tasks={visibleTasks} forceExpanded />
+              </div>
+            ) : null}
           </div>
-        ) : null}
-
-        {viewMode === 'kanban' ? (
-          <div className="flex items-center justify-end">
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setBoardFiltersOpen((current) => !current)}
-                className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
-              >
-                <SlidersHorizontal size={14} />
-                <span>Filter</span>
-                {activeFilterCount > 0 ? <span className="text-[var(--accent)]">({activeFilterCount})</span> : null}
-              </button>
-
-              {boardFiltersOpen ? (
-                <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[640px] max-w-[80vw] rounded-[16px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-lg)]">
-                  <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={visibleStatuses} tasks={visibleTasks} />
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        {viewMode === 'list' ? <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={visibleStatuses} tasks={visibleTasks} /> : null}
+        </div>
 
         {viewMode === 'kanban' ? (
           <div className="min-h-[520px]">
@@ -1795,15 +1857,6 @@ export default function SpaceOverview() {
         </div>
       </div>
 
-      {/* DEBUG BANNER — remove after testing */}
-      {(selectedListId || selectedFolderId || calendarTaskModal) ? (
-        <div style={{ position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: '#1C1610', color: '#fff', borderRadius: 12, padding: '10px 20px', fontSize: 13, display: 'flex', gap: 16, alignItems: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
-          {selectedListId ? <span>✅ List: <b>{treeData.lists.find(l => l.id === selectedListId)?.name ?? selectedListId}</b></span> : null}
-          {selectedFolderId && !selectedListId ? <span>📁 Folder: <b>{treeData.folders.find(f => f.id === selectedFolderId)?.name ?? selectedFolderId}</b></span> : null}
-          {calendarTaskModal ? <span>🗓 Modal opened: <b>{calendarTaskModal.title ?? calendarTaskModal.id}</b></span> : null}
-          <button type="button" onClick={() => { setSelectedListId(null); setSelectedFolderId(null); setCalendarTaskModal(null) }} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: 8, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>✕</button>
-        </div>
-      ) : null}
 
       {tabContent}
 
