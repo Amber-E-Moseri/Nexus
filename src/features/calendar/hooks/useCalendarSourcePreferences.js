@@ -20,6 +20,18 @@ export function useCalendarSourcePreferences() {
     setLoading(true)
     setError(null)
     try {
+      // Only show sources when there is an active connection. Without this
+      // check, sources become visible as orphaned rows after a disconnect.
+      const { data: conn } = await supabase
+        .from('ministry_calendar_connection')
+        .select('id')
+        .maybeSingle()
+      if (!conn) {
+        setSources([])
+        setHiddenSourceIds(new Set())
+        return
+      }
+
       const { data: sourceRows, error: sourcesErr } = await supabase
         .from('ministry_calendar_sources')
         .select('id, display_name, color, sync_enabled')

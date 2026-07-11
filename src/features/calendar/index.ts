@@ -23,6 +23,8 @@ export {
   rejectEvent,
   getPendingApprovals,
   getOrCreateSubscription,
+  getMinistryCalendarSources,
+  syncCalendarSource,
   getSubscriptions,
   deleteSubscription,
   getEventsBySubscriptionToken,

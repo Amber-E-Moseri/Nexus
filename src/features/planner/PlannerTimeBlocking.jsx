@@ -37,7 +37,16 @@ export default function PlannerTimeBlocking() {
   const { showToast } = useToast()
   const userId = profile?.id ?? ''
 
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [mobileDate, setMobileDate] = useState(() => new Date())
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const weekStartISO = toISODate(weekStart)
   const weekEndISO = toISODate(addDays(weekStart, 6))
   const todayISO = toISODate(new Date())
@@ -345,9 +354,32 @@ export default function PlannerTimeBlocking() {
 
   const dragTask = activeDrag?.type === 'task' ? activeDrag.task : activeDrag?.type === 'block' ? taskById[activeDrag.block.task_id] : null
 
+  const handleMobileDateChange = useCallback((d) => {
+    setMobileDate(d)
+    setWeekStart(startOfWeek(d))
+  }, [])
+
   return (
-    <div style={{ padding: '18px 22px', background: BG, minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PlannerHeader weekStart={weekStart} onWeekChange={setWeekStart} onSyncToCalendar={() => setCalendarPanelOpen(true)} />
+    <div style={{ padding: isMobile ? '12px 14px' : '18px 22px', background: BG, minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
+      <PlannerHeader
+        weekStart={weekStart}
+        onWeekChange={setWeekStart}
+        onSyncToCalendar={isMobile ? null : () => setCalendarPanelOpen(true)}
+        isMobile={isMobile}
+        mobileDate={mobileDate}
+        onMobileDateChange={handleMobileDateChange}
+      />
+
+      {isMobile && (
+        <button
+          type="button"
+          onClick={() => setSidebarOpen((o) => !o)}
+          style={{ alignSelf: 'flex-start', marginBottom: 8, border: `1px solid ${BORDER}`, background: 'white', borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 600, color: TEXT, cursor: 'pointer' }}
+        >
+          {sidebarOpen ? 'Hide tasks ▲' : 'Tasks & wins ▼'}
+        </button>
+      )}
+
       <WarningBanner warnings={bannerWarnings} onDismiss={(key) => setDismissedWarnings((prev) => new Set(prev).add(key))} />
 
       <DndContext
@@ -356,22 +388,26 @@ export default function PlannerTimeBlocking() {
         onDragCancel={() => setActiveDrag(null)}
         onDragEnd={handleDragEnd}
       >
-        <div style={{ display: 'flex', gap: 14, flex: 1, minHeight: 0, height: 'calc(100vh - 180px)' }}>
-          <PlannerSidebar
-            groups={groups}
-            kpis={kpis}
-            priorityFilter={priorityFilter}
-            onTogglePriority={handleTogglePriority}
-            expandedTaskIds={expandedTaskIds}
-            subtasksByParentId={subtasksByParentId}
-            scheduledTaskIds={scheduledTaskIds}
-            onToggleExpand={handleToggleExpand}
-            onOpenTask={setModalTask}
-            departmentId={profile?.department_id}
-            weekStart={weekStart}
-          />
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 14, flex: 1, minHeight: 0, height: isMobile ? 'auto' : 'calc(100vh - 180px)' }}>
+          {(!isMobile || sidebarOpen) && (
+            <PlannerSidebar
+              groups={groups}
+              kpis={kpis}
+              priorityFilter={priorityFilter}
+              onTogglePriority={handleTogglePriority}
+              expandedTaskIds={expandedTaskIds}
+              subtasksByParentId={subtasksByParentId}
+              scheduledTaskIds={scheduledTaskIds}
+              onToggleExpand={handleToggleExpand}
+              onOpenTask={setModalTask}
+              departmentId={profile?.department_id}
+              weekStart={weekStart}
+              isMobile={isMobile}
+            />
+          )}
           <PlannerGrid
             weekStart={weekStart}
+            overrideDays={isMobile ? [mobileDate] : undefined}
             timeBlocks={timeBlocks}
             taskById={taskById}
             severityByBlockId={severityByBlockId}

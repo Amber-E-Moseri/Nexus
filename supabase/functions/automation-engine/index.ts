@@ -97,6 +97,8 @@ type TriggerConditions = {
   any_status_change?: boolean
   department_id?: string
   days_before?: number
+  to_list_id?: string
+  days_inactive?: number
 }
 
 // The "IF conditions" step in AutomationBuilder — up to 3 field/operator/value
@@ -112,6 +114,7 @@ const CONDITION_FIELD_MAP: Record<string, string> = {
   'task.priority': 'priority',
   'task.department': 'department_id',
   'task.assignee': 'assignee_id',
+  'task.list_id': 'list_id',
 }
 
 function evaluateBuilderConditions(
@@ -187,6 +190,42 @@ function evaluateTriggerConditions(
   if (triggerType === 'delegated_task_due_soon') {
     const daysBefore = typeof conditions.days_before === 'number' ? conditions.days_before : 1
     return newRecord.days_until_due === daysBefore
+  }
+
+  if (triggerType === 'task_created') {
+    if (conditions.department_id) {
+      return newRecord.department_id === conditions.department_id
+    }
+    return true
+  }
+
+  if (triggerType === 'task_moved_list') {
+    if (!oldRecord || oldRecord.list_id === newRecord.list_id) return false
+    if (conditions.to_list_id) return newRecord.list_id === conditions.to_list_id
+    return true
+  }
+
+  if (triggerType === 'date_changed') {
+    if (!oldRecord) return false
+    return oldRecord.due_date !== newRecord.due_date || oldRecord.start_date !== newRecord.start_date
+  }
+
+  if (triggerType === 'assignee_removed') {
+    if (!oldRecord) return false
+    return oldRecord.assignee_id != null && newRecord.assignee_id == null
+  }
+
+  if (triggerType === 'comment_added') {
+    if (conditions.department_id) {
+      return newRecord.department_id === conditions.department_id
+    }
+    return true
+  }
+
+  if (triggerType === 'task_inactive') {
+    // Candidate tasks are already filtered by trigger_config.days_inactive
+    // in the task-inactive-trigger cron function before this engine sees them.
+    return true
   }
 
   return true
@@ -309,6 +348,153 @@ async function executeAction(
         return { action_type: 'create_task', result: { created_task_id: task?.id } }
       }
 
+      case 'update_task_status': {
+        const statusId = typeof config.status === 'string' ? config.status : null
+        const taskId = typeof context.task_id === 'string' ? context.task_id : (typeof context.id === 'string' ? context.id : null)
+
+        if (!statusId || !taskId) {
+          return { action_type: 'update_task_status', result: { skipped: true, reason: 'missing_status_or_task' } }
+        }
+
+        const { data: statusDef, error: statusError } = await supabase
+          .from('task_status_definitions')
+          .select('id, legacy_key, category')
+          .eq('id', statusId)
+          .single()
+
+        if (statusError || !statusDef) {
+          return { action_type: 'update_task_status', result: { skipped: true, reason: 'status_not_found' } }
+        }
+
+        const { error } = await supabase
+          .from('tasks')
+          .update({
+            status_id: statusDef.id,
+            status: statusDef.legacy_key ?? undefined,
+            completed_at: statusDef.category === 'completed' ? new Date().toISOString() : null,
+          })
+          .eq('id', taskId)
+
+        if (error) throw error
+        return { action_type: 'update_task_status', result: { updated_task_id: taskId, status_id: statusDef.id } }
+      }
+
+      case 'assign_task': {
+        const taskId = typeof context.task_id === 'string' ? context.task_id : (typeof context.id === 'string' ? context.id : null)
+        if (!taskId) {
+          return { action_type: 'assign_task', result: { skipped: true, reason: 'missing_task' } }
+        }
+
+        let assigneeId: string | null = null
+        if (config.assignee_id === '__creator__') {
+          assigneeId = typeof context.created_by === 'string' ? context.created_by : null
+        } else if (typeof config.assignee_id === 'string' && config.assignee_id) {
+          assigneeId = config.assignee_id
+        }
+
+        if (!assigneeId) {
+          return { action_type: 'assign_task', result: { skipped: true, reason: 'no_assignee_resolved' } }
+        }
+
+        const { error } = await supabase.from('tasks').update({ assignee_id: assigneeId }).eq('id', taskId)
+        if (error) throw error
+        return { action_type: 'assign_task', result: { updated_task_id: taskId, assignee_id: assigneeId } }
+      }
+
+      case 'set_field': {
+        const taskId = typeof context.task_id === 'string' ? context.task_id : (typeof context.id === 'string' ? context.id : null)
+        const field = typeof config.field === 'string' ? config.field : null
+
+        if (!taskId || !field || !['due_date', 'start_date'].includes(field)) {
+          return { action_type: 'set_field', result: { skipped: true, reason: 'invalid_field_or_task' } }
+        }
+
+        let value: string
+        if (typeof config.relative_days === 'number') {
+          const target = new Date()
+          target.setDate(target.getDate() + config.relative_days)
+          value = target.toISOString().split('T')[0]
+        } else if (typeof config.value === 'string' && config.value) {
+          value = config.value
+        } else {
+          value = new Date().toISOString().split('T')[0]
+        }
+
+        const { error } = await supabase.from('tasks').update({ [field]: value }).eq('id', taskId)
+        if (error) throw error
+        return { action_type: 'set_field', result: { updated_task_id: taskId, field, value } }
+      }
+
+      case 'clear_field': {
+        const taskId = typeof context.task_id === 'string' ? context.task_id : (typeof context.id === 'string' ? context.id : null)
+        const field = typeof config.field === 'string' ? config.field : null
+
+        if (!taskId || !field || !['due_date', 'start_date', 'assignee_id'].includes(field)) {
+          return { action_type: 'clear_field', result: { skipped: true, reason: 'invalid_field_or_task' } }
+        }
+
+        const { error } = await supabase.from('tasks').update({ [field]: null }).eq('id', taskId)
+        if (error) throw error
+        return { action_type: 'clear_field', result: { updated_task_id: taskId, field } }
+      }
+
+      case 'move_to_list': {
+        const taskId = typeof context.task_id === 'string' ? context.task_id : (typeof context.id === 'string' ? context.id : null)
+        const listId = typeof config.list_id === 'string' ? config.list_id : null
+
+        if (!taskId || !listId) {
+          return { action_type: 'move_to_list', result: { skipped: true, reason: 'missing_list_or_task' } }
+        }
+
+        const { error } = await supabase.from('tasks').update({ list_id: listId }).eq('id', taskId)
+        if (error) throw error
+        return { action_type: 'move_to_list', result: { updated_task_id: taskId, list_id: listId } }
+      }
+
+      case 'shift_dependent_dates': {
+        const taskId = typeof context.task_id === 'string' ? context.task_id : (typeof context.id === 'string' ? context.id : null)
+        const dueDelta = typeof context.due_date_delta_days === 'number' ? context.due_date_delta_days : null
+        const startDelta = typeof context.start_date_delta_days === 'number' ? context.start_date_delta_days : null
+
+        if (!taskId || (!dueDelta && !startDelta)) {
+          return { action_type: 'shift_dependent_dates', result: { skipped: true, reason: 'no_date_delta' } }
+        }
+
+        const { data: dependents, error: depsError } = await supabase
+          .from('task_dependencies')
+          .select('task_id, tasks!task_id(id, due_date, start_date)')
+          .eq('depends_on_id', taskId)
+
+        if (depsError) throw depsError
+        if (!dependents?.length) {
+          return { action_type: 'shift_dependent_dates', result: { shifted: 0 } }
+        }
+
+        const shiftDate = (value: unknown, days: number): string | null => {
+          if (typeof value !== 'string') return null
+          const d = new Date(value)
+          d.setDate(d.getDate() + days)
+          return d.toISOString().split('T')[0]
+        }
+
+        let shifted = 0
+        for (const dep of dependents) {
+          const dependentTask = (dep as { tasks?: { id: string; due_date: string | null; start_date: string | null } }).tasks
+          if (!dependentTask) continue
+
+          const update: Record<string, string | null> = {}
+          if (dueDelta && dependentTask.due_date) update.due_date = shiftDate(dependentTask.due_date, dueDelta)
+          if (startDelta && dependentTask.start_date) update.start_date = shiftDate(dependentTask.start_date, startDelta)
+
+          if (Object.keys(update).length === 0) continue
+
+          const { error: updateError } = await supabase.from('tasks').update(update).eq('id', dependentTask.id)
+          if (!updateError) shifted += 1
+        }
+
+        return { action_type: 'shift_dependent_dates', result: { shifted } }
+      }
+
       case 'post_webhook': {
         const url = typeof config.url === 'string' ? config.url : null
         if (!url) {
@@ -395,10 +581,26 @@ Deno.serve(async (req) => {
   let newRecord: Record<string, unknown> | null = null
   let oldRecord: Record<string, unknown> | null = null
 
-  if (triggerType === 'task_status_change' || triggerType === 'task_assigned') {
+  const NEW_OLD_RECORD_TRIGGERS = [
+    'task_status_change',
+    'task_assigned',
+    'task_moved_list',
+    'date_changed',
+    'assignee_removed',
+  ]
+  const RECORD_ONLY_TRIGGERS = [
+    'meeting_created',
+    'task_overdue',
+    'delegated_task_due_soon',
+    'task_created',
+    'task_inactive',
+    'comment_added',
+  ]
+
+  if (NEW_OLD_RECORD_TRIGGERS.includes(triggerType)) {
     newRecord = typeof body.new_record === 'object' && body.new_record ? (body.new_record as Record<string, unknown>) : null
     oldRecord = typeof body.old_record === 'object' && body.old_record ? (body.old_record as Record<string, unknown>) : null
-  } else if (triggerType === 'meeting_created' || triggerType === 'task_overdue' || triggerType === 'delegated_task_due_soon') {
+  } else if (RECORD_ONLY_TRIGGERS.includes(triggerType)) {
     newRecord = typeof body.record === 'object' && body.record ? (body.record as Record<string, unknown>) : null
   }
 
@@ -406,11 +608,70 @@ Deno.serve(async (req) => {
     return jsonResponse(400, { error: 'record data is required' })
   }
 
+  // task_comments rows carry no department_id/sprint_id of their own — resolve
+  // the parent task so scoping and action context (assignee, status, etc.)
+  // work the same way they do for task-shaped triggers.
+  if (triggerType === 'comment_added') {
+    const taskId = typeof newRecord.task_id === 'string' ? newRecord.task_id : null
+    if (!taskId) {
+      return jsonResponse(400, { error: 'comment record is missing task_id' })
+    }
+
+    const { data: parentTask, error: parentTaskError } = await supabase
+      .from('tasks')
+      .select('id, department_id, sprint_id, title, assignee_id, created_by, status, priority')
+      .eq('id', taskId)
+      .single()
+
+    if (parentTaskError || !parentTask) {
+      return jsonResponse(200, { matched: 0, message: 'Parent task not found for comment' })
+    }
+
+    newRecord = {
+      ...newRecord,
+      task_id: taskId,
+      department_id: parentTask.department_id,
+      sprint_id: parentTask.sprint_id,
+      task_title: parentTask.title,
+      assignee_id: parentTask.assignee_id,
+      created_by: parentTask.created_by,
+      status: parentTask.status,
+      priority: parentTask.priority,
+    }
+  }
+
   // Task assigned condition: check if assignment actually changed
   if (triggerType === 'task_assigned' && oldRecord) {
     if (oldRecord.assignee_id === newRecord.assignee_id) {
       return jsonResponse(200, { matched: 0, message: 'No assignment change detected' })
     }
+  }
+
+  if (triggerType === 'task_moved_list' && (!oldRecord || oldRecord.list_id === newRecord.list_id)) {
+    return jsonResponse(200, { matched: 0, message: 'No list change detected' })
+  }
+
+  if (triggerType === 'date_changed' && (!oldRecord || (oldRecord.due_date === newRecord.due_date && oldRecord.start_date === newRecord.start_date))) {
+    return jsonResponse(200, { matched: 0, message: 'No date change detected' })
+  }
+
+  if (triggerType === 'assignee_removed' && (!oldRecord || oldRecord.assignee_id == null || newRecord.assignee_id != null)) {
+    return jsonResponse(200, { matched: 0, message: 'No assignee removal detected' })
+  }
+
+  // date_changed carries the shift delta so shift_dependent_dates can move
+  // dependent tasks by the same number of days rather than re-deriving it.
+  let dueDateDeltaDays: number | null = null
+  let startDateDeltaDays: number | null = null
+  if (triggerType === 'date_changed' && oldRecord) {
+    const diffDays = (a: unknown, b: unknown): number | null => {
+      if (typeof a !== 'string' || typeof b !== 'string') return null
+      const diffMs = new Date(a).getTime() - new Date(b).getTime()
+      if (Number.isNaN(diffMs)) return null
+      return Math.round(diffMs / (1000 * 60 * 60 * 24))
+    }
+    dueDateDeltaDays = diffDays(newRecord.due_date, oldRecord.due_date)
+    startDateDeltaDays = diffDays(newRecord.start_date, oldRecord.start_date)
   }
 
   // Automations are scoped to a department or a sprint (see automations_select
@@ -444,6 +705,7 @@ Deno.serve(async (req) => {
   }
 
   const results: Array<Record<string, unknown>> = []
+  const recordId = typeof newRecord.id === 'string' ? newRecord.id : null
 
   for (const automation of automations) {
     const runStart = Date.now()
@@ -462,9 +724,42 @@ Deno.serve(async (req) => {
         continue
       }
 
+      // Loop guard: actions like move_to_list/update_task_status can trigger
+      // another DB webhook that re-invokes this same automation for the same
+      // record (e.g. two rules that move a task back and forth between
+      // lists). Skip if this automation already fired for this exact record
+      // moments ago, bounding any accidental cycle instead of letting it run
+      // away.
+      if (recordId) {
+        const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString()
+        const { data: recentRuns } = await supabase
+          .from('automation_run_log')
+          .select('id')
+          .eq('automation_id', automation.id)
+          .eq('trigger_payload->new_record->>id', recordId)
+          .gte('ran_at', fiveSecondsAgo)
+          .limit(1)
+
+        if (recentRuns?.length) {
+          actionsExecuted.push({ result: { skipped: true, reason: 'loop_guard' } })
+          await supabase.from('automation_run_log').insert({
+            automation_id: automation.id,
+            trigger_type: triggerType,
+            trigger_payload: { ...body, new_record: newRecord, old_record: oldRecord },
+            actions_executed: actionsExecuted,
+            success: true,
+            error_message: null,
+            triggered_by_user_id: jwtData.sub,
+          })
+          continue
+        }
+      }
+
       const actionContext = {
         ...newRecord,
         old_status: oldRecord?.status,
+        due_date_delta_days: dueDateDeltaDays,
+        start_date_delta_days: startDateDeltaDays,
       }
 
       for (const action of automation.actions ?? []) {

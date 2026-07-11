@@ -68,8 +68,8 @@ export default function CalendarSettingsPage() {
   // This prevents non-calendar dept_leads (e.g., Media, ORS) from accessing Google connection.
   const isDeptLeadOfCalendarSpace = role === 'dept_lead' && (isProgramsMember || isAdminMember)
 
-  // Programs team and regional_secretary can manage category visibility.
-  const canManageVisibility = isProgramsMember || effectiveRole === 'regional_secretary'
+  // Super admin, Programs team, and regional_secretary can manage category visibility.
+  const canManageVisibility = isSuperAdmin || isProgramsMember || effectiveRole === 'regional_secretary'
 
   // Super admin or dept_lead of Programs/Admin can manage Google connection and subscriptions.
   const canManageConnections = isSuperAdmin || isDeptLeadOfCalendarSpace

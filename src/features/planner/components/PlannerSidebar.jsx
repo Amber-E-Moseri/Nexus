@@ -49,10 +49,11 @@ export default function PlannerSidebar({
   onOpenTask,
   departmentId,
   weekStart,
+  isMobile,
 }) {
   const [winsOpen, setWinsOpen] = useState(true)
   return (
-    <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
+    <div style={{ width: isMobile ? '100%' : 280, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden', maxHeight: isMobile ? 340 : 'none', overflowY: isMobile ? 'auto' : 'visible' }}>
       {/* Priority filters */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {PRIORITY_FILTERS.map((p) => {

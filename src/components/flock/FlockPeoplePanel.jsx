@@ -394,12 +394,12 @@ function PersonCard({ person, expanded, onToggle, onLogCall, onPatched }) {
           )}
 
           {/* Quick actions */}
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', paddingTop: '4px' }}>
+          <div className="flock-person-detail-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', paddingTop: '4px' }}>
             <button type="button" onClick={() => onLogCall(person)} style={btnPrimary({ padding: '9px 14px' })}>
               <Sparkles size={14} />
               Log a call
             </button>
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <div className="flock-cadence-row" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '12px', color: FLOCK.muted }}>Call every</span>
               <input
                 type="number"

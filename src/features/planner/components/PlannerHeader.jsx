@@ -22,9 +22,59 @@ const navBtn = {
   color: TEXT,
 }
 
+function formatDay(date) {
+  return date.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
 // Week navigation and date-picker week jump.
-export default function PlannerHeader({ weekStart, onWeekChange, onSyncToCalendar }) {
+export default function PlannerHeader({ weekStart, onWeekChange, onSyncToCalendar, isMobile, mobileDate, onMobileDateChange }) {
   const [pickerOpen, setPickerOpen] = useState(false)
+
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <h1 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: TEXT }}>Planner</h1>
+        <div style={{ flex: 1 }} />
+        <button type="button" aria-label="Previous day" style={navBtn} onClick={() => onMobileDateChange(addDays(mobileDate, -1))}>
+          <ChevronLeft size={15} />
+        </button>
+        <button
+          type="button"
+          onClick={() => setPickerOpen((o) => !o)}
+          style={{ position: 'relative', border: `1px solid ${BORDER}`, background: 'white', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 700, color: TEXT, cursor: 'pointer' }}
+        >
+          {formatDay(mobileDate)}
+          {pickerOpen && (
+            <input
+              type="date"
+              autoFocus
+              aria-label="Jump to date"
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                if (e.target.value) {
+                  const d = fromISODate(e.target.value)
+                  onMobileDateChange(d)
+                  onWeekChange(startOfWeek(d))
+                  setPickerOpen(false)
+                }
+              }}
+              style={{ position: 'absolute', top: '110%', left: 0, zIndex: 50, border: `1px solid ${BORDER}`, borderRadius: 8, padding: 6, background: 'white', fontFamily: 'inherit' }}
+            />
+          )}
+        </button>
+        <button type="button" aria-label="Next day" style={navBtn} onClick={() => onMobileDateChange(addDays(mobileDate, 1))}>
+          <ChevronRight size={15} />
+        </button>
+        <button
+          type="button"
+          onClick={() => { const today = new Date(); onMobileDateChange(today); onWeekChange(startOfWeek(today)) }}
+          style={{ border: `1px solid ${PRIMARY}`, background: 'white', color: PRIMARY, borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+        >
+          Today
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import PeopleLayout from './PeopleLayout'
@@ -10,6 +10,7 @@ import {
   listPastorMembers,
   listUsers,
   sendInvitationEmail,
+  sendPasswordReset,
   updateUserMembership,
 } from '../../lib/people/api'
 import { selectDepartmentUsers, selectPastorMembers } from '../../lib/people/selectors'
@@ -141,10 +142,12 @@ export default function UsersPage() {
   })
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [hoveredUserId, setHoveredUserId] = useState(null)
+  const detailPanelRef = useRef(null)
   const [draft, setDraft] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
 
   const loadData = async () => {
     setLoading(true)
@@ -239,6 +242,7 @@ export default function UsersPage() {
   const selectedUser = filteredUsers.find((user) => user.id === selectedUserId) ?? filteredUsers[0] ?? null
 
   useEffect(() => {
+    setResetSent(false)
     if (selectedUser) {
       setSelectedUserId(selectedUser.id)
       setDraft({
@@ -293,6 +297,21 @@ export default function UsersPage() {
         reason,
       })
       await loadData()
+    } catch (nextError) {
+      setError(nextError.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSendPasswordReset = async () => {
+    if (!selectedUser) return
+    setSaving(true)
+    setError('')
+    setResetSent(false)
+    try {
+      await sendPasswordReset(selectedUser.id)
+      setResetSent(true)
     } catch (nextError) {
       setError(nextError.message)
     } finally {
@@ -479,6 +498,7 @@ export default function UsersPage() {
                         onClick={(event) => {
                           event.stopPropagation()
                           setSelectedUserId(user.id)
+                          detailPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                         }}
                         onFocus={() => setHoveredUserId(user.id)}
                         className="rounded-lg p-1.5 hover:bg-[var(--purple-tint)] hover:text-[var(--purple-700)]"
@@ -508,7 +528,7 @@ export default function UsersPage() {
       </section>
 
       {selectedUser && draft ? (
-        <section className="rounded-[22px] border border-[var(--border)] bg-white p-5">
+        <section ref={detailPanelRef} className="rounded-[22px] border border-[var(--border)] bg-white p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">Selected Member</div>
@@ -608,7 +628,7 @@ export default function UsersPage() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
               disabled={!canManageUser(selectedUser) || saving}
@@ -625,6 +645,21 @@ export default function UsersPage() {
             >
               Archive
             </button>
+            {role === 'super_admin' && canManageUser(selectedUser) && ['active', 'pending_activation'].includes(selectedUser.status) ? (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleSendPasswordReset}
+                className="rounded-xl border px-4 py-2.5 text-sm font-medium disabled:opacity-60"
+                style={{
+                  borderColor: resetSent ? 'var(--accent-green)' : 'var(--border)',
+                  color: resetSent ? 'var(--accent-green-text)' : 'var(--text-primary)',
+                  background: resetSent ? 'var(--accent-green-tint)' : 'transparent',
+                }}
+              >
+                {resetSent ? 'Reset link sent ✓' : 'Send Password Reset'}
+              </button>
+            ) : null}
           </div>
         </section>
       ) : null}

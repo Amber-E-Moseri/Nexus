@@ -94,6 +94,16 @@ export async function sendInvitationEmail(invitationId, mode = 'send') {
   return data
 }
 
+export async function sendPasswordReset(userId) {
+  const { data, error } = await supabase.functions.invoke('send-password-reset', {
+    body: { user_id: userId },
+  })
+
+  if (error) throw error
+  if (data?.error) throw new Error(data.error)
+  return data
+}
+
 export async function cancelInvitation(invitationId) {
   const { data, error } = await supabase.rpc('cancel_user_invitation', {
     p_invitation_id: invitationId,

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { NOTIFICATION_TYPES, setNotificationPref } from '../../features/notifications'
+import { NOTIFICATION_TYPES, setNotificationPref, testPushNotifications } from '../../features/notifications'
 import { supabase } from '../../lib/supabase'
 import { requestPushPermission, unsubscribePush, isPushEnabled, getPushStatus } from '../../lib/webPush'
-import { Bell, Mail, Smartphone, AlertCircle, Check } from 'lucide-react'
+import { Bell, Mail, Smartphone, AlertCircle, Check, FlaskConical } from 'lucide-react'
 
 const NOTIFICATION_CHANNELS = [
   { id: 'in_app', label: 'In-App', icon: Bell, alwaysOn: true, description: 'Bell icon notifications' },
@@ -16,12 +16,12 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
   const [preferences, setPreferences] = useState(prefs)
   const [browserSupport, setBrowserSupport] = useState(false)
   const [browserPermission, setBrowserPermission] = useState('default')
-  const [mobileToken, setMobileToken] = useState(null)
   const [pushEnabled, setPushEnabled] = useState(false)
   const [pushLoading, setPushLoading] = useState(false)
   const [pushStatus, setPushStatus] = useState({ supported: false, permission: 'denied', subscribed: false })
   const [saving, setSaving] = useState({})
   const [message, setMessage] = useState('')
+  const [testLoading, setTestLoading] = useState(false)
 
   useEffect(() => {
     if ('Notification' in window) {
@@ -118,6 +118,24 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
     }
   }
 
+  const handleTestNotification = async () => {
+    if (!user?.id) return
+    setTestLoading(true)
+    setMessage('')
+    try {
+      const result = await testPushNotifications(user.id)
+      if (result.error) {
+        setMessage(`Test failed: ${result.error}`)
+      } else {
+        setMessage('✅ Test notification sent — check your bell icon in the sidebar.')
+      }
+    } catch (err) {
+      setMessage(`Test failed: ${err.message}`)
+    } finally {
+      setTestLoading(false)
+    }
+  }
+
   const notificationTypesList = Object.entries(NOTIFICATION_TYPES).map(([key, value]) => ({
     key,
     ...value
@@ -194,6 +212,27 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
           </div>
         </div>
       )}
+
+      {/* Test in-app notification */}
+      <div className="rounded-xl border border-[var(--border)] bg-white p-5">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Test Notifications</h3>
+            <p className="text-xs text-[var(--text-secondary)]">
+              Send a test in-app notification to verify delivery is working for your account.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleTestNotification}
+            disabled={testLoading}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: testLoading ? 'not-allowed' : 'pointer', opacity: testLoading ? 0.6 : 1, whiteSpace: 'nowrap' }}
+          >
+            <FlaskConical size={14} />
+            {testLoading ? 'Sending…' : 'Send test'}
+          </button>
+        </div>
+      </div>
 
       {/* Notification Types Matrix */}
       <div className="rounded-xl border border-[var(--border)] bg-white overflow-hidden">

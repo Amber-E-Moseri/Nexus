@@ -2,17 +2,34 @@
 
 type SendMode = 'send' | 'resend'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+const configuredOrigin = Deno.env.get('ALLOWED_ORIGIN')?.trim()
+const allowedOrigins = new Set(
+  [
+    configuredOrigin,
+    'http://localhost:5173',
+    'https://blwcannexus.vercel.app',
+    'https://app.blwcannexus.ca',
+  ].filter(Boolean),
+)
+
+function getCorsHeaders(origin: string | null) {
+  const allowOrigin = origin && allowedOrigins.has(origin)
+    ? origin
+    : configuredOrigin || 'https://blwcannexus.vercel.app'
+
+  return {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    Vary: 'Origin',
+  }
 }
 
-function jsonResponse(status: number, body: Record<string, unknown>) {
+function jsonResponse(status: number, body: Record<string, unknown>, origin: string | null) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...corsHeaders,
+      ...getCorsHeaders(origin),
       'Content-Type': 'application/json',
     },
   })
@@ -138,12 +155,14 @@ function roleLabel(role: string) {
 }
 
 Deno.serve(async (request) => {
+  const origin = request.headers.get('origin')
+
   if (request.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: getCorsHeaders(origin) })
   }
 
   if (request.method !== 'POST') {
-    return jsonResponse(405, { error: 'Method not allowed' })
+    return jsonResponse(405, { error: 'Method not allowed' }, origin)
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
@@ -152,12 +171,12 @@ Deno.serve(async (request) => {
   const fromEmail = Deno.env.get('INVITATION_FROM_EMAIL')
 
   if (!supabaseUrl || !serviceRoleKey || !resendApiKey || !fromEmail) {
-    return jsonResponse(500, { error: 'Missing required environment variables' })
+    return jsonResponse(500, { error: 'Missing required environment variables' }, origin)
   }
 
   const authHeader = request.headers.get('Authorization')
   if (!authHeader) {
-    return jsonResponse(401, { error: 'Missing authorization header' })
+    return jsonResponse(401, { error: 'Missing authorization header' }, origin)
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -170,7 +189,7 @@ Deno.serve(async (request) => {
   } = await supabase.auth.getUser()
 
   if (userError || !user) {
-    return jsonResponse(401, { error: 'Unable to validate caller' })
+    return jsonResponse(401, { error: 'Unable to validate caller' }, origin)
   }
 
   const body = (await request.json().catch(() => null)) as
@@ -181,7 +200,7 @@ Deno.serve(async (request) => {
   const mode: SendMode = body?.mode === 'resend' ? 'resend' : 'send'
 
   if (!invitationId) {
-    return jsonResponse(400, { error: 'invitation_id is required' })
+    return jsonResponse(400, { error: 'invitation_id is required' }, origin)
   }
 
   const { data: actor, error: actorError } = await supabase
@@ -191,11 +210,11 @@ Deno.serve(async (request) => {
     .single()
 
   if (actorError || !actor) {
-    return jsonResponse(403, { error: 'Caller profile not found' })
+    return jsonResponse(403, { error: 'Caller profile not found' }, origin)
   }
 
   if (!['super_admin', 'dept_lead'].includes(actor.role)) {
-    return jsonResponse(403, { error: 'You do not have permission to send invitations' })
+    return jsonResponse(403, { error: 'You do not have permission to send invitations' }, origin)
   }
 
   const loadInvitation = async () => {
@@ -231,11 +250,11 @@ Deno.serve(async (request) => {
   try {
     invitation = await loadInvitation()
   } catch (error) {
-    return jsonResponse(404, { error: error.message })
+    return jsonResponse(404, { error: error.message }, origin)
   }
 
   if (actor.role === 'dept_lead' && invitation.department_id !== actor.department_id) {
-    return jsonResponse(403, { error: 'Department leads may send invitations in their own department only' })
+    return jsonResponse(403, { error: 'Department leads may send invitations in their own department only' }, origin)
   }
 
   if (new Date(invitation.expires_at).getTime() < Date.now()) {
@@ -248,11 +267,11 @@ Deno.serve(async (request) => {
       })
       .eq('id', invitation.id)
 
-    return jsonResponse(422, { error: 'Invitation has expired and can no longer be sent' })
+    return jsonResponse(422, { error: 'Invitation has expired and can no longer be sent' }, origin)
   }
 
   if (['accepted', 'revoked', 'expired'].includes(invitation.status)) {
-    return jsonResponse(422, { error: `Invitation cannot be sent while ${invitation.status}` })
+    return jsonResponse(422, { error: `Invitation cannot be sent while ${invitation.status}` }, origin)
   }
 
   if (mode === 'resend') {
@@ -261,7 +280,7 @@ Deno.serve(async (request) => {
     })
 
     if (resendError) {
-      return jsonResponse(400, { error: resendError.message })
+      return jsonResponse(400, { error: resendError.message }, origin)
     }
 
     invitation = await loadInvitation()
@@ -273,13 +292,13 @@ Deno.serve(async (request) => {
   })
 
   if (tokenError) {
-    return jsonResponse(400, { error: tokenError.message })
+    return jsonResponse(400, { error: tokenError.message }, origin)
   }
 
   const tokenPayload = Array.isArray(tokenData) ? tokenData[0] ?? null : tokenData
 
   if (!tokenPayload?.invitation_token) {
-    return jsonResponse(500, { error: 'Failed to generate invitation token' })
+    return jsonResponse(500, { error: 'Failed to generate invitation token' }, origin)
   }
 
   const frontendUrl = resolveFrontendUrl()
@@ -342,7 +361,7 @@ Deno.serve(async (request) => {
     return jsonResponse(502, {
       error: 'Failed to send invitation email',
       details: errorText,
-    })
+    }, origin)
   }
 
   const resendBody = await resendResponse.json().catch(() => ({}))
@@ -365,5 +384,5 @@ Deno.serve(async (request) => {
     delivery_status: 'sent',
     activation_url: activationUrl,
     resend: resendBody,
-  })
+  }, origin)
 })

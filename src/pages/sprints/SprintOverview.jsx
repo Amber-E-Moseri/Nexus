@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import Badge from '../../components/ui/Badge'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent } from '../../features/calendar'
-import { advanceSprintStatus, archiveSprintWithAutoDeactivation, calculateSprintTaskStats, createSprintTeam, duplicateSprint, getSprintDetail, getSprintTasks, getTemporarySprintMembers, restoreSprint, shouldAutoStartSprint, updateSprint } from '../../features/sprints'
+import { advanceSprintStatus, archiveSprintWithAutoDeactivation, calculateSprintTaskStats, createSprintTeam, duplicateSprint, getSprintDetail, getSprintTasks, getTemporarySprintMembers, hasSprintAccess, restoreSprint, shouldAutoStartSprint, updateSprint } from '../../features/sprints'
 import { supabase } from '../../lib/supabase'
 import { isTaskCompleted } from '../../lib/taskStatuses'
 import SprintProgressBar from '../../features/sprints/components/SprintProgressBar'
@@ -165,6 +165,7 @@ export default function SprintOverview() {
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false)
   const [showInviteExternalModal, setShowInviteExternalModal] = useState(false)
   const [temporaryMembers, setTemporaryMembers] = useState([])
+  const [canViewSprint, setCanViewSprint] = useState(role === 'super_admin')
 
   const completion = useMemo(() => {
     if (tasks.length === 0) return 0
@@ -194,6 +195,20 @@ export default function SprintOverview() {
     setLoading(true)
     setLoadError(null)
     try {
+      if (role !== 'super_admin') {
+        const allowed = await hasSprintAccess(sprintId)
+        setCanViewSprint(allowed)
+        if (!allowed) {
+          setDetail(null)
+          setTasks([])
+          setTemporaryMembers([])
+          setLoadError('You do not have access to this sprint.')
+          return
+        }
+      } else {
+        setCanViewSprint(true)
+      }
+
       const [nextDetail, nextTasks, tempMembers] = await Promise.all([
         getSprintDetail(sprintId),
         getSprintTasks(sprintId),
@@ -224,6 +239,12 @@ export default function SprintOverview() {
   }, [sprintId])
 
   useEffect(() => {
+    if (!canViewSprint) {
+      setCalendarEvents([])
+      setCalendarLoading(false)
+      return
+    }
+
     setCalendarLoading(true)
     supabase
       .from('calendar_events')
@@ -237,9 +258,14 @@ export default function SprintOverview() {
       })
       .catch(() => setCalendarEvents([]))
       .finally(() => setCalendarLoading(false))
-  }, [sprintId])
+  }, [canViewSprint, sprintId])
 
   useEffect(() => {
+    if (!canViewSprint) {
+      setRecentActivity([])
+      return
+    }
+
     setRecentActivity(null)
     supabase
       .from('activity_log')
@@ -250,7 +276,7 @@ export default function SprintOverview() {
       .limit(5)
       .then(({ data, error }) => setRecentActivity(error ? [] : (data ?? [])))
       .catch(() => setRecentActivity([]))
-  }, [sprintId])
+  }, [canViewSprint, sprintId])
 
   if (loading) {
     return <div style={{ padding: '1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading...</div>

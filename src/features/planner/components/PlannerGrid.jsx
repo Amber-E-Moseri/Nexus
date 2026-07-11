@@ -77,6 +77,7 @@ function AllDayCell({ dateISO, blocks, taskById, severityByBlockId, onBlockClick
  */
 export default function PlannerGrid({
   weekStart,
+  overrideDays,
   timeBlocks,
   taskById,
   severityByBlockId,
@@ -85,7 +86,7 @@ export default function PlannerGrid({
   onBlockContextMenu,
   onBlockResize,
 }) {
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  const days = overrideDays ?? Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const todayISO = toISODate(new Date())
   const gridTop = DAY_START_HOUR * 60
 

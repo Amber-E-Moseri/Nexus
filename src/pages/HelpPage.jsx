@@ -42,6 +42,10 @@ const FAQ_SECTIONS = [
         a: 'Planner is a super_admin-only cross-team scheduling view for laying out work across departments and sprints at a glance. It also includes a Weekly Wins board where teams log highlight achievements each week — visible to leadership without digging into task lists.',
       },
       {
+        q: 'What is Personal List?',
+        a: 'A private task list visible only to you. Use it for personal to-dos, reminders, and notes that don\'t belong in a shared space. You can also "pin" any team task to your Personal List to keep it visible there as a second location — the task still lives in its original space, you\'re just tracking it personally too. Find it under My Tasks → Personal List in the sidebar.',
+      },
+      {
         q: 'What are Task Followers?',
         a: 'Any team member can follow a task to stay updated on it without being the assignee. Followers receive activity-feed notifications when the task is updated, commented on, or status-changed. Add or remove yourself via the task detail panel.',
       },
@@ -203,11 +207,27 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: 'Who sees My Flock?',
-        a: 'regional_secretary, pastor, and super_admin. It\'s a pastoral-care view of the congregation members assigned to that person for follow-up.',
+        a: 'regional_secretary, pastor, and super_admin. It\'s a pastoral-care view of the congregation members assigned to that person for follow-up, showing contact details, last-contact date, and a log of past interactions.',
       },
       {
         q: 'What is Flock CRM — Pastoral Outreach?',
-        a: 'A confidential outreach tracking tool (regional_secretary and super_admin only, shown under a separate "Confidential" sidebar section) for logging pastoral contact history. It\'s a UI layer over the existing Google Apps Script backend, not a replacement for it.',
+        a: 'A confidential outreach tracking tool (regional_secretary and super_admin only, under the "Confidential" sidebar section) for logging pastoral contact history. Each person record tracks call/visit notes, follow-up dates, and contact status — scoped per pastor so each leader only sees their own flock.',
+      },
+      {
+        q: 'How do I log a pastoral contact?',
+        a: 'Open a person record in Flock CRM → click "Log Contact" (or use the quick-log button in the Home widget). Fill in the date, contact type (call, visit, message), and notes. The entry is saved privately to your record and does not surface to other pastors.',
+      },
+      {
+        q: 'What is voice-to-text call logging?',
+        a: 'On a person record, tap the microphone icon to dictate your contact notes by voice. Whisper transcribes the audio in-browser (no audio sent to external servers) and auto-fills the notes field. Useful for logging calls immediately after hanging up, hands-free.',
+      },
+      {
+        q: 'How does the fuzzy person search work?',
+        a: 'The person search in Flock CRM tolerates spelling differences — searching "Emeka" also surfaces "Emeka-Chijioke" or "Emeca". If you\'re not finding someone, try a shorter version of the name or their phone number.',
+      },
+      {
+        q: 'Where are Flock CRM settings?',
+        a: 'Settings → Flock (visible to regional_secretary and super_admin) controls which fields are collected on person records and whether the Flock home widget is shown on your dashboard.',
       },
     ],
   },
@@ -231,11 +251,27 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: 'What are Automation Rules?',
-        a: 'Trigger-and-action rules (e.g. "when a task moves to Completed, notify the dept_lead") that run automatically without manual intervention. Available to dept_lead and super_admin.',
+        a: 'Trigger-and-action rules that run automatically without manual intervention. Available to dept_lead and super_admin. Example: "when a task moves to Completed, notify the dept_lead" or "when a task becomes overdue, send a Slack alert."',
+      },
+      {
+        q: 'What triggers are available?',
+        a: 'Task triggers: status changed, due date passed (overdue), task assigned, task created. Sprint triggers: sprint started, sprint ended. Meeting triggers: meeting completed. Member triggers: member joined or left a space.',
+      },
+      {
+        q: 'What actions can an automation take?',
+        a: 'Send a Slack notification, send an in-app notification to a user or role, change a task\'s status or assignee, create a follow-up task, or send an email via Resend. Actions can be chained — one trigger can fire multiple actions.',
+      },
+      {
+        q: 'How do I create an automation?',
+        a: 'Go to Automations in the sidebar → click "+ New Rule" → pick a trigger, set any conditions (e.g. only for a specific space or status), then add one or more actions. Save and toggle the rule active. Rules apply org-wide unless scoped to a specific space or department.',
       },
       {
         q: 'Where can I see what an automation actually did?',
-        a: 'Every automation run is logged for audit — check the automation\'s run history to see exactly when it fired and what it changed.',
+        a: 'Every automation run is logged for audit — click a rule to open its detail panel and view the full run history: timestamp, what triggered it, which action(s) fired, and whether each succeeded or errored.',
+      },
+      {
+        q: 'Why didn\'t my automation fire?',
+        a: 'Check the run history first — errors are logged there with a reason. Common causes: the rule is toggled off, the trigger condition wasn\'t fully met (e.g. wrong status name), or the target user has no Slack connected. If the run history is empty, the trigger event never occurred.',
       },
     ],
   },
@@ -267,21 +303,15 @@ const FAQ_SECTIONS = [
       },
       {
         q: 'How do I connect my Google Calendar or other personal integrations?',
-        a: 'Go to Settings → Personal Integrations to connect Google Calendar, Google Drive, Slack, Outlook, or Teams to your own account. These are separate from org-wide integrations, which super_admin manages.',
+        a: 'Go to Settings → Personal Integrations → click "Connect" next to the integration you want. Google Calendar: authorise with your Google account and select which calendar to sync. Google Drive: authorise and pick a default folder for exported reports. Slack: enter your workspace URL and authorise — you\'ll then receive NEXUS notifications as Slack DMs. Outlook and Teams follow the same OAuth flow. These are per-account; they don\'t affect org-wide settings.',
+      },
+      {
+        q: 'How do I set up org-wide integrations (Slack workspace, Google shared account)?',
+        a: 'super_admin only: Settings → Org Integrations. Slack workspace integration: paste the Slack Incoming Webhook URL from your Slack App settings — this is what automations and system alerts post to. Google shared account: used for the Ministry Calendar Google sync (see Calendar Settings → Sources). Resend email: the API key and sender domain are configured here for all outbound campaign and notification emails.',
       },
       {
         q: 'Where\'s the API documentation?',
         a: 'Settings → API Docs lists every endpoint (tasks, spaces, folders, lists, sprints) with request/response examples, auth header format, and rate limits — for anyone building external integrations against NEXUS.',
-      },
-    ],
-  },
-  {
-    id: 'instagram',
-    title: 'Instagram Grading',
-    items: [
-      {
-        q: 'What is Instagram Grading and who can use it?',
-        a: 'A review tool for scoring department Instagram content against a rubric, available to super_admin, regional_secretary, and media roles.',
       },
     ],
   },

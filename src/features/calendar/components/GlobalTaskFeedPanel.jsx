@@ -138,65 +138,84 @@ function FeedCard({ feed, subscription, busy, onCopy, onGoogle, onApple }) {
 
 export default function GlobalTaskFeedPanel({ userId, onClose }) {
   const { showToast } = useToast()
+  // urls keyed by feed type — pre-loaded on mount so Copy Link is synchronous.
+  // navigator.clipboard.writeText requires an active user-gesture context;
+  // if we await an RPC inside the click handler that context expires before
+  // the clipboard write, causing a NotAllowedError on first-time subscriptions.
+  const [urls, setUrls] = useState({})
+  const [loading, setLoading] = useState(true)
   const [subscriptions, setSubscriptions] = useState([])
-  const [busyType, setBusyType] = useState(null)
 
-  const loadSubscriptions = useCallback(async () => {
+  const loadAll = useCallback(async () => {
     if (!userId) return
+    setLoading(true)
+
+    // Fetch existing subscriptions first so we can display status badges.
     const { data } = await supabase
       .from('task_feed_subscriptions')
       .select('id, feed_type, token, created_at')
       .eq('user_id', userId)
       .is('space_id', null)
-    setSubscriptions(data ?? [])
+    const rows = data ?? []
+    setSubscriptions(rows)
+
+    // Pre-create tokens for any feed that doesn't have one yet, then build the
+    // url map. All async work happens here (mount), not inside click handlers.
+    const nextUrls = {}
+    await Promise.all(
+      GLOBAL_FEEDS.map(async (feed) => {
+        try {
+          const existing = rows.find((s) => s.feed_type === feed.type)?.token
+          const token = existing ?? (await getOrCreateTaskFeedToken(userId, null, feed.type))
+          if (token) nextUrls[feed.type] = getTaskFeedUrl(token)
+        } catch (err) {
+          console.error(`Failed to pre-load token for ${feed.type}:`, err)
+        }
+      }),
+    )
+    setUrls(nextUrls)
+
+    // Refresh subscription rows now that tokens may have been created.
+    const { data: refreshed } = await supabase
+      .from('task_feed_subscriptions')
+      .select('id, feed_type, token, created_at')
+      .eq('user_id', userId)
+      .is('space_id', null)
+    setSubscriptions(refreshed ?? [])
+    setLoading(false)
   }, [userId])
 
   useEffect(() => {
-    loadSubscriptions()
-  }, [loadSubscriptions])
+    loadAll()
+  }, [loadAll])
 
   const subFor = (type) => subscriptions.find((s) => s.feed_type === type)
 
-  async function ensureUrl(feedType) {
-    const existing = subFor(feedType)?.token
-    if (existing) return getTaskFeedUrl(existing)
-    setBusyType(feedType)
-    try {
-      const token = await getOrCreateTaskFeedToken(userId, null, feedType)
-      await loadSubscriptions()
-      return getTaskFeedUrl(token)
-    } finally {
-      setBusyType(null)
+  function handleCopy(feedType) {
+    const url = urls[feedType]
+    if (!url) {
+      showToast('Feed link not ready yet — please try again', { tone: 'error' })
+      return
     }
+    navigator.clipboard.writeText(url).then(
+      () => showToast('Feed link copied to clipboard', { tone: 'success' }),
+      () => {
+        // Clipboard write blocked — fall back to a prompt so the user can copy manually.
+        window.prompt('Copy this link:', url)
+      },
+    )
   }
 
-  async function handleCopy(feedType) {
-    try {
-      const url = await ensureUrl(feedType)
-      await navigator.clipboard.writeText(url)
-      showToast('Feed link copied to clipboard', { tone: 'success' })
-    } catch {
-      showToast('Could not copy feed link', { tone: 'error' })
-    }
+  function handleGoogle(feedType) {
+    const url = urls[feedType]
+    if (!url) { showToast('Feed link not ready yet', { tone: 'error' }); return }
+    window.open(`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}`, '_blank', 'noopener')
   }
 
-  async function handleGoogle(feedType) {
-    try {
-      const url = await ensureUrl(feedType)
-      window.open(`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}`, '_blank', 'noopener')
-    } catch {
-      showToast('Could not open Google Calendar', { tone: 'error' })
-    }
-  }
-
-  async function handleApple(feedType) {
-    try {
-      const url = await ensureUrl(feedType)
-      const webcal = `webcal://${url.replace(/^https?:\/\//, '')}`
-      window.open(webcal, '_blank', 'noopener')
-    } catch {
-      showToast('Could not open Apple Calendar', { tone: 'error' })
-    }
+  function handleApple(feedType) {
+    const url = urls[feedType]
+    if (!url) { showToast('Feed link not ready yet', { tone: 'error' }); return }
+    window.open(`webcal://${url.replace(/^https?:\/\//, '')}`, '_blank', 'noopener')
   }
 
   return (
@@ -260,7 +279,7 @@ export default function GlobalTaskFeedPanel({ userId, onClose }) {
               key={feed.type}
               feed={feed}
               subscription={subFor(feed.type)}
-              busy={busyType === feed.type}
+              busy={loading || !urls[feed.type]}
               onCopy={() => handleCopy(feed.type)}
               onGoogle={() => handleGoogle(feed.type)}
               onApple={() => handleApple(feed.type)}

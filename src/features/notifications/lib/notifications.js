@@ -176,11 +176,19 @@ export async function sendBrowserPushNotification(title, options = {}) {
 
 export async function testPushNotifications(userId) {
   try {
-    const response = await fetch('/functions/v1/test-push-notification', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId }),
-    })
+    const { data: session } = await supabase.auth.getSession()
+    const token = session?.session?.access_token
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-push-notification`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ user_id: userId }),
+      },
+    )
     return await response.json()
   } catch (err) {
     console.error('Failed to send test notification:', err)

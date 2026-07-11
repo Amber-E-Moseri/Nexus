@@ -6,6 +6,12 @@ export const TRIGGER_LABELS = {
   task_overdue: 'Task becomes overdue',
   delegated_task_due_soon: 'Delegated task due soon',
   meeting_created: 'Meeting is logged',
+  task_created: 'Task is created',
+  task_moved_list: 'Task is moved to a list',
+  date_changed: 'A due/start date changes',
+  assignee_removed: 'Assignee is removed',
+  comment_added: 'Comment is added',
+  task_inactive: 'Task has no activity for a while',
 }
 
 export const ACTION_LABELS = {
@@ -13,6 +19,12 @@ export const ACTION_LABELS = {
   create_task: 'Create a task',
   send_email: 'Send an email',
   post_webhook: 'Post to webhook URL',
+  update_task_status: 'Update task status',
+  assign_task: 'Assign the task',
+  set_field: 'Set a date field',
+  clear_field: 'Clear a field',
+  move_to_list: 'Move task to a list',
+  shift_dependent_dates: 'Shift dependent tasks\' dates',
 }
 
 export async function getDeptAutomations(departmentId) {

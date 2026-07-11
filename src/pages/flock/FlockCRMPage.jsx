@@ -24,7 +24,7 @@ function StatTile({ label, value, tone, note }) {
       <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
         {label}
       </div>
-      <div style={{ marginTop: '8px', fontSize: '40px', lineHeight: 1, fontWeight: 700, color: palette.fg, fontFamily: FLOCK.fontHead }}>
+      <div className="flock-stat-value" style={{ marginTop: '8px', fontSize: '40px', lineHeight: 1, fontWeight: 700, color: palette.fg, fontFamily: FLOCK.fontHead }}>
         {value}
       </div>
       <div style={{ marginTop: '10px', fontSize: '12px', lineHeight: 1.5, color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
@@ -276,7 +276,7 @@ function DuePersonCard({ person, expanded, onExpand, onRefresh, onOpenPerson, to
   )
 }
 
-function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
+function HomePanel({ onLogCall, onAddPerson, onOpenPerson, isMobile }) {
   const { role, user } = useAuth()
   const [stats, setStats] = useState({ today: 0, overdue: 0, week: 0, total: 0 })
   const [duePeople, setDuePeople] = useState([])
@@ -361,7 +361,7 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
 
   return (
     <div style={{ display: 'grid', gap: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: isMobile ? 'stretch' : 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
         <button
           type="button"
           className="flock-btn-primary"
@@ -369,7 +369,7 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
           style={{
             border: 'none',
             borderRadius: '10px',
-            padding: '8px 14px',
+            padding: '10px 14px',
             background: FLOCK.purple,
             color: '#FFFFFF',
             fontSize: '13px',
@@ -377,9 +377,11 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '8px',
             fontFamily: FLOCK.fontBody,
             transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+            flex: isMobile ? 1 : undefined,
           }}
         >
           <Mic size={14} />
@@ -392,7 +394,7 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
           style={{
             border: `1px solid ${FLOCK.borderStrong}`,
             borderRadius: '10px',
-            padding: '8px 14px',
+            padding: '10px 14px',
             background: FLOCK.card,
             color: FLOCK.text,
             fontSize: '13px',
@@ -400,9 +402,11 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '8px',
             fontFamily: FLOCK.fontBody,
             transition: 'background 0.12s ease, border-color 0.12s ease',
+            flex: isMobile ? 1 : undefined,
           }}
         >
           <UserPlus size={14} />
@@ -415,7 +419,7 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
           style={{
             border: `1px solid ${FLOCK.borderStrong}`,
             borderRadius: '10px',
-            padding: '8px 14px',
+            padding: '10px 14px',
             background: FLOCK.card,
             color: FLOCK.text,
             fontSize: '13px',
@@ -423,13 +427,15 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '8px',
             fontFamily: FLOCK.fontBody,
             transition: 'background 0.12s ease, border-color 0.12s ease',
+            flex: isMobile ? '0 0 auto' : undefined,
           }}
         >
           <RefreshCw size={14} />
-          Refresh
+          {!isMobile && 'Refresh'}
         </button>
       </div>
 
@@ -443,7 +449,7 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson }) {
         </div>
       )}
 
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+      <section style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
         <StatTile label="Due Today" value={loading ? '-' : stats.today} tone="violet" note="People who need same-day contact." />
         <StatTile label="Overdue" value={loading ? '-' : stats.overdue} tone="red" note="Callbacks past their target follow-up window." />
         <StatTile label="This Week" value={loading ? '-' : stats.week} tone="green" note="Active ministry load scheduled this week." />
@@ -519,6 +525,13 @@ const TABS = [
 export default function FlockCRMPage() {
   const { role } = useAuth()
   const [activeTab, setActiveTab] = useState('home')
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640)
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const [peoplePreselect, setPeoplePreselect] = useState(null)
   const [peopleStartAdd, setPeopleStartAdd] = useState(false)
   const [aiPreselect, setAiPreselect] = useState(null)
@@ -553,7 +566,7 @@ export default function FlockCRMPage() {
         return <FlockSettingsPanel />
       case 'home':
       default:
-        return <HomePanel onLogCall={openLogCall} onAddPerson={openAddPerson} onOpenPerson={openPersonNotes} />
+        return <HomePanel onLogCall={openLogCall} onAddPerson={openAddPerson} onOpenPerson={openPersonNotes} isMobile={isMobile} />
     }
   }
 
@@ -570,24 +583,26 @@ export default function FlockCRMPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minHeight: '100%', fontFamily: FLOCK.fontBody }}>
       <section
         style={flockCard({
-          padding: '24px',
+          padding: isMobile ? '16px' : '24px',
           background: `radial-gradient(circle at top left, ${FLOCK.purpleTint} 0%, ${FLOCK.surface} 45%, ${FLOCK.card} 100%)`,
         })}
       >
-        <div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 10px', borderRadius: '999px', background: FLOCK.purpleTint, color: FLOCK.purple, fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            <ShieldCheck size={12} />
-            Pastoral Operations
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '14px' }}>
-            <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: FLOCK.purple, display: 'grid', placeItems: 'center', color: '#FFFFFF' }}>
-              <Phone size={20} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: isMobile ? '34px' : '44px', height: isMobile ? '34px' : '44px', borderRadius: '14px', background: FLOCK.purple, display: 'grid', placeItems: 'center', color: '#FFFFFF', flexShrink: 0 }}>
+              <Phone size={isMobile ? 16 : 20} />
             </div>
-            <h1 style={{ margin: 0, fontSize: '30px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Flock CRM</h1>
+            <h1 style={{ margin: 0, fontSize: isMobile ? '22px' : '30px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Flock CRM</h1>
           </div>
+          {!isMobile && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 10px', borderRadius: '999px', background: FLOCK.purpleTint, color: FLOCK.purple, fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              <ShieldCheck size={12} />
+              Pastoral Operations
+            </div>
+          )}
         </div>
 
-        <nav style={{ display: 'flex', gap: '6px', marginTop: '20px', flexWrap: 'wrap' }}>
+        <nav style={{ display: 'flex', gap: '6px', marginTop: isMobile ? '12px' : '20px', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: isMobile ? '2px' : 0 }}>
           {TABS.map((tab) => {
             const Icon = tab.icon
             const isActive = tab.id === activeTab
@@ -600,20 +615,20 @@ export default function FlockCRMPage() {
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '7px',
-                  padding: '9px 15px',
+                  gap: isMobile ? '5px' : '7px',
+                  padding: isMobile ? '7px 11px' : '9px 15px',
                   borderRadius: '999px',
                   border: `1px solid ${isActive ? 'transparent' : FLOCK.border}`,
                   background: isActive ? FLOCK.purple : FLOCK.card,
                   color: isActive ? '#FFFFFF' : FLOCK.muted,
-                  fontSize: '13px',
+                  fontSize: isMobile ? '12px' : '13px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   fontFamily: FLOCK.fontBody,
                   transition: 'background 0.12s ease, color 0.12s ease, border-color 0.12s ease',
                 }}
               >
-                <Icon size={14} />
+                <Icon size={13} />
                 {tab.label}
               </button>
             )
@@ -629,6 +644,16 @@ export default function FlockCRMPage() {
         .flock-btn-primary:hover { box-shadow: 0 4px 12px ${FLOCK.purple}44; transform: translateY(-1px); }
         .flock-btn-secondary:hover { background: ${FLOCK.surface}; border-color: ${FLOCK.purple}; }
         .flock-tab:hover { background: ${FLOCK.surface}; border-color: ${FLOCK.purple}; color: ${FLOCK.text}; }
+        nav::-webkit-scrollbar { display: none; }
+        nav { scrollbar-width: none; }
+        @media (max-width: 639px) {
+          .flock-stat-value { font-size: 30px !important; }
+          .flock-stat-tile { padding: 14px !important; }
+          .flock-cadence-row { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; margin-left: 0 !important; }
+          .flock-cadence-row > * { flex-shrink: 0; }
+          .flock-person-detail-actions { flex-wrap: wrap !important; gap: 8px !important; }
+          .flock-person-detail-actions button { flex: 1 1 auto !important; justify-content: center !important; }
+        }
       `}</style>
     </div>
   )

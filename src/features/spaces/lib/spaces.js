@@ -16,6 +16,10 @@ export async function getMySpaces(userId, role, departmentId) {
   return spaces.filter((space) => {
     if (space.space_type === 'personal') return space.owner_id === userId
     if (space.space_type === 'department') return role === 'super_admin' || space.id === departmentId
+    // group: pastor sees their own space; super_admin sees all; members see org-visible ones
+    if (space.space_type === 'group') {
+      return role === 'super_admin' || space.owner_id === userId || space.visibility === 'org'
+    }
     if (isAdmin) return true
     // program / sandbox: enforce visibility for non-admins
     return space.visibility === 'org'
@@ -27,6 +31,7 @@ export async function getSpacesByType(userId, role, departmentId) {
   return {
     department: spaces.filter((space) => space.space_type === 'department' && space.status === 'active'),
     program: spaces.filter((space) => space.space_type === 'program' && space.status === 'active'),
+    group: spaces.filter((space) => space.space_type === 'group' && space.status === 'active'),
     personal: spaces.filter((space) => space.space_type === 'personal' && space.status === 'active'),
     sandbox: spaces.filter((space) => space.space_type === 'sandbox' && space.status === 'active'),
     archived: spaces.filter((space) => space.status === 'archived'),
@@ -190,6 +195,7 @@ export async function canManageSpace(spaceId) {
 export const SPACE_TYPE_LABELS = {
   department: 'Department',
   program: 'Program',
+  group: 'Group',
   personal: 'Personal',
   sandbox: 'Sandbox',
 }
@@ -197,6 +203,7 @@ export const SPACE_TYPE_LABELS = {
 export const SPACE_TYPE_ICONS = {
   department: '🏢',
   program: '⚡',
+  group: '👥',
   personal: '👤',
   sandbox: '🧪',
 }

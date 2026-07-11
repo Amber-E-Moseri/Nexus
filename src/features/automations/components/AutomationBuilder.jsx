@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { ACTION_LABELS, TRIGGER_LABELS, createAutomation, updateAutomation } from '../lib/automations'
 import { listTaskStatuses } from '../../../lib/taskStatuses'
+import { getLists } from '../../spaces/lib/spaces'
 import { FONT_BODY, FONT_HEADING, FONT_MONO } from '../../../lib/fonts'
 
 const INPUT_CLASS =
@@ -98,7 +99,7 @@ function AddStepButton({ label, disabled, onClick }) {
   )
 }
 
-const CONDITION_FIELDS = ['task.status', 'task.priority', 'task.department', 'task.assignee']
+const CONDITION_FIELDS = ['task.status', 'task.priority', 'task.department', 'task.assignee', 'task.list_id']
 const CONDITION_OPERATORS = ['equals', 'not equals', 'is empty', 'is not empty']
 const SPRINT_STATUSES = ['planning', 'active', 'completed', 'review', 'archived']
 
@@ -177,6 +178,14 @@ function normalizeTriggerConfig(triggerType, currentConfig = {}) {
     return { days_before: currentConfig.days_before ?? 1 }
   }
 
+  if (triggerType === 'task_moved_list') {
+    return { to_list_id: currentConfig.to_list_id ?? '' }
+  }
+
+  if (triggerType === 'task_inactive') {
+    return { days_inactive: currentConfig.days_inactive ?? 7 }
+  }
+
   return {}
 }
 
@@ -204,6 +213,7 @@ export default function AutomationBuilder({
   const [conditions, setConditions] = useState(normalizeConditions(seed?.conditions))
   const [actions, setActions] = useState(normalizeActions(seed?.actions))
   const [taskStatuses, setTaskStatuses] = useState([])
+  const [lists, setLists] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -223,6 +233,15 @@ export default function AutomationBuilder({
     }
 
     listTaskStatuses({ departmentId: selectedDepartmentId }).then(setTaskStatuses).catch(() => setTaskStatuses([]))
+  }, [selectedDepartmentId])
+
+  useEffect(() => {
+    if (!selectedDepartmentId) {
+      setLists([])
+      return
+    }
+
+    getLists(selectedDepartmentId).then(setLists).catch(() => setLists([]))
   }, [selectedDepartmentId])
 
   function handleTriggerTypeChange(nextType) {
@@ -425,6 +444,31 @@ export default function AutomationBuilder({
                   </p>
                 </div>
               ) : null}
+
+              {triggerType === 'task_moved_list' ? (
+                <select
+                  value={triggerConfig.to_list_id ?? ''}
+                  onChange={(event) => setTriggerConfig({ to_list_id: event.target.value })}
+                  className={INPUT_CLASS}
+                >
+                  <option value="">Any list</option>
+                  {lists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}
+                </select>
+              ) : null}
+
+              {triggerType === 'task_inactive' ? (
+                <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                  Days without activity
+                  <input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={triggerConfig.days_inactive ?? 7}
+                    onChange={(event) => setTriggerConfig({ days_inactive: Number(event.target.value) })}
+                    className={INPUT_CLASS}
+                  />
+                </label>
+              ) : null}
             </StepCard>
 
             <StepConnector />
@@ -559,6 +603,84 @@ export default function AutomationBuilder({
                       <option value="">Select status</option>
                       {taskStatuses.map((status) => <option key={status.id} value={status.id}>{status.name}</option>)}
                     </select>
+                  ) : null}
+
+                  {action.type === 'assign_task' ? (
+                    <select
+                      value={action.config?.assignee_id ?? ''}
+                      onChange={(event) => updateAction(index, (current) => ({
+                        ...current,
+                        config: { ...current.config, assignee_id: event.target.value },
+                      }))}
+                      className={INPUT_CLASS}
+                    >
+                      <option value="">Select assignee</option>
+                      <option value="__creator__">Task creator</option>
+                      {scopedUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
+                    </select>
+                  ) : null}
+
+                  {action.type === 'set_field' ? (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <select
+                        value={action.config?.field ?? 'due_date'}
+                        onChange={(event) => updateAction(index, (current) => ({
+                          ...current,
+                          config: { ...current.config, field: event.target.value },
+                        }))}
+                        className={INPUT_CLASS}
+                      >
+                        <option value="due_date">Due date</option>
+                        <option value="start_date">Start date</option>
+                      </select>
+                      <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                        Days from now
+                        <input
+                          type="number"
+                          value={action.config?.relative_days ?? 0}
+                          onChange={(event) => updateAction(index, (current) => ({
+                            ...current,
+                            config: { ...current.config, relative_days: Number(event.target.value) },
+                          }))}
+                          className={INPUT_CLASS}
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+
+                  {action.type === 'clear_field' ? (
+                    <select
+                      value={action.config?.field ?? 'due_date'}
+                      onChange={(event) => updateAction(index, (current) => ({
+                        ...current,
+                        config: { ...current.config, field: event.target.value },
+                      }))}
+                      className={INPUT_CLASS}
+                    >
+                      <option value="due_date">Due date</option>
+                      <option value="start_date">Start date</option>
+                      <option value="assignee_id">Assignee</option>
+                    </select>
+                  ) : null}
+
+                  {action.type === 'move_to_list' ? (
+                    <select
+                      value={action.config?.list_id ?? ''}
+                      onChange={(event) => updateAction(index, (current) => ({
+                        ...current,
+                        config: { ...current.config, list_id: event.target.value },
+                      }))}
+                      className={INPUT_CLASS}
+                    >
+                      <option value="">Select target list</option>
+                      {lists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}
+                    </select>
+                  ) : null}
+
+                  {action.type === 'shift_dependent_dates' ? (
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      No configuration needed — shifts every task that depends on this one by the same number of days this task's date just moved.
+                    </p>
                   ) : null}
 
                   {action.type === 'create_task' ? (

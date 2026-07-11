@@ -544,11 +544,18 @@ export async function getMinistryCalendarConnectionStatus() {
 }
 
 export async function disconnectMinistryCalendar() {
-  // Delete the connection record and all associated sources
+  // Sources must be deleted first — no FK cascade from sources → connection.
+  const { error: srcErr } = await supabase
+    .from('ministry_calendar_sources')
+    .delete()
+    .not('id', 'is', null)
+
+  if (srcErr) throw srcErr
+
   const { error: connErr } = await supabase
     .from('ministry_calendar_connection')
     .delete()
-    .not('id', 'is', null)  // delete all rows for this org/user
+    .not('id', 'is', null)
 
   if (connErr) throw connErr
 }

@@ -4,9 +4,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import SprintCard from '../../features/sprints/components/SprintCard'
 import SprintModal from '../../features/sprints/components/SprintModal'
 import { useAuth } from '../../hooks/useAuth'
-import { deleteSprint, duplicateSprint, getAllSprints, restoreSprint } from '../../features/sprints'
-import { getSprintTasks, getMySprintMembershipIds } from '../../features/sprints/lib/sprints'
-import { requestSprintAccess, getMySprintAccessRequests } from '../../lib/people/api'
+import { deleteSprint, duplicateSprint, getAllSprints, getMySprints, restoreSprint } from '../../features/sprints'
+import { getSprintTasks } from '../../features/sprints/lib/sprints'
 import { supabase } from '../../lib/supabase'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 
@@ -21,7 +20,6 @@ const cardEnter = {
 }
 
 const FILTERS = ['all', 'active', 'planning', 'completed', 'review', 'archived']
-const STATUS_ORDER = ['active', 'planning', 'completed', 'review', 'archived']
 const EMPTY_STATE = {
   icon: '⚡',
   title: 'No sprints yet',
@@ -49,33 +47,14 @@ export default function SprintsList() {
   const [query, setQuery] = useState('')
   const [showModal, setShowModal] = useState(searchParams.get('new') === 'true')
   const [loading, setLoading] = useState(true)
-  const [myMemberSprintIds, setMyMemberSprintIds] = useState(new Set())
-  const [myRequestsBySprintId, setMyRequestsBySprintId] = useState({})
 
   async function loadSprints() {
     setLoading(true)
     try {
-      // Everyone sees every sprint; access to open one is checked separately
-      // via sprint membership (super_admin always has access).
-      const [sprintData, membershipIds, myRequests] = await Promise.all([
-        getAllSprints(),
-        role === 'super_admin' ? Promise.resolve([]) : getMySprintMembershipIds(),
-        role === 'super_admin' ? Promise.resolve([]) : getMySprintAccessRequests(),
-      ])
+      const sprintData = role === 'super_admin' ? await getAllSprints() : await getMySprints()
 
-      const memberIdSet = new Set(membershipIds)
-      setMyMemberSprintIds(memberIdSet)
-      setMyRequestsBySprintId(
-        Object.fromEntries(myRequests.map((request) => [request.sprint_id, request])),
-      )
-
-      // Fetch task counts and department info for each sprint the viewer can
-      // actually open — skip it for locked sprints (RLS would return an
-      // incomplete/misleading count anyway, and there's no board to preview).
       const enrichedSprints = await Promise.all(
         sprintData.map(async (sprint) => {
-          const hasAccess = role === 'super_admin' || memberIdSet.has(sprint.id)
-
           let deptName = null
           if (sprint.department_id) {
             const { data: dept } = await supabase
@@ -84,10 +63,6 @@ export default function SprintsList() {
               .eq('id', sprint.department_id)
               .single()
             deptName = dept?.name
-          }
-
-          if (!hasAccess) {
-            return { ...sprint, task_count: 0, completed_count: 0, department_name: deptName, has_access: false }
           }
 
           try {
@@ -111,7 +86,7 @@ export default function SprintsList() {
               has_access: true,
             }
           }
-        })
+        }),
       )
 
       setSprints(enrichedSprints)
@@ -140,19 +115,15 @@ export default function SprintsList() {
     )
   }, [query, sprints])
 
-  const filtered = useMemo(
-    () => {
-      let result = searched
+  const filtered = useMemo(() => {
+    let result = searched
 
-      // Apply status filter
-      if (filter !== 'all') {
-        result = result.filter((sprint) => sprint.status === filter)
-      }
+    if (filter !== 'all') {
+      result = result.filter((sprint) => sprint.status === filter)
+    }
 
-      return result
-    },
-    [filter, searched],
-  )
+    return result
+  }, [filter, searched])
 
   async function handleDuplicate(sprintId) {
     await duplicateSprint(sprintId, profile.id)
@@ -168,15 +139,6 @@ export default function SprintsList() {
     if (!window.confirm(`Delete "${sprintName}"? This cannot be undone.`)) return
     await deleteSprint(sprintId)
     await loadSprints()
-  }
-
-  async function handleRequestAccess(sprintId) {
-    try {
-      await requestSprintAccess(sprintId)
-      await loadSprints()
-    } catch (err) {
-      alert(err.message ?? 'Failed to request access')
-    }
   }
 
   function closeModal() {
@@ -238,24 +200,20 @@ export default function SprintsList() {
         </div>
       ) : filtered.length > 0 ? (
         <motion.div variants={gridStagger} initial="hidden" animate="show" className="grid gap-4 lg:grid-cols-3">
-          {filtered.map((sprint) => {
-            const hasAccess = role === 'super_admin' || myMemberSprintIds.has(sprint.id)
-            const accessRequest = myRequestsBySprintId[sprint.id]
-            return (
-              <motion.div key={sprint.id} variants={cardEnter}>
-                <SprintCard
-                  sprint={sprint}
-                  hasAccess={hasAccess}
-                  accessRequestStatus={accessRequest?.status ?? null}
-                  onClick={hasAccess ? () => navigate(`/sprints/${sprint.id}`) : undefined}
-                  onRequestAccess={!hasAccess ? () => handleRequestAccess(sprint.id) : undefined}
-                  onDuplicate={canCreate ? handleDuplicate : undefined}
-                  onRestore={canCreate ? handleRestore : undefined}
-                  onDelete={canCreate ? handleDelete : undefined}
-                />
-              </motion.div>
-            )
-          })}
+          {filtered.map((sprint) => (
+            <motion.div key={sprint.id} variants={cardEnter}>
+              <SprintCard
+                sprint={sprint}
+                hasAccess={true}
+                accessRequestStatus={null}
+                onClick={() => navigate(`/sprints/${sprint.id}`)}
+                onRequestAccess={undefined}
+                onDuplicate={canCreate ? handleDuplicate : undefined}
+                onRestore={canCreate ? handleRestore : undefined}
+                onDelete={canCreate ? handleDelete : undefined}
+              />
+            </motion.div>
+          ))}
         </motion.div>
       ) : (
         <EmptyState />

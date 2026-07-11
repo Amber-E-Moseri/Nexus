@@ -65,7 +65,9 @@ export default function SpaceModal({ mode = 'create', space = null, onSaved, onC
 
   const visibleTypes = useMemo(() => {
     const base = ['program', 'personal', 'sandbox']
-    return role === 'super_admin' ? ['department', ...base] : base
+    if (role === 'super_admin') return ['department', 'group', ...base]
+    if (role === 'pastor') return ['group', ...base]
+    return base
   }, [role])
 
   async function handleSave() {
@@ -84,7 +86,7 @@ export default function SpaceModal({ mode = 'create', space = null, onSaved, onC
       space_type: spaceType,
       visibility,
       color,
-      owner_id: spaceType === 'personal' ? profile?.id : space?.owner_id ?? profile?.id,
+      owner_id: (spaceType === 'personal' || spaceType === 'group') ? profile?.id : space?.owner_id ?? profile?.id,
       start_date: startDate || null,
       end_date: endDate || null,
     }

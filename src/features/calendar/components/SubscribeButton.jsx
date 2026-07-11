@@ -8,7 +8,7 @@ function buildFeedUrl(token) {
   return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-ical?token=${token}`
 }
 
-export default function SubscribeButton({ userId, deptOnly = false, departmentId = null, onCopied }) {
+export default function SubscribeButton({ userId, deptOnly = false, departmentId = null, onCopied, onOpenTaskFeeds }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -235,6 +235,47 @@ export default function SubscribeButton({ userId, deptOnly = false, departmentId
                 Open in Apple / Outlook Calendar
               </a>
             </div>
+
+            {onOpenTaskFeeds ? (
+              <div
+                style={{
+                  marginTop: 12,
+                  paddingTop: 12,
+                  borderTop: '1px solid var(--border)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-secondary)', fontFamily: FONT_BODY }}>
+                  Need task deadlines too? Tasks use a separate live calendar feed.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false)
+                    onOpenTaskFeeds()
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    background: 'white',
+                    color: 'var(--accent)',
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <ExternalLink size={13} />
+                  Open Task Feed Options
+                </button>
+              </div>
+            ) : null}
           </motion.div>
         )}
       </AnimatePresence>

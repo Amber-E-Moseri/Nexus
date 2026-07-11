@@ -73,7 +73,7 @@ const ITEM_BASE_STYLE = {
   background: 'transparent',
 }
 
-const SPACE_GROUPS = ['department', 'program', 'personal', 'sandbox']
+const SPACE_GROUPS = ['department', 'program', 'group', 'personal', 'sandbox']
 
 function getInitials(name = '') {
   return name
@@ -127,6 +127,7 @@ const SidebarItem = memo(function SidebarItem({
   badge,
   glyph,
   to,
+  href,
   onClick,
   trailing,
 }) {
@@ -135,6 +136,32 @@ const SidebarItem = memo(function SidebarItem({
   function handleActivate() {
     if (onClick) onClick()
     else if (to) navigate(to)
+  }
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={active ? 'sidebar-item sidebar-item--active' : 'sidebar-item'}
+      >
+        {glyph ? (
+          glyph
+        ) : Icon ? (
+          <Icon size={15} style={{ opacity: 0.85, color: 'inherit', flexShrink: 0 }} />
+        ) : null}
+        <span className="sidebar-item__label">
+          {label}
+        </span>
+        {badge > 0 ? (
+          <span className="sidebar-item__badge">
+            {badge}
+          </span>
+        ) : null}
+        {trailing ?? null}
+      </a>
+    )
   }
 
   return (
@@ -238,6 +265,7 @@ export default function Sidebar() {
   const [spaceGroups, setSpaceGroups] = useState({
     department: [],
     program: [],
+    group: [],
     personal: [],
     sandbox: [],
     archived: [],
@@ -270,7 +298,7 @@ export default function Sidebar() {
   // ors/programs/media/dept_lead authority comes from space_roles rows
   // (Phase 3); users.role only ever holds the base roles now.
   const isSpaceManager = ['ors', 'programs', 'media', 'dept_lead'].some((r) => hasSpaceRole(profile, null, r))
-  const canCreateSpace = ['super_admin', 'dept_lead', 'regional_secretary'].includes(role) || isSpaceManager
+  const canCreateSpace = ['super_admin', 'dept_lead', 'regional_secretary', 'pastor'].includes(role) || isSpaceManager
   const canManageSpaces = canCreateSpace
   const showPeople = ['super_admin', 'dept_lead', 'regional_secretary'].includes(role) || isSpaceManager
   const showAdminPlatform = role === 'super_admin' || role === 'dept_lead' || hasSpaceRole(profile, null, 'dept_lead')
@@ -1172,7 +1200,7 @@ export default function Sidebar() {
             active={false}
             label={integration.name}
             glyph={<EmojiGlyph emoji={integration.icon_emoji} />}
-            onClick={() => openExternal(integration.launch_url)}
+            href={integration.launch_url}
           />
         ))}
 

@@ -1123,3 +1123,16 @@ export async function getMySprintMembershipIds() {
   if (error) throw error
   return (data ?? []).map((row) => row.sprint_id)
 }
+
+export async function hasSprintAccess(sprintId) {
+  if (!sprintId) return false
+
+  const { data, error } = await supabase
+    .from('sprint_members')
+    .select('sprint_id')
+    .eq('sprint_id', sprintId)
+    .maybeSingle()
+
+  if (error) throw error
+  return Boolean(data)
+}

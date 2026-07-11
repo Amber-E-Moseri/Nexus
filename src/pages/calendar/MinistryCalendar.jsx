@@ -21,6 +21,13 @@ export default function MinistryCalendar() {
   const { showToast } = useToast()
   const location = useLocation()
   const navigate = useNavigate()
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth())
   const [events, setEvents] = useState([])
@@ -279,7 +286,7 @@ export default function MinistryCalendar() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: FONT_BODY }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontFamily: FONT_HEADING, fontSize: '26px', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
             Ministry Calendar
@@ -314,7 +321,7 @@ export default function MinistryCalendar() {
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '20px', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '240px 1fr', gap: '20px', alignItems: 'start' }}>
         <CalendarSidebar
           year={year}
           month={month}
@@ -339,7 +346,7 @@ export default function MinistryCalendar() {
 
         {/* Main Calendar */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px', position: 'relative' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', flexWrap: 'wrap', position: 'relative' }}>
             <motion.button
               onClick={() => setShowSubmitModal(true)}
               whileHover={{ backgroundColor: '#3A1F75' }}
@@ -388,7 +395,7 @@ export default function MinistryCalendar() {
               Export
             </motion.button>
 
-            {['super_admin', 'regional_secretary'].includes(effectiveRole) && (
+            {(effectiveRole === 'super_admin' || effectiveRole === 'regional_secretary') && (
               <motion.button
                 onClick={handleSyncAllSources}
                 disabled={syncing}
