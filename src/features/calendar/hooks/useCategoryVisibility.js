@@ -56,7 +56,11 @@ export function useCategoryVisibility() {
       }
 
       try {
-        const result = await supabase.from('departments').select('id, name, color').order('name')
+        const result = await supabase
+          .from('departments')
+          .select('id, name, color, space_type')
+          .in('space_type', ['department', 'program'])
+          .order('name')
         deptsResult = result
       } catch (e) {
         console.error('Failed to load departments:', e)

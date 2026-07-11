@@ -113,7 +113,68 @@ export default function CategoryVisibilityConfig() {
         <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
           <div style={{ fontSize: 24, marginBottom: 8 }}>🗂️</div>
           <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>No event categories yet</div>
-          <div>Create event types before configuring visibility.</div>
+          {!showAddForm ? (
+            <div style={{ marginTop: 12 }}>
+              <button
+                onClick={() => setShowAddForm(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: 'var(--accent)',
+                  color: 'white',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <Plus size={14} /> Add Category
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', justifyContent: 'center', marginTop: 12 }}>
+              <div style={{ textAlign: 'left' }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>
+                  Category Name
+                </label>
+                <input
+                  type="text"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  placeholder="e.g., Birthday"
+                  style={{ width: 180, padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 12, boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>
+                  Color
+                </label>
+                <input
+                  type="color"
+                  value={newCatColor}
+                  onChange={(e) => setNewCatColor(e.target.value)}
+                  style={{ width: 40, height: 32, borderRadius: 6, border: '1px solid var(--border)', cursor: 'pointer' }}
+                />
+              </div>
+              <button
+                onClick={handleAddCategory}
+                disabled={saving || !newCatName.trim()}
+                style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: 'white', fontSize: 12, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}
+              >
+                {saving ? 'Adding...' : 'Add'}
+              </button>
+              <button
+                onClick={() => setShowAddForm(false)}
+                disabled={saving}
+                style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'white', color: 'var(--text-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <>

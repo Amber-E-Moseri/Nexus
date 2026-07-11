@@ -69,7 +69,7 @@ export default function CalendarSettingsPage() {
   const isDeptLeadOfCalendarSpace = role === 'dept_lead' && (isProgramsMember || isAdminMember)
 
   // Super admin, Programs team, and regional_secretary can manage category visibility.
-  const canManageVisibility = isSuperAdmin || isProgramsMember || effectiveRole === 'regional_secretary'
+  const canManageVisibility = isSuperAdmin || isProgramsMember || role === 'regional_secretary'
 
   // Super admin or dept_lead of Programs/Admin can manage Google connection and subscriptions.
   const canManageConnections = isSuperAdmin || isDeptLeadOfCalendarSpace
