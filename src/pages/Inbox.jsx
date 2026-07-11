@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatRelativeDate } from '../lib/dateUtils'
 import { getTaskById } from '../features/tasks/lib/tasks'
+import { formatNotificationMessage, NOTIFICATION_TYPES } from '../features/notifications/lib/notifications'
 import { supabase } from '../lib/supabase'
 import TaskModal from '../features/tasks/components/TaskModal'
 import { useAuth } from '../hooks/useAuth'
@@ -225,7 +226,7 @@ export default function Inbox() {
       try {
         const { data: notificationResult, error: notificationError } = await supabase
           .from('notifications')
-          .select('id, user_id, type, payload, read, created_at, title, description')
+          .select('id, user_id, type, payload, read, created_at')
           .eq('user_id', profile.id)
           .order('created_at', { ascending: false })
           .limit(100)
@@ -237,7 +238,12 @@ export default function Inbox() {
           throw notificationError
         }
 
-        setNotifications(notificationResult ?? [])
+        const mapped = (notificationResult ?? []).map((n) => ({
+          ...n,
+          title: NOTIFICATION_TYPES[n.type]?.label ?? n.type,
+          description: formatNotificationMessage(n),
+        }))
+        setNotifications(mapped)
       } catch (err) {
         console.error('Failed to load notifications:', err)
       } finally {
