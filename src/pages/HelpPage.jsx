@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Search, Headphones } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
 
 const FAQ_SECTIONS = [
@@ -324,6 +325,7 @@ function normalize(text) {
 export default function HelpPage() {
   const [query, setQuery] = useState('')
   const [openId, setOpenId] = useState(null)
+  const navigate = useNavigate()
 
   const filteredSections = useMemo(() => {
     const q = normalize(query.trim())
@@ -447,6 +449,27 @@ export default function HelpPage() {
             ))}
           </div>
         )}
+        {/* Contact admin CTA */}
+        <div className="rounded-2xl border border-[var(--border-1)] bg-white p-6 shadow-sm" style={{ marginTop: 24, display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: '#f0eafb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Headphones size={20} style={{ color: '#4C2A92' }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontFamily: FONT_HEADING, fontWeight: 700, fontSize: 15, color: 'var(--ink-1)', marginBottom: 3 }}>
+              Still need help?
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--ink-3)' }}>
+              Can't find what you're looking for? Submit a request and your admin will respond in-app.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/support')}
+            style={{ padding: '9px 18px', background: '#4C2A92', color: '#fff', border: 'none', borderRadius: 10, fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+          >
+            Get Support
+          </button>
+        </div>
       </main>
     </div>
   )

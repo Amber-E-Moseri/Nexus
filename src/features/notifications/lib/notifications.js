@@ -149,6 +149,8 @@ export const NOTIFICATION_TYPES = {
   meeting_reminder: { label: 'Meeting reminder', icon: '🔔', description: 'Reminder 1 hour before a meeting' },
   system: { label: 'System notification', icon: '🔔', description: 'Important system-wide announcements' },
   calendar_sync_failure: { label: 'Calendar sync failed', icon: '⚠️', description: 'When the Google Calendar sync fails for a space you manage' },
+  support_ticket_submitted: { label: 'New support ticket', icon: '🎫', description: 'When a team member submits a support request' },
+  support_ticket_reply: { label: 'Reply on your support ticket', icon: '💬', description: 'When admin replies to your support request' },
 }
 
 export async function sendBrowserPushNotification(title, options = {}) {
@@ -278,6 +280,10 @@ export function formatNotificationMessage(notification) {
       return `Your edit to "${payload.campus_name ?? 'a campus'}" was rejected${payload.notes ? `: ${payload.notes}` : ''}`
     case 'calendar_sync_failure':
       return `Google Calendar sync failed: ${payload.error_message ?? 'unknown error'}`
+    case 'support_ticket_submitted':
+      return `${payload.submitter_name ?? 'Someone'} submitted a ${payload.category?.replace('_', ' ') ?? 'support'} request: "${payload.title ?? 'Untitled'}"`
+    case 'support_ticket_reply':
+      return `Admin replied to your request: "${payload.title ?? 'Untitled'}"`
     case 'system':
       return payload.message ?? def.label
     default:
