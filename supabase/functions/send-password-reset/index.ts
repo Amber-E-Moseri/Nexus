@@ -5,6 +5,7 @@ const allowedOrigins = new Set(
   [
     configuredOrigin,
     'http://localhost:5173',
+    'http://localhost:5174',
     'https://blwcannexus.vercel.app',
     'https://app.blwcannexus.ca',
   ].filter(Boolean),

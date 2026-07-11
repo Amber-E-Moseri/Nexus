@@ -40,8 +40,8 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
       try {
         const types = await getEventTypes()
         setEventTypes(types)
-        if (types.length > 0 && !types.includes(formData.event_type)) {
-          setFormData((prev) => ({ ...prev, event_type: types[0] }))
+        if (types.length > 0 && !types.some((t) => t.name === formData.event_type)) {
+          setFormData((prev) => ({ ...prev, event_type: types[0].name }))
         }
       } catch (err) {
         console.error('Failed to load event types:', err)
@@ -659,8 +659,8 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
               }}
             >
               {eventTypes.map((type) => (
-                <option key={type} value={type}>
-                  ● {type.charAt(0).toUpperCase() + type.slice(1)}
+                <option key={type.id ?? type.name} value={type.name}>
+                  ● {type.name.charAt(0).toUpperCase() + type.name.slice(1)}
                 </option>
               ))}
             </select>

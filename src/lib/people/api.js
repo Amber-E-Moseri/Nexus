@@ -14,6 +14,7 @@ export async function listDepartments() {
   const { data, error } = await supabase
     .from('departments')
     .select('id, name, color, health_status')
+    .eq('space_type', 'department')
     .order('name')
 
   if (error) throw error
@@ -51,19 +52,33 @@ export async function listDepartmentAssignmentHistory() {
 }
 
 export async function createInvitation(payload) {
-  const { data, error } = await supabase.rpc('create_user_invitation', {
+  const baseArgs = {
     p_first_name: payload.firstName,
     p_last_name: payload.lastName,
     p_email: payload.email,
-    p_department_id: payload.departmentId,
+    p_department_id: payload.departmentId || null,
     p_role: payload.role,
     p_assigned_pastor_id: payload.assignedPastorId || null,
     p_message: payload.message || null,
     p_group_name: payload.groupName || null,
+  }
+  const groupSpaceIds = payload.groupSpaceIds && payload.groupSpaceIds.length > 0 ? payload.groupSpaceIds : null
+
+  let result = await supabase.rpc('create_user_invitation', {
+    ...baseArgs,
+    p_group_space_ids: groupSpaceIds,
   })
 
-  if (error) throw error
-  return data
+  if (result.error && /Could not find the function public\.create_user_invitation/i.test(result.error.message || '')) {
+    if (groupSpaceIds) {
+      throw new Error('This database has not been updated for group-space invitation assignment yet. Apply the latest Supabase migrations and try again.')
+    }
+
+    result = await supabase.rpc('create_user_invitation', baseArgs)
+  }
+
+  if (result.error) throw result.error
+  return result.data
 }
 
 export async function resendInvitation(invitationId) {

@@ -43,6 +43,7 @@ import { getDashboardPresets } from '../features/dashboard/lib/dashboard-queries
 import { useDashboardData } from '../features/dashboard/hooks/useDashboardData'
 import WidgetErrorBoundary from '../features/dashboard/components/WidgetErrorBoundary'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
+import BorderGlow from '../components/ui/BorderGlow'
 
 // BLW-12: enter animations are CSS (.dash-stagger in index.css); Framer
 // Motion remains only for the gesture-driven customize panel.
@@ -144,6 +145,15 @@ function CustomHeroStatCard({ meta, value, statKey, onChoose, onClick }) {
 
   return (
     <div style={{ position: 'relative' }}>
+      <BorderGlow
+        glowColor="267 60 85"
+        backgroundColor={meta.bg}
+        borderRadius={24}
+        glowRadius={45}
+        glowIntensity={1.1}
+        colors={['#9B7EF5', '#C4B0FF', '#EDE8F8']}
+        edgeSensitivity={25}
+      >
       <button
         type="button"
         onClick={onClick}
@@ -151,7 +161,7 @@ function CustomHeroStatCard({ meta, value, statKey, onChoose, onClick }) {
         style={{
           position: 'relative',
           overflow: 'hidden',
-          background: meta.bg,
+          background: 'transparent',
           borderRadius: 24,
           padding: '28px 28px 24px',
           border: 'none',
@@ -207,6 +217,7 @@ function CustomHeroStatCard({ meta, value, statKey, onChoose, onClick }) {
           {meta.sub}
         </div>
       </button>
+      </BorderGlow>
 
       {showPicker && (
         <>
@@ -311,46 +322,56 @@ function useOrgStats(userId, heroStats) {
 
 function HeroStatCard({ label, value, sub, bg, blobColor, onClick }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={onClick ? 'hero-stat-card' : undefined}
-      style={{
-        position: 'relative',
-        overflow: 'hidden',
-        background: bg,
-        borderRadius: 24,
-        padding: '28px 28px 24px',
-        border: 'none',
-        cursor: onClick ? 'pointer' : 'default',
-        textAlign: 'left',
-        width: '100%',
-        transition: 'filter .15s',
-      }}
-      onMouseEnter={(e) => { if (onClick) e.currentTarget.style.filter = 'brightness(1.07)' }}
-      onMouseLeave={(e) => { e.currentTarget.style.filter = 'none' }}
+    <BorderGlow
+      glowColor="267 60 85"
+      backgroundColor={bg}
+      borderRadius={24}
+      glowRadius={45}
+      glowIntensity={1.1}
+      colors={['#9B7EF5', '#C4B0FF', '#EDE8F8']}
+      edgeSensitivity={25}
     >
-      {/* decorative blob */}
-      <span style={{
-        position: 'absolute',
-        top: -28,
-        right: -28,
-        width: 130,
-        height: 130,
-        borderRadius: '50%',
-        background: blobColor,
-        pointerEvents: 'none',
-      }} />
-      <div style={{ fontFamily: FONT_HEADING, fontSize: 10.5, fontWeight: 600, letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,.78)', marginBottom: 10, position: 'relative' }}>
-        {label}
-      </div>
-      <div style={{ fontFamily: FONT_HEADING, fontSize: 64, fontWeight: 700, color: '#fff', lineHeight: 1, letterSpacing: '-0.03em', position: 'relative' }}>
-        {value ?? '—'}
-      </div>
-      <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: 'rgba(255,255,255,.72)', marginTop: 8, fontWeight: 500, position: 'relative' }}>
-        {sub}
-      </div>
-    </button>
+      <button
+        type="button"
+        onClick={onClick}
+        className={onClick ? 'hero-stat-card' : undefined}
+        style={{
+          position: 'relative',
+          overflow: 'hidden',
+          background: 'transparent',
+          borderRadius: 24,
+          padding: '28px 28px 24px',
+          border: 'none',
+          cursor: onClick ? 'pointer' : 'default',
+          textAlign: 'left',
+          width: '100%',
+          transition: 'filter .15s',
+        }}
+        onMouseEnter={(e) => { if (onClick) e.currentTarget.style.filter = 'brightness(1.07)' }}
+        onMouseLeave={(e) => { e.currentTarget.style.filter = 'none' }}
+      >
+        {/* decorative blob */}
+        <span style={{
+          position: 'absolute',
+          top: -28,
+          right: -28,
+          width: 130,
+          height: 130,
+          borderRadius: '50%',
+          background: blobColor,
+          pointerEvents: 'none',
+        }} />
+        <div style={{ fontFamily: FONT_HEADING, fontSize: 10.5, fontWeight: 600, letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,.78)', marginBottom: 10, position: 'relative' }}>
+          {label}
+        </div>
+        <div style={{ fontFamily: FONT_HEADING, fontSize: 64, fontWeight: 700, color: '#fff', lineHeight: 1, letterSpacing: '-0.03em', position: 'relative' }}>
+          {value ?? '—'}
+        </div>
+        <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: 'rgba(255,255,255,.72)', marginTop: 8, fontWeight: 500, position: 'relative' }}>
+          {sub}
+        </div>
+      </button>
+    </BorderGlow>
   )
 }
 

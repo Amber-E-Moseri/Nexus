@@ -169,6 +169,12 @@ export function buildCommunicationRecipientData({
   contacts = [],
   categories = [],
   contactCategoryLinks = [],
+  commSubGroups = [],
+  commSubGroupMembers = [],
+  commTags = [],
+  commPersonTags = [],
+  commLeadershipRoles = [],
+  commLeadershipRoleMembers = [],
 } = {}) {
   const deptMembers = users.reduce((acc, user) => {
     if (!user.department_id) return acc
@@ -210,6 +216,27 @@ export function buildCommunicationRecipientData({
   const rosterWithEmail = roster.filter((person) => person.email?.trim())
   const contactsWithEmail = contacts.filter((contact) => contact.email?.trim())
 
+  // Build tag members map: tagId → [{email, person_name}]
+  const tagMembers = {}
+  for (const pt of commPersonTags) {
+    if (!pt.tag_id) continue
+    tagMembers[pt.tag_id] = [...(tagMembers[pt.tag_id] ?? []), { email: pt.email, name: pt.person_name ?? pt.email }]
+  }
+
+  // Build managed sub-group members map: subGroupId → [{email, person_name}]
+  const managedSubGroupMembers = {}
+  for (const sgm of commSubGroupMembers) {
+    if (!sgm.sub_group_id) continue
+    managedSubGroupMembers[sgm.sub_group_id] = [...(managedSubGroupMembers[sgm.sub_group_id] ?? []), { email: sgm.email, name: sgm.person_name ?? sgm.email }]
+  }
+
+  // Build leadership role members map: roleId → [{email, person_name}]
+  const leadershipRoleMembers = {}
+  for (const lrm of commLeadershipRoleMembers) {
+    if (!lrm.leadership_role_id) continue
+    leadershipRoleMembers[lrm.leadership_role_id] = [...(leadershipRoleMembers[lrm.leadership_role_id] ?? []), { email: lrm.email, name: lrm.person_name ?? lrm.email }]
+  }
+
   return {
     depts,
     roster,
@@ -221,6 +248,12 @@ export function buildCommunicationRecipientData({
     categoryMembers,
     rosterWithEmail,
     contactsWithEmail,
+    commTags,
+    tagMembers,
+    commSubGroups,
+    managedSubGroupMembers,
+    commLeadershipRoles,
+    leadershipRoleMembers,
   }
 }
 
@@ -268,6 +301,33 @@ export function segmentFiltersToRecipientPills(filters = {}) {
       type: 'category',
       category: `role:${role}`,
       label: `All ${titleize(role)}s`,
+    })
+  }
+
+  for (const tagId of filters.tags ?? []) {
+    pills.push({
+      id: `tag:${tagId}`,
+      type: 'tag',
+      tagId,
+      label: `Tag: ${tagId}`,
+    })
+  }
+
+  for (const subGroupId of filters.managed_subgroups ?? []) {
+    pills.push({
+      id: `managed_subgroup:${subGroupId}`,
+      type: 'managed_subgroup',
+      subGroupId,
+      label: `Sub-group: ${subGroupId}`,
+    })
+  }
+
+  for (const leadershipRoleId of filters.leadership_roles ?? []) {
+    pills.push({
+      id: `leadership_role:${leadershipRoleId}`,
+      type: 'leadership_role',
+      leadershipRoleId,
+      label: 'Leadership',
     })
   }
 
@@ -340,13 +400,35 @@ export function resolveRecipientPills(pills = [], allData = {}) {
         addRecipient(entry)
       }
     }
+
+    if (pill.type === 'tag') {
+      for (const person of allData.tagMembers?.[pill.tagId] ?? []) {
+        addRecipient(person)
+      }
+    }
+
+    if (pill.type === 'managed_subgroup') {
+      for (const person of allData.managedSubGroupMembers?.[pill.subGroupId] ?? []) {
+        addRecipient(person)
+      }
+    }
+
+    if (pill.type === 'leadership_role') {
+      for (const person of allData.leadershipRoleMembers?.[pill.leadershipRoleId] ?? []) {
+        addRecipient(person)
+      }
+    }
   }
 
   return Array.from(resolved.values())
 }
 
 export async function loadCommunicationSources(supabase) {
-  const [deptsRes, rosterRes, usersRes, contactsRes, categoriesRes, linksRes] = await Promise.all([
+  const [
+    deptsRes, rosterRes, usersRes, contactsRes, categoriesRes, linksRes,
+    subGroupsRes, subGroupMembersRes, tagsRes, personTagsRes,
+    leadershipRolesRes, leadershipRoleMembersRes,
+  ] = await Promise.all([
     supabase.from('departments').select('id, name, color').order('name'),
     supabase
       .from('expected_attendees')
@@ -368,6 +450,12 @@ export async function loadCommunicationSources(supabase) {
     supabase
       .from('communication_contact_categories')
       .select('contact_id, category_id'),
+    supabase.from('communication_sub_groups').select('id, name, description, color').order('name'),
+    supabase.from('communication_sub_group_members').select('id, sub_group_id, email, person_name'),
+    supabase.from('communication_tags').select('id, name, color').order('name'),
+    supabase.from('communication_person_tags').select('id, tag_id, email, person_name'),
+    supabase.from('communication_leadership_roles').select('id, name, description, color').order('name'),
+    supabase.from('communication_leadership_role_members').select('id, leadership_role_id, email, person_name'),
   ])
 
   return buildCommunicationRecipientData({
@@ -377,6 +465,12 @@ export async function loadCommunicationSources(supabase) {
     contacts: contactsRes.data ?? [],
     categories: categoriesRes.data ?? [],
     contactCategoryLinks: linksRes.data ?? [],
+    commSubGroups: subGroupsRes.data ?? [],
+    commSubGroupMembers: subGroupMembersRes.data ?? [],
+    commTags: tagsRes.data ?? [],
+    commPersonTags: personTagsRes.data ?? [],
+    commLeadershipRoles: leadershipRolesRes.data ?? [],
+    commLeadershipRoleMembers: leadershipRoleMembersRes.data ?? [],
   })
 }
 

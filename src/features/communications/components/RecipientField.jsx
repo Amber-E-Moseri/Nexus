@@ -15,6 +15,9 @@ const PILL_STYLES = {
   all_roster: { background: '#E8F0FE', color: '#1A5276' },
   category: { background: '#FEF8E7', color: '#E8A020' },
   csv_import: { background: '#F4F1EA', color: '#6B6560' },
+  tag: { background: '#E8F0FE', color: '#4C2A92' },
+  managed_subgroup: { background: '#E0F2E9', color: '#1B7A4A' },
+  leadership_role: { background: '#FEF3E0', color: '#B8760C' },
 }
 
 function normalizeEmail(email = '') {
@@ -28,7 +31,7 @@ function titleize(value = '') {
 }
 
 function getPillKey(pill) {
-  return pill.id ?? `${pill.type}:${pill.email ?? pill.deptId ?? pill.subgroup ?? pill.category ?? pill.label}`
+  return pill.id ?? `${pill.type}:${pill.email ?? pill.deptId ?? pill.subgroup ?? pill.category ?? pill.tagId ?? pill.subGroupId ?? pill.leadershipRoleId ?? pill.label}`
 }
 
 function extractEmailEntries(text = '') {
@@ -108,30 +111,62 @@ function getSectionOptions(allData = {}) {
     })
   }
 
+  const tagOptions = (allData.commTags ?? []).map((tag) => ({
+    id: `tag:${tag.id}`,
+    type: 'tag',
+    tagId: tag.id,
+    label: tag.name,
+    description: `${(allData.tagMembers?.[tag.id] ?? []).length} people`,
+    section: 'tags',
+    sortLabel: tag.name,
+    icon: Tag,
+    pillColor: tag.color,
+  }))
+
+  const managedSubGroupOptions = (allData.commSubGroups ?? []).map((sg) => ({
+    id: `managed_subgroup:${sg.id}`,
+    type: 'managed_subgroup',
+    subGroupId: sg.id,
+    label: sg.name,
+    description: `${(allData.managedSubGroupMembers?.[sg.id] ?? []).length} members`,
+    section: 'subgroups',
+    sortLabel: sg.name,
+    icon: Users,
+  }))
+
+  const leadershipRoleOptions = (allData.commLeadershipRoles ?? []).map((lr) => ({
+    id: `leadership_role:${lr.id}`,
+    type: 'leadership_role',
+    leadershipRoleId: lr.id,
+    label: lr.name,
+    description: `${(allData.leadershipRoleMembers?.[lr.id] ?? []).length} people`,
+    section: 'leadership',
+    sortLabel: lr.name,
+    icon: Tag,
+  }))
+
   return [
     {
-      title: 'Groups',
-      key: 'groups',
+      title: 'Tags',
+      key: 'tags',
+      options: tagOptions.length > 0
+        ? tagOptions.sort((a, b) => a.sortLabel.localeCompare(b.sortLabel))
+        : [],
+    },
+    {
+      title: 'Sub-groups',
+      key: 'subgroups',
       options: [
         {
           id: 'all_roster',
           type: 'all_roster',
           label: 'Everyone on roster with email',
           description: `${(allData.rosterWithEmail ?? []).length} people`,
-          section: 'groups',
+          section: 'subgroups',
           sortLabel: '0-Everyone on roster with email',
           icon: Users,
         },
-        ...((allData.depts ?? []).map((dept) => ({
-          id: `department:${dept.id}`,
-          type: 'department',
-          deptId: dept.id,
-          label: `All ${dept.name} members`,
-          description: `${(allData.deptMembers?.[dept.id] ?? []).length} people`,
-          section: 'groups',
-          sortLabel: `1-${dept.name}`,
-          icon: Users,
-        }))),
+        ...managedSubGroupOptions.sort((a, b) => a.sortLabel.localeCompare(b.sortLabel)),
         ...Object.keys(allData.subgroupMembers ?? {})
           .sort((a, b) => a.localeCompare(b))
           .map((subgroup) => ({
@@ -140,16 +175,20 @@ function getSectionOptions(allData = {}) {
             subgroup,
             label: `Subgroup: ${subgroup}`,
             description: `${(allData.subgroupMembers?.[subgroup] ?? []).length} people`,
-            section: 'groups',
+            section: 'subgroups',
             sortLabel: `2-${subgroup}`,
             icon: Users,
           })),
       ],
     },
     {
-      title: 'Categories',
-      key: 'categories',
-      options: [...roleOptions, ...leadershipOptions].sort((a, b) => a.sortLabel.localeCompare(b.sortLabel)),
+      title: 'Leadership Responsibility',
+      key: 'leadership',
+      options: [
+        ...leadershipRoleOptions,
+        ...roleOptions,
+        ...leadershipOptions,
+      ].sort((a, b) => a.sortLabel.localeCompare(b.sortLabel)),
     },
     {
       title: 'People',
@@ -222,6 +261,30 @@ export function resolveRecipients(pills, allData) {
         const email = normalizeEmail(entry.email)
         if (!email) continue
         resolved.set(email, { name: entry.name ?? entry.email, email: entry.email })
+      }
+    }
+
+    if (pill.type === 'tag') {
+      for (const person of allData.tagMembers?.[pill.tagId] ?? []) {
+        const email = normalizeEmail(person.email)
+        if (!email) continue
+        resolved.set(email, { name: person.name ?? person.email, email: person.email })
+      }
+    }
+
+    if (pill.type === 'managed_subgroup') {
+      for (const person of allData.managedSubGroupMembers?.[pill.subGroupId] ?? []) {
+        const email = normalizeEmail(person.email)
+        if (!email) continue
+        resolved.set(email, { name: person.name ?? person.email, email: person.email })
+      }
+    }
+
+    if (pill.type === 'leadership_role') {
+      for (const person of allData.leadershipRoleMembers?.[pill.leadershipRoleId] ?? []) {
+        const email = normalizeEmail(person.email)
+        if (!email) continue
+        resolved.set(email, { name: person.name ?? person.email, email: person.email })
       }
     }
   }

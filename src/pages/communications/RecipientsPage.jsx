@@ -30,12 +30,355 @@ function Modal({ title, wide, onClose, children }) {
   )
 }
 
+function TagManagementPanel() {
+  const { profile } = useAuth()
+  const [tags, setTags] = useState([])
+  const [personTags, setPersonTags] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [newTagName, setNewTagName] = useState('')
+  const [newTagColor, setNewTagColor] = useState('#4C2A92')
+  const [editingTag, setEditingTag] = useState(null)
+  const [addMemberTagId, setAddMemberTagId] = useState(null)
+  const [addEmail, setAddEmail] = useState('')
+  const [addName, setAddName] = useState('')
+
+  async function load() {
+    setLoading(true)
+    const [tagsRes, ptRes] = await Promise.all([
+      supabase.from('communication_tags').select('id, name, color, created_at').order('name'),
+      supabase.from('communication_person_tags').select('id, tag_id, email, person_name'),
+    ])
+    setTags(tagsRes.data ?? [])
+    setPersonTags(ptRes.data ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function handleCreateTag() {
+    if (!newTagName.trim()) return
+    await supabase.from('communication_tags').insert({ name: newTagName.trim(), color: newTagColor, created_by: profile?.id })
+    setNewTagName('')
+    setNewTagColor('#4C2A92')
+    await load()
+  }
+
+  async function handleDeleteTag(id) {
+    await supabase.from('communication_tags').delete().eq('id', id)
+    await load()
+  }
+
+  async function handleAddMember() {
+    if (!addEmail.trim() || !addMemberTagId) return
+    await supabase.from('communication_person_tags').insert({ tag_id: addMemberTagId, email: addEmail.trim().toLowerCase(), person_name: addName.trim() || null })
+    setAddEmail('')
+    setAddName('')
+    await load()
+  }
+
+  async function handleRemoveMember(ptId) {
+    await supabase.from('communication_person_tags').delete().eq('id', ptId)
+    await load()
+  }
+
+  if (loading) return <div style={{ padding: 24, color: MUTED, fontSize: 13 }}>Loading...</div>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: MUTED, textTransform: 'uppercase', marginBottom: 4 }}>New tag</label>
+          <input value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="e.g. Youth, Choir, Ushers" style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none' }} />
+        </div>
+        <input type="color" value={newTagColor} onChange={(e) => setNewTagColor(e.target.value)} style={{ width: 36, height: 36, border: `1px solid ${BORDER}`, borderRadius: 8, cursor: 'pointer', padding: 2 }} />
+        <button type="button" onClick={handleCreateTag} disabled={!newTagName.trim()} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: newTagName.trim() ? 1 : 0.5 }}>
+          Create Tag
+        </button>
+      </div>
+
+      {tags.length === 0 ? (
+        <div style={{ padding: 24, textAlign: 'center', color: MUTED, fontSize: 13 }}>No tags yet. Create one above.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {tags.map((tag) => {
+            const members = personTags.filter((pt) => pt.tag_id === tag.id)
+            const isAdding = addMemberTagId === tag.id
+            return (
+              <div key={tag.id} style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: `1px solid ${BORDER}` }}>
+                  <span style={{ width: 14, height: 14, borderRadius: '50%', background: tag.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: TEXT, flex: 1 }}>{tag.name}</span>
+                  <span style={{ fontSize: 12, color: MUTED }}>{members.length} member{members.length !== 1 ? 's' : ''}</span>
+                  <button type="button" onClick={() => setAddMemberTagId(isAdding ? null : tag.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    {isAdding ? 'Cancel' : '+ Add'}
+                  </button>
+                  <button type="button" onClick={() => handleDeleteTag(tag.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark, #C94830)', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    Delete
+                  </button>
+                </div>
+                {isAdding ? (
+                  <div style={{ display: 'flex', gap: 8, padding: '10px 16px', background: BG, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Name" style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, outline: 'none', flex: 1, minWidth: 120 }} />
+                    <input value={addEmail} onChange={(e) => setAddEmail(e.target.value)} placeholder="Email" style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, outline: 'none', flex: 1, minWidth: 160 }} />
+                    <button type="button" onClick={handleAddMember} disabled={!addEmail.trim()} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: addEmail.trim() ? 1 : 0.5 }}>
+                      Add
+                    </button>
+                  </div>
+                ) : null}
+                {members.length > 0 ? (
+                  <div style={{ padding: '6px 16px 10px' }}>
+                    {members.map((pt) => (
+                      <div key={pt.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 13, color: TEXT }}>
+                        <span style={{ flex: 1 }}>{pt.person_name ?? pt.email}</span>
+                        <span style={{ fontSize: 12, color: MUTED }}>{pt.email}</span>
+                        <button type="button" onClick={() => handleRemoveMember(pt.id)} style={{ border: 'none', background: 'none', color: 'var(--coral-dark, #C94830)', fontSize: 14, cursor: 'pointer', padding: '2px 6px' }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SubGroupManagementPanel() {
+  const { profile } = useAuth()
+  const [subGroups, setSubGroups] = useState([])
+  const [members, setMembers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [newName, setNewName] = useState('')
+  const [newColor, setNewColor] = useState('#6B7280')
+  const [addMemberSgId, setAddMemberSgId] = useState(null)
+  const [addEmail, setAddEmail] = useState('')
+  const [addName, setAddName] = useState('')
+
+  async function load() {
+    setLoading(true)
+    const [sgRes, memRes] = await Promise.all([
+      supabase.from('communication_sub_groups').select('id, name, description, color, created_at').order('name'),
+      supabase.from('communication_sub_group_members').select('id, sub_group_id, email, person_name'),
+    ])
+    setSubGroups(sgRes.data ?? [])
+    setMembers(memRes.data ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function handleCreate() {
+    if (!newName.trim()) return
+    await supabase.from('communication_sub_groups').insert({ name: newName.trim(), color: newColor, created_by: profile?.id })
+    setNewName('')
+    setNewColor('#6B7280')
+    await load()
+  }
+
+  async function handleDelete(id) {
+    await supabase.from('communication_sub_groups').delete().eq('id', id)
+    await load()
+  }
+
+  async function handleAddMember() {
+    if (!addEmail.trim() || !addMemberSgId) return
+    await supabase.from('communication_sub_group_members').insert({ sub_group_id: addMemberSgId, email: addEmail.trim().toLowerCase(), person_name: addName.trim() || null })
+    setAddEmail('')
+    setAddName('')
+    await load()
+  }
+
+  async function handleRemoveMember(memId) {
+    await supabase.from('communication_sub_group_members').delete().eq('id', memId)
+    await load()
+  }
+
+  if (loading) return <div style={{ padding: 24, color: MUTED, fontSize: 13 }}>Loading...</div>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: MUTED, textTransform: 'uppercase', marginBottom: 4 }}>New sub-group</label>
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Central East, Youth Group" style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none' }} />
+        </div>
+        <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} style={{ width: 36, height: 36, border: `1px solid ${BORDER}`, borderRadius: 8, cursor: 'pointer', padding: 2 }} />
+        <button type="button" onClick={handleCreate} disabled={!newName.trim()} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: newName.trim() ? 1 : 0.5 }}>
+          Create Sub-group
+        </button>
+      </div>
+
+      {subGroups.length === 0 ? (
+        <div style={{ padding: 24, textAlign: 'center', color: MUTED, fontSize: 13 }}>No sub-groups yet. Create one above.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {subGroups.map((sg) => {
+            const sgMembers = members.filter((m) => m.sub_group_id === sg.id)
+            const isAdding = addMemberSgId === sg.id
+            return (
+              <div key={sg.id} style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: `1px solid ${BORDER}` }}>
+                  <span style={{ width: 14, height: 14, borderRadius: '50%', background: sg.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: TEXT, flex: 1 }}>{sg.name}</span>
+                  <span style={{ fontSize: 12, color: MUTED }}>{sgMembers.length} member{sgMembers.length !== 1 ? 's' : ''}</span>
+                  <button type="button" onClick={() => setAddMemberSgId(isAdding ? null : sg.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    {isAdding ? 'Cancel' : '+ Add'}
+                  </button>
+                  <button type="button" onClick={() => handleDelete(sg.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark, #C94830)', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    Delete
+                  </button>
+                </div>
+                {isAdding ? (
+                  <div style={{ display: 'flex', gap: 8, padding: '10px 16px', background: BG, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Name" style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, outline: 'none', flex: 1, minWidth: 120 }} />
+                    <input value={addEmail} onChange={(e) => setAddEmail(e.target.value)} placeholder="Email" style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, outline: 'none', flex: 1, minWidth: 160 }} />
+                    <button type="button" onClick={handleAddMember} disabled={!addEmail.trim()} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: addEmail.trim() ? 1 : 0.5 }}>
+                      Add
+                    </button>
+                  </div>
+                ) : null}
+                {sgMembers.length > 0 ? (
+                  <div style={{ padding: '6px 16px 10px' }}>
+                    {sgMembers.map((m) => (
+                      <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 13, color: TEXT }}>
+                        <span style={{ flex: 1 }}>{m.person_name ?? m.email}</span>
+                        <span style={{ fontSize: 12, color: MUTED }}>{m.email}</span>
+                        <button type="button" onClick={() => handleRemoveMember(m.id)} style={{ border: 'none', background: 'none', color: 'var(--coral-dark, #C94830)', fontSize: 14, cursor: 'pointer', padding: '2px 6px' }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LeadershipRolesPanel() {
+  const { profile } = useAuth()
+  const [roles, setRoles] = useState([])
+  const [members, setMembers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [newName, setNewName] = useState('')
+  const [newColor, setNewColor] = useState('#E8A020')
+  const [addMemberRoleId, setAddMemberRoleId] = useState(null)
+  const [addEmail, setAddEmail] = useState('')
+  const [addName, setAddName] = useState('')
+
+  async function load() {
+    setLoading(true)
+    const [rolesRes, memRes] = await Promise.all([
+      supabase.from('communication_leadership_roles').select('id, name, description, color, created_at').order('name'),
+      supabase.from('communication_leadership_role_members').select('id, leadership_role_id, email, person_name'),
+    ])
+    setRoles(rolesRes.data ?? [])
+    setMembers(memRes.data ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function handleCreate() {
+    if (!newName.trim()) return
+    await supabase.from('communication_leadership_roles').insert({ name: newName.trim(), color: newColor, created_by: profile?.id })
+    setNewName('')
+    setNewColor('#E8A020')
+    await load()
+  }
+
+  async function handleDelete(id) {
+    await supabase.from('communication_leadership_roles').delete().eq('id', id)
+    await load()
+  }
+
+  async function handleAddMember() {
+    if (!addEmail.trim() || !addMemberRoleId) return
+    await supabase.from('communication_leadership_role_members').insert({ leadership_role_id: addMemberRoleId, email: addEmail.trim().toLowerCase(), person_name: addName.trim() || null })
+    setAddEmail('')
+    setAddName('')
+    await load()
+  }
+
+  async function handleRemoveMember(memId) {
+    await supabase.from('communication_leadership_role_members').delete().eq('id', memId)
+    await load()
+  }
+
+  if (loading) return <div style={{ padding: 24, color: MUTED, fontSize: 13 }}>Loading...</div>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: MUTED, textTransform: 'uppercase', marginBottom: 4 }}>New leadership responsibility</label>
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Cell Leader, Deacon, Usher Lead" style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none' }} />
+        </div>
+        <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} style={{ width: 36, height: 36, border: `1px solid ${BORDER}`, borderRadius: 8, cursor: 'pointer', padding: 2 }} />
+        <button type="button" onClick={handleCreate} disabled={!newName.trim()} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: newName.trim() ? 1 : 0.5 }}>
+          Create Role
+        </button>
+      </div>
+
+      {roles.length === 0 ? (
+        <div style={{ padding: 24, textAlign: 'center', color: MUTED, fontSize: 13 }}>No leadership responsibilities yet. Create one above.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {roles.map((role) => {
+            const roleMembers = members.filter((m) => m.leadership_role_id === role.id)
+            const isAdding = addMemberRoleId === role.id
+            return (
+              <div key={role.id} style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: `1px solid ${BORDER}` }}>
+                  <span style={{ width: 14, height: 14, borderRadius: '50%', background: role.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: TEXT, flex: 1 }}>{role.name}</span>
+                  <span style={{ fontSize: 12, color: MUTED }}>{roleMembers.length} member{roleMembers.length !== 1 ? 's' : ''}</span>
+                  <button type="button" onClick={() => setAddMemberRoleId(isAdding ? null : role.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: PRIMARY, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    {isAdding ? 'Cancel' : '+ Add'}
+                  </button>
+                  <button type="button" onClick={() => handleDelete(role.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark, #C94830)', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    Delete
+                  </button>
+                </div>
+                {isAdding ? (
+                  <div style={{ display: 'flex', gap: 8, padding: '10px 16px', background: BG, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Name" style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, outline: 'none', flex: 1, minWidth: 120 }} />
+                    <input value={addEmail} onChange={(e) => setAddEmail(e.target.value)} placeholder="Email" style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, outline: 'none', flex: 1, minWidth: 160 }} />
+                    <button type="button" onClick={handleAddMember} disabled={!addEmail.trim()} style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: addEmail.trim() ? 1 : 0.5 }}>
+                      Add
+                    </button>
+                  </div>
+                ) : null}
+                {roleMembers.length > 0 ? (
+                  <div style={{ padding: '6px 16px 10px' }}>
+                    {roleMembers.map((m) => (
+                      <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 13, color: TEXT }}>
+                        <span style={{ flex: 1 }}>{m.person_name ?? m.email}</span>
+                        <span style={{ fontSize: 12, color: MUTED }}>{m.email}</span>
+                        <button type="button" onClick={() => handleRemoveMember(m.id)} style={{ border: 'none', background: 'none', color: 'var(--coral-dark, #C94830)', fontSize: 14, cursor: 'pointer', padding: '2px 6px' }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function RecipientsPage() {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const windowWidth = useWindowWidth()
   const isMobile = windowWidth <= 768
-  const [tab, setTab] = useState('all') // 'all' | 'suppressed'
+  const [tab, setTab] = useState('all') // 'all' | 'suppressed' | 'tags' | 'subgroups' | 'leadership'
   const [profiles, setProfiles] = useState([])
   const [suppressedRows, setSuppressedRows] = useState([])
   const [departments, setDepartments] = useState([])
@@ -45,8 +388,6 @@ export default function RecipientsPage() {
   const [filterSubscribed, setFilterSubscribed] = useState('')
   const [selectedRows, setSelectedRows] = useState(new Set())
   const [selectAll, setSelectAll] = useState(false)
-  // BLW-11: render the member list in windows so large rosters don't put
-  // every row in the DOM at once. Filters/search still cover all rows.
   const RECIPIENT_WINDOW = 100
   const [visibleCount, setVisibleCount] = useState(RECIPIENT_WINDOW)
 
@@ -216,46 +557,45 @@ export default function RecipientsPage() {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 0, borderBottom: `2px solid ${BORDER}` }}>
-          <button
-            type="button"
-            onClick={() => setTab('all')}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              padding: '12px 20px',
-              fontSize: 14,
-              fontWeight: tab === 'all' ? 700 : 500,
-              color: tab === 'all' ? PRIMARY : MUTED,
-              borderBottom: tab === 'all' ? `3px solid ${PRIMARY}` : 'none',
-              cursor: 'pointer',
-              marginBottom: '-2px',
-            }}
-          >
-            All Members
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('suppressed')}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              padding: '12px 20px',
-              fontSize: 14,
-              fontWeight: tab === 'suppressed' ? 700 : 500,
-              color: tab === 'suppressed' ? PRIMARY : MUTED,
-              borderBottom: tab === 'suppressed' ? `3px solid ${PRIMARY}` : 'none',
-              cursor: 'pointer',
-              marginBottom: '-2px',
-            }}
-          >
-            Suppressed
-          </button>
+        <div style={{ display: 'flex', gap: 0, borderBottom: `2px solid ${BORDER}`, overflowX: 'auto' }}>
+          {[
+            { key: 'all', label: 'All Members' },
+            { key: 'tags', label: 'Tags' },
+            { key: 'subgroups', label: 'Sub-groups' },
+            { key: 'leadership', label: 'Leadership' },
+            { key: 'suppressed', label: 'Suppressed' },
+          ].map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                padding: '12px 20px',
+                fontSize: 14,
+                fontWeight: tab === t.key ? 700 : 500,
+                color: tab === t.key ? PRIMARY : MUTED,
+                borderBottom: tab === t.key ? `3px solid ${PRIMARY}` : 'none',
+                cursor: 'pointer',
+                marginBottom: '-2px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
 
       <div style={{ flex: 1, overflow: 'auto', padding: '16px 24px', background: BG }}>
-        {loading ? (
+        {tab === 'tags' ? (
+          <TagManagementPanel />
+        ) : tab === 'subgroups' ? (
+          <SubGroupManagementPanel />
+        ) : tab === 'leadership' ? (
+          <LeadershipRolesPanel />
+        ) : loading ? (
           <div style={{ textAlign: 'center', padding: 48, color: MUTED, fontSize: 13 }}>Loading...</div>
         ) : tab === 'all' ? (
           <>

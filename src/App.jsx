@@ -97,6 +97,7 @@ const InvitationDetailPage = lazy(() => import('./pages/communications/Invitatio
 const InvitationsListPage = lazy(() => import('./pages/communications/InvitationsListPage'))
 const InstagramGradingPage = lazyRoute('/instagram', () => import('./features/instagram/pages/InstagramGradingPage'))
 const HelpPage = lazyRoute('/help', () => import('./pages/HelpPage'))
+const GlowCardDemo = lazy(() => import('./components/ui/GlowCardDemo'))
 
 function onError(error, errorInfo) {
   console.error('[AppErrorBoundary]', error, errorInfo)
@@ -133,8 +134,8 @@ export default function App() {
       <Route path="/rsvp" element={<RSVPPage />} />
       <Route path="/subscribe" element={<SubscribePage />} />
       <Route path="/confirm-subscription/:token" element={<ConfirmSubscriptionPage />} />
-
       <Route element={<ProtectedRoute />}>
+        <Route path="/demo/glow-card" element={<GlowCardDemo />} />
         <Route element={<Shell />}>
           {/* Home merged into Dashboard (experiment/clickup-ui-refresh) */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

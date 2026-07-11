@@ -19,6 +19,15 @@ const STATUS_DOT_COLORS = {
   cancelled: 'var(--accent-red)',
 }
 
+const STATUS_BADGE = {
+  scheduled: { label: 'Scheduled', bg: '#EFF6FF', color: '#1D4ED8' },
+  in_progress: { label: 'In Progress', bg: '#FFFBEB', color: '#B45309' },
+  completed: { label: 'Completed', bg: '#F0FDF4', color: '#15803D' },
+  cancelled: { label: 'Cancelled', bg: '#FEF2F2', color: '#B91C1C' },
+}
+
+const PAST_STATUSES = new Set(['completed', 'cancelled'])
+
 function groupMeetingsByCategory(meetings) {
   const groups = {}
   meetings.forEach((meeting) => {
@@ -261,68 +270,110 @@ export default function MeetingsList({ onAddMeeting, onTasksAdded, canManage = f
               No meetings in this category
             </div>
           ) : (
-            filteredMeetings
-              .sort((a, b) => new Date(b.date) - new Date(a.date))
-              .map((meeting) => {
-                const isSelected = selectedMeetingId === meeting.id
-                return (
-                  <button
-                    key={meeting.id}
-                    type="button"
-                    onClick={() => setSelectedMeetingId(meeting.id)}
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      background: isSelected ? '#F3E8FF' : 'transparent',
-                      border: isSelected ? '2px solid var(--accent)' : 'none',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      transition: 'all 0.12s',
-                      borderBottom: '1px solid var(--border)',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSelected) e.currentTarget.style.background = '#FAFAF9'
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSelected) e.currentTarget.style.background = 'transparent'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-                          background: STATUS_DOT_COLORS[meeting.status] || 'var(--accent-blue)',
-                        }}
-                      />
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-1)' }}>
-                        {meeting.title}
+            (() => {
+                const sorted = [...filteredMeetings].sort((a, b) => new Date(b.date) - new Date(a.date))
+                const now = new Date()
+                const upcoming = sorted.filter((m) => !PAST_STATUSES.has(m.status) && new Date(m.date) >= now)
+                const past = sorted.filter((m) => PAST_STATUSES.has(m.status) || new Date(m.date) < now)
+
+                const renderMeeting = (meeting) => {
+                  const isSelected = selectedMeetingId === meeting.id
+                  return (
+                    <button
+                      key={meeting.id}
+                      type="button"
+                      onClick={() => setSelectedMeetingId(meeting.id)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        background: isSelected ? '#F3E8FF' : 'transparent',
+                        border: isSelected ? '2px solid var(--accent)' : 'none',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        transition: 'all 0.12s',
+                        borderBottom: '1px solid var(--border)',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) e.currentTarget.style.background = '#FAFAF9'
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) e.currentTarget.style.background = 'transparent'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                            background: STATUS_DOT_COLORS[meeting.status] || 'var(--accent-blue)',
+                          }}
+                        />
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-1)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {meeting.title}
+                        </div>
                       </div>
-                    </div>
-                    <div style={{ marginTop: 4, display: 'flex', gap: 8, fontSize: 11, color: 'var(--ink-3)' }}>
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          padding: '2px 6px',
-                          borderRadius: 4,
-                          background: TYPE_CHIP_COLORS[meeting.meeting_type] || 'var(--ink-3)',
-                          color: 'white',
-                          fontSize: 10,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {meeting.meeting_type?.charAt(0).toUpperCase() + meeting.meeting_type?.slice(1) || 'General'}
-                      </span>
-                      <span>
-                        {new Date(meeting.date).toLocaleDateString('en-CA', {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </span>
-                    </div>
-                  </button>
+                      <div style={{ marginTop: 4, display: 'flex', gap: 8, fontSize: 11, color: 'var(--ink-3)' }}>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            background: TYPE_CHIP_COLORS[meeting.meeting_type] || 'var(--ink-3)',
+                            color: 'white',
+                            fontSize: 10,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {meeting.meeting_type?.charAt(0).toUpperCase() + meeting.meeting_type?.slice(1) || 'General'}
+                        </span>
+                        <span>
+                          {new Date(meeting.date).toLocaleDateString('en-CA', {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </span>
+                        {meeting.attendance?.filter((e) => e.status === 'present').length > 0 && (
+                          <span style={{ color: 'var(--ink-3)' }}>
+                            · {meeting.attendance.filter((e) => e.status === 'present').length} attended
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  )
+                }
+
+                const SectionDivider = ({ label, count }) => (
+                  <div style={{
+                    padding: '8px 16px 4px',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    color: 'var(--text-tertiary)',
+                    background: 'var(--surface-secondary)',
+                    borderBottom: '1px solid var(--border)',
+                  }}>
+                    {label} {count > 0 ? `(${count})` : ''}
+                  </div>
                 )
-              })
+
+                return (
+                  <>
+                    {upcoming.length > 0 && (
+                      <>
+                        <SectionDivider label="Upcoming" count={upcoming.length} />
+                        {upcoming.map(renderMeeting)}
+                      </>
+                    )}
+                    {past.length > 0 && (
+                      <>
+                        <SectionDivider label="Past" count={past.length} />
+                        {past.map(renderMeeting)}
+                      </>
+                    )}
+                  </>
+                )
+              })()
           )}
         </div>
       </div>
@@ -331,56 +382,77 @@ export default function MeetingsList({ onAddMeeting, onTasksAdded, canManage = f
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {selectedMeeting ? (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid var(--border)', padding: '16px' }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {selectedMeeting.title}
-                </h2>
-                <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
-                  {new Date(selectedMeeting.date).toLocaleDateString('en-CA', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                  {' • '}
-                  {selectedMeeting.meeting_type || 'General'}
+            {(() => {
+              const badge = STATUS_BADGE[selectedMeeting.status]
+              const isPast = PAST_STATUSES.has(selectedMeeting.status)
+              const attendeeCount = selectedMeeting.attendance?.filter((e) => e.status === 'present').length ?? 0
+              return (
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', padding: '16px' }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {selectedMeeting.title}
+                      </h2>
+                      {badge && (
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          background: badge.bg,
+                          color: badge.color,
+                          flexShrink: 0,
+                        }}>
+                          {badge.label}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-secondary)', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      <span>
+                        {new Date(selectedMeeting.date).toLocaleDateString('en-CA', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
+                      <span>·</span>
+                      <span style={{ textTransform: 'capitalize' }}>{selectedMeeting.meeting_type || 'General'}</span>
+                      {attendeeCount > 0 && (
+                        <>
+                          <span>·</span>
+                          <span>{attendeeCount} attended</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {canManage && !isPast && (
+                    <button
+                      type="button"
+                      onClick={() => onStartLive?.(selectedMeeting)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '8px 12px',
+                        borderRadius: 8,
+                        border: '1px solid var(--border)',
+                        background: 'white',
+                        cursor: 'pointer',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: 'var(--text-primary)',
+                        flexShrink: 0,
+                        marginLeft: 12,
+                      }}
+                    >
+                      <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#DC2626' }} />
+                      Start live
+                    </button>
+                  )}
                 </div>
-              </div>
-              {canManage && (
-                <button
-                  type="button"
-                  onClick={() => onStartLive?.(selectedMeeting)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    paddingLeft: '12px',
-                    paddingRight: '12px',
-                    paddingTop: '8px',
-                    paddingBottom: '8px',
-                    borderRadius: 8,
-                    border: '1px solid var(--border)',
-                    background: 'white',
-                    cursor: 'pointer',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: '#DC2626',
-                    }}
-                  />
-                  Start live
-                </button>
-              )}
-            </div>
+              )
+            })()}
             <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px' }}>
               <MeetingRecordTabs meeting={selectedMeeting} />
             </div>

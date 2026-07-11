@@ -342,10 +342,11 @@ export default function Sidebar() {
 
   useEffect(() => {
     let active = true
+    if (!profile?.id) return
 
     supabase
       .from('external_integrations')
-      .select('id, name, type, enabled, show_in_sidebar, sort_order, icon_emoji, launch_url, description')
+      .select('id, name, type, enabled, show_in_sidebar, sort_order, icon_emoji, launch_url, description, scope, department_ids, user_ids')
       .eq('enabled', true)
       .eq('show_in_sidebar', true)
       .order('sort_order')
@@ -355,15 +356,35 @@ export default function Sidebar() {
           return
         }
 
-        if (active) {
-          setIntegrations(data ?? [])
-        }
+        if (!active) return
+
+        // Client-side scope filter — guards against stale JWT claims missing
+        // department from RLS, ensuring department-scoped integrations are shown
+        // to the right users even if their token hasn't refreshed yet.
+        const userId = profile.id
+        const deptId = profile.department_id ?? null
+
+        const filtered = (data ?? []).filter((integration) => {
+          const scope = integration.scope ?? 'global'
+          if (scope === 'global') return true
+          if (scope === 'departments') {
+            const ids = integration.department_ids ?? []
+            return ids.length === 0 || (deptId && ids.includes(deptId))
+          }
+          if (scope === 'users') {
+            const ids = integration.user_ids ?? []
+            return ids.length === 0 || ids.includes(userId)
+          }
+          return true
+        })
+
+        setIntegrations(filtered)
       })
 
     return () => {
       active = false
     }
-  }, [profile?.department_id])
+  }, [profile?.id, profile?.department_id])
 
   const displaySpaces = useMemo(
     () => SPACE_GROUPS.flatMap((groupKey) => spaceGroups[groupKey] ?? []).filter((space) => !hiddenSpaceIds.includes(space.id)),

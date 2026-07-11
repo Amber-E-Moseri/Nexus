@@ -187,9 +187,10 @@ export default function EventModal({
               <div>
                 <label style={labelStyle}>Event type</label>
                 <select value={eventType} onChange={(e) => setEventType(e.target.value)} style={inputStyle}>
-                  {eventTypes.map((type) => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
+                  {eventTypes.map((type) => {
+                    const name = typeof type === 'string' ? type : type.name
+                    return <option key={name} value={name}>{name}</option>
+                  })}
                 </select>
                 <div className="mt-2 flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
                   <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: EVENT_COLORS[eventType] }} />

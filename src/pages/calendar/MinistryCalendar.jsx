@@ -105,8 +105,9 @@ export default function MinistryCalendar() {
   async function loadEventTypes() {
     try {
       const types = await getEventTypes()
-      setEventTypes(types)
-      setSelectedEventTypes(new Set(types))
+      const typeNames = types.map((t) => typeof t === 'string' ? t : t.name)
+      setEventTypes(typeNames)
+      setSelectedEventTypes(new Set(typeNames))
     } catch (err) {
       console.error('Failed to load event types:', err)
     }

@@ -1,4 +1,5 @@
 import { Calendar, FileText, Clock } from 'lucide-react'
+import GlowCard from '../ui/GlowCard'
 
 const TYPE_COLORS = {
   general: { bg: 'var(--purple-tint)', text: 'var(--purple-700)', border: '#DDD6FE' },
@@ -54,41 +55,46 @@ export default function MeetingCard({
   const absentCount = attendance.filter((a) => a.status === 'absent').length
 
   return (
-    <button
-      type="button"
-      onClick={() => {
-        onSelect?.(meeting)
-        onClick?.()
-      }}
-      aria-pressed={isSelected}
-      aria-label={`${meeting.title}, ${formattedDate}${isSelected ? ', selected' : ''}`}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-        padding: 16,
-        borderRadius: 12,
-        border: isSelected ? `2px solid ${typeColor.text}` : `1px solid var(--border-1)`,
-        background: 'white',
-        boxShadow: isSelected ? `0 0 0 3px ${typeColor.bg}` : 'var(--card-shadow)',
-        cursor: 'pointer',
-        transition: 'all 0.2s ease',
-        textAlign: 'left',
-        minHeight: 200,
-      }}
-      onMouseEnter={(e) => {
-        if (!isSelected) {
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(28,22,16,.12)'
-          e.currentTarget.style.transform = 'translateY(-2px)'
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!isSelected) {
-          e.currentTarget.style.boxShadow = 'var(--card-shadow)'
-          e.currentTarget.style.transform = 'translateY(0)'
-        }
-      }}
+    <GlowCard
+      variant="primary"
+      borderRadius={12}
+      glowIntensity={isSelected ? 0 : 0.7}
+      edgeSensitivity={40}
     >
+      <button
+        type="button"
+        onClick={() => {
+          onSelect?.(meeting)
+          onClick?.()
+        }}
+        aria-pressed={isSelected}
+        aria-label={`${meeting.title}, ${formattedDate}${isSelected ? ', selected' : ''}`}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          padding: 16,
+          borderRadius: 12,
+          border: isSelected ? `2px solid ${typeColor.text}` : 'none',
+          background: 'transparent',
+          boxShadow: 'none',
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+          textAlign: 'left',
+          minHeight: 200,
+          width: '100%',
+        }}
+        onMouseEnter={(e) => {
+          if (!isSelected) {
+            e.currentTarget.style.transform = 'translateY(-2px)'
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isSelected) {
+            e.currentTarget.style.transform = 'translateY(0)'
+          }
+        }}
+      >
       {/* Type + status badges */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <div
@@ -238,6 +244,7 @@ export default function MeetingCard({
           </div>
         )}
       </div>
-    </button>
+      </button>
+    </GlowCard>
   )
 }

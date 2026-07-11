@@ -32,6 +32,7 @@ import FileList from '../../components/files/FileList'
 import { supabase } from '../../lib/supabase'
 import SpaceSopModal, { sopIcon } from '../../components/layout/SpaceSopModal'
 import GlobalTaskFeedPanel from '../../features/calendar/components/GlobalTaskFeedPanel'
+import GroupSpaceMembersPanel from '../../features/spaces/components/GroupSpaceMembersPanel'
 
 const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Meetings', 'Automations', 'Members']
 
@@ -136,9 +137,7 @@ function SpaceHeader({ space, members, canManage, canManageStatuses, onOpenStatu
   const visibleMembers = mediaSpace
     ? [getMediaOverviewMember(members)].filter(Boolean)
     : members.slice(0, 4)
-  const description = mediaSpace
-    ? 'Media production, content creation, broadcast and digital publishing for BLW CAN NEXUS.'
-    : space.description
+  const description = mediaSpace ? null : space.description
 
   return (
     <div className="space-y-4">
@@ -468,12 +467,11 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
       {widgetConfig.metrics !== false ? (
         <section className="grid gap-4 sm:grid-cols-3">
           {[
-            { label: 'Lists', value: effectiveListsCount, icon: '📋' },
-            { label: 'Active sprints', value: activeSprints, icon: '🏃' },
-            { label: 'Members', value: members.length, icon: '👥' },
+            { label: 'Lists', value: effectiveListsCount },
+            { label: 'Active sprints', value: activeSprints },
+            { label: 'Members', value: members.length },
           ].map((item) => (
             <div key={item.label} className="flex items-center gap-3 rounded-[18px] border border-[var(--border)] bg-white px-4 py-4 shadow-[var(--card-shadow)]">
-              <div className="text-2xl">{item.icon}</div>
               <div className="min-w-0">
                 <div className="text-xs font-semibold uppercase text-[var(--text-tertiary)] tracking-[0.08em]">{item.label}</div>
                 <div className="mt-1 text-[24px] font-semibold text-[var(--text-primary)]">{item.value}</div>
@@ -1451,7 +1449,19 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
   )
 }
 
-function SpaceMembersTab({ members }) {
+function SpaceMembersTab({ members, spaceId, spaceType, canTransferOwnership, onOwnershipTransferred }) {
+  // For group spaces, show the member management panel
+  if (spaceType === 'group') {
+    return (
+      <GroupSpaceMembersPanel
+        groupSpaceId={spaceId}
+        canTransferOwnership={canTransferOwnership}
+        onOwnershipTransferred={onOwnershipTransferred}
+      />
+    )
+  }
+
+  // For other spaces, show the standard members list
   return (
     <div className="overflow-hidden rounded-[24px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)]">
       <div className="divide-y divide-[var(--border)]">
@@ -1858,7 +1868,19 @@ export default function SpaceOverview() {
       {activeTab === 'Sprints' ? <div role="tabpanel" id="tabpanel-sprints" aria-labelledby="tab-sprints" tabIndex={0}><SpaceSprintsTab canManage={canManage} sprints={spaceSprints} spaceColor={space.color} onCreate={() => setShowSprintModal(true)} onOpen={(sprint) => navigate(`/sprints/${sprint.id}`)} /></div> : null}
       {activeTab === 'Meetings' ? <div role="tabpanel" id="tabpanel-meetings" aria-labelledby="tab-meetings" tabIndex={0}><SpaceMeetingsTab meetings={spaceMeetings} spaceId={spaceId} spaceName={space.name} canManage={canManage} onMeetingCreated={async () => { setSpaceMeetings(await getSpaceMeetings(spaceId)) }} /></div> : null}
       {activeTab === 'Automations' ? <div role="tabpanel" id="tabpanel-automations" aria-labelledby="tab-automations" tabIndex={0}><SpaceAutomationsTab space={space} canManage={canManageStatuses} /></div> : null}
-      {activeTab === 'Members' ? <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}><SpaceMembersTab members={spaceMembers} /></div> : null}
+      {activeTab === 'Members' ? (
+        <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}>
+          <SpaceMembersTab
+            members={spaceMembers}
+            spaceId={spaceId}
+            spaceType={space.space_type}
+            canTransferOwnership={effectiveRole === 'super_admin' || space.owner_id === profile?.id}
+            onOwnershipTransferred={(updatedSpace) => {
+              setDetail((current) => current ? { ...current, space: { ...current.space, ...updatedSpace } } : current)
+            }}
+          />
+        </div>
+      ) : null}
       {activeTab === 'Integrations' && canManage ? <div role="tabpanel" id="tabpanel-integrations" aria-labelledby="tab-integrations" tabIndex={0}><SpaceIntegrationsTab spaceId={spaceId} canManage={canManage} /></div> : null}
       {activeTab === 'Settings' && canManage ? <SpaceSettingsTab space={space} canManage={canManage} onSaved={(updated) => setDetail((current) => ({ ...current, space: updated }))} onArchive={async () => { await archiveSpace(spaceId); await loadDetail() }} /> : null}
     </>

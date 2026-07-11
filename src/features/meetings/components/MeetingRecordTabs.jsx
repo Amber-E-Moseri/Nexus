@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { hasSpaceRole } from '../../../lib/permissions.js'
 import { getMeetingTasks } from '../lib/meetings'
@@ -88,7 +89,7 @@ export default function MeetingRecordTabs({ meeting }) {
           <div style={{ paddingLeft: 16, paddingRight: 16 }}>
             {meeting.summary ? (
               <>
-                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.7, color: '#1C1C1C' }}>
+                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.7, color: '#1C1C1C', whiteSpace: 'pre-wrap' }}>
                   {meeting.summary}
                 </p>
                 {actionCount > 0 && (
@@ -126,13 +127,16 @@ export default function MeetingRecordTabs({ meeting }) {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {(tasks ?? []).slice(0, 2).map((task) => (
-                        <div
+                        <Link
                           key={task.id}
+                          to={`/tasks/${task.id}`}
                           style={{
+                            display: 'block',
                             padding: '10px 12px',
                             borderRadius: 8,
                             background: '#FAFAF9',
                             border: '1px solid var(--border)',
+                            textDecoration: 'none',
                           }}
                         >
                           <div
@@ -169,14 +173,16 @@ export default function MeetingRecordTabs({ meeting }) {
                               </>
                             )}
                           </div>
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   </div>
                 )}
               </>
             ) : (
-              <p style={{ margin: 0, fontSize: 13, color: '#9E9488' }}>No summary logged yet.</p>
+              <p style={{ margin: 0, fontSize: 13, color: '#9E9488' }}>
+                No summary logged yet.{canRecord ? ' Open this meeting in Live mode to add one.' : ''}
+              </p>
             )}
           </div>
         )}
@@ -230,8 +236,9 @@ export default function MeetingRecordTabs({ meeting }) {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {tasks.map((task) => (
-                  <div
+                  <Link
                     key={task.id}
+                    to={`/tasks/${task.id}`}
                     style={{
                       display: 'flex',
                       alignItems: 'flex-start',
@@ -240,6 +247,7 @@ export default function MeetingRecordTabs({ meeting }) {
                       borderRadius: 8,
                       background: '#FAFAF9',
                       border: '1px solid var(--border)',
+                      textDecoration: 'none',
                     }}
                   >
                     <span
@@ -273,7 +281,8 @@ export default function MeetingRecordTabs({ meeting }) {
                         ) : null}
                       </div>
                     </div>
-                  </div>
+                    <span style={{ fontSize: 11, color: '#9E9488', flexShrink: 0, marginTop: 2 }}>→</span>
+                  </Link>
                 ))}
               </div>
             )}
@@ -287,7 +296,9 @@ export default function MeetingRecordTabs({ meeting }) {
                 {meeting.minutes}
               </div>
             ) : (
-              <p style={{ margin: 0, fontSize: 13, color: '#9E9488' }}>No minutes saved yet.</p>
+              <p style={{ margin: 0, fontSize: 13, color: '#9E9488' }}>
+                No minutes saved yet.{canRecord ? ' Use Live mode during a meeting to capture them.' : ''}
+              </p>
             )}
           </div>
         )}

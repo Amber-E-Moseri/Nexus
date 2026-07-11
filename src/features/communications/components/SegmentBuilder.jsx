@@ -31,7 +31,12 @@ function CheckRow({ label, count, checked, onChange }) {
 
 export default function SegmentBuilder({ onSave, onCancel, initialSegment = null, allData = {} }) {
   const { profile } = useAuth()
-  const { depts = [], roster = [], users = [] } = allData
+  const {
+    depts = [], roster = [], users = [],
+    commTags = [], tagMembers = {},
+    commSubGroups = [], managedSubGroupMembers = {},
+    commLeadershipRoles = [], leadershipRoleMembers = {},
+  } = allData
 
   const [name, setName]               = useState(initialSegment?.name ?? '')
   const [description, setDescription] = useState(initialSegment?.description ?? '')
@@ -44,13 +49,14 @@ export default function SegmentBuilder({ onSave, onCancel, initialSegment = null
   const [selectedCategories, setSelectedCategories] = useState(initial.categories ?? [])
   const [selectedRoles, setSelectedRoles]       = useState(initial.roles ?? [])
   const [includeRoster, setIncludeRoster]       = useState(initial.include_roster ?? false)
+  const [selectedTags, setSelectedTags]                   = useState(initial.tags ?? [])
+  const [selectedManagedSubGroups, setSelectedManagedSubGroups] = useState(initial.managed_subgroups ?? [])
+  const [selectedLeadershipRoles, setSelectedLeadershipRoles]   = useState(initial.leadership_roles ?? [])
 
-  // Derived unique subgroups and categories from roster
   const allSubgroups   = useMemo(() => [...new Set(roster.map((r) => r.subgroup).filter(Boolean))].sort(), [roster])
   const allCategories  = useMemo(() => [...new Set(roster.map((r) => r.leadership_category).filter(Boolean))].sort(), [roster])
   const allRoles       = ['super_admin', 'dept_lead', 'pastor', 'member']
 
-  // Live preview count
   const previewPeople = useMemo(() => {
     const emailSet = new Set()
     const people   = []
@@ -91,8 +97,26 @@ export default function SegmentBuilder({ onSave, onCancel, initialSegment = null
         .forEach((u) => add(u.name ?? u.email, u.email))
     }
 
+    for (const tagId of selectedTags) {
+      for (const person of tagMembers[tagId] ?? []) {
+        add(person.name ?? person.email, person.email)
+      }
+    }
+
+    for (const sgId of selectedManagedSubGroups) {
+      for (const person of managedSubGroupMembers[sgId] ?? []) {
+        add(person.name ?? person.email, person.email)
+      }
+    }
+
+    for (const lrId of selectedLeadershipRoles) {
+      for (const person of leadershipRoleMembers[lrId] ?? []) {
+        add(person.name ?? person.email, person.email)
+      }
+    }
+
     return people
-  }, [includeRoster, roster, users, selectedDepts, selectedSubgroups, selectedCategories, selectedRoles])
+  }, [includeRoster, roster, users, selectedDepts, selectedSubgroups, selectedCategories, selectedRoles, selectedTags, tagMembers, selectedManagedSubGroups, managedSubGroupMembers, selectedLeadershipRoles, leadershipRoleMembers])
 
   function toggle(setter, value) {
     setter((prev) => prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value])
@@ -104,11 +128,14 @@ export default function SegmentBuilder({ onSave, onCancel, initialSegment = null
     setError(null)
 
     const filters = {
-      departments:     selectedDepts,
-      subgroups:       selectedSubgroups,
-      categories:      selectedCategories,
-      roles:           selectedRoles,
-      include_roster:  includeRoster,
+      departments:       selectedDepts,
+      subgroups:         selectedSubgroups,
+      categories:        selectedCategories,
+      roles:             selectedRoles,
+      include_roster:    includeRoster,
+      tags:              selectedTags,
+      managed_subgroups: selectedManagedSubGroups,
+      leadership_roles:  selectedLeadershipRoles,
     }
 
     const payload = {
@@ -187,22 +214,31 @@ export default function SegmentBuilder({ onSave, onCancel, initialSegment = null
       </div>
 
       <div style={{ background: BG, borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {depts.length > 0 ? (
-          <Section title="Departments">
-            {depts.map((dept) => (
+        {commTags.length > 0 ? (
+          <Section title="Tags">
+            {commTags.map((tag) => (
               <CheckRow
-                key={dept.id}
-                label={`All ${dept.name} Members`}
-                count={deptCounts[dept.id]}
-                checked={selectedDepts.includes(dept.id)}
-                onChange={() => toggle(setSelectedDepts, dept.id)}
+                key={tag.id}
+                label={tag.name}
+                count={(tagMembers[tag.id] ?? []).length}
+                checked={selectedTags.includes(tag.id)}
+                onChange={() => toggle(setSelectedTags, tag.id)}
               />
             ))}
           </Section>
         ) : null}
 
-        {allSubgroups.length > 0 ? (
-          <Section title="Subgroups">
+        {commSubGroups.length > 0 || allSubgroups.length > 0 ? (
+          <Section title="Sub-groups">
+            {commSubGroups.map((sg) => (
+              <CheckRow
+                key={sg.id}
+                label={sg.name}
+                count={(managedSubGroupMembers[sg.id] ?? []).length}
+                checked={selectedManagedSubGroups.includes(sg.id)}
+                onChange={() => toggle(setSelectedManagedSubGroups, sg.id)}
+              />
+            ))}
             {allSubgroups.map((sg) => (
               <CheckRow
                 key={sg}
@@ -215,8 +251,17 @@ export default function SegmentBuilder({ onSave, onCancel, initialSegment = null
           </Section>
         ) : null}
 
-        {allCategories.length > 0 ? (
-          <Section title="Leadership Categories">
+        {commLeadershipRoles.length > 0 || allCategories.length > 0 ? (
+          <Section title="Leadership Responsibility">
+            {commLeadershipRoles.map((lr) => (
+              <CheckRow
+                key={lr.id}
+                label={lr.name}
+                count={(leadershipRoleMembers[lr.id] ?? []).length}
+                checked={selectedLeadershipRoles.includes(lr.id)}
+                onChange={() => toggle(setSelectedLeadershipRoles, lr.id)}
+              />
+            ))}
             {allCategories.map((cat) => (
               <CheckRow
                 key={cat}
@@ -224,6 +269,20 @@ export default function SegmentBuilder({ onSave, onCancel, initialSegment = null
                 count={roster.filter((r) => r.leadership_category === cat).length}
                 checked={selectedCategories.includes(cat)}
                 onChange={() => toggle(setSelectedCategories, cat)}
+              />
+            ))}
+          </Section>
+        ) : null}
+
+        {depts.length > 0 ? (
+          <Section title="Departments">
+            {depts.map((dept) => (
+              <CheckRow
+                key={dept.id}
+                label={`All ${dept.name} Members`}
+                count={deptCounts[dept.id]}
+                checked={selectedDepts.includes(dept.id)}
+                onChange={() => toggle(setSelectedDepts, dept.id)}
               />
             ))}
           </Section>
@@ -251,7 +310,6 @@ export default function SegmentBuilder({ onSave, onCancel, initialSegment = null
         </Section>
       </div>
 
-      {/* Live preview */}
       <div style={{ background: '#EDE8F8', borderRadius: 12, padding: '14px 16px' }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: PRIMARY, marginBottom: 4 }}>
           This segment includes approximately {previewPeople.length} {previewPeople.length === 1 ? 'person' : 'people'}

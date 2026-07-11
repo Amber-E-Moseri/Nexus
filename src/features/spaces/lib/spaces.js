@@ -11,14 +11,27 @@ export async function getMySpaces(userId, role, departmentId) {
   if (error) throw error
   const spaces = data ?? []
 
+  // Fetch group space memberships for filtering
+  const { data: memberships, error: membershipError } = await supabase
+    .from('group_space_members')
+    .select('group_space_id')
+
+  if (membershipError) {
+    console.warn('Failed to load group space memberships:', membershipError.message)
+  }
+
+  const memberGroupIds = new Set(
+    memberships ? memberships.map((m) => m.group_space_id) : []
+  )
+
   const isAdmin = role === 'super_admin' || role === 'dept_lead'
 
   return spaces.filter((space) => {
     if (space.space_type === 'personal') return space.owner_id === userId
     if (space.space_type === 'department') return role === 'super_admin' || space.id === departmentId
-    // group: pastor sees their own space; super_admin sees all; members see org-visible ones
+    // group: only owner, members, and super_admin can see (never org-visible)
     if (space.space_type === 'group') {
-      return role === 'super_admin' || space.owner_id === userId || space.visibility === 'org'
+      return role === 'super_admin' || space.owner_id === userId || memberGroupIds.has(space.id)
     }
     if (isAdmin) return true
     // program / sandbox: enforce visibility for non-admins
@@ -48,14 +61,69 @@ export async function getSpaceDetail(spaceId) {
   }
 }
 
+export async function addGroupSpaceMember(groupSpaceId, userId) {
+  const { error } = await supabase
+    .from('group_space_members')
+    .insert({
+      group_space_id: groupSpaceId,
+      user_id: userId,
+      role: 'member',
+    })
+
+  if (error) {
+    if (error.code === '23505') throw new Error('User is already a member of this group space')
+    throw error
+  }
+}
+
+export async function removeGroupSpaceMember(groupSpaceId, userId) {
+  const { error } = await supabase
+    .from('group_space_members')
+    .delete()
+    .eq('group_space_id', groupSpaceId)
+    .eq('user_id', userId)
+
+  if (error) throw error
+}
+
+export async function transferGroupSpaceOwnership(groupSpaceId, newOwnerId) {
+  const { data, error } = await supabase.rpc('transfer_group_space_ownership', {
+    p_space_id: groupSpaceId,
+    p_new_owner_id: newOwnerId,
+  })
+
+  if (error) throw error
+  return data
+}
+
+export async function getGroupSpaceMembers(groupSpaceId) {
+  // Use explicit foreign key reference for user_id relationship
+  const { data, error } = await supabase
+    .from('group_space_members')
+    .select('user_id, role, added_at, added_by, users!user_id(id, name, email)')
+    .eq('group_space_id', groupSpaceId)
+    .order('added_at')
+
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    id: row.user_id,
+    name: row.users?.name,
+    email: row.users?.email,
+    role: row.role,
+    addedAt: row.added_at,
+  }))
+}
+
 export async function createSpace(data, createdBy) {
+  const spaceType = data.space_type ?? 'program'
+
   const { data: space, error } = await supabase
     .from('departments')
     .insert({
       name: data.name,
       description: data.description ?? null,
-      space_type: data.space_type ?? 'program',
-      visibility: data.visibility ?? 'org',
+      space_type: spaceType,
+      visibility: spaceType === 'group' ? 'private' : (data.visibility ?? 'org'),
       status: 'active',
       color: data.color ?? '534AB7',
       owner_id: data.owner_id ?? createdBy,

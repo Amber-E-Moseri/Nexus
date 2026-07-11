@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import PeopleLayout from './PeopleLayout'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../context/ToastContext'
@@ -58,6 +58,75 @@ function statusTone(status) {
   return STATUS_TONES[status] ?? { bg: 'var(--surface-secondary)', text: 'var(--text-secondary)', border: 'transparent' }
 }
 
+function MultiSelectDropdown({ options, selectedIds, onChange, placeholder, getLabel = (o) => o.name, getId = (o) => o.id }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function handleClick(event) {
+      if (ref.current && !ref.current.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const selectedLabels = options
+    .filter((option) => selectedIds.includes(getId(option)))
+    .map((option) => getLabel(option))
+
+  const summary = selectedLabels.length === 0
+    ? placeholder
+    : selectedLabels.length === 1
+      ? selectedLabels[0]
+      : `${selectedLabels.length} selected`
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2 text-left text-sm outline-none focus:border-[var(--accent)]"
+        style={{ color: selectedLabels.length === 0 ? 'var(--text-tertiary)' : 'var(--text-primary)' }}
+      >
+        <span className="truncate">{summary}</span>
+        <span className="ml-2 shrink-0 text-[var(--text-tertiary)]">▾</span>
+      </button>
+
+      {open ? (
+        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto rounded-xl border border-[var(--border)] bg-white p-1 shadow-lg">
+          {options.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-[var(--text-tertiary)]">No options</div>
+          ) : (
+            options.map((option) => {
+              const id = getId(option)
+              const checked = selectedIds.includes(id)
+              return (
+                <label
+                  key={id}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-[var(--surface-secondary)]"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const next = new Set(selectedIds)
+                      if (e.target.checked) next.add(id)
+                      else next.delete(id)
+                      onChange(Array.from(next))
+                    }}
+                    className="rounded"
+                  />
+                  <span className="text-[var(--text-primary)]">{getLabel(option)}</span>
+                </label>
+              )
+            })
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function DepartmentGlyph({ department }) {
   const color = department?.color ? `#${department.color}` : '#563199'
   const label = department?.name?.charAt(0)?.toUpperCase() ?? '?'
@@ -78,6 +147,7 @@ export default function InvitationsPage() {
   const [departments, setDepartments] = useState([])
   const [users, setUsers] = useState([])
   const [invitations, setInvitations] = useState([])
+  const [groupSpaces, setGroupSpaces] = useState([])
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
@@ -88,6 +158,7 @@ export default function InvitationsPage() {
     assignedPastorId: '',
     groupName: '',
     message: '',
+    groupSpaceIds: [],
   })
   const [csvRows, setCsvRows] = useState([])
   const [importReport, setImportReport] = useState(null)
@@ -104,15 +175,18 @@ export default function InvitationsPage() {
     setError('')
 
     try {
-      const [nextDepartments, nextUsers, nextInvitations] = await Promise.all([
+      const { supabase } = await import('../../lib/supabase')
+      const [nextDepartments, nextUsers, nextInvitations, { data: spaces }] = await Promise.all([
         listDepartments(),
         listUsers(),
         listInvitations(),
+        supabase.from('departments').select('id, name, space_type').eq('space_type', 'group').eq('status', 'active'),
       ])
 
       setDepartments(nextDepartments)
       setUsers(nextUsers)
       setInvitations(nextInvitations)
+      setGroupSpaces(spaces ?? [])
 
       if (role === 'dept_lead' && profile?.department_id) {
         setForm((current) => ({
@@ -194,6 +268,12 @@ export default function InvitationsPage() {
 
   const handleCreateInvitation = async (event) => {
     event.preventDefault()
+
+    if (!form.departmentId && form.groupSpaceIds.length === 0) {
+      setError('Select a department or at least one group space')
+      return
+    }
+
     setSaving(true)
     setError('')
     setLatestLink('')
@@ -209,6 +289,7 @@ export default function InvitationsPage() {
         assignedPastorId: '',
         groupName: '',
         message: '',
+        groupSpaceIds: [],
       }))
       setFormOpen(false)
     } catch (nextError) {
@@ -305,7 +386,6 @@ export default function InvitationsPage() {
                 className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] md:col-span-2"
               />
               <select
-                required
                 value={form.departmentId}
                 disabled={role === 'dept_lead'}
                 onChange={(event) =>
@@ -317,7 +397,7 @@ export default function InvitationsPage() {
                 }
                 className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] disabled:bg-[var(--surface-secondary)]"
               >
-                <option value="">Select space</option>
+                <option value="">No department (group space only)</option>
                 {scopedDepartments.map((department) => (
                   <option key={department.id} value={department.id}>
                     {department.name}
@@ -354,16 +434,36 @@ export default function InvitationsPage() {
                     </option>
                   ))}
               </select>
-              <select
-                value={form.groupName}
-                onChange={(event) => setForm((current) => ({ ...current, groupName: event.target.value }))}
-                className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] md:col-span-2"
-              >
-                <option value="">Ministry group (optional)</option>
-                <option value="Central">Central</option>
-                <option value="Central-East">Central-East</option>
-                <option value="West">West</option>
-              </select>
+              <label className="space-y-1 md:col-span-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                  Region (for attendance & map reporting)
+                </span>
+                <select
+                  value={form.groupName}
+                  onChange={(event) => setForm((current) => ({ ...current, groupName: event.target.value }))}
+                  className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                >
+                  <option value="">No region (optional)</option>
+                  <option value="Central">Central</option>
+                  <option value="Central-East">Central-East</option>
+                  <option value="West">West</option>
+                </select>
+              </label>
+
+              {groupSpaces.length > 0 && (
+                <label className="space-y-1 md:col-span-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                    Group spaces (optional)
+                  </span>
+                  <MultiSelectDropdown
+                    options={groupSpaces}
+                    selectedIds={form.groupSpaceIds}
+                    onChange={(ids) => setForm((current) => ({ ...current, groupSpaceIds: ids }))}
+                    placeholder="Add to group spaces"
+                  />
+                </label>
+              )}
+
               <textarea
                 value={form.message}
                 onChange={(event) => setForm((current) => ({ ...current, message: event.target.value }))}
