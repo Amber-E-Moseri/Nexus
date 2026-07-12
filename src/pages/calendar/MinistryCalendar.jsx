@@ -323,7 +323,7 @@ export default function MinistryCalendar() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '240px 1fr', gap: '20px', alignItems: 'start' }}>
-        <CalendarSidebar
+        {!isMobile && <CalendarSidebar
           year={year}
           month={month}
           onPrevMonth={goPrevMonth}
@@ -343,7 +343,7 @@ export default function MinistryCalendar() {
           onShare={copySubscribeLink}
           onDownload={downloadICS}
           onOpenSettings={effectiveRole === 'super_admin' ? () => navigate('/calendar/settings') : undefined}
-        />
+        />}
 
         {/* Main Calendar */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

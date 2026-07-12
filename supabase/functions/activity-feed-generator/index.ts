@@ -1,18 +1,27 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
-const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN')
+const allowedOrigins = [
+  Deno.env.get('ALLOWED_ORIGIN') ?? '',
+  'https://blwcannexus.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:5174',
+].filter(Boolean)
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': allowedOrigin ?? '',
-  'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info, Authorization',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+function getCorsHeaders(request?: Request) {
+  const origin = request?.headers?.get('origin') ?? ''
+  const matched = allowedOrigins.includes(origin) ? origin : allowedOrigins[0]
+  return {
+    'Access-Control-Allow-Origin': matched,
+    'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info, Authorization',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  }
 }
 
-function jsonResponse(status: number, body: Record<string, unknown>) {
+function jsonResponse(status: number, body: Record<string, unknown>, request?: Request) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...corsHeaders,
+      ...getCorsHeaders(request),
       'Content-Type': 'application/json',
     },
   })
@@ -36,6 +45,14 @@ type ActivityRow = {
   read: boolean
 }
 
+async function getTaskWatcherIds(supabase: ReturnType<typeof createClient>, taskId: string): Promise<string[]> {
+  const { data } = await supabase
+    .from('task_follows')
+    .select('user_id')
+    .eq('task_id', taskId)
+  return (data ?? []).map((row) => row.user_id)
+}
+
 async function getActorName(supabase: ReturnType<typeof createClient>, actorId: string | null | undefined) {
   if (!actorId) return null
 
@@ -53,17 +70,12 @@ function dedupeRecipients(recipients: Array<string | null | undefined>, actorId:
 }
 
 Deno.serve(async (request) => {
-  if (!allowedOrigin) {
-    console.error('activity-feed-generator error', 'Missing ALLOWED_ORIGIN environment variable')
-    return jsonResponse(200, { ok: false })
-  }
-
   if (request.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: getCorsHeaders(request) })
   }
 
   if (request.method !== 'POST') {
-    return jsonResponse(200, { ok: false })
+    return jsonResponse(200, { ok: false }, request)
   }
 
   try {
@@ -72,14 +84,14 @@ Deno.serve(async (request) => {
 
     if (!supabaseUrl || !serviceRoleKey) {
       console.error('activity-feed-generator error', 'Missing Supabase environment variables')
-      return jsonResponse(200, { ok: false })
+      return jsonResponse(200, { ok: false }, request)
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey)
     const { action, payload } = await request.json() as { action?: ActionName; payload?: Record<string, unknown> }
 
     if (!action || !payload) {
-      return jsonResponse(200, { ok: false })
+      return jsonResponse(200, { ok: false }, request)
     }
 
     const actorId = typeof payload.actor_id === 'string' ? payload.actor_id : null
@@ -108,28 +120,19 @@ Deno.serve(async (request) => {
 
     if (action === 'task_status_changed') {
       const taskId = String(payload.task_id)
-      const { data: task } = await supabase
-        .from('tasks')
-        .select('created_by')
-        .eq('id', taskId)
-        .maybeSingle()
-
-      const { data: commenters } = await supabase
-        .from('task_comments')
-        .select('author_id')
-        .eq('task_id', taskId)
-
-      const { data: dependentTasks } = await supabase
-        .from('task_dependencies')
-        .select('task:tasks!task_id(assignee_id)')
-        .eq('depends_on_id', taskId)
-        .eq('type', 'blocking')
+      const [{ data: task }, { data: commenters }, { data: dependentTasks }, watcherIds] = await Promise.all([
+        supabase.from('tasks').select('created_by').eq('id', taskId).maybeSingle(),
+        supabase.from('task_comments').select('author_id').eq('task_id', taskId),
+        supabase.from('task_dependencies').select('task:tasks!task_id(assignee_id)').eq('depends_on_id', taskId).eq('type', 'blocking'),
+        getTaskWatcherIds(supabase, taskId),
+      ])
 
       const recipients = dedupeRecipients([
         typeof payload.assignee_id === 'string' ? payload.assignee_id : null,
         task?.created_by ?? null,
         ...(commenters ?? []).map((comment) => comment.author_id),
         ...(dependentTasks ?? []).map((item) => item.task?.assignee_id ?? null),
+        ...watcherIds,
       ], actorId)
 
       rows.push(...recipients.map((recipient) => ({
@@ -161,26 +164,23 @@ Deno.serve(async (request) => {
 
     if (action === 'comment_added') {
       const taskId = String(payload.task_id)
-      const { data: task } = await supabase
-        .from('tasks')
-        .select('assignee_id, created_by')
-        .eq('id', taskId)
-        .maybeSingle()
-
-      const { data: commenters } = await supabase
-        .from('task_comments')
-        .select('author_id')
-        .eq('task_id', taskId)
+      const authorId = typeof payload.author_id === 'string' ? payload.author_id : actorId
+      const [{ data: task }, { data: commenters }, watcherIds] = await Promise.all([
+        supabase.from('tasks').select('assignee_id, created_by').eq('id', taskId).maybeSingle(),
+        supabase.from('task_comments').select('author_id').eq('task_id', taskId),
+        getTaskWatcherIds(supabase, taskId),
+      ])
 
       const recipients = dedupeRecipients([
         task?.assignee_id ?? (typeof payload.assignee_id === 'string' ? payload.assignee_id : null),
         task?.created_by ?? null,
         ...(commenters ?? []).map((comment) => comment.author_id),
-      ], typeof payload.author_id === 'string' ? payload.author_id : actorId)
+        ...watcherIds,
+      ], authorId)
 
       rows.push(...recipients.map((recipient) => ({
         user_id: recipient,
-        actor_id: typeof payload.author_id === 'string' ? payload.author_id : actorId,
+        actor_id: authorId,
         action,
         entity_type: 'comment',
         entity_id: String(payload.comment_id),
@@ -245,9 +245,9 @@ Deno.serve(async (request) => {
       }
     }
 
-    return jsonResponse(200, { ok: true, inserted: rows.length })
+    return jsonResponse(200, { ok: true, inserted: rows.length }, request)
   } catch (error) {
     console.error('activity-feed-generator error', error)
-    return jsonResponse(200, { ok: false })
+    return jsonResponse(200, { ok: false }, request)
   }
 })

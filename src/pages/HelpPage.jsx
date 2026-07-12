@@ -48,7 +48,33 @@ const FAQ_SECTIONS = [
       },
       {
         q: 'What are Task Followers?',
-        a: 'Any team member can follow a task to stay updated on it without being the assignee. Followers receive activity-feed notifications when the task is updated, commented on, or status-changed. Add or remove yourself via the task detail panel.',
+        a: 'Any team member can follow a task to stay updated on it without being the assignee. Followers receive activity-feed notifications when the task is updated, commented on, or status-changed. Click the ☆ Follow button on any task detail panel to start following; click ★ Following to unfollow.',
+      },
+      {
+        q: 'Can I sync my tasks to Google Calendar?',
+        a: 'Yes — go to Settings → Personal Integrations → Task Calendar Sync. Once your Google Calendar is connected, toggle "Sync tasks to calendar" on and your assigned tasks with due dates will appear as events in your Google Calendar. Hit "Sync now" to push immediately.',
+      },
+    ],
+  },
+  {
+    id: 'inbox-notifications',
+    title: 'Inbox & Notifications',
+    items: [
+      {
+        q: 'What shows up in my Inbox?',
+        a: 'Inbox surfaces items that need your action — task assignments, @mentions, comment replies, and approval requests. Items are grouped by recency (Today / Earlier) and you can filter to show only unread items.',
+      },
+      {
+        q: 'How do I manage Inbox items?',
+        a: 'Click any item to open the related task or record. Use the context menu (hover to reveal) to mark as read/unread or delete individual notifications. You can also mark all as read in one click from the top of the page.',
+      },
+      {
+        q: 'How is Notifications different from Inbox?',
+        a: 'Notifications is a fuller activity log grouped into Today, This Week, and Earlier. It shows everything happening across your spaces — not just items assigned to you. Use it to stay aware of team activity; use Inbox to focus on what needs your attention.',
+      },
+      {
+        q: 'What notification types are there?',
+        a: 'Task assigned, task comment, meeting created, calendar event approved/rejected, @mentions, and system alerts. Each type has its own icon so you can scan the list quickly.',
       },
     ],
   },
@@ -73,8 +99,16 @@ const FAQ_SECTIONS = [
         a: 'NEXUS uses a two-tier status system. Every department status maps to one of 6 canonical org-wide statuses (Not Started, In Progress, Review, Blocked, Completed, Cancelled), so reporting stays consistent even though each department can customize its own status names and colors.',
       },
       {
+        q: 'Do completed or cancelled tasks get deleted automatically?',
+        a: 'No — they stay in their list until you manually archive or delete them (or set up an automation to do it). In List view, completed and cancelled tasks are hidden by default to keep things clean. A "Show N closed tasks" button appears at the bottom of the list whenever hidden tasks exist — click it to reveal them, and "Hide closed tasks" to collapse again. Archiving is a separate step: it removes a task from active views and reporting entirely, but it remains searchable and restorable.',
+      },
+      {
         q: 'Can I hide or archive a Space I don\'t use?',
         a: 'Yes — use the "..." menu on a space to Hide it from your sidebar (personal, reversible) or, if you\'re super_admin, Archive it for everyone. Archived spaces live in the collapsible "Archived" section at the bottom of the Spaces list.',
+      },
+      {
+        q: 'What are Group Spaces?',
+        a: 'Group Spaces are shared workspaces for cross-department groups (e.g. a campus team or outreach unit). Members are added via group invitations and automatically gain access to the group\'s space, folders, and lists. Group members see the group space in their sidebar alongside their department space.',
       },
     ],
   },
@@ -291,6 +325,76 @@ const FAQ_SECTIONS = [
       {
         q: 'Who can change permissions?',
         a: 'Only super_admin. Fine-grained role and access changes live under People → Permissions and the separate Admin Permissions page.',
+      },
+    ],
+  },
+  {
+    id: 'mobile-notifications',
+    title: 'Mobile App & Notifications',
+    items: [
+      {
+        q: 'How do I install NEXUS on my iPhone or iPad?',
+        a: 'NEXUS is a web app that installs directly from Safari — no App Store needed. Open nexus.blwcanada.org in Safari (must be Safari, not Chrome or Firefox on iOS). Tap the Share button (the box with an arrow at the bottom of the screen), then scroll down and tap "Add to Home Screen." Tap "Add" to confirm. The app will appear on your home screen and opens in full-screen, just like a native app.',
+      },
+      {
+        q: 'How do I install NEXUS on my Android phone?',
+        a: 'Open NEXUS in Chrome on Android. You\'ll usually see an "Install" banner at the bottom of the screen — tap it to install. If the banner doesn\'t appear, tap the three-dot menu (⋮) in Chrome and select "Add to Home Screen" or "Install app." The app icon will be added to your home screen and launches in standalone mode.',
+      },
+      {
+        q: 'How do I allow push notifications on Android?',
+        a: 'When you first use NEXUS after installing it, the app will ask permission to send notifications — tap "Allow." If you missed or dismissed the prompt: open your Android Settings → Apps → BLW Nexus (or Chrome if not installed) → Notifications → turn on "Allow notifications." You\'ll then receive alerts for task assignments, mentions, inbox items, and calendar events.',
+      },
+      {
+        q: 'How do I allow push notifications on iPhone (iOS)?',
+        a: 'Push notifications on iOS require iOS 16.4 or later and the app must be installed to your home screen from Safari first (see "How do I install NEXUS on my iPhone"). Once installed, open the app from your home screen — it will prompt you to allow notifications. If it doesn\'t prompt: go to iOS Settings → scroll down to BLW Nexus → Notifications → toggle "Allow Notifications" on and choose your alert style.',
+      },
+      {
+        q: 'What notifications will I receive?',
+        a: 'Task assignments, @mentions, comment replies on tasks you\'re watching, inbox items, calendar event approvals/rejections, and system alerts. Notifications also appear in-app in your Inbox and Notifications pages, so you won\'t miss anything even if push is off.',
+      },
+      {
+        q: 'Can I use NEXUS offline?',
+        a: 'Partially. The app shell and recently visited pages load offline thanks to the service worker cache. However, live data (tasks, messages, calendar) requires an internet connection to fetch or update. If you lose connection, an offline indicator appears and the app will sync automatically when reconnected.',
+      },
+    ],
+  },
+  {
+    id: 'activity-files',
+    title: 'Activity Log & Files',
+    items: [
+      {
+        q: 'What is the Activity Log?',
+        a: 'A chronological audit trail (dept_lead and super_admin only) of every action taken across the platform — task creates, status changes, meeting updates, permission changes, and more. Filter by user, date range, or entity type to find exactly what happened and when.',
+      },
+      {
+        q: 'Can I export the Activity Log?',
+        a: 'Yes — click the download icon at the top of the Activity Log to export a filtered CSV of all visible entries.',
+      },
+      {
+        q: 'What is the Files page?',
+        a: 'A centralized view (dept_lead and super_admin only) of every file attachment uploaded across tasks, meetings, sprints, and spaces. Search by name, filter by entity type, preview files in-app, or download them directly.',
+      },
+    ],
+  },
+  {
+    id: 'support',
+    title: 'Support & Tickets',
+    items: [
+      {
+        q: 'How do I get help inside NEXUS?',
+        a: 'Visit Help & FAQ (this page) for self-service answers, or click "Get Support" at the bottom to submit a support ticket. Your ticket goes directly to super_admin for review.',
+      },
+      {
+        q: 'What can I submit a ticket for?',
+        a: 'Four categories: General Support (questions or help), Task Request (ask an admin to create or modify something), Bug Report (something isn\'t working), and Feature Request (suggest an improvement). Set a priority (low, normal, high, urgent) so admins can triage.',
+      },
+      {
+        q: 'How do ticket replies work?',
+        a: 'Once submitted, your ticket opens a real-time chat thread between you and admin. You\'ll see replies appear instantly — no need to refresh. The ticket status moves from Open → In Progress → Resolved → Closed as the admin works on it.',
+      },
+      {
+        q: 'Where do admins manage tickets?',
+        a: 'super_admin can access the Support Tickets admin page to see all submitted tickets, filter by status or category, reply, and update ticket status.',
       },
     ],
   },

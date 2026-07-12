@@ -69,6 +69,17 @@ export const ROLE_DEFAULTS: RoleDefault[] = [
     ],
     description: 'Ministry focus: meetings, events, personal tasks, team availability',
   },
+  {
+    role: 'group_member',
+    widgets: [
+      'my_tasks_summary',
+      'action_items',
+      'my_spaces',
+      'personal_reminders',
+      'quick_actions',
+    ],
+    description: 'Restricted focus: personal tasks and assigned group spaces only — no meetings, sprints, or org widgets',
+  },
 ]
 
 export function getDefaultWidgetsForRole(role: string): string[] {

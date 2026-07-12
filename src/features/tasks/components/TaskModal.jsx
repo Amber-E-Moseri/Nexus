@@ -28,7 +28,7 @@ import TaskComments from './TaskComments'
 import TaskDependencies from './TaskDependencies'
 import TaskFiles from './TaskFiles'
 import SubtaskList from './SubtaskList'
-import TaskFollowToggle from './TaskFollowToggle'
+import WatchersPopover from './WatchersPopover'
 import { TasksContext } from '../TasksContext'
 
 const EMPTY_STATUSES = []
@@ -237,6 +237,7 @@ export default function TaskModal({
   const [selectedSprintId, setSelectedSprintId] = useState(sprintId ?? task?.sprint_id ?? '')
   const deptMembers = useDeptMembers(departmentId)
   const [members, setMembers] = useState(sprintId ? [] : deptMembers)
+  const [pendingWatchers, setPendingWatchers] = useState([])
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState(null)
@@ -415,6 +416,11 @@ export default function TaskModal({
           })
         }
 
+        if (pendingWatchers.length > 0) {
+          const { followTask } = await import('../lib/followers')
+          await Promise.allSettled(pendingWatchers.map((u) => followTask(created.id, u.id)))
+        }
+
         onSaved?.(created)
       } else {
         const updated = ctx ? await ctx.editTask(task.id, payload) : await updateTask(task.id, payload)
@@ -504,8 +510,12 @@ export default function TaskModal({
               {mode === 'create' ? 'New task' : 'Edit task'}
             </Dialog.Title>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {mode !== 'create' && task?.id && profile?.id && task.assignee_id !== profile.id && (
-                <TaskFollowToggle taskId={task.id} userId={profile.id} />
+              {!isReadOnly && (
+                <WatchersPopover
+                  taskId={mode === 'edit' ? task?.id : null}
+                  pending={pendingWatchers}
+                  onPendingChange={setPendingWatchers}
+                />
               )}
               <Dialog.Close
                 style={{

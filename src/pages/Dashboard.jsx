@@ -189,7 +189,7 @@ function CustomHeroStatCard({ meta, value, statKey, onChoose, onClick }) {
           </div>
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); setShowPicker((v) => !v) }}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPicker((v) => !v) }}
             title="Change stat"
             style={{
               border: 'none',

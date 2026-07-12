@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { exchangeMinistryCalendarConnectionCode } from '../../features/calendar/lib/calendar'
@@ -13,13 +13,19 @@ export default function MinistryCalendarConnectionCallback() {
   const { profile } = useAuth()
   const [status, setStatus] = useState('processing')
   const [error, setError] = useState(null)
+  // Authorization codes are single-use — guard against the effect re-firing
+  // when the profile object reference changes after the initial auth load.
+  const exchangeStarted = useRef(false)
 
   useEffect(() => {
+    if (!profile?.id) return
+    if (exchangeStarted.current) return
+    exchangeStarted.current = true
+
     async function handleCallback() {
       try {
         const code = searchParams.get('code')
         if (!code) throw new Error(searchParams.get('error') || 'No authorization code received')
-        if (!profile?.id) throw new Error('User not authenticated')
 
         await exchangeMinistryCalendarConnectionCode({ code, userId: profile.id })
         setStatus('success')
@@ -30,9 +36,7 @@ export default function MinistryCalendarConnectionCallback() {
       }
     }
 
-    if (profile?.id) {
-      handleCallback()
-    }
+    handleCallback()
   }, [searchParams, profile, navigate])
 
   return (

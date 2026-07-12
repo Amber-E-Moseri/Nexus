@@ -26,6 +26,8 @@ function taskMatchesStatus(task, status) {
   return false
 }
 
+const CLOSED_CATEGORIES = new Set(['completed', 'cancelled'])
+
 export default function TaskListView({
   tasks,
   statuses = [],
@@ -43,6 +45,7 @@ export default function TaskListView({
 }) {
   const [composerStatusId, setComposerStatusId] = useState(null)
   const [activeTaskId, setActiveTaskId] = useState(null)
+  const [showClosed, setShowClosed] = useState(false)
   const sensors = useDndSensors()
 
   // Only re-sort if task count or order changed (not on every task property change)
@@ -130,6 +133,14 @@ export default function TaskListView({
 
   const allTaskIds = useMemo(() => tasks.map((t) => t.id), [tasks])
 
+  const closedCount = grouped
+    .filter((g) => CLOSED_CATEGORIES.has(g.status.category))
+    .reduce((sum, g) => sum + g.items.length, 0)
+
+  const visibleGroups = showClosed
+    ? grouped
+    : grouped.filter((g) => !CLOSED_CATEGORIES.has(g.status.category))
+
   return (
     <DndContext
       sensors={sensors}
@@ -139,7 +150,7 @@ export default function TaskListView({
       onDragCancel={handleDragCancel}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        {grouped.map(({ status, items }) => (
+        {visibleGroups.map(({ status, items }) => (
           <section key={status.id} style={{ border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden', background: '#FFFFFF' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 16px', borderBottom: '1px solid var(--border)', background: '#FCFAF6' }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: status.color }} />
@@ -210,10 +221,39 @@ export default function TaskListView({
           </section>
         ))}
 
-        {grouped.every((group) => group.items.length === 0) ? (
+        {visibleGroups.every((group) => group.items.length === 0) && closedCount === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
             No tasks match the current filters.
           </div>
+        ) : null}
+
+        {closedCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowClosed((s) => !s)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '9px 14px',
+              fontSize: 12,
+              fontWeight: 500,
+              color: 'var(--ink-3)',
+              background: 'transparent',
+              border: '1px solid var(--border-1)',
+              borderRadius: 10,
+              cursor: 'pointer',
+              alignSelf: 'flex-start',
+              transition: 'color .13s, border-color .13s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--ink-1)'; e.currentTarget.style.borderColor = 'var(--ink-3)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--ink-3)'; e.currentTarget.style.borderColor = 'var(--border-1)' }}
+          >
+            <span style={{ fontSize: 10 }}>{showClosed ? '▲' : '▼'}</span>
+            {showClosed
+              ? 'Hide closed tasks'
+              : `Show ${closedCount} closed task${closedCount !== 1 ? 's' : ''}`}
+          </button>
         ) : null}
       </div>
 

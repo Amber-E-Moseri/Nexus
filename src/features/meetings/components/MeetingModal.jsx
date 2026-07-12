@@ -1,7 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
-import { useDeptMembers } from '../../../hooks/useDeptMembers'
 import { useMeetings } from '../MeetingsContext'
 import { supabase } from '../../../lib/supabase'
 import AudioTranscriptionPanel from './AudioTranscriptionPanel'
@@ -24,7 +23,7 @@ function toLocalDateTime(value) {
 export default function MeetingModal({ departmentId, onClose }) {
   const { profile } = useAuth()
   const { addMeeting, editMeeting } = useMeetings()
-  const members = useDeptMembers(departmentId)
+  const [members, setMembers] = useState([])
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(() => toLocalDateTime(new Date().toISOString()))
   const [meetingType, setMeetingType] = useState('general')
@@ -44,6 +43,17 @@ export default function MeetingModal({ departmentId, onClose }) {
   const [savedMeeting, setSavedMeeting] = useState(null)
   const [creatingDraft, setCreatingDraft] = useState(false)
   const [actionItems, setActionItems] = useState([])
+
+  useEffect(() => {
+    let active = true
+    supabase
+      .from('users')
+      .select('id, name, email, department_id')
+      .eq('status', 'active')
+      .order('name')
+      .then(({ data }) => { if (active) setMembers(data ?? []) })
+    return () => { active = false }
+  }, [])
 
   const attendanceLabel = useMemo(() => {
     if (attendeeIds.length === 0) return 'No attendees selected'

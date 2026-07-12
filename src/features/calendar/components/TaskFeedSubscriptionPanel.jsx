@@ -159,8 +159,12 @@ export default function TaskFeedSubscriptionPanel({ spaceId, userId, onClose }) 
   async function handleCopy(feedType) {
     try {
       const url = await ensureUrl(feedType)
-      await navigator.clipboard.writeText(url)
-      showToast('Feed link copied to clipboard', { tone: 'success' })
+      try {
+        await navigator.clipboard.writeText(url)
+        showToast('Feed link copied to clipboard', { tone: 'success' })
+      } catch {
+        window.prompt('Copy this feed URL:', url)
+      }
     } catch (e) {
       console.error('Failed to copy feed link:', e)
       showToast('Could not copy feed link', { tone: 'error' })

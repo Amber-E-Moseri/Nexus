@@ -5,7 +5,6 @@ import { CSS } from '@dnd-kit/utilities'
 import { formatDueDate } from '../../../lib/dateUtils'
 import { PRIORITY_STYLES } from '../../../lib/priorities'
 import { getTaskStatusLabel, isTaskCompleted } from '../../../lib/taskStatuses'
-import SubtaskProgress from './SubtaskProgress'
 
 function Initials({ name }) {
   const initials = (name ?? '')
@@ -85,6 +84,10 @@ function TaskCard({ task, onClick, isDragging = false }) {
         ? 'var(--amber)'
         : 'var(--text-tertiary)'
 
+  const subtasksDone = subtasks.filter((s) => isTaskCompleted(s)).length
+  const subtaskPct = subtasks.length > 0 ? Math.round((subtasksDone / subtasks.length) * 100) : 0
+  const subtaskBarColor = subtaskPct >= 100 ? '#2D8653' : subtaskPct > 0 ? '#C47E0A' : '#D5CCBE'
+
   return (
     <div
       ref={setNodeRef}
@@ -98,7 +101,7 @@ function TaskCard({ task, onClick, isDragging = false }) {
         background: '#FFFFFF',
         border: '1px solid #E8E0D2',
         borderRadius: 14,
-        padding: '12px 14px',
+        overflow: 'hidden',
         cursor: isDragging ? 'grabbing' : 'pointer',
         userSelect: 'none',
         boxShadow: isDragging
@@ -106,6 +109,7 @@ function TaskCard({ task, onClick, isDragging = false }) {
           : '0 2px 8px rgba(28,22,16,0.06)',
       }}
     >
+      <div style={{ padding: '12px 14px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A' }}>
           {scopeLabel}
@@ -231,7 +235,11 @@ function TaskCard({ task, onClick, isDragging = false }) {
           </div>
         ) : null}
 
-        {subtasks.length > 0 ? <SubtaskProgress subtasks={subtasks} /> : null}
+        {subtasks.length > 0 ? (
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+            {subtasksDone}/{subtasks.length}
+          </span>
+        ) : null}
 
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <span aria-hidden="true">💬</span>
@@ -252,6 +260,23 @@ function TaskCard({ task, onClick, isDragging = false }) {
           ) : null}
         </div>
       </div>
+      </div>
+
+      {subtasks.length > 0 ? (
+        <div
+          title={`${subtasksDone} of ${subtasks.length} subtasks completed`}
+          style={{ height: 4, background: '#EDE8DF' }}
+        >
+          <div
+            style={{
+              height: '100%',
+              width: `${subtaskPct}%`,
+              background: subtaskBarColor,
+              transition: 'width 0.3s ease',
+            }}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

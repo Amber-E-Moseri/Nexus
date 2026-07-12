@@ -191,12 +191,11 @@ export async function createTasksFromActionItems(meetingId, departmentId, action
   )
 
   const tasks = actionItems.map((item) => {
-    // An assignee's own space wins (so the task shows on their board); otherwise
-    // fall back to an explicit department suggestion (e.g. AI-suggested space),
-    // then the meeting's own department.
-    const destDeptId = item.assigneeId
-      ? (assigneeDeptMap[item.assigneeId] ?? departmentId)
-      : (item.departmentId ?? departmentId)
+    // Explicit space selection wins (user chose via dropdown); otherwise
+    // fall back to assignee's own space, then the meeting's department.
+    const destDeptId = item.departmentId
+      || (item.assigneeId ? assigneeDeptMap[item.assigneeId] : null)
+      || departmentId
     return {
       title: item.title,
       description: item.description || null,

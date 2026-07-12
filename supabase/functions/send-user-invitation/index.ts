@@ -66,7 +66,7 @@ function invitationEmailHtml({
   inviteMessage,
 }: {
   recipientName: string
-  departmentName: string
+  departmentName: string | null
   roleLabel: string
   activationUrl: string
   expiresAt: string
@@ -93,8 +93,7 @@ function invitationEmailHtml({
               Hello ${recipientName},
             </p>
             <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.7;">
-              You have been invited to join <strong>BLW CAN NEXUS</strong> as <strong>${roleLabel}</strong> in the
-              <strong>${departmentName}</strong> department.
+              You have been invited to join <strong>BLW CAN NEXUS</strong> as <strong>${roleLabel}</strong>${departmentName ? ` in the <strong>${departmentName}</strong> department` : ''}.
             </p>
             ${
               safeInviteMessage
@@ -133,7 +132,7 @@ function invitationEmailText({
   inviteMessage,
 }: {
   recipientName: string
-  departmentName: string
+  departmentName: string | null
   roleLabel: string
   activationUrl: string
   expiresAt: string
@@ -142,7 +141,9 @@ function invitationEmailText({
   return [
     `Hello ${recipientName},`,
     '',
-    `You have been invited to join BLW CAN NEXUS as ${roleLabel} in the ${departmentName} department.`,
+    departmentName
+      ? `You have been invited to join BLW CAN NEXUS as ${roleLabel} in the ${departmentName} department.`
+      : `You have been invited to join BLW CAN NEXUS as ${roleLabel}.`,
     inviteMessage ? inviteMessage : null,
     `Activate your account here: ${activationUrl}`,
     `This invitation expires on ${expiresAt}.`,
@@ -254,7 +255,7 @@ Deno.serve(async (request) => {
     return jsonResponse(404, { error: error.message }, origin)
   }
 
-  if (actor.role === 'dept_lead' && invitation.department_id !== actor.department_id) {
+  if (actor.role === 'dept_lead' && (invitation.department_id ?? null) !== (actor.department_id ?? null)) {
     return jsonResponse(403, { error: 'Department leads may send invitations in their own department only' }, origin)
   }
 
@@ -304,7 +305,7 @@ Deno.serve(async (request) => {
 
   const frontendUrl = resolveFrontendUrl()
   const activationUrl = `${frontendUrl}/accept-invite?token=${tokenPayload.invitation_token}`
-  const departmentName = (invitation.departments as { name?: string } | null)?.name ?? 'Assigned'
+  const departmentName = (invitation.departments as { name?: string } | null)?.name ?? null
   const recipientName = `${invitation.first_name} ${invitation.last_name}`.trim()
   const expiresAt = new Date(tokenPayload.expires_at ?? invitation.expires_at).toLocaleDateString('en-CA', {
     month: 'long',

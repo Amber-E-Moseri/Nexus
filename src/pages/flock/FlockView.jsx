@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { getFlockMembers, getFlockTasks } from '../../features/tasks'
 import { isTaskCompleted, isTaskInProgress } from '../../lib/taskStatuses'
 import { PRIORITY_STYLES } from '../../lib/priorities'
+import { supabase } from '../../lib/supabase'
 
 function memberStatusBadge(member, memberTasks) {
   const tasks = memberTasks[member.id] ?? []
@@ -51,6 +52,88 @@ function groupByDept(tasks) {
   return Array.from(map.values())
 }
 
+function WorkloadSummary({ tasks, deptGroups }) {
+  const now = new Date()
+  const completed = tasks.filter((t) => isTaskCompleted(t)).length
+  const inProgress = tasks.filter((t) => isTaskInProgress(t)).length
+  const overdue = tasks.filter((t) => t.due_date && new Date(t.due_date) < now && !isTaskCompleted(t)).length
+  const notStarted = tasks.length - completed - inProgress
+
+  const stats = [
+    { label: 'Total Tasks', value: tasks.length, color: 'var(--accent)' },
+    { label: 'In Progress', value: inProgress, color: '#2563eb' },
+    { label: 'Not Started', value: notStarted, color: 'var(--text-tertiary)' },
+    { label: 'Completed', value: completed, color: '#16a34a' },
+    { label: 'Overdue', value: overdue, color: 'var(--coral-dark)' },
+  ]
+
+  const priorityCounts = {}
+  for (const t of tasks) {
+    if (!isTaskCompleted(t)) {
+      const p = t.priority ?? 'medium'
+      priorityCounts[p] = (priorityCounts[p] ?? 0) + 1
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ background: 'var(--surface-secondary)', borderRadius: 12, padding: 16, marginBottom: 18 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+          Workload Overview
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 10 }}>
+          {stats.map((s) => (
+            <div key={s.label} style={{ background: 'white', borderRadius: 10, padding: '10px 12px', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 4, fontWeight: 500 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {Object.keys(priorityCounts).length > 0 && (
+        <div style={{ background: 'var(--surface-secondary)', borderRadius: 12, padding: 16, marginBottom: 18 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+            By Priority
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {['urgent', 'high', 'medium', 'low'].filter((p) => priorityCounts[p]).map((p) => {
+              const style = PRIORITY_STYLES[p] ?? PRIORITY_STYLES.medium
+              return (
+                <div key={p} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', borderRadius: 8, padding: '6px 12px', border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 20, background: style.bg, color: style.text, textTransform: 'capitalize' }}>{p}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{priorityCounts[p]}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {deptGroups.length > 1 && (
+        <div style={{ background: 'var(--surface-secondary)', borderRadius: 12, padding: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+            By Space
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {deptGroups.map(({ dept, tasks: dTasks }) => (
+              <div key={dept?.id ?? 'none'} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'white', borderRadius: 8, padding: '8px 12px', border: '1px solid var(--border)' }}>
+                {dept && <span style={{ width: 8, height: 8, borderRadius: '50%', background: `#${dept.color}`, flexShrink: 0 }} />}
+                <span style={{ flex: 1, fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)' }}>{dept?.name ?? 'No department'}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{dTasks.length}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--text-tertiary)', fontSize: 12, fontStyle: 'italic' }}>
+        Task details are restricted for this department. Only workload summaries are shown.
+      </div>
+    </div>
+  )
+}
+
 export default function FlockView() {
   const { profile } = useAuth()
   const [members, setMembers] = useState([])
@@ -58,6 +141,9 @@ export default function FlockView() {
   const [selectedId, setSelectedId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [deptNames, setDeptNames] = useState({})
+
+  const RESTRICTED_DEPTS = useMemo(() => new Set(['ors', 'admin']), [])
 
   useEffect(() => {
     if (!profile?.id) return
@@ -66,15 +152,27 @@ export default function FlockView() {
     Promise.all([
       getFlockMembers(profile.id),
       getFlockTasks(profile.id),
-    ]).then(([m, t]) => {
+      supabase.from('departments').select('id, name').then(({ data }) => {
+        const map = {}
+        for (const d of data ?? []) map[d.id] = d.name
+        return map
+      }),
+    ]).then(([m, t, dm]) => {
       setMembers(m ?? [])
       setAllTasks(t ?? [])
+      setDeptNames(dm)
       if (m?.length > 0) setSelectedId(m[0].id)
     }).catch((err) => {
       console.error('Failed to load flock data:', err)
       setError(err.message || 'Failed to load member information')
     }).finally(() => setLoading(false))
   }, [profile?.id])
+
+  const isMemberRestricted = (member) => {
+    if (!member?.department_id) return false
+    const name = (deptNames[member.department_id] ?? '').toLowerCase()
+    return RESTRICTED_DEPTS.has(name)
+  }
 
   // Index tasks by assignee_id
   const memberTasks = {}
@@ -226,10 +324,11 @@ export default function FlockView() {
                 </div>
                 <div>Create your first task to get started</div>
               </div>
+            ) : isMemberRestricted(selectedMember) ? (
+              <WorkloadSummary tasks={selectedTasks} deptGroups={deptGroups} />
             ) : (
               deptGroups.map(({ dept, tasks }) => (
                 <div key={dept?.id ?? 'none'} style={{ marginBottom: 24 }}>
-                  {/* Dept label */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                     {dept && (
                       <span
@@ -252,7 +351,6 @@ export default function FlockView() {
                     </span>
                   </div>
 
-                  {/* Task rows — read-only */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {tasks.map((task) => {
                       const isOverdue =

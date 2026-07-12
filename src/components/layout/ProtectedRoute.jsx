@@ -3,7 +3,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { hasSpaceRole, SPACE_ROLES } from '../../lib/permissions.js'
 import LoadingSpinner from '../ui/LoadingSpinner'
 
-export default function ProtectedRoute({ children, roles, allowFeatureRoles }) {
+export default function ProtectedRoute({ children, roles, allowFeatureRoles, blockRoles }) {
   const { loading, user, profile, effectiveRole, isRecoveryMode } = useAuth()
   const location = useLocation()
 
@@ -22,6 +22,18 @@ export default function ProtectedRoute({ children, roles, allowFeatureRoles }) {
   // Recovery mode guard: only allow /reset-password while in recovery
   if (isRecoveryMode && location.pathname !== '/reset-password') {
     return <Navigate to="/reset-password" replace />
+  }
+
+  // Denylist guard: block specific roles outright (e.g. group_member from the
+  // Sprints browse list / Meetings). Applied before the roles allowlist.
+  if (blockRoles && blockRoles.includes(effectiveRole)) {
+    return (
+      <Navigate
+        to="/dashboard"
+        replace
+        state={{ authError: 'You do not have access to that section.' }}
+      />
+    )
   }
 
   if (roles && !roles.includes(effectiveRole)) {

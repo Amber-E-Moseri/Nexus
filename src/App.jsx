@@ -97,6 +97,8 @@ const InvitationDetailPage = lazy(() => import('./pages/communications/Invitatio
 const InvitationsListPage = lazy(() => import('./pages/communications/InvitationsListPage'))
 const InstagramGradingPage = lazyRoute('/instagram', () => import('./features/instagram/pages/InstagramGradingPage'))
 const HelpPage = lazyRoute('/help', () => import('./pages/HelpPage'))
+const SupportPage = lazyRoute('/support', () => import('./pages/SupportPage'))
+const SupportTicketsAdminPage = lazyRoute('/admin/tickets', () => import('./pages/SupportTicketsAdminPage'))
 const GlowCardDemo = lazy(() => import('./components/ui/GlowCardDemo'))
 
 function onError(error, errorInfo) {
@@ -213,7 +215,14 @@ export default function App() {
           />
           <Route path="/spaces" element={<SpacesList />} />
           <Route path="/spaces/:spaceId" element={<SpaceOverview />} />
-          <Route path="/sprints" element={<SprintsList />} />
+          <Route
+            path="/sprints"
+            element={
+              <ProtectedRoute blockRoles={['group_member']}>
+                <SprintsList />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/sprints/:sprintId" element={<SprintOverview />} />
           <Route path="/dept/:deptSlug" element={<DeptSpace />} />
           <Route
@@ -232,8 +241,22 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/meetings" element={<MeetingsModule />} />
-          <Route path="/meetings/:meetingId" element={<MeetingDetailView />} />
+          <Route
+            path="/meetings"
+            element={
+              <ProtectedRoute blockRoles={['group_member']}>
+                <MeetingsModule />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/meetings/:meetingId"
+            element={
+              <ProtectedRoute blockRoles={['group_member']}>
+                <MeetingDetailView />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/meetings/wizard"
             element={
@@ -353,6 +376,8 @@ export default function App() {
           />
           <Route path="/settings/api-docs" element={<ApiDocumentationPage />} />
           <Route path="/help" element={<HelpPage />} />
+          <Route path="/support" element={<SupportPage />} />
+          <Route path="/admin/tickets" element={<SupportTicketsAdminPage />} />
           {/* Instagram Grading is paused (2026-07-09). Re-enable via the
               INSTAGRAM_GRADING_ENABLED flag in src/config/features.js. While
               disabled, the route redirects to the dashboard. */}

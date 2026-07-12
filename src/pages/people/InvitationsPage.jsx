@@ -412,6 +412,7 @@ export default function InvitationsPage() {
                 className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] disabled:bg-[var(--surface-secondary)]"
               >
                 <option value="member">Member</option>
+                <option value="group_member">Group Member</option>
                 {role === 'super_admin' ? (
                   <>
                     <option value="pastor">Pastor</option>

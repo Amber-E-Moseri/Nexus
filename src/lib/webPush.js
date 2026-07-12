@@ -51,7 +51,7 @@ export async function requestPushPermission() {
     })
 
     // Save subscription to Supabase
-    const { data: user } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user?.id) {
       console.error('No authenticated user found')
       return false
@@ -97,7 +97,7 @@ export async function unsubscribePush() {
     }
 
     // Update Supabase
-    const { data: user } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
     if (user?.id) {
       await supabase
         .from('users')

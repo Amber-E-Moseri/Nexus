@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { ACTION_LABELS, TRIGGER_LABELS, deleteAutomation, getRecentAutomationRuns, toggleAutomation, getAllDepartments, getAllUsers, getAllAutomations, getAutomationRunLog, getWebhookDeliveryLog, AutomationBuilder } from '../../features/automations'
+import { AUTOMATION_TEMPLATES, TEMPLATE_CATEGORIES } from '../../features/automations/lib/automationTemplates'
 import { formatLastActive } from '../../lib/dateUtils'
 import { supabase } from '../../lib/supabase'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
@@ -71,6 +72,8 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
   const [webhookLoading, setWebhookLoading] = useState(false)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('automations')
+  const [showTemplates, setShowTemplates] = useState(false)
+  const [templateFilter, setTemplateFilter] = useState('all')
 
   useEffect(() => {
     if (initialDepartmentId) {
@@ -190,16 +193,26 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
               Trigger-and-action workflows across departments.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingAutomation(null)
-              setShowBuilder(true)
-            }}
-            className="rounded-xl bg-[var(--purple-700)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--purple-600)]"
-          >
-            + New Automation
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => setShowTemplates((v) => !v)}
+              className="rounded-xl px-4 py-2 text-sm font-semibold"
+              style={{ border: '1px solid var(--border-1)', background: showTemplates ? 'var(--purple-tint)' : 'white', color: 'var(--purple-700)' }}
+            >
+              {showTemplates ? 'Hide Templates' : 'Browse Templates'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingAutomation(null)
+                setShowBuilder(true)
+              }}
+              className="rounded-xl bg-[var(--purple-700)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--purple-600)]"
+            >
+              + New Automation
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -209,16 +222,26 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
             {activeCount} of {automations.length} rules active · trigger-and-action workflows across departments.
           </p>
 
-          <button
-            type="button"
-            onClick={() => {
-              setEditingAutomation(null)
-              setShowBuilder(true)
-            }}
-            className="rounded-xl bg-[var(--purple-700)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--purple-600)]"
-          >
-            + New Automation
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => setShowTemplates((v) => !v)}
+              className="rounded-xl px-4 py-2 text-sm font-semibold"
+              style={{ border: '1px solid var(--border-1)', background: showTemplates ? 'var(--purple-tint)' : 'white', color: 'var(--purple-700)' }}
+            >
+              {showTemplates ? 'Hide Templates' : 'Browse Templates'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingAutomation(null)
+                setShowBuilder(true)
+              }}
+              className="rounded-xl bg-[var(--purple-700)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--purple-600)]"
+            >
+              + New Automation
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -227,6 +250,58 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
           {error}
         </div>
       ) : null}
+
+      {showTemplates && (
+        <div style={{ background: 'white', border: '1px solid var(--border-1)', borderRadius: 16, padding: '18px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h3 style={{ fontFamily: FONT_HEADING, fontSize: 15, fontWeight: 700, color: 'var(--ink-1)' }}>Automation Templates</h3>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" onClick={() => setTemplateFilter('all')} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, border: 'none', cursor: 'pointer', background: templateFilter === 'all' ? 'var(--purple-tint)' : 'transparent', color: templateFilter === 'all' ? 'var(--purple-700)' : 'var(--ink-2)' }}>All</button>
+              {Object.entries(TEMPLATE_CATEGORIES).map(([key, cat]) => (
+                <button key={key} type="button" onClick={() => setTemplateFilter(key)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, border: 'none', cursor: 'pointer', background: templateFilter === key ? 'var(--purple-tint)' : 'transparent', color: templateFilter === key ? 'var(--purple-700)' : 'var(--ink-2)' }}>
+                  {cat.icon} {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+            {AUTOMATION_TEMPLATES
+              .filter((t) => templateFilter === 'all' || t.category === templateFilter)
+              .map((template) => {
+                const cat = TEMPLATE_CATEGORIES[template.category]
+                return (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => {
+                      setEditingAutomation({
+                        name: template.name,
+                        description: template.description,
+                        trigger_type: template.trigger_type,
+                        trigger_config: template.trigger_config,
+                        conditions: template.conditions,
+                        actions: template.actions,
+                        department_id: deptId,
+                        enabled: true,
+                      })
+                      setShowBuilder(true)
+                      setShowTemplates(false)
+                    }}
+                    style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--border-1)', background: 'var(--surface-1)', cursor: 'pointer', textAlign: 'left', transition: 'border-color .15s' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = cat?.color ?? 'var(--purple-500)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-1)' }}
+                  >
+                    <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{cat?.icon ?? '⚡'}</span>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-1)' }}>{template.name}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 2, lineHeight: 1.4 }}>{template.description}</div>
+                    </div>
+                  </button>
+                )
+              })}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="rounded-3xl border border-[var(--border)] bg-white p-6 text-sm text-[var(--text-secondary)] shadow-[var(--card-shadow)]">

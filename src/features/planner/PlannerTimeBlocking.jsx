@@ -388,7 +388,7 @@ export default function PlannerTimeBlocking() {
         onDragCancel={() => setActiveDrag(null)}
         onDragEnd={handleDragEnd}
       >
-        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 14, flex: 1, minHeight: 0, height: isMobile ? 'auto' : 'calc(100vh - 180px)' }}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 14, flex: 1, minHeight: 0, height: isMobile ? 'calc(100vh - 220px)' : 'calc(100vh - 180px)' }}>
           {(!isMobile || sidebarOpen) && (
             <PlannerSidebar
               groups={groups}

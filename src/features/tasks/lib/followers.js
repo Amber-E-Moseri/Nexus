@@ -1,5 +1,14 @@
 import { supabase } from '../../../lib/supabase'
 
+export async function getTaskFollowers(taskId) {
+  const { data, error } = await supabase
+    .from('task_follows')
+    .select('user_id, user:users!user_id(id, name)')
+    .eq('task_id', taskId)
+  if (error) throw error
+  return data ?? []
+}
+
 export async function isFollowingTask(taskId, userId) {
   const { data, error } = await supabase
     .from('task_follows')

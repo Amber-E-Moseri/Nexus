@@ -11,6 +11,8 @@ import {
   Copy,
   Folder,
   HelpCircle,
+  HeadphonesIcon,
+  Ticket,
   LayoutGrid,
   Lock,
   Mail,
@@ -302,6 +304,10 @@ export default function Sidebar() {
   const canManageSpaces = canCreateSpace
   const showPeople = ['super_admin', 'dept_lead', 'regional_secretary'].includes(role) || isSpaceManager
   const showAdminPlatform = role === 'super_admin' || role === 'dept_lead' || hasSpaceRole(profile, null, 'dept_lead')
+  // Group members are restricted: no platform access (meetings, calendar tools,
+  // communications, map), no people management, and no Sprints unless they've
+  // been added to a specific sprint (RLS scopes displayedSprints to theirs).
+  const isGroupMember = role === 'group_member'
   // Communications is open to super_admin + regional_secretary (org-wide roles)
   // and to anyone holding an ors / dept_lead / programs space role. Mirrors the
   // route guard on /communications in App.jsx.
@@ -1002,7 +1008,11 @@ export default function Sidebar() {
               : null}
           </>
         ) : null}
-        <SidebarSectionLabel onAdd={canCreateSpace ? () => setShowSprintModal(true) : undefined}>Sprints</SidebarSectionLabel>
+        {/* Group members only see Sprints once added to one; otherwise the
+            whole section (label + All Sprints browse link) is hidden. */}
+        {(!isGroupMember || displayedSprints.length > 0) ? (
+          <SidebarSectionLabel onAdd={canCreateSpace ? () => setShowSprintModal(true) : undefined}>Sprints</SidebarSectionLabel>
+        ) : null}
         {displayedSprints.map((sprint) => (
           <SidebarItem
             key={sprint.id}
@@ -1023,15 +1033,21 @@ export default function Sidebar() {
             onClick={() => go(`/sprints/${sprint.id}`)}
           />
         ))}
-        <SidebarItem
-          active={location.pathname === '/sprints'}
-          label="All Sprints"
-          glyph={
-            <span style={{ width: 20, flex: '0 0 20px', textAlign: 'center', fontSize: 14, opacity: 0.7 }}>◈</span>
-          }
-          to="/sprints"
-        />
+        {!isGroupMember ? (
+          <SidebarItem
+            active={location.pathname === '/sprints'}
+            label="All Sprints"
+            glyph={
+              <span style={{ width: 20, flex: '0 0 20px', textAlign: 'center', fontSize: 14, opacity: 0.7 }}>◈</span>
+            }
+            to="/sprints"
+          />
+        ) : null}
 
+        {/* Platform (meetings, communications, map, campus, flock) is hidden
+            entirely for group members — they have no platform access. */}
+        {!isGroupMember ? (
+        <>
         <SidebarSectionLabel>Platform</SidebarSectionLabel>
         <div
           style={{
@@ -1205,6 +1221,8 @@ export default function Sidebar() {
             />
           </div>
         ) : null}
+        </>
+        ) : null}
 
         {role === 'regional_secretary' ? (
           <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 10 }}>
@@ -1325,6 +1343,20 @@ export default function Sidebar() {
           label="Help & FAQ"
           to="/help"
         />
+        <SidebarItem
+          active={isPathActive(location.pathname, '/support')}
+          icon={HeadphonesIcon}
+          label="Get Support"
+          to="/support"
+        />
+        {role === 'super_admin' ? (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/admin/tickets')}
+            icon={Ticket}
+            label="Support Tickets"
+            to="/admin/tickets"
+          />
+        ) : null}
       </div>
 
       <div style={{ borderTop: '1px solid #EDE8DC', padding: 10, marginTop: 'auto' }}>

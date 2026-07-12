@@ -200,11 +200,16 @@ export async function testPushNotifications(userId) {
 
 export async function sendTaskPushNotification(userId, data) {
   try {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData?.session?.access_token
     const response = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-task-push-notification`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           userId,
           taskId: data.taskId,

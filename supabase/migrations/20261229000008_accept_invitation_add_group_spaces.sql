@@ -1,17 +1,7 @@
 -- Update accept_invitation / create_user_from_invitation to add user to group spaces
 -- After creating the user from an invitation, add them to any pre-assigned group spaces
 
--- Find and update the RPC that creates user from invitation
--- This assumes there's a create_user_from_invitation or similar RPC
-
--- If not, we can handle this via a trigger instead
-CREATE TRIGGER IF NOT EXISTS user_invitations_accepted_add_group_spaces
-  AFTER UPDATE OF status ON public.user_invitations
-  FOR EACH ROW
-  WHEN (NEW.status = 'accepted' AND OLD.status != 'accepted')
-  EXECUTE FUNCTION public.add_user_to_invitation_group_spaces();
-
--- Helper function to add user to group spaces from invitation
+-- Helper function must be created before the trigger that references it
 CREATE OR REPLACE FUNCTION public.add_user_to_invitation_group_spaces()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -44,3 +34,12 @@ begin
   return NEW;
 end;
 $$;
+
+-- Drop and recreate trigger (IF NOT EXISTS is not valid for CREATE TRIGGER)
+DROP TRIGGER IF EXISTS user_invitations_accepted_add_group_spaces ON public.user_invitations;
+
+CREATE TRIGGER user_invitations_accepted_add_group_spaces
+  AFTER UPDATE OF status ON public.user_invitations
+  FOR EACH ROW
+  WHEN (NEW.status = 'accepted' AND OLD.status != 'accepted')
+  EXECUTE FUNCTION public.add_user_to_invitation_group_spaces();

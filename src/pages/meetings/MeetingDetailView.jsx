@@ -78,6 +78,9 @@ function MeetingDetailViewInner() {
   const [selectedAiActionItems, setSelectedAiActionItems] = useState(new Set())
   const [mergingAiActions, setMergingAiActions] = useState(false)
   const [aiMergeSuccess, setAiMergeSuccess]     = useState(false)
+  const [editableAiItems, setEditableAiItems]   = useState([])
+  const [orgUsers, setOrgUsers]                 = useState([])
+  const [orgDepartments, setOrgDepartments]     = useState([])
   const [editingTranscript, setEditingTranscript] = useState(false)
   const [editedTranscript, setEditedTranscript]   = useState('')
   const [savingTranscript, setSavingTranscript]   = useState(false)
@@ -331,6 +334,27 @@ function MeetingDetailViewInner() {
       setAiResult(extracted)
       if (extracted?.action_items?.length) {
         setSelectedAiActionItems(new Set(extracted.action_items.map((_, i) => i)))
+        let users = orgUsers
+        let depts = orgDepartments
+        if (!users.length || !depts.length) {
+          try {
+            const [u, d] = await Promise.all([getOrgUsers(), getOrgDepartments()])
+            users = u; depts = d
+            setOrgUsers(u); setOrgDepartments(d)
+          } catch {}
+        }
+        const directory = { departments: depts, users }
+        setEditableAiItems(extracted.action_items.map((raw) => {
+          const item = typeof raw === 'string' ? { title: raw, owner: '', due_date: '' } : raw
+          const resolved = resolveAssignment(item, directory)
+          return {
+            title: item.title || '',
+            owner: item.owner || '',
+            due_date: item.due_date || '',
+            assigneeId: resolved.assigneeId || '',
+            departmentId: resolved.departmentId || meeting?.department_id || '',
+          }
+        }))
       }
       // Save the AI summary to meeting_notes — never to `summary`, which holds
       // the transcript (overwriting it would destroy the transcript and make
@@ -373,34 +397,22 @@ function MeetingDetailViewInner() {
   // this tab keeps the success banner visible for confirmation. Not an oversight — don't
   // "fix" this to match Path A without a conscious call to do so.
   async function handleAiActionItemsMerge() {
-    if (!aiResult?.action_items?.length || !meeting?.department_id) return
+    if (!editableAiItems.length) return
     setMergingAiActions(true)
     setAiError('')
     try {
-      // Resolve AI-suggested owners against the real org directory so tasks
-      // land assigned (and on the assignee's board) instead of always unassigned.
-      let directory = { departments: [], users: [] }
-      try {
-        const [departments, users] = await Promise.all([getOrgDepartments(), getOrgUsers()])
-        directory = { departments, users }
-      } catch {
-        // degrade to unassigned tasks rather than failing the merge
-      }
-      const items = aiResult.action_items
+      const fallbackDept = meeting?.department_id
+      const items = editableAiItems
         .filter((_, i) => selectedAiActionItems.has(i))
-        .map((item) => {
-          const assignment = resolveAssignment(item, directory)
-          return {
-            title: item.title,
-            assigneeId: assignment.assigneeId,
-            departmentId: assignment.departmentId,
-            dueDate: item.due_date ?? null,
-            // Keep the AI's owner name visible when we couldn't match a real user
-            description: item.owner && item.owner !== 'TBD' && !assignment.assigneeId ? `Owner: ${item.owner}` : null,
-          }
-        })
+        .map((item) => ({
+          title: item.title,
+          assigneeId: item.assigneeId || null,
+          departmentId: item.departmentId || fallbackDept,
+          dueDate: item.due_date || null,
+          description: item.owner && item.owner !== 'TBD' && !item.assigneeId ? `Owner: ${item.owner}` : null,
+        }))
       if (!items.length) { setMergingAiActions(false); return }
-      await createTasksFromActionItems(meetingId, meeting.department_id, items, profile?.id)
+      await createTasksFromActionItems(meetingId, fallbackDept, items, profile?.id)
       setAiMergeSuccess(true)
       fetchActionItems()
     } catch (err) {
@@ -525,8 +537,8 @@ function MeetingDetailViewInner() {
             </>
           )}
 
-          {/* Mode toggle pills — always visible for managers */}
-          {canManage && (
+          {/* Mode toggle pills — only for non-completed meetings */}
+          {canManage && meeting?.status !== 'completed' && meeting?.status !== 'cancelled' && (
             <div style={{ display:'inline-flex', borderRadius:999, border:`1px solid ${isLive ? 'rgba(255,255,255,.2)' : FS.border}`, overflow:'hidden', background: isLive ? 'rgba(255,255,255,.08)' : FS.surface }}>
               {[
                 { id:'prep',  label:'Prep' },
@@ -1111,23 +1123,45 @@ function MeetingDetailViewInner() {
                     )}
                     {aiResult.action_items?.length > 0 && (
                       <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
-                        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>Action items extracted — select to add to board</div>
-                        {aiResult.action_items.map((item, i) => (
-                          <label
+                        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>Action items extracted — edit &amp; select to add to board</div>
+                        {editableAiItems.map((item, i) => (
+                          <div
                             key={i}
-                            onClick={() => toggleAiActionItem(i)}
-                            style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'8px 10px', background: FS.surface, borderRadius:6, border:`1px solid ${selectedAiActionItems.has(i) ? FS.purple : FS.borderL}`, cursor:'pointer', marginBottom:6 }}
+                            style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'8px 10px', background: FS.surface, borderRadius:6, border:`1px solid ${selectedAiActionItems.has(i) ? FS.purple : FS.borderL}`, marginBottom:6 }}
                           >
-                            <input type="checkbox" checked={selectedAiActionItems.has(i)} onChange={() => toggleAiActionItem(i)} style={{ marginTop:2, cursor:'pointer', accentColor: FS.purple }} />
-                            <div>
-                              <div style={{ fontSize:13, fontWeight:600, color: FS.text }}>{typeof item === 'string' ? item : item.title}</div>
-                              {typeof item !== 'string' && (
-                                <div style={{ fontSize:11, color: FS.muted, marginTop:2 }}>
-                                  Owner: {item.owner || 'TBD'}{item.due_date ? ` · Due ${item.due_date}` : ''}
-                                </div>
-                              )}
+                            <input type="checkbox" checked={selectedAiActionItems.has(i)} onChange={() => toggleAiActionItem(i)} style={{ marginTop:6, cursor:'pointer', accentColor: FS.purple }} />
+                            <div style={{ flex:1, display:'flex', flexDirection:'column', gap:4 }}>
+                              <input
+                                value={item.title}
+                                onChange={(e) => setEditableAiItems((prev) => prev.map((it, j) => j === i ? { ...it, title: e.target.value } : it))}
+                                style={{ fontSize:13, fontWeight:600, color: FS.text, border:`1px solid ${FS.borderL}`, borderRadius:4, padding:'4px 6px', fontFamily:'inherit', width:'100%', background:'#fff' }}
+                              />
+                              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                <select
+                                  value={item.assigneeId}
+                                  onChange={(e) => setEditableAiItems((prev) => prev.map((it, j) => j === i ? { ...it, assigneeId: e.target.value } : it))}
+                                  style={{ fontSize:11, color: FS.text, border:`1px solid ${FS.borderL}`, borderRadius:4, padding:'3px 6px', fontFamily:'inherit', flex:1, minWidth:120, background:'#fff' }}
+                                >
+                                  <option value="">{item.owner && item.owner !== 'TBD' ? `${item.owner} (unmatched)` : 'Unassigned'}</option>
+                                  {orgUsers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                </select>
+                                <select
+                                  value={item.departmentId}
+                                  onChange={(e) => setEditableAiItems((prev) => prev.map((it, j) => j === i ? { ...it, departmentId: e.target.value } : it))}
+                                  style={{ fontSize:11, color: FS.text, border:`1px solid ${FS.borderL}`, borderRadius:4, padding:'3px 6px', fontFamily:'inherit', flex:1, minWidth:120, background:'#fff' }}
+                                >
+                                  <option value="">Meeting space</option>
+                                  {orgDepartments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                </select>
+                                <input
+                                  type="date"
+                                  value={item.due_date}
+                                  onChange={(e) => setEditableAiItems((prev) => prev.map((it, j) => j === i ? { ...it, due_date: e.target.value } : it))}
+                                  style={{ fontSize:11, color: FS.text, border:`1px solid ${FS.borderL}`, borderRadius:4, padding:'3px 6px', fontFamily:'inherit', background:'#fff' }}
+                                />
+                              </div>
                             </div>
-                          </label>
+                          </div>
                         ))}
 
                         {aiMergeSuccess && (

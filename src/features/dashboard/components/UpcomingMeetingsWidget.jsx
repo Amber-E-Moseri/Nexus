@@ -43,7 +43,7 @@ export default function UpcomingMeetingsWidget({ role, userId, departmentId }) {
         const dept = meeting.departments
         const deptColor = dept?.color ? `#${dept.color}` : '#4C2A92'
         return (
-          <div key={meeting.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <NavLink key={meeting.id} to={`/meetings/${meeting.id}`} style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', borderRadius: 8, padding: '6px 8px', margin: '-6px -8px', transition: 'background .15s' }} onMouseEnter={(e) => e.currentTarget.style.background = '#F5F2EC'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
             <div style={{
               fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
               background: '#F0EDE6', color: '#6B6560', flexShrink: 0, minWidth: 65, textAlign: 'center',
@@ -61,7 +61,7 @@ export default function UpcomingMeetingsWidget({ role, userId, departmentId }) {
             }}>
               {dept?.name ?? 'Unknown'}
             </span>
-          </div>
+          </NavLink>
         )
       })}
       <NavLink to="/meetings" style={{ fontSize: 12, color: '#4C2A92', fontWeight: 600, textDecoration: 'none', marginTop: 2 }}>

@@ -104,9 +104,9 @@ serve(async (req: Request) => {
     if (feed_type === 'my_tasks' || feed_type === 'all_my_tasks') {
       taskQuery = taskQuery.eq('assignee_id', user_id)
     } else if (feed_type === 'followed_tasks' || feed_type === 'all_followed_tasks') {
-      // Join through task_followers
+      // Join through task_follows
       const { data: follows, error: followError } = await supabase
-        .from('task_followers')
+        .from('task_follows')
         .select('task_id')
         .eq('user_id', user_id)
       if (followError) throw followError
@@ -214,7 +214,10 @@ function generateTaskICalFeed(feedName: string, tasks: any[], statusMap: Record<
     lines.push('BEGIN:VEVENT')
     lines.push(`UID:${uid}`)
     lines.push(`DTSTART;VALUE=DATE:${dueDateStr}`)
-    lines.push(`DTEND;VALUE=DATE:${dueDateStr}`)
+    const nextDay = new Date(task.due_date)
+    nextDay.setDate(nextDay.getDate() + 1)
+    const dtendStr = nextDay.toISOString().slice(0, 10).replace(/-/g, '')
+    lines.push(`DTEND;VALUE=DATE:${dtendStr}`)
     lines.push(`DTSTAMP:${now}`)
     lines.push(`SUMMARY:${escapeICalValue(task.title)}`)
     if (description) lines.push(`DESCRIPTION:${escapeICalValue(description)}`)
@@ -260,7 +263,10 @@ function generatePlannerICalFeed(blocks: any[], taskMap: Record<string, { title:
 
     if (block.is_all_day) {
       lines.push(`DTSTART;VALUE=DATE:${dateStr}`)
-      lines.push(`DTEND;VALUE=DATE:${dateStr}`)
+      const nextBlockDay = new Date(block.scheduled_date)
+      nextBlockDay.setDate(nextBlockDay.getDate() + 1)
+      const blockDtend = nextBlockDay.toISOString().slice(0, 10).replace(/-/g, '')
+      lines.push(`DTEND;VALUE=DATE:${blockDtend}`)
       lines.push('TRANSP:TRANSPARENT')
     } else {
       // Convert HH:MM:SS time to iCal local time format
