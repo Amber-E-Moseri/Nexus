@@ -1224,9 +1224,9 @@ export default function Sidebar() {
         </>
         ) : null}
 
-        {role === 'regional_secretary' ? (
+        {(role === 'regional_secretary' || role === 'super_admin') ? (
           <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 10 }}>
-            <div style={{ ...SECTION_LABEL_STYLE }}>Regional Secretary</div>
+            <div style={{ ...SECTION_LABEL_STYLE }}>{role === 'super_admin' ? 'Regional Updates' : 'Regional Secretary'}</div>
             <div style={{ marginTop: 8 }}>
               <RegionalUpdateCompose />
             </div>
