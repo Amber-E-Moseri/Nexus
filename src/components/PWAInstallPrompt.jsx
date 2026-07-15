@@ -2,14 +2,20 @@ import { useState, useEffect } from 'react'
 import { X, Download } from 'lucide-react'
 import { usePWA } from '../hooks/usePWA'
 
+const DISMISSED_KEY = 'blw_pwa_install_dismissed'
+
 export function PWAInstallPrompt() {
-  const { isInstallable, install } = usePWA()
+  const { isInstallable, isInstalled, install } = usePWA()
   const [visible, setVisible] = useState(false)
   const [installing, setInstalling] = useState(false)
 
   useEffect(() => {
+    if (isInstalled || localStorage.getItem(DISMISSED_KEY) === 'true') {
+      setVisible(false)
+      return
+    }
     setVisible(isInstallable)
-  }, [isInstallable])
+  }, [isInstallable, isInstalled])
 
   if (!visible) {
     return null
@@ -20,6 +26,7 @@ export function PWAInstallPrompt() {
     try {
       const success = await install()
       if (success) {
+        localStorage.setItem(DISMISSED_KEY, 'true')
         setVisible(false)
       }
     } catch (err) {
@@ -30,6 +37,7 @@ export function PWAInstallPrompt() {
   }
 
   const handleDismiss = () => {
+    localStorage.setItem(DISMISSED_KEY, 'true')
     setVisible(false)
   }
 
