@@ -154,9 +154,16 @@ function CustomHeroStatCard({ meta, value, statKey, onChoose, onClick }) {
         colors={['#9B7EF5', '#C4B0FF', '#EDE8F8']}
         edgeSensitivity={25}
       >
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onClick?.(e)
+          }
+        }}
         className="hero-stat-card"
         style={{
           position: 'relative',
@@ -216,7 +223,7 @@ function CustomHeroStatCard({ meta, value, statKey, onChoose, onClick }) {
         <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: 'rgba(255,255,255,.72)', marginTop: 8, fontWeight: 500, position: 'relative' }}>
           {meta.sub}
         </div>
-      </button>
+      </div>
       </BorderGlow>
 
       {showPicker && (
@@ -1028,9 +1035,6 @@ export default function Dashboard() {
             <h1 style={{ fontFamily: FONT_HEADING, fontSize: 26, fontWeight: 700, color: 'var(--ink-1)', margin: 0, letterSpacing: '-0.02em' }}>
               {greetingForHour()}, {profile?.name?.split(' ')[0] ?? 'there'} 👋
             </h1>
-            <p style={{ marginTop: 5, fontSize: 13, color: 'var(--ink-2)', margin: '5px 0 0' }}>
-              Keep ministry execution visible across departments, meetings, and follow-through.
-            </p>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <OrgReportExport role={role} />

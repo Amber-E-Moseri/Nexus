@@ -33,6 +33,7 @@ export default function KanbanBoard({
   onTaskClick,
   filteredTasks,
   readOnly = false,
+  canCreateTask = !readOnly,
   statusesOverride = null,
   departmentId = null,
   listId = null,
@@ -40,10 +41,25 @@ export default function KanbanBoard({
   departments = [],
   defaultDepartmentId = '',
   onCreateTask,
+  onTaskStatusChange,
   teamMembers = [],
 }) {
-  const { tasks: allTasks, moveTask, statuses } = useTasks()
-  const tasks = filteredTasks ?? allTasks
+  const { tasks: contextTasks, moveTask: contextMoveTask, statuses } = useTasks()
+  // filteredTasks may come from a source unrelated to TasksContext (e.g. a
+  // cross-department hook), so drag lookups must use it, not contextTasks —
+  // contextTasks is empty whenever TasksProvider is mounted without a
+  // departmentId/sprintId scope.
+  const tasks = filteredTasks ?? contextTasks
+
+  // Controlled boards (onTaskStatusChange provided) persist through the
+  // caller instead of TasksContext's own moveTask.
+  function persistMove(taskId, nextStatus) {
+    if (onTaskStatusChange) {
+      onTaskStatusChange({ taskId, newStatus: nextStatus })
+    } else {
+      contextMoveTask(taskId, nextStatus)
+    }
+  }
   const [activeTask, setActiveTask] = useState(null)
   const [overColumnId, setOverColumnId] = useState(null)
   const [composerStatusId, setComposerStatusId] = useState(null)
@@ -115,7 +131,7 @@ export default function KanbanBoard({
   }
 
   function handleDragStart({ active }) {
-    setActiveTask(allTasks.find((task) => task.id === active.id) ?? null)
+    setActiveTask(tasks.find((task) => task.id === active.id) ?? null)
   }
 
   function handleDragEnd({ active, over }) {
@@ -124,7 +140,7 @@ export default function KanbanBoard({
     setOverColumnId(null)
     if (!over && !resolvedColumnId) return
 
-    const task = allTasks.find((item) => item.id === active.id)
+    const task = tasks.find((item) => item.id === active.id)
     // Try over.id as a status id first, then fall back to overColumnId
     const destinationStatus =
       boardStatuses.find((s) => s.id === over?.id) ??
@@ -137,7 +153,7 @@ export default function KanbanBoard({
       (!task.status_id && task.status === destinationStatus.legacy_key)
 
     if (!isSameStatus) {
-      moveTask(task.id, destinationStatus)
+      persistMove(task.id, destinationStatus)
     }
   }
 
@@ -165,7 +181,7 @@ export default function KanbanBoard({
           tasks={tasksByStatus[status.id] ?? []}
           onTaskClick={onTaskClick}
           onStartAddTask={() => setComposerStatusId(status.id)}
-          composer={!readOnly && composerStatusId === status.id ? (
+          composer={canCreateTask && composerStatusId === status.id ? (
             <InlineTaskComposer
               key={status.id}
               departments={departments}
@@ -182,7 +198,7 @@ export default function KanbanBoard({
               }}
             />
           ) : null}
-          readOnly={readOnly}
+          readOnly={!canCreateTask}
           isOver={overColumnId === status.id}
         />
       ))}

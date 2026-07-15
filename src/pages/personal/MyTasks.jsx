@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
+import { useToast } from '../../context/ToastContext'
 import { useAuth } from '../../hooks/useAuth'
 import { useDeptMembers } from '../../hooks/useDeptMembers'
 import { useMyTasks } from '../../features/tasks/hooks/useMyTasks'
@@ -14,7 +15,7 @@ import TaskListView from '../../features/tasks/components/TaskListView'
 import TaskFilters from '../../features/tasks/components/TaskFilters'
 import { EMPTY_FILTERS, applyTaskFilters } from '../../features/tasks/hooks/useTaskFilters'
 import { getTaskTypeInfo } from '../../features/tasks/lib/task-types'
-import { isDelegatedTask } from '../../features/tasks/lib/tasks'
+import { isDelegatedTask, updateTask } from '../../features/tasks/lib/tasks'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 
 function loadViewMode() {
@@ -33,6 +34,7 @@ const QUICK_VIEWS = {
 
 export default function MyTasks() {
   const { profile, role } = useAuth()
+  const { showToast } = useToast()
   const location = useLocation()
   const navigate = useNavigate()
   const { view } = useParams()
@@ -99,10 +101,11 @@ export default function MyTasks() {
       const activeDepts = spacesData.filter((space) => space.status === 'active')
       setDepartments(activeDepts)
 
-      // Load statuses for user's primary department (or global if no department)
-      // The RPC get_space_statuses() automatically returns dept-specific if they exist, else global
-      const allStatuses = await listTaskStatuses({ departmentId: profile?.department_id })
-      setStatuses(allStatuses)
+      // Load statuses from every department so cross-space tasks group correctly
+      const statusLists = await Promise.all(
+        activeDepts.map((d) => listTaskStatuses({ departmentId: d.id })),
+      )
+      setStatuses(statusLists.flat())
     } catch (err) {
       console.error('[MyTasks] Failed to load metadata:', err)
     }
@@ -133,6 +136,26 @@ export default function MyTasks() {
 
   function handleDeleted() {
     refetch()
+  }
+
+  // Drag-and-drop status change for both List and Board views. Delegated
+  // tasks are included on purpose — the modal stays read-only for them, but
+  // dragging lets the delegator override status without editing other
+  // fields. Realtime only re-syncs tasks assigned to me, so delegated-tab
+  // moves need an explicit refetch to show up.
+  async function handleTaskStatusChange({ taskId, newStatus }) {
+    try {
+      await updateTask(taskId, {
+        status: newStatus.legacy_key,
+        statusId: newStatus.id,
+        statusCategory: newStatus.category,
+      })
+    } catch (err) {
+      console.error('[MyTasks] Failed to update task status:', err)
+      showToast("Couldn't update that task's status. Try again.", { tone: 'error' })
+    } finally {
+      refetch()
+    }
   }
 
   // Mirrors useTaskFilters.hasActiveFilters — a generic truthiness sweep
@@ -248,7 +271,8 @@ export default function MyTasks() {
                 statusesOverride={statuses}
                 onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab === 'delegated' })}
                 onCreateTask={() => setModal({ mode: 'create' })}
-                readOnly={effectiveTab === 'delegated'}
+                onTaskStatusChange={handleTaskStatusChange}
+                canCreateTask={effectiveTab === 'mine'}
               />
             </TasksProvider>
           </div>
@@ -261,7 +285,7 @@ export default function MyTasks() {
               canAddTask={effectiveTab === 'mine'}
               onCreateTask={() => setModal({ mode: 'create' })}
               onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab === 'delegated' })}
-              onTaskStatusChange={undefined}
+              onTaskStatusChange={handleTaskStatusChange}
               people={memberMap}
               priorities={{}}
               teamMembers={Object.values(memberMap)}
