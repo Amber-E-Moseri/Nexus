@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ACTION_LABELS, TRIGGER_LABELS, deleteAutomation, toggleAutomation, AutomationBuilder } from '../../automations'
+import { AUTOMATION_TEMPLATES, TEMPLATE_CATEGORIES } from '../../automations/lib/automationTemplates'
 import { formatRelativeDate } from '../../../lib/dateUtils'
 import { supabase } from '../../../lib/supabase'
 
@@ -43,46 +44,25 @@ export default function SpaceAutomationsTab({ space, canManage }) {
     [automations],
   )
 
+  // Shared 12-template gallery (also used on the standalone /automations page) —
+  // space-scoped automations reuse the same templates rather than a separate,
+  // smaller local list.
   const templates = useMemo(
-    () => [
-      {
-        id: 'blocked-notify',
-        label: 'When a task is blocked -> notify the space lead',
+    () =>
+      AUTOMATION_TEMPLATES.map((template) => ({
+        id: template.id,
+        label: template.name,
+        category: template.category,
+        description: template.description,
         values: {
-          name: 'Notify lead when blocked',
-          trigger_type: 'task_status_change',
-          trigger_config: { to_status: 'blocked' },
-          actions: [
-            {
-              type: 'send_notification',
-              config: {
-                user_id: space?.owner_id ?? '',
-                message: 'A task has been blocked in {{space.name}}',
-              },
-            },
-          ],
+          name: template.name,
+          trigger_type: template.trigger_type,
+          trigger_config: template.trigger_config,
+          conditions: template.conditions,
+          actions: template.actions,
         },
-      },
-      {
-        id: 'overdue-escalate',
-        label: 'When a task becomes overdue -> escalate to lead',
-        values: {
-          name: 'Escalate overdue tasks',
-          trigger_type: 'task_overdue',
-          trigger_config: {},
-          actions: [
-            {
-              type: 'send_notification',
-              config: {
-                user_id: space?.owner_id ?? '',
-                message: '{{task.title}} is overdue in {{space.name}}',
-              },
-            },
-          ],
-        },
-      },
-    ],
-    [space?.owner_id],
+      })),
+    [],
   )
 
   async function loadAutomations() {
@@ -257,20 +237,25 @@ export default function SpaceAutomationsTab({ space, canManage }) {
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
           <div className="text-sm font-semibold text-[var(--text-primary)]">Quick-add templates</div>
           <div className="mt-3 flex flex-wrap gap-2">
-            {templates.map((template) => (
-              <button
-                key={template.id}
-                type="button"
-                onClick={() => {
-                  setEditingAutomation(null)
-                  setBuilderTemplate(template.values)
-                  setShowBuilder(true)
-                }}
-                className="rounded-full border border-[var(--border)] bg-[var(--surface-secondary)] px-4 py-2 text-sm text-[var(--text-primary)]"
-              >
-                {template.label}
-              </button>
-            ))}
+            {templates.map((template) => {
+              const cat = TEMPLATE_CATEGORIES[template.category]
+              return (
+                <button
+                  key={template.id}
+                  type="button"
+                  title={template.description}
+                  onClick={() => {
+                    setEditingAutomation(null)
+                    setBuilderTemplate(template.values)
+                    setShowBuilder(true)
+                  }}
+                  className="rounded-full border border-[var(--border)] bg-[var(--surface-secondary)] px-4 py-2 text-sm text-[var(--text-primary)]"
+                >
+                  {cat ? `${cat.icon} ` : ''}
+                  {template.label}
+                </button>
+              )
+            })}
           </div>
         </div>
       ) : null}

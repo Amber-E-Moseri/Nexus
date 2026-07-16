@@ -1,9 +1,9 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import { hasSpaceRole, SPACE_ROLES } from '../../lib/permissions.js'
+import { hasSpaceRole, hasGrant, SPACE_ROLES } from '../../lib/permissions.js'
 import LoadingSpinner from '../ui/LoadingSpinner'
 
-export default function ProtectedRoute({ children, roles, allowFeatureRoles, blockRoles }) {
+export default function ProtectedRoute({ children, roles, allowFeatureRoles, allowGrant, blockRoles }) {
   const { loading, user, profile, effectiveRole, isRecoveryMode } = useAuth()
   const location = useLocation()
 
@@ -46,8 +46,12 @@ export default function ProtectedRoute({ children, roles, allowFeatureRoles, blo
       (r) => SPACE_ROLES.includes(r) && hasSpaceRole(profile, null, r)
     )
     const featureRolePasses = (allowFeatureRoles ?? []).some((fr) => hasSpaceRole(profile, null, fr))
+    // Ad-hoc grant (user_grants) — lets a specific user pass this route's
+    // roles check without changing their base role. See regional_secretary_
+    // access: a pastor granted regional-secretary admin reach.
+    const grantPasses = allowGrant ? hasGrant(profile, allowGrant) : false
 
-    if (!spaceRolePasses && !featureRolePasses) {
+    if (!spaceRolePasses && !featureRolePasses && !grantPasses) {
       return (
         <Navigate
           to="/dashboard"

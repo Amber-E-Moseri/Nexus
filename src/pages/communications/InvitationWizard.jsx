@@ -82,7 +82,10 @@ export default function InvitationWizard() {
   }
 
   function isStepValid() {
-    if (currentStep === 1) return wizardState.templateId !== null
+    // templateId itself may legitimately be null (the synthetic default
+    // "start from scratch" template has no real invitation_templates row) —
+    // `template` (the object) is what actually indicates a selection was made.
+    if (currentStep === 1) return wizardState.template !== null
     if (currentStep === 2) {
       if (!wizardState.template?.content_slots) return true
       const slots = wizardState.template.content_slots || []

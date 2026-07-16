@@ -599,6 +599,19 @@ export async function getDeptMembers(departmentId) {
   return data ?? []
 }
 
+// Org-wide roles (super_admin, regional_secretary) can assign a task to
+// anyone, not just the selected space's members.
+export async function getAllOrgMembers() {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, name, avatar_url, role')
+    .eq('status', 'active')
+    .order('name')
+
+  if (error) throw error
+  return data ?? []
+}
+
 export async function getSprintMembers(sprintId) {
   const { data, error } = await supabase
     .from('sprint_members')

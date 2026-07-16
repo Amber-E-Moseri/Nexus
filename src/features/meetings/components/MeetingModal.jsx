@@ -32,6 +32,7 @@ export default function MeetingModal({ departmentId, onClose }) {
   const [zoomJoinUrl, setZoomJoinUrl] = useState('')
   const [driveUrl, setDriveUrl] = useState('')
   const [attendeeIds, setAttendeeIds] = useState([])
+  const [isPrivate, setIsPrivate] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -79,6 +80,7 @@ export default function MeetingModal({ departmentId, onClose }) {
         department_id: departmentId,
         date: new Date(date).toISOString(),
         meeting_type: meetingType,
+        visibility: isPrivate ? 'private' : 'published',
         created_by: profile?.id,
       })
       setSavedMeeting(created)
@@ -119,6 +121,7 @@ export default function MeetingModal({ departmentId, onClose }) {
           title: title.trim(),
           date: new Date(date).toISOString(),
           meeting_type: meetingType,
+          visibility: isPrivate ? 'private' : 'published',
           summary: summary.trim() || null,
           minutes: minutes.trim() || null,
           zoom_join_url: zoomJoinUrl.trim() || null,
@@ -141,6 +144,7 @@ export default function MeetingModal({ departmentId, onClose }) {
           department_id: departmentId,
           date: new Date(date).toISOString(),
           meeting_type: meetingType,
+          visibility: isPrivate ? 'private' : 'published',
           summary: summary.trim() || null,
           minutes: minutes.trim() || null,
           zoom_join_url: zoomJoinUrl.trim() || null,
@@ -235,6 +239,61 @@ export default function MeetingModal({ departmentId, onClose }) {
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                marginTop: 14,
+                borderRadius: 10,
+                border: '1px solid var(--border)',
+                background: isPrivate ? 'rgba(108, 90, 234, 0.06)' : 'white',
+                padding: '12px 14px',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  🔒 Make private
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                  Only you, invited attendees, and admins can see this. Off = visible to your department.
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isPrivate}
+                aria-label="Make meeting private"
+                onClick={() => setIsPrivate((value) => !value)}
+                style={{
+                  width: 38,
+                  height: 22,
+                  borderRadius: 999,
+                  border: 'none',
+                  background: isPrivate ? 'var(--accent)' : '#C9C0B0',
+                  position: 'relative',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s',
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 3,
+                    left: isPrivate ? 19 : 3,
+                    width: 16,
+                    height: 16,
+                    borderRadius: 999,
+                    background: 'white',
+                    transition: 'left 0.15s',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                  }}
+                />
+              </button>
             </div>
 
             <div style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr', marginTop: 14 }}>

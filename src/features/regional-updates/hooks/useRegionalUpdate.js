@@ -22,9 +22,9 @@ export function useRegionalUpdate() {
 
     fetchUpdate()
 
-    // Realtime subscription
+    // Realtime subscription — unique topic per mount, see useRegionalUpdatesList.js
     const channel = supabase
-      .channel('regional_updates')
+      .channel(`regional_updates:${crypto.randomUUID()}`)
       .on(
         'postgres_changes',
         {

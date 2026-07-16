@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { useDeptMembers } from '../../../hooks/useDeptMembers'
+import { hasSpaceRole } from '../../../lib/permissions'
 import { PRIORITIES } from '../../../lib/constants'
 import { createNotification } from '../../notifications'
 import { getMySpaces, SPACE_TYPE_ICONS } from '../../spaces'
@@ -15,7 +16,7 @@ import {
 } from '../../../lib/activityLog'
 import { normalizeTaskFieldSettings } from '../../../lib/taskFieldSettings'
 import { FONT_BODY, FONT_HEADING } from '../../../lib/fonts'
-import { createTask, deleteTask, getSubtasks, getTaskBlockers, updateTask } from '../lib/tasks'
+import { createTask, deleteTask, getAllOrgMembers, getSubtasks, getTaskBlockers, updateTask } from '../lib/tasks'
 import {
   getTaskStatusId,
   getTaskStatusLabel,
@@ -235,7 +236,15 @@ export default function TaskModal({
   const [spaces, setSpaces] = useState([])
   const [selectedSpaceId, setSelectedSpaceId] = useState(departmentId ?? '')
   const [selectedSprintId, setSelectedSprintId] = useState(sprintId ?? task?.sprint_id ?? '')
-  const deptMembers = useDeptMembers(departmentId)
+  // Space-scoped members react to the in-modal space picker (selectedSpaceId),
+  // not just the fixed departmentId prop — otherwise a modal opened without a
+  // department (e.g. the header "New Task" button) never populates members
+  // even after the user picks a space.
+  const deptMembers = useDeptMembers(selectedSpaceId || departmentId)
+  // Org-wide roles can assign to anyone, regardless of the selected space.
+  const canAssignOrgWide = role === 'super_admin' || role === 'regional_secretary' ||
+    hasSpaceRole(profile, null, 'ors') || hasSpaceRole(profile, null, 'programs')
+  const [orgMembers, setOrgMembers] = useState([])
   const [members, setMembers] = useState(sprintId ? [] : deptMembers)
   const [pendingWatchers, setPendingWatchers] = useState([])
   const [saving, setSaving] = useState(false)
@@ -244,6 +253,17 @@ export default function TaskModal({
   const [blockers, setBlockers] = useState([])
 
   const titleRef = useRef(null)
+
+  useEffect(() => {
+    if (canAssignOrgWide) {
+      getAllOrgMembers()
+        .then(setOrgMembers)
+        .catch((error) => {
+          console.error('Failed to load org members', error)
+          setOrgMembers([])
+        })
+    }
+  }, [canAssignOrgWide])
 
   useEffect(() => {
     if (sprintId) {
@@ -258,9 +278,9 @@ export default function TaskModal({
 
   useEffect(() => {
     if (!sprintId) {
-      setMembers(deptMembers)
+      setMembers(canAssignOrgWide ? orgMembers : deptMembers)
     }
-  }, [deptMembers, sprintId])
+  }, [deptMembers, orgMembers, canAssignOrgWide, sprintId])
 
   useEffect(() => {
     if (contextStatuses.length > 0) {
@@ -669,6 +689,7 @@ export default function TaskModal({
                 members={members}
                 selectedIds={assigneeIds}
                 onSelectionChange={setAssigneeIds}
+                isMultiSelect={false}
               />
             </div>
 

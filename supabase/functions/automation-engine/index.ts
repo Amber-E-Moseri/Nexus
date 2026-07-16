@@ -561,9 +561,22 @@ Deno.serve(async (req) => {
   )
 
   const token = authHeader.substring(7)
-  const jwtData = await verifyJwt(supabase, token)
-  if (!jwtData) {
-    return jsonResponse(401, { error: 'Invalid JWT token' })
+
+  // Native Supabase DB webhooks (Edge Function type) send the service_role key,
+  // which is not a user JWT and will fail getUser(). Detect these by decoding the
+  // role claim without signature verification — if role === 'service_role' we trust
+  // it as a valid internal call. All other callers still go through full JWT verification.
+  let isServiceRole = false
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    isServiceRole = payload?.role === 'service_role'
+  } catch { /* not a JWT at all — fall through to full verification */ }
+
+  if (!isServiceRole) {
+    const jwtData = await verifyJwt(supabase, token)
+    if (!jwtData) {
+      return jsonResponse(401, { error: 'Invalid JWT token' })
+    }
   }
 
   let body: Record<string, unknown>
@@ -571,6 +584,47 @@ Deno.serve(async (req) => {
     body = await req.json()
   } catch {
     return jsonResponse(400, { error: 'Invalid JSON' })
+  }
+
+  // Native Supabase Edge Function webhooks send { type, table, schema, record, old_record }
+  // instead of our custom { trigger_type, record/new_record/old_record } shape.
+  // Normalise them here so the rest of the engine is unchanged.
+  if (typeof body.type === 'string' && typeof body.table === 'string' && !body.trigger_type) {
+    const eventType = (body.type as string).toUpperCase()
+    const table = body.table as string
+
+    if (eventType === 'INSERT' && table === 'tasks') {
+      body = { trigger_type: 'task_created', record: body.record }
+    } else if (eventType === 'UPDATE' && table === 'tasks') {
+      // Detect which kind of change this UPDATE represents and fan out to the
+      // appropriate trigger_type. The engine will be called once per detected
+      // change type — if a single UPDATE changes both status and assignee, we
+      // handle the first match only (most significant change wins).
+      const rec = body.record as Record<string, unknown>
+      const old = body.old_record as Record<string, unknown> | null
+      let detectedTrigger = 'task_status_change' // default
+
+      if (old) {
+        if (old.assignee_id == null && rec.assignee_id != null) {
+          detectedTrigger = 'task_assigned'
+        } else if (old.assignee_id != null && rec.assignee_id == null) {
+          detectedTrigger = 'assignee_removed'
+        } else if (old.list_id !== rec.list_id) {
+          detectedTrigger = 'task_moved_list'
+        } else if (old.due_date !== rec.due_date || old.start_date !== rec.start_date) {
+          detectedTrigger = 'date_changed'
+        } else if (old.assignee_id !== rec.assignee_id) {
+          detectedTrigger = 'task_assigned'
+        }
+        // status change is the default fallback
+      }
+
+      body = { trigger_type: detectedTrigger, new_record: body.record, old_record: body.old_record }
+    } else if (eventType === 'INSERT' && table === 'meetings') {
+      body = { trigger_type: 'meeting_created', record: body.record }
+    } else if (eventType === 'INSERT' && table === 'task_comments') {
+      body = { trigger_type: 'comment_added', record: body.record }
+    }
   }
 
   const triggerType = typeof body.trigger_type === 'string' ? body.trigger_type : null

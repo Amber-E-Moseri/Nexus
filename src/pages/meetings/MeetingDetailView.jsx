@@ -13,6 +13,7 @@ import MeetingSummaryEditor from '../../features/meetings/components/MeetingSumm
 import GenerateMeetingDocButton from '../../features/meetings/components/GenerateMeetingDocButton'
 import { createTasksFromActionItems } from '../../features/meetings/lib/meetings'
 import { resolveAssignment, getOrgDepartments, getOrgUsers } from '../../features/meetings/lib/ownerMatching'
+import { getOpenItemsByMeeting, createOpenItems, updateOpenItemStatus, deleteOpenItem, convertOpenItemToTask } from '../../features/meetings/lib/openItems'
 
 // exact colors from the HTML reference
 const FS = {
@@ -88,6 +89,23 @@ function MeetingDetailViewInner() {
   const [exportingPdf, setExportingPdf]           = useState(false)
   const [context, setContext]                     = useState('')      // WIN 2: meeting context
   const [contextChanged, setContextChanged]       = useState(false)
+  const [editingTitle, setEditingTitle]           = useState(false)
+  const [titleDraft, setTitleDraft]               = useState('')
+  const [savingTitle, setSavingTitle]             = useState(false)
+  const [savingVisibility, setSavingVisibility]   = useState(false)
+
+  // open items state
+  const [openItems, setOpenItems]                       = useState([])
+  const [showAddOpenItem, setShowAddOpenItem]           = useState(false)
+  const [newOpenItemText, setNewOpenItemText]           = useState('')
+  const [newOpenItemType, setNewOpenItemType]           = useState('exploration')
+  const [convertingOpenItem, setConvertingOpenItem]     = useState(null)
+  const [convertAssignee, setConvertAssignee]           = useState('')
+  const [convertDueDate, setConvertDueDate]             = useState('')
+  // AI extract tab: open items confirmation
+  const [selectedAiOpenItems, setSelectedAiOpenItems]   = useState(new Set())
+  const [mergingAiOpenItems, setMergingAiOpenItems]     = useState(false)
+  const [aiOpenItemsMergeSuccess, setAiOpenItemsMergeSuccess] = useState(false)
 
   const timerRef       = useRef(null)
   const startRef       = useRef(null)
@@ -100,13 +118,16 @@ function MeetingDetailViewInner() {
   const canManage = ['super_admin', 'dept_lead'].includes((role ?? '').toLowerCase()) ||
                     hasSpaceRole(profile, null, 'ors') ||
                     hasSpaceRole(profile, null, 'dept_lead')
+  // Mirrors the meetings_update RLS policy: creator can always edit their own
+  // meeting, regardless of current visibility (private or published).
+  const canEditVisibility = canManage || meeting?.created_by === profile?.id
   const isLive    = mode === 'live'
   const isPrep    = mode === 'prep'
   const isPost    = mode === 'post'
 
   // ── fetch ──────────────────────────────────────────────────────────────────
 
-  useEffect(() => { if (meetingId) { fetchMeeting(); fetchActionItems() } }, [meetingId])
+  useEffect(() => { if (meetingId) { fetchMeeting(); fetchActionItems(); fetchOpenItems() } }, [meetingId])
 
   // ── auto-cache to localStorage (debounced) ─────────────────────────────────
   useEffect(() => {
@@ -175,6 +196,7 @@ function MeetingDetailViewInner() {
       if (error) throw error
 
       setMeeting(data)
+      setTitleDraft(data.title ?? '')
       if (data.minutes) setMinutesText(data.minutes)
       if (data.decisions) setDecisionsText(data.decisions)
       if (data.next_steps) setNextStepsText(data.next_steps)
@@ -216,6 +238,15 @@ function MeetingDetailViewInner() {
       }
     } catch (e) {
       console.warn('Failed to fetch action items:', e)
+    }
+  }
+
+  async function fetchOpenItems() {
+    try {
+      const data = await getOpenItemsByMeeting(meetingId)
+      setOpenItems(data)
+    } catch (e) {
+      console.warn('Failed to fetch open items:', e)
     }
   }
 
@@ -325,6 +356,8 @@ function MeetingDetailViewInner() {
     setAiResult(null)
     setSelectedAiActionItems(new Set())
     setAiMergeSuccess(false)
+    setSelectedAiOpenItems(new Set())
+    setAiOpenItemsMergeSuccess(false)
     try {
       const { data, error } = await supabase.functions.invoke('extract-meeting-data', {
         body: { transcript, context: context || '' }
@@ -355,6 +388,13 @@ function MeetingDetailViewInner() {
             departmentId: resolved.departmentId || meeting?.department_id || '',
           }
         }))
+      }
+      if (extracted?.open_items?.length) {
+        const autoSelected = new Set()
+        extracted.open_items.forEach((item, i) => {
+          if ((item.confidence_score ?? 0) >= 0.80) autoSelected.add(i)
+        })
+        setSelectedAiOpenItems(autoSelected)
       }
       // Save the AI summary to meeting_notes — never to `summary`, which holds
       // the transcript (overwriting it would destroy the transcript and make
@@ -422,10 +462,155 @@ function MeetingDetailViewInner() {
     }
   }
 
+  function toggleAiOpenItem(i) {
+    setSelectedAiOpenItems((prev) => {
+      const next = new Set(prev)
+      next.has(i) ? next.delete(i) : next.add(i)
+      return next
+    })
+  }
+
+  async function handleAiOpenItemsMerge() {
+    if (!aiResult?.open_items?.length) return
+    setMergingAiOpenItems(true)
+    try {
+      const items = aiResult.open_items
+        .filter((_, i) => selectedAiOpenItems.has(i))
+        .map((item) => ({
+          item_text: item.item_text,
+          item_type: item.item_type || 'exploration',
+          transcript_excerpt: item.transcript_excerpt || null,
+          confidence_score: item.confidence_score ?? null,
+        }))
+      if (!items.length) { setMergingAiOpenItems(false); return }
+      await createOpenItems(meetingId, meeting?.department_id, items, profile?.id)
+      setAiOpenItemsMergeSuccess(true)
+      fetchOpenItems()
+    } catch (err) {
+      setAiError(err.message || 'Failed to save open items.')
+    } finally {
+      setMergingAiOpenItems(false)
+    }
+  }
+
+  async function handleAddOpenItem() {
+    if (!newOpenItemText.trim()) return
+    try {
+      await createOpenItems(meetingId, meeting?.department_id, [{
+        item_text: newOpenItemText.trim(),
+        item_type: newOpenItemType,
+      }], profile?.id)
+      setNewOpenItemText('')
+      setNewOpenItemType('exploration')
+      setShowAddOpenItem(false)
+      fetchOpenItems()
+    } catch (err) {
+      console.warn('Failed to add open item:', err)
+    }
+  }
+
+  async function handleOpenItemStatusChange(itemId, newStatus) {
+    try {
+      await updateOpenItemStatus(itemId, newStatus)
+      setOpenItems(prev => prev.map(item =>
+        item.id === itemId ? { ...item, status: newStatus } : item
+      ))
+    } catch (err) {
+      console.warn('Failed to update open item status:', err)
+    }
+  }
+
+  async function handleDeleteOpenItem(itemId) {
+    try {
+      await deleteOpenItem(itemId)
+      setOpenItems(prev => prev.filter(item => item.id !== itemId))
+    } catch (err) {
+      console.warn('Failed to delete open item:', err)
+    }
+  }
+
+  async function handleConvertOpenItem() {
+    if (!convertingOpenItem) return
+    try {
+      await convertOpenItemToTask(convertingOpenItem, {
+        assigneeId: convertAssignee || null,
+        dueDate: convertDueDate || null,
+        spaceId: meeting?.department_id || null,
+      })
+      setConvertingOpenItem(null)
+      setConvertAssignee('')
+      setConvertDueDate('')
+      fetchOpenItems()
+      fetchActionItems()
+    } catch (err) {
+      console.warn('Failed to convert open item:', err)
+    }
+  }
+
   async function togglePublishMinutes() {
     const newVal = !minutesPublished
     setMinutesPublished(newVal)
     await publishMinutes()
+  }
+
+  function startTitleEdit() {
+    setTitleDraft(meeting?.title ?? '')
+    setEditingTitle(true)
+  }
+
+  function cancelTitleEdit() {
+    setTitleDraft(meeting?.title ?? '')
+    setEditingTitle(false)
+  }
+
+  async function saveTitle() {
+    const nextTitle = titleDraft.trim()
+    if (!nextTitle) {
+      showToast('Meeting title cannot be empty.', { tone: 'error' })
+      return
+    }
+    if (nextTitle === meeting?.title) {
+      setEditingTitle(false)
+      return
+    }
+
+    setSavingTitle(true)
+    const { error } = await supabase
+      .from('meetings')
+      .update({ title: nextTitle })
+      .eq('id', meetingId)
+    setSavingTitle(false)
+
+    if (error) {
+      showToast(`Couldn't rename the meeting: ${error.message}`, { tone: 'error' })
+      return
+    }
+
+    setMeeting((current) => ({ ...current, title: nextTitle }))
+    setTitleDraft(nextTitle)
+    setEditingTitle(false)
+    showToast('Meeting renamed.', { tone: 'success' })
+  }
+
+  // Visibility (private/published) is editable any time, not just before the
+  // first publish — the RLS policy already permits the creator/managers to
+  // update the meeting regardless of its current visibility.
+  async function toggleVisibility() {
+    const nextVisibility = meeting?.visibility === 'private' ? 'published' : 'private'
+    setSavingVisibility(true)
+    const { error } = await supabase
+      .from('meetings')
+      .update({ visibility: nextVisibility })
+      .eq('id', meetingId)
+    setSavingVisibility(false)
+
+    if (error) {
+      showToast(`Couldn't update visibility: ${error.message}`, { tone: 'error' })
+      return
+    }
+
+    setMeeting((current) => ({ ...current, visibility: nextVisibility }))
+    showToast(nextVisibility === 'private' ? 'Meeting is now private.' : 'Meeting is now published.', { tone: 'success' })
   }
 
   function avatarColor(name = '') {
@@ -487,7 +672,99 @@ function MeetingDetailViewInner() {
         )}
 
         <div style={{ minWidth:0, flex:1 }}>
-          <div style={{ fontSize:15, fontWeight:800, color: isLive ? '#fff' : FS.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{meeting.title}</div>
+          {editingTitle ? (
+            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+              <input
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    saveTitle()
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault()
+                    cancelTitleEdit()
+                  }
+                }}
+                disabled={savingTitle}
+                autoFocus
+                aria-label="Meeting title"
+                style={{
+                  minWidth: 0,
+                  flex: '1 1 260px',
+                  maxWidth: '100%',
+                  fontSize: 15,
+                  fontWeight: 800,
+                  color: FS.text,
+                  border: `1px solid ${FS.border}`,
+                  borderRadius: 8,
+                  padding: '7px 10px',
+                  background: '#fff',
+                  outline: 'none',
+                }}
+              />
+              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <button
+                  type="button"
+                  onClick={saveTitle}
+                  disabled={savingTitle}
+                  style={{ padding:'7px 12px', border:'none', borderRadius:6, background: FS.purple, color:'#fff', fontFamily:'inherit', fontSize:11.5, fontWeight:700, cursor: savingTitle ? 'wait' : 'pointer', opacity: savingTitle ? 0.7 : 1 }}
+                >
+                  {savingTitle ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelTitleEdit}
+                  disabled={savingTitle}
+                  style={{ padding:'7px 12px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:11.5, fontWeight:700, cursor: savingTitle ? 'default' : 'pointer' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display:'flex', alignItems:'center', gap:8, minWidth:0 }}>
+              <div style={{ fontSize:15, fontWeight:800, color: isLive ? '#fff' : FS.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{meeting.title}</div>
+              {canManage && !isLive && (
+                <button
+                  type="button"
+                  onClick={startTitleEdit}
+                  style={{ flexShrink:0, padding:'4px 8px', border:`1px solid ${FS.border}`, borderRadius:999, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:11, fontWeight:700, cursor:'pointer' }}
+                >
+                  Rename
+                </button>
+              )}
+              {canEditVisibility && !isLive && (
+                <button
+                  type="button"
+                  onClick={toggleVisibility}
+                  disabled={savingVisibility}
+                  title={meeting.visibility === 'private'
+                    ? 'Private — only you, invited attendees, and admins can see this. Click to publish.'
+                    : 'Published — visible to your department. Click to make private.'}
+                  style={{
+                    flexShrink:0,
+                    display:'inline-flex',
+                    alignItems:'center',
+                    gap:4,
+                    padding:'4px 8px',
+                    border:`1px solid ${FS.border}`,
+                    borderRadius:999,
+                    background: meeting.visibility === 'private' ? 'rgba(76,42,146,.08)' : FS.surface,
+                    color: meeting.visibility === 'private' ? FS.purple : FS.muted,
+                    fontFamily:'inherit',
+                    fontSize:11,
+                    fontWeight:700,
+                    cursor: savingVisibility ? 'wait' : 'pointer',
+                    opacity: savingVisibility ? 0.7 : 1,
+                  }}
+                >
+                  {meeting.visibility === 'private' ? '🔒 Private' : '🔓 Published'}
+                </button>
+              )}
+            </div>
+          )}
           <div style={{ fontSize:11, color: isLive ? 'rgba(255,255,255,.55)' : FS.muted, marginTop:1 }}>
             {isPrep ? 'Meeting Prep · ' : isPost ? `Duration: ${fmt(elapsed)} · ` : ''}{dateLabel}
           </div>
@@ -888,6 +1165,141 @@ function MeetingDetailViewInner() {
                     })}
                   </div>
                 )}
+
+                {/* ── Open Items Section ────────────────────────────────── */}
+                <div style={{ marginTop: 24 }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 8 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>
+                      Open Discussion Items
+                      {openItems.length > 0 && <span style={{ fontSize:11, fontWeight:500, color: FS.muted, marginLeft:8 }}>({openItems.length})</span>}
+                    </div>
+                    {canManage && (
+                      <button
+                        onClick={() => setShowAddOpenItem(v => !v)}
+                        style={{ padding:'7px 13px', border:'none', borderRadius:6, background: '#2D8653', color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
+                      >
+                        + Add item
+                      </button>
+                    )}
+                  </div>
+
+                  {showAddOpenItem && (
+                    <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:14, marginBottom: 10 }}>
+                      <input
+                        value={newOpenItemText}
+                        onChange={e => setNewOpenItemText(e.target.value)}
+                        placeholder="Describe the open item..."
+                        style={{ width:'100%', padding:'8px 10px', border:`1px solid ${FS.border}`, borderRadius:6, fontSize:13, fontFamily:'inherit', marginBottom:8, boxSizing:'border-box' }}
+                      />
+                      <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                        <select
+                          value={newOpenItemType}
+                          onChange={e => setNewOpenItemType(e.target.value)}
+                          style={{ padding:'6px 8px', border:`1px solid ${FS.border}`, borderRadius:6, fontSize:12, fontFamily:'inherit', background:'#fff' }}
+                        >
+                          <option value="question">Question</option>
+                          <option value="exploration">Exploration</option>
+                          <option value="blocker">Blocker</option>
+                          <option value="decision_point">Decision Point</option>
+                          <option value="future_consideration">Future Consideration</option>
+                        </select>
+                        <button onClick={handleAddOpenItem} style={{ padding:'6px 14px', border:'none', borderRadius:6, background:'#2D8653', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Save</button>
+                        <button onClick={() => setShowAddOpenItem(false)} style={{ padding:'6px 14px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.navy, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {openItems.length === 0 ? (
+                    <div style={{ textAlign:'center', padding:'20px 0', color: FS.xmuted, fontSize:13 }}>
+                      No open items yet. Add one above or extract from audio.
+                    </div>
+                  ) : (
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      {openItems.map(item => {
+                        const typeLabels = { question: '❓', exploration: '🔍', blocker: '🚫', decision_point: '⚖️', future_consideration: '💡' }
+                        const statusColors = { open: { bg: 'rgba(0,0,0,.06)', color: FS.muted, label: 'Open' }, in_progress: { bg: 'rgba(232,160,32,.15)', color: FS.amber, label: 'In Progress' }, resolved: { bg: FS.sageL, color: FS.sage, label: 'Resolved' } }
+                        const sc = statusColors[item.status] || statusColors.open
+                        return (
+                          <div key={item.id} style={{ padding:'11px 14px', borderRadius:10, border:`1px solid ${FS.border}`, background: FS.surface, boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
+                            <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+                              <span style={{ fontSize:14, flexShrink:0, marginTop:1 }}>{typeLabels[item.item_type] || '📌'}</span>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:13, fontWeight:600, color: FS.text }}>{item.item_text}</div>
+                                {item.transcript_excerpt && (
+                                  <div style={{ fontSize:11, color: FS.muted, marginTop:4, fontStyle:'italic' }}>
+                                    "{item.transcript_excerpt.slice(0, 100)}{item.transcript_excerpt.length > 100 ? '…' : ''}"
+                                  </div>
+                                )}
+                                <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:6, flexWrap:'wrap' }}>
+                                  <select
+                                    value={item.status}
+                                    onChange={e => handleOpenItemStatusChange(item.id, e.target.value)}
+                                    style={{ padding:'3px 8px', border:`1px solid ${FS.border}`, borderRadius:6, fontSize:11, fontWeight:600, background: sc.bg, color: sc.color, cursor:'pointer', fontFamily:'inherit' }}
+                                  >
+                                    <option value="open">Open</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="resolved">Resolved</option>
+                                  </select>
+                                  {!item.converted_to_task_id && (
+                                    <button
+                                      onClick={async () => {
+                                        setConvertingOpenItem(item); setConvertAssignee(''); setConvertDueDate('')
+                                        if (!orgUsers.length) {
+                                          try {
+                                            const [u, d] = await Promise.all([getOrgUsers(), getOrgDepartments()])
+                                            setOrgUsers(u); setOrgDepartments(d)
+                                          } catch {}
+                                        }
+                                      }}
+                                      style={{ padding:'3px 10px', border:`1px solid ${FS.border}`, borderRadius:6, fontSize:11, fontWeight:600, background:'#fff', color: FS.purple, cursor:'pointer', fontFamily:'inherit' }}
+                                    >
+                                      Convert to Task
+                                    </button>
+                                  )}
+                                  {item.converted_to_task_id && (
+                                    <span style={{ fontSize:10, fontWeight:700, color: FS.sage, background: FS.sageL, borderRadius:999, padding:'2px 7px' }}>Converted to task</span>
+                                  )}
+                                  <button
+                                    onClick={() => handleDeleteOpenItem(item.id)}
+                                    style={{ padding:'3px 10px', border:'none', borderRadius:6, fontSize:11, fontWeight:600, background:'transparent', color: FS.xmuted, cursor:'pointer', fontFamily:'inherit' }}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            {convertingOpenItem?.id === item.id && (
+                              <div style={{ marginTop:10, padding:12, background:'#fff', border:`1px solid ${FS.borderL}`, borderRadius:8 }}>
+                                <div style={{ fontSize:12, fontWeight:600, color: FS.text, marginBottom:8 }}>Convert to task</div>
+                                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                                  <select
+                                    value={convertAssignee}
+                                    onChange={e => setConvertAssignee(e.target.value)}
+                                    style={{ flex:1, minWidth:120, padding:'6px 8px', border:`1px solid ${FS.border}`, borderRadius:6, fontSize:12, fontFamily:'inherit', background:'#fff' }}
+                                  >
+                                    <option value="">Unassigned</option>
+                                    {orgUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                  </select>
+                                  <input
+                                    type="date"
+                                    value={convertDueDate}
+                                    onChange={e => setConvertDueDate(e.target.value)}
+                                    style={{ padding:'6px 8px', border:`1px solid ${FS.border}`, borderRadius:6, fontSize:12, fontFamily:'inherit', background:'#fff' }}
+                                  />
+                                </div>
+                                <div style={{ display:'flex', gap:8, marginTop:8 }}>
+                                  <button onClick={handleConvertOpenItem} style={{ padding:'6px 14px', border:'none', borderRadius:6, background: FS.purple, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Create Task</button>
+                                  <button onClick={() => setConvertingOpenItem(null)} style={{ padding:'6px 14px', border:`1px solid ${FS.border}`, borderRadius:6, background:'#fff', color: FS.navy, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Cancel</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -1184,6 +1596,56 @@ function MeetingDetailViewInner() {
                             → View Actions tab
                           </button>
                         </div>
+                      </div>
+                    )}
+                    {/* Open Items from AI extraction */}
+                    {aiResult?.open_items?.length > 0 && (
+                      <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
+                        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: '#2D8653', marginBottom:8 }}>Open Discussion Items — select to track</div>
+                        {aiResult.open_items.map((item, i) => {
+                          const typeLabels = { question: '❓ Question', exploration: '🔍 Exploration', blocker: '🚫 Blocker', decision_point: '⚖️ Decision', future_consideration: '💡 Future' }
+                          const score = item.confidence_score ?? 0
+                          return (
+                            <div
+                              key={i}
+                              style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'8px 10px', background: FS.surface, borderRadius:6, border:`1px solid ${selectedAiOpenItems.has(i) ? '#2D8653' : FS.borderL}`, marginBottom:6 }}
+                            >
+                              <input type="checkbox" checked={selectedAiOpenItems.has(i)} onChange={() => toggleAiOpenItem(i)} style={{ marginTop:4, cursor:'pointer', accentColor:'#2D8653' }} />
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:13, fontWeight:600, color: FS.text }}>{item.item_text}</div>
+                                <div style={{ display:'flex', gap:8, marginTop:3, fontSize:11, color: FS.muted, flexWrap:'wrap' }}>
+                                  <span style={{ padding:'1px 6px', borderRadius:4, background:'#E8F5E9', color:'#2D8653', fontSize:10, fontWeight:600 }}>
+                                    {typeLabels[item.item_type] || item.item_type}
+                                  </span>
+                                  <span>{Math.round(score * 100)}% confidence</span>
+                                </div>
+                                {item.transcript_excerpt && (
+                                  <div style={{ fontSize:11, color: '#9A8F7E', marginTop:4, fontStyle:'italic' }}>
+                                    "{item.transcript_excerpt.slice(0, 120)}{item.transcript_excerpt.length > 120 ? '…' : ''}"
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+
+                        {aiOpenItemsMergeSuccess && (
+                          <div style={{ marginTop:12, padding:'9px 14px', borderRadius:8, background: FS.sageL, color: FS.sage, fontSize:12, fontWeight:600, borderLeft:`3px solid ${FS.sage}` }}>
+                            ✅ {selectedAiOpenItems.size} open item{selectedAiOpenItems.size !== 1 ? 's' : ''} saved for tracking.
+                          </div>
+                        )}
+
+                        {!aiOpenItemsMergeSuccess && (
+                          <div style={{ display:'flex', gap:8, marginTop:12 }}>
+                            <button
+                              onClick={handleAiOpenItemsMerge}
+                              disabled={selectedAiOpenItems.size === 0 || mergingAiOpenItems}
+                              style={{ padding:'7px 14px', border:'none', borderRadius:6, background:'#2D8653', color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor: selectedAiOpenItems.size === 0 || mergingAiOpenItems ? 'not-allowed' : 'pointer', opacity: selectedAiOpenItems.size === 0 || mergingAiOpenItems ? 0.6 : 1 }}
+                            >
+                              {mergingAiOpenItems ? '⏳ Saving...' : `✓ Save ${selectedAiOpenItems.size} open item${selectedAiOpenItems.size !== 1 ? 's' : ''}`}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </>

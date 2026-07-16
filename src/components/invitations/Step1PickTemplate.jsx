@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react'
-import { Plus } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import { supabase } from '../../lib/supabase'
 
 /* Design system colors via CSS variables */
+const PRIMARY = 'var(--accent)'
+const BORDER = 'var(--border)'
+
+// invitation_templates doesn't exist yet (deferred — see plan doc), so the
+// wizard offers a single synthetic "start from scratch" template instead of
+// querying a table that isn't there. content_slots matches what
+// Step2EventDetails.jsx / Step4PreviewSend.jsx's preview already assume.
+const DEFAULT_TEMPLATE = {
+  id: null,
+  name: 'Custom Invitation',
+  occasion: 'other',
+  content_slots: ['event_name', 'date', 'time', 'venue', 'rsvp_by', 'rsvp_email'],
+}
 
 const OCCASION_EMOJI = {
   graduation: '🎓',
@@ -84,17 +94,20 @@ function TemplateCard({ template, selected, onClick }) {
 }
 
 export default function Step1PickTemplate({ onSelect, wizardState }) {
-  const navigate = useNavigate()
   const { profile } = useAuth()
-  const [templates, setTemplates] = useState([])
+  const [templates] = useState([DEFAULT_TEMPLATE])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error] = useState(null)
 
   useEffect(() => {
-    // Templates feature requires invitation_templates table
-    // For now, skip loading and let users create from scratch
-    setTemplates([])
     setLoading(false)
+    // Only one option exists today — auto-select it so users aren't stuck
+    // clicking a single card. Guarded so re-entering this step (e.g. via
+    // back/forward) doesn't clobber an already-made selection.
+    if (wizardState.templateId === undefined || wizardState.templateId === null) {
+      onSelect(DEFAULT_TEMPLATE.id, DEFAULT_TEMPLATE)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id])
 
   if (loading) {
@@ -142,47 +155,15 @@ export default function Step1PickTemplate({ onSelect, wizardState }) {
       >
         {templates.map((template) => (
           <TemplateCard
-            key={template.id}
+            key={template.id ?? 'default'}
             template={template}
-            selected={wizardState.templateId === template.id}
+            selected={wizardState.template?.id === template.id}
             onClick={() => onSelect(template.id, template)}
           />
         ))}
-
-        <button
-          type="button"
-          onClick={() => navigate('/communications/templates/new')}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            padding: 16,
-            border: `2px dashed ${BORDER}`,
-            borderRadius: 12,
-            background: '#FFFFFF',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            color: 'var(--accent)',
-            fontSize: 13,
-            fontWeight: 600,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = PRIMARY
-            e.currentTarget.style.background = '#EDE8F8'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = BORDER
-            e.currentTarget.style.background = '#FFFFFF'
-          }}
-        >
-          <Plus size={24} strokeWidth={1.5} />
-          New Template
-        </button>
       </div>
 
-      {wizardState.templateId === null && (
+      {wizardState.template === null && (
         <div
           style={{
             background: '#FEF3C7',

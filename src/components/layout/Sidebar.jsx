@@ -28,6 +28,7 @@ import {
   Users,
   Users2,
   Image,
+  Zap,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
@@ -36,7 +37,7 @@ import { useInboxCount } from '../../context/InboxCountContext'
 import { useAuth } from '../../hooks/useAuth'
 import { archiveSpace, getSpacesByType, restoreSpace, updateSpace } from '../../features/spaces'
 import { supabase } from '../../lib/supabase'
-import { FLOCK_CRM_CONFIG, hasSpaceRole } from '../../lib/permissions.js'
+import { FLOCK_CRM_CONFIG, hasSpaceRole, hasGrant } from '../../lib/permissions.js'
 import { INSTAGRAM_GRADING_ENABLED } from '../../config/features.js'
 import SidebarSpaceTree from './SidebarSpaceTree'
 import SpaceModal from '../../features/spaces/components/SpaceModal'
@@ -98,10 +99,18 @@ function isPathActive(pathname, to) {
   return pathname === to || pathname.startsWith(`${to}/`)
 }
 
-const SidebarSectionLabel = memo(function SidebarSectionLabel({ children, onAdd }) {
+const SidebarSectionLabel = memo(function SidebarSectionLabel({ children, onAdd, collapsible, expanded, onToggle }) {
   return (
-    <div style={{ ...SECTION_LABEL_STYLE, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 9 }}>
-      <span>{children}</span>
+    <div
+      style={{ ...SECTION_LABEL_STYLE, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 9, cursor: collapsible ? 'pointer' : 'default' }}
+      onClick={collapsible ? onToggle : undefined}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        {children}
+        {collapsible && (
+          <ChevronDown size={11} style={{ opacity: 0.7, transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+        )}
+      </span>
       {onAdd && (
         <button
           type="button"
@@ -279,6 +288,7 @@ export default function Sidebar() {
   const [myTasksExpanded, setMyTasksExpanded] = useState(false)
   const [meetingsExpanded, setMeetingsExpanded] = useState(false)
   const [communicationsExpanded, setCommunicationsExpanded] = useState(false)
+  const [platformExpanded, setPlatformExpanded] = useState(null) // null = no manual override yet
   const [editingSpace, setEditingSpace] = useState(null)
   const [hoveredSpaceId, setHoveredSpaceId] = useState(null)
   const [inlineRenameId, setInlineRenameId] = useState(null)
@@ -302,8 +312,9 @@ export default function Sidebar() {
   const isSpaceManager = ['ors', 'programs', 'media', 'dept_lead'].some((r) => hasSpaceRole(profile, null, r))
   const canCreateSpace = ['super_admin', 'dept_lead', 'regional_secretary', 'pastor'].includes(role) || isSpaceManager
   const canManageSpaces = canCreateSpace
-  const showPeople = ['super_admin', 'dept_lead', 'regional_secretary'].includes(role) || isSpaceManager
-  const showAdminPlatform = role === 'super_admin' || role === 'dept_lead' || hasSpaceRole(profile, null, 'dept_lead')
+  const showPeople = ['super_admin', 'dept_lead', 'regional_secretary', 'pastor'].includes(role) || isSpaceManager
+  const showAdminPlatform = role === 'super_admin' || role === 'regional_secretary' || role === 'dept_lead' ||
+    hasSpaceRole(profile, null, 'dept_lead') || hasGrant(profile, 'regional_secretary_access')
   // Group members are restricted: no platform access (meetings, calendar tools,
   // communications, map), no people management, and no Sprints unless they've
   // been added to a specific sprint (RLS scopes displayedSprints to theirs).
@@ -315,7 +326,19 @@ export default function Sidebar() {
     ['super_admin', 'regional_secretary', 'dept_lead'].includes(role) ||
     hasSpaceRole(profile, null, 'ors') ||
     hasSpaceRole(profile, null, 'dept_lead') ||
-    hasSpaceRole(profile, null, 'programs')
+    hasSpaceRole(profile, null, 'programs') ||
+    hasGrant(profile, 'regional_secretary_access')
+  // Display-only aggregate — decides only whether "Platform" starts expanded
+  // or collapsed. Does not gate any individual item inside it; each item
+  // keeps its own existing condition unchanged.
+  const hasAnyPlatformAccess =
+    showAdminPlatform ||
+    role === 'pastor' ||
+    canAccessCommunications ||
+    (INSTAGRAM_GRADING_ENABLED && (['super_admin', 'regional_secretary'].includes(role) || hasSpaceRole(profile, null, 'media'))) ||
+    hasSpaceRole(profile, null, 'ors') ||
+    FLOCK_CRM_CONFIG.checkAccess(role)
+  const isPlatformExpanded = platformExpanded === null ? hasAnyPlatformAccess : platformExpanded
 
   async function loadSpaces() {
     if (!profile?.id || !role) return
@@ -1048,7 +1071,15 @@ export default function Sidebar() {
             entirely for group members — they have no platform access. */}
         {!isGroupMember ? (
         <>
-        <SidebarSectionLabel>Platform</SidebarSectionLabel>
+        <SidebarSectionLabel
+          collapsible
+          expanded={isPlatformExpanded}
+          onToggle={() => setPlatformExpanded(!isPlatformExpanded)}
+        >
+          Platform
+        </SidebarSectionLabel>
+        {isPlatformExpanded ? (
+        <>
         <div
           style={{
             ...ITEM_BASE_STYLE,
@@ -1068,7 +1099,17 @@ export default function Sidebar() {
         >
           <button
             type="button"
-            onClick={() => go('/meetings')}
+            onClick={() => {
+              // Plain members reach meetings via their own space's Meetings
+              // tab, not the global list (which is blocked for them in
+              // App.jsx) — everything else about the Meetings nav (sub-items
+              // below) is unchanged for them.
+              if (role === 'member' && profile?.department_id) {
+                go(`/spaces/${profile.department_id}?action=meetings`)
+              } else {
+                go('/meetings')
+              }
+            }}
             style={{ flex: 1, border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'inherit', fontSize: 'inherit' }}
           >
             Meetings
@@ -1202,7 +1243,7 @@ export default function Sidebar() {
           label="CAN Map"
           to="/map"
         />
-        {['super_admin', 'ors'].includes(role) && (
+        {(role === 'super_admin' || hasSpaceRole(profile, null, 'ors')) && (
           <SidebarItem
             active={isPathActive(location.pathname, '/settings/campus-photos')}
             icon={Image}
@@ -1210,6 +1251,14 @@ export default function Sidebar() {
             to="/settings/campus-photos"
           />
         )}
+        {showAdminPlatform ? (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/automations')}
+            icon={Zap}
+            label="Automations"
+            to="/automations"
+          />
+        ) : null}
         {FLOCK_CRM_CONFIG.checkAccess(role) ? (
           <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12 }}>
             <div style={{ ...SECTION_LABEL_STYLE }}>Confidential</div>
@@ -1223,8 +1272,10 @@ export default function Sidebar() {
         ) : null}
         </>
         ) : null}
+        </>
+        ) : null}
 
-        {(role === 'regional_secretary' || role === 'super_admin') ? (
+        {(role === 'regional_secretary' || role === 'super_admin' || hasGrant(profile, 'regional_secretary_access')) ? (
           <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 10 }}>
             <div style={{ ...SECTION_LABEL_STYLE }}>{role === 'super_admin' ? 'Regional Updates' : 'Regional Secretary'}</div>
             <div style={{ marginTop: 8 }}>

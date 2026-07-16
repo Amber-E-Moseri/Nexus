@@ -33,8 +33,11 @@ import { supabase } from '../../lib/supabase'
 import SpaceSopModal, { sopIcon } from '../../components/layout/SpaceSopModal'
 import GlobalTaskFeedPanel from '../../features/calendar/components/GlobalTaskFeedPanel'
 import GroupSpaceMembersPanel from '../../features/spaces/components/GroupSpaceMembersPanel'
+import MeetingModal from '../../features/meetings/components/MeetingModal'
+import SpaceOpenItemsTab from '../../features/meetings/components/SpaceOpenItemsTab'
+import { getOpenItemsBySpace } from '../../features/meetings/lib/openItems'
 
-const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Meetings', 'Automations', 'Members']
+const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Meetings', 'Open Items', 'Automations', 'Members']
 
 const STATUS_ACCENT = {
   open: '#C9BEAD',
@@ -353,11 +356,83 @@ const WIDGET_LABELS = {
   metrics: 'Lists / Sprints / Members',
   organizer: 'Folders & Lists',
   activity: 'Recent Activity & Meetings',
+  openItems: 'Open Discussion Items',
   sops: 'SOPs & Resources',
 }
-const DEFAULT_WIDGETS = { glance: true, metrics: true, organizer: true, activity: true, sops: true }
+const DEFAULT_WIDGETS = { glance: true, metrics: true, organizer: true, activity: true, openItems: true, sops: true }
+
+function OpenItemsWidget({ spaceId, onViewAll }) {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    getOpenItemsBySpace(spaceId, { sortBy: 'last_mentioned' })
+      .then(data => { if (!cancelled) setItems(data) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [spaceId])
+
+  const openCount = items.filter(i => i.status === 'open').length
+  const inProgressCount = items.filter(i => i.status === 'in_progress').length
+  const thisWeek = items.filter(i => {
+    if (!i.last_mentioned) return false
+    const d = new Date(i.last_mentioned)
+    const now = new Date()
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    return d >= weekAgo
+  }).length
+  const recent = items.filter(i => i.status !== 'resolved').slice(0, 3)
+
+  if (loading) return null
+  if (items.length === 0) return null
+
+  return (
+    <section style={{ background: '#FAFAF8', borderRadius: 12, border: '1px solid #E5DDD0', padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1C1C1C' }}>Open Discussion Items</h3>
+        <button onClick={onViewAll} style={{ padding: '5px 12px', border: '1px solid #E5DDD0', borderRadius: 6, background: '#fff', color: '#4C2A92', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          View all →
+        </button>
+      </div>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+        <div style={{ padding: '6px 12px', borderRadius: 6, background: 'rgba(0,0,0,.04)', fontSize: 12 }}>
+          <span style={{ fontWeight: 700, color: '#1C1C1C' }}>{openCount}</span> <span style={{ color: '#7A6F5E' }}>open</span>
+        </div>
+        <div style={{ padding: '6px 12px', borderRadius: 6, background: 'rgba(232,160,32,.1)', fontSize: 12 }}>
+          <span style={{ fontWeight: 700, color: '#E8A020' }}>{inProgressCount}</span> <span style={{ color: '#7A6F5E' }}>in progress</span>
+        </div>
+        {thisWeek > 0 && (
+          <div style={{ padding: '6px 12px', borderRadius: 6, background: 'rgba(76,42,146,.08)', fontSize: 12 }}>
+            <span style={{ fontWeight: 700, color: '#4C2A92' }}>{thisWeek}</span> <span style={{ color: '#7A6F5E' }}>this week</span>
+          </div>
+        )}
+      </div>
+      {recent.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {recent.map(item => {
+            const typeIcons = { question: '❓', exploration: '🔍', blocker: '🚫', decision_point: '⚖️', future_consideration: '💡' }
+            return (
+              <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6, background: '#fff', border: '1px solid #EDE8DC', fontSize: 13 }}>
+                <span style={{ fontSize: 12, flexShrink: 0 }}>{typeIcons[item.item_type] || '📌'}</span>
+                <span style={{ flex: 1, color: '#1C1C1C', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.item_text}</span>
+                {item.last_mentioned && (
+                  <span style={{ fontSize: 11, color: '#B0A89A', flexShrink: 0 }}>
+                    {new Date(item.last_mentioned).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
 
 function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings, selectedFolder, selectedList, canManage, onSelectList, onTreeDataChange }) {
+  const navigate = useNavigate()
   const { profile } = useAuth()
   const [calFeedOpen, setCalFeedOpen] = useState(false)
   const WIDGET_KEY = `nexus_overview_widgets_${space.id}`
@@ -534,10 +609,15 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
             <div className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Upcoming Meetings</div>
             <div className="space-y-3">
               {visibleMeetings.map((meeting) => (
-                <div key={meeting.id} className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+                <button
+                  key={meeting.id}
+                  type="button"
+                  onClick={() => navigate(`/meetings/${meeting.id}`)}
+                  className="w-full rounded-[18px] border border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-3 text-left text-sm text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:bg-white"
+                >
                   <div className="font-medium text-[var(--text-primary)]">{meeting.title}</div>
                   <div className="mt-1 text-xs text-[var(--text-tertiary)]">{formatDateTime(meeting.date)}</div>
-                </div>
+                </button>
               ))}
               {visibleMeetings.length === 0 ? (
                 <div className="flex min-h-[240px] items-center justify-center rounded-2xl bg-[var(--surface-tertiary)] px-4 py-6 text-center text-sm text-[var(--text-tertiary)]">
@@ -548,6 +628,8 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
           </div>
         </section>
       ) : null}
+
+      {widgetConfig.openItems !== false ? <OpenItemsWidget spaceId={space.id} onViewAll={() => navigate(`?action=open-items`)} /> : null}
 
       {widgetConfig.sops !== false ? <SpaceSopCard spaceId={space.id} spaceName={space.name} canManage={canManage} /> : null}
 
@@ -1731,6 +1813,10 @@ export default function SpaceOverview() {
       setActiveTab('Automations')
     } else if (action === 'edit') {
       setShowSpaceModal(true)
+    } else if (action === 'meetings') {
+      setActiveTab('Meetings')
+    } else if (action === 'open-items') {
+      setActiveTab('Open Items')
     }
   }, [searchParams])
 
@@ -1867,6 +1953,7 @@ export default function SpaceOverview() {
       ) : null}
       {activeTab === 'Sprints' ? <div role="tabpanel" id="tabpanel-sprints" aria-labelledby="tab-sprints" tabIndex={0}><SpaceSprintsTab canManage={canManage} sprints={spaceSprints} spaceColor={space.color} onCreate={() => setShowSprintModal(true)} onOpen={(sprint) => navigate(`/sprints/${sprint.id}`)} /></div> : null}
       {activeTab === 'Meetings' ? <div role="tabpanel" id="tabpanel-meetings" aria-labelledby="tab-meetings" tabIndex={0}><SpaceMeetingsTab meetings={spaceMeetings} spaceId={spaceId} spaceName={space.name} canManage={canManage} onMeetingCreated={async () => { setSpaceMeetings(await getSpaceMeetings(spaceId)) }} /></div> : null}
+      {activeTab === 'Open Items' ? <div role="tabpanel" id="tabpanel-openitems" aria-labelledby="tab-openitems" tabIndex={0}><SpaceOpenItemsTab spaceId={spaceId} canManage={canManage} /></div> : null}
       {activeTab === 'Automations' ? <div role="tabpanel" id="tabpanel-automations" aria-labelledby="tab-automations" tabIndex={0}><SpaceAutomationsTab space={space} canManage={canManageStatuses} /></div> : null}
       {activeTab === 'Members' ? (
         <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}>
@@ -1954,13 +2041,84 @@ export default function SpaceOverview() {
   )
 }
 
+// Read-only, inline-expandable meeting card for group members. Group members are
+// blocked from the /meetings/:id detail route (App.jsx blockRoles), so they read
+// their group's meeting info here in the space page instead of navigating away.
+function SpaceMeetingInfoCard({ meeting }) {
+  const [expanded, setExpanded] = useState(false)
+  const summary = (meeting.summary ?? '').trim()
+  const minutes = (meeting.minutes ?? '').trim()
+  const hasInfo = Boolean(summary || minutes)
+  const isPrivate = meeting.visibility === 'private'
+
+  return (
+    <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]">
+            {meeting.title}
+            {isPrivate ? <span title="Private to this group" className="text-xs text-[var(--text-tertiary)]">🔒</span> : null}
+          </h3>
+          <div className="mt-3 text-sm text-[var(--text-tertiary)]">{formatDateTime(meeting.date)}</div>
+        </div>
+        <span className="rounded-full bg-[#E7F7EC] px-3 py-1 text-xs font-semibold text-[#2F8C58]">
+          {meeting.status || 'planned'}
+        </span>
+      </div>
+
+      {hasInfo ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="mt-3 text-xs font-medium text-[var(--accent)] hover:underline"
+            aria-expanded={expanded}
+          >
+            {expanded ? '▾ Hide meeting info' : '▸ View meeting info'}
+          </button>
+          {expanded ? (
+            <div className="mt-3 space-y-4 border-t border-[var(--border)] pt-4">
+              {summary ? (
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">Summary</div>
+                  <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--text-secondary)]">{summary}</p>
+                </div>
+              ) : null}
+              {minutes ? (
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">Minutes</div>
+                  <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--text-secondary)]">{minutes}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <div className="mt-3 text-xs text-[var(--text-tertiary)]">No summary or minutes recorded yet.</div>
+      )}
+    </div>
+  )
+}
+
 function SpaceMeetingsTab({ meetings, spaceId, spaceName, canManage, onMeetingCreated }) {
   const navigate = useNavigate()
+  const { effectiveRole } = useAuth()
+  // Group members can't open the /meetings/:id detail route, so they read info
+  // inline here rather than navigating to a blocked page.
+  const inlineOnly = effectiveRole === 'group_member'
+  const [showLogModal, setShowLogModal] = useState(false)
 
   return (
     <div className="space-y-4">
       {canManage ? (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setShowLogModal(true)}
+            className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)]"
+          >
+            + Log meeting
+          </button>
           <button
             type="button"
             onClick={() => navigate('/meetings/wizard', { state: { departmentId: spaceId, departmentName: spaceName } })}
@@ -1971,25 +2129,44 @@ function SpaceMeetingsTab({ meetings, spaceId, spaceName, canManage, onMeetingCr
         </div>
       ) : null}
 
+      {showLogModal ? (
+        <MeetingModal
+          departmentId={spaceId}
+          onClose={async () => {
+            setShowLogModal(false)
+            await onMeetingCreated?.()
+          }}
+        />
+      ) : null}
+
       {meetings.length > 0 ? (
         <div className="grid gap-4">
-          {meetings.map((meeting) => (
-            <div key={meeting.id} className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-lg font-semibold text-[var(--text-primary)]">{meeting.title}</h3>
-                  {meeting.description ? <p className="mt-1 text-sm text-[var(--text-secondary)]">{meeting.description}</p> : null}
-                  <div className="mt-3 text-sm text-[var(--text-tertiary)]">
-                    {formatDateTime(meeting.date)}
-                    {meeting.location ? ` • ${meeting.location}` : ''}
+          {meetings.map((meeting) =>
+            inlineOnly ? (
+              <SpaceMeetingInfoCard key={meeting.id} meeting={meeting} />
+            ) : (
+              <button
+                key={meeting.id}
+                type="button"
+                onClick={() => navigate(`/meetings/${meeting.id}`)}
+                className="rounded-[24px] border border-[var(--border)] bg-white p-5 text-left shadow-[var(--card-shadow)] transition hover:border-[var(--accent)] hover:bg-[var(--surface-tertiary)]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-lg font-semibold text-[var(--text-primary)]">{meeting.title}</h3>
+                    {meeting.description ? <p className="mt-1 text-sm text-[var(--text-secondary)]">{meeting.description}</p> : null}
+                    <div className="mt-3 text-sm text-[var(--text-tertiary)]">
+                      {formatDateTime(meeting.date)}
+                      {meeting.location ? ` • ${meeting.location}` : ''}
+                    </div>
                   </div>
+                  <span className="rounded-full bg-[#E7F7EC] px-3 py-1 text-xs font-semibold text-[#2F8C58]">
+                    {meeting.status || 'planned'}
+                  </span>
                 </div>
-                <span className="rounded-full bg-[#E7F7EC] px-3 py-1 text-xs font-semibold text-[#2F8C58]">
-                  {meeting.status || 'planned'}
-                </span>
-              </div>
-            </div>
-          ))}
+              </button>
+            ),
+          )}
         </div>
       ) : (
         <div className="rounded-[20px] border border-dashed border-[var(--border)] bg-white p-8 text-center text-sm text-[var(--text-tertiary)] shadow-[var(--card-shadow)]">

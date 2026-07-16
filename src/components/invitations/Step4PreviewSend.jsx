@@ -78,10 +78,10 @@ export default function Step4PreviewSend({ template, wizardState, onUpdate }) {
     try {
       const campaignData = {
         template_id: wizardState.templateId,
-        org_id: profile?.org_id,
+        title: wizardState.content.event_name?.trim() || 'Untitled Invitation',
         created_by: profile?.id,
         status: sendMode === 'now' ? 'sent' : sendMode === 'schedule' ? 'scheduled' : 'draft',
-        content_data: wizardState.content,
+        content: wizardState.content,
         recipient_count: wizardState.recipients.length,
         scheduled_at: sendMode === 'schedule' ? scheduledAt : null,
       }

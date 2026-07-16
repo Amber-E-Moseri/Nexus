@@ -231,6 +231,44 @@ export async function createTasksFromActionItems(meetingId, departmentId, action
   return normalizeTaskRows(data)
 }
 
+// Full-content search across title, minutes, AI notes, decisions, and transcript.
+// Used by the meetings list search when the user types a query.
+export async function searchMeetings(query, departmentId) {
+  if (!query || !query.trim()) return []
+  const q = `%${query.trim()}%`
+
+  let req = supabase
+    .from('meetings')
+    .select(`
+      id,
+      title,
+      department_id,
+      date,
+      meeting_type,
+      status,
+      minutes,
+      meeting_notes,
+      decisions,
+      summary,
+      created_by,
+      created_at,
+      attendance:meeting_attendance(user_id, status, attendee:users(id, name))
+    `)
+    .or(
+      `title.ilike.${q},minutes.ilike.${q},meeting_notes.ilike.${q},decisions.ilike.${q},summary.ilike.${q}`
+    )
+    .order('date', { ascending: false })
+    .limit(50)
+
+  if (departmentId && departmentId !== 'all') {
+    req = req.eq('department_id', departmentId)
+  }
+
+  const { data, error } = await req
+  if (error) throw error
+  return data ?? []
+}
+
 export async function getMeetingTasks(meetingId) {
   const { data, error } = await supabase
     .from('tasks')

@@ -285,7 +285,14 @@ export default function MeetingsWorkspace({ onStartLive, canManage }) {
             <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#1C1C1C' }}>
               Filter
             </h3>
-            {!isMobile && <ViewToggle view={viewMode} onViewChange={setViewMode} />}
+            {!isMobile && (
+              <ViewToggle
+                view={viewMode}
+                onViewChange={setViewMode}
+                listLabel="List view"
+                gridLabel="Board view"
+              />
+            )}
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }} role="group" aria-label="Filter meetings by type">

@@ -35,9 +35,7 @@ export default function RSVPPage() {
             invitation_campaigns (
               id,
               title,
-              event_date,
-              event_time,
-              event_location,
+              content,
               description,
               html_content,
               theme_config
@@ -135,8 +133,10 @@ export default function RSVPPage() {
           <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-6 text-white">
             <h1 className="text-2xl font-bold mb-2">{campaign.title}</h1>
             <div className="space-y-1 text-sm opacity-90">
-              <p>📅 {new Date(campaign.event_date).toLocaleDateString()} at {campaign.event_time}</p>
-              {campaign.event_location && <p>📍 {campaign.event_location}</p>}
+              {(campaign.content?.date || campaign.content?.time) && (
+                <p>📅 {campaign.content?.date}{campaign.content?.date && campaign.content?.time ? ' at ' : ''}{campaign.content?.time}</p>
+              )}
+              {campaign.content?.venue && <p>📍 {campaign.content.venue}</p>}
             </div>
           </div>
 

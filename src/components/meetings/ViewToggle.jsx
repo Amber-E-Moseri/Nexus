@@ -1,6 +1,11 @@
 import { List, LayoutGrid } from 'lucide-react'
 
-export default function ViewToggle({ view, onViewChange }) {
+export default function ViewToggle({
+  view,
+  onViewChange,
+  listLabel = 'List view',
+  gridLabel = 'Board view',
+}) {
   return (
     <div
       style={{
@@ -18,8 +23,8 @@ export default function ViewToggle({ view, onViewChange }) {
         type="button"
         onClick={() => onViewChange('list')}
         aria-pressed={view === 'list'}
-        aria-label="List view"
-        title="List view"
+        aria-label={listLabel}
+        title={listLabel}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -46,8 +51,8 @@ export default function ViewToggle({ view, onViewChange }) {
         type="button"
         onClick={() => onViewChange('grid')}
         aria-pressed={view === 'grid'}
-        aria-label="Card gallery view"
-        title="Card gallery view"
+        aria-label={gridLabel}
+        title={gridLabel}
         style={{
           display: 'flex',
           alignItems: 'center',

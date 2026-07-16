@@ -142,16 +142,44 @@ Deno.serve(async (req) => {
     return jsonResponse(200, { notified: 0, message: 'No new notifications needed' })
   }
 
-  const { error: insertError } = await supabase
+  const { data: inserted, error: insertError } = await supabase
     .from('notifications')
     .insert(notificationsToInsert)
+    .select()
 
   if (insertError) {
     return jsonResponse(500, { error: insertError.message })
   }
 
+  // Fire push notifications for each inserted notification (best-effort)
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  const pushResults = await Promise.allSettled(
+    (inserted ?? notificationsToInsert).map((n) => {
+      const taskTitle = n.payload?.task_title ?? 'A task'
+      const isOverdue = n.payload?.is_overdue
+      return fetch(`${supabaseUrl}/functions/v1/send-task-push-notification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${serviceRoleKey}`,
+        },
+        body: JSON.stringify({
+          userId: n.user_id,
+          taskId: n.payload?.task_id,
+          title: isOverdue ? 'Task Overdue' : 'Task Due Soon',
+          message: `"${taskTitle}" is ${isOverdue ? 'overdue' : 'due soon'}`,
+          url: n.payload?.task_id ? `/tasks/${n.payload.task_id}` : '/inbox',
+          type: 'task_due_soon',
+        }),
+      })
+    })
+  )
+  const pushSent = pushResults.filter((r) => r.status === 'fulfilled').length
+
   return jsonResponse(200, {
     notified: notificationsToInsert.length,
-    message: `Created ${notificationsToInsert.length} task due notifications`
+    push_sent: pushSent,
+    message: `Created ${notificationsToInsert.length} task due notifications, pushed ${pushSent}`,
   })
 })

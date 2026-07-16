@@ -393,24 +393,18 @@ export default function RecipientsPage() {
 
   async function loadData() {
     setLoading(true)
+    // "profiles" doesn't exist on this schema (the real table is "users"),
+    // and communication_unsubscribes is keyed by email — not profile_id — and
+    // carries its own full_name/email/unsubscribed_at directly, so no join
+    // back to users is needed for the suppressed list.
     const [profilesRes, deptsRes, suppressedRes] = await Promise.all([
-      supabase.from('profiles').select('id, email, full_name, department_id, role').order('full_name'),
+      supabase.from('users').select('id, email, full_name:name, department_id, role').order('name'),
       supabase.from('departments').select('id, name').order('name'),
-      supabase.from('communication_unsubscribes').select('id, profile_id, reason, created_at').then((res) => {
-        if (!res.error && res.data) {
-          return supabase.from('profiles').select('id, email, full_name').in('id', res.data.map((r) => r.profile_id)).then((profileRes) => {
-            return res.data.map((sup) => ({
-              ...sup,
-              profile: profileRes.data?.find((p) => p.id === sup.profile_id),
-            }))
-          })
-        }
-        return Promise.resolve([])
-      }),
+      supabase.from('communication_unsubscribes').select('id, email, full_name, reason, unsubscribed_at').order('unsubscribed_at', { ascending: false }),
     ])
     setProfiles(profilesRes.data ?? [])
     setDepartments(deptsRes.data ?? [])
-    setSuppressedRows(await suppressedRes)
+    setSuppressedRows(suppressedRes.data ?? [])
     setLoading(false)
   }
 
@@ -418,8 +412,8 @@ export default function RecipientsPage() {
     loadData()
   }, [])
 
-  // Get suppressed profile IDs
-  const suppressedIds = useMemo(() => new Set(suppressedRows.map((r) => r.profile_id)), [suppressedRows])
+  // communication_unsubscribes is keyed by email, not a user id
+  const suppressedEmails = useMemo(() => new Set(suppressedRows.map((r) => r.email)), [suppressedRows])
 
   // Filter profiles for "All Members" tab
   const filteredProfiles = useMemo(() => {
@@ -427,9 +421,9 @@ export default function RecipientsPage() {
 
     // Filter by subscription status
     if (filterSubscribed === 'subscribed') {
-      result = result.filter((p) => !suppressedIds.has(p.id))
+      result = result.filter((p) => !suppressedEmails.has(p.email))
     } else if (filterSubscribed === 'suppressed') {
-      result = result.filter((p) => suppressedIds.has(p.id))
+      result = result.filter((p) => suppressedEmails.has(p.email))
     }
 
     // Filter by department
@@ -447,7 +441,7 @@ export default function RecipientsPage() {
     }
 
     return result
-  }, [profiles, suppressedIds, filterDept, filterSubscribed, searchText])
+  }, [profiles, suppressedEmails, filterDept, filterSubscribed, searchText])
 
   const visibleProfiles = useMemo(
     () => filteredProfiles.slice(0, visibleCount),
@@ -459,24 +453,28 @@ export default function RecipientsPage() {
     setVisibleCount(RECIPIENT_WINDOW)
   }, [filterDept, filterSubscribed, searchText, tab])
 
-  async function handleSuppress(profileId) {
+  // communication_unsubscribes is keyed by email, not a user id — takes the
+  // whole profile so it can write email/full_name together.
+  async function handleSuppress(profile) {
     await supabase.from('communication_unsubscribes').insert({
-      profile_id: profileId,
+      email: profile.email,
+      full_name: profile.full_name,
       reason: 'manual_admin',
     })
     await loadData()
   }
 
-  async function handleReactivate(profileId) {
-    await supabase.from('communication_unsubscribes').delete().eq('profile_id', profileId)
+  async function handleReactivate(email) {
+    await supabase.from('communication_unsubscribes').delete().eq('email', email)
     await loadData()
   }
 
   async function handleSuppressSelected() {
-    const toSuppress = Array.from(selectedRows)
-    for (const profileId of toSuppress) {
+    const toSuppress = profiles.filter((p) => selectedRows.has(p.id))
+    for (const profile of toSuppress) {
       await supabase.from('communication_unsubscribes').insert({
-        profile_id: profileId,
+        email: profile.email,
+        full_name: profile.full_name,
         reason: 'manual_admin',
       })
     }
@@ -486,8 +484,8 @@ export default function RecipientsPage() {
   }
 
   async function handleReactivateSelected() {
-    const toReactivate = Array.from(selectedRows)
-    await supabase.from('communication_unsubscribes').delete().in('profile_id', toReactivate)
+    const emails = profiles.filter((p) => selectedRows.has(p.id)).map((p) => p.email)
+    await supabase.from('communication_unsubscribes').delete().in('email', emails)
     setSelectedRows(new Set())
     setSelectAll(false)
     await loadData()
@@ -526,9 +524,9 @@ export default function RecipientsPage() {
     const csvContent = [
       headers.join(','),
       ...rows.map((r) => [
-        r.profile?.email ?? '',
+        r.email ?? '',
         reasonMap[r.reason] ?? r.reason ?? '',
-        r.created_at ? new Date(r.created_at).toLocaleString() : '',
+        r.unsubscribed_at ? new Date(r.unsubscribed_at).toLocaleString() : '',
       ].map((v) => `"${v.replace(/"/g, '""')}"`).join(',')),
     ].join('\n')
 
@@ -659,7 +657,7 @@ export default function RecipientsPage() {
                 </div>
                 {visibleProfiles.map((profile) => {
                   const isSelected = selectedRows.has(profile.id)
-                  const isSuppressed = suppressedIds.has(profile.id)
+                  const isSuppressed = suppressedEmails.has(profile.email)
                   const dept = departments.find((d) => d.id === profile.department_id)
 
                   return (
@@ -684,11 +682,11 @@ export default function RecipientsPage() {
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
                         {isSuppressed ? (
-                          <button type="button" onClick={() => handleReactivate(profile.id)} style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#2D8653', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                          <button type="button" onClick={() => handleReactivate(profile.email)} style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#2D8653', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                             Reactivate
                           </button>
                         ) : (
-                          <button type="button" onClick={() => handleSuppress(profile.id)} style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                          <button type="button" onClick={() => handleSuppress(profile)} style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                             Suppress
                           </button>
                         )}
@@ -733,7 +731,7 @@ export default function RecipientsPage() {
                   <tbody>
                     {visibleProfiles.map((profile) => {
                       const isSelected = selectedRows.has(profile.id)
-                      const isSuppressed = suppressedIds.has(profile.id)
+                      const isSuppressed = suppressedEmails.has(profile.email)
                       const dept = departments.find((d) => d.id === profile.department_id)
 
                       return (
@@ -755,11 +753,11 @@ export default function RecipientsPage() {
                           </td>
                           <td style={{ padding: '12px 14px' }}>
                             {isSuppressed ? (
-                              <button type="button" onClick={() => handleReactivate(profile.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#2D8653', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                              <button type="button" onClick={() => handleReactivate(profile.email)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#2D8653', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                                 Reactivate
                               </button>
                             ) : (
-                              <button type="button" onClick={() => handleSuppress(profile.id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                              <button type="button" onClick={() => handleSuppress(profile)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: 'var(--coral-dark)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                                 Suppress
                               </button>
                             )}
@@ -821,12 +819,12 @@ export default function RecipientsPage() {
                     }
                     return (
                       <tr key={row.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                        <td style={{ padding: '12px 14px', color: TEXT, fontSize: 13, fontWeight: 600 }}>{row.profile?.full_name || '—'}</td>
-                        <td style={{ padding: '12px 14px', color: TEXT, fontSize: 13 }}>{row.profile?.email}</td>
+                        <td style={{ padding: '12px 14px', color: TEXT, fontSize: 13, fontWeight: 600 }}>{row.full_name || '—'}</td>
+                        <td style={{ padding: '12px 14px', color: TEXT, fontSize: 13 }}>{row.email}</td>
                         <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{reasonMap[row.reason] ?? row.reason ?? '—'}</td>
-                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
+                        <td style={{ padding: '12px 14px', color: MUTED, fontSize: 13 }}>{row.unsubscribed_at ? new Date(row.unsubscribed_at).toLocaleString() : '—'}</td>
                         <td style={{ padding: '12px 14px' }}>
-                          <button type="button" onClick={() => handleReactivate(row.profile_id)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#2D8653', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                          <button type="button" onClick={() => handleReactivate(row.email)} style={{ border: `1px solid ${BORDER}`, background: '#FFFFFF', color: '#2D8653', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                             Reactivate
                           </button>
                         </td>

@@ -12,8 +12,8 @@ const BG = 'var(--surface-sub)'
 const SUCCESS = 'var(--sage)'
 const WARNING = '#92400E'
 const ERROR = 'var(--coral-dark)'
-const CAMPAIGN_SELECT = 'id, name, status, sent_at'
-const RECIPIENT_SELECT = 'id, campaign_id, full_name, email, token, status, sent_at, opened_at, rsvp_at, created_at'
+const CAMPAIGN_SELECT = 'id, title, status, sent_at'
+const RECIPIENT_SELECT = 'id, campaign_id, recipient_name, recipient_email, rsvp_token, status, rsvp_response, rsvp_at, rsvp_notes, sent_at, created_at'
 
 function StatCard({ label, value, percentage, color }) {
   return (
@@ -25,18 +25,36 @@ function StatCard({ label, value, percentage, color }) {
   )
 }
 
+// Delivery status (pending/sent/bounced/complained) — separate concept from
+// RSVP outcome, see RsvpBadge below.
 function StatusBadge({ status }) {
   const statusMap = {
-    pending:  { bg: 'var(--surface-sub)', color: MUTED },
-    sent:     { bg: '#EBF7F1', color: SUCCESS },
-    opened:   { bg: '#E8EEFA', color: '#1A56DB' },
-    rsvp_yes: { bg: '#D1FAE5', color: '#059669' },
-    rsvp_no:  { bg: '#FEE2E2', color: ERROR },
+    pending:    { bg: 'var(--surface-sub)', color: MUTED },
+    sent:       { bg: '#EBF7F1', color: SUCCESS },
+    bounced:    { bg: '#FEE2E2', color: ERROR },
+    complained: { bg: '#FEE2E2', color: ERROR },
   }
   const s = statusMap[status] ?? statusMap.pending
   return (
     <span style={{ display: 'inline-block', borderRadius: 999, padding: '4px 12px', fontSize: 11, fontWeight: 600, background: s.bg, color: s.color }}>
-      {status.replace('_', ' ')}
+      {status}
+    </span>
+  )
+}
+
+// RSVP outcome (pending/yes/no/maybe) — kept as its own field, distinct from
+// delivery status, so "opened but no response" isn't conflated with "declined".
+function RsvpBadge({ response }) {
+  const responseMap = {
+    pending: { bg: 'var(--surface-sub)', color: MUTED },
+    yes:     { bg: '#D1FAE5', color: '#059669' },
+    maybe:   { bg: '#FEF3C7', color: WARNING },
+    no:      { bg: '#FEE2E2', color: ERROR },
+  }
+  const s = responseMap[response] ?? responseMap.pending
+  return (
+    <span style={{ display: 'inline-block', borderRadius: 999, padding: '4px 12px', fontSize: 11, fontWeight: 600, background: s.bg, color: s.color }}>
+      {response}
     </span>
   )
 }
@@ -46,7 +64,7 @@ function RecipientDrawer({ recipient, onClose }) {
 
   const handleCopyLink = () => {
     const baseUrl = import.meta.env.VITE_INVITATION_BASE_URL || `${window.location.protocol}//${window.location.host}`
-    const inviteUrl = `${baseUrl}/i/${recipient.token}`
+    const inviteUrl = `${baseUrl}/rsvp?token=${recipient.rsvp_token}`
     navigator.clipboard.writeText(inviteUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -65,15 +83,19 @@ function RecipientDrawer({ recipient, onClose }) {
         <div style={{ padding: 20, flex: 1, overflowY: 'auto' }}>
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: MUTED, marginBottom: 4 }}>Name</div>
-            <div style={{ fontSize: 14, color: TEXT, fontWeight: 600 }}>{recipient.full_name || recipient.email}</div>
+            <div style={{ fontSize: 14, color: TEXT, fontWeight: 600 }}>{recipient.recipient_name || recipient.recipient_email}</div>
           </div>
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: MUTED, marginBottom: 4 }}>Email</div>
-            <div style={{ fontSize: 14, color: TEXT }}>{recipient.email}</div>
+            <div style={{ fontSize: 14, color: TEXT }}>{recipient.recipient_email}</div>
           </div>
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: MUTED, marginBottom: 4 }}>Status</div>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: MUTED, marginBottom: 4 }}>Delivery Status</div>
             <StatusBadge status={recipient.status} />
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: MUTED, marginBottom: 4 }}>RSVP</div>
+            <RsvpBadge response={recipient.rsvp_response} />
           </div>
           {recipient.sent_at && (
             <div style={{ marginBottom: 20 }}>
@@ -81,16 +103,16 @@ function RecipientDrawer({ recipient, onClose }) {
               <div style={{ fontSize: 14, color: TEXT }}>{new Date(recipient.sent_at).toLocaleString()}</div>
             </div>
           )}
-          {recipient.opened_at && (
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: MUTED, marginBottom: 4 }}>Opened At</div>
-              <div style={{ fontSize: 14, color: TEXT }}>{new Date(recipient.opened_at).toLocaleString()}</div>
-            </div>
-          )}
           {recipient.rsvp_at && (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: MUTED, marginBottom: 4 }}>RSVP Response</div>
-              <div style={{ fontSize: 14, color: TEXT, fontWeight: 600 }}>{recipient.status === 'rsvp_yes' ? 'Attending' : 'Declining'}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: MUTED, marginBottom: 4 }}>Responded At</div>
+              <div style={{ fontSize: 14, color: TEXT }}>{new Date(recipient.rsvp_at).toLocaleString()}</div>
+            </div>
+          )}
+          {recipient.rsvp_notes && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: MUTED, marginBottom: 4 }}>Notes</div>
+              <div style={{ fontSize: 14, color: TEXT }}>{recipient.rsvp_notes}</div>
             </div>
           )}
           <div style={{ marginBottom: 20 }}>
@@ -142,7 +164,6 @@ function RecipientTable({ recipients, onRowClick }) {
             <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: TEXT }}>Email</th>
             <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: TEXT }}>Status</th>
             <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: TEXT }}>Sent At</th>
-            <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: TEXT }}>Opened At</th>
           </tr>
         </thead>
         <tbody>
@@ -159,16 +180,13 @@ function RecipientTable({ recipients, onRowClick }) {
               onMouseEnter={(e) => (e.currentTarget.style.background = BG)}
               onMouseLeave={(e) => (e.currentTarget.style.background = '#FFFFFF')}
             >
-              <td style={{ padding: '12px 16px', color: TEXT, fontWeight: 500 }}>{r.full_name || r.email}</td>
-              <td style={{ padding: '12px 16px', color: MUTED, fontSize: 13 }}>{r.email}</td>
+              <td style={{ padding: '12px 16px', color: TEXT, fontWeight: 500 }}>{r.recipient_name || r.recipient_email}</td>
+              <td style={{ padding: '12px 16px', color: MUTED, fontSize: 13 }}>{r.recipient_email}</td>
               <td style={{ padding: '12px 16px' }}>
                 <StatusBadge status={r.status} />
               </td>
               <td style={{ padding: '12px 16px', color: MUTED, fontSize: 13 }}>
                 {r.sent_at ? new Date(r.sent_at).toLocaleDateString('en-CA') : '—'}
-              </td>
-              <td style={{ padding: '12px 16px', color: MUTED, fontSize: 13 }}>
-                {r.opened_at ? new Date(r.opened_at).toLocaleDateString('en-CA') : '—'}
               </td>
             </tr>
           ))}
@@ -252,28 +270,27 @@ export default function InvitationDetailPage() {
   }, [campaignId])
 
   const metrics = useMemo(() => {
-    const sent = recipients.filter((r) => r.status !== 'pending').length
-    const opened = recipients.filter((r) => r.opened_at).length
-    const rsvpYes = recipients.filter((r) => r.status === 'rsvp_yes').length
-    const unopened = recipients.filter((r) => r.sent_at && !r.opened_at).length
+    const sent = recipients.filter((r) => r.status === 'sent').length
+    const bounced = recipients.filter((r) => r.status === 'bounced' || r.status === 'complained').length
+    const rsvpYes = recipients.filter((r) => r.rsvp_response === 'yes').length
+    const pending = recipients.filter((r) => r.status === 'pending').length
     const total = recipients.length
 
     return {
       sent,
-      opened,
+      bounced,
       rsvpYes,
-      unopened,
+      pending,
       total,
       sentPct: total > 0 ? Math.round((sent / total) * 100) : 0,
-      openedPct: sent > 0 ? Math.round((opened / sent) * 100) : 0,
-      rsvpYesPct: opened > 0 ? Math.round((rsvpYes / opened) * 100) : 0,
+      rsvpYesPct: sent > 0 ? Math.round((rsvpYes / sent) * 100) : 0,
     }
   }, [recipients])
 
-  async function handleResendToUnopened() {
-    const unopenedRecipients = recipients.filter((r) => r.status === 'sent' && !r.opened_at)
-    if (unopenedRecipients.length === 0) {
-      setError('No unopened recipients to resend to')
+  async function handleResendToPending() {
+    const pendingRecipients = recipients.filter((r) => r.status === 'pending')
+    if (pendingRecipients.length === 0) {
+      setError('No pending recipients to resend to')
       return
     }
 
@@ -313,7 +330,7 @@ export default function InvitationDetailPage() {
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <h1 style={{ fontFamily: FONT_HEADING, fontSize: 28, fontWeight: 800, color: TEXT, margin: 0 }}>{campaign.name}</h1>
+          <h1 style={{ fontFamily: FONT_HEADING, fontSize: 28, fontWeight: 800, color: TEXT, margin: 0 }}>{campaign.title}</h1>
           <span style={{ display: 'inline-block', borderRadius: 999, padding: '4px 12px', fontSize: 11, fontWeight: 700, background: '#EBF7F1', color: SUCCESS }}>
             {campaign.status.toUpperCase()}
           </span>
@@ -386,31 +403,31 @@ export default function InvitationDetailPage() {
       {/* Metrics */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
         <StatCard label="Sent" value={metrics.sent} percentage={`${metrics.sentPct}% of total`} />
-        <StatCard label="Opened" value={metrics.opened} percentage={`${metrics.openedPct}% of sent`} color="#1A56DB" />
-        <StatCard label="RSVP Yes" value={metrics.rsvpYes} percentage={`${metrics.rsvpYesPct}% of opened`} color={SUCCESS} />
-        <StatCard label="Unopened" value={metrics.unopened} color={WARNING} />
+        <StatCard label="RSVP Yes" value={metrics.rsvpYes} percentage={`${metrics.rsvpYesPct}% of sent`} color={SUCCESS} />
+        <StatCard label="Bounced" value={metrics.bounced} color={ERROR} />
+        <StatCard label="Pending" value={metrics.pending} color={WARNING} />
       </div>
 
       {/* Resend Button */}
       <div style={{ marginBottom: 32 }}>
         <button
           type="button"
-          onClick={handleResendToUnopened}
-          disabled={resending || metrics.unopened === 0}
+          onClick={handleResendToPending}
+          disabled={resending || metrics.pending === 0}
           style={{
             padding: '10px 20px',
-            background: metrics.unopened === 0 ? MUTED : PRIMARY,
+            background: metrics.pending === 0 ? MUTED : PRIMARY,
             color: '#FFFFFF',
             border: 'none',
             borderRadius: 8,
             fontSize: 14,
             fontWeight: 700,
-            cursor: metrics.unopened === 0 ? 'not-allowed' : 'pointer',
+            cursor: metrics.pending === 0 ? 'not-allowed' : 'pointer',
             opacity: resending ? 0.6 : 1,
             transition: 'opacity 0.15s ease',
           }}
         >
-          {resending ? 'Resending...' : `Resend to ${metrics.unopened} Unopened`}
+          {resending ? 'Resending...' : `Resend to ${metrics.pending} Pending`}
         </button>
       </div>
 
@@ -457,22 +474,16 @@ export default function InvitationDetailPage() {
                 ) : (
                   recipients.map((r) => (
                     <tr key={r.id} style={{ borderBottom: `1px solid ${BORDER}`, background: '#FFFFFF' }}>
-                      <td style={{ padding: '12px 16px', color: TEXT, fontWeight: 500 }}>{r.full_name || r.email}</td>
-                      <td style={{ padding: '12px 16px', color: MUTED, fontSize: 13 }}>{r.email}</td>
+                      <td style={{ padding: '12px 16px', color: TEXT, fontWeight: 500 }}>{r.recipient_name || r.recipient_email}</td>
+                      <td style={{ padding: '12px 16px', color: MUTED, fontSize: 13 }}>{r.recipient_email}</td>
                       <td style={{ padding: '12px 16px' }}>
-                        {r.status?.startsWith('rsvp_') ? (
-                          <StatusBadge status={r.status} />
-                        ) : (
-                          <span style={{ display: 'inline-block', borderRadius: 999, padding: '4px 12px', fontSize: 11, fontWeight: 600, background: BG, color: MUTED }}>
-                            Pending
-                          </span>
-                        )}
+                        <RsvpBadge response={r.rsvp_response} />
                       </td>
                       <td style={{ padding: '12px 16px', color: MUTED, fontSize: 13 }}>
                         {r.rsvp_at ? new Date(r.rsvp_at).toLocaleDateString('en-CA') : '—'}
                       </td>
                       <td style={{ padding: '12px 16px', color: MUTED, fontSize: 13, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        —
+                        {r.rsvp_notes || '—'}
                       </td>
                     </tr>
                   ))

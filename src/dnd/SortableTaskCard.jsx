@@ -128,13 +128,16 @@ function SortableTaskCardComponent({
     if (isDragging) hasDraggedRef.current = true
   }, [isDragging])
 
-  function handlePointerDown() {
+  function handlePointerDown(event) {
+    event.stopPropagation()
     hasDraggedRef.current = false
   }
 
-  function handleCardClick() {
+  function handleCardClick(event) {
     // Acceptance 5/6: a tap or click opens the task unless the pointer crossed the drag threshold.
     if (hasDraggedRef.current) {
+      event.preventDefault()
+      event.stopPropagation()
       hasDraggedRef.current = false
       return
     }
@@ -155,7 +158,7 @@ function SortableTaskCardComponent({
         listeners: {
           ...listeners,
           onPointerDown: (event) => {
-            handlePointerDown()
+            handlePointerDown(event)
             listeners?.onPointerDown?.(event)
           },
         },

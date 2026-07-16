@@ -146,7 +146,7 @@ export default function App() {
           <Route
             path="/activity-log"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'dept_lead']} allowGrant="regional_secretary_access">
                 <ActivityLogPage />
               </ProtectedRoute>
             }
@@ -154,7 +154,7 @@ export default function App() {
           <Route
             path="/files"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'dept_lead']} allowGrant="regional_secretary_access">
                 <FilesPage />
               </ProtectedRoute>
             }
@@ -168,7 +168,7 @@ export default function App() {
           <Route
             path="/calendar-management"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'dept_lead']} allowGrant="regional_secretary_access">
                 <CalendarManagementPage />
               </ProtectedRoute>
             }
@@ -176,7 +176,7 @@ export default function App() {
           <Route
             path="/calendar/review"
             element={
-              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'dept_lead']} allowGrant="regional_secretary_access">
                 <CalendarReviewPage />
               </ProtectedRoute>
             }
@@ -184,7 +184,7 @@ export default function App() {
           <Route
             path="/calendar/settings"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'dept_lead']} allowGrant="regional_secretary_access">
                 <CalendarSettingsPage />
               </ProtectedRoute>
             }
@@ -192,7 +192,7 @@ export default function App() {
           <Route
             path="/admin/campus-edits"
             element={
-              <ProtectedRoute roles={['super_admin', 'ors']}>
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'ors']} allowGrant="regional_secretary_access">
                 <CampusEditsPage />
               </ProtectedRoute>
             }
@@ -244,7 +244,12 @@ export default function App() {
           <Route
             path="/meetings"
             element={
-              <ProtectedRoute blockRoles={['group_member']}>
+              // Plain space members reach meetings via their space's Meetings
+              // tab (SpaceOverview), not this global list — the detail route
+              // below stays open so clicking a meeting from the space still
+              // works. Only the list entry point moves; everything else about
+              // a member's meeting access is unchanged.
+              <ProtectedRoute blockRoles={['group_member', 'member']}>
                 <MeetingsModule />
               </ProtectedRoute>
             }
@@ -260,7 +265,7 @@ export default function App() {
           <Route
             path="/meetings/wizard"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead', 'ors']}>
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'dept_lead', 'ors']} allowGrant="regional_secretary_access">
                 <MeetingWizardPage />
               </ProtectedRoute>
             }
@@ -268,7 +273,7 @@ export default function App() {
           <Route
             path="/meetings/expected-attendees"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'dept_lead']} allowGrant="regional_secretary_access">
                 <ExpectedAttendeesPage />
               </ProtectedRoute>
             }
@@ -276,7 +281,7 @@ export default function App() {
           <Route
             path="/meetings/attendance-trends"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead', 'pastor']}>
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'dept_lead', 'pastor']}>
                 <AttendanceTrendsDashboard />
               </ProtectedRoute>
             }
@@ -306,7 +311,7 @@ export default function App() {
           <Route
             path="/people/invitations"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead', 'regional_secretary']}>
+              <ProtectedRoute roles={['super_admin', 'dept_lead', 'regional_secretary']} allowGrant="regional_secretary_access">
                 <InvitationsPage />
               </ProtectedRoute>
             }
@@ -338,7 +343,7 @@ export default function App() {
           <Route
             path="/automations"
             element={
-              <ProtectedRoute roles={['super_admin', 'dept_lead']}>
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'dept_lead']} allowGrant="regional_secretary_access">
                 <AutomationsPage />
               </ProtectedRoute>
             }
@@ -346,7 +351,7 @@ export default function App() {
           <Route
             path="/communications"
             element={
-              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'ors', 'dept_lead', 'programs']}>
+              <ProtectedRoute roles={['super_admin', 'regional_secretary', 'ors', 'dept_lead', 'programs']} allowGrant="regional_secretary_access">
                 <CommunicationsLayout />
               </ProtectedRoute>
             }
@@ -377,7 +382,14 @@ export default function App() {
           <Route path="/settings/api-docs" element={<ApiDocumentationPage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/support" element={<SupportPage />} />
-          <Route path="/admin/tickets" element={<SupportTicketsAdminPage />} />
+          <Route
+            path="/admin/tickets"
+            element={
+              <ProtectedRoute roles={['super_admin']}>
+                <SupportTicketsAdminPage />
+              </ProtectedRoute>
+            }
+          />
           {/* Instagram Grading is paused (2026-07-09). Re-enable via the
               INSTAGRAM_GRADING_ENABLED flag in src/config/features.js. While
               disabled, the route redirects to the dashboard. */}

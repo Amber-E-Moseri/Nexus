@@ -93,7 +93,8 @@ export default function CampusPhotosSettings() {
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <h1 style={{ marginBottom: '4px', fontSize: '22px', fontWeight: '700' }}>Campus Photos</h1>
       <p style={{ color: '#666', marginBottom: '8px', fontSize: '14px' }}>
-        Manage photos for all 358 campuses. Paste a URL or upload a file. Photos appear in the map modal.
+        Manage campus photos. Paste a URL or upload a file. Photos appear in the map modal.
+        ORS and regional coordinators see all groups; other roles see only their assigned group.
       </p>
       <p style={{ color: '#4C2A92', fontSize: '13px', fontWeight: '500', marginBottom: '20px' }}>
         {withPhotos} of {campuses.length} campuses have photos

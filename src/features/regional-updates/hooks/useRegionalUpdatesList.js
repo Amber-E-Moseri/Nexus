@@ -21,9 +21,13 @@ export function useRegionalUpdatesList() {
 
     fetchUpdates()
 
-    // Realtime subscription
+    // Realtime subscription — unique topic per mount so simultaneous
+    // consumers (e.g. the Sidebar compose widget and the Dashboard past-
+    // updates modal) don't collide on Supabase's channel-name dedup, which
+    // returns the same already-subscribed instance for a shared topic and
+    // throws when a second .on() is added to it.
     const channel = supabase
-      .channel('regional_updates_list')
+      .channel(`regional_updates_list:${crypto.randomUUID()}`)
       .on(
         'postgres_changes',
         {

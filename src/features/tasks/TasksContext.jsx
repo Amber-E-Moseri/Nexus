@@ -11,6 +11,16 @@ export function TasksProvider({ departmentId, sprintId, children }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // Silent background sync — refreshes tasks without triggering the loading state.
+  // Used by the realtime UPDATE handler so status/field changes don't flash a spinner.
+  const silentSync = useCallback(async () => {
+    if (!departmentId && !sprintId) return
+    try {
+      const taskData = await (sprintId ? getSprintTasks(sprintId) : getDeptTasks(departmentId))
+      setTasks(taskData)
+    } catch { /* ignore — next explicit load will recover */ }
+  }, [departmentId, sprintId])
+
   const loadTasks = useCallback(async () => {
     try {
       setLoading(true)
@@ -95,8 +105,8 @@ export function TasksProvider({ departmentId, sprintId, children }) {
         // Realtime payload has only flat fields; re-fetch to get full relations
         loadTasks()
       } else if (payload.eventType === 'UPDATE') {
-        // Realtime payload has only flat fields; re-fetch to avoid stale joined relations.
-        loadTasks()
+        // Silently re-fetch so the optimistic update isn't replaced by a loading spinner.
+        silentSync()
       }
     }
 
@@ -111,7 +121,7 @@ export function TasksProvider({ departmentId, sprintId, children }) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [departmentId, sprintId, loadTasks])
+  }, [departmentId, sprintId, loadTasks, silentSync])
 
   const moveTask = useCallback(
     async (taskId, nextStatus) => {

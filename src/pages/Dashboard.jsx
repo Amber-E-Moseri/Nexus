@@ -144,7 +144,7 @@ function CustomHeroStatCard({ meta, value, statKey, onChoose, onClick }) {
   const [showPicker, setShowPicker] = useState(false)
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', zIndex: showPicker ? 200 : undefined, isolation: showPicker ? 'isolate' : undefined }}>
       <BorderGlow
         glowColor="267 60 85"
         backgroundColor={meta.bg}

@@ -259,13 +259,16 @@ function SortableTaskRowComponent({
     if (isDragging) hasDraggedRef.current = true
   }, [isDragging])
 
-  function handlePointerDown() {
+  function handlePointerDown(event) {
+    event.stopPropagation()
     hasDraggedRef.current = false
   }
 
-  function handleClick() {
+  function handleClick(event) {
     // Acceptance 7/8: taps open the row unless a real drag crossed the sensor threshold.
     if (hasDraggedRef.current) {
+      event.preventDefault()
+      event.stopPropagation()
       hasDraggedRef.current = false
       return
     }
@@ -286,7 +289,7 @@ function SortableTaskRowComponent({
         listeners: {
           ...listeners,
           onPointerDown: (event) => {
-            handlePointerDown()
+            handlePointerDown(event)
             listeners?.onPointerDown?.(event)
           },
         },
@@ -295,7 +298,7 @@ function SortableTaskRowComponent({
         ...attributes,
         ...listeners,
         onPointerDown: (event) => {
-          handlePointerDown()
+          handlePointerDown(event)
           listeners?.onPointerDown?.(event)
         },
       }

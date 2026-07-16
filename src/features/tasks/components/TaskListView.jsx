@@ -1,4 +1,4 @@
-import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core'
+import { DndContext, DragOverlay, closestCorners, useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useMemo, useState } from 'react'
 import { formatDueDate } from '../../../lib/dateUtils'
@@ -8,6 +8,31 @@ import { useDndSensors } from '../../../dnd'
 import InlineTaskComposer from './InlineTaskComposer'
 import SortableTaskRow from '../../../dnd/SortableTaskRow'
 import { TaskRowGhost } from '../../../dnd/SortableTaskRow'
+
+// Wraps each status section's task list in its own droppable zone. A
+// SortableContext alone only registers drop targets for the items inside
+// it — with zero items there's nothing to hit-test against, so dragging a
+// task onto an empty status silently did nothing. minHeight keeps an empty
+// section big enough to actually drop onto.
+function DroppableStatusBody({ statusId, isEmpty, children }) {
+  const { setNodeRef, isOver } = useDroppable({ id: statusId })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: isEmpty ? 48 : undefined,
+        alignItems: isEmpty ? 'center' : undefined,
+        justifyContent: isEmpty ? 'center' : undefined,
+        background: isOver ? 'rgba(91,52,199,0.06)' : undefined,
+        transition: 'background .12s',
+      }}
+    >
+      {isEmpty ? null : children}
+    </div>
+  )
+}
 
 function taskMatchesStatus(task, status) {
   // Match by status_id first (or any id merged into this status by dedupeTaskStatuses)
@@ -45,18 +70,14 @@ export default function TaskListView({
 }) {
   const [composerStatusId, setComposerStatusId] = useState(null)
   const [activeTaskId, setActiveTaskId] = useState(null)
-  const [showClosed, setShowClosed] = useState(false)
+  // Show Completed/Cancelled sections by default so all statuses are visible;
+  // the toggle below still lets users collapse them.
+  const [showClosed, setShowClosed] = useState(true)
   const sensors = useDndSensors()
-
-  // Only re-sort if task count or order changed (not on every task property change)
-  const sortKey = useMemo(
-    () => tasks.map(t => t.id).join(','),
-    [tasks]
-  )
 
   const sorted = useMemo(
     () => [...tasks].sort((a, b) => new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0)),
-    [sortKey],
+    [tasks],
   )
 
   const dedupedStatuses = useMemo(() => dedupeTaskStatuses(statuses), [statuses])
@@ -93,13 +114,32 @@ export default function TaskListView({
 
     // Find the over task
     const overTask = tasks.find((t) => t.id === over.id)
-    if (!overTask) return
+
+    // Dropped directly on a status section (empty, or the section body itself
+    // rather than a task row) — dedupeTaskStatuses may merge several status
+    // ids into one section, so match against _mergedIds too.
+    if (!overTask) {
+      const targetStatus = dedupedStatuses.find(
+        (s) => s.id === over.id || (s._mergedIds ?? []).includes(over.id),
+      )
+      if (!targetStatus) return
+
+      const activeStatus = statuses.find((s) => taskMatchesStatus(activeTask, s))
+      const isAlreadyInTarget = activeStatus
+        ? activeStatus.id === targetStatus.id
+        : taskMatchesStatus(activeTask, targetStatus)
+
+      if (!isAlreadyInTarget) {
+        onTaskStatusChange?.({ taskId: activeTask.id, newStatus: targetStatus })
+      }
+      return
+    }
 
     const activeStatus = statuses.find((s) => taskMatchesStatus(activeTask, s))
     const overStatus = statuses.find((s) => taskMatchesStatus(overTask, s))
 
     // If dropped on a task in a different status, update the status
-    if (activeStatus && overStatus && activeStatus.id !== overStatus.id) {
+    if (overStatus && (!activeStatus || activeStatus.id !== overStatus.id)) {
       onTaskStatusChange?.({
         taskId: activeTask.id,
         newStatus: overStatus,
@@ -161,7 +201,7 @@ export default function TaskListView({
             </div>
 
             <SortableContext items={items.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <DroppableStatusBody statusId={status.id} isEmpty={items.length === 0}>
                 {items.map((task) => (
                   <SortableTaskRow
                     key={task.id}
@@ -172,7 +212,7 @@ export default function TaskListView({
                     onClick={() => onTaskClick(task)}
                   />
                 ))}
-              </div>
+              </DroppableStatusBody>
             </SortableContext>
 
             {canAddTask ? (

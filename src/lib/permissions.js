@@ -73,6 +73,22 @@ export function hasFeatureRole(user, spaceId, featureRole) {
 }
 
 /**
+ * Check if user holds an ad-hoc grant (user_grants table; attached in
+ * AuthContext as profile.grants, a flat array of grant_type strings). Used to
+ * give a specific user a capability beyond their base role — e.g. a pastor
+ * granted regional_secretary-level admin reach without changing their base
+ * role (which would drop pastor-specific RLS/RPC checks elsewhere).
+ *
+ * @param {Object} user - profile object carrying grants
+ * @param {string} grantType
+ */
+export function hasGrant(user, grantType) {
+  const grants = user?.grants
+  if (!Array.isArray(grants)) return false
+  return grants.includes(grantType)
+}
+
+/**
  * Get effective role for a user in a specific space.
  * Space-role grants (space_roles rows) outrank the base role except for
  * super_admin/regional_secretary, which are org-wide by design.

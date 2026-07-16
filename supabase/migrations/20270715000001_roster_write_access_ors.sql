@@ -31,6 +31,9 @@ $$;
 drop policy if exists "admins can insert expected attendees" on public.expected_attendees;
 drop policy if exists "admins can update expected attendees" on public.expected_attendees;
 drop policy if exists "admins can delete expected attendees" on public.expected_attendees;
+drop policy if exists "roster managers can insert expected attendees" on public.expected_attendees;
+drop policy if exists "roster managers can update expected attendees" on public.expected_attendees;
+drop policy if exists "roster managers can delete expected attendees" on public.expected_attendees;
 
 create policy "roster managers can insert expected attendees"
   on public.expected_attendees

@@ -463,7 +463,6 @@ export default function PlannerTimeBlocking() {
         <TaskModal
           mode="edit"
           task={modalTask}
-          isReadOnly={true}
           departmentId={modalTask.department_id}
           sprintId={modalTask.sprint_id}
           onClose={() => setModalTask(null)}

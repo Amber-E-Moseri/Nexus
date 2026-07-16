@@ -14,8 +14,8 @@ export const PRIORITY_DOT = {
 }
 
 export const HOUR_HEIGHT = 60 // px per hour row
-export const DAY_START_HOUR = 6 // 6 AM (user-configurable in Phase 2)
-export const DAY_END_HOUR = 22 // 10 PM
+export const DAY_START_HOUR = 6  // 6 AM (user-configurable in Phase 2)
+export const DAY_END_HOUR = 24   // midnight
 
 export function spaceColor(space) {
   const raw = space?.color

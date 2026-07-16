@@ -1,8 +1,9 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { useMeetings } from '../MeetingsContext'
+import { searchMeetings } from '../lib/meetings'
 import StatsCards from './StatsCards'
 import DepartmentFilter from './DepartmentFilter'
 import LoadingSpinner from '../../../components/ui/LoadingSpinner'
@@ -114,6 +115,14 @@ function groupMeetingsByCategory(meetings) {
   return groups
 }
 
+function formatMeetingType(type) {
+  return (type ?? '')
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
 
 export default function UnifiedMeetingsView({
   isSuperAdmin = false,
@@ -126,12 +135,45 @@ export default function UnifiedMeetingsView({
   const navigate = useNavigate()
   const { meetings, loading, removeMeeting, hasMore, loadMore, totalCount: totalMeetingCount } = useMeetings()
   const [activeType, setActiveType] = useState('all')
+  const [activeStatus, setActiveStatus] = useState('all')
+  const [dateRange, setDateRange] = useState('all')
+  const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState('list')
   const [stats, setStats] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [hoveredId, setHoveredId] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
+  const [contentSearchResults, setContentSearchResults] = useState(null)
+  const [contentSearchLoading, setContentSearchLoading] = useState(false)
+  const searchDebounce = useRef(null)
   const isMobile = useMediaQuery('(max-width: 640px)')
+
+  // Server-side content search (debounced, fires when search >= 2 chars)
+  useEffect(() => {
+    if (searchDebounce.current) clearTimeout(searchDebounce.current)
+
+    const q = search.trim()
+    if (q.length < 2) {
+      setContentSearchResults(null)
+      setContentSearchLoading(false)
+      return
+    }
+
+    setContentSearchLoading(true)
+    searchDebounce.current = setTimeout(async () => {
+      try {
+        const results = await searchMeetings(q, selectedDeptId)
+        setContentSearchResults(results)
+      } catch (err) {
+        console.error('[meetings] content search error:', err)
+        setContentSearchResults([])
+      } finally {
+        setContentSearchLoading(false)
+      }
+    }, 350)
+
+    return () => clearTimeout(searchDebounce.current)
+  }, [search, selectedDeptId])
 
   // Load KPI stats
   useEffect(() => {
@@ -206,10 +248,36 @@ export default function UnifiedMeetingsView({
 
   const grouped = useMemo(() => groupMeetingsByCategory(filteredByDept), [filteredByDept])
   const allTypes = useMemo(() => Object.keys(grouped).sort(), [grouped])
+
   const filteredMeetings = useMemo(() => {
-    if (activeType === 'all') return filteredByDept
-    return grouped[activeType] || []
-  }, [grouped, activeType, filteredByDept])
+    // When a server-side content search has returned, use those results directly.
+    // The server already filtered by dept and all fields; we still apply the
+    // status and date-range UI filters on top.
+    let result = contentSearchResults !== null
+      ? contentSearchResults
+      : (activeType === 'all' ? filteredByDept : (grouped[activeType] || []))
+
+    if (activeStatus !== 'all') {
+      result = result.filter((m) => m.status === activeStatus)
+    }
+
+    if (dateRange !== 'all') {
+      const now = new Date()
+      const cutoff = new Date()
+      if (dateRange === '7d') cutoff.setDate(now.getDate() - 7)
+      else if (dateRange === '30d') cutoff.setDate(now.getDate() - 30)
+      else if (dateRange === '90d') cutoff.setDate(now.getDate() - 90)
+      result = result.filter((m) => new Date(m.date) >= cutoff)
+    }
+
+    // Fallback: short query (< 2 chars) — client-side title match only
+    if (contentSearchResults === null && search.trim()) {
+      const q = search.trim().toLowerCase()
+      result = result.filter((m) => m.title?.toLowerCase().includes(q))
+    }
+
+    return result
+  }, [grouped, activeType, filteredByDept, activeStatus, dateRange, search, contentSearchResults])
 
   const handleDelete = async (event, meeting) => {
     event.stopPropagation()
@@ -237,21 +305,30 @@ export default function UnifiedMeetingsView({
 
   const TYPE_ICONS = { general: '🗓', team: '👥', media: '🎬', department: '🏛' }
 
+  const selectStyle = {
+    padding: '6px 10px',
+    border: '1px solid var(--border-1)',
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 600,
+    color: 'var(--ink-2)',
+    background: 'white',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-app)' }}>
-      {/* Stats Cards Section */}
+      {/* Stats Cards — super admin only */}
       {stats && isSuperAdmin && (
         <div style={{ padding: '16px', borderBottom: '1px solid var(--border-1)', background: 'var(--surface-card)', flexShrink: 0 }}>
           <StatsCards stats={stats} />
         </div>
       )}
 
-      {/* Filters Section */}
+      {/* Department filter — super admin only */}
       {isSuperAdmin && (
-        <div style={{ padding: '16px', borderBottom: '1px solid var(--border-1)', background: 'var(--surface-card)', flexShrink: 0 }}>
-          <label style={{ fontSize: 11, color: 'var(--ink-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>
-            Department
-          </label>
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-1)', background: 'var(--surface-card)', flexShrink: 0 }}>
           <DepartmentFilter
             departments={departments}
             selected={selectedDeptId}
@@ -261,35 +338,52 @@ export default function UnifiedMeetingsView({
         </div>
       )}
 
-      {/* Filter chips + view toggle */}
-      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-1)', background: 'var(--surface-card)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }} role="group" aria-label="Filter meetings by type">
-            <button
-              type="button"
-              onClick={() => setActiveType('all')}
-              aria-pressed={activeType === 'all'}
+      {/* Unified filter bar */}
+      <div style={{ padding: isMobile ? '10px 14px' : '12px 20px', borderBottom: '1px solid var(--border-1)', background: 'var(--surface-card)', flexShrink: 0 }}>
+        {/* Row 1: search + view toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-3)', pointerEvents: 'none' }}>🔍</span>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search meetings…"
               style={{
-                padding: '5px 14px',
-                borderRadius: 999,
-                border: activeType === 'all' ? 'none' : '1px solid var(--border-1)',
-                background: activeType === 'all' ? 'var(--purple-700)' : 'white',
-                color: activeType === 'all' ? 'white' : 'var(--ink-2)',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
+                width: '100%',
+                padding: '7px 10px 7px 30px',
+                border: '1px solid var(--border-1)',
+                borderRadius: 8,
+                fontSize: 13,
+                fontFamily: 'inherit',
+                color: 'var(--ink-1)',
+                background: 'white',
+                boxSizing: 'border-box',
+                outline: 'none',
               }}
-            >
-              All
-            </button>
-            {allTypes.map((type) => (
+            />
+          </div>
+          {!isMobile && (
+            <ViewToggle
+              view={viewMode}
+              onViewChange={setViewMode}
+              listLabel="List view"
+              gridLabel="Board view"
+            />
+          )}
+        </div>
+
+        {/* Row 2: type chips + status + date dropdowns */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, flex: 1 }} role="group" aria-label="Filter by type">
+            {['all', ...allTypes].map((type) => (
               <button
                 key={type}
                 type="button"
                 onClick={() => setActiveType(type)}
                 aria-pressed={activeType === type}
                 style={{
-                  padding: '5px 14px',
+                  padding: '4px 12px',
                   borderRadius: 999,
                   border: activeType === type ? 'none' : '1px solid var(--border-1)',
                   background: activeType === type ? 'var(--purple-700)' : 'white',
@@ -297,17 +391,42 @@ export default function UnifiedMeetingsView({
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: 'pointer',
-                  textTransform: 'capitalize',
+                  fontFamily: 'inherit',
                 }}
               >
-                {type.charAt(0).toUpperCase() + type.slice(1)}
+                {type === 'all' ? 'All types' : formatMeetingType(type)}
               </button>
             ))}
           </div>
-          {!isMobile && <ViewToggle view={viewMode} onViewChange={setViewMode} />}
+
+          <select value={activeStatus} onChange={(e) => setActiveStatus(e.target.value)} style={selectStyle}>
+            <option value="all">All statuses</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+
+          <select value={dateRange} onChange={(e) => setDateRange(e.target.value)} style={selectStyle}>
+            <option value="all">Any time</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+          </select>
         </div>
-        <div style={{ fontFamily: FONT_HEADING, fontSize: 11, color: 'var(--ink-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          {totalCount} meeting{totalCount !== 1 ? 's' : ''}
+
+        {/* Result count */}
+        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--ink-3)', fontWeight: 600, fontFamily: FONT_HEADING, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          {contentSearchLoading ? 'Searching notes…' : `${totalCount} meeting${totalCount !== 1 ? 's' : ''}`}
+          {(search || activeStatus !== 'all' || dateRange !== 'all' || activeType !== 'all') && (
+            <button
+              type="button"
+              onClick={() => { setSearch(''); setActiveStatus('all'); setDateRange('all'); setActiveType('all') }}
+              style={{ marginLeft: 10, fontSize: 11, color: 'var(--purple-700)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: 0, fontFamily: 'inherit' }}
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       </div>
 

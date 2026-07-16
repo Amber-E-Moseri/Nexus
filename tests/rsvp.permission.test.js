@@ -9,18 +9,22 @@ describe('RSVP Permission Tests', () => {
   let adminClient, userClient;
 
   beforeEach(() => {
+    // Only the .todo stubs below actually need a real connection (run them
+    // against a local `supabase start` instance). The few non-todo tests are
+    // pure logic and shouldn't crash just because SUPABASE_URL isn't set here.
+    if (!supabaseUrl) return;
     adminClient = createClient(supabaseUrl, adminKey);
     userClient = createClient(supabaseUrl, userKey);
   });
 
   describe('invitation_campaigns RLS', () => {
-    it.todo('should allow ORS user to create campaign in their org', async () => {
-      // This test requires proper JWT setup with org_id and role claims
-      // In a real test environment, this would authenticate as an ORS user
+    it.todo('should allow dept_lead/pastor/regional_secretary/super_admin to create a campaign', async () => {
+      // Requires a real authenticated session (current_user_role()-backed RLS,
+      // no org_id — this app is single-tenant). Run against a local instance.
       expect(adminClient).toBeDefined();
     });
 
-    it.todo('should allow super_admin to view all campaigns', async () => {
+    it.todo('should allow any authenticated user to view campaigns (select using (true))', async () => {
       const { data, error } = await adminClient
         .from('invitation_campaigns')
         .select('id, title, status')
@@ -30,21 +34,19 @@ describe('RSVP Permission Tests', () => {
       expect(Array.isArray(data)).toBe(true);
     });
 
-    it.todo('should block non-ORS user from creating campaign for org', async () => {
-      // Simulated: User with wrong org_id should be blocked
-      // This would require proper JWT setup in test environment
+    it.todo('should block a plain member from creating a campaign', async () => {
+      // Simulated: a user without dept_lead/pastor/regional_secretary/super_admin
+      // should be blocked by invitation_campaigns_insert's current_user_role() check.
       expect(adminClient).toBeDefined();
     });
   });
 
   describe('invitation_recipients RLS', () => {
-    it('should allow inserting recipients for own org campaign', async () => {
-      // Should pass RLS check if campaign belongs to user's org
+    it.todo('should allow a privileged-role user to insert recipients for a campaign', async () => {
       expect(adminClient).toBeDefined();
     });
 
-    it('should prevent inserting recipients for other org campaign', async () => {
-      // Should fail RLS check
+    it.todo('should block a plain member from inserting recipients', async () => {
       expect(adminClient).toBeDefined();
     });
   });

@@ -98,7 +98,7 @@ export default function InvitationsListPage() {
 
         const { data, error: err } = await supabase
           .from('invitation_campaigns')
-          .select('id, name, status, sent_at, created_at')
+          .select('id, title, status, sent_at, created_at, recipient_count')
           .eq('created_by', profile.id)
           .order('created_at', { ascending: false })
 
@@ -129,7 +129,7 @@ export default function InvitationsListPage() {
           // Refetch campaigns when changes occur
           const { data } = await supabase
             .from('invitation_campaigns')
-            .select('id, name, status, sent_at, created_at')
+            .select('id, title, status, sent_at, created_at, recipient_count')
             .eq('created_by', profile.id)
             .order('created_at', { ascending: false })
           setCampaigns(data ?? [])
@@ -390,7 +390,7 @@ export default function InvitationsListPage() {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {campaign.name}
+                    {campaign.title}
                   </td>
                   <td
                     style={{
@@ -403,7 +403,9 @@ export default function InvitationsListPage() {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {campaign.invitation_templates?.name ?? '-'}
+                    {/* invitation_templates doesn't exist yet — every campaign
+                        today uses the synthetic "Custom Invitation" default. */}
+                    {'-'}
                   </td>
                   <td
                     style={{

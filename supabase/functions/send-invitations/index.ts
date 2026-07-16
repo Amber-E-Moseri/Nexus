@@ -25,7 +25,6 @@ export default async (req: Request) => {
       .from('invitation_campaigns')
       .select(`
         id,
-        org_id,
         title,
         subject_line,
         html_content,
@@ -88,11 +87,18 @@ export default async (req: Request) => {
     }
 
     if (sent > 0) {
+      const { data: currentCampaign } = await supabase
+        .from('invitation_campaigns')
+        .select('sent_count')
+        .eq('id', campaignId)
+        .single()
+
       await supabase
         .from('invitation_campaigns')
         .update({
           status: 'sent',
-          sent_at: new Date().toISOString()
+          sent_at: new Date().toISOString(),
+          sent_count: (currentCampaign?.sent_count ?? 0) + sent
         })
         .eq('id', campaignId)
     }

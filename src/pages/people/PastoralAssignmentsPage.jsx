@@ -157,10 +157,14 @@ export default function PastoralAssignmentsPage() {
     return map
   }, [pastors, userById, visibleAssignments])
 
-  const assignedMemberIds = useMemo(
-    () => new Set(visibleAssignments.map((assignment) => assignment.member_id)),
-    [visibleAssignments],
-  )
+  const assignedMemberIdsByPastor = useMemo(() => {
+    const map = new Map()
+    for (const assignment of visibleAssignments) {
+      if (!map.has(assignment.pastor_id)) map.set(assignment.pastor_id, new Set())
+      map.get(assignment.pastor_id).add(assignment.member_id)
+    }
+    return map
+  }, [visibleAssignments])
 
   async function handleAssign(pastorId) {
     const memberId = draftMemberByPastor[pastorId]
@@ -202,9 +206,8 @@ export default function PastoralAssignmentsPage() {
           {pastors.map((pastor) => {
             const department = departmentById.get(pastor.department_id)
             const assignedMembers = membersByPastor.get(pastor.id) ?? []
-            const availableMembers = members.filter((member) => {
-              return !assignedMemberIds.has(member.id) || assignedMembers.some((assigned) => assigned.id === member.id)
-            })
+            const thisRosterIds = assignedMemberIdsByPastor.get(pastor.id) ?? new Set()
+            const availableMembers = members.filter((member) => !thisRosterIds.has(member.id))
 
             return (
               <div key={pastor.id} className="rounded-[22px] border border-[var(--border)] bg-white p-4 shadow-[var(--card-shadow)]">
@@ -235,7 +238,7 @@ export default function PastoralAssignmentsPage() {
                         setSaving(true)
                         setError('')
                         try {
-                          await removePastorMember(member.id)
+                          await removePastorMember(pastor.id, member.id)
                           await loadData()
                         } catch (nextError) {
                           setError(nextError.message)

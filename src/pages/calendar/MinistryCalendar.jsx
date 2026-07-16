@@ -46,14 +46,11 @@ export default function MinistryCalendar() {
   const [hiddenSourceIds, setHiddenSourceIds] = useState(new Set())
   const [syncing, setSyncing] = useState(false)
 
-  async function resolveOrgId() {
-    if (profile?.org_id) return profile.org_id
-    if (profile?.department_id) {
-      const { data } = await supabase.from('departments').select('organization_id').eq('id', profile.department_id).maybeSingle()
-      if (data?.organization_id) return data.organization_id
-    }
-    const { data } = await supabase.from('departments').select('organization_id').not('organization_id', 'is', null).limit(1).maybeSingle()
-    return data?.organization_id ?? null
+  // Single-tenant deployment: departments has no organization_id column.
+  // Return the well-known default UUID (same constant used by useCategoryVisibility).
+  function resolveOrgId() {
+    if (profile?.org_id) return Promise.resolve(profile.org_id)
+    return Promise.resolve('00000000-0000-0000-0000-000000000000')
   }
 
   async function loadDeptVisibility() {

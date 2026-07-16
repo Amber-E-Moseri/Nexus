@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { ChevronDown, Plus, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Plus, Search, X } from 'lucide-react'
 
 export default function AssigneeSelector({
   members = [],
@@ -8,10 +8,38 @@ export default function AssigneeSelector({
   isMultiSelect = true,
 }) {
   const [isOpen, setIsOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const dropdownRef = useRef(null)
 
-  const selectedMembers = members.filter(m => selectedIds.includes(m.id))
-  const unselectedMembers = members.filter(m => !selectedIds.includes(m.id))
+  const selectedMembers = useMemo(
+    () => members.filter((m) => selectedIds.includes(m.id)),
+    [members, selectedIds],
+  )
+
+  const filteredUnselectedMembers = useMemo(() => {
+    const lowered = query.trim().toLowerCase()
+    return members.filter((member) => {
+      if (selectedIds.includes(member.id)) return false
+      if (!lowered) return true
+      return String(member.name ?? '').toLowerCase().includes(lowered)
+    })
+  }, [members, query, selectedIds])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setQuery('')
+      return
+    }
+
+    function handlePointerDown(event) {
+      if (!dropdownRef.current?.contains(event.target)) {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [isOpen])
 
   function toggleSelection(memberId) {
     if (isMultiSelect) {
@@ -25,6 +53,7 @@ export default function AssigneeSelector({
         onSelectionChange([])
       } else {
         onSelectionChange([memberId])
+        setIsOpen(false)
       }
     }
   }
@@ -149,6 +178,38 @@ export default function AssigneeSelector({
             overflowY: 'auto',
           }}
         >
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: '0 10px',
+                background: '#FFFFFF',
+              }}
+            >
+              <Search size={14} color="var(--text-tertiary)" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="Type a name..."
+                style={{
+                  flex: 1,
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  fontSize: 12,
+                  color: 'var(--text-primary)',
+                  padding: '8px 0',
+                }}
+              />
+            </div>
+          </div>
+
           {selectedMembers.length > 0 && (
             <>
               <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
@@ -187,14 +248,14 @@ export default function AssigneeSelector({
               </div>
             </>
           )}
-          {unselectedMembers.length > 0 && (
+          {filteredUnselectedMembers.length > 0 && (
             <div style={{ padding: '8px 12px' }}>
               {selectedMembers.length > 0 && (
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 8 }}>
                   Add More
                 </div>
               )}
-              {unselectedMembers.map((member) => (
+              {filteredUnselectedMembers.map((member) => (
                 <button
                   key={member.id}
                   type="button"
@@ -228,6 +289,11 @@ export default function AssigneeSelector({
           {members.length === 0 && (
             <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
               No members available
+            </div>
+          )}
+          {members.length > 0 && filteredUnselectedMembers.length === 0 && query.trim() && (
+            <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+              No matches found
             </div>
           )}
         </div>

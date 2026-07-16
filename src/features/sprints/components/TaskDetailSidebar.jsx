@@ -305,7 +305,7 @@ function TaskDetailContent({
               members={members}
               selectedIds={assigneeIds}
               onSelectionChange={setAssigneeIds}
-              isMultiSelect={true}
+              isMultiSelect={false}
             />
           </div>
         ) : null}

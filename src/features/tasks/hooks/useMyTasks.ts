@@ -31,6 +31,7 @@ interface UseMyTasksReturn {
   isLoading: boolean
   error: Error | null
   refetch: () => Promise<void>
+  optimisticStatusUpdate: (taskId: string, newStatus: any) => void
 }
 
 /**
@@ -80,6 +81,23 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
+  // Optimistically update a single task's status without triggering a loading state.
+  const optimisticStatusUpdate = useCallback((taskId: string, newStatus: any) => {
+    setTasks((prev) => prev.map((t) =>
+      t.id === taskId
+        ? {
+            ...t,
+            status: newStatus.legacy_key ?? t.status,
+            status_id: newStatus.id,
+            status_definition: newStatus,
+            status_name: newStatus.name ?? t.status_name,
+            status_color: newStatus.color ?? t.status_color,
+            status_category: newStatus.category ?? t.status_category,
+          }
+        : t,
+    ))
+  }, [])
+
   // Create a stable dependency key from filter values to avoid unnecessary re-renders
   const filterKey = useMemo(() => {
     const key = {
@@ -99,10 +117,11 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     return JSON.stringify(key)
   }, [filters])
 
-  // Fetch tasks
-  const load = useCallback(async () => {
+  // Fetch tasks. Pass silent=true to refresh in the background without showing
+  // a loading spinner (used by the realtime UPDATE handler).
+  const load = useCallback(async (silent = false) => {
     if (!userId) return
-    setIsLoading(true)
+    if (!silent) setIsLoading(true)
     setError(null)
 
     try {
@@ -240,9 +259,11 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     const handlePayload = (payload) => {
       if (payload.eventType === 'DELETE') {
         setTasks((prev) => prev.filter((t) => t.id !== payload.old.id))
-      } else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-        // Realtime payload has only flat fields; re-fetch to get relations
+      } else if (payload.eventType === 'INSERT') {
         loadRef.current()
+      } else if (payload.eventType === 'UPDATE') {
+        // Silent refresh — don't flash a loading spinner for background updates
+        loadRef.current(true)
       }
     }
 
@@ -270,5 +291,6 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     isLoading,
     error,
     refetch: load,
+    optimisticStatusUpdate,
   }
 }

@@ -180,8 +180,9 @@ export async function assignPastorMember(pastorId, memberId) {
   if (error) throw error
 }
 
-export async function removePastorMember(memberId) {
+export async function removePastorMember(pastorId, memberId) {
   const { error } = await supabase.rpc('remove_pastor_member', {
+    p_pastor_id: pastorId,
     p_member_id: memberId,
   })
 

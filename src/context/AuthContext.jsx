@@ -38,7 +38,18 @@ async function fetchProfile(userId) {
     .select('space_id, role')
     .eq('user_id', userId)
 
-  return { ...data, space_roles: spaceRoles ?? [] }
+  // Ad-hoc grants (user_grants table) — capabilities given to a specific user
+  // beyond their base role/department, e.g. a pastor given regional_secretary-
+  // level admin reach without changing their base role (which would silently
+  // drop the ~10 pastor-specific RLS/RPC checks elsewhere in the app). Attached
+  // as a flat array of grant_type strings so hasGrant()/route guards can check
+  // synchronously, same as space_roles above.
+  const { data: grantRows } = await supabase
+    .from('user_grants')
+    .select('grant_type')
+    .eq('user_id', userId)
+
+  return { ...data, space_roles: spaceRoles ?? [], grants: (grantRows ?? []).map((g) => g.grant_type) }
 }
 
 export function AuthProvider({ children }) {

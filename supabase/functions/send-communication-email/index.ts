@@ -1,15 +1,34 @@
 ﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
-const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN')
+// Matches the allowlist pattern in create-invite-user/activity-feed-generator:
+// reflect the request's Origin if it's a known dev/prod origin, instead of a
+// single hardcoded ALLOWED_ORIGIN that blocked localhost during development.
+const configuredOrigin = Deno.env.get('ALLOWED_ORIGIN')?.trim()
+const allowedOrigins = new Set(
+  [
+    configuredOrigin,
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'https://blwcannexus.vercel.app',
+    'https://app.blwcannexus.ca',
+  ].filter(Boolean),
+)
 
-const corsHeaders: Record<string, string> = ALLOWED_ORIGIN
-  ? {
-      'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-      'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      Vary: 'Origin',
-    }
-  : {}
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowOrigin = origin && allowedOrigins.has(origin)
+    ? origin
+    : configuredOrigin || 'https://app.blwcannexus.ca'
+
+  return {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    Vary: 'Origin',
+  }
+}
+
+// Set once per request at the top of the Deno.serve handler below.
+let corsHeaders: Record<string, string> = getCorsHeaders(null)
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -388,13 +407,10 @@ async function fetchCampaignRecipients(campaign: CampaignRow, supabase: ReturnTy
 }
 
 Deno.serve(async (request) => {
-  if (request.method === 'OPTIONS') {
-    if (!ALLOWED_ORIGIN) return new Response('CORS not configured', { status: 500 })
-    return new Response('ok', { headers: corsHeaders })
-  }
+  corsHeaders = getCorsHeaders(request.headers.get('origin'))
 
-  if (!ALLOWED_ORIGIN) {
-    return jsonResponse(500, { error: 'Missing ALLOWED_ORIGIN environment variable' })
+  if (request.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
   }
 
   if (request.method !== 'POST') {

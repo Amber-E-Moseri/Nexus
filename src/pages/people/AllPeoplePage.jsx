@@ -476,10 +476,10 @@ function PastoralTab({ users, departments, pastorMembers, role, profile, onReloa
     finally { setSaving(false); setOpenPickerId(null) }
   }
 
-  async function handleRemove(_pastorId, memberId) {
+  async function handleRemove(pastorId, memberId) {
     setSaving(true); setError('')
     try {
-      await removePastorMember(memberId)
+      await removePastorMember(pastorId, memberId)
       await onReload()
     } catch (e) { setError(e.message) }
     finally { setSaving(false) }

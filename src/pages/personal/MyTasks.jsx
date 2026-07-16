@@ -43,7 +43,7 @@ export default function MyTasks() {
     () => (quickView ? { scope: quickView.scope } : undefined),
     [quickView],
   )
-  const { tasks, isLoading, refetch } = useMyTasks(profile?.id || '', hookFilters)
+  const { tasks, isLoading, refetch, optimisticStatusUpdate } = useMyTasks(profile?.id || '', hookFilters)
   const [statuses, setStatuses] = useState([])
   const [departments, setDepartments] = useState([])
   const [modal, setModal] = useState(null)
@@ -144,6 +144,7 @@ export default function MyTasks() {
   // fields. Realtime only re-syncs tasks assigned to me, so delegated-tab
   // moves need an explicit refetch to show up.
   async function handleTaskStatusChange({ taskId, newStatus }) {
+    optimisticStatusUpdate(taskId, newStatus)
     try {
       await updateTask(taskId, {
         status: newStatus.legacy_key,
@@ -153,7 +154,6 @@ export default function MyTasks() {
     } catch (err) {
       console.error('[MyTasks] Failed to update task status:', err)
       showToast("Couldn't update that task's status. Try again.", { tone: 'error' })
-    } finally {
       refetch()
     }
   }
