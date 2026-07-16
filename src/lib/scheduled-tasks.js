@@ -1,4 +1,4 @@
-import { deactivateExpiredSprintMembers } from './sprints'
+import { deactivateExpiredSprintMembers } from '../features/sprints/lib/sprints'
 
 /**
  * Daily scheduled task to deactivate expired temporary sprint members
