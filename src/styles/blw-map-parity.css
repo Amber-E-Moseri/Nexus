@@ -751,6 +751,45 @@
   margin-top: 4px;
 }
 
+/* ── MOBILE BACK BUTTON ─────────────────────────────────────────────────── */
+.blwp-back-btn {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .blwp-back-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 850;
+    gap: 8px;
+    padding: 0 24px;
+    height: 48px;
+    background: rgba(28, 22, 16, 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: none;
+    border-radius: 28px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.28);
+    color: #fff;
+    font-family: var(--blwp-font-body);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+    pointer-events: all;
+  }
+
+  .blwp-back-btn:active {
+    transform: translateX(-50%) scale(0.96);
+  }
+}
+
 /* ── MOBILE ────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .blwp-topbar { flex-wrap: wrap; }
@@ -760,9 +799,9 @@
   .blwp-chips { top: 108px; padding: 0 10px; }
   .blwp-chips-2 { top: 142px; }
   .blwp-chip { font-size: 11px; padding: 4px 10px; }
-  .blwp-tally { bottom: 16px; }
+  .blwp-tally { bottom: 80px; }
   .blwp-tally-num { font-size: 14px; }
   .blwp-tally-item { padding: 6px 8px; }
   .blwp-prog { min-width: 100px; padding: 0 8px; }
-  .blwp-key { right: 8px; left: 8px; bottom: 80px; width: auto; }
+  .blwp-key { right: 8px; left: 8px; bottom: 120px; width: auto; }
 }

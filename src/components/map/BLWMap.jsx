@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { supabase } from '../../lib/supabase'
@@ -42,6 +43,7 @@ export function BLWMap() {
   // Default to the signed-in user's ministry group once (surface-level gate:
   // they land on their territory; the All Regions toggle stays available).
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const groupDefaultApplied = useRef(false)
   useEffect(() => {
     if (groupDefaultApplied.current) return
@@ -407,8 +409,20 @@ export function BLWMap() {
   return (
     <div style={{ display: 'flex', width: '100%', height: '100%', position: 'relative', background: THEME.surface }}>
       <div style={{ flex: 1, position: 'relative' }}>
+        {/* Mobile back button — fixed at bottom centre, only visible on small screens */}
+        <button className="blwp-back-btn" onClick={() => navigate(-1)}>
+          ← Back
+        </button>
         {/* Top bar */}
         <div className="blwp-topbar">
+          <button
+            className="blwp-navpill"
+            onClick={() => navigate('/dashboard')}
+            title="Exit map — back to dashboard"
+            style={{ fontWeight: 600 }}
+          >
+            ← Exit
+          </button>
           <div className="blwp-pill blwp-logo">
             <span style={{ fontSize: 15 }}>🍁</span>
             <span className="blwp-logo-text">BLW CAN</span>
