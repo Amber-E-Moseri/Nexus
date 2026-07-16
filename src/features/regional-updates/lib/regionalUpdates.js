@@ -2,9 +2,10 @@ import { supabase } from '../../../lib/supabase'
 
 // Post a new regional update
 export async function postRegionalUpdate(content, expiresAt) {
+  const { data: { user } } = await supabase.auth.getUser()
   const { data, error } = await supabase
     .from('regional_updates')
-    .insert([{ content, expires_at: expiresAt }])
+    .insert([{ content, expires_at: expiresAt, created_by: user.id }])
     .select()
 
   if (error) throw error
