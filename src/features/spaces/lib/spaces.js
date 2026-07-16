@@ -24,11 +24,11 @@ export async function getMySpaces(userId, role, departmentId) {
     memberships ? memberships.map((m) => m.group_space_id) : []
   )
 
-  const isAdmin = role === 'super_admin' || role === 'dept_lead'
+  const isAdmin = role === 'super_admin' || role === 'dept_lead' || role === 'regional_secretary'
 
   return spaces.filter((space) => {
     if (space.space_type === 'personal') return space.owner_id === userId
-    if (space.space_type === 'department') return role === 'super_admin' || space.id === departmentId
+    if (space.space_type === 'department') return role === 'super_admin' || role === 'regional_secretary' || space.id === departmentId
     // group: only owner, members, and super_admin can see (never org-visible)
     if (space.space_type === 'group') {
       return role === 'super_admin' || space.owner_id === userId || memberGroupIds.has(space.id)
@@ -212,7 +212,7 @@ export async function getSpaceSprints(spaceId) {
 export async function getSpaceMeetings(spaceId) {
   const { data, error } = await supabase
     .from('meetings')
-    .select('id, title, date, department_id, created_at, status')
+    .select('id, title, date, department_id, created_at, status, visibility, summary, minutes')
     .eq('department_id', spaceId)
     .order('date', { ascending: false })
 
