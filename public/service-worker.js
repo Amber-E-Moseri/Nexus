@@ -1,7 +1,7 @@
 // Service Worker for PWA: offline support, caching, and push notifications
 // Version: 1.0.0 (increment on deploy for cache busting)
 
-const CACHE_VERSION = 'v1.0.4';
+const CACHE_VERSION = 'v1.0.5';
 const STATIC_CACHE = `nexus-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `nexus-dynamic-${CACHE_VERSION}`;
 const API_CACHE = `nexus-api-${CACHE_VERSION}`;

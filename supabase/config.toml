@@ -2,3 +2,6 @@
 
 [functions."task-overdue-trigger"]
 verify_jwt = false
+
+[functions."calendar-task-feed"]
+verify_jwt = false
