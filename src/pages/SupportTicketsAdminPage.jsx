@@ -200,7 +200,7 @@ export default function SupportTicketsAdminPage() {
   const loadTickets = useCallback(async () => {
     const { data } = await supabase
       .from('support_tickets')
-      .select('*, submitter:users!submitted_by(id, full_name, avatar_url, department_id)')
+      .select('*, submitter:users!submitted_by(id, name, avatar_url, department_id)')
       .order('created_at', { ascending: false })
     setTickets(data ?? [])
     setLoading(false)
