@@ -91,7 +91,6 @@ const TEXTAREA = {
   borderRadius: 8,
   fontSize: 13,
   color: '#2D2A22',
-  fontFamily: 'monospace',
   fontFamily: 'inherit',
   outline: 'none',
   minHeight: 120,
