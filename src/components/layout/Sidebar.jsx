@@ -1251,14 +1251,6 @@ export default function Sidebar() {
             to="/settings/campus-photos"
           />
         )}
-        {showAdminPlatform ? (
-          <SidebarItem
-            active={isPathActive(location.pathname, '/automations')}
-            icon={Zap}
-            label="Automations"
-            to="/automations"
-          />
-        ) : null}
         {FLOCK_CRM_CONFIG.checkAccess(role) ? (
           <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12 }}>
             <div style={{ ...SECTION_LABEL_STYLE }}>Confidential</div>

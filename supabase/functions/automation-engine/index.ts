@@ -279,6 +279,41 @@ async function executeAction(
           return { action_type: 'send_email', result: { skipped: true, reason: 'no_email' } }
         }
 
+        // Look up the target user to check their automation email preferences
+        const { data: targetUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', to)
+          .maybeSingle()
+
+        if (targetUser?.id) {
+          // Email actions require explicit opt-in per user
+          const { data: pref } = await supabase
+            .from('user_automation_preferences')
+            .select('enabled, email_opted_in, max_emails_per_day')
+            .eq('user_id', targetUser.id)
+            .eq('automation_id', automation.id)
+            .maybeSingle()
+
+          const opted = pref?.email_opted_in ?? false
+          if (!opted) {
+            return { action_type: 'send_email', result: { skipped: true, reason: 'not_opted_in' } }
+          }
+
+          // Enforce daily per-user email limit
+          const maxPerDay = pref?.max_emails_per_day ?? 3
+          if (maxPerDay > 0) {
+            const { data: limitReached } = await supabase
+              .rpc('user_email_limit_reached', {
+                p_user_id: targetUser.id,
+                p_automation_id: automation.id,
+              })
+            if (limitReached) {
+              return { action_type: 'send_email', result: { skipped: true, reason: 'daily_limit_reached' } }
+            }
+          }
+        }
+
         const resendApiKey = Deno.env.get('RESEND_API_KEY')
         if (!resendApiKey) {
           return { action_type: 'send_email', result: { skipped: true, reason: 'no_api_key' } }
@@ -301,6 +336,16 @@ async function executeAction(
         if (!emailResponse.ok) {
           const errorData = await emailResponse.json()
           throw new Error(`Resend API error: ${JSON.stringify(errorData)}`)
+        }
+
+        // Log the send for daily-limit tracking
+        if (targetUser?.id) {
+          await supabase.from('automation_email_log').insert({
+            user_id: targetUser.id,
+            automation_id: automation.id,
+            subject,
+            recipient: to,
+          })
         }
 
         return { action_type: 'send_email', result: { sent: true } }
@@ -734,13 +779,9 @@ Deno.serve(async (req) => {
   const recordDepartmentId = typeof newRecord.department_id === 'string' ? newRecord.department_id : null
   const recordSprintId = typeof newRecord.sprint_id === 'string' ? newRecord.sprint_id : null
 
-  const scopeClauses: string[] = []
+  const scopeClauses: string[] = ['department_id.is.null'] // always include org-wide automations
   if (recordDepartmentId) scopeClauses.push(`department_id.eq.${recordDepartmentId}`)
   if (recordSprintId) scopeClauses.push(`sprint_id.eq.${recordSprintId}`)
-
-  if (scopeClauses.length === 0) {
-    return jsonResponse(200, { matched: 0, message: 'Record has no department or sprint scope' })
-  }
 
   const { data: automations, error } = await supabase
     .from('automations')

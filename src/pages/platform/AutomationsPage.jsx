@@ -100,15 +100,10 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
 
         let nextAutomations = automationsRes
         if (role !== 'super_admin') {
-          if (!targetDeptId) {
-            setAutomations([])
-            setRunLog([])
-            setDepartments([])
-            setUsers([])
-            setLoading(false)
-            return
-          }
-          nextAutomations = automationsRes.filter((a) => a.department_id === targetDeptId)
+          // Show org-wide automations (null dept) + this user's dept automations
+          nextAutomations = automationsRes.filter(
+            (a) => a.department_id === null || a.department_id === targetDeptId
+          )
         }
 
         const nextDepartments = departmentsRes ?? []
@@ -186,14 +181,14 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
   return (
     <div className="space-y-6" style={{ fontFamily: FONT_BODY }}>
       {!embedded ? (
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-[22px]" style={{ fontFamily: FONT_HEADING, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ink-1)' }}>Automations</h1>
             <p className="mt-0.5 text-sm" style={{ color: 'var(--ink-2)' }}>
               Trigger-and-action workflows across departments.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
               onClick={() => setShowTemplates((v) => !v)}
@@ -217,12 +212,12 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
       ) : null}
 
       {embedded ? (
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-[var(--text-secondary)]">
             {activeCount} of {automations.length} rules active · trigger-and-action workflows across departments.
           </p>
 
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
               onClick={() => setShowTemplates((v) => !v)}
@@ -253,9 +248,9 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
 
       {showTemplates && (
         <div style={{ background: 'white', border: '1px solid var(--border-1)', borderRadius: 16, padding: '18px 20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div className="mb-[14px] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h3 style={{ fontFamily: FONT_HEADING, fontSize: 15, fontWeight: 700, color: 'var(--ink-1)' }}>Automation Templates</h3>
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => setTemplateFilter('all')} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, border: 'none', cursor: 'pointer', background: templateFilter === 'all' ? 'var(--purple-tint)' : 'transparent', color: templateFilter === 'all' ? 'var(--purple-700)' : 'var(--ink-2)' }}>All</button>
               {Object.entries(TEMPLATE_CATEGORIES).map(([key, cat]) => (
                 <button key={key} type="button" onClick={() => setTemplateFilter(key)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, border: 'none', cursor: 'pointer', background: templateFilter === key ? 'var(--purple-tint)' : 'transparent', color: templateFilter === key ? 'var(--purple-700)' : 'var(--ink-2)' }}>
@@ -310,7 +305,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
       ) : (
         <>
           {role === 'super_admin' ? (
-            <div className="flex gap-2 border-b border-[var(--border)]">
+            <div className="flex gap-2 overflow-x-auto border-b border-[var(--border)] pb-1">
               <button
                 type="button"
                 onClick={() => setActiveTab('automations')}
@@ -364,7 +359,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
 
               return (
                 <div key={automation.id} className="rounded-3xl border border-[var(--border)] bg-white p-4 shadow-[var(--card-shadow)]">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <button
                         type="button"
@@ -388,7 +383,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
                       </div>
 
                       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)]">
-                        <span>{automation.department?.name ?? 'Unassigned space'}</span>
+                        <span>{automation.department?.name ?? 'All Spaces'}</span>
                         <span>{automation.fire_count ?? 0} runs</span>
                         {latestRun ? (
                           <>
@@ -401,7 +396,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 sm:self-start">
                       <Toggle
                         checked={automation.enabled}
                         onClick={async () => {
@@ -430,7 +425,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
             ) : (
               <div>
                 {runLog.slice(0, 8).map((run) => (
-                  <div key={run.id} className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-5 py-4 last:border-b-0">
+                  <div key={run.id} className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 last:border-b-0 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-[var(--text-primary)]">
                         {run.automation?.name ?? 'Automation'}
@@ -443,7 +438,9 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
                       </div>
                     </div>
 
-                    <RunBadge status={run.status} />
+                    <div className="sm:self-start">
+                      <RunBadge status={run.status} />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -455,9 +452,9 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
           {activeTab === 'run-log' ? (
             <div className="space-y-4">
               <div className="rounded-3xl border border-[var(--border)] bg-white shadow-[var(--card-shadow)]">
-                <div className="border-b border-[var(--border)] px-5 py-4 flex items-center justify-between gap-4">
+                <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <h3 className="text-lg font-semibold text-[var(--text-primary)]">Automation Run Log</h3>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {['all', 'failed'].map((filter) => (
                       <button
                         key={filter}
@@ -480,7 +477,59 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
                 ) : !automationRunLog.length ? (
                   <div className="px-5 py-6 text-sm text-[var(--text-secondary)]">No automations have run yet.</div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <>
+                    <div className="divide-y divide-[var(--border)] md:hidden">
+                      {automationRunLog
+                        .filter((entry) => {
+                          if (automationRunFilter === 'failed') return !entry.success
+                          return true
+                        })
+                        .map((entry) => {
+                          const automation = automations.find((a) => a.id === entry.automation_id)
+                          const actionCount = Array.isArray(entry.actions_executed) ? entry.actions_executed.length : 0
+
+                          return (
+                            <button
+                              key={entry.id}
+                              type="button"
+                              className="block w-full space-y-2 px-5 py-4 text-left transition hover:bg-[var(--surface-secondary)]"
+                              onClick={() => setSelectedRunDetail(entry)}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="font-medium text-[var(--text-primary)]">
+                                    {automation?.name ?? 'Unknown automation'}
+                                  </div>
+                                  <div className="mt-1 text-xs text-[var(--text-secondary)]">
+                                    {entry.trigger_type}
+                                  </div>
+                                </div>
+                                <span
+                                  className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                                  style={{
+                                    background: entry.success ? 'var(--status-done-bg)' : 'var(--status-blocked-bg)',
+                                    color: entry.success ? 'var(--status-done-text)' : 'var(--status-blocked-text)',
+                                  }}
+                                >
+                                  {entry.success ? 'Success' : 'Failed'}
+                                </span>
+                              </div>
+                              <div className="text-xs text-[var(--text-secondary)]">
+                                {new Date(entry.ran_at).toLocaleString('en-CA', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                })}
+                              </div>
+                              <div className="text-xs text-[var(--text-secondary)]">
+                                {actionCount} action{actionCount !== 1 ? 's' : ''}
+                              </div>
+                            </button>
+                          )
+                        })}
+                    </div>
+                    <div className="hidden overflow-x-auto md:block">
                     <table className="min-w-full text-left text-sm">
                       <thead className="text-[var(--text-secondary)]">
                         <tr className="border-b border-[var(--border)]">
@@ -540,7 +589,8 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
                           })}
                       </tbody>
                     </table>
-                  </div>
+                    </div>
+                  </>
                 )}
               </div>
 
@@ -621,9 +671,9 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
 
           {activeTab === 'webhooks' ? (
             <div className="rounded-3xl border border-[var(--border)] bg-white shadow-[var(--card-shadow)]">
-              <div className="border-b border-[var(--border)] px-5 py-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <h3 className="text-lg font-semibold text-[var(--text-primary)]">Webhook Delivery Log</h3>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {['all', 'success', 'failed'].map((filter) => (
                     <button
                       key={filter}
@@ -646,7 +696,45 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
               ) : !webhookLog.length ? (
                 <div className="px-5 py-6 text-sm text-[var(--text-secondary)]">No webhook deliveries recorded yet.</div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                  <div className="divide-y divide-[var(--border)] md:hidden">
+                    {webhookLog
+                      .filter((entry) => {
+                        if (webhookFilter === 'success') return entry.success
+                        if (webhookFilter === 'failed') return !entry.success
+                        return true
+                      })
+                      .map((entry) => (
+                        <div key={entry.id} className="space-y-2 px-5 py-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 break-all text-xs font-mono text-[var(--text-secondary)]">
+                              {entry.webhook_url}
+                            </div>
+                            <span
+                              className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                              style={{
+                                background: entry.success ? 'var(--status-done-bg)' : 'var(--status-blocked-bg)',
+                                color: entry.success ? 'var(--status-done-text)' : 'var(--status-blocked-text)',
+                              }}
+                            >
+                              {entry.response_status ?? 'Error'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-[var(--text-secondary)]">
+                            {new Date(entry.delivered_at).toLocaleString('en-CA', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                          <div className="break-words text-xs text-[var(--text-secondary)]">
+                            {entry.response_body || '—'}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                  <div className="hidden overflow-x-auto md:block">
                   <table className="min-w-full text-left text-sm">
                     <thead className="text-[var(--text-secondary)]">
                       <tr className="border-b border-[var(--border)]">
@@ -702,7 +790,8 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
                         ))}
                     </tbody>
                   </table>
-                </div>
+                  </div>
+                </>
               )}
             </div>
           ) : null}

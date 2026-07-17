@@ -14,9 +14,10 @@ import ApiDocumentationPage from '../ApiDocumentationPage'
 import ActivityFeedWidget from '../../features/dashboard/components/ActivityFeedWidget'
 import ApiPermissionsSection from './ApiPermissionsSection'
 import ApiKeyManager from '../../features/automations/components/ApiKeyManager'
+import AutomationPreferencesSection from '../../components/settings/AutomationPreferencesSection'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 
-const TABS = ['Profile', 'Notifications', 'Integrations', 'Automations', 'Members', 'Activity Log', 'API Permissions', 'Organisation', 'API', 'Danger Zone']
+const TABS = ['Profile', 'Notifications', 'My Automations', 'Integrations', 'Automations', 'Members', 'Activity Log', 'API Permissions', 'Organisation', 'API', 'Danger Zone']
 const EXPORT_TABLE_SELECT = {
   profiles: 'id, full_name, email, department_id, role, status, created_at',
   tasks: 'id, title, description, status, status_id, priority, assignee_id, department_id, sprint_id, due_date, completed_at, created_by, created_at',
@@ -382,6 +383,13 @@ export default function Settings() {
       {activeTab === 'Notifications' ? (
         <div role="tabpanel" id="tabpanel-notifications" aria-labelledby="tab-notifications" tabIndex={0}>
           <NotificationsSection prefs={prefs} role={role} onTogglePref={handleToggleNotification} />
+        </div>
+      ) : null}
+
+      {activeTab === 'My Automations' ? (
+        <div role="tabpanel" id="tabpanel-my-automations" aria-labelledby="tab-my-automations" tabIndex={0}>
+          <h2 style={{ fontFamily: FONT_HEADING, fontSize: 16, fontWeight: 700, color: 'var(--ink-1)', marginBottom: 4 }}>My Automation Preferences</h2>
+          <AutomationPreferencesSection />
         </div>
       ) : null}
 

@@ -21,18 +21,12 @@ function StepCard({ kind, title, description, headerRight, children }) {
   const step = STEP_STYLES[kind]
   return (
     <section
+      className="flex flex-col gap-3 rounded-[14px] border border-[var(--border-1)] bg-white p-4"
       style={{
-        border: '1px solid var(--border-1)',
         borderLeft: `3px solid ${step.edge}`,
-        borderRadius: 14,
-        background: 'white',
-        padding: '14px 16px 16px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
           <span
             style={{
@@ -201,7 +195,7 @@ export default function AutomationBuilder({
   const seed = automation ?? initialValues ?? null
   const { profile } = useAuth()
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(
-    seed?.department_id ?? departmentId ?? departments[0]?.id ?? '',
+    seed?.department_id ?? departmentId ?? null,
   )
   const [name, setName] = useState(seed?.name ?? '')
   const [description, setDescription] = useState(seed?.description ?? '')
@@ -223,7 +217,7 @@ export default function AutomationBuilder({
   )
 
   useEffect(() => {
-    setSelectedDepartmentId(seed?.department_id ?? departmentId ?? departments[0]?.id ?? '')
+    setSelectedDepartmentId(seed?.department_id ?? departmentId ?? null)
   }, [seed?.department_id, departmentId, departments])
 
   useEffect(() => {
@@ -264,11 +258,6 @@ export default function AutomationBuilder({
   async function handleSave() {
     if (!name.trim()) {
       setError('Automation name is required.')
-      return
-    }
-
-    if (!selectedDepartmentId) {
-      setError('Select a space for this automation.')
       return
     }
 
@@ -321,24 +310,24 @@ export default function AutomationBuilder({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[min(760px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-1)] bg-white shadow-[0_24px_64px_rgba(14,14,30,0.22)]"
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100vh-16px)] w-[calc(100vw-16px)] max-w-[760px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[20px] border border-[var(--border-1)] bg-white shadow-[0_24px_64px_rgba(14,14,30,0.22)] sm:max-h-[90vh] sm:w-[min(760px,94vw)] sm:rounded-2xl"
           style={{ fontFamily: FONT_BODY }}
           aria-describedby={undefined}
         >
-          <div className="flex items-center justify-between border-b border-[var(--border-1)] px-5 py-4">
+          <div className="flex items-center justify-between border-b border-[var(--border-1)] px-4 py-4 sm:px-5">
             <Dialog.Title className="text-sm" style={{ fontFamily: FONT_HEADING, fontWeight: 600, color: 'var(--ink-1)' }}>
               {automation ? 'Edit automation' : 'New automation'}
             </Dialog.Title>
             <Dialog.Close aria-label="Close dialog" className="rounded-lg px-2 py-1 text-[var(--text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"><span aria-hidden="true">×</span></Dialog.Close>
           </div>
 
-          <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
+          <div className="flex-1 space-y-6 overflow-y-auto px-4 py-5 sm:px-5">
             {error ? (
               <div className="rounded-xl border px-3 py-2 text-sm" style={{ borderColor: 'var(--coral)', background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>{error}</div>
             ) : null}
 
             <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--text-primary)]">Details</h3>
                   <p className="text-sm text-[var(--text-secondary)]">Name the rule and decide whether it is active.</p>
@@ -355,12 +344,12 @@ export default function AutomationBuilder({
                 placeholder="Birthday sheet intake"
               />
               <select
-                value={selectedDepartmentId}
-                onChange={(event) => setSelectedDepartmentId(event.target.value)}
+                value={selectedDepartmentId ?? ''}
+                onChange={(event) => setSelectedDepartmentId(event.target.value || null)}
                 className={INPUT_CLASS}
                 disabled={Boolean(departmentId && departments.length <= 1)}
               >
-                <option value="">Select space</option>
+                <option value="">All Spaces (org-wide)</option>
                 {departments.map((department) => (
                   <option key={department.id} value={department.id}>{department.name}</option>
                 ))}
@@ -428,8 +417,8 @@ export default function AutomationBuilder({
 
               {triggerType === 'delegated_task_due_soon' ? (
                 <div className="grid gap-3 md:grid-cols-2">
-                  <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-                    Days before due date
+                  <label className="grid gap-2 text-sm text-[var(--text-secondary)]">
+                    <span>Days before due date</span>
                     <input
                       type="number"
                       min={0}
@@ -457,8 +446,8 @@ export default function AutomationBuilder({
               ) : null}
 
               {triggerType === 'task_inactive' ? (
-                <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-                  Days without activity
+                <label className="grid gap-2 text-sm text-[var(--text-secondary)]">
+                  <span>Days without activity</span>
                   <input
                     type="number"
                     min={1}
@@ -633,8 +622,8 @@ export default function AutomationBuilder({
                         <option value="due_date">Due date</option>
                         <option value="start_date">Start date</option>
                       </select>
-                      <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-                        Days from now
+                      <label className="grid gap-2 text-sm text-[var(--text-secondary)]">
+                        <span>Days from now</span>
                         <input
                           type="number"
                           value={action.config?.relative_days ?? 0}
@@ -764,13 +753,13 @@ export default function AutomationBuilder({
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-[var(--border-1)] bg-[var(--surface-sub)] px-5 py-4">
+          <div className="flex flex-col-reverse gap-2 border-t border-[var(--border-1)] bg-[var(--surface-sub)] px-4 py-4 sm:flex-row sm:justify-end sm:px-5">
             <Dialog.Close className="rounded-xl border border-[var(--border-1)] px-4 py-2 text-sm font-medium text-[var(--ink-2)]">
               Cancel
             </Dialog.Close>
             <button
               type="button"
-              disabled={saving || !selectedDepartmentId}
+              disabled={saving}
               onClick={handleSave}
               className="rounded-xl bg-[var(--purple-700)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--purple-600)] disabled:opacity-60"
             >
