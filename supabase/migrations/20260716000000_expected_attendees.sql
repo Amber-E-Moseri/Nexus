@@ -15,6 +15,7 @@ create table if not exists public.expected_attendees (
   unique (match_key)
 );
 
+drop trigger if exists set_expected_attendees_updated_at on public.expected_attendees;
 create trigger set_expected_attendees_updated_at
   before update on public.expected_attendees
   for each row execute function public.set_updated_at();
