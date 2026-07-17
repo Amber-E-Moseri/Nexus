@@ -7,6 +7,7 @@ import CalendarSettingsPanel from '../../features/calendar/components/CalendarSe
 import { SubscriptionManager } from '../../features/calendar/components/SubscriptionManager'
 import CalendarSourcesAdminPanel from '../../features/calendar/components/CalendarSourcesAdminPanel'
 import CategoryVisibilityConfig from '../../features/calendar/components/CategoryVisibilityConfig'
+import MeetingDocConnectionPanel from '../../features/meetings/components/MeetingDocConnectionPanel'
 
 // Ministry Calendar settings.
 // Super admins manage write access, iCal subscriptions, and the Google Calendar
@@ -133,6 +134,13 @@ export default function CalendarSettingsPage() {
 
           <CalendarSourcesAdminPanel />
         </>
+      )}
+
+      {/* Meeting Docs Drive connection — super_admin only. */}
+      {isSuperAdmin && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--border)', paddingTop: '20px' }}>
+          <MeetingDocConnectionPanel />
+        </div>
       )}
 
       {/* Category visibility — Programs team + super admins. */}

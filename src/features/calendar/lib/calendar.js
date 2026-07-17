@@ -413,6 +413,12 @@ export function getTaskFeedUrl(token) {
   return `${base}/functions/v1/calendar-task-feed/${token}`
 }
 
+export function getGoogleCalendarSubscribeUrl(feedUrl) {
+  if (!feedUrl) return null
+  const webcalUrl = feedUrl.replace(/^https?:\/\//, 'webcal://')
+  return `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcalUrl)}`
+}
+
 // ---- Event Types ----
 
 export async function getEventTypes(options = {}) {

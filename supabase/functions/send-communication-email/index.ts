@@ -1,8 +1,5 @@
 ﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
-// Matches the allowlist pattern in create-invite-user/activity-feed-generator:
-// reflect the request's Origin if it's a known dev/prod origin, instead of a
-// single hardcoded ALLOWED_ORIGIN that blocked localhost during development.
 import { corsOptionsResponse, jsonResponse } from '../_shared/cors.ts'
 
 interface Recipient {
@@ -416,7 +413,7 @@ Deno.serve(async (request) => {
     })
 
     const { data: authData, error: authError } = await authClient.auth.getUser()
-    if (authError || !authData.user) return jsonResponse(401, { error: 'Unable to validate caller' })
+    if (authError || !authData.user) return respond(401, { error: 'Unable to validate caller' })
 
     const { data: profile } = await supabase
       .from('users')
@@ -425,7 +422,7 @@ Deno.serve(async (request) => {
       .single()
 
     if (!profile || !['super_admin', 'dept_lead'].includes(profile.role ?? '')) {
-      return jsonResponse(403, { error: 'You do not have permission to send campaigns.' })
+      return respond(403, { error: 'You do not have permission to send campaigns.' })
     }
 
     callerUserId = profile.id
@@ -466,7 +463,7 @@ Deno.serve(async (request) => {
       .single()
 
     if (campaignError || !campaign) {
-      return jsonResponse(404, { error: 'Campaign not found.' })
+      return respond(404, { error: 'Campaign not found.' })
     }
 
     const typedCampaign = campaign as CampaignRow
@@ -485,21 +482,21 @@ Deno.serve(async (request) => {
   }
 
   if (!Array.isArray(to) || to.length === 0) {
-    return jsonResponse(400, { error: 'No recipients resolved for this send.' })
+    return respond(400, { error: 'No recipients resolved for this send.' })
   }
 
   if (to.some((recipient) => !recipient?.email || recipient.email.trim() === '')) {
-    return jsonResponse(400, { error: 'Every recipient must have a non-empty email.' })
+    return respond(400, { error: 'Every recipient must have a non-empty email.' })
   }
 
-  if (!subject.trim()) return jsonResponse(400, { error: 'subject must be non-empty' })
+  if (!subject.trim()) return respond(400, { error: 'subject must be non-empty' })
   if (!bodyHtml.trim() && !bodyText.trim() && !body.trim()) {
-    return jsonResponse(400, { error: 'body must be non-empty' })
+    return respond(400, { error: 'body must be non-empty' })
   }
 
   if (!subject.trim().startsWith('[TEST]')) {
     const subjectError = validateSubject(subject)
-    if (subjectError) return jsonResponse(400, { error: subjectError })
+    if (subjectError) return respond(400, { error: subjectError })
   }
 
   const safeHtmlTemplate = sanitizeEmailHtml(bodyHtml || body || '')
@@ -560,7 +557,7 @@ Deno.serve(async (request) => {
         .eq('id', campaignId)
     }
 
-    return jsonResponse(200, { sent: 0, failed: 0, errors: [], skipped_unsubscribed: skippedUnsubscribed })
+    return respond(200, { sent: 0, failed: 0, errors: [], skipped_unsubscribed: skippedUnsubscribed })
   }
 
   // Fetch A/B test data if this is a campaign
@@ -762,7 +759,7 @@ Deno.serve(async (request) => {
       .eq('id', campaignId)
   }
 
-  return jsonResponse(200, {
+  return respond(200, {
     sent,
     failed,
     errors,
