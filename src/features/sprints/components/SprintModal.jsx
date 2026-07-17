@@ -33,22 +33,23 @@ const labelStyle = {
   marginBottom: 6,
 }
 
-export default function SprintModal({ mode = 'create', sprint = null, initialDepartmentId = null, onSaved, onClose }) {
+export default function SprintModal({ mode = 'create', sprint = null, initialDepartmentId = null, initialName = '', onSaved, onClose }) {
   const { profile } = useAuth()
-  const [name, setName] = useState(sprint?.name ?? '')
+  const [name, setName] = useState(sprint?.name ?? initialName ?? '')
   const [goal, setGoal] = useState(sprint?.goal ?? '')
   const [description, setDescription] = useState(sprint?.description ?? '')
   const [startDate, setStartDate] = useState(sprint?.start_date ?? '')
   const [endDate, setEndDate] = useState(sprint?.end_date ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-  const [template, setTemplate] = useState('custom')
-  const [selectedDepts, setSelectedDepts] = useState([])
+  const [template, setTemplate] = useState(initialDepartmentId ? 'single' : 'custom')
+  const [selectedDepts, setSelectedDepts] = useState(initialDepartmentId ? [initialDepartmentId] : [])
   const [depts, setDepts] = useState([])
   const [deptsLoading, setDeptsLoading] = useState(false)
   const [createdTeams, setCreatedTeams] = useState(null)
   const [success, setSuccess] = useState(false)
   const titleRef = useRef(null)
+  const nameDirtyRef = useRef(false)
 
   async function createSprintTemplateFallback() {
     const departmentId = template === 'single' ? selectedDepts[0] : null
@@ -107,6 +108,12 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
   useEffect(() => {
     titleRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    if (mode === 'create' && !sprint && !nameDirtyRef.current) {
+      setName(initialName ?? '')
+    }
+  }, [initialName, mode, sprint])
 
   useEffect(() => {
     if (mode === 'create') {
@@ -399,7 +406,7 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
                     ref={titleRef}
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => { nameDirtyRef.current = true; setName(e.target.value) }}
                     placeholder="Healing Streams"
                     style={{ ...inputStyle, fontSize: 15, padding: '10px 12px' }}
                   />

@@ -166,6 +166,22 @@ export default function PastoralAssignmentsPage() {
     return map
   }, [visibleAssignments])
 
+  // Built from the FULL, unscoped `assignments` (not visibleAssignments) so a
+  // candidate's existing pastor(s) — including ones in other departments a dept_lead
+  // can't otherwise see — are always visible to whoever is assigning. A member can have
+  // at most 2 pastors (enforced by the assign_pastor_member RPC + a DB unique index).
+  const memberExistingPastors = useMemo(() => {
+    const map = new Map()
+    for (const assignment of assignments) {
+      const pastor = userById.get(assignment.pastor_id)
+      if (!pastor) continue
+      const list = map.get(assignment.member_id) ?? []
+      list.push(pastor)
+      map.set(assignment.member_id, list)
+    }
+    return map
+  }, [assignments, userById])
+
   async function handleAssign(pastorId) {
     const memberId = draftMemberByPastor[pastorId]
     if (!memberId) return
@@ -207,7 +223,11 @@ export default function PastoralAssignmentsPage() {
             const department = departmentById.get(pastor.department_id)
             const assignedMembers = membersByPastor.get(pastor.id) ?? []
             const thisRosterIds = assignedMemberIdsByPastor.get(pastor.id) ?? new Set()
-            const availableMembers = members.filter((member) => !thisRosterIds.has(member.id))
+            // Exclude candidates already at the two-pastor cap (any pastor, not just
+            // this one) rather than letting the click fail with an RPC error.
+            const availableMembers = members.filter((member) =>
+              !thisRosterIds.has(member.id) && (memberExistingPastors.get(member.id)?.length ?? 0) < 2
+            )
 
             return (
               <div key={pastor.id} className="rounded-[22px] border border-[var(--border)] bg-white p-4 shadow-[var(--card-shadow)]">
@@ -263,11 +283,17 @@ export default function PastoralAssignmentsPage() {
                           className="min-w-[220px] flex-1 rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                         >
                           <option value="">Assign member</option>
-                          {availableMembers.map((member) => (
-                            <option key={member.id} value={member.id}>
-                              {member.name}
-                            </option>
-                          ))}
+                          {availableMembers.map((member) => {
+                            const existing = memberExistingPastors.get(member.id) ?? []
+                            const existingLabel = existing.length > 0
+                              ? ` — already with ${existing.map((p) => p.name).join(', ')}`
+                              : ''
+                            return (
+                              <option key={member.id} value={member.id}>
+                                {member.name}{existingLabel}
+                              </option>
+                            )
+                          })}
                         </select>
                         <button
                           type="button"

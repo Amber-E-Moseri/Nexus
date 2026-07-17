@@ -17,8 +17,10 @@ import { useTimeBlocks } from './hooks/useTimeBlocks'
 import { computeTimeBlockWarnings, worstSeverity } from './lib/warningEngine'
 import {
   addDays,
+  canSplitBlock,
   minutesToTime,
   parseTimeToMinutes,
+  snapMinutes,
   startOfWeek,
   toISODate,
   MINUTES_PER_DAY,
@@ -60,6 +62,7 @@ export default function PlannerTimeBlocking() {
   const [subtasksByParentId, setSubtasksByParentId] = useState({})
   const [modalTask, setModalTask] = useState(null)
   const [activeDrag, setActiveDrag] = useState(null)
+  const [pendingTask, setPendingTask] = useState(null) // mobile tap-to-schedule
   const [unlinkPrompt, setUnlinkPrompt] = useState(null) // { block, move }
   const [contextMenu, setContextMenu] = useState(null) // { x, y, block }
   const [dismissedWarnings, setDismissedWarnings] = useState(() => new Set())
@@ -95,7 +98,16 @@ export default function PlannerTimeBlocking() {
     ]
   }, [parents, matchesPriority, todayISO, weekEndISO])
 
-  const scheduledTaskIds = useMemo(() => new Set(timeBlocks.map((b) => b.task_id)), [timeBlocks])
+  const scheduledBlocksByTaskId = useMemo(() => {
+    const map = new Map()
+    for (const b of timeBlocks) {
+      if (!map.has(b.task_id)) map.set(b.task_id, [])
+      map.get(b.task_id).push(b)
+    }
+    return map
+  }, [timeBlocks])
+
+  const scheduledTaskIds = useMemo(() => new Set(scheduledBlocksByTaskId.keys()), [scheduledBlocksByTaskId])
 
   const kpis = useMemo(() => {
     const due = (t) => (t.due_date ? t.due_date.slice(0, 10) : null)
@@ -334,6 +346,45 @@ export default function PlannerTimeBlocking() {
     [updateTimeBlock, runMutation],
   )
 
+  const [splittingBlockIds, setSplittingBlockIds] = useState(new Set())
+
+  const handleSplitBlock = useCallback(async (block) => {
+    if (!canSplitBlock(block, childBlocksByParentBlockId)) return
+    if (splittingBlockIds.has(block.id)) return
+
+    const startMin   = parseTimeToMinutes(block.scheduled_start_time)
+    const endMin     = parseTimeToMinutes(block.scheduled_end_time)
+    const snappedMid = snapMinutes(startMin + Math.floor((endMin - startMin) / 2), 15)
+
+    setSplittingBlockIds((prev) => new Set([...prev, block.id]))
+    try {
+      await updateTimeBlock(block.id, { scheduled_end_time: minutesToTime(snappedMid) })
+      try {
+        await createTimeBlock({
+          taskId: block.task_id,
+          scheduledDate: block.scheduled_date,
+          scheduledStartTime: minutesToTime(snappedMid),
+          scheduledEndTime: minutesToTime(endMin),
+          isAllDay: false,
+          parentTimeBlockId: null,
+          timeOffsetFromParent: null,
+        })
+      } catch {
+        // createTimeBlock failed — attempt to restore the original end time
+        try {
+          await updateTimeBlock(block.id, { scheduled_end_time: minutesToTime(endMin) })
+          showToast('Split failed — block restored.', { tone: 'error' })
+        } catch {
+          showToast('Split failed and block may be truncated — please refresh.', { tone: 'error' })
+        }
+      }
+    } catch {
+      showToast('Could not split block. Please try again.', { tone: 'error' })
+    } finally {
+      setSplittingBlockIds((prev) => { const next = new Set(prev); next.delete(block.id); return next })
+    }
+  }, [childBlocksByParentBlockId, splittingBlockIds, updateTimeBlock, createTimeBlock, showToast])
+
   const handleBlockContextMenu = useCallback((e, block) => {
     setContextMenu({ x: e.clientX, y: e.clientY, block })
   }, [])
@@ -359,6 +410,34 @@ export default function PlannerTimeBlocking() {
     setWeekStart(startOfWeek(d))
   }, [])
 
+  // Mobile tap-to-schedule: select a task then tap a grid slot
+  const handleTapSchedule = useCallback((task) => {
+    setPendingTask((prev) => (prev?.id === task.id ? null : task))
+    setSidebarOpen(false) // reveal the grid
+  }, [])
+
+  const handleSlotTap = useCallback((slotId) => {
+    if (!pendingTask) return
+    const [, date, hour] = slotId.split(':')
+    const startTime = minutesToTime(Number(hour) * 60)
+    const endTime = minutesToTime(Math.min(MINUTES_PER_DAY, (Number(hour) + 1) * 60))
+    const relinkTarget = findRelinkTarget(pendingTask, date, startTime)
+    runMutation(() =>
+      createTimeBlock({
+        taskId: pendingTask.id,
+        scheduledDate: date,
+        scheduledStartTime: startTime,
+        scheduledEndTime: endTime,
+        isAllDay: false,
+        parentTimeBlockId: relinkTarget?.id ?? null,
+        timeOffsetFromParent: relinkTarget
+          ? parseTimeToMinutes(startTime) - parseTimeToMinutes(relinkTarget.scheduled_start_time)
+          : null,
+      }),
+    )
+    setPendingTask(null)
+  }, [pendingTask, createTimeBlock, findRelinkTarget, runMutation])
+
   return (
     <div style={{ padding: isMobile ? '12px 14px' : '18px 22px', background: BG, minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
       <PlannerHeader
@@ -371,13 +450,20 @@ export default function PlannerTimeBlocking() {
       />
 
       {isMobile && (
-        <button
-          type="button"
-          onClick={() => setSidebarOpen((o) => !o)}
-          style={{ alignSelf: 'flex-start', marginBottom: 8, border: `1px solid ${BORDER}`, background: 'white', borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 600, color: TEXT, cursor: 'pointer' }}
-        >
-          {sidebarOpen ? 'Hide tasks ▲' : 'Tasks & wins ▼'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <button
+            type="button"
+            onClick={() => { setSidebarOpen((o) => !o); if (pendingTask) setPendingTask(null) }}
+            style={{ border: `1px solid ${BORDER}`, background: 'white', borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 600, color: TEXT, cursor: 'pointer' }}
+          >
+            {sidebarOpen ? 'Hide tasks ▲' : 'Tap to schedule ▼'}
+          </button>
+          {pendingTask && !sidebarOpen && (
+            <span style={{ fontSize: 11.5, color: 'var(--accent)', fontWeight: 600 }}>
+              {pendingTask.title} — tap a slot below
+            </span>
+          )}
+        </div>
       )}
 
       <WarningBanner warnings={bannerWarnings} onDismiss={(key) => setDismissedWarnings((prev) => new Set(prev).add(key))} />
@@ -397,12 +483,14 @@ export default function PlannerTimeBlocking() {
               onTogglePriority={handleTogglePriority}
               expandedTaskIds={expandedTaskIds}
               subtasksByParentId={subtasksByParentId}
-              scheduledTaskIds={scheduledTaskIds}
+              scheduledBlocksByTaskId={scheduledBlocksByTaskId}
               onToggleExpand={handleToggleExpand}
               onOpenTask={setModalTask}
               departmentId={profile?.department_id}
               weekStart={weekStart}
               isMobile={isMobile}
+              pendingTaskId={pendingTask?.id}
+              onTapSchedule={handleTapSchedule}
             />
           )}
           <PlannerGrid
@@ -415,6 +503,9 @@ export default function PlannerTimeBlocking() {
             onBlockClick={handleBlockClick}
             onBlockContextMenu={handleBlockContextMenu}
             onBlockResize={handleBlockResize}
+            pendingTask={isMobile ? pendingTask : null}
+            onSlotTap={isMobile ? handleSlotTap : undefined}
+            onCancelPending={() => setPendingTask(null)}
           />
         </div>
 
@@ -453,8 +544,11 @@ export default function PlannerTimeBlocking() {
           x={contextMenu.x}
           y={contextMenu.y}
           block={contextMenu.block}
+          childBlocksByParentBlockId={childBlocksByParentBlockId}
+          isSplitting={splittingBlockIds.has(contextMenu.block.id)}
           onSetDuration={(block, newEnd) => runMutation(() => updateTimeBlock(block.id, { scheduled_end_time: newEnd }))}
           onDelete={(block) => runMutation(() => deleteTimeBlock(block.id), 'Removed from schedule. The task stays in your list.')}
+          onSplit={handleSplitBlock}
           onClose={() => setContextMenu(null)}
         />
       )}

@@ -23,6 +23,7 @@ export function CalendarEventForm({ eventId, spaceId, onSave, onCancel }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [sprints, setSprints] = useState([]);
+  const [eventTypes, setEventTypes] = useState([]);
 
   // Populate form with existing event data
   useEffect(() => {
@@ -43,17 +44,25 @@ export function CalendarEventForm({ eventId, spaceId, onSave, onCancel }) {
     }
   }, [existingEvent]);
 
-  // Fetch sprints for the space
+  // Fetch sprints and event types
   useEffect(() => {
-    async function fetchSprints() {
-      const { data } = await supabase
-        .from('sprints')
-        .select('id, name, start_date, end_date')
-        .eq('department_id', spaceId)
-        .order('start_date', { ascending: false });
-      setSprints(data || []);
+    async function fetchData() {
+      const [sprintsRes, typesRes] = await Promise.all([
+        supabase
+          .from('sprints')
+          .select('id, name, start_date, end_date')
+          .eq('department_id', spaceId)
+          .order('start_date', { ascending: false }),
+        supabase
+          .from('calendar_event_types')
+          .select('name, color, active, sort_order')
+          .eq('active', true)
+          .order('sort_order')
+      ]);
+      setSprints(sprintsRes.data || []);
+      setEventTypes(typesRes.data || []);
     }
-    if (spaceId) fetchSprints();
+    if (spaceId) fetchData();
   }, [spaceId]);
 
   const handleChange = (field, value) => {
@@ -137,14 +146,11 @@ export function CalendarEventForm({ eventId, spaceId, onSave, onCancel }) {
             onChange={(e) => handleChange('event_type', e.target.value)}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
           >
-            <option value="conference">Conference</option>
-            <option value="program">Program</option>
-            <option value="training">Training</option>
-            <option value="prayer">Prayer</option>
-            <option value="graduation">Graduation</option>
-            <option value="event">Event</option>
-            <option value="deadline">Deadline</option>
-            <option value="leave">Leave / Out of Office</option>
+            {eventTypes.map((type) => (
+              <option key={type.name} value={type.name}>
+                {type.name.charAt(0).toUpperCase() + type.name.slice(1).replace(/_/g, ' ')}
+              </option>
+            ))}
           </select>
         </div>
 

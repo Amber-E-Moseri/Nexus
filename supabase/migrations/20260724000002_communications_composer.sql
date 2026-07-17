@@ -1,4 +1,4 @@
-﻿alter table public.communication_campaigns
+alter table public.communication_campaigns
   add column if not exists preview_text text,
   add column if not exists body_html text,
   add column if not exists body_text text,

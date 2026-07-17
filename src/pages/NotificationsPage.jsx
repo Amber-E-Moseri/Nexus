@@ -9,7 +9,7 @@ import { useNotifications } from '../context/NotificationsContext'
 import { getNotifications, markAsRead, markAllAsRead, formatNotificationMessage } from '../features/notifications'
 import { supabase } from '../lib/supabase'
 import {
-  CheckSquare, MessageSquare, Calendar, CalendarCheck, CalendarX, AtSign, Bell,
+  CheckSquare, MessageSquare, Calendar, CalendarCheck, CalendarX, AtSign, Bell, Zap,
 } from 'lucide-react'
 import { FONT_BODY, FONT_HEADING, FONT_MONO } from '../lib/fonts'
 
@@ -17,6 +17,8 @@ const NOTIFICATION_TYPE_ICONS = {
   task_assigned: CheckSquare,
   task_comment: MessageSquare,
   meeting_created: Calendar,
+  calendar_event_reminder: Calendar,
+  calendar_sprint_prompt: Zap,
   event_approved: CalendarCheck,
   event_rejected: CalendarX,
   mention: AtSign,
@@ -82,7 +84,7 @@ function GroupHeader({ children }) {
   )
 }
 
-function NotificationRow({ notification, isLast, onClick }) {
+function NotificationRow({ notification, isLast, onClick, onPrimaryAction }) {
   const [hovered, setHovered] = useState(false)
   const IconComponent = NOTIFICATION_TYPE_ICONS[notification.type] || Bell
 
@@ -137,6 +139,29 @@ function NotificationRow({ notification, isLast, onClick }) {
         <div style={{ fontFamily: FONT_MONO, fontSize: 10.5, color: 'var(--ink-3)', marginTop: 3 }}>
           {timeAgo(notification.created_at)}
         </div>
+        {notification.type === 'calendar_sprint_prompt' ? (
+          <div style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onPrimaryAction?.(notification)
+              }}
+              style={{
+                border: 'none',
+                borderRadius: 999,
+                background: 'var(--purple-700)',
+                color: '#FFFFFF',
+                padding: '5px 10px',
+                cursor: 'pointer',
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            >
+              Start Sprint
+            </button>
+          </div>
+        ) : null}
       </div>
       {!notification.read && (
         <span
@@ -211,15 +236,47 @@ export default function NotificationsPage() {
 
   async function handleNotificationClick(notification) {
     if (!notification.read) {
-      await contextMarkAsRead(notification.id)
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
-      )
+      try {
+        await contextMarkAsRead(notification.id)
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+        )
+      } catch (err) {
+        console.error('Failed to mark notification as read:', err)
+      }
     }
 
-    // TODO: Navigate to linked resource if available
-    // if (notification.payload?.link_url) navigate(notification.payload.link_url)
-    // if (notification.payload?.task_id) navigate(`/my-tasks`, { state: { taskId: notification.payload.task_id } })
+    const { payload, type } = notification
+    if (payload?.task_id) {
+      navigate(`/my-tasks?task=${payload.task_id}`)
+    } else if (type === 'calendar_sprint_prompt' && payload?.event_id) {
+      navigate(
+        `/sprints?new=1`
+        + `&event_id=${encodeURIComponent(payload.event_id)}`
+        + `&name=${encodeURIComponent(payload.event_title ?? '')}`
+        + `&dept=${encodeURIComponent(payload.department_id ?? '')}`,
+      )
+    } else if (type === 'meeting_created' && payload?.meeting_id) {
+      navigate('/meetings')
+    }
+  }
+
+  function handlePrimaryAction(notification) {
+    if (notification.type !== 'calendar_sprint_prompt') return
+    if (!notification.read) {
+      contextMarkAsRead(notification.id).then(() => {
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+        )
+      }).catch((err) => console.error('Failed to mark notification as read:', err))
+    }
+    const payload = notification.payload ?? {}
+    navigate(
+      `/sprints?new=1`
+      + `&event_id=${encodeURIComponent(payload.event_id ?? '')}`
+      + `&name=${encodeURIComponent(payload.event_title ?? '')}`
+      + `&dept=${encodeURIComponent(payload.department_id ?? '')}`,
+    )
   }
 
   function handleLoadMore() {
@@ -355,6 +412,7 @@ export default function NotificationsPage() {
                     notification={notification}
                     isLast={index === group.items.length - 1}
                     onClick={handleNotificationClick}
+                    onPrimaryAction={handlePrimaryAction}
                   />
                 ))}
               </AnimatePresence>

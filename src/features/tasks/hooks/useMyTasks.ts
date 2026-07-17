@@ -294,3 +294,78 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     optimisticStatusUpdate,
   }
 }
+
+interface UseWatchedTasksReturn {
+  tasks: any[]
+  isLoading: boolean
+  refetch: () => Promise<void>
+}
+
+/**
+ * Tasks the user follows via task_follows — separate from "Mine"/"Delegated" (assignee_id/
+ * created_by), since a followed task may belong to another department or another user's
+ * personal task the owner explicitly looped this user into. Excludes tasks already covered
+ * by assignee_id/created_by to avoid duplicate rows across tabs.
+ */
+export function useWatchedTasks(userId: string): UseWatchedTasksReturn {
+  const [tasks, setTasks] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    if (!userId) return
+    setIsLoading(true)
+    try {
+      const { data: follows, error: followsError } = await supabase
+        .from('task_follows')
+        .select('task_id')
+        .eq('user_id', userId)
+
+      if (followsError) throw followsError
+
+      const taskIds = (follows ?? []).map((f) => f.task_id)
+      if (taskIds.length === 0) {
+        setTasks([])
+        return
+      }
+
+      const { data: tasksData, error: tasksError } = await supabase
+        .from('tasks')
+        .select(TASK_SELECT)
+        .in('id', taskIds)
+        .is('deleted_at', null)
+
+      if (tasksError) throw tasksError
+
+      const followedOnly = (tasksData ?? []).filter(
+        (t: any) => t.assignee_id !== userId && t.created_by !== userId,
+      )
+      setTasks(normalizeTaskRows(followedOnly))
+    } catch (err) {
+      console.error('[useWatchedTasks] Failed to load watched tasks:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [userId])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  useEffect(() => {
+    if (!userId) return
+    const channel = supabase
+      .channel(`task_follows:user_id:${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'task_follows', filter: `user_id=eq.${userId}` },
+        () => load(),
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [userId, load])
+
+  return { tasks, isLoading, refetch: load }
+}

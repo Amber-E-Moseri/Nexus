@@ -259,7 +259,7 @@ export default function MeetingModal({ departmentId, onClose }) {
                   🔒 Make private
                 </div>
                 <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                  Only you, invited attendees, and admins can see this. Off = visible to your department.
+                  Only you and admins can see this by default (you can share it with specific people after creating it). Off = visible to your department.
                 </div>
               </div>
               <button

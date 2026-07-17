@@ -1,4 +1,4 @@
-﻿create table if not exists public.org_settings (
+create table if not exists public.org_settings (
   id uuid primary key default gen_random_uuid(),
   org_name text not null default 'BLW CAN NEXUS',
   timezone text not null default 'America/Toronto',

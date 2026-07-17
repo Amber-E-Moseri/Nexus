@@ -42,10 +42,11 @@ export default function SprintsList() {
   const { role, profile } = useAuth()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const wantsNewSprint = searchParams.get('new') === '1' || searchParams.get('new') === 'true'
   const [sprints, setSprints] = useState([])
   const [filter, setFilter] = useState('all')
   const [query, setQuery] = useState('')
-  const [showModal, setShowModal] = useState(searchParams.get('new') === 'true')
+  const [showModal, setShowModal] = useState(wantsNewSprint)
   const [loading, setLoading] = useState(true)
 
   async function loadSprints() {
@@ -100,7 +101,7 @@ export default function SprintsList() {
   }, [role])
 
   useEffect(() => {
-    const wantsNew = searchParams.get('new') === 'true'
+    const wantsNew = searchParams.get('new') === '1' || searchParams.get('new') === 'true'
     setShowModal(wantsNew)
   }, [searchParams])
 
@@ -143,9 +144,34 @@ export default function SprintsList() {
 
   function closeModal() {
     setShowModal(false)
-    if (searchParams.get('new') === 'true') {
-      setSearchParams({})
+    if (searchParams.get('new') === '1' || searchParams.get('new') === 'true') {
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('new')
+      nextParams.delete('event_id')
+      nextParams.delete('name')
+      nextParams.delete('dept')
+      setSearchParams(nextParams)
     }
+  }
+
+  async function handleSprintSaved(savedSprint) {
+    const eventId = searchParams.get('event_id')
+
+    if (eventId && savedSprint?.id) {
+      const { data: linked, error } = await supabase.rpc('link_calendar_event_sprint', {
+        p_event_id: eventId,
+        p_sprint_id: savedSprint.id,
+      })
+
+      if (error) {
+        console.error('Failed to link sprint to event:', error)
+      } else if (!linked) {
+        console.warn('link_calendar_event_sprint: 0 rows updated — event may already be linked, not approved, or caller lacks access')
+      }
+    }
+
+    await loadSprints()
+    closeModal()
   }
 
   const canCreate = role === 'super_admin' || role === 'dept_lead'
@@ -219,7 +245,14 @@ export default function SprintsList() {
         <EmptyState />
       )}
 
-      {showModal ? <SprintModal initialDepartmentId={profile?.department_id ?? null} onSaved={loadSprints} onClose={closeModal} /> : null}
+      {showModal ? (
+        <SprintModal
+          initialDepartmentId={searchParams.get('dept') || profile?.department_id || null}
+          initialName={searchParams.get('name') ?? ''}
+          onSaved={handleSprintSaved}
+          onClose={closeModal}
+        />
+      ) : null}
     </div>
   )
 }

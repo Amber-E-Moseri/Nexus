@@ -7,17 +7,19 @@ const HOURS = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR }, (_, i) => DA
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const TIME_COL = 52
 
-function DroppableSlot({ id, height, borderTop }) {
+function DroppableSlot({ id, height, borderTop, onTap }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   return (
     <div
       ref={setNodeRef}
+      onClick={onTap ? () => onTap(id) : undefined}
       style={{
         height,
         boxSizing: 'border-box',
         borderTop,
         background: isOver ? SLOT_HOVER : 'transparent',
         transition: 'background .1s',
+        cursor: onTap ? 'pointer' : undefined,
       }}
     />
   )
@@ -85,6 +87,9 @@ export default function PlannerGrid({
   onBlockClick,
   onBlockContextMenu,
   onBlockResize,
+  pendingTask,   // mobile: task selected for tap-to-schedule
+  onSlotTap,    // mobile: (slotId: string) => void
+  onCancelPending, // mobile: () => void
 }) {
   const days = overrideDays ?? Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const todayISO = toISODate(new Date())
@@ -103,6 +108,19 @@ export default function PlannerGrid({
 
   return (
     <div style={{ flex: 1, minWidth: 0, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      {pendingTask && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent-light)', borderBottom: `1px solid var(--accent)`, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, color: TEXT }}>
+          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Tap a time slot to schedule: <em style={{ fontStyle: 'normal', color: PRIMARY }}>{pendingTask.title}</em>
+          </span>
+          <button
+            type="button"
+            onClick={onCancelPending}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: MUTED, fontSize: 16, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
+            aria-label="Cancel"
+          >✕</button>
+        </div>
+      )}
       {/* Day headers */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${BORDER}` }}>
         <div style={{ width: TIME_COL, flexShrink: 0 }} />
@@ -172,7 +190,7 @@ export default function PlannerGrid({
             return (
               <div key={iso} style={{ flex: 1, minWidth: 0, position: 'relative', borderLeft: `1px solid ${BORDER}`, background: isToday ? SLOT_HOVER : 'transparent' }}>
                 {HOURS.map((h) => (
-                  <DroppableSlot key={h} id={`slot:${iso}:${h}`} height={HOUR_HEIGHT} borderTop={`1px solid ${BORDER}`} />
+                  <DroppableSlot key={h} id={`slot:${iso}:${h}`} height={HOUR_HEIGHT} borderTop={`1px solid ${BORDER}`} onTap={pendingTask ? onSlotTap : undefined} />
                 ))}
                 {showNowLine && (
                   <div

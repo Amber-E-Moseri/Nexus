@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { BORDER, MUTED, TEXT, BG } from '../lib/plannerTheme'
-import { minutesToTime, parseTimeToMinutes, MINUTES_PER_DAY } from '../lib/timeBlockUtils'
+import { minutesToTime, parseTimeToMinutes, MINUTES_PER_DAY, canSplitBlock } from '../lib/timeBlockUtils'
 
 const DURATIONS = [
   { label: '15 min', minutes: 15 },
@@ -11,11 +11,26 @@ const DURATIONS = [
   { label: '2 hr', minutes: 120 },
 ]
 
-// Right-click menu for a time block: duration presets + remove-from-schedule
+// Right-click menu for a time block: duration presets + split + remove-from-schedule
 // (with inline confirm — removing the block never deletes the task).
-export default function TimeBlockContextMenu({ x, y, block, onSetDuration, onDelete, onClose }) {
+export default function TimeBlockContextMenu({
+  x, y, block,
+  childBlocksByParentBlockId = {},
+  isSplitting = false,
+  onSetDuration, onDelete, onSplit, onClose,
+}) {
   const ref = useRef(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [menuTop, setMenuTop] = useState(y)
+
+  // Two-pass positioning: first render at y, then measure and clamp so the menu
+  // never clips below the viewport bottom. useLayoutEffect runs before paint so
+  // the correction is imperceptible.
+  useLayoutEffect(() => {
+    if (!ref.current) return
+    const h = ref.current.offsetHeight
+    setMenuTop(Math.min(y, window.innerHeight - h - 8))
+  }, [y])
 
   useEffect(() => {
     const onDown = (e) => {
@@ -31,6 +46,15 @@ export default function TimeBlockContextMenu({ x, y, block, onSetDuration, onDel
       window.removeEventListener('keydown', onKey)
     }
   }, [onClose])
+
+  const eligible = canSplitBlock(block, childBlocksByParentBlockId) && !isSplitting
+  const splitTitle = isSplitting
+    ? 'Splitting…'
+    : block.is_all_day
+      ? 'Cannot split an all-day block'
+      : (childBlocksByParentBlockId[block.id]?.length > 0)
+        ? 'Cannot split a block with linked subtask blocks'
+        : 'Block must be at least 30 minutes to split'
 
   const itemStyle = {
     display: 'block',
@@ -51,7 +75,7 @@ export default function TimeBlockContextMenu({ x, y, block, onSetDuration, onDel
       role="menu"
       style={{
         position: 'fixed',
-        top: Math.min(y, window.innerHeight - 320),
+        top: menuTop,
         left: Math.min(x, window.innerWidth - 200),
         zIndex: 400,
         background: 'white',
@@ -95,6 +119,35 @@ export default function TimeBlockContextMenu({ x, y, block, onSetDuration, onDel
             Sync to calendar
             <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, background: BG, borderRadius: 4, padding: '1px 5px' }}>SOON</span>
           </button>
+          <div style={{ borderTop: `1px solid ${BORDER}`, margin: '5px 0' }} />
+          {eligible ? (
+            <button
+              type="button"
+              role="menuitem"
+              style={itemStyle}
+              onMouseEnter={(e) => { e.currentTarget.style.background = BG }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              onClick={() => { onSplit(block); onClose() }}
+            >
+              Split into two sessions
+            </button>
+          ) : (
+            <button
+              type="button"
+              role="menuitem"
+              disabled
+              title={splitTitle}
+              style={{ ...itemStyle, color: MUTED, cursor: 'default' }}
+            >
+              {isSplitting ? 'Splitting…' : 'Split into two sessions'}
+              {!isSplitting && (
+                <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, background: BG, borderRadius: 4, padding: '1px 5px' }}>
+                  {block.is_all_day ? 'N/A' : '30m min'}
+                </span>
+              )}
+            </button>
+          )}
+          <div style={{ borderTop: `1px solid ${BORDER}`, margin: '5px 0' }} />
           <button
             type="button"
             role="menuitem"

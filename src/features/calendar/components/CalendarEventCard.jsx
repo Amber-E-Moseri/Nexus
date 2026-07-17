@@ -7,6 +7,8 @@ export const EVENT_COLORS = {
   event: '#4C2A92',
   deadline: '#DC2626',
   leave: '#6B7280',
+  regional_program: '#A855F7',
+  executive_birthday: '#F59E0B',
 }
 
 function eventColor(event) {

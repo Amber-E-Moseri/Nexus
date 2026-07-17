@@ -11,9 +11,11 @@ import AudioTranscriptionPanel from '../../features/meetings/components/AudioTra
 import MeetingDocsTab from '../../features/meetings/components/MeetingDocsTab'
 import MeetingSummaryEditor from '../../features/meetings/components/MeetingSummaryEditor'
 import GenerateMeetingDocButton from '../../features/meetings/components/GenerateMeetingDocButton'
+import MeetingShareModal from '../../features/meetings/components/MeetingShareModal'
 import { createTasksFromActionItems } from '../../features/meetings/lib/meetings'
 import { resolveAssignment, getOrgDepartments, getOrgUsers } from '../../features/meetings/lib/ownerMatching'
 import { getOpenItemsByMeeting, createOpenItems, updateOpenItemStatus, deleteOpenItem, convertOpenItemToTask } from '../../features/meetings/lib/openItems'
+import { getCategoryStatusId, STATUS_CATEGORIES } from '../../lib/taskStatuses'
 
 // exact colors from the HTML reference
 const FS = {
@@ -58,7 +60,6 @@ function MeetingDetailViewInner() {
   const [loading, setLoading]   = useState(true)
   const [fetchErr, setFetchErr] = useState(null)
 
-  const [mode, setMode]                         = useState('prep') // prep | live | post
   const [elapsed, setElapsed]                   = useState(0)
   const [recording, setRecording]               = useState(false)
   const [currentIdx, setCurrentIdx]             = useState(0)
@@ -93,6 +94,7 @@ function MeetingDetailViewInner() {
   const [titleDraft, setTitleDraft]               = useState('')
   const [savingTitle, setSavingTitle]             = useState(false)
   const [savingVisibility, setSavingVisibility]   = useState(false)
+  const [shareModalOpen, setShareModalOpen]       = useState(false)
 
   // open items state
   const [openItems, setOpenItems]                       = useState([])
@@ -121,9 +123,9 @@ function MeetingDetailViewInner() {
   // Mirrors the meetings_update RLS policy: creator can always edit their own
   // meeting, regardless of current visibility (private or published).
   const canEditVisibility = canManage || meeting?.created_by === profile?.id
-  const isLive    = mode === 'live'
-  const isPrep    = mode === 'prep'
-  const isPost    = mode === 'post'
+  const isLive    = meeting?.status === 'in_progress'
+  const isPost    = meeting?.status === 'completed' || meeting?.status === 'cancelled'
+  const isPrep    = !isLive && !isPost
 
   // ── fetch ──────────────────────────────────────────────────────────────────
 
@@ -172,9 +174,10 @@ function MeetingDetailViewInner() {
         .select(`
           id, title, department_id, date, meeting_type, agenda, minutes,
           decisions, next_steps, summary, polished_transcript, context, meeting_notes, doc_drive_url, doc_title,
-          zoom_join_url, drive_url, status, started_at,
+          zoom_join_url, drive_url, status, started_at, visibility, allowed_viewers,
           created_by, created_at,
-          agendas(id, title, agenda_items(id, segment, notes, duration_minutes, sort_order))
+          agendas(id, title, agenda_items(id, segment, notes, duration_minutes, sort_order)),
+          attendance:meeting_attendance(user_id, status, attendee:users(id, name))
         `)
         .eq('id', meetingId)
         .single()
@@ -214,9 +217,6 @@ function MeetingDetailViewInner() {
         const s = Math.floor((Date.now() - new Date(data.started_at).getTime()) / 1000)
         startRef.current = new Date(data.started_at).getTime()
         setElapsed(s)
-        setMode('live')
-      } else if (data.status === 'completed') {
-        setMode('post')
       }
     } catch (e) {
       setFetchErr(e.message)
@@ -229,7 +229,7 @@ function MeetingDetailViewInner() {
     try {
       const { data, error } = await supabase
         .from('tasks')
-        .select('id, title, status, due_date, source, assignee:users!assignee_id(id, name)')
+        .select('id, title, status, department_id, due_date, source, assignee:users!assignee_id(id, name)')
         .eq('meeting_id', meetingId)
         .order('created_at', { ascending: true })
       if (!error && data) {
@@ -283,19 +283,18 @@ function MeetingDetailViewInner() {
     if (error) { showToast(`Couldn't start the meeting: ${error.message}`, { tone: 'error' }); return }
     startRef.current = Date.now()
     setElapsed(0)
-    setMode('live')
+    setMeeting(m => ({ ...m, status: 'in_progress', started_at: now }))
     setActiveTab('minutes')
   }
 
   async function endMeeting() {
     if (!window.confirm('End this meeting and save progress?')) return
-    // Stop any active recording first
     setRecording(false)
+    const ended_at = new Date().toISOString()
     const { error } = await supabase
-      .from('meetings').update({ status: 'completed', ended_at: new Date().toISOString() }).eq('id', meetingId)
+      .from('meetings').update({ status: 'completed', ended_at }).eq('id', meetingId)
     if (error) { showToast(`Couldn't end the meeting: ${error.message}`, { tone: 'error' }); return }
-    setMode('post')
-    setActiveTab('audio')
+    setMeeting(m => ({ ...m, status: 'completed', ended_at }))
   }
 
   async function publishMinutes() {
@@ -325,6 +324,7 @@ function MeetingDetailViewInner() {
         summary: meeting?.meeting_notes || minutesText || '',
         decisions: splitLines(decisionsText),
         nextSteps: splitLines(nextStepsText),
+        detailedNotes: minutesText || '',
         actionItems: actionItems.map((t) => ({
           action: t.title,
           owner: t.assignee?.name || 'Unassigned',
@@ -408,6 +408,9 @@ function MeetingDetailViewInner() {
         if (!notesErr) setMeeting(m => ({ ...m, meeting_notes: extracted.summary }))
       }
       // Auto-populate minutes fields if empty
+      if (extracted?.detailed_notes && !minutesText) {
+        setMinutesText(extracted.detailed_notes)
+      }
       if (extracted?.decisions?.length && !decisionsText) {
         const decisionStrings = extracted.decisions
           .map((d) => (typeof d === 'string' ? d : d?.decision ?? null))
@@ -741,7 +744,7 @@ function MeetingDetailViewInner() {
                   onClick={toggleVisibility}
                   disabled={savingVisibility}
                   title={meeting.visibility === 'private'
-                    ? 'Private — only you, invited attendees, and admins can see this. Click to publish.'
+                    ? 'Private — only you and admins can see this by default. Use Share to add specific people. Click to publish.'
                     : 'Published — visible to your department. Click to make private.'}
                   style={{
                     flexShrink:0,
@@ -763,10 +766,33 @@ function MeetingDetailViewInner() {
                   {meeting.visibility === 'private' ? '🔒 Private' : '🔓 Published'}
                 </button>
               )}
+              {canEditVisibility && !isLive && meeting.visibility === 'private' && (
+                <button
+                  type="button"
+                  onClick={() => setShareModalOpen(true)}
+                  style={{
+                    flexShrink:0,
+                    display:'inline-flex',
+                    alignItems:'center',
+                    gap:4,
+                    padding:'4px 8px',
+                    border:`1px solid ${FS.border}`,
+                    borderRadius:999,
+                    background: FS.surface,
+                    color: FS.muted,
+                    fontFamily:'inherit',
+                    fontSize:11,
+                    fontWeight:700,
+                    cursor:'pointer',
+                  }}
+                >
+                  👥 Share{meeting.allowed_viewers?.length ? ` (${meeting.allowed_viewers.length})` : ''}
+                </button>
+              )}
             </div>
           )}
           <div style={{ fontSize:11, color: isLive ? 'rgba(255,255,255,.55)' : FS.muted, marginTop:1 }}>
-            {isPrep ? 'Meeting Prep · ' : isPost ? `Duration: ${fmt(elapsed)} · ` : ''}{dateLabel}
+            {isPost ? `Duration: ${fmt(elapsed)} · ` : ''}{dateLabel}
           </div>
         </div>
 
@@ -814,35 +840,21 @@ function MeetingDetailViewInner() {
             </>
           )}
 
-          {/* Mode toggle pills — only for non-completed meetings */}
-          {canManage && meeting?.status !== 'completed' && meeting?.status !== 'cancelled' && (
-            <div style={{ display:'inline-flex', borderRadius:999, border:`1px solid ${isLive ? 'rgba(255,255,255,.2)' : FS.border}`, overflow:'hidden', background: isLive ? 'rgba(255,255,255,.08)' : FS.surface }}>
-              {[
-                { id:'prep',  label:'Prep' },
-                { id:'live',  label:'● Live' },
-                { id:'post',  label:'Post' },
-              ].map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => {
-                    if (m.id === mode) return
-                    if (m.id === 'live') startLive()
-                    else if (m.id === 'post') endMeeting()
-                    // Can't go back to prep from live/post
-                  }}
-                  style={{
-                    padding:'6px 13px', border:'none', fontFamily:'inherit', fontSize:11.5, fontWeight:700, cursor: m.id === mode ? 'default' : 'pointer',
-                    background: m.id === mode
-                      ? (m.id === 'live' ? FS.coral : isLive ? 'rgba(255,255,255,.2)' : FS.purple)
-                      : 'transparent',
-                    color: m.id === mode ? '#fff' : (isLive ? 'rgba(255,255,255,.5)' : FS.muted),
-                    transition:'all .15s',
-                  }}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
+          {canManage && isPrep && (
+            <button
+              onClick={startLive}
+              style={{ padding:'7px 14px', border:'none', borderRadius:6, background: FS.coral, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
+            >
+              ● Start meeting
+            </button>
+          )}
+          {canManage && isLive && (
+            <button
+              onClick={endMeeting}
+              style={{ padding:'7px 14px', border:`1px solid rgba(255,255,255,.3)`, borderRadius:6, background:'rgba(255,255,255,.12)', color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
+            >
+              ■ End meeting
+            </button>
           )}
         </div>
       </div>
@@ -916,25 +928,6 @@ function MeetingDetailViewInner() {
               </button>
             )}
 
-            {/* Permissions */}
-            <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'11px 13px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
-              <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>Your permissions</div>
-              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-                {[
-                  { label:'Edit minutes',     ok: canManage },
-                  { label:'Manage agenda',    ok: canManage },
-                  { label:'Delete meeting',   ok: role === 'super_admin' },
-                  { label:'Manage attendees', ok: canManage },
-                ].map(p => (
-                  <div key={p.label} style={{ display:'flex', alignItems:'center', gap:7, fontSize:11 }}>
-                    <span style={{ color: p.ok ? FS.sage : FS.coral, fontSize:12 }}>{p.ok ? '✓' : '✗'}</span>
-                    <span style={{ color: p.ok ? FS.text : FS.xmuted, fontWeight:600 }}>{p.label}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ marginTop:8, fontSize:10, color: FS.xmuted }}>Role: <strong style={{ color: FS.navy }}>{role}</strong></div>
-            </div>
-
           </div>
         </aside>
 
@@ -990,8 +983,8 @@ function MeetingDetailViewInner() {
                   </div>
                 )}
 
-                {/* WIN 2: Meeting Context (prep mode only) */}
-                {isPrep && canManage && (
+                {/* Meeting Context */}
+                {canManage && (
                   <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'14px 16px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
                     <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:4 }}>Meeting Context</div>
                     <div style={{ fontSize:11, color: FS.xmuted, marginBottom:8 }}>e.g. "Q3 planning", "API redesign" — helps AI extract better action items</div>
@@ -1128,8 +1121,12 @@ function MeetingDetailViewInner() {
                             type="checkbox"
                             checked={isDone}
                             onChange={async () => {
+                              const nextCategory = isDone ? STATUS_CATEGORIES.OPEN : STATUS_CATEGORIES.COMPLETED
+                              const statusId = await getCategoryStatusId({ departmentId: task.department_id, category: nextCategory })
+                              if (!statusId) return
+                              const { error } = await supabase.from('tasks').update({ status_id: statusId }).eq('id', task.id)
+                              if (error) return
                               const newStatus = isDone ? 'open' : 'done'
-                              await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
                               setActionItems(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t))
                             }}
                             style={{ width:16, height:16, cursor:'pointer', accentColor: FS.purple, flexShrink:0 }}
@@ -1149,7 +1146,7 @@ function MeetingDetailViewInner() {
                             </div>
                           </div>
                           <div style={{ display:'flex', gap:6, flexShrink:0, alignItems:'center' }}>
-                            {task.source === 'ai' && (
+                            {task.source === 'meeting' && (
                               <span style={{ fontSize:9, fontWeight:700, color: FS.purple, background:'rgba(76,42,146,.12)', borderRadius:999, padding:'2px 7px', letterSpacing:'.03em' }}>AI</span>
                             )}
                             <span style={{
@@ -1648,6 +1645,33 @@ function MeetingDetailViewInner() {
                         )}
                       </div>
                     )}
+
+                    {/* Export options after extraction: PDF + Save to Drive side by side */}
+                    <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
+                      <div style={{ flex:'1 1 260px', background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'14px 18px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
+                        <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>Export Minutes as PDF</div>
+                        <div style={{ fontSize:11, color: FS.muted, marginTop:2, marginBottom:12 }}>Includes discussion, decisions, next steps & action items</div>
+                        <button
+                          onClick={exportPdf}
+                          disabled={exportingPdf}
+                          style={{ padding:'8px 16px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.navy, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor: exportingPdf ? 'wait' : 'pointer', opacity: exportingPdf ? 0.7 : 1 }}
+                        >
+                          {exportingPdf ? '⏳ Exporting…' : '📤 Export PDF'}
+                        </button>
+                      </div>
+                      <div style={{ flex:'1 1 260px', background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'14px 18px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
+                        <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>📄 Save to Drive</div>
+                        <div style={{ fontSize:11, color: FS.muted, marginTop:2, marginBottom:12 }}>
+                          Creates a formatted Google Doc with transcript, summary, and action items — uploaded to Drive automatically.
+                        </div>
+                        <GenerateMeetingDocButton
+                          meetingId={meetingId}
+                          meeting={meeting}
+                          actionItems={actionItems}
+                          onSuccess={(result) => setMeeting(m => ({ ...m, doc_drive_url: result.docUrl, doc_title: result.docTitle }))}
+                        />
+                      </div>
+                    </div>
                   </>
                 )}
 
@@ -1664,6 +1688,17 @@ function MeetingDetailViewInner() {
           </div>
         </div>
       </div>
+
+      {shareModalOpen && (
+        <MeetingShareModal
+          meetingId={meetingId}
+          attendees={(meeting.attendance ?? []).map((a) => ({ id: a.user_id, name: a.attendee?.name }))}
+          allowedViewers={meeting.allowed_viewers ?? []}
+          excludeUserIds={[meeting.created_by, profile?.id]}
+          onClose={() => setShareModalOpen(false)}
+          onChange={(next) => setMeeting((current) => ({ ...current, allowed_viewers: next }))}
+        />
+      )}
     </div>
   )
 }

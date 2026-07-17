@@ -1404,77 +1404,85 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
   return (
     <>
       <div className="space-y-4">
-        {(selectedList || selectedFolder) ? (
-          <div className="rounded-[20px] border border-[var(--border)] bg-white px-5 py-4 text-sm shadow-[var(--card-shadow)] flex items-center gap-1 flex-wrap">
-            <button
-              type="button"
-              onClick={onClearToSpace}
-              className="text-[var(--text-secondary)] hover:text-[var(--accent)] hover:underline transition-colors cursor-pointer"
-            >
-              {spaceName}
-            </button>
-            {selectedFolder ? (
+        <div className="rounded-[20px] border border-[var(--border)] bg-white px-5 py-3 text-sm shadow-[var(--card-shadow)] flex items-center gap-2">
+          {/* Breadcrumb — only when a folder/list is selected */}
+          <div className="flex-1 flex items-center gap-1 flex-wrap min-w-0">
+            {(selectedList || selectedFolder) ? (
               <>
-                <span className="text-[var(--text-tertiary)] mx-1">→</span>
                 <button
                   type="button"
-                  onClick={selectedList ? () => onClearToFolder?.(selectedFolder.id) : undefined}
-                  className={selectedList ? 'font-semibold text-[var(--text-primary)] hover:text-[var(--accent)] hover:underline transition-colors cursor-pointer' : 'font-semibold text-[var(--text-primary)]'}
+                  onClick={onClearToSpace}
+                  className="text-[var(--text-secondary)] hover:text-[var(--accent)] hover:underline transition-colors cursor-pointer shrink-0"
                 >
-                  {selectedFolder.name}
+                  {spaceName}
                 </button>
+                {selectedFolder ? (
+                  <>
+                    <span className="text-[var(--text-tertiary)] mx-1">→</span>
+                    <button
+                      type="button"
+                      onClick={selectedList ? () => onClearToFolder?.(selectedFolder.id) : undefined}
+                      className={selectedList ? 'font-semibold text-[var(--text-primary)] hover:text-[var(--accent)] hover:underline transition-colors cursor-pointer shrink-0' : 'font-semibold text-[var(--text-primary)] shrink-0'}
+                    >
+                      {selectedFolder.name}
+                    </button>
+                  </>
+                ) : null}
+                {selectedList ? (
+                  <>
+                    <span className="text-[var(--text-tertiary)] mx-1">→</span>
+                    <span className="font-semibold text-[var(--text-primary)] shrink-0">{selectedList.name}</span>
+                  </>
+                ) : null}
               </>
-            ) : null}
-            {selectedList ? (
-              <>
-                <span className="text-[var(--text-tertiary)] mx-1">→</span>
-                <span className="font-semibold text-[var(--text-primary)]">{selectedList.name}</span>
-              </>
-            ) : null}
+            ) : (
+              <span className="text-[var(--text-secondary)] font-medium">{spaceName}</span>
+            )}
           </div>
-        ) : null}
 
-        <div className="flex items-center justify-end gap-2">
-          <button
-            type="button"
-            title="Sync tasks to calendar"
-            aria-label="Sync tasks to calendar"
-            onClick={() => setCalFeedOpen(true)}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
-          >
-            <CalendarDays size={14} />
-          </button>
-
-          <button
-            type="button"
-            title="Filter for your tasks"
-            onClick={() => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold transition-all"
-            style={
-              filters.assigneeId === profile?.id
-                ? { background: '#1C1610', color: '#fff', boxShadow: '0 0 0 2px #1C1610' }
-                : { background: 'var(--surface-tertiary)', color: 'var(--text-secondary)', border: '1.5px solid var(--border)' }
-            }
-          >
-            {getInitials(profile?.name ?? profile?.email)}
-          </button>
-
-          <div className="relative">
+          {/* Controls */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button
               type="button"
-              onClick={() => setBoardFiltersOpen((current) => !current)}
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
+              title="Sync tasks to calendar"
+              aria-label="Sync tasks to calendar"
+              onClick={() => setCalFeedOpen(true)}
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
             >
-              <SlidersHorizontal size={14} />
-              <span>Filter</span>
-              {activeFilterCount > 0 ? <span className="text-[var(--accent)]">({activeFilterCount})</span> : null}
+              <CalendarDays size={14} />
             </button>
 
-            {boardFiltersOpen ? (
-              <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[640px] max-w-[80vw] rounded-[16px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-lg)]">
-                <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={members} statuses={visibleStatuses} tasks={visibleTasks} forceExpanded />
-              </div>
-            ) : null}
+            <button
+              type="button"
+              title="Filter for your tasks"
+              onClick={() => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))}
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold transition-all"
+              style={
+                filters.assigneeId === profile?.id
+                  ? { background: '#1C1610', color: '#fff', boxShadow: '0 0 0 2px #1C1610' }
+                  : { background: 'var(--surface-tertiary)', color: 'var(--text-secondary)', border: '1.5px solid var(--border)' }
+              }
+            >
+              {getInitials(profile?.name ?? profile?.email)}
+            </button>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setBoardFiltersOpen((current) => !current)}
+                className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
+              >
+                <SlidersHorizontal size={14} />
+                <span>Filter</span>
+                {activeFilterCount > 0 ? <span className="text-[var(--accent)]">({activeFilterCount})</span> : null}
+              </button>
+
+              {boardFiltersOpen ? (
+                <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[640px] max-w-[80vw] rounded-[16px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-lg)]">
+                  <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={members} statuses={visibleStatuses} tasks={visibleTasks} forceExpanded />
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 

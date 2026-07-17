@@ -186,7 +186,7 @@ function AddExistingTaskModal({ pinnedIds, onPin, onClose }) {
                     </span>
                   ) : null}
                   <span style={{ fontSize: 11, color: 'var(--ink-3)', flexShrink: 0 }}>
-                    {alreadyPinned ? 'Added' : formatDueDate(task.due_date) || ''}
+                    {alreadyPinned ? 'Added' : (formatDueDate(task.due_date)?.label ?? '')}
                   </span>
                 </button>
               )
@@ -255,7 +255,7 @@ function PinnedTaskRow({ task, onOpen, onUnpin }) {
         </span>
       ) : null}
       {task.due_date ? (
-        <span style={{ fontSize: 11.5, color: 'var(--ink-3)', flexShrink: 0 }}>{formatDueDate(task.due_date)}</span>
+        <span style={{ fontSize: 11.5, color: 'var(--ink-3)', flexShrink: 0 }}>{formatDueDate(task.due_date)?.label}</span>
       ) : null}
       <button
         type="button"

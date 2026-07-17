@@ -3,7 +3,7 @@
 
 export type CalendarEventStatus = 'pending' | 'approved' | 'rejected' | 'draft' | 'confirmed' | 'cancelled' | 'completed';
 export type EventPriority = 'high' | 'medium' | 'low';
-export type EventType = 'conference' | 'program' | 'training' | 'prayer' | 'graduation' | 'event' | 'deadline' | 'leave';
+export type EventType = 'conference' | 'program' | 'training' | 'prayer' | 'graduation' | 'event' | 'deadline' | 'leave' | 'regional_program' | 'executive_birthday';
 export type SyncDirection = 'to_google' | 'from_google' | 'both';
 export type SubscriptionScope = 'all' | 'department';
 
@@ -251,4 +251,43 @@ export interface CalendarEventFilter {
   created_by?: string;
   is_org_wide?: boolean;
   synced_to_google?: boolean;
+}
+
+// Reminder Configuration (per event type)
+export interface ReminderConfig {
+  days_before: number;
+  sprint_prompt?: boolean;
+}
+
+// Calendar Event Type
+export interface CalendarEventType {
+  id?: string;
+  name: EventType;
+  color: string;
+  active: boolean;
+  sort_order: number;
+  reminder_configs?: ReminderConfig[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Calendar Event Reminder (per-event overrides)
+export interface CalendarEventReminder {
+  reminder_overrides?: ReminderConfig[] | null;
+}
+
+// Calendar Event Reminder Log (audit trail of sent reminders)
+export interface CalendarEventReminderLog {
+  id: string;
+  event_id: string;
+  days_before: number;
+  sent_at: string;
+}
+
+// Deliverable Task (linked to calendar event)
+export interface DeliverableTask {
+  id: string;
+  calendar_event_id: string;
+  task_id: string;
+  created_at: string;
 }

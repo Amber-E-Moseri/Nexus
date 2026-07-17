@@ -1,4 +1,4 @@
-﻿-- ─────────────────────────────────────────────────────────────────────────────
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Attendance Trends system
 --
 -- NOTE: public.meetings / public.meeting_attendance already exist for the

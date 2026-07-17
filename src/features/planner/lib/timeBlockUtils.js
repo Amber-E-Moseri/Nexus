@@ -146,3 +146,12 @@ export function computeLanes(blocks) {
 export function snapMinutes(minutes, step = 15) {
   return Math.round(minutes / step) * step
 }
+
+// Single source of truth for split eligibility — used by both the handler and the menu.
+// A block is splittable when it is timed, has no linked subtask-blocks anchored to it,
+// and is at least 30 minutes long (so each half is at least 15 min after 15-min snap).
+export function canSplitBlock(block, childBlocksByParentId = {}) {
+  if (block.is_all_day) return false
+  if ((childBlocksByParentId[block.id] ?? []).length > 0) return false
+  return (parseTimeToMinutes(block.scheduled_end_time) - parseTimeToMinutes(block.scheduled_start_time)) >= 30
+}

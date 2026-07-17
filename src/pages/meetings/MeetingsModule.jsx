@@ -73,7 +73,7 @@ function MeetingsModuleFallback() {
 
   return (
     <MeetingsProvider key={selectedDepartmentId} departmentId={selectedDepartmentId}>
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', gap: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden', gap: 0 }}>
         {canManage && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: isMobile ? '8px 16px' : '10px 24px', borderBottom: '1px solid #EDE8DC', background: '#FBF8F2', flexShrink: 0 }}>
             <button

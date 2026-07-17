@@ -44,12 +44,14 @@ export default function PlannerSidebar({
   onTogglePriority,
   expandedTaskIds,
   subtasksByParentId,
-  scheduledTaskIds,
+  scheduledBlocksByTaskId,
   onToggleExpand,
   onOpenTask,
   departmentId,
   weekStart,
   isMobile,
+  pendingTaskId,    // mobile: id of task selected for tap-scheduling
+  onTapSchedule,   // mobile: (task) => void
 }) {
   const [winsOpen, setWinsOpen] = useState(true)
   return (
@@ -99,17 +101,21 @@ export default function PlannerSidebar({
                 task={task}
                 subtaskCount={task.subtask_count?.[0]?.count ?? 0}
                 expanded={expandedTaskIds.has(task.id)}
-                scheduled={scheduledTaskIds.has(task.id)}
+                scheduledBlocks={scheduledBlocksByTaskId.get(task.id) ?? []}
                 onToggleExpand={onToggleExpand}
                 onOpen={onOpenTask}
+                onTapSchedule={isMobile ? onTapSchedule : undefined}
+                isPending={pendingTaskId === task.id}
               >
                 {(subtasksByParentId[task.id] ?? []).map((sub) => (
                   <TaskExpandable
                     key={sub.id}
                     task={sub}
                     isSubtask
-                    scheduled={scheduledTaskIds.has(sub.id)}
+                    scheduledBlocks={scheduledBlocksByTaskId.get(sub.id) ?? []}
                     onOpen={onOpenTask}
+                    onTapSchedule={isMobile ? onTapSchedule : undefined}
+                    isPending={pendingTaskId === sub.id}
                   />
                 ))}
                 {expandedTaskIds.has(task.id) && !subtasksByParentId[task.id] && (

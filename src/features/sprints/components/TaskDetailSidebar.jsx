@@ -2,7 +2,6 @@ import { useContext, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { useDeptMembers } from '../../../hooks/useDeptMembers'
 import { PRIORITIES } from '../../../lib/constants'
-import { createNotification } from '../../notifications'
 import { getSprintMembers } from '../lib/sprints'
 import { normalizeTaskFieldSettings } from '../../../lib/taskFieldSettings'
 import {
@@ -497,11 +496,12 @@ export default function TaskDetailSidebar({
         const created = ctx ? await ctx.addTask(payload) : await createTask(payload)
 
         if (primaryAssigneeId && primaryAssigneeId !== profile?.id) {
-          await createNotification(primaryAssigneeId, 'task_assigned', {
-            task_id: created.id,
-            task_title: created.title,
-            assigner_name: profile?.name,
+          const { error: notifyError } = await supabase.rpc('create_task_notification', {
+            p_user_id: primaryAssigneeId,
+            p_type: 'task_assigned',
+            p_task_id: created.id,
           })
+          if (notifyError) console.error(notifyError)
         }
 
         onSaved?.(created)
@@ -509,11 +509,12 @@ export default function TaskDetailSidebar({
         const updated = ctx ? await ctx.editTask(task.id, payload) : await updateTask(task.id, payload)
 
         if (primaryAssigneeId && primaryAssigneeId !== previousAssigneeId && primaryAssigneeId !== profile?.id) {
-          await createNotification(primaryAssigneeId, 'task_assigned', {
-            task_id: updated.id,
-            task_title: updated.title,
-            assigner_name: profile?.name,
+          const { error: notifyError } = await supabase.rpc('create_task_notification', {
+            p_user_id: primaryAssigneeId,
+            p_type: 'task_assigned',
+            p_task_id: updated.id,
           })
+          if (notifyError) console.error(notifyError)
         }
 
         onSaved?.(updated)

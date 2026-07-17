@@ -457,15 +457,35 @@ function PastoralTab({ users, departments, pastorMembers, role, profile, onReloa
   const pastors = scopedUsers.filter(u => u.role === 'pastor')
   const allMembers = scopedUsers.filter(u => u.role === 'member')
 
+  // Built from the FULL, unscoped pastorMembers list (not scopedUsers/allMembers) so a
+  // candidate's existing pastor(s) — including ones in other departments a dept_lead
+  // can't otherwise see — are always visible to whoever is assigning. A member can have
+  // at most 2 pastors (enforced by the assign_pastor_member RPC + a DB unique index).
+  const memberExistingPastors = useMemo(() => {
+    const map = new Map()
+    for (const a of pastorMembers) {
+      const p = userById.get(a.pastor_id)
+      if (!p) continue
+      const list = map.get(a.member_id) ?? []
+      list.push(p)
+      map.set(a.member_id, list)
+    }
+    return map
+  }, [pastorMembers, userById])
+
   const pastorCards = useMemo(() => {
     return pastors.map(pastor => {
       const myAssignments = pastorMembers.filter(a => a.pastor_id === pastor.id)
       const members = myAssignments.map(a => userById.get(a.member_id)).filter(Boolean)
       const assignedIds = new Set(members.map(m => m.id))
-      const pickOptions = allMembers.filter(m => !assignedIds.has(m.id))
+      // Exclude candidates already at the two-pastor cap (any pastor, not just this
+      // one) rather than letting the click fail with an RPC error.
+      const pickOptions = allMembers.filter(m =>
+        !assignedIds.has(m.id) && (memberExistingPastors.get(m.id)?.length ?? 0) < 2
+      )
       return { pastor, members, pickOptions }
     })
-  }, [pastors, allMembers, pastorMembers, userById])
+  }, [pastors, allMembers, pastorMembers, userById, memberExistingPastors])
 
   async function handleAssign(pastorId, memberId) {
     setSaving(true); setError('')
@@ -527,15 +547,25 @@ function PastoralTab({ users, departments, pastorMembers, role, profile, onReloa
                   </button>
                   {openPickerId === pastor.id && pickOptions.length > 0 ? (
                     <div style={{ position: 'absolute', left: 16, right: 16, bottom: 54, zIndex: 7, background: '#fff', border: '1px solid #E9E4D8', borderRadius: 10, boxShadow: '0 8px 28px rgba(28,22,16,.16)', padding: 5, maxHeight: 220, overflowY: 'auto' }}>
-                      {pickOptions.map(opt => (
-                        <button key={opt.id} type="button" disabled={saving} onClick={() => handleAssign(pastor.id, opt.id)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'left', border: 'none', background: 'none', borderRadius: 7, padding: '7px 8px', cursor: 'pointer', fontFamily: 'inherit' }}
-                          onMouseEnter={e => e.currentTarget.style.background = '#F9F7F3'}
-                          onMouseLeave={e => e.currentTarget.style.background = ''}>
-                          <Avatar name={opt.name} size={24} fontSize={9} />
-                          <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1C1610' }}>{opt.name}</span>
-                        </button>
-                      ))}
+                      {pickOptions.map(opt => {
+                        const existing = memberExistingPastors.get(opt.id) ?? []
+                        return (
+                          <button key={opt.id} type="button" disabled={saving} onClick={() => handleAssign(pastor.id, opt.id)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'left', border: 'none', background: 'none', borderRadius: 7, padding: '7px 8px', cursor: 'pointer', fontFamily: 'inherit' }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#F9F7F3'}
+                            onMouseLeave={e => e.currentTarget.style.background = ''}>
+                            <Avatar name={opt.name} size={24} fontSize={9} />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 12.5, fontWeight: 600, color: '#1C1610' }}>{opt.name}</div>
+                              {existing.length > 0 ? (
+                                <div style={{ fontSize: 10.5, color: '#9A8E7A' }}>
+                                  already with {existing.map(p => `${p.name}${departmentById.get(p.department_id)?.name ? ` (${departmentById.get(p.department_id).name})` : ''}`).join(', ')}
+                                </div>
+                              ) : null}
+                            </div>
+                          </button>
+                        )
+                      })}
                     </div>
                   ) : openPickerId === pastor.id && pickOptions.length === 0 ? (
                     <div style={{ position: 'absolute', left: 16, right: 16, bottom: 54, zIndex: 7, background: '#fff', border: '1px solid #E9E4D8', borderRadius: 10, boxShadow: '0 8px 28px rgba(28,22,16,.16)', padding: '12px 14px', fontSize: 12, color: '#B0A696' }}>

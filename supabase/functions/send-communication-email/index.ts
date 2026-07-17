@@ -3,39 +3,7 @@
 // Matches the allowlist pattern in create-invite-user/activity-feed-generator:
 // reflect the request's Origin if it's a known dev/prod origin, instead of a
 // single hardcoded ALLOWED_ORIGIN that blocked localhost during development.
-const configuredOrigin = Deno.env.get('ALLOWED_ORIGIN')?.trim()
-const allowedOrigins = new Set(
-  [
-    configuredOrigin,
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'https://blwcannexus.vercel.app',
-    'https://app.blwcannexus.ca',
-  ].filter(Boolean),
-)
-
-function getCorsHeaders(origin: string | null): Record<string, string> {
-  const allowOrigin = origin && allowedOrigins.has(origin)
-    ? origin
-    : configuredOrigin || 'https://app.blwcannexus.ca'
-
-  return {
-    'Access-Control-Allow-Origin': allowOrigin,
-    'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    Vary: 'Origin',
-  }
-}
-
-// Set once per request at the top of the Deno.serve handler below.
-let corsHeaders: Record<string, string> = getCorsHeaders(null)
-
-function jsonResponse(status: number, body: Record<string, unknown>) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-}
+import { corsOptionsResponse, jsonResponse } from '../_shared/cors.ts'
 
 interface Recipient {
   name: string
@@ -407,14 +375,15 @@ async function fetchCampaignRecipients(campaign: CampaignRow, supabase: ReturnTy
 }
 
 Deno.serve(async (request) => {
-  corsHeaders = getCorsHeaders(request.headers.get('origin'))
-
   if (request.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return corsOptionsResponse(request)
   }
 
+  const respond = (status: number, body: Record<string, unknown>) =>
+    jsonResponse(status, body, undefined, request)
+
   if (request.method !== 'POST') {
-    return jsonResponse(405, { error: 'Method not allowed' })
+    return respond(405, { error: 'Method not allowed' })
   }
 
   const fromEmail = Deno.env.get('FROM_EMAIL')
@@ -423,14 +392,14 @@ Deno.serve(async (request) => {
   const resendApiKey = Deno.env.get('RESEND_API_KEY')
 
   if (!fromEmail || !supabaseUrl || !serviceRoleKey || !resendApiKey) {
-    return jsonResponse(500, { error: 'Missing required environment variables' })
+    return respond(500, { error: 'Missing required environment variables' })
   }
 
   const authHeader = request.headers.get('Authorization')
-  if (!authHeader) return jsonResponse(401, { error: 'Missing authorization header' })
+  if (!authHeader) return respond(401, { error: 'Missing authorization header' })
 
   const requestBody = (await request.json().catch(() => null)) as RequestBody | null
-  if (!requestBody) return jsonResponse(400, { error: 'Invalid JSON body' })
+  if (!requestBody) return respond(400, { error: 'Invalid JSON body' })
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
   const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim()

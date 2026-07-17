@@ -37,4 +37,6 @@ export {
   createEventType,
   updateEventType,
   deleteEventType,
+  getEventTypeUsageCount,
+  cascadeRenameEventType,
 } from './lib/calendar'

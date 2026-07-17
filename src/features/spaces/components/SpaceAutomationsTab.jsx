@@ -109,7 +109,7 @@ export default function SpaceAutomationsTab({ space, canManage }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-4 rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+      <div className="flex flex-col gap-4 rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)] sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-[var(--text-primary)]">Automations</h2>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
@@ -159,7 +159,7 @@ export default function SpaceAutomationsTab({ space, canManage }) {
 
             return (
               <div key={automation.id} className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <div className="text-base font-semibold text-[var(--text-primary)]">{automation.name}</div>
                     <div className="mt-1 text-sm text-[var(--text-secondary)]">
@@ -236,7 +236,7 @@ export default function SpaceAutomationsTab({ space, canManage }) {
       {canManage ? (
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
           <div className="text-sm font-semibold text-[var(--text-primary)]">Quick-add templates</div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap">
             {templates.map((template) => {
               const cat = TEMPLATE_CATEGORIES[template.category]
               return (
@@ -249,7 +249,7 @@ export default function SpaceAutomationsTab({ space, canManage }) {
                     setBuilderTemplate(template.values)
                     setShowBuilder(true)
                   }}
-                  className="rounded-full border border-[var(--border)] bg-[var(--surface-secondary)] px-4 py-2 text-sm text-[var(--text-primary)]"
+                  className="rounded-2xl border border-[var(--border)] bg-[var(--surface-secondary)] px-4 py-2 text-left text-sm text-[var(--text-primary)] sm:rounded-full sm:text-center"
                 >
                   {cat ? `${cat.icon} ` : ''}
                   {template.label}

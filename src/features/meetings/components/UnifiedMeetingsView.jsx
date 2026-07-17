@@ -318,7 +318,7 @@ export default function UnifiedMeetingsView({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-app)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden', background: 'var(--bg-app)' }}>
       {/* Stats Cards — super admin only */}
       {stats && isSuperAdmin && (
         <div style={{ padding: '16px', borderBottom: '1px solid var(--border-1)', background: 'var(--surface-card)', flexShrink: 0 }}>

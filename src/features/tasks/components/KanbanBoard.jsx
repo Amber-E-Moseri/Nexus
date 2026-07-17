@@ -100,7 +100,14 @@ export default function KanbanBoard({
   const tasksByStatus = useMemo(() => {
     const map = {}
     boardStatuses.forEach((status) => {
-      map[status.id] = tasks.filter((task) => taskMatchesStatus(task, status))
+      const col = tasks.filter((task) => taskMatchesStatus(task, status))
+      col.sort((a, b) => {
+        if (!a.due_date && !b.due_date) return 0
+        if (!a.due_date) return 1
+        if (!b.due_date) return -1
+        return a.due_date < b.due_date ? -1 : 1
+      })
+      map[status.id] = col
     })
     return map
   }, [tasks, boardStatuses])

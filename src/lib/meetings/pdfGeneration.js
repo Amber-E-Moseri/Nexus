@@ -19,24 +19,32 @@ export async function generateMinutesPDF(minutesData, meeting, agendaRows = []) 
     lightBg: [244, 241, 234],
   };
 
-  // Header
+  // Header: meeting name + date/time
+  const meetingDate = new Date(meeting.date);
+  const dateTimeLine = `${meetingDate.toLocaleDateString()} · ${meetingDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  const titleLines = doc.splitTextToSize(meeting.title || 'Meeting Minutes', pageWidth - 30);
+  const headerHeight = 14 + titleLines.length * 7 + 8;
+
   doc.setFillColor(...colors.header);
-  doc.rect(0, 0, pageWidth, 25, 'F');
+  doc.rect(0, 0, pageWidth, headerHeight, 'F');
 
   doc.setTextColor(...colors.headerText);
-  doc.setFontSize(16);
+  doc.setFontSize(15);
   doc.setFont('Helvetica', 'bold');
-  doc.text('BLW CANADA MEETING MINUTES', 15, 15);
+  doc.text(titleLines, 15, 15);
+
+  doc.setFontSize(10);
+  doc.setFont('Helvetica', 'normal');
+  doc.text(dateTimeLine, 15, 14 + titleLines.length * 7);
 
   // Meeting metadata
   doc.setTextColor(...colors.text);
   doc.setFontSize(10);
   doc.setFont('Helvetica', 'normal');
 
-  let y = 35;
+  let y = headerHeight + 10;
   const metadata = [
     `Meeting Type: ${meeting.meeting_type || 'General'}`,
-    `Date: ${new Date(meeting.date).toLocaleDateString()}`,
     `Location: ${meeting.location || 'Virtual'}`,
     `Moderator: ${meeting.moderator_name || 'Not specified'}`,
   ];
@@ -204,6 +212,44 @@ export async function generateMinutesPDF(minutesData, meeting, agendaRows = []) 
       const lines = doc.splitTextToSize(`• ${point}`, pageWidth - 30);
       doc.text(lines, 15, y);
       y += lines.length * 5 + 2;
+    });
+  }
+
+  // Detailed Notes Section (cleaned-up transcript, markdown-lite)
+  if (minutesData.detailedNotes && minutesData.detailedNotes.trim()) {
+    y += 10;
+    if (y > pageHeight - 40) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(...colors.text);
+    doc.text('Detailed Notes', 15, y);
+    y += 8;
+
+    const notesLines = minutesData.detailedNotes.split('\n');
+    notesLines.forEach((rawLine) => {
+      const line = rawLine.trim();
+      if (!line) { y += 3; return; }
+
+      const isHeading = /^#{1,6}\s*/.test(line);
+      const cleaned = line.replace(/^#{1,6}\s*/, '').replace(/\*\*/g, '');
+
+      doc.setFont('Helvetica', isHeading ? 'bold' : 'normal');
+      doc.setFontSize(isHeading ? 11 : 10);
+      doc.setTextColor(...colors.text);
+
+      if (isHeading && y > 20) y += 3;
+      if (y > pageHeight - 20) {
+        doc.addPage();
+        y = 20;
+      }
+
+      const wrapped = doc.splitTextToSize(cleaned, pageWidth - 30);
+      doc.text(wrapped, 15, y);
+      y += wrapped.length * 5 + (isHeading ? 3 : 2);
     });
   }
 

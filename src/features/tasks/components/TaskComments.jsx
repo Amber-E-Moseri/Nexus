@@ -3,7 +3,7 @@ import { useAuth } from '../../../hooks/useAuth'
 import { formatRelativeDate } from '../../../lib/dateUtils'
 import { recordActivity } from '../../../lib/activityFeed'
 import { createComment, deleteComment, getTaskComments } from '../lib/tasks'
-import { createMentionNotifications } from '../../notifications'
+import { sendTaskPushNotification } from '../../notifications'
 import { supabase } from '../../../lib/supabase'
 
 function formatRelativeTime(dateStr) {
@@ -239,14 +239,27 @@ export default function TaskComments({ taskId }) {
         })
       }
 
-      // Create @mention notifications
-      void createMentionNotifications(
-        profile.id,
-        profile.name,
-        mentions.map((m) => m.id),
-        taskId,
-        task?.title ?? 'a task'
-      )
+      // @mention: notify + grant task_follows visibility atomically per mentioned user.
+      // Errors are logged, not thrown — a failed mention shouldn't roll back the
+      // comment that already posted successfully. The RPC returns false (no push) when
+      // the mentioned user muted in-app mention notifications or mentioned themselves —
+      // task_follows visibility is still granted either way.
+      for (const mentioned of mentions) {
+        void supabase
+          .rpc('mention_user_on_task', { p_task_id: taskId, p_user_id: mentioned.id })
+          .then(({ data: notified, error }) => {
+            if (error) { console.error(error); return }
+            if (notified) {
+              sendTaskPushNotification(mentioned.id, {
+                taskId,
+                title: "I'm @mentioned",
+                message: `${profile.name ?? 'Someone'} mentioned you`,
+                url: '/inbox',
+                type: 'mention',
+              }).catch(() => {})
+            }
+          })
+      }
 
       setBody('')
       setMentions([])

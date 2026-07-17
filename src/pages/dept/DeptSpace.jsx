@@ -8,7 +8,7 @@ import MiniCalendar from '../../features/calendar/components/MiniCalendar'
 import MeetingModal from '../../features/meetings/components/MeetingModal'
 import MeetingsList from '../../features/meetings/components/MeetingsList'
 import { MeetingsProvider } from '../../features/meetings/MeetingsContext'
-import AssignedToMeToggle from '../../features/tasks/components/AssignedToMeToggle'
+import MeModeToggle from '../../features/tasks/components/MeModeToggle'
 import KanbanBoard from '../../features/tasks/components/KanbanBoard'
 import TaskCalendarView from '../../features/tasks/components/TaskCalendarView'
 import TaskFilters from '../../features/tasks/components/TaskFilters'
@@ -135,9 +135,19 @@ function DeptBoardView({ dept, onTaskClick, onAddTask }) {
   const { profile } = useAuth()
   const { tasks, loading, error, statuses, defaultStatusId } = useTasks()
   const members = useDeptMembers(dept?.id)
-  const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
-  const assignedToMe = Boolean(profile?.id) && filters.assigneeId === profile.id
-  const toggleAssignedToMe = () => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))
+  const { filters, setFilters, filtered: baseFiltered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
+  const [meMode, setMeMode] = useState(false)
+  const [meModeOptions, setMeModeOptions] = useState({ comments: false, subtasks: false, checklists: false })
+
+  const filtered = meMode && profile?.id
+    ? baseFiltered.filter((t) => {
+        if (t.assignee_id === profile.id || t.assignees?.some((a) => a.id === profile.id)) return true
+        if (meModeOptions.comments && t.comments?.some?.((c) => c.author_id === profile.id || c.user_id === profile.id)) return true
+        if (meModeOptions.subtasks && t.subtasks?.some?.((s) => s.assignee_id === profile.id)) return true
+        return false
+      })
+    : baseFiltered
+
   const [boardStatuses, setBoardStatuses] = useState([])
   const [loadingStatuses, setLoadingStatuses] = useState(true)
   const [statusError, setStatusError] = useState('')
@@ -220,7 +230,15 @@ function DeptBoardView({ dept, onTaskClick, onAddTask }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ paddingBottom: 12, borderBottom: '1px solid #F2EEE6', marginBottom: 12, flexShrink: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-          <AssignedToMeToggle active={assignedToMe} onClick={toggleAssignedToMe} />
+          <MeModeToggle
+            active={meMode}
+            options={meModeOptions}
+            onChange={(opts, on) => {
+              if (on === false) { setMeMode(false); return }
+              if (opts !== null) setMeModeOptions(opts)
+              if (on === true) setMeMode(true)
+            }}
+          />
         </div>
         <TaskFilters
           filters={filters}
@@ -248,9 +266,18 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
   const { profile } = useAuth()
   const { tasks, loading, error, statuses, defaultStatusId, moveTask } = useTasks()
   const members = useDeptMembers(dept?.id)
-  const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
-  const assignedToMe = Boolean(profile?.id) && filters.assigneeId === profile.id
-  const toggleAssignedToMe = () => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))
+  const { filters, setFilters, filtered: baseFiltered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
+  const [meMode, setMeMode] = useState(false)
+  const [meModeOptions, setMeModeOptions] = useState({ comments: false, subtasks: false, checklists: false })
+
+  const filtered = meMode && profile?.id
+    ? baseFiltered.filter((t) => {
+        if (t.assignee_id === profile.id || t.assignees?.some((a) => a.id === profile.id)) return true
+        if (meModeOptions.comments && t.comments?.some?.((c) => c.author_id === profile.id || c.user_id === profile.id)) return true
+        if (meModeOptions.subtasks && t.subtasks?.some?.((s) => s.assignee_id === profile.id)) return true
+        return false
+      })
+    : baseFiltered
 
   function handleTaskStatusChange({ taskId, newStatus }) {
     moveTask(taskId, newStatus)
@@ -263,7 +290,15 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ paddingBottom: 12, borderBottom: '1px solid #F2EEE6', marginBottom: 12, flexShrink: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-          <AssignedToMeToggle active={assignedToMe} onClick={toggleAssignedToMe} />
+          <MeModeToggle
+            active={meMode}
+            options={meModeOptions}
+            onChange={(opts, on) => {
+              if (on === false) { setMeMode(false); return }
+              if (opts !== null) setMeModeOptions(opts)
+              if (on === true) setMeMode(true)
+            }}
+          />
         </div>
         <TaskFilters
           filters={filters}

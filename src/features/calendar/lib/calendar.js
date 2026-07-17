@@ -415,12 +415,19 @@ export function getTaskFeedUrl(token) {
 
 // ---- Event Types ----
 
-export async function getEventTypes() {
-  const { data, error } = await supabase
+export async function getEventTypes(options = {}) {
+  const { includeInactive = false } = options
+
+  let query = supabase
     .from('calendar_event_types')
-    .select('id, name, color')
-    .eq('active', true)
+    .select('id, name, color, active, sort_order, reminder_configs')
     .order('sort_order')
+
+  if (!includeInactive) {
+    query = query.eq('active', true)
+  }
+
+  const { data, error } = await query
 
   if (error) {
     console.error('Failed to fetch event types:', error)
@@ -436,8 +443,9 @@ export async function createEventType(eventType) {
     .insert({
       name: eventType.name,
       color: eventType.color,
-      active: true,
+      active: eventType.active ?? true,
       sort_order: 0,
+      reminder_configs: eventType.reminder_configs ?? [],
     })
     .select()
     .single()
@@ -463,6 +471,26 @@ export async function deleteEventType(id) {
     .from('calendar_event_types')
     .delete()
     .eq('id', id)
+
+  if (error) throw error
+}
+
+export async function getEventTypeUsageCount(name) {
+  const { count, error } = await supabase
+    .from('calendar_events')
+    .select('id', { count: 'exact', head: true })
+    .eq('event_type', name)
+    .is('deleted_at', null)
+
+  if (error) throw error
+  return count ?? 0
+}
+
+export async function cascadeRenameEventType(oldName, newName) {
+  const { error } = await supabase
+    .from('calendar_events')
+    .update({ event_type: newName })
+    .eq('event_type', oldName)
 
   if (error) throw error
 }

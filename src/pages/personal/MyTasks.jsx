@@ -5,7 +5,7 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import { useToast } from '../../context/ToastContext'
 import { useAuth } from '../../hooks/useAuth'
 import { useDeptMembers } from '../../hooks/useDeptMembers'
-import { useMyTasks } from '../../features/tasks/hooks/useMyTasks'
+import { useMyTasks, useWatchedTasks } from '../../features/tasks/hooks/useMyTasks'
 import { TasksProvider } from '../../features/tasks/TasksContext'
 import { listTaskStatuses } from '../../lib/taskStatuses'
 import { getMySpaces } from '../../features/spaces'
@@ -44,6 +44,7 @@ export default function MyTasks() {
     [quickView],
   )
   const { tasks, isLoading, refetch, optimisticStatusUpdate } = useMyTasks(profile?.id || '', hookFilters)
+  const { tasks: watchedTasks, isLoading: watchedLoading, refetch: refetchWatched } = useWatchedTasks(profile?.id || '')
   const [statuses, setStatuses] = useState([])
   const [departments, setDepartments] = useState([])
   const [modal, setModal] = useState(null)
@@ -80,10 +81,12 @@ export default function MyTasks() {
   // they don't inflate my own to-do totals.
   const myTasks = tasks.filter((t) => t.assignee_id === profile?.id)
   const delegatedTasks = tasks.filter((t) => isDelegatedTask(t, profile?.id))
-  // Quick views are assignee-scoped at the query level, so the Delegated tab
-  // doesn't apply — pin them to "mine".
+  // Quick views are assignee-scoped at the query level, so the Delegated/Watching tabs
+  // don't apply — pin them to "mine".
   const effectiveTab = quickView ? 'mine' : activeTab
-  const tabTasks = effectiveTab === 'delegated' ? delegatedTasks : myTasks
+  const tabTasks = effectiveTab === 'delegated' ? delegatedTasks
+    : effectiveTab === 'watching' ? watchedTasks
+    : myTasks
 
   // Apply the filter panel to whichever tab is showing. Status ids expand to
   // their name group first (see statusGroups above).
@@ -132,10 +135,12 @@ export default function MyTasks() {
     // useMyTasks owns the task list (with realtime sync); re-pull after a
     // modal save rather than mutating a non-existent local setter.
     refetch()
+    refetchWatched()
   }
 
   function handleDeleted() {
     refetch()
+    refetchWatched()
   }
 
   // Drag-and-drop status change for both List and Board views. Delegated
@@ -215,6 +220,7 @@ export default function MyTasks() {
           {[
             { id: 'mine', label: 'My Tasks', count: myTasks.length },
             { id: 'delegated', label: 'Delegated', count: delegatedTasks.length },
+            { id: 'watching', label: 'Watching', count: watchedTasks.length },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -256,7 +262,7 @@ export default function MyTasks() {
           </div>
         </div>
 
-        {isLoading ? (
+        {isLoading || (effectiveTab === 'watching' && watchedLoading) ? (
           <div className="flex justify-center py-16">
             <LoadingSpinner label="Loading tasks" />
           </div>
@@ -269,7 +275,7 @@ export default function MyTasks() {
                 spaceName="My Tasks"
                 departments={departmentOptions}
                 statusesOverride={statuses}
-                onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab === 'delegated' })}
+                onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab !== 'mine' })}
                 onCreateTask={() => setModal({ mode: 'create' })}
                 onTaskStatusChange={handleTaskStatusChange}
                 canCreateTask={effectiveTab === 'mine'}
@@ -284,7 +290,7 @@ export default function MyTasks() {
               departments={departmentOptions}
               canAddTask={effectiveTab === 'mine'}
               onCreateTask={() => setModal({ mode: 'create' })}
-              onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab === 'delegated' })}
+              onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab !== 'mine' })}
               onTaskStatusChange={handleTaskStatusChange}
               people={memberMap}
               priorities={{}}

@@ -5,7 +5,6 @@ export {
   markAsRead,
   markAllAsRead,
   createNotification,
-  createMentionNotifications,
   getNotificationPrefs,
   setNotificationPref,
   sendBrowserPushNotification,

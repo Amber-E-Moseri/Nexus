@@ -1,4 +1,4 @@
-﻿alter table public.expected_attendees
+alter table public.expected_attendees
   add column if not exists email text;
 
 create table if not exists public.absence_email_templates (

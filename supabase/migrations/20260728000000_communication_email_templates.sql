@@ -1,4 +1,4 @@
-﻿-- Communication email templates: pre-built and customizable campaign templates
+-- Communication email templates: pre-built and customizable campaign templates
 
 create table if not exists public.communication_email_templates (
   id              uuid        primary key default gen_random_uuid(),

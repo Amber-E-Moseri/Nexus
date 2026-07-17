@@ -73,11 +73,11 @@ async function storeVaultSecret(req: Request) {
   let clientSecretVaultId: string
 
   try {
-    // Call vault.create_secret via SQL query (vault must be enabled in migration)
+    // Call vault_upsert_secret for idempotent create-or-update (handles reconnects gracefully)
     const { data: idResult, error: idError } = await supabase
-      .rpc('vault_create_secret', {
-        secret_name: `zoom_client_id_${space_id}`,
-        secret_value: client_id,
+      .rpc('vault_upsert_secret', {
+        name: `zoom_client_id_${space_id}`,
+        value: client_id,
       })
 
     if (idError) {
@@ -92,9 +92,9 @@ async function storeVaultSecret(req: Request) {
 
   try {
     const { data: secretResult, error: secretError } = await supabase
-      .rpc('vault_create_secret', {
-        secret_name: `zoom_client_secret_${space_id}`,
-        secret_value: client_secret,
+      .rpc('vault_upsert_secret', {
+        name: `zoom_client_secret_${space_id}`,
+        value: client_secret,
       })
 
     if (secretError) {

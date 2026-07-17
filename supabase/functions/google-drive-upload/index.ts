@@ -71,12 +71,12 @@ async function refreshAccessToken(
     return null
   }
 
-  // Store the new access token in vault
+  // Store the new access token in vault using idempotent upsert
   const supabase = adminClient()
   try {
-    await supabase.rpc('vault_create_secret', {
-      secret_name: `google_drive_access_token_${userId}`,
-      secret_value: newAccessToken,
+    await supabase.rpc('vault_upsert_secret', {
+      name: `google_drive_access_token_${userId}`,
+      value: newAccessToken,
     })
   } catch (err) {
     console.error('Failed to update access token in vault:', err)

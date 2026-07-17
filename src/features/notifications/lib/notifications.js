@@ -54,49 +54,6 @@ export async function createNotification(userId, type, payload) {
   return data
 }
 
-export async function createMentionNotifications(commenterId, commenterName, mentionedUserIds, taskId, taskTitle) {
-  if (!mentionedUserIds || mentionedUserIds.length === 0) return []
-
-  // Check preferences for each mentioned user
-  const { data: userPrefs } = await supabase
-    .from('user_notification_prefs')
-    .select('user_id')
-    .in('user_id', mentionedUserIds)
-    .eq('notification_type', 'mention')
-    .eq('in_app', false)
-
-  const disabledUserIds = new Set((userPrefs || []).map((p) => p.user_id))
-
-  // Insert notifications for enabled mentions (excluding self-mentions)
-  const notificationsToInsert = mentionedUserIds
-    .filter((userId) => userId !== commenterId && !disabledUserIds.has(userId))
-    .map((userId) => ({
-      user_id: userId,
-      type: 'mention',
-      payload: {
-        actor_name: commenterName,
-        task_title: taskTitle,
-        task_id: taskId,
-      },
-    }))
-
-  if (notificationsToInsert.length === 0) return []
-
-  const { data: inserted, error } = await supabase
-    .from('notifications')
-    .insert(notificationsToInsert)
-    .select()
-
-  if (error) {
-    console.error('Failed to insert mention notifications:', error)
-  } else {
-    for (const notification of inserted ?? []) {
-      dispatchPush(notification.user_id, notification)
-    }
-  }
-  return inserted || []
-}
-
 export async function getNotificationPrefs(userId) {
   const { data, error } = await supabase
     .from('user_notification_prefs')
@@ -144,6 +101,8 @@ export const NOTIFICATION_TYPES = {
   event_approval_pending: { label: 'Calendar event awaiting approval', icon: '📅', description: 'When a calendar event needs your approval' },
   event_approved: { label: 'Calendar event approved', icon: '✅', description: 'When your calendar event is approved' },
   event_rejected: { label: 'Calendar event rejected', icon: '❌', description: 'When your calendar event is rejected' },
+  calendar_event_reminder: { label: 'Calendar event reminder', icon: '📅', description: 'When an approved calendar event is approaching' },
+  calendar_sprint_prompt: { label: 'Sprint prompt for upcoming event', icon: '⚡', description: 'When an upcoming regional program may need a sprint' },
   campus_edit_approved: { label: 'Map edit approved', icon: '✅', description: 'When your campus map edit is approved' },
   campus_edit_rejected: { label: 'Map edit rejected', icon: '❌', description: 'When your campus map edit is rejected' },
   meeting_reminder: { label: 'Meeting reminder', icon: '🔔', description: 'Reminder 1 hour before a meeting' },
@@ -279,6 +238,10 @@ export function formatNotificationMessage(notification) {
       return `Your event "${payload.event_title ?? 'Untitled'}" was approved`
     case 'event_rejected':
       return `Your event "${payload.event_title ?? 'Untitled'}" was rejected`
+    case 'calendar_event_reminder':
+      return `"${payload.event_title ?? 'Untitled'}" is in ${payload.days_before ?? '?'} days`
+    case 'calendar_sprint_prompt':
+      return `"${payload.event_title ?? 'Untitled'}" is in ${payload.days_before ?? '?'} days - time to start a sprint?`
     case 'campus_edit_approved':
       return `Your edit to "${payload.campus_name ?? 'a campus'}" (${payload.field_name ?? 'field'}) was approved`
     case 'campus_edit_rejected':

@@ -4,7 +4,6 @@ import { useAuth } from '../../../hooks/useAuth'
 import { useDeptMembers } from '../../../hooks/useDeptMembers'
 import { hasSpaceRole } from '../../../lib/permissions'
 import { PRIORITIES } from '../../../lib/constants'
-import { createNotification } from '../../notifications'
 import { getMySpaces, SPACE_TYPE_ICONS } from '../../spaces'
 import { getSprintMembers, SprintPicker } from '../../sprints'
 import { supabase } from '../../../lib/supabase'
@@ -431,11 +430,12 @@ export default function TaskModal({
         const created = ctx ? await ctx.addTask(payload) : await createTask(payload)
 
         if (assigneeIds[0] && assigneeIds[0] !== profile?.id) {
-          await createNotification(assigneeIds[0], 'task_assigned', {
-            task_id: created.id,
-            task_title: created.title,
-            assigner_name: profile?.name,
+          const { error: notifyError } = await supabase.rpc('create_task_notification', {
+            p_user_id: assigneeIds[0],
+            p_type: 'task_assigned',
+            p_task_id: created.id,
           })
+          if (notifyError) console.error(notifyError)
         }
 
         if (pendingWatchers.length > 0) {
@@ -448,11 +448,12 @@ export default function TaskModal({
         const updated = ctx ? await ctx.editTask(task.id, payload) : await updateTask(task.id, payload)
 
         if (assigneeIds[0] && assigneeIds[0] !== previousAssigneeId && assigneeIds[0] !== profile?.id) {
-          await createNotification(assigneeIds[0], 'task_assigned', {
-            task_id: updated.id,
-            task_title: updated.title,
-            assigner_name: profile?.name,
+          const { error: notifyError } = await supabase.rpc('create_task_notification', {
+            p_user_id: assigneeIds[0],
+            p_type: 'task_assigned',
+            p_task_id: updated.id,
           })
+          if (notifyError) console.error(notifyError)
         }
 
         onSaved?.(updated)

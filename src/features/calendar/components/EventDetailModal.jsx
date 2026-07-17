@@ -3,13 +3,44 @@ import { X } from 'lucide-react'
 import { approveEvent, rejectEvent } from '..'
 import { useAuth } from '../../../hooks/useAuth'
 import { useToast } from '../../../context/ToastContext'
+import { supabase } from '../../../lib/supabase'
+import DeliverablesSection from './DeliverablesSection'
 
 export default function EventDetailModal({ event, onClose, onApproved, canApprove = false }) {
-  const { profile, effectiveRole } = useAuth()
+  const { profile } = useAuth()
   const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
   const [showRejectForm, setShowRejectForm] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('')
+  const [isProgramsMember, setIsProgramsMember] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadProgramsFlag() {
+      if (!profile?.department_id) {
+        if (!cancelled) setIsProgramsMember(false)
+        return
+      }
+
+      // Match RLS check from is_programs_team() RPC (exact case-insensitive name = 'programs')
+      // not the is_programs column fuzzy-match (ilike '%programs%')
+      const { data } = await supabase
+        .from('departments')
+        .select('name')
+        .eq('id', profile.department_id)
+        .maybeSingle()
+
+      if (!cancelled) {
+        setIsProgramsMember(Boolean(data?.name && data.name.toLowerCase() === 'programs'))
+      }
+    }
+
+    loadProgramsFlag()
+    return () => {
+      cancelled = true
+    }
+  }, [profile?.department_id])
 
   async function handleApprove() {
     if (!canApprove || !event) return
@@ -193,6 +224,11 @@ export default function EventDetailModal({ event, onClose, onApproved, canApprov
             </div>
           )}
         </div>
+
+        {/* Dual-gate: Programs-only UI convenience here, RLS is the real security gate. */}
+        {isProgramsMember ? (
+          <DeliverablesSection eventId={event.id} departmentId={event.department_id ?? null} />
+        ) : null}
 
         {/* Approval Form */}
         {isPending && canApprove && (
