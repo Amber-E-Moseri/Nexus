@@ -2106,11 +2106,13 @@ function SpaceMeetingsTab({ meetings, spaceId, spaceName, canManage, onMeetingCr
   // Group members can't open the /meetings/:id detail route, so they read info
   // inline here rather than navigating to a blocked page.
   const inlineOnly = effectiveRole === 'group_member'
+  // Members can log meetings in their own space; planning (wizard) stays admin-only.
+  const canLog = canManage || ['member', 'pastor', 'regional_secretary', 'super_admin'].includes(effectiveRole)
   const [showLogModal, setShowLogModal] = useState(false)
 
   return (
     <div className="space-y-4">
-      {canManage ? (
+      {canLog ? (
         <div className="flex justify-end gap-2">
           <button
             type="button"
@@ -2119,13 +2121,15 @@ function SpaceMeetingsTab({ meetings, spaceId, spaceName, canManage, onMeetingCr
           >
             + Log meeting
           </button>
-          <button
-            type="button"
-            onClick={() => navigate('/meetings/wizard', { state: { departmentId: spaceId, departmentName: spaceName } })}
-            className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white"
-          >
-            + Plan a meeting
-          </button>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={() => navigate('/meetings/wizard', { state: { departmentId: spaceId, departmentName: spaceName } })}
+              className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white"
+            >
+              + Plan a meeting
+            </button>
+          ) : null}
         </div>
       ) : null}
 
