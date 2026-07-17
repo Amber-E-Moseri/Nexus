@@ -683,6 +683,25 @@ export default function TaskModal({
               </div>
             </div>
 
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Due date</label>
+              <input
+                type="date"
+                disabled={isReadOnly}
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                style={{
+                  ...inputStyle,
+                  padding: '9px 12px',
+                  opacity: isReadOnly ? 0.6 : 1,
+                  cursor: isReadOnly ? 'default' : 'pointer',
+                  colorScheme: 'light',
+                }}
+                onFocus={(e) => { if (!isReadOnly) e.target.style.borderColor = 'var(--accent)' }}
+                onBlur={(e) => { if (!isReadOnly) e.target.style.borderColor = 'var(--border)' }}
+              />
+            </div>
+
             <div style={{ marginBottom: 18, pointerEvents: isReadOnly ? 'none' : 'auto', opacity: isReadOnly ? 0.6 : 1 }}>
               <label style={labelStyle}>Assignees</label>
               <AssigneeSelector
