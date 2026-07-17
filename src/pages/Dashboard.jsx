@@ -170,7 +170,7 @@ function CustomHeroStatCard({ meta, value, statKey, onChoose, onClick }) {
           overflow: 'hidden',
           background: 'transparent',
           borderRadius: 24,
-          padding: '28px 28px 24px',
+          padding: 'clamp(14px, 4vw, 28px) clamp(12px, 3.5vw, 28px) clamp(12px, 3vw, 24px)',
           border: 'none',
           cursor: 'pointer',
           textAlign: 'left',
@@ -217,7 +217,7 @@ function CustomHeroStatCard({ meta, value, statKey, onChoose, onClick }) {
             change
           </button>
         </div>
-        <div style={{ fontFamily: FONT_HEADING, fontSize: 64, fontWeight: 700, color: '#fff', lineHeight: 1, letterSpacing: '-0.03em', position: 'relative', marginTop: 10 }}>
+        <div style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(36px, 8vw, 64px)', fontWeight: 700, color: '#fff', lineHeight: 1, letterSpacing: '-0.03em', position: 'relative', marginTop: 10 }}>
           {value ?? '—'}
         </div>
         <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: 'rgba(255,255,255,.72)', marginTop: 8, fontWeight: 500, position: 'relative' }}>
@@ -347,7 +347,7 @@ function HeroStatCard({ label, value, sub, bg, blobColor, onClick }) {
           overflow: 'hidden',
           background: 'transparent',
           borderRadius: 24,
-          padding: '28px 28px 24px',
+          padding: 'clamp(14px, 4vw, 28px) clamp(12px, 3.5vw, 28px) clamp(12px, 3vw, 24px)',
           border: 'none',
           cursor: onClick ? 'pointer' : 'default',
           textAlign: 'left',
@@ -371,7 +371,7 @@ function HeroStatCard({ label, value, sub, bg, blobColor, onClick }) {
         <div style={{ fontFamily: FONT_HEADING, fontSize: 10.5, fontWeight: 600, letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,.78)', marginBottom: 10, position: 'relative' }}>
           {label}
         </div>
-        <div style={{ fontFamily: FONT_HEADING, fontSize: 64, fontWeight: 700, color: '#fff', lineHeight: 1, letterSpacing: '-0.03em', position: 'relative' }}>
+        <div style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(36px, 8vw, 64px)', fontWeight: 700, color: '#fff', lineHeight: 1, letterSpacing: '-0.03em', position: 'relative' }}>
           {value ?? '—'}
         </div>
         <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: 'rgba(255,255,255,.72)', marginTop: 8, fontWeight: 500, position: 'relative' }}>
@@ -1062,7 +1062,7 @@ export default function Dashboard() {
 
         {/* ── Hero stat cards — semantic accent mapping: purple anchor /
             blue progress / orange priority / green active ── */}
-        <div className="dash-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+        <div className="dash-stagger dash-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
           <CustomHeroStatCard
             meta={customStat.meta}
             value={customStat.value}

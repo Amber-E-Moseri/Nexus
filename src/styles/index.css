@@ -418,3 +418,13 @@ code, kbd { font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospa
 }
 .hero-stat-card:hover { translate: 0 -2px; }
 .hero-stat-card:active { scale: .99; }
+
+/* Stat card grid — equal height cards, tighter gap on mobile */
+.dash-stat-grid {
+  grid-template-columns: repeat(2, 1fr);
+  align-items: stretch;
+}
+.dash-stat-grid > * { height: 100%; }
+@media (max-width: 380px) {
+  .dash-stat-grid { gap: 8px !important; }
+}
