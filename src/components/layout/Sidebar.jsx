@@ -1146,11 +1146,13 @@ export default function Sidebar() {
                 to="/meetings/attendance-trends"
               />
             ) : null}
-            <SidebarItem
-              active={isPathActive(location.pathname, '/meetings/absence-email-log')}
-              label="Absence Email Send Log"
-              to="/meetings/absence-email-log"
-            />
+            {!['member', 'group_member'].includes(role) ? (
+              <SidebarItem
+                active={isPathActive(location.pathname, '/meetings/absence-email-log')}
+                label="Absence Email Send Log"
+                to="/meetings/absence-email-log"
+              />
+            ) : null}
           </>
         ) : null}
         {canAccessCommunications && (

@@ -289,7 +289,9 @@ export default function App() {
           <Route
             path="/meetings/absence-email-log"
             element={
-              <AbsenceEmailLogPage />
+              <ProtectedRoute blockRoles={['member', 'group_member']}>
+                <AbsenceEmailLogPage />
+              </ProtectedRoute>
             }
           />
           <Route
