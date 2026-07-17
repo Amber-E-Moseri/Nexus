@@ -11,7 +11,6 @@ CREATE POLICY "automations_select" ON public.automations
     OR sprint_id IN (
       SELECT sprint_id FROM public.sprint_members
       WHERE user_id = auth.uid()
-        AND status = 'active'
     )
   );
 
