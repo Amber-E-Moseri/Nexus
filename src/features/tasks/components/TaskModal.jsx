@@ -231,6 +231,7 @@ export default function TaskModal({
     task?.assignee_id ? [task.assignee_id] : profile?.id ? [profile.id] : []
   )
   const [dueDate, setDueDate] = useState(task?.due_date ?? defaultDueDate ?? '')
+  const [dueTime, setDueTime] = useState(task?.due_time ?? '')
   const [personal, setPersonal] = useState(task?.is_personal ?? isPersonal)
   const [subtasks, setSubtasks] = useState(task?.subtasks ?? [])
   const [spaces, setSpaces] = useState([])
@@ -416,6 +417,7 @@ export default function TaskModal({
         priority,
         assignee_id: assigneeIds[0] || null,
         due_date: dueDate || null,
+        due_time: (dueDate && dueTime) ? dueTime : null,
         is_personal: personal,
         source: 'manual',
         department_id: personal ? departmentId ?? null : effectiveSprintId ? null : (selectedSpaceId || departmentId) ?? null,
@@ -684,22 +686,42 @@ export default function TaskModal({
             </div>
 
             <div style={{ marginBottom: 18 }}>
-              <label style={labelStyle}>Due date</label>
-              <input
-                type="date"
-                disabled={isReadOnly}
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                style={{
-                  ...inputStyle,
-                  padding: '9px 12px',
-                  opacity: isReadOnly ? 0.6 : 1,
-                  cursor: isReadOnly ? 'default' : 'pointer',
-                  colorScheme: 'light',
-                }}
-                onFocus={(e) => { if (!isReadOnly) e.target.style.borderColor = 'var(--accent)' }}
-                onBlur={(e) => { if (!isReadOnly) e.target.style.borderColor = 'var(--border)' }}
-              />
+              <label style={labelStyle}>Due date &amp; time</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="date"
+                  disabled={isReadOnly}
+                  value={dueDate}
+                  onChange={(e) => { setDueDate(e.target.value); if (!e.target.value) setDueTime('') }}
+                  style={{
+                    ...inputStyle,
+                    padding: '9px 12px',
+                    flex: '1 1 0',
+                    opacity: isReadOnly ? 0.6 : 1,
+                    cursor: isReadOnly ? 'default' : 'pointer',
+                    colorScheme: 'light',
+                  }}
+                  onFocus={(e) => { if (!isReadOnly) e.target.style.borderColor = 'var(--accent)' }}
+                  onBlur={(e) => { if (!isReadOnly) e.target.style.borderColor = 'var(--border)' }}
+                />
+                <input
+                  type="time"
+                  disabled={isReadOnly || !dueDate}
+                  value={dueTime}
+                  onChange={(e) => setDueTime(e.target.value)}
+                  style={{
+                    ...inputStyle,
+                    padding: '9px 12px',
+                    width: 130,
+                    flexShrink: 0,
+                    opacity: (isReadOnly || !dueDate) ? 0.4 : 1,
+                    cursor: (isReadOnly || !dueDate) ? 'default' : 'pointer',
+                    colorScheme: 'light',
+                  }}
+                  onFocus={(e) => { if (!isReadOnly && dueDate) e.target.style.borderColor = 'var(--accent)' }}
+                  onBlur={(e) => { if (!isReadOnly) e.target.style.borderColor = 'var(--border)' }}
+                />
+              </div>
             </div>
 
             <div style={{ marginBottom: 18, pointerEvents: isReadOnly ? 'none' : 'auto', opacity: isReadOnly ? 0.6 : 1 }}>

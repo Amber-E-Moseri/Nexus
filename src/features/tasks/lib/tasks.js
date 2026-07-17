@@ -14,7 +14,7 @@ const TASK_COLS = `
   id, title, description, is_personal, status, priority,
   assignee_id, department_id, parent_task_id, meeting_id, goal_id,
   source, source_name, source_type, external_unique_key,
-  due_date, completed_at, created_by, created_at,
+  due_date, due_time, completed_at, created_by, created_at,
   sprint_id, task_type, status_id, list_id, sort_order, deleted_at
 `
 
