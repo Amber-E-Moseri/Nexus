@@ -14,14 +14,16 @@ const inputStyle = {
   boxSizing: 'border-box',
 }
 
-// Only Flock-specific settings — not anything already in Nexus user profile
-const FLOCK_SETTING_KEYS = ['REMINDER_MINUTES', 'CALL_WINDOW_START', 'CALL_WINDOW_END', 'TIMEZONE']
+// Flock-specific settings — keys must match SETTINGS_ORDER in flockSupabase.js
+const FLOCK_SETTING_KEYS = ['YOUR_NAME', 'REMINDER_EMAIL', 'MORNING_REMINDER_HOUR', 'DUESTATUS_REFRESH_HOUR', 'MONDAY_FOLLOWUPS_HOUR', 'TIMEZONE']
 
 const SETTING_META = {
-  REMINDER_MINUTES: { label: 'Reminder lead time', desc: 'Minutes before a follow-up is due to send a reminder notification.', icon: Bell },
-  CALL_WINDOW_START: { label: 'Call window start', desc: 'Earliest hour to schedule follow-up calls (24h format, e.g. 9).', icon: Clock },
-  CALL_WINDOW_END: { label: 'Call window end', desc: 'Latest hour to schedule follow-up calls (24h format, e.g. 20).', icon: Clock },
-  TIMEZONE: { label: 'Timezone', desc: 'IANA timezone used for scheduling (e.g. America/Toronto).', icon: Clock },
+  YOUR_NAME:              { label: 'Your Name',              desc: 'Used in greetings and email reminders.',               icon: User },
+  REMINDER_EMAIL:         { label: 'Reminder Email',         desc: 'Email address to receive follow-up reminders.',         icon: Bell },
+  MORNING_REMINDER_HOUR:  { label: 'Morning Reminder Hour',  desc: 'Hour (0–23) to send your daily follow-up reminders.',   icon: Clock },
+  DUESTATUS_REFRESH_HOUR: { label: 'Due Status Refresh Hour',desc: 'Hour (0–23) to recompute who is coming due.',           icon: Clock },
+  MONDAY_FOLLOWUPS_HOUR:  { label: 'Monday Digest Hour',     desc: 'Hour (0–23) for your Monday weekly follow-up digest.',  icon: Clock },
+  TIMEZONE:               { label: 'Timezone',               desc: 'IANA timezone for scheduling (e.g. America/Toronto).',  icon: Clock },
 }
 
 function SettingRow({ setting, onSave }) {

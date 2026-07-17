@@ -236,7 +236,7 @@ export default function App() {
           <Route
             path="/flock-crm"
             element={
-              <ProtectedRoute roles={['regional_secretary', 'pastor', 'super_admin']}>
+              <ProtectedRoute roles={['regional_secretary', 'pastor', 'super_admin']} allowGrant="can_access_flock_crm">
                 <FlockCRMPage />
               </ProtectedRoute>
             }
