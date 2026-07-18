@@ -3,7 +3,7 @@
 // (My Tasks / Created Tasks) as read-only iCal calendars.
 
 import { X, Copy, Check, Calendar, Apple, CheckCircle2, Circle, Loader2 } from 'lucide-react'
-import { getTaskFeedUrl } from '../lib/calendar'
+import { getGoogleCalendarSubscribeUrl, getTaskFeedUrl } from '../lib/calendar'
 import { useTaskFeedSubscriptions } from '../../tasks/hooks/useTaskFeedSubscriptions'
 import { useToast } from '../../../context/ToastContext'
 
@@ -174,7 +174,9 @@ export default function TaskFeedSubscriptionPanel({ spaceId, userId, onClose }) 
   async function handleGoogle(feedType) {
     try {
       const url = await ensureUrl(feedType)
-      window.open(`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}`, '_blank', 'noopener')
+      const googleUrl = getGoogleCalendarSubscribeUrl(url)
+      if (!googleUrl) throw new Error('Feed link not ready yet')
+      window.open(googleUrl, '_blank', 'noopener')
     } catch (e) {
       console.error('Failed to open Google Calendar:', e)
       showToast('Could not open Google Calendar', { tone: 'error' })

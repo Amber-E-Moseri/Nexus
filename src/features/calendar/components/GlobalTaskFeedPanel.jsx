@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { X, Copy, Calendar, Apple, CheckCircle2, Circle, Loader2, Check } from 'lucide-react'
-import { getOrCreateTaskFeedToken, getTaskFeedUrl } from '../lib/calendar'
+import { getGoogleCalendarSubscribeUrl, getOrCreateTaskFeedToken, getTaskFeedUrl } from '../lib/calendar'
 import { supabase } from '../../../lib/supabase'
 import { useToast } from '../../../context/ToastContext'
 
@@ -209,7 +209,9 @@ export default function GlobalTaskFeedPanel({ userId, onClose }) {
   function handleGoogle(feedType) {
     const url = urls[feedType]
     if (!url) { showToast('Feed link not ready yet', { tone: 'error' }); return }
-    window.open(`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}`, '_blank', 'noopener')
+    const googleUrl = getGoogleCalendarSubscribeUrl(url)
+    if (!googleUrl) { showToast('Feed link not ready yet', { tone: 'error' }); return }
+    window.open(googleUrl, '_blank', 'noopener')
   }
 
   function handleApple(feedType) {
