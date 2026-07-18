@@ -91,6 +91,7 @@ export async function getAllSprints() {
 }
 
 export async function getSprintDetail(sprintId) {
+  if (!sprintId) throw Object.assign(new Error('Sprint ID is required'), { code: 'PGRST116' })
   const sprintRes = await supabase
     .from('sprints')
     .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by')
@@ -1131,8 +1132,8 @@ export async function hasSprintAccess(sprintId) {
     .from('sprint_members')
     .select('sprint_id')
     .eq('sprint_id', sprintId)
-    .maybeSingle()
+    .limit(1)
 
   if (error) throw error
-  return Boolean(data)
+  return Array.isArray(data) && data.length > 0
 }
