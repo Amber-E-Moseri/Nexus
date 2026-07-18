@@ -122,15 +122,25 @@ function RowContent({
   isOver = false,
   isHovering = false,
   isMobile = false,
+  showSubtaskCount = true,
+  checklistCount = null,
+  showChecklistCount = false,
 }) {
   const subtaskCount = (Array.isArray(task.subtask_count) ? task.subtask_count[0]?.count : task.subtask_count) ?? task.subtasks?.length ?? 0
+  const desktopColumns = showSubtaskCount
+    ? showChecklistCount
+      ? '40px minmax(0,1fr) 110px 96px 90px 80px 70px'
+      : '40px minmax(0,1fr) 110px 96px 90px 70px'
+    : showChecklistCount
+      ? '40px minmax(0,1fr) 110px 96px 90px 70px'
+      : '40px minmax(0,1fr) 110px 96px 90px'
 
   return (
     <div
       style={{
         position: 'relative',
         display: 'grid',
-        gridTemplateColumns: isMobile ? '40px 1fr' : '40px minmax(0,1fr) 110px 96px 90px 70px',
+        gridTemplateColumns: isMobile ? '40px 1fr' : desktopColumns,
         alignItems: 'center',
         minHeight: 44,
         padding: '11px 16px 11px 0',
@@ -232,9 +242,16 @@ function RowContent({
           <div style={{ minWidth: 0 }}>
             <DueText task={task} />
           </div>
-          <div style={{ fontSize: 12, color: '#7A6F5E', textAlign: 'right' }}>
-            {subtaskCount || '-'}
-          </div>
+          {showChecklistCount ? (
+            <div style={{ fontSize: 12, color: '#7A6F5E', textAlign: 'right' }}>
+              {checklistCount?.total ? `${checklistCount.checked}/${checklistCount.total}` : '-'}
+            </div>
+          ) : null}
+          {showSubtaskCount ? (
+            <div style={{ fontSize: 12, color: '#7A6F5E', textAlign: 'right' }}>
+              {subtaskCount || '-'}
+            </div>
+          ) : null}
         </>
       ) : null}
     </div>
@@ -248,8 +265,12 @@ function SortableTaskRowComponent({
   priorities = PRIORITY_STYLES,
   onClick,
   isMobile = false,
+  showSubtaskCount = true,
+  checklistCount = null,
+  showChecklistCount = false,
+  disabled = false,
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: task.id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: task.id, disabled })
   const hasDraggedRef = useRef(false)
   const [statusColor] = useMemo(() => [
     statuses?.find((status) => status.id === task.status_id || status.key === task.status || status.legacy_key === task.status)?.color ?? '#7A7D86',
@@ -331,6 +352,9 @@ function SortableTaskRowComponent({
         handleProps={handleProps}
         isOver={isOver}
         isMobile={isMobile}
+        showSubtaskCount={showSubtaskCount}
+        checklistCount={checklistCount}
+        showChecklistCount={showChecklistCount}
       />
     </div>
   )

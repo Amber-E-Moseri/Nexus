@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabase'
 import { dedupeTaskStatuses } from '../../../lib/taskStatuses'
 import { useDndSensors } from '../../../dnd'
 import { useTasks } from '../TasksContext'
+import { getChecklistCounts } from '../lib/checklists'
 import KanbanColumn from './KanbanColumn'
 import TaskCard from './TaskCard'
 import PlainKanbanBoard from './PlainKanbanBoard'
@@ -43,6 +44,7 @@ export default function KanbanBoard({
   onCreateTask,
   onTaskStatusChange,
   teamMembers = [],
+  showSubtasks = true,
 }) {
   const { tasks: contextTasks, moveTask: contextMoveTask, statuses } = useTasks()
   // filteredTasks may come from a source unrelated to TasksContext (e.g. a
@@ -111,6 +113,16 @@ export default function KanbanBoard({
     })
     return map
   }, [tasks, boardStatuses])
+
+  const [checklistCounts, setChecklistCounts] = useState({})
+
+  useEffect(() => {
+    const ids = tasks.map((t) => t.id).filter(Boolean)
+    if (!ids.length) { setChecklistCounts({}); return }
+    getChecklistCounts(ids)
+      .then(setChecklistCounts)
+      .catch(() => {})
+  }, [tasks])
 
   const sensors = useDndSensors()
 
@@ -181,13 +193,14 @@ export default function KanbanBoard({
         alignItems: 'flex-start',
       }}
     >
-      {boardStatuses.map((status) => (
+      {boardStatuses.filter((s) => (tasksByStatus[s.id]?.length ?? 0) > 0 || composerStatusId === s.id).map((status) => (
         <KanbanColumn
           key={status.id}
           status={status}
           tasks={tasksByStatus[status.id] ?? []}
           onTaskClick={onTaskClick}
           onStartAddTask={() => setComposerStatusId(status.id)}
+          checklistCounts={checklistCounts}
           composer={canCreateTask && composerStatusId === status.id ? (
             <InlineTaskComposer
               key={status.id}
@@ -207,6 +220,7 @@ export default function KanbanBoard({
           ) : null}
           readOnly={!canCreateTask}
           isOver={overColumnId === status.id}
+          showSubtasks={showSubtasks}
         />
       ))}
     </div>
@@ -218,6 +232,8 @@ export default function KanbanBoard({
         filteredTasks={tasks}
         onTaskClick={onTaskClick}
         statuses={boardStatuses}
+        showSubtasks={showSubtasks}
+        checklistCounts={checklistCounts}
       />
     )
   }
@@ -234,7 +250,7 @@ export default function KanbanBoard({
       {columns}
 
       <DragOverlay dropAnimation={{ duration: 150, easing: 'ease' }}>
-        {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
+        {activeTask ? <TaskCard task={activeTask} isDragging checklistCount={checklistCounts[activeTask.id] ?? null} /> : null}
       </DragOverlay>
     </DndContext>
   )

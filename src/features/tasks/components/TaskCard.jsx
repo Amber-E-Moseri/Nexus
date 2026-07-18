@@ -22,7 +22,7 @@ function OverflowBadge({ count }) {
   )
 }
 
-function TaskCard({ task, onClick, isDragging = false, onTaskUpdate }) {
+function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtasks = true, checklistCount = null }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSortDragging } =
     useSortable({ id: task.id })
   const { editTask, addTask } = useTasks()
@@ -287,8 +287,22 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate }) {
           {/* Paperclip */}
           <Paperclip size={12} style={{ color: '#C8BFAF', flexShrink: 0 }} />
 
+          {/* Checklist badge */}
+          {checklistCount && checklistCount.total > 0 ? (
+            <div
+              title={`${checklistCount.checked} of ${checklistCount.total} checklist items done`}
+              style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10.5, color: checklistCount.checked === checklistCount.total ? '#2D8653' : 'var(--text-tertiary)', flexShrink: 0 }}
+            >
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                <rect x="1" y="1" width="14" height="14" rx="3" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+                <path d="M4 8l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {checklistCount.checked}/{checklistCount.total}
+            </div>
+          ) : null}
+
           {/* Subtask toggle */}
-          {subtasks.length > 0 ? (
+          {showSubtasks && subtasks.length > 0 ? (
             <button
               onClick={(e) => { e.stopPropagation(); setSubtasksExpanded((v) => !v) }}
               onPointerDown={(e) => e.stopPropagation()}
@@ -304,7 +318,7 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate }) {
 
       {/* Bottom clipping wrapper */}
       <div style={{ borderRadius: '0 0 14px 14px', overflow: 'hidden' }}>
-        {subtasks.length > 0 ? (
+        {showSubtasks && subtasks.length > 0 ? (
           <div title={`${subtasksDone} of ${subtasks.length} subtasks completed`} style={{ height: 4, background: '#EDE8DF' }}>
             <div style={{ height: '100%', width: `${subtaskPct}%`, background: subtaskBarColor, transition: 'width 0.3s ease' }} />
           </div>
@@ -347,7 +361,7 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate }) {
           </div>
         ) : null}
 
-        {subtasksExpanded && subtasks.length > 0 ? (
+        {showSubtasks && subtasksExpanded && subtasks.length > 0 ? (
           <div style={{ borderTop: '1px solid #F0EBE3', padding: '6px 14px 8px' }}>
             {subtasks.map((sub) => {
               const done = isTaskCompleted(sub)

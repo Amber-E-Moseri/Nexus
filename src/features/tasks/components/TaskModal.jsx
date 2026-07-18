@@ -28,6 +28,7 @@ import TaskComments from './TaskComments'
 import TaskDependencies from './TaskDependencies'
 import TaskFiles from './TaskFiles'
 import SubtaskList from './SubtaskList'
+import TaskChecklists from './TaskChecklists'
 import WatchersPopover from './WatchersPopover'
 import { TasksContext } from '../TasksContext'
 
@@ -227,7 +228,9 @@ export default function TaskModal({
   const [statusId, setStatusId] = useState(getTaskStatusId(task) ?? defaultStatus ?? '')
   const [priority, setPriority] = useState(task?.priority ?? 'medium')
   const [assigneeIds, setAssigneeIds] = useState(
-    task?.assignee_id ? [task.assignee_id] : profile?.id ? [profile.id] : []
+    task?.assignees?.length
+      ? task.assignees.map((a) => a.user_id ?? a.id ?? a)
+      : task?.assignee_id ? [task.assignee_id] : profile?.id ? [profile.id] : []
   )
   const [dueDate, setDueDate] = useState(task?.due_date ?? defaultDueDate ?? '')
   const [dueTime, setDueTime] = useState(task?.due_time ?? '')
@@ -416,6 +419,7 @@ export default function TaskModal({
         statusCategory: selectedStatus?.category,
         priority,
         assignee_id: assigneeIds[0] || null,
+        assigneeIds,
         due_date: dueDate || null,
         due_time: (dueDate && dueTime) ? dueTime : null,
         is_personal: personal,
@@ -775,6 +779,10 @@ export default function TaskModal({
                   Private task (visible only to me)
                 </label>
               </div>
+            ) : null}
+
+            {mode === 'edit' && task?.id && !isReadOnly ? (
+              <TaskChecklists taskId={task.id} />
             ) : null}
 
             {mode === 'edit' && task?.id ? (

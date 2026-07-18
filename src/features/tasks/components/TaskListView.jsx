@@ -1,10 +1,12 @@
 import { DndContext, DragOverlay, closestCorners, useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import { getChecklistCounts } from '../lib/checklists'
 import { formatDueDate } from '../../../lib/dateUtils'
 import { isTaskCompleted, getTaskStatusCategory, STATUS_CATEGORIES, dedupeTaskStatuses } from '../../../lib/taskStatuses'
 import { PRIORITY_STYLES } from '../../../lib/priorities'
 import { useDndSensors } from '../../../dnd'
+import { getTaskSubtasks } from '../lib/tasks'
 import InlineTaskComposer from './InlineTaskComposer'
 import SortableTaskRow from '../../../dnd/SortableTaskRow'
 import { TaskRowGhost } from '../../../dnd/SortableTaskRow'
@@ -67,30 +69,78 @@ export default function TaskListView({
   people = {},
   priorities = {},
   teamMembers = [],
+  showSubtaskCount = true,
 }) {
   const [composerStatusId, setComposerStatusId] = useState(null)
   const [activeTaskId, setActiveTaskId] = useState(null)
   // Show Completed/Cancelled sections by default so all statuses are visible;
   // the toggle below still lets users collapse them.
   const [showClosed, setShowClosed] = useState(true)
+  const [checklistCounts, setChecklistCounts] = useState({})
+  // Map of taskId → subtask[] for lazily-loaded subtask rows
+  const [lazySubtasks, setLazySubtasks] = useState({})
+  const [expandedTasks, setExpandedTasks] = useState(new Set())
   const sensors = useDndSensors()
+
+  const toggleSubtasks = useCallback(async (taskId) => {
+    setExpandedTasks((prev) => {
+      const next = new Set(prev)
+      if (next.has(taskId)) {
+        next.delete(taskId)
+        return next
+      }
+      next.add(taskId)
+      return next
+    })
+    if (!lazySubtasks[taskId]) {
+      try {
+        const children = await getTaskSubtasks(taskId)
+        setLazySubtasks((prev) => ({ ...prev, [taskId]: children }))
+      } catch {}
+    }
+  }, [lazySubtasks])
 
   const sorted = useMemo(
     () => [...tasks].sort((a, b) => new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0)),
     [tasks],
   )
 
+  // Build parent→children map: prefer lazily-fetched subtasks; fall back to
+  // any subtasks that happen to be pre-loaded in the tasks prop.
+  const subtasksByParent = useMemo(() => {
+    const map = {}
+    for (const t of sorted) {
+      if (t.parent_task_id) (map[t.parent_task_id] ??= []).push(t)
+    }
+    // Merge lazy-fetched results — overrides the inline list for each parent
+    for (const [parentId, children] of Object.entries(lazySubtasks)) {
+      map[parentId] = children
+    }
+    return map
+  }, [sorted, lazySubtasks])
+
+  // Top-level tasks are those without a parent_task_id.
+  // If all tasks are top-level (no subtasks loaded), this is a no-op.
+  const topLevelIds = useMemo(() => new Set(sorted.filter((t) => !t.parent_task_id).map((t) => t.id)), [sorted])
+
   const dedupedStatuses = useMemo(() => dedupeTaskStatuses(statuses), [statuses])
 
   const grouped = useMemo(() => {
+    // Only group top-level tasks; subtasks render as children beneath their parent.
+    // A subtask whose parent is absent from the current view is treated as top-level
+    // (orphan promotion) so it doesn't silently disappear.
+    const taskIds = new Set(sorted.map((t) => t.id))
+    const topLevel = sorted.filter(
+      (t) => !t.parent_task_id || !taskIds.has(t.parent_task_id),
+    )
     const matchedIds = new Set()
     const groups = dedupedStatuses.map((status) => {
-      const items = sorted.filter((task) => taskMatchesStatus(task, status))
+      const items = topLevel.filter((task) => taskMatchesStatus(task, status))
       items.forEach((task) => matchedIds.add(task.id))
       return { status, items }
     })
 
-    const ungrouped = sorted.filter((task) => !matchedIds.has(task.id))
+    const ungrouped = topLevel.filter((task) => !matchedIds.has(task.id))
     if (ungrouped.length > 0) {
       groups.push({
         status: { id: 'ungrouped', name: 'Other', color: '#7A7D86', legacy_key: 'other' },
@@ -171,7 +221,39 @@ export default function TaskListView({
 
   const activeTask = activeTaskId ? tasks.find((t) => t.id === activeTaskId) : null
 
-  const allTaskIds = useMemo(() => tasks.map((t) => t.id), [tasks])
+  const allTaskIds = useMemo(() => {
+    const ids = tasks.map((t) => t.id)
+    for (const children of Object.values(lazySubtasks)) {
+      for (const child of children) ids.push(child.id)
+    }
+    return ids
+  }, [tasks, lazySubtasks])
+  const showChecklistCount = useMemo(
+    () => tasks.some((task) => (checklistCounts[task.id]?.total ?? 0) > 0),
+    [checklistCounts, tasks],
+  )
+
+  useEffect(() => {
+    let active = true
+
+    if (!allTaskIds.length) {
+      setChecklistCounts({})
+      return undefined
+    }
+
+    getChecklistCounts(allTaskIds)
+      .then((counts) => {
+        if (active) setChecklistCounts(counts)
+      })
+      .catch((error) => {
+        console.error('[TaskListView] Failed to load checklist counts:', error)
+        if (active) setChecklistCounts({})
+      })
+
+    return () => {
+      active = false
+    }
+  }, [allTaskIds])
 
   const closedCount = grouped
     .filter((g) => CLOSED_CATEGORIES.has(g.status.category))
@@ -202,16 +284,57 @@ export default function TaskListView({
 
             <SortableContext items={items.map((t) => t.id)} strategy={verticalListSortingStrategy}>
               <DroppableStatusBody statusId={status.id} isEmpty={items.length === 0}>
-                {items.map((task) => (
-                  <SortableTaskRow
-                    key={task.id}
-                    task={task}
-                    people={people}
-                    statuses={statuses}
-                    priorities={priorities}
-                    onClick={() => onTaskClick(task)}
-                  />
-                ))}
+                {items.map((task) => {
+                  const subtaskCount = task.subtask_count ?? subtasksByParent[task.id]?.length ?? 0
+                  const hasSubtasks = subtaskCount > 0
+                  const isExpanded = expandedTasks.has(task.id)
+                  const childSubtasks = subtasksByParent[task.id] ?? []
+                  return (
+                    <div key={task.id}>
+                      <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                        {hasSubtasks && (
+                          <button
+                            onClick={() => toggleSubtasks(task.id)}
+                            title={isExpanded ? 'Collapse subtasks' : 'Expand subtasks'}
+                            style={{ flexShrink: 0, width: 28, border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                          >
+                            {isExpanded ? '▾' : '▸'}
+                          </button>
+                        )}
+                        <div style={{ flex: 1, minWidth: 0, paddingLeft: hasSubtasks ? 0 : 28 }}>
+                          <SortableTaskRow
+                            task={task}
+                            people={people}
+                            statuses={statuses}
+                            priorities={priorities}
+                            onClick={() => onTaskClick(task)}
+                            showSubtaskCount={showSubtaskCount}
+                            checklistCount={checklistCounts[task.id] ?? null}
+                            showChecklistCount={showChecklistCount}
+                          />
+                        </div>
+                      </div>
+                      {isExpanded && childSubtasks.map((child) => (
+                        <div
+                          key={child.id}
+                          style={{ paddingLeft: 44, background: 'var(--surface-secondary, #F9F7F3)' }}
+                        >
+                          <SortableTaskRow
+                            task={child}
+                            people={people}
+                            statuses={statuses}
+                            priorities={priorities}
+                            onClick={() => onTaskClick(child)}
+                            showSubtaskCount={false}
+                            checklistCount={checklistCounts[child.id] ?? null}
+                            showChecklistCount={showChecklistCount}
+                            disabled
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
               </DroppableStatusBody>
             </SortableContext>
 

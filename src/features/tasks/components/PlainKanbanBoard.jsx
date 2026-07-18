@@ -6,6 +6,8 @@ function PlainKanbanColumn({
   tasks,
   onTaskClick,
   readOnly = false,
+  showSubtasks = true,
+  checklistCounts = {},
 }) {
   return (
     <div
@@ -48,7 +50,13 @@ function PlainKanbanColumn({
         }}
       >
         {tasks.map((task) => (
-          <TaskCard key={task.id} task={task} onClick={() => onTaskClick(task)} />
+          <TaskCard
+            key={task.id}
+            task={task}
+            onClick={() => onTaskClick(task)}
+            showSubtasks={showSubtasks}
+            checklistCount={checklistCounts[task.id] ?? null}
+          />
         ))}
       </div>
     </div>
@@ -60,6 +68,8 @@ export default memo(function PlainKanbanBoard({
   filteredTasks,
   statusesOverride = null,
   statuses = [],
+  showSubtasks = true,
+  checklistCounts = {},
 }) {
   const tasks = filteredTasks ?? []
   const boardStatuses = statusesOverride?.length ? statusesOverride : statuses
@@ -81,15 +91,20 @@ export default memo(function PlainKanbanBoard({
         alignItems: 'flex-start',
       }}
     >
-      {boardStatuses.map((status) => (
-        <PlainKanbanColumn
-          key={status.id}
-          status={status}
-          tasks={tasks.filter((task) => taskMatchesStatus(task, status))}
-          onTaskClick={onTaskClick}
-          readOnly
-        />
-      ))}
+      {boardStatuses
+        .map((status) => ({ status, statusTasks: tasks.filter((task) => taskMatchesStatus(task, status)) }))
+        .filter(({ statusTasks }) => statusTasks.length > 0)
+        .map(({ status, statusTasks }) => (
+          <PlainKanbanColumn
+            key={status.id}
+            status={status}
+            tasks={statusTasks}
+            onTaskClick={onTaskClick}
+            readOnly
+            showSubtasks={showSubtasks}
+            checklistCounts={checklistCounts}
+          />
+        ))}
     </div>
   )
 })

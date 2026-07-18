@@ -12,6 +12,8 @@ function KanbanColumn({
   composer = null,
   readOnly = false,
   isOver: isOverProp,
+  showSubtasks = true,
+  checklistCounts = {},
 }) {
   const { setNodeRef, isOver: isOverDroppable } = useDroppable({ id: status.id })
   const isOver = isOverProp ?? isOverDroppable
@@ -86,7 +88,7 @@ function KanbanColumn({
       >
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onClick={() => onTaskClick(task)} />
+            <TaskCard key={task.id} task={task} onClick={() => onTaskClick(task)} showSubtasks={showSubtasks} checklistCount={checklistCounts[task.id] ?? null} />
           ))}
         </SortableContext>
       </div>
