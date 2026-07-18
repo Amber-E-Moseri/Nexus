@@ -342,9 +342,9 @@ serve(async (req) => {
     const userId = userData.user.id
 
     // Route connection management actions before the generation path
-    if (body.action === 'connect')    return actionConnect(body, userId)
-    if (body.action === 'status')     return actionStatus()
-    if (body.action === 'disconnect') return actionDisconnect()
+    if (body.action === 'connect')    return await actionConnect(body, userId)
+    if (body.action === 'status')     return await actionStatus()
+    if (body.action === 'disconnect') return await actionDisconnect()
 
     // ── Meeting doc generation ──────────────────────────────────────────────
     const {
