@@ -110,7 +110,7 @@ function DeptSelect({ value, onChange, departments, multiple = false }) {
   )
 }
 
-function IntegrationCard({ integration }) {
+function IntegrationCard({ integration, onDelete }) {
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
       <div className="flex items-start justify-between gap-3">
@@ -123,14 +123,26 @@ function IntegrationCard({ integration }) {
             <p className="mt-1 text-sm text-[var(--text-secondary)]">{integration.description || 'External tool'}</p>
           </div>
         </div>
-        <a
-          href={safeHref(integration.launch_url)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-semibold text-[var(--accent)]"
-        >
-          Launch ↗
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            href={safeHref(integration.launch_url)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-semibold text-[var(--accent)]"
+          >
+            Launch ↗
+          </a>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="rounded-xl border px-3 py-2 text-xs"
+              style={{ borderColor: 'var(--coral)', color: 'var(--coral-dark)' }}
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -325,12 +337,15 @@ const EMPTY_INTEGRATION = {
 export default function IntegrationsSection({ role, supabaseClient }) {
   const [loading, setLoading] = useState(true)
   const [manageIntegrations, setManageIntegrations] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
   const [integrations, setIntegrations] = useState([])
   const [integrationDrafts, setIntegrationDrafts] = useState([])
   const [newIntegration, setNewIntegration] = useState(EMPTY_INTEGRATION)
   const [integrationSavingId, setIntegrationSavingId] = useState(null)
   const [departments, setDepartments] = useState([])
   const [users, setUsers] = useState([])
+  const [currentUserId, setCurrentUserId] = useState(null)
+  const [currentUserDeptId, setCurrentUserDeptId] = useState(null)
 
   const isSuperAdmin = role === 'super_admin'
 
@@ -339,7 +354,7 @@ export default function IntegrationsSection({ role, supabaseClient }) {
     try {
       const { data, error } = await supabaseClient
         .from('external_integrations')
-        .select('id, name, type, launch_url, description, icon_emoji, visible_to, enabled, show_in_sidebar, sort_order, department_id, scope, department_ids, user_ids')
+        .select('id, name, type, launch_url, description, icon_emoji, visible_to, enabled, show_in_sidebar, sort_order, department_id, scope, department_ids, user_ids, created_by')
         .order('sort_order')
 
       if (error) {
@@ -373,17 +388,18 @@ export default function IntegrationsSection({ role, supabaseClient }) {
 
   useEffect(() => {
     Promise.all([
-      supabaseClient
-        .from('departments')
-        .select('id, name')
-        .order('name'),
-      supabaseClient
-        .from('users')
-        .select('id, name, email')
-        .order('name'),
-    ]).then(([{ data: deptData }, { data: userData }]) => {
+      supabaseClient.from('departments').select('id, name').order('name'),
+      supabaseClient.from('users').select('id, name, email, department_id').order('name'),
+      supabaseClient.auth.getUser(),
+    ]).then(([{ data: deptData }, { data: userData }, { data: authData }]) => {
       setDepartments(deptData ?? [])
       setUsers(userData ?? [])
+      const uid = authData?.user?.id ?? null
+      setCurrentUserId(uid)
+      if (uid && userData) {
+        const me = userData.find((u) => u.id === uid)
+        setCurrentUserDeptId(me?.department_id ?? null)
+      }
     })
   }, [])
 
@@ -397,7 +413,7 @@ export default function IntegrationsSection({ role, supabaseClient }) {
 
       const query = integration.id
         ? supabaseClient.from('external_integrations').update(payload).eq('id', integration.id)
-        : supabaseClient.from('external_integrations').insert(payload)
+        : supabaseClient.from('external_integrations').insert({ ...payload, created_by: currentUserId })
 
       const { data, error } = await query
       setIntegrationSavingId(null)
@@ -596,10 +612,124 @@ export default function IntegrationsSection({ role, supabaseClient }) {
       {!loading && (!manageIntegrations || role !== 'super_admin') ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {integrations.map((integration) => (
-            <IntegrationCard key={integration.id} integration={integration} />
+            <IntegrationCard
+              key={integration.id}
+              integration={integration}
+              onDelete={
+                !isSuperAdmin && currentUserId && integration.created_by === currentUserId
+                  ? () => deleteIntegration(integration.id)
+                  : undefined
+              }
+            />
           ))}
         </div>
       ) : null}
+
+      {/* Self-service: add private/dept integration for non-super_admin */}
+      {!isSuperAdmin && !loading && (
+        <div className="mt-2">
+          {!showAddForm ? (
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddForm(true)
+                setNewIntegration({
+                  ...EMPTY_INTEGRATION,
+                  scope: 'users',
+                  user_ids: currentUserId ? [currentUserId] : [],
+                })
+              }}
+              className="rounded-xl border border-dashed border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)]"
+            >
+              + Add my integration
+            </button>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-5">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-[var(--text-primary)]">Add my integration</h4>
+                <button
+                  type="button"
+                  onClick={() => setShowAddForm(false)}
+                  className="text-xs text-[var(--text-secondary)]"
+                >
+                  Cancel
+                </button>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <input
+                  className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+                  placeholder="Name"
+                  value={newIntegration.name}
+                  onChange={(e) => setNewIntegration((prev) => ({ ...prev, name: e.target.value }))}
+                />
+                <select
+                  className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+                  value={newIntegration.type}
+                  onChange={(e) => setNewIntegration((prev) => ({ ...prev, type: e.target.value }))}
+                >
+                  {INTEGRATION_TYPES.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+                <input
+                  className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm md:col-span-2"
+                  placeholder="Launch URL"
+                  value={newIntegration.launch_url}
+                  onChange={(e) => setNewIntegration((prev) => ({ ...prev, launch_url: e.target.value }))}
+                />
+                <textarea
+                  className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm md:col-span-2"
+                  rows={2}
+                  placeholder="Description (optional)"
+                  value={newIntegration.description}
+                  onChange={(e) => setNewIntegration((prev) => ({ ...prev, description: e.target.value }))}
+                />
+                <input
+                  className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+                  placeholder="Emoji icon (e.g. 🔗)"
+                  value={newIntegration.icon_emoji}
+                  onChange={(e) => setNewIntegration((prev) => ({ ...prev, icon_emoji: e.target.value }))}
+                />
+                {role === 'dept_lead' ? (
+                  <label className="space-y-1">
+                    <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">Visible to</span>
+                    <select
+                      className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+                      value={newIntegration.scope}
+                      onChange={(e) => {
+                        const s = e.target.value
+                        setNewIntegration((prev) => ({
+                          ...prev,
+                          scope: s,
+                          user_ids: s === 'users' ? (currentUserId ? [currentUserId] : []) : [],
+                          department_ids: s === 'departments' ? (currentUserDeptId ? [currentUserDeptId] : []) : [],
+                        }))
+                      }}
+                    >
+                      <option value="users">Private (only me)</option>
+                      <option value="departments">My department</option>
+                    </select>
+                  </label>
+                ) : (
+                  <p className="flex items-center text-xs text-[var(--text-secondary)]">
+                    This integration will only be visible to you.
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                className="mt-4 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"
+                onClick={async () => {
+                  await saveIntegration(newIntegration)
+                  setShowAddForm(false)
+                }}
+              >
+                Add integration
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   )
 }

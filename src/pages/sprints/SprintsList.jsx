@@ -213,7 +213,7 @@ export default function SprintsList() {
     closeModal()
   }
 
-  const canCreate = role === 'super_admin' || role === 'dept_lead'
+  const canCreate = role === 'super_admin' || role === 'dept_lead' || role === 'pastor'
 
   return (
     <div className="space-y-5" style={{ fontFamily: FONT_BODY }}>

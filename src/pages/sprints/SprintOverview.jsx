@@ -194,7 +194,7 @@ export default function SprintOverview() {
   const canAssignPrivilegedSprintRoles = role === 'super_admin' || detail?.members?.some(
     (member) => member.user?.id === profile?.id && member.role === 'owner',
   )
-  const canCreateSprint = role === 'super_admin' || role === 'dept_lead'
+  const canCreateSprint = role === 'super_admin' || role === 'dept_lead' || role === 'pastor'
 
   async function loadDetail() {
     setLoading(true)

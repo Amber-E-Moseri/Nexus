@@ -147,6 +147,27 @@ export async function createSprint(data, createdBy) {
     })
 
   if (memberError) throw memberError
+
+  const { data: pastoralMembers, error: pmError } = await supabase
+    .from('pastor_members')
+    .select('member_id')
+    .eq('pastor_id', createdBy)
+
+  if (pmError) throw pmError
+
+  if (pastoralMembers?.length) {
+    const { error: membersError } = await supabase
+      .from('sprint_members')
+      .insert(
+        pastoralMembers.map(({ member_id }) => ({
+          sprint_id: sprint.id,
+          user_id: member_id,
+          role: 'contributor',
+        }))
+      )
+    if (membersError) throw membersError
+  }
+
   return sprint
 }
 
