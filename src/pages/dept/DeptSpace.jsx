@@ -175,24 +175,10 @@ function DeptBoardView({ dept, onTaskClick, onAddTask }) {
       }
 
       try {
-        let { data, error: localError } = await supabase
-          .from('task_status_definitions')
-          .select('id, name, category, sort_order, legacy_key')
-          .eq('department_id', dept.id)
-          .order('sort_order')
+        const { data, error: localError } = await supabase
+          .rpc('get_space_statuses', { p_department_id: dept.id })
 
         if (localError) throw localError
-
-        if (!data?.length) {
-          const fallbackRes = await supabase
-            .from('task_status_definitions')
-            .select('id, name, category, sort_order, legacy_key')
-            .is('department_id', null)
-            .order('sort_order')
-
-          if (fallbackRes.error) throw fallbackRes.error
-          data = fallbackRes.data
-        }
 
         if (active) {
           setBoardStatuses((data ?? []).map((status) => ({
@@ -495,7 +481,8 @@ export default function DeptSpace() {
   if (loadingDept) return <div style={{ padding: '1rem', color: '#7A6F5E', fontSize: 13 }}>Loading…</div>
   if (!dept) return <div style={{ padding: '40px', textAlign: 'center', color: '#7A6F5E', fontSize: 14 }}>Department not found.</div>
 
-  const canManageTasks = role !== 'member'
+  const inDept = profile?.department_id === dept?.id
+  const canManageTasks = role === 'super_admin' || role === 'regional_secretary' || (inDept && role !== 'member')
   const canManageMeetings = role !== 'member'
   const deptColor = dept.color ? (dept.color.startsWith('#') ? dept.color : `#${dept.color}`) : '#4C2A92'
   const glyph = dept.name.charAt(0).toUpperCase()
