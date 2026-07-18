@@ -119,15 +119,22 @@ alter table public.calendar_event_types
 -- The calendar-event-reminders edge function processes upcoming events (within their reminder windows)
 -- and sends notifications. This runs once per day; the function handles idempotency via
 -- calendar_event_reminder_log unique (event_id, days_before) constraint.
+do $$
+begin
+  perform cron.unschedule('calendar-event-reminders');
+exception when others then
+  null;
+end $$;
+
 select cron.schedule(
   'calendar-event-reminders',
-  '0 6 * * *',  -- 6 AM UTC daily
+  '0 6 * * *',
   $$select net.http_post(
     url := current_setting('app.calendar_reminders_url'),
     headers := jsonb_build_object('Authorization', 'Bearer ' || current_setting('app.calendar_reminders_token')),
     body := '{}'::jsonb
   );$$
-) on conflict (jobname) do update set schedule = '0 6 * * *';
+);
 
 comment on function public.validate_calendar_event_type() is
   'Trigger function that ensures calendar_event is linked to a real calendar_event_types entry. Called on insert/update of event_type.';
