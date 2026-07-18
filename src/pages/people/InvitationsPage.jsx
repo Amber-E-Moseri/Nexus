@@ -237,6 +237,16 @@ export default function InvitationsPage() {
     return [...base].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
   }, [invitations, profile?.department_id, role])
 
+  const departmentById = useMemo(
+    () => new Map(departments.map((department) => [department.id, department])),
+    [departments],
+  )
+
+  const userById = useMemo(
+    () => new Map(users.map((user) => [user.id, user])),
+    [users],
+  )
+
   const visibleInvitations = useMemo(() => {
     let result = scopedInvitations
     if (statusFilter !== 'all') result = result.filter((i) => i.status === statusFilter)
@@ -249,16 +259,6 @@ export default function InvitationsPage() {
     }
     return result
   }, [scopedInvitations, statusFilter, searchQuery, userById])
-
-  const departmentById = useMemo(
-    () => new Map(departments.map((department) => [department.id, department])),
-    [departments],
-  )
-
-  const userById = useMemo(
-    () => new Map(users.map((user) => [user.id, user])),
-    [users],
-  )
 
   const summary = useMemo(() => ({
     pending: scopedInvitations.filter((invitation) => invitation.status === 'pending').length,
