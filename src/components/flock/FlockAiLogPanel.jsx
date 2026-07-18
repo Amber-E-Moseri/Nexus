@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Check, Mic, Square, UserPlus, Wand2, X } from 'lucide-react'
 import { callFlockCRM as callFlockAPI, flockCard, FLOCK } from '../../lib/flockSupabase'
 import { useAuth } from '../../hooks/useAuth'
+import FlockVoiceInteractionLogger from './FlockVoiceInteractionLogger'
 
 const RESULTS = ['Reached', 'No Answer', 'Left Message', 'Rescheduled Call']
 const NEXT_ACTIONS = ['None', 'Callback', 'Follow-up']
@@ -215,6 +216,7 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
   const { profile } = useAuth()
   const [people, setPeople] = useState([])
   const [forPerson, setForPerson] = useState(preselect)
+  const [logMode, setLogMode] = useState('text') // 'text' or 'voice'
   const [text, setText] = useState(loadDraft)
   const [parsing, setParsing] = useState(false)
   const [parsed, setParsed] = useState(null)
@@ -225,6 +227,7 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [quickAddName, setQuickAddName] = useState('')
   const [quickAddSaving, setQuickAddSaving] = useState(false)
+  const [voiceLogSuccess, setVoiceLogSuccess] = useState(false)
 
   const { listening, supported, start, stop } = useVoiceInput((transcript) => {
     setText(transcript)
@@ -338,25 +341,38 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
     setParsed(null)
     setMsg(null)
     setSuccess(false)
+    setVoiceLogSuccess(false)
     setForPerson(null)
+    setLogMode('text')
     if (listening) stop()
   }
 
-  if (success) {
+  const handleVoiceLogSuccess = () => {
+    setVoiceLogSuccess(true)
+    if (onOpenPerson && forPerson) {
+      setTimeout(() => onOpenPerson(forPerson.id), 1500)
+    }
+  }
+
+  if (success || voiceLogSuccess) {
     return (
       <div style={{ ...flockCard({ padding: '40px 28px' }), textAlign: 'center', maxWidth: '520px', margin: '0 auto' }}>
         <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: FLOCK.greenTint, color: FLOCK.green, display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
           <Check size={28} />
         </div>
-        <div style={{ fontSize: '18px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Call logged.</div>
-        <div style={{ fontSize: '13px', color: FLOCK.muted, marginTop: '6px' }}>Interaction saved for {parsed?.personName || 'this person'}.</div>
+        <div style={{ fontSize: '18px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>
+          {voiceLogSuccess ? 'Voice note saved.' : 'Call logged.'}
+        </div>
+        <div style={{ fontSize: '13px', color: FLOCK.muted, marginTop: '6px' }}>
+          {voiceLogSuccess ? 'Todos added for this contact.' : `Interaction saved for ${parsed?.personName || 'this person'}.`}
+        </div>
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '22px', flexWrap: 'wrap' }}>
           <button type="button" onClick={reset} style={{ padding: '11px 18px', background: FLOCK.purple, color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: FLOCK.fontBody }}>
-            Log another call
+            Log another
           </button>
-          {onOpenPerson && parsed?.personId && (
-            <button type="button" onClick={() => onOpenPerson(parsed.personId)} style={{ padding: '11px 18px', background: FLOCK.card, color: FLOCK.text, border: `1px solid ${FLOCK.borderStrong}`, borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: FLOCK.fontBody }}>
-              View {parsed?.personName ? `${parsed.personName.split(' ')[0]}'s` : 'their'} notes
+          {onOpenPerson && ((parsed?.personId) || (forPerson?.id)) && (
+            <button type="button" onClick={() => onOpenPerson(parsed?.personId || forPerson.id)} style={{ padding: '11px 18px', background: FLOCK.card, color: FLOCK.text, border: `1px solid ${FLOCK.borderStrong}`, borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: FLOCK.fontBody }}>
+              View {(parsed?.personName || forPerson?.name)?.split(' ')[0] || 'their'}'s notes
             </button>
           )}
         </div>
@@ -364,16 +380,78 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
     )
   }
 
+  // Voice logging mode
+  if (logMode === 'voice' && forPerson) {
+    return (
+      <div style={{ display: 'grid', gap: '16px', maxWidth: '620px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+            <Mic size={20} color={FLOCK.purple} />
+            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Voice interaction log</h2>
+          </div>
+          <p style={{ margin: '4px 0 0', fontSize: '13px', color: FLOCK.muted }}>
+            Speak to create follow-up todos for {forPerson.name}.
+          </p>
+        </div>
+        <FlockVoiceInteractionLogger
+          contactId={forPerson.id}
+          contactName={forPerson.name}
+          onSuccess={handleVoiceLogSuccess}
+          onClose={() => setLogMode('text')}
+        />
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'grid', gap: '16px', maxWidth: '620px' }}>
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
           <Mic size={20} color={FLOCK.purple} />
           <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Quick Call Log</h2>
         </div>
         <p style={{ margin: '4px 0 0', fontSize: '13px', color: FLOCK.muted }}>
           Speak or type what happened on the call — Nexus will fill in the details.
         </p>
+      </div>
+
+      {/* Mode tabs */}
+      <div style={{ display: 'flex', gap: '12px', borderBottom: `1px solid ${FLOCK.border}`, paddingBottom: '0' }}>
+        <button
+          type="button"
+          onClick={() => setLogMode('text')}
+          style={{
+            padding: '10px 12px',
+            background: 'none',
+            border: 'none',
+            borderBottom: logMode === 'text' ? `3px solid ${FLOCK.purple}` : 'none',
+            color: logMode === 'text' ? FLOCK.purple : FLOCK.muted,
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontFamily: FLOCK.fontBody,
+          }}
+        >
+          Text
+        </button>
+        <button
+          type="button"
+          onClick={() => forPerson ? setLogMode('voice') : setMsg({ type: 'error', text: 'Please select a person first to use voice logging.' })}
+          style={{
+            padding: '10px 12px',
+            background: 'none',
+            border: 'none',
+            borderBottom: logMode === 'voice' ? `3px solid ${FLOCK.purple}` : 'none',
+            color: logMode === 'voice' ? FLOCK.purple : FLOCK.muted,
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontFamily: FLOCK.fontBody,
+            opacity: forPerson ? 1 : 0.5,
+          }}
+        >
+          Voice
+        </button>
       </div>
 
       {msg && (
