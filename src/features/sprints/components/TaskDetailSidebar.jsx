@@ -472,6 +472,7 @@ export default function TaskDetailSidebar({
 
     try {
       const previousAssigneeId = task?.assignee_id ?? null
+      const previousStatusId = task ? getTaskStatusId(task) : null
       const primaryAssigneeId = assigneeIds[0] ?? null
       const selectedStatus = statuses.find((entry) => entry.id === statusId) ?? selectDefaultStatus(statuses)
 
@@ -515,6 +516,22 @@ export default function TaskDetailSidebar({
             p_task_id: updated.id,
           })
           if (notifyError) console.error(notifyError)
+        }
+
+        // Notify assignee on meaningful status transitions (completed or blocked only).
+        // Use legacy_key for blocked — it shares category 'in_progress' with review.
+        const statusChanged = selectedStatus?.id && selectedStatus.id !== previousStatusId
+        const isNotifyTransition =
+          selectedStatus?.category === 'completed' || selectedStatus?.legacy_key === 'blocked'
+        const notifyTarget = primaryAssigneeId || updated.assignee_id
+        if (statusChanged && isNotifyTransition && notifyTarget && notifyTarget !== profile?.id) {
+          supabase.rpc('create_task_notification', {
+            p_user_id: notifyTarget,
+            p_type: 'task_status_changed',
+            p_task_id: updated.id,
+          }).then(({ error }) => {
+            if (error) console.warn('Status change notification failed:', error.message)
+          })
         }
 
         onSaved?.(updated)

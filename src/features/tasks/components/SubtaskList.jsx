@@ -14,6 +14,7 @@ import {
   getTaskStatusColor,
   isTaskCompleted,
 } from '../../../lib/taskStatuses'
+import { supabase } from '../../../lib/supabase'
 import { createSubtask, deleteTask, reorderSubtasks, updateSubtask } from '../lib/tasks'
 import AssigneeSelector from './AssigneeSelector'
 import SubtaskProgress from './SubtaskProgress'
@@ -106,6 +107,17 @@ function SubtaskRow({
       )
       onChange(updated)
       onToggleExpand(null)
+
+      // Notify the new assignee if the assignee changed (self-notify guard is in the RPC)
+      if (draft.assigneeId && draft.assigneeId !== subtask.assignee_id) {
+        supabase.rpc('create_task_notification', {
+          p_user_id: draft.assigneeId,
+          p_type: 'task_assigned',
+          p_task_id: subtask.id,
+        }).then(({ error }) => {
+          if (error) console.warn('Subtask assignment notification failed:', error.message)
+        })
+      }
     } finally {
       setSaving(false)
     }
