@@ -5,6 +5,8 @@ import SprintCard from '../../features/sprints/components/SprintCard'
 import SprintModal from '../../features/sprints/components/SprintModal'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteSprint, duplicateSprint, getAllSprints, getMySprints, restoreSprint } from '../../features/sprints'
+import { requestSprintAccess, getMySprintAccessRequests } from '../../lib/people/api'
+import { useToast } from '../../context/ToastContext'
 import { getSprintTasks } from '../../features/sprints/lib/sprints'
 import { supabase } from '../../lib/supabase'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
@@ -40,6 +42,7 @@ function EmptyState() {
 
 export default function SprintsList() {
   const { role, profile } = useAuth()
+  const { showToast } = useToast()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const wantsNewSprint = searchParams.get('new') === '1' || searchParams.get('new') === 'true'
@@ -52,10 +55,22 @@ export default function SprintsList() {
   async function loadSprints() {
     setLoading(true)
     try {
-      const sprintData = role === 'super_admin' ? await getAllSprints() : await getMySprints()
+      const canSeeAll = role === 'super_admin' || role === 'regional_secretary'
+
+      const [allSprints, memberSprints, myRequests] = await Promise.all([
+        getAllSprints(),
+        canSeeAll ? Promise.resolve([]) : getMySprints(),
+        canSeeAll ? Promise.resolve([]) : getMySprintAccessRequests(),
+      ])
+
+      const memberIds = canSeeAll
+        ? new Set(allSprints.map((s) => s.id))
+        : new Set(memberSprints.map((s) => s.id))
+
+      const requestMap = Object.fromEntries(myRequests.map((r) => [r.sprint_id, r.status]))
 
       const enrichedSprints = await Promise.all(
-        sprintData.map(async (sprint) => {
+        allSprints.map(async (sprint) => {
           let deptName = null
           if (sprint.department_id) {
             const { data: dept } = await supabase
@@ -66,16 +81,29 @@ export default function SprintsList() {
             deptName = dept?.name
           }
 
+          const hasAccess = memberIds.has(sprint.id)
+
+          if (!hasAccess) {
+            return {
+              ...sprint,
+              task_count: 0,
+              completed_count: 0,
+              department_name: deptName,
+              has_access: false,
+              accessRequestStatus: requestMap[sprint.id] ?? null,
+            }
+          }
+
           try {
             const tasks = await getSprintTasks(sprint.id)
             const completed = tasks.filter((t) => t.status_definition?.category === 'completed').length
-
             return {
               ...sprint,
               task_count: tasks.length,
               completed_count: completed,
               department_name: deptName,
               has_access: true,
+              accessRequestStatus: null,
             }
           } catch (err) {
             console.error(`Failed to load details for sprint ${sprint.id}:`, err)
@@ -85,6 +113,7 @@ export default function SprintsList() {
               completed_count: 0,
               department_name: deptName,
               has_access: true,
+              accessRequestStatus: null,
             }
           }
         }),
@@ -137,8 +166,18 @@ export default function SprintsList() {
   }
 
   async function handleDelete(sprintId, sprintName) {
+    const sprint = sprints.find((s) => s.id === sprintId)
+    if (sprint?.status === 'active') {
+      showToast('Complete or archive this sprint before deleting it.', 'error')
+      return
+    }
     if (!window.confirm(`Delete "${sprintName}"? This cannot be undone.`)) return
     await deleteSprint(sprintId)
+    await loadSprints()
+  }
+
+  async function handleRequestAccess(sprintId) {
+    await requestSprintAccess(sprintId)
     await loadSprints()
   }
 
@@ -230,13 +269,13 @@ export default function SprintsList() {
             <motion.div key={sprint.id} variants={cardEnter}>
               <SprintCard
                 sprint={sprint}
-                hasAccess={true}
-                accessRequestStatus={null}
-                onClick={() => navigate(`/sprints/${sprint.id}`)}
-                onRequestAccess={undefined}
-                onDuplicate={canCreate ? handleDuplicate : undefined}
-                onRestore={canCreate ? handleRestore : undefined}
-                onDelete={canCreate ? handleDelete : undefined}
+                hasAccess={sprint.has_access}
+                accessRequestStatus={sprint.accessRequestStatus}
+                onClick={sprint.has_access ? () => navigate(`/sprints/${sprint.id}`) : undefined}
+                onRequestAccess={() => handleRequestAccess(sprint.id)}
+                onDuplicate={canCreate && sprint.has_access ? handleDuplicate : undefined}
+                onRestore={canCreate && sprint.has_access ? handleRestore : undefined}
+                onDelete={canCreate && sprint.has_access ? handleDelete : undefined}
               />
             </motion.div>
           ))}

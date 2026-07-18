@@ -193,7 +193,7 @@ export default function KanbanBoard({
         alignItems: 'flex-start',
       }}
     >
-      {boardStatuses.filter((s) => (tasksByStatus[s.id]?.length ?? 0) > 0 || composerStatusId === s.id).map((status) => (
+      {boardStatuses.map((status) => (
         <KanbanColumn
           key={status.id}
           status={status}

@@ -4,7 +4,7 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 
-const STATUS_SELECT = 'id, name, category, active, is_default, department_id, sort_order, legacy_key'
+const STATUS_SELECT = 'id, name, category, active, is_default, department_id, sort_order, legacy_key, is_org_status'
 
 const CATEGORY_OPTIONS = [
   { value: 'open', label: 'Open' },
@@ -144,6 +144,9 @@ export default function SpaceStatusSettings({ departmentId, departmentName }) {
   const [savingId, setSavingId] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [draftName, setDraftName] = useState('')
+  const [orgStatuses, setOrgStatuses] = useState([])
+  const [disabledOrgStatusIds, setDisabledOrgStatusIds] = useState(new Set())
+  const [togglingOrgId, setTogglingOrgId] = useState(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
@@ -156,17 +159,21 @@ export default function SpaceStatusSettings({ departmentId, departmentName }) {
     setLoading(true)
     setMessage('')
     try {
-      const { data, error } = await supabase
-        .from('task_status_definitions')
-        .select(STATUS_SELECT)
-        .eq('department_id', departmentId)
-        .order('sort_order')
+      const [{ data, error }, { data: orgRows, error: orgError }, { data: disabledRows, error: disabledError }] = await Promise.all([
+        supabase.from('task_status_definitions').select(STATUS_SELECT).eq('department_id', departmentId).order('sort_order'),
+        supabase.from('task_status_definitions').select(STATUS_SELECT).eq('is_org_status', true).order('sort_order'),
+        supabase.from('space_disabled_org_statuses').select('org_status_id').eq('department_id', departmentId),
+      ])
 
       if (error) throw error
+      if (orgError) throw orgError
+      if (disabledError) throw disabledError
 
       const rows = data ?? []
       setStatuses(rows)
       setUsingGlobals(rows.length === 0)
+      setOrgStatuses(orgRows ?? [])
+      setDisabledOrgStatusIds(new Set((disabledRows ?? []).map((r) => r.org_status_id)))
     } catch (nextError) {
       setMessage(nextError.message)
       setStatuses([])
@@ -399,6 +406,42 @@ export default function SpaceStatusSettings({ departmentId, departmentName }) {
     }
   }
 
+  async function handleOrgStatusToggle(orgStatusId, currentlyEnabled) {
+    setTogglingOrgId(orgStatusId)
+    try {
+      if (currentlyEnabled) {
+        // Disable: check if tasks exist with this org status (guard)
+        const { count } = await supabase
+          .from('tasks')
+          .select('id', { count: 'exact', head: true })
+          .eq('department_id', departmentId)
+          .eq('status_id', orgStatusId)
+
+        if (count > 0) {
+          setMessage(`Cannot hide this org status — ${count} task${count === 1 ? '' : 's'} still use it in this space.`)
+          return
+        }
+        const { error } = await supabase
+          .from('space_disabled_org_statuses')
+          .insert({ department_id: departmentId, org_status_id: orgStatusId })
+        if (error) throw error
+        setDisabledOrgStatusIds((prev) => new Set([...prev, orgStatusId]))
+      } else {
+        const { error } = await supabase
+          .from('space_disabled_org_statuses')
+          .delete()
+          .eq('department_id', departmentId)
+          .eq('org_status_id', orgStatusId)
+        if (error) throw error
+        setDisabledOrgStatusIds((prev) => { const next = new Set(prev); next.delete(orgStatusId); return next })
+      }
+    } catch (nextError) {
+      setMessage(nextError.message)
+    } finally {
+      setTogglingOrgId(null)
+    }
+  }
+
   async function handleDragEnd(event) {
     const { active, over } = event
     if (!over || active.id === over.id) return
@@ -497,6 +540,43 @@ export default function SpaceStatusSettings({ departmentId, departmentName }) {
             </button>
           </div>
         </>
+      )}
+
+      {orgStatuses.length > 0 && (
+        <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+          <div className="text-base font-semibold text-[var(--text-primary)]">Org-wide status visibility</div>
+          <p className="mt-1 mb-4 text-sm text-[var(--text-secondary)]">
+            Toggle which canonical org statuses are visible in this space. Statuses with active tasks cannot be hidden.
+          </p>
+          <div className="space-y-2">
+            {orgStatuses.map((os) => {
+              const enabled = !disabledOrgStatusIds.has(os.id)
+              const tone = categoryTone(os.category)
+              return (
+                <label
+                  key={os.id}
+                  className="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--border)] px-4 py-3"
+                  style={{ opacity: togglingOrgId === os.id ? 0.6 : 1 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    disabled={togglingOrgId === os.id}
+                    onChange={() => handleOrgStatusToggle(os.id, enabled)}
+                  />
+                  <span className="h-3 w-3 rounded-full flex-shrink-0" style={{ background: tone.dot }} />
+                  <span className="flex-1 text-sm font-medium text-[var(--text-primary)]">{os.name}</span>
+                  <span
+                    className="rounded-full px-2 py-0.5 text-xs font-medium"
+                    style={{ background: tone.bg, color: tone.text }}
+                  >
+                    {os.category}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
       )}
     </section>
   )

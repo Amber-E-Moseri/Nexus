@@ -301,7 +301,7 @@ export default function TaskListView({
                             {isExpanded ? '▾' : '▸'}
                           </button>
                         )}
-                        <div style={{ flex: 1, minWidth: 0, paddingLeft: hasSubtasks ? 0 : 28 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
                           <SortableTaskRow
                             task={task}
                             people={people}

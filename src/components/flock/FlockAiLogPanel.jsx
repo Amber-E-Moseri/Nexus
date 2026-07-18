@@ -8,7 +8,7 @@ const RESULTS = ['Reached', 'No Answer', 'Left Message', 'Rescheduled Call']
 const NEXT_ACTIONS = ['None', 'Callback', 'Follow-up']
 
 /* ── Heuristic parsers ── */
-function detectResult(lower) {
+export function detectResult(lower) {
   const noAnswer = /(voicemail|left a message|left message|left them a message|went to voicemail|no answer|didn.t pick|did not pick|didn.t answer|did not answer|not available|couldn.t reach|could not reach|no response|never answered|never picked|didn.t get through|did not get through)/
   const reached = /(spoke|talked|chatted|connected|reached|answered|picked up|pick up|she picked|he picked|they picked|caught up|had a call|had a chat|had a conversation|great call|good call|nice call|quick call|long call|good chat|great chat|nice chat|she said|he said|they said|she told|he told|they told|she mentioned|he mentioned|they mentioned|graduating|told me|let me know|shared|mentioned|praying|discussed|talked about|spoke about|we talked|we spoke|we chatted|we discussed)/
   const calledAnd = /called .{1,40}[,]\s*(she|he|they|we)\b/

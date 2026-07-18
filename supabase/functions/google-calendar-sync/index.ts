@@ -611,7 +611,7 @@ async function syncOneSource(payload: Record<string, string>) {
           google_event_id:    item.id,
           title:              item.summary ?? '(no title)',
           description:        item.description ?? null,
-          event_type:         'event',
+          event_type:         source.default_event_type ?? 'event',
           start_date,
           end_date,
           all_day:            allDay,

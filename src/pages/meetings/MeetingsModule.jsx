@@ -22,8 +22,8 @@ function MeetingsModuleFallback() {
   const isSuperAdmin = role === 'super_admin'
   const canManage = ['super_admin', 'dept_lead'].includes((role ?? '').toLowerCase()) ||
                     hasSpaceRole(profile, null, 'ors') ||
-                    hasSpaceRole(profile, null, 'dept_lead') ||
-                    hasSpaceRole(profile, selectedDepartmentId || null, 'programs')
+                    hasSpaceRole(profile, null, 'dept_lead')
+  const canLog = canManage || role === 'media'
 
   useEffect(() => {
     let active = true
@@ -74,7 +74,7 @@ function MeetingsModuleFallback() {
   return (
     <MeetingsProvider key={selectedDepartmentId} departmentId={selectedDepartmentId}>
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'auto', gap: 0 }}>
-        {canManage && (
+        {canLog && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: isMobile ? '8px 16px' : '10px 24px', borderBottom: '1px solid #EDE8DC', background: '#FBF8F2', flexShrink: 0 }}>
             <button
               type="button"

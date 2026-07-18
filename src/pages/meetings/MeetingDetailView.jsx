@@ -14,7 +14,7 @@ import GenerateMeetingDocButton from '../../features/meetings/components/Generat
 import MeetingShareModal from '../../features/meetings/components/MeetingShareModal'
 import { createTasksFromActionItems } from '../../features/meetings/lib/meetings'
 import { resolveAssignment, getOrgDepartments, getOrgUsers } from '../../features/meetings/lib/ownerMatching'
-import { getOpenItemsByMeeting, createOpenItems, updateOpenItemStatus, deleteOpenItem, convertOpenItemToTask } from '../../features/meetings/lib/openItems'
+import { getOpenItemsByMeeting, createOpenItems, updateOpenItem, updateOpenItemStatus, deleteOpenItem, convertOpenItemToTask } from '../../features/meetings/lib/openItems'
 import { getCategoryStatusId, STATUS_CATEGORIES } from '../../lib/taskStatuses'
 
 // exact colors from the HTML reference
@@ -104,10 +104,22 @@ function MeetingDetailViewInner() {
   const [convertingOpenItem, setConvertingOpenItem]     = useState(null)
   const [convertAssignee, setConvertAssignee]           = useState('')
   const [convertDueDate, setConvertDueDate]             = useState('')
+  const [editingOpenItemId, setEditingOpenItemId]       = useState(null)
+  const [editOpenItemText, setEditOpenItemText]         = useState('')
+  const [editOpenItemType, setEditOpenItemType]         = useState('')
+  const [savingOpenItem, setSavingOpenItem]             = useState(false)
   // AI extract tab: open items confirmation
   const [selectedAiOpenItems, setSelectedAiOpenItems]   = useState(new Set())
   const [mergingAiOpenItems, setMergingAiOpenItems]     = useState(false)
   const [aiOpenItemsMergeSuccess, setAiOpenItemsMergeSuccess] = useState(false)
+  // meeting_minutes record (AI-extracted notes)
+  const [minutesRecord, setMinutesRecord]               = useState(null)
+  const [togglingPrivacy, setTogglingPrivacy]           = useState(false)
+
+  // attendees edit
+  const [editingAttendees, setEditingAttendees]         = useState(false)
+  const [attendeeDraft, setAttendeeDraft]               = useState([])
+  const [savingAttendees, setSavingAttendees]           = useState(false)
 
   const timerRef       = useRef(null)
   const startRef       = useRef(null)
@@ -200,6 +212,14 @@ function MeetingDetailViewInner() {
 
       setMeeting(data)
       setTitleDraft(data.title ?? '')
+
+      // fetch meeting_minutes record for AI notes privacy toggle
+      const { data: mm } = await supabase
+        .from('meeting_minutes')
+        .select('id, is_private')
+        .eq('meeting_id', meetingId)
+        .maybeSingle()
+      setMinutesRecord(mm ?? null)
       if (data.minutes) setMinutesText(data.minutes)
       if (data.decisions) setDecisionsText(data.decisions)
       if (data.next_steps) setNextStepsText(data.next_steps)
@@ -529,6 +549,50 @@ function MeetingDetailViewInner() {
       setOpenItems(prev => prev.filter(item => item.id !== itemId))
     } catch (err) {
       console.warn('Failed to delete open item:', err)
+    }
+  }
+
+  function startEditOpenItem(item) {
+    setEditingOpenItemId(item.id)
+    setEditOpenItemText(item.item_text)
+    setEditOpenItemType(item.item_type)
+  }
+
+  async function saveEditOpenItem(itemId) {
+    setSavingOpenItem(true)
+    try {
+      await updateOpenItem(itemId, { item_text: editOpenItemText, item_type: editOpenItemType })
+      setOpenItems(prev => prev.map(it =>
+        it.id === itemId ? { ...it, item_text: editOpenItemText, item_type: editOpenItemType } : it
+      ))
+      setEditingOpenItemId(null)
+    } catch (err) {
+      console.warn('Failed to update open item:', err)
+    } finally {
+      setSavingOpenItem(false)
+    }
+  }
+
+  async function saveAttendees() {
+    setSavingAttendees(true)
+    try {
+      await supabase.from('meeting_attendance').delete().eq('meeting_id', meetingId)
+      if (attendeeDraft.length > 0) {
+        await supabase.from('meeting_attendance').insert(
+          attendeeDraft.map(userId => ({ meeting_id: meetingId, user_id: userId, status: 'present' }))
+        )
+      }
+    } catch (err) {
+      console.warn('Failed to save attendees:', err)
+    } finally {
+      // Re-fetch to sync UI with DB state regardless of success/failure
+      const { data } = await supabase
+        .from('meeting_attendance')
+        .select('user_id, status, attendee:users(id, name)')
+        .eq('meeting_id', meetingId)
+      setMeeting(m => ({ ...m, attendance: data ?? [] }))
+      setSavingAttendees(false)
+      setEditingAttendees(false)
     }
   }
 
@@ -928,6 +992,57 @@ function MeetingDetailViewInner() {
               </button>
             )}
 
+            {/* Attendees */}
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                Attendees
+                {canManage && !editingAttendees && (
+                  <button
+                    onClick={() => {
+                      setAttendeeDraft((meeting?.attendance ?? []).map(a => a.user_id))
+                      if (!orgUsers.length) getOrgUsers().then(u => setOrgUsers(u)).catch(() => {})
+                      setEditingAttendees(true)
+                    }}
+                    style={{ fontFamily:'inherit', fontSize:10, fontWeight:700, color: FS.navy, border:'none', background:'none', cursor:'pointer', padding:0 }}
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+              {editingAttendees ? (
+                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                  <div style={{ display:'flex', flexDirection:'column', gap:4, maxHeight:160, overflowY:'auto' }}>
+                    {orgUsers.map(u => (
+                      <label key={u.id} style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, color: FS.text, cursor:'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={attendeeDraft.includes(u.id)}
+                          onChange={e => setAttendeeDraft(prev => e.target.checked ? [...prev, u.id] : prev.filter(id => id !== u.id))}
+                        />
+                        {u.name}
+                      </label>
+                    ))}
+                  </div>
+                  <div style={{ display:'flex', gap:6 }}>
+                    <button onClick={saveAttendees} disabled={savingAttendees} style={{ flex:1, padding:'5px 0', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                      {savingAttendees ? 'Saving…' : 'Save'}
+                    </button>
+                    <button onClick={() => setEditingAttendees(false)} style={{ flex:1, padding:'5px 0', border:`1px solid ${FS.border}`, borderRadius:6, background:'transparent', color: FS.muted, fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (meeting?.attendance ?? []).length === 0 ? (
+                <div style={{ fontSize:12, color: FS.xmuted }}>No attendees recorded</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  {(meeting?.attendance ?? []).map(a => (
+                    <div key={a.user_id} style={{ fontSize:12, color: FS.text }}>{a.attendee?.name ?? a.user_id}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
         </aside>
 
@@ -1219,49 +1334,94 @@ function MeetingDetailViewInner() {
                         return (
                           <div key={item.id} style={{ padding:'11px 14px', borderRadius:10, border:`1px solid ${FS.border}`, background: FS.surface, boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
                             <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
-                              <span style={{ fontSize:14, flexShrink:0, marginTop:1 }}>{typeLabels[item.item_type] || '📌'}</span>
+                              {editingOpenItemId === item.id ? (
+                                <select
+                                  value={editOpenItemType}
+                                  onChange={e => setEditOpenItemType(e.target.value)}
+                                  style={{ fontSize:13, border:`1px solid ${FS.border}`, borderRadius:6, padding:'2px 4px', fontFamily:'inherit', flexShrink:0 }}
+                                >
+                                  <option value="question">❓ Question</option>
+                                  <option value="exploration">🔍 Exploration</option>
+                                  <option value="blocker">🚫 Blocker</option>
+                                  <option value="decision_point">⚖️ Decision</option>
+                                  <option value="future_consideration">💡 Future</option>
+                                </select>
+                              ) : (
+                                <span style={{ fontSize:14, flexShrink:0, marginTop:1 }}>{typeLabels[item.item_type] || '📌'}</span>
+                              )}
                               <div style={{ flex:1, minWidth:0 }}>
-                                <div style={{ fontSize:13, fontWeight:600, color: FS.text }}>{item.item_text}</div>
-                                {item.transcript_excerpt && (
+                                {editingOpenItemId === item.id ? (
+                                  <input
+                                    autoFocus
+                                    value={editOpenItemText}
+                                    onChange={e => setEditOpenItemText(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') saveEditOpenItem(item.id); if (e.key === 'Escape') setEditingOpenItemId(null) }}
+                                    style={{ width:'100%', fontSize:13, fontWeight:600, border:`1px solid ${FS.border}`, borderRadius:6, padding:'4px 8px', fontFamily:'inherit', color: FS.text }}
+                                  />
+                                ) : (
+                                  <div style={{ fontSize:13, fontWeight:600, color: FS.text }}>{item.item_text}</div>
+                                )}
+                                {item.transcript_excerpt && editingOpenItemId !== item.id && (
                                   <div style={{ fontSize:11, color: FS.muted, marginTop:4, fontStyle:'italic' }}>
                                     "{item.transcript_excerpt.slice(0, 100)}{item.transcript_excerpt.length > 100 ? '…' : ''}"
                                   </div>
                                 )}
                                 <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:6, flexWrap:'wrap' }}>
-                                  <select
-                                    value={item.status}
-                                    onChange={e => handleOpenItemStatusChange(item.id, e.target.value)}
-                                    style={{ padding:'3px 8px', border:`1px solid ${FS.border}`, borderRadius:6, fontSize:11, fontWeight:600, background: sc.bg, color: sc.color, cursor:'pointer', fontFamily:'inherit' }}
-                                  >
-                                    <option value="open">Open</option>
-                                    <option value="in_progress">In Progress</option>
-                                    <option value="resolved">Resolved</option>
-                                  </select>
-                                  {!item.converted_to_task_id && (
-                                    <button
-                                      onClick={async () => {
-                                        setConvertingOpenItem(item); setConvertAssignee(''); setConvertDueDate('')
-                                        if (!orgUsers.length) {
-                                          try {
-                                            const [u, d] = await Promise.all([getOrgUsers(), getOrgDepartments()])
-                                            setOrgUsers(u); setOrgDepartments(d)
-                                          } catch {}
-                                        }
-                                      }}
-                                      style={{ padding:'3px 10px', border:`1px solid ${FS.border}`, borderRadius:6, fontSize:11, fontWeight:600, background:'#fff', color: FS.purple, cursor:'pointer', fontFamily:'inherit' }}
-                                    >
-                                      Convert to Task
-                                    </button>
+                                  {editingOpenItemId === item.id ? (
+                                    <>
+                                      <button onClick={() => saveEditOpenItem(item.id)} disabled={savingOpenItem} style={{ padding:'3px 10px', border:'none', borderRadius:6, fontSize:11, fontWeight:700, background: FS.sage, color:'#fff', cursor:'pointer', fontFamily:'inherit' }}>
+                                        {savingOpenItem ? '…' : 'Save'}
+                                      </button>
+                                      <button onClick={() => setEditingOpenItemId(null)} style={{ padding:'3px 10px', border:`1px solid ${FS.border}`, borderRadius:6, fontSize:11, fontWeight:600, background:'transparent', color: FS.muted, cursor:'pointer', fontFamily:'inherit' }}>
+                                        Cancel
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <select
+                                        value={item.status}
+                                        onChange={e => handleOpenItemStatusChange(item.id, e.target.value)}
+                                        style={{ padding:'3px 8px', border:`1px solid ${FS.border}`, borderRadius:6, fontSize:11, fontWeight:600, background: sc.bg, color: sc.color, cursor:'pointer', fontFamily:'inherit' }}
+                                      >
+                                        <option value="open">Open</option>
+                                        <option value="in_progress">In Progress</option>
+                                        <option value="resolved">Resolved</option>
+                                      </select>
+                                      {canManage && (
+                                        <button
+                                          onClick={() => startEditOpenItem(item)}
+                                          style={{ padding:'3px 10px', border:`1px solid ${FS.border}`, borderRadius:6, fontSize:11, fontWeight:600, background:'#fff', color: FS.navy, cursor:'pointer', fontFamily:'inherit' }}
+                                        >
+                                          Edit
+                                        </button>
+                                      )}
+                                      {!item.converted_to_task_id && (
+                                        <button
+                                          onClick={async () => {
+                                            setConvertingOpenItem(item); setConvertAssignee(''); setConvertDueDate('')
+                                            if (!orgUsers.length) {
+                                              try {
+                                                const [u, d] = await Promise.all([getOrgUsers(), getOrgDepartments()])
+                                                setOrgUsers(u); setOrgDepartments(d)
+                                              } catch {}
+                                            }
+                                          }}
+                                          style={{ padding:'3px 10px', border:`1px solid ${FS.border}`, borderRadius:6, fontSize:11, fontWeight:600, background:'#fff', color: FS.purple, cursor:'pointer', fontFamily:'inherit' }}
+                                        >
+                                          Convert to Task
+                                        </button>
+                                      )}
+                                      {item.converted_to_task_id && (
+                                        <span style={{ fontSize:10, fontWeight:700, color: FS.sage, background: FS.sageL, borderRadius:999, padding:'2px 7px' }}>Converted to task</span>
+                                      )}
+                                      <button
+                                        onClick={() => handleDeleteOpenItem(item.id)}
+                                        style={{ padding:'3px 10px', border:'none', borderRadius:6, fontSize:11, fontWeight:600, background:'transparent', color: FS.xmuted, cursor:'pointer', fontFamily:'inherit' }}
+                                      >
+                                        Delete
+                                      </button>
+                                    </>
                                   )}
-                                  {item.converted_to_task_id && (
-                                    <span style={{ fontSize:10, fontWeight:700, color: FS.sage, background: FS.sageL, borderRadius:999, padding:'2px 7px' }}>Converted to task</span>
-                                  )}
-                                  <button
-                                    onClick={() => handleDeleteOpenItem(item.id)}
-                                    style={{ padding:'3px 10px', border:'none', borderRadius:6, fontSize:11, fontWeight:600, background:'transparent', color: FS.xmuted, cursor:'pointer', fontFamily:'inherit' }}
-                                  >
-                                    Delete
-                                  </button>
                                 </div>
                               </div>
                             </div>
@@ -1343,6 +1503,34 @@ function MeetingDetailViewInner() {
                   onTranscriptionComplete={({ transcript }) => setMeeting(m => ({ ...m, summary: transcript }))}
                   onActionItemsExtracted={() => { fetchActionItems(); setActiveTab('actions') }}
                 />
+
+                {/* AI notes privacy toggle */}
+                {minutesRecord && (
+                  <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>AI Notes visibility</div>
+                      <div style={{ fontSize:11, color: FS.muted, marginTop:2 }}>
+                        {minutesRecord.is_private ? 'Private — only you and admins can see these notes' : 'Shared with all department members'}
+                      </div>
+                    </div>
+                    <button
+                      disabled={togglingPrivacy}
+                      onClick={async () => {
+                        setTogglingPrivacy(true)
+                        const { error } = await supabase.rpc('toggle_minutes_privacy', {
+                          p_minutes_id: minutesRecord.id,
+                          p_is_private: !minutesRecord.is_private,
+                        })
+                        setTogglingPrivacy(false)
+                        if (error) { showToast(`Couldn't update visibility: ${error.message}`, { tone: 'error' }); return }
+                        setMinutesRecord(r => ({ ...r, is_private: !r.is_private }))
+                      }}
+                      style={{ flexShrink:0, padding:'7px 14px', border:`1px solid ${FS.border}`, borderRadius:6, background: minutesRecord.is_private ? FS.surface : FS.sageL, color: minutesRecord.is_private ? FS.navy : FS.sage, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor: togglingPrivacy ? 'wait' : 'pointer', opacity: togglingPrivacy ? 0.6 : 1 }}
+                    >
+                      {togglingPrivacy ? '…' : minutesRecord.is_private ? 'Share with department' : 'Make private'}
+                    </button>
+                  </div>
+                )}
 
                 {/* Saved transcript */}
                 {meeting?.summary && (

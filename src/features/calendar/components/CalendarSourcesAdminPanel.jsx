@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { CalendarPlus, RefreshCw, Trash2, Link as LinkIcon, Users, ChevronDown, ChevronUp } from 'lucide-react'
+import { CalendarPlus, RefreshCw, Trash2, Link as LinkIcon, Users, Tag, ChevronDown, ChevronUp } from 'lucide-react'
 import {
   getMinistryCalendarConnectionStatus,
   getMinistryCalendarConnectOAuthUrl,
@@ -38,6 +38,12 @@ export default function CalendarSourcesAdminPanel() {
   const [expandedSource, setExpandedSource] = useState(null) // source id with open visibility panel
   const [visibilityBusy, setVisibilityBusy] = useState(false)
 
+  // Per-source event category
+  const [eventTypes, setEventTypes] = useState([]) // { name, color }[]
+  const [expandedCategory, setExpandedCategory] = useState(null) // source id with open category panel
+  const [categoryBusy, setCategoryBusy] = useState(false)
+  const [pendingCategory, setPendingCategory] = useState({}) // { [sourceId]: suggestedType } — auto-suggest not yet saved
+
   const loadVisibility = useCallback(async () => {
     const [deptRes, visRes] = await Promise.all([
       supabase.from('departments').select('id, name, color').order('name'),
@@ -46,6 +52,32 @@ export default function CalendarSourcesAdminPanel() {
     setDepartments(deptRes.data ?? [])
     setVisibilityRows(visRes.data ?? [])
   }, [])
+
+  const loadEventTypes = useCallback(async () => {
+    const { data } = await supabase
+      .from('calendar_event_types')
+      .select('name, color')
+      .order('sort_order')
+    setEventTypes(data ?? [])
+  }, [])
+
+  async function handleSaveCategory(sourceId, eventType) {
+    setCategoryBusy(true)
+    try {
+      const { error } = await supabase
+        .from('ministry_calendar_sources')
+        .update({ default_event_type: eventType })
+        .eq('id', sourceId)
+      if (error) throw new Error(error.message)
+      setSources((prev) => prev.map((s) => s.id === sourceId ? { ...s, default_event_type: eventType } : s))
+      setPendingCategory((prev) => { const next = { ...prev }; delete next[sourceId]; return next })
+      showToast('Category saved', { tone: 'success' })
+    } catch (err) {
+      showToast(err.message || 'Failed to save category', { tone: 'error' })
+    } finally {
+      setCategoryBusy(false)
+    }
+  }
 
   // Returns whether a dept is currently allowed to see a source.
   // No rows for a source = org-wide = all true.
@@ -135,6 +167,7 @@ export default function CalendarSourcesAdminPanel() {
   useEffect(() => {
     load()
     loadVisibility()
+    loadEventTypes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -190,7 +223,26 @@ export default function CalendarSourcesAdminPanel() {
       })
       showToast(`Added ${cal.summary}`, { tone: 'success' })
       setPicker(null)
-      await load()
+
+      // Load fresh source list so we can find the new source's id
+      const [connection, sourceRows] = await Promise.all([
+        getMinistryCalendarConnectionStatus(),
+        getMinistryCalendarSources(),
+      ])
+      setConnected(!!connection)
+      setNeedsReauth(connection?.needs_reauth ?? false)
+      setSources(sourceRows)
+
+      // Auto-suggest category: check if calendar name contains an event type name
+      const calNameLower = (cal.summary || '').toLowerCase()
+      const match = eventTypes.find((et) => calNameLower.includes(et.name.toLowerCase()))
+      if (match) {
+        const newSource = sourceRows.find((s) => s.google_calendar_id === cal.id)
+        if (newSource) {
+          setPendingCategory((prev) => ({ ...prev, [newSource.id]: match.name }))
+          setExpandedCategory(newSource.id)
+        }
+      }
     } catch (err) {
       showToast(err.message || 'Failed to add calendar', { tone: 'error' })
     }
@@ -467,7 +519,22 @@ export default function CalendarSourcesAdminPanel() {
                       }}>
                         <span style={{ width: 10, height: 10, borderRadius: '50%', background: source.color || 'var(--accent)', flexShrink: 0 }} />
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{source.display_name}</div>
+                          <div style={{ fontWeight: 500, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            {source.display_name}
+                            {/* Assigned category badge */}
+                            {(() => {
+                              const typeName = pendingCategory[source.id] || source.default_event_type
+                              const et = typeName && eventTypes.find((t) => t.name === typeName)
+                              if (!et || typeName === 'event') return null
+                              return (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '1px 7px', borderRadius: '10px', backgroundColor: et.color + '22', border: `1px solid ${et.color}44`, fontSize: '10px', fontWeight: 600, color: et.color }}>
+                                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: et.color, flexShrink: 0 }} />
+                                  {et.name}
+                                  {pendingCategory[source.id] && ' *'}
+                                </span>
+                              )
+                            })()}
+                          </div>
                           <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                             {source.last_sync_error
                               ? <span style={{ color: '#DC2626' }}>Error: {source.last_sync_error}</span>
@@ -493,6 +560,23 @@ export default function CalendarSourcesAdminPanel() {
                           <Users size={11} />
                           {isOrgWide ? 'Everyone' : `${restricted.length} dept${restricted.length !== 1 ? 's' : ''}`}
                           {isExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                        </button>
+
+                        {/* Category */}
+                        <button
+                          onClick={() => setExpandedCategory(expandedCategory === source.id ? null : source.id)}
+                          title="Map this calendar to an event category"
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                            padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)',
+                            backgroundColor: expandedCategory === source.id ? 'var(--accent-light)' : 'white',
+                            color: expandedCategory === source.id ? 'var(--accent)' : 'var(--text-secondary)',
+                            fontSize: '11px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <Tag size={11} />
+                          Category
+                          {expandedCategory === source.id ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                         </button>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title="Push approved events to this calendar">
@@ -585,6 +669,64 @@ export default function CalendarSourcesAdminPanel() {
                               Reset to visible to everyone
                             </button>
                           )}
+                        </div>
+                      )}
+
+                      {/* Category panel (expands independently of visibility panel) */}
+                      {expandedCategory === source.id && (
+                        <div style={{
+                          padding: '10px 14px 12px',
+                          borderTop: '1px solid var(--border-light)',
+                          backgroundColor: 'white',
+                        }}>
+                          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px' }}>
+                            Event category
+                          </div>
+                          {pendingCategory[source.id] !== undefined && (
+                            <div style={{ fontSize: '12px', color: '#92400E', backgroundColor: '#FFFBEB', padding: '6px 10px', borderRadius: '6px', marginBottom: '8px', border: '1px solid #F59E0B' }}>
+                              Auto-suggested based on calendar name — save to confirm.
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            {/* Color swatch for currently selected type */}
+                            {(() => {
+                              const typeName = pendingCategory[source.id] !== undefined ? pendingCategory[source.id] : (source.default_event_type || 'event')
+                              const et = eventTypes.find((t) => t.name === typeName)
+                              return et ? <span style={{ width: 12, height: 12, borderRadius: '50%', background: et.color || '#3B82F6', flexShrink: 0 }} /> : null
+                            })()}
+                            <select
+                              value={pendingCategory[source.id] !== undefined ? pendingCategory[source.id] : (source.default_event_type || 'event')}
+                              onChange={(e) => {
+                                if (pendingCategory[source.id] !== undefined) {
+                                  // Auto-suggest is pending — update it but wait for Save
+                                  setPendingCategory((prev) => ({ ...prev, [source.id]: e.target.value }))
+                                } else {
+                                  // Manual change — save immediately
+                                  handleSaveCategory(source.id, e.target.value)
+                                }
+                              }}
+                              disabled={categoryBusy}
+                              style={{ padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '13px', color: 'var(--text-primary)', backgroundColor: 'white' }}
+                            >
+                              {eventTypes.map((et) => (
+                                <option key={et.name} value={et.name}>{et.name}</option>
+                              ))}
+                            </select>
+                            {pendingCategory[source.id] !== undefined && (
+                              <button
+                                onClick={() => handleSaveCategory(source.id, pendingCategory[source.id])}
+                                disabled={categoryBusy}
+                                style={{
+                                  padding: '5px 12px', borderRadius: '6px', border: 'none',
+                                  backgroundColor: 'var(--accent)', color: 'white',
+                                  fontSize: '12px', fontWeight: 600, cursor: categoryBusy ? 'not-allowed' : 'pointer',
+                                  opacity: categoryBusy ? 0.6 : 1,
+                                }}
+                              >
+                                {categoryBusy ? 'Saving…' : 'Save'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>

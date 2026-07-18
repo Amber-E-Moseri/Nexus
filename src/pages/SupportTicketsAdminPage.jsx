@@ -42,7 +42,7 @@ function TicketThread({ ticket, currentUserId, onUpdate }) {
   const loadReplies = useCallback(async () => {
     const { data } = await supabase
       .from('support_ticket_replies')
-      .select('*, author:users(id, full_name, avatar_url)')
+      .select('*, author:users(id, name, avatar_url)')
       .eq('ticket_id', ticket.id)
       .order('created_at', { ascending: true })
     setReplies(data ?? [])
@@ -104,7 +104,7 @@ function TicketThread({ ticket, currentUserId, onUpdate }) {
             {ticket.priority}
           </span>
           <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-            from {ticket.submitter?.full_name ?? 'Unknown'} · {new Date(ticket.created_at).toLocaleDateString()}
+            from {ticket.submitter?.name ?? 'Unknown'} · {new Date(ticket.created_at).toLocaleDateString()}
           </span>
         </div>
 
@@ -137,11 +137,11 @@ function TicketThread({ ticket, currentUserId, onUpdate }) {
                 }}>
                   {msg.author?.avatar_url
                     ? <img src={msg.author.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : (msg.author?.full_name?.[0] ?? '?')}
+                    : (msg.author?.name?.[0] ?? '?')}
                 </div>
                 <div style={{ maxWidth: '80%' }}>
                   <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 3, textAlign: isAdmin ? 'right' : 'left' }}>
-                    {msg.author?.full_name ?? 'Unknown'}{msg.isInitial ? ' (submitter)' : ''} · {new Date(msg.created_at).toLocaleString()}
+                    {msg.author?.name ?? 'Unknown'}{msg.isInitial ? ' (submitter)' : ''} · {new Date(msg.created_at).toLocaleString()}
                   </div>
                   <div style={{
                     padding: '10px 14px',
@@ -200,7 +200,7 @@ export default function SupportTicketsAdminPage() {
   const loadTickets = useCallback(async () => {
     const { data } = await supabase
       .from('support_tickets')
-      .select('*, submitter:users!support_tickets_submitted_by_fkey(id, full_name, avatar_url, department_id)')
+      .select('*, submitter:users!support_tickets_submitted_by_fkey(id, name, avatar_url, department_id)')
       .order('created_at', { ascending: false })
     setTickets(data ?? [])
     setLoading(false)
@@ -318,7 +318,7 @@ export default function SupportTicketsAdminPage() {
                     </span>
                   </div>
                   <p style={{ fontSize: 11.5, color: 'var(--ink-3)', margin: '0 0 6px' }}>
-                    {t.submitter?.full_name ?? 'Unknown'} · {new Date(t.created_at).toLocaleDateString()}
+                    {t.submitter?.name ?? 'Unknown'} · {new Date(t.created_at).toLocaleDateString()}
                   </p>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <span style={{ padding: '2px 7px', borderRadius: 99, fontSize: 10, fontWeight: 600, color: sm.color, background: sm.bg }}>{sm.label}</span>

@@ -58,6 +58,9 @@ export default function CalendarView({
   function handleSelectEvent(event) {
     setSelectedEvent(event)
     onEventClick?.(event)
+    if (!readOnly) {
+      onEditEvent?.(event)
+    }
   }
 
   return loading ? (

@@ -16,8 +16,19 @@ import CalendarSidebar from '../../features/calendar/components/CalendarSidebar'
 import SubscribeButton from '../../features/calendar/components/SubscribeButton'
 import { FONT_BODY, FONT_HEADING } from '../../features/calendar/lib/fonts'
 
+function useIsProgramsMember(profile) {
+  const [isProgramsMember, setIsProgramsMember] = useState(false)
+  useEffect(() => {
+    if (!profile?.department_id) return
+    supabase.from('departments').select('id').eq('is_programs', true).maybeSingle()
+      .then(({ data }) => setIsProgramsMember(!!data && profile.department_id === data.id))
+  }, [profile?.department_id])
+  return isProgramsMember
+}
+
 export default function MinistryCalendar() {
   const { effectiveRole, profile } = useAuth()
+  const isProgramsMember = useIsProgramsMember(profile)
   const { showToast } = useToast()
   const location = useLocation()
   const navigate = useNavigate()
@@ -157,6 +168,15 @@ export default function MinistryCalendar() {
     setModalDefault(null)
   }
 
+  function handleOpenEvent(event) {
+    if (!event) return
+    setSelectedEvent(event)
+    if (canEdit) {
+      setModalDefault(null)
+      setShowModal(true)
+    }
+  }
+
   async function handleDelete(event) {
     await deleteCalendarEvent(event.id)
     setSelectedEvent(null)
@@ -204,13 +224,9 @@ export default function MinistryCalendar() {
   }
 
   const filteredEvents = events.filter((e) => {
-    // Google-synced events (source_id set) have event_type='event' which isn't
-    // a custom Nexus type — skip the type filter and use source visibility instead.
-    if (!e.source_id) {
-      if (!selectedEventTypes.has(e.event_type)) return false
-      if (hiddenCategories && hiddenCategories.has(e.event_type)) return false
-    }
     if (e.source_id && hiddenSourceIds.has(e.source_id)) return false
+    if (!selectedEventTypes.has(e.event_type)) return false
+    if (hiddenCategories && hiddenCategories.has(e.event_type)) return false
     return true
   })
 
@@ -293,7 +309,7 @@ export default function MinistryCalendar() {
             An org-wide view of programs, training, prayer, deadlines, and major ministry events.
           </p>
         </div>
-        {effectiveRole === 'super_admin' && (
+        {(effectiveRole === 'super_admin' || effectiveRole === 'regional_secretary' || isProgramsMember) && (
           <motion.button
             type="button"
             onClick={() => navigate('/calendar/settings')}
@@ -339,7 +355,7 @@ export default function MinistryCalendar() {
           }}
           onShare={copySubscribeLink}
           onDownload={downloadICS}
-          onOpenSettings={effectiveRole === 'super_admin' ? () => navigate('/calendar/settings') : undefined}
+          onOpenSettings={(effectiveRole === 'super_admin' || effectiveRole === 'regional_secretary' || isProgramsMember) ? () => navigate('/calendar/settings') : undefined}
         />}
 
         {/* Main Calendar */}
@@ -450,15 +466,13 @@ export default function MinistryCalendar() {
             year={year}
             month={month}
             upcomingEvents={upcoming.filter((e) => {
-              if (!e.source_id) {
-                if (!selectedEventTypes.has(e.event_type)) return false
-                if (hiddenCategories && hiddenCategories.has(e.event_type)) return false
-              }
               if (e.source_id && hiddenSourceIds.has(e.source_id)) return false
+              if (!selectedEventTypes.has(e.event_type)) return false
+              if (hiddenCategories && hiddenCategories.has(e.event_type)) return false
               return true
             })}
             highlightedEventId={location.state?.highlightedEventId ?? null}
-            onEventClick={setSelectedEvent}
+            onEventClick={handleOpenEvent}
             onDayClick={(day) => {
               if (!canEdit) return
               setModalDefault(day)
@@ -466,8 +480,7 @@ export default function MinistryCalendar() {
             }}
             onAddEvent={undefined}
             onEditEvent={(event) => {
-              setSelectedEvent(event)
-              setShowModal(true)
+              handleOpenEvent(event)
             }}
             onDeleteEvent={handleDelete}
             onPrevMonth={goPrevMonth}

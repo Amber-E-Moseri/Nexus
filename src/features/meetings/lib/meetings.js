@@ -4,6 +4,11 @@ import { recordActivity } from '../../../lib/activityFeed'
 
 export const MEETINGS_PAGE_SIZE = 50
 
+// Strip annotations like "2026-07-19 (before Saturday meeting)" that break new Date()
+export function sanitizeMeetingDate(raw) {
+  return (raw ?? '').match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? new Date().toISOString().slice(0, 10)
+}
+
 // BLW-16: paged instead of a silent .limit(50) cap — returns the total count
 // so callers can offer "load more" until every meeting is reachable.
 export async function getDeptMeetings(departmentId, { limit = MEETINGS_PAGE_SIZE, offset = 0 } = {}) {
@@ -24,6 +29,8 @@ export async function getDeptMeetings(departmentId, { limit = MEETINGS_PAGE_SIZE
       summary,
       zoom_join_url,
       drive_url,
+      visibility,
+      allowed_viewers,
       created_by,
       created_at,
       creator:users!created_by(id, name),
@@ -61,6 +68,8 @@ export async function createMeeting(meetingData) {
       summary,
       zoom_join_url,
       drive_url,
+      visibility,
+      allowed_viewers,
       created_by,
       created_at,
       creator:users!created_by(id, name)
@@ -111,6 +120,8 @@ export async function updateMeeting(meetingId, updates) {
       summary,
       zoom_join_url,
       drive_url,
+      visibility,
+      allowed_viewers,
       created_by,
       created_at,
       creator:users!created_by(id, name)

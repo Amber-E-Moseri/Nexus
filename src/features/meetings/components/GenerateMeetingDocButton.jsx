@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMeetingDocGeneration } from '../hooks/useMeetingDocGeneration'
 import { getMeetingDocConnectionStatus, getMeetingDocConnectOAuthUrl } from '../lib/meetingDocConnection'
+import { sanitizeMeetingDate } from '../lib/meetings'
 
 const FS = {
   purple: '#4C2A92',
@@ -40,11 +41,13 @@ export default function GenerateMeetingDocButton({ meetingId, meeting, actionIte
       const result = await generateAndUploadDoc({
         meetingId,
         title:         meeting?.title,
-        date:          meeting?.date,
+        date:          sanitizeMeetingDate(meeting?.date),
         attendees:     meeting?.attendees ?? '',
-        summary:       meeting?.summary ?? '',
-        meeting_notes: meeting?.meeting_notes ?? '',
-        meetingType:   meeting?.meeting_type ?? 'meeting',
+        decisions:      meeting?.decisions ?? '',
+        detailed_notes: meeting?.meeting_notes ?? '',
+        minutes:        meeting?.minutes ?? '',
+        next_steps:     meeting?.next_steps ?? '',
+        meetingType:    meeting?.meeting_type ?? 'meeting',
         actionItems:   actionItems.map(t => ({
           action:   t.title || t.action,
           owner:    t.assignee?.name || t.owner || 'Unassigned',

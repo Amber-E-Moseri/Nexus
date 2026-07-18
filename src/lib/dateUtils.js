@@ -94,6 +94,12 @@ export function formatDuration(minutes) {
   return `${hours} h ${remainingMinutes} min`
 }
 
+export function extractISODate(val) {
+  if (!val) return null
+  const m = String(val).match(/\d{4}-\d{2}-\d{2}/)
+  return m ? m[0] : null
+}
+
 export function formatLastActive(isoTimestamp) {
   const value = parseDateValue(isoTimestamp)
   if (!value) return 'Never'

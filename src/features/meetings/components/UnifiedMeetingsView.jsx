@@ -11,6 +11,7 @@ import { useMediaQuery } from '../../../hooks/useMediaQuery'
 import CardGalleryView from '../../../components/meetings/CardGalleryView'
 import ViewToggle from '../../../components/meetings/ViewToggle'
 import { FONT_HEADING } from '../../../lib/fonts'
+import ScheduleMeetingModal from './ScheduleMeetingModal'
 
 const TYPE_CHIP_COLORS = {
   general: '#4C2A92',
@@ -133,7 +134,7 @@ export default function UnifiedMeetingsView({
   onStartLive,
 }) {
   const navigate = useNavigate()
-  const { meetings, loading, removeMeeting, hasMore, loadMore, totalCount: totalMeetingCount } = useMeetings()
+  const { meetings, loading, removeMeeting, hasMore, loadMore, reload: reloadMeetings, totalCount: totalMeetingCount } = useMeetings()
   const [activeType, setActiveType] = useState('all')
   const [activeStatus, setActiveStatus] = useState('all')
   const [dateRange, setDateRange] = useState('all')
@@ -147,6 +148,7 @@ export default function UnifiedMeetingsView({
   const [contentSearchLoading, setContentSearchLoading] = useState(false)
   const searchDebounce = useRef(null)
   const isMobile = useMediaQuery('(max-width: 640px)')
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
 
   // Server-side content search (debounced, fires when search >= 2 chars)
   useEffect(() => {
@@ -318,7 +320,7 @@ export default function UnifiedMeetingsView({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden', background: 'var(--bg-app)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--bg-app)' }}>
       {/* Stats Cards — super admin only */}
       {stats && isSuperAdmin && (
         <div style={{ padding: '16px', borderBottom: '1px solid var(--border-1)', background: 'var(--surface-card)', flexShrink: 0 }}>
@@ -363,6 +365,24 @@ export default function UnifiedMeetingsView({
               }}
             />
           </div>
+          <button
+            type="button"
+            onClick={() => setShowScheduleModal(true)}
+            style={{
+              padding: '7px 14px',
+              borderRadius: 8,
+              border: 'none',
+              background: 'var(--accent)',
+              color: 'white',
+              fontWeight: 600,
+              fontSize: 12,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            + Schedule
+          </button>
           {!isMobile && (
             <ViewToggle
               view={viewMode}
@@ -431,7 +451,7 @@ export default function UnifiedMeetingsView({
       </div>
 
       {/* Meeting grid / list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+      <div style={{ padding: '20px' }}>
         {viewMode === 'list' ? (
           filteredMeetings.length === 0 ? (
             <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
@@ -486,6 +506,11 @@ export default function UnifiedMeetingsView({
                           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {meeting.title}
                           </span>
+                          {meeting.visibility === 'private' && (
+                            <span title="Private meeting" style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: 'var(--purple-700)', background: 'rgba(76,42,146,.08)', borderRadius: 999, padding: '2px 7px' }}>
+                              🔒 Private
+                            </span>
+                          )}
                           <span
                             style={{
                               display: 'inline-block', flexShrink: 0, padding: '2px 8px', borderRadius: 999,
@@ -568,6 +593,16 @@ export default function UnifiedMeetingsView({
           </div>
         ) : null}
       </div>
+
+      {showScheduleModal && (
+        <ScheduleMeetingModal
+          onClose={() => setShowScheduleModal(false)}
+          onSaved={() => {
+            setShowScheduleModal(false)
+            reloadMeetings()
+          }}
+        />
+      )}
     </div>
   )
 }

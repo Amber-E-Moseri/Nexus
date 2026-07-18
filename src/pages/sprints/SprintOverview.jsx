@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import Badge from '../../components/ui/Badge'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent } from '../../features/calendar'
 import { advanceSprintStatus, archiveSprintWithAutoDeactivation, calculateSprintTaskStats, createSprintTeam, duplicateSprint, getSprintDetail, getSprintTasks, getTemporarySprintMembers, hasSprintAccess, restoreSprint, shouldAutoStartSprint, updateSprint } from '../../features/sprints'
 import { supabase } from '../../lib/supabase'
+import { requestSprintAccess, getMySprintAccessRequests } from '../../lib/people/api'
 import { isTaskCompleted } from '../../lib/taskStatuses'
 import SprintProgressBar from '../../features/sprints/components/SprintProgressBar'
 import CalendarView from '../../features/calendar/components/CalendarView'
@@ -145,6 +146,7 @@ function EmptyState({ icon, title, subtitle }) {
 export default function SprintOverview() {
   const { sprintId } = useParams()
   const { role, profile } = useAuth()
+  const location = useLocation()
   const [activeTab, setActiveTab] = useState('Overview')
   const [detail, setDetail] = useState(null)
   const [tasks, setTasks] = useState([])
@@ -165,7 +167,10 @@ export default function SprintOverview() {
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false)
   const [showInviteExternalModal, setShowInviteExternalModal] = useState(false)
   const [temporaryMembers, setTemporaryMembers] = useState([])
-  const [canViewSprint, setCanViewSprint] = useState(role === 'super_admin')
+  const [canViewSprint, setCanViewSprint] = useState(role === 'super_admin' || role === 'regional_secretary')
+  const [accessDeniedSprint, setAccessDeniedSprint] = useState(null) // {name, description} when user lacks access
+  const [accessRequestStatus, setAccessRequestStatus] = useState(null) // 'pending' | 'rejected' | null
+  const [requestingAccess, setRequestingAccess] = useState(false)
 
   const completion = useMemo(() => {
     if (tasks.length === 0) return 0
@@ -183,7 +188,7 @@ export default function SprintOverview() {
     return grouped
   }, [tasks])
 
-  const canManage = role === 'super_admin' || detail?.members?.some(
+  const canManage = role === 'super_admin' || role === 'regional_secretary' || detail?.members?.some(
     (member) => member.user?.id === profile?.id && ['owner', 'manager'].includes(member.role),
   )
   const canAssignPrivilegedSprintRoles = role === 'super_admin' || detail?.members?.some(
@@ -195,14 +200,29 @@ export default function SprintOverview() {
     setLoading(true)
     setLoadError(null)
     try {
-      if (role !== 'super_admin') {
+      if (role !== 'super_admin' && role !== 'regional_secretary') {
         const allowed = await hasSprintAccess(sprintId)
         setCanViewSprint(allowed)
         if (!allowed) {
           setDetail(null)
           setTasks([])
           setTemporaryMembers([])
-          setLoadError('You do not have access to this sprint.')
+          // Fetch sprint name for the request card (RLS is open after migration)
+          const nameFromState = location.state?.name
+          if (nameFromState) {
+            setAccessDeniedSprint({ name: nameFromState, description: null })
+          } else {
+            const { data: sprintRow } = await supabase
+              .from('sprints')
+              .select('id, name, description')
+              .eq('id', sprintId)
+              .maybeSingle()
+            setAccessDeniedSprint(sprintRow ?? { name: 'Sprint', description: null })
+          }
+          // Check if user already requested access
+          const requests = await getMySprintAccessRequests().catch(() => [])
+          const existing = requests.find((r) => r.sprint_id === sprintId)
+          setAccessRequestStatus(existing?.status ?? null)
           return
         }
       } else {
@@ -225,7 +245,7 @@ export default function SprintOverview() {
       setTasks([])
       setTemporaryMembers([])
       if (error?.code === 'PGRST116' || error?.message?.includes('no rows')) {
-        setLoadError('This sprint was deleted.')
+        setLoadError('This sprint no longer exists — it may have been deleted by an administrator.')
       } else {
         setLoadError(error?.message || 'Failed to load sprint')
       }
@@ -235,6 +255,7 @@ export default function SprintOverview() {
   }
 
   useEffect(() => {
+    if (!sprintId) return
     loadDetail()
   }, [sprintId])
 
@@ -280,6 +301,76 @@ export default function SprintOverview() {
 
   if (loading) {
     return <div style={{ padding: '1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading...</div>
+  }
+
+  if (accessDeniedSprint) {
+    const isPending = accessRequestStatus === 'pending'
+    const isRejected = accessRequestStatus === 'rejected'
+
+    async function handleRequestAccess() {
+      setRequestingAccess(true)
+      try {
+        await requestSprintAccess(sprintId)
+        setAccessRequestStatus('pending')
+      } catch (err) {
+        console.error('Failed to request access:', err)
+      } finally {
+        setRequestingAccess(false)
+      }
+    }
+
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem 1rem', fontFamily: FONT_BODY }}>
+        <div style={{ maxWidth: 440, width: '100%', borderRadius: 20, border: '1px solid var(--border)', background: 'white', padding: '2rem', textAlign: 'center' }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>🔒</div>
+          <div style={{ fontFamily: FONT_HEADING, fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+            {accessDeniedSprint.name}
+          </div>
+          {accessDeniedSprint.description && (
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              {accessDeniedSprint.description}
+            </div>
+          )}
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 24 }}>
+            You are not a member of this sprint. Request access from the sprint owner, manager, or a regional secretary / super admin.
+          </div>
+          {isPending ? (
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-tertiary)', padding: '10px 20px', borderRadius: 10, background: 'var(--surface-secondary)', marginBottom: 16 }}>
+              Access request sent — awaiting approval
+            </div>
+          ) : isRejected ? (
+            <div style={{ fontSize: 13, color: '#C94830', marginBottom: 16 }}>
+              Your previous request was not approved. Contact the sprint owner directly.
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={requestingAccess}
+              onClick={handleRequestAccess}
+              style={{
+                padding: '10px 24px',
+                borderRadius: 10,
+                background: 'var(--accent)',
+                color: 'white',
+                fontWeight: 600,
+                fontSize: 14,
+                border: 'none',
+                cursor: requestingAccess ? 'default' : 'pointer',
+                opacity: requestingAccess ? 0.7 : 1,
+                marginBottom: 16,
+              }}
+            >
+              {requestingAccess ? 'Requesting…' : 'Request Access'}
+            </button>
+          )}
+          <div>
+            <Link to="/sprints" style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>
+              ← Back to All Sprints
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (loadError) {
@@ -522,7 +613,7 @@ export default function SprintOverview() {
 
       {/* Tasks & Tabs */}
       {activeTab === 'Tasks' || activeTab === 'Overview' ? (
-        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+        <div className="flex flex-col rounded-[24px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)]" style={{ minHeight: 520 }}>
           <SprintTaskBoard sprintId={detail.sprint.id} sprint={detail} canEdit={Boolean(canManage && !isArchived)} />
         </div>
       ) : null}

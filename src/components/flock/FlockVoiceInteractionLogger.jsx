@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { callFlockCRM } from '../../lib/flockSupabase'
 import { FLOCK, flockCard } from '../../lib/flockSupabase'
 import { useAuth } from '../../hooks/useAuth'
+import { detectResult } from './FlockAiLogPanel'
 
 const isAudioType = (type) => type.startsWith('audio/') || type === 'video/webm'
 const MAX_SIZE = 50 * 1024 * 1024 // 50MB
@@ -87,15 +88,15 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
     setError('')
     setTranscript('')
 
-    try {
-      let filePath = `temp-flock-voice-${Date.now()}-${Math.random().toString(36).slice(2)}`
-      const extension = audioFile.name?.split('.').pop() || 'webm'
-      if (extension) filePath = `${filePath}.${extension}`
+    const audioPath = `private/flock-${profile.id}-${Date.now()}.webm`
+    let uploaded = false
 
+    try {
       const { error: uploadError } = await supabase.storage
         .from('meeting-audio')
-        .upload(filePath, audioFile, { upsert: false })
+        .upload(audioPath, audioFile, { upsert: false })
       if (uploadError) throw new Error('Upload failed: ' + uploadError.message)
+      uploaded = true
 
       const response = await fetch('/functions/v1/transcribe-audio-deepgram', {
         method: 'POST',
@@ -103,7 +104,7 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
           'Content-Type': 'application/json',
           Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`,
         },
-        body: JSON.stringify({ filePath }),
+        body: JSON.stringify({ audioPath }),
       })
 
       if (!response.ok) {
@@ -120,16 +121,14 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
 
       setTranscript(transcriptText)
       await extractTodos(transcriptText)
-
-      // Clean up storage
-      try {
-        await supabase.storage.from('meeting-audio').remove([filePath])
-      } catch { /* ignore cleanup errors */ }
     } catch (e) {
       setError(e.message || 'Transcription failed')
       setTranscript('')
     } finally {
       setTranscribing(false)
+      if (uploaded) {
+        supabase.storage.from('meeting-audio').remove([audioPath]).catch(() => {})
+      }
     }
   }
 
@@ -169,40 +168,59 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
     }
   }
 
-  const saveTodos = async () => {
-    if (!extractedData || !selectedTodos.size) {
-      setError('Please select at least one todo to save')
+  const saveInteractionAndTodos = async () => {
+    if (!extractedData) {
+      setError('No extracted data to save')
       return
     }
 
+    const selectedList = Array.from(selectedTodos)
+      .map((idx) => extractedData.suggested_todos[idx])
+      .filter((t) => t && t.text.trim())
+
     setSaving(true)
+    setError('')
     try {
-      const selectedList = Array.from(selectedTodos)
-        .map((idx) => extractedData.suggested_todos[idx])
-        .filter((t) => t && t.text.trim())
-
-      if (!selectedList.length) {
-        setError('No valid todos to save')
-        setSaving(false)
-        return
-      }
-
-      // Save todos to Flock
-      await callFlockCRM('saveTodos', {
+      // Step 1: save interaction (updates next_due_date automatically)
+      const interactionRes = await callFlockCRM('saveInteraction', {
         payload: JSON.stringify({
-          interactionId: `voice-${Date.now()}`,
           personId: contactId,
-          personName: contactName,
-          todos: selectedList.map((t) => ({
-            text: t.text.trim(),
-            dueDate: t.due_date_hint || '',
-          })),
+          fullName: contactName,
+          result: detectResult(transcript.toLowerCase()),
+          summary: transcript,
+          nextAction: selectedList.length ? 'Follow-up' : 'None',
+          nextActionDateTime: '',
+          loggedBy: profile?.name || profile?.email || 'Regional Secretary',
         }),
       })
+      if (!interactionRes || interactionRes.success !== true) {
+        throw new Error((interactionRes && interactionRes.error) || 'Save failed')
+      }
+
+      // Step 2: save todos (non-critical — show partial-success if this fails)
+      if (selectedList.length) {
+        try {
+          await callFlockCRM('saveTodos', {
+            payload: JSON.stringify({
+              interactionId: interactionRes.interactionId,
+              personId: contactId,
+              personName: contactName,
+              todos: selectedList.map((t) => ({
+                text: t.text.trim(),
+                dueDate: t.due_date_hint || '',
+              })),
+            }),
+          })
+        } catch {
+          setError('Interaction logged, but follow-up todos couldn\'t be saved. Add them manually in the Todos tab.')
+          setSaving(false)
+          return
+        }
+      }
 
       if (onSuccess) onSuccess()
     } catch (e) {
-      setError('Error saving todos: ' + (e.message || e))
+      setError('Error saving: ' + (e.message || e))
     } finally {
       setSaving(false)
     }
@@ -268,7 +286,7 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
             type="button"
-            onClick={saveTodos}
+            onClick={saveInteractionAndTodos}
             disabled={saving || !selectedTodos.size}
             style={{ padding: '11px 20px', background: FLOCK.purple, color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: saving ? 'wait' : 'pointer', opacity: saving || !selectedTodos.size ? 0.7 : 1, fontFamily: FLOCK.fontBody }}
           >

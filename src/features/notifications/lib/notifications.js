@@ -105,6 +105,8 @@ export const NOTIFICATION_TYPES = {
   calendar_sprint_prompt: { label: 'Sprint prompt for upcoming event', icon: '⚡', description: 'When an upcoming regional program may need a sprint' },
   campus_edit_approved: { label: 'Map edit approved', icon: '✅', description: 'When your campus map edit is approved' },
   campus_edit_rejected: { label: 'Map edit rejected', icon: '❌', description: 'When your campus map edit is rejected' },
+  meeting_scheduled: { label: 'Meeting scheduled', icon: '📅', description: 'When a meeting is scheduled and you are added as an attendee' },
+  subtask_completed: { label: 'Subtask completed', icon: '✅', description: 'When a subtask on your task is marked complete' },
   meeting_reminder: { label: 'Meeting reminder', icon: '🔔', description: 'Reminder 1 hour before a meeting' },
   system: { label: 'System notification', icon: '🔔', description: 'Important system-wide announcements' },
   calendar_sync_failure: { label: 'Calendar sync failed', icon: '⚠️', description: 'When the Google Calendar sync fails for a space you manage' },
@@ -230,6 +232,10 @@ export function formatNotificationMessage(notification) {
       return `${payload.user_name ?? 'A user'} accepted their invitation`
     case 'meeting_created':
       return `New meeting: "${payload.meeting_title ?? 'Untitled'}"`
+    case 'meeting_scheduled':
+      return `You have been added to "${payload.title ?? 'a meeting'}" on ${payload.date ?? ''}`
+    case 'subtask_completed':
+      return `✅ "${payload.title ?? 'A subtask'}" was completed on "${payload.parentTitle ?? 'your task'}"`
     case 'mention':
       return `${payload.actor_name ?? 'Someone'} mentioned you`
     case 'task_due_soon':

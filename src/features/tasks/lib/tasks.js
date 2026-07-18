@@ -37,10 +37,13 @@ const TASK_LIST_SELECT = `
   )
 `
 
+const ASSIGNEES_SELECT = `assignees:task_assignees(user_id, user:users(id, name, avatar_url))`
+
 const SUBTASK_SELECT = `
   id, title, description, status, status_id, priority, due_date, task_type, sprint_id,
   parent_task_id, assignee_id, sort_order,
   assignee:users!assignee_id(id, name, avatar_url),
+  ${ASSIGNEES_SELECT},
   ${TASK_STATUS_SELECT}
 `
 
@@ -86,6 +89,10 @@ function buildTaskPayload(taskData = {}) {
     delete payload.assigneeId
   }
 
+  if ('assigneeIds' in payload) {
+    delete payload.assigneeIds
+  }
+
   if ('dueDate' in payload) {
     payload.due_date = payload.dueDate
     delete payload.dueDate
@@ -129,6 +136,7 @@ export async function getDeptTasks(departmentId) {
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
+      ${ASSIGNEES_SELECT},
       meeting:meetings!meeting_id(id, title),
       subtask_count:tasks!parent_task_id(count),
       comments:task_comments(count),
@@ -184,94 +192,75 @@ export async function getPersonalTasks(userId) {
 }
 
 export async function getMyTasks(userId) {
-  // Get sprint IDs for which user is a member
-  const { data: sprintMemberships, error: sprintError } = await supabase
-    .from('sprint_members')
-    .select('sprint_id')
-    .eq('user_id', userId)
+  // Two-step: RPC returns all task IDs for primary + secondary assignees (task_assignees junction),
+  // then fetch full rows with embeds. Falls back to empty on RPC error (migration may not be pushed yet).
+  const { data: rpcIds, error: rpcError } = await supabase
+    .rpc('get_my_task_ids', { p_user_id: userId })
 
-  if (sprintError) throw sprintError
+  let taskIds = null
+  if (!rpcError && rpcIds) {
+    taskIds = rpcIds.map((r) => r.task_id ?? r)
+  }
 
-  const sprintIds = (sprintMemberships ?? []).map((m) => m.sprint_id)
+  const MY_TASK_SELECT = `
+    ${TASK_COLS},
+    ${TASK_STATUS_SELECT},
+    ${TASK_LIST_SELECT},
+    ${ASSIGNEES_SELECT},
+    department:departments(id, name, color),
+    assignee:users!assignee_id(id, name, avatar_url),
+    subtask_count:tasks!parent_task_id(count),
+    comments:task_comments(count),
+    files:task_files(count)
+  `
 
-  // Get space tasks (assigned to user, not personal, not in sprint)
-  const { data: spaceTasks, error: spaceError } = await supabase
-    .from('tasks')
-    .select(`
-      ${TASK_COLS},
-      ${TASK_STATUS_SELECT},
-      ${TASK_LIST_SELECT},
-      department:departments(id, name, color),
-      assignee:users!assignee_id(id, name, avatar_url),
-      subtask_count:tasks!parent_task_id(count),
-      comments:task_comments(count),
-      files:task_files(count)
-    `)
-    .eq('assignee_id', userId)
-    .eq('is_personal', false)
-    .is('sprint_id', null)
-    .is('parent_task_id', null)
-    .is('deleted_at', null)
-
-  if (spaceError) throw spaceError
-
-  // Get personal tasks (assigned to user)
-  const { data: personalTasks, error: personalError } = await supabase
-    .from('tasks')
-    .select(`
-      ${TASK_COLS},
-      ${TASK_STATUS_SELECT},
-      ${TASK_LIST_SELECT},
-      department:departments(id, name, color),
-      assignee:users!assignee_id(id, name, avatar_url),
-      subtask_count:tasks!parent_task_id(count),
-      comments:task_comments(count),
-      files:task_files(count)
-    `)
-    .eq('assignee_id', userId)
-    .eq('is_personal', true)
-    .is('parent_task_id', null)
-    .is('deleted_at', null)
-
-  if (personalError) throw personalError
-
-  // Get sprint tasks (if user is a sprint member)
-  let sprintTasks = []
-  if (sprintIds.length > 0) {
-    const { data: tasks, error: error2 } = await supabase
+  if (taskIds !== null && taskIds.length > 0) {
+    const { data, error } = await supabase
       .from('tasks')
-      .select(`
-        ${TASK_COLS},
-        ${TASK_STATUS_SELECT},
-        ${TASK_LIST_SELECT},
-        department:departments(id, name, color),
-        assignee:users!assignee_id(id, name, avatar_url),
-        subtask_count:tasks!parent_task_id(count),
-        comments:task_comments(count),
-        files:task_files(count)
-      `)
-      .in('sprint_id', sprintIds)
-      .eq('assignee_id', userId)
+      .select(MY_TASK_SELECT)
+      .in('id', taskIds)
       .is('parent_task_id', null)
       .is('deleted_at', null)
+      .order('due_date', { ascending: true, nullsFirst: false })
+      .limit(200)
 
-    if (error2) throw error2
-    sprintTasks = tasks ?? []
+    if (error) throw error
+    return normalizeTaskResultList(data ?? [])
   }
 
-  // Merge and deduplicate tasks (by ID) and sort by due_date
-  const allTasks = [...(spaceTasks ?? []), ...(personalTasks ?? []), ...sprintTasks]
+  if (taskIds !== null) return [] // RPC returned empty list
+
+  // Fallback: direct assignee_id queries (pre-migration or RPC unavailable)
+  const { data: sprintMemberships } = await supabase
+    .from('sprint_members').select('sprint_id').eq('user_id', userId)
+  const sprintIds = (sprintMemberships ?? []).map((m) => m.sprint_id)
+
+  const queries = [
+    supabase.from('tasks').select(MY_TASK_SELECT)
+      .eq('assignee_id', userId).eq('is_personal', false)
+      .is('sprint_id', null).is('parent_task_id', null).is('deleted_at', null),
+    supabase.from('tasks').select(MY_TASK_SELECT)
+      .eq('assignee_id', userId).eq('is_personal', true)
+      .is('parent_task_id', null).is('deleted_at', null),
+  ]
+  if (sprintIds.length > 0) {
+    queries.push(
+      supabase.from('tasks').select(MY_TASK_SELECT)
+        .in('sprint_id', sprintIds).eq('assignee_id', userId)
+        .is('parent_task_id', null).is('deleted_at', null),
+    )
+  }
+
+  const results = await Promise.all(queries)
+  const allTasks = results.flatMap((r) => r.data ?? [])
   const uniqueMap = new Map()
-  for (const task of allTasks) {
-    uniqueMap.set(task.id, task)
-  }
+  for (const task of allTasks) uniqueMap.set(task.id, task)
   const uniqueTasks = Array.from(uniqueMap.values())
   uniqueTasks.sort((a, b) => {
     const aDate = a.due_date ? new Date(a.due_date).getTime() : Infinity
     const bDate = b.due_date ? new Date(b.due_date).getTime() : Infinity
     return aDate - bDate
   })
-
   return normalizeTaskResultList(uniqueTasks.slice(0, 200))
 }
 
@@ -312,6 +301,7 @@ export async function getTaskById(taskId) {
       ${TASK_STATUS_SELECT},
       ${TASK_LIST_SELECT},
       assignee:users!assignee_id(id, name, avatar_url),
+      ${ASSIGNEES_SELECT},
       subtasks:tasks!parent_task_id(${SUBTASK_SELECT}),
       department:departments(id, name, color)
     `)
@@ -370,11 +360,22 @@ export async function createTask(taskData) {
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
+      ${ASSIGNEES_SELECT},
       subtasks:tasks!parent_task_id(${SUBTASK_SELECT})
     `)
     .single()
 
   if (error) throw error
+
+  // Sync junction table for multi-assignee. assigneeIds may be passed alongside
+  // assignee_id; if absent, fall back to the single assignee_id.
+  const assigneeIds = taskData.assigneeIds ?? (payload.assignee_id ? [payload.assignee_id] : [])
+  if (assigneeIds.length > 0) {
+    await supabase.from('task_assignees').upsert(
+      assigneeIds.map((uid) => ({ task_id: data.id, user_id: uid })),
+      { onConflict: 'task_id,user_id' },
+    )
+  }
 
   recordActivity('task_created', {
     entity_type: 'task',
@@ -418,6 +419,7 @@ export async function updateTask(taskId, updates, actorId = null) {
       status,
       department_id,
       sprint_id,
+      parent_task_id,
       ${TASK_STATUS_SELECT}
     `)
     .eq('id', taskId)
@@ -438,12 +440,44 @@ export async function updateTask(taskId, updates, actorId = null) {
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
+      ${ASSIGNEES_SELECT},
       subtasks:tasks!parent_task_id(${SUBTASK_SELECT})
     `)
     .single()
 
   if (error) throw error
   const normalized = normalizeTaskResult(data)
+
+  // Sync junction table when assigneeIds is explicitly provided.
+  if (Array.isArray(updates.assigneeIds)) {
+    const ids = updates.assigneeIds
+    await supabase.from('task_assignees').delete().eq('task_id', taskId)
+    if (ids.length > 0) {
+      await supabase.from('task_assignees').insert(ids.map((uid) => ({ task_id: taskId, user_id: uid })))
+    }
+  }
+
+  // Item 7: notify parent-task assignees when a subtask is marked completed.
+  const isNowCompleted = updates.statusCategory === STATUS_CATEGORIES.COMPLETED
+  const wasAlreadyCompleted = existingTask.status_definition?.category === STATUS_CATEGORIES.COMPLETED
+  if (isNowCompleted && !wasAlreadyCompleted && existingTask.parent_task_id && actorId) {
+    const { createNotification } = await import('../../notifications/lib/notifications')
+    const { data: parentAssignees } = await supabase
+      .from('task_assignees')
+      .select('user_id')
+      .eq('task_id', existingTask.parent_task_id)
+    const { data: parentTask } = await supabase.from('tasks').select('title').eq('id', existingTask.parent_task_id).single()
+    for (const row of parentAssignees ?? []) {
+      if (row.user_id !== actorId) {
+        createNotification(row.user_id, 'subtask_completed', {
+          taskId,
+          parentTaskId: existingTask.parent_task_id,
+          title: existingTask.title,
+          parentTitle: parentTask?.title ?? '',
+        }).catch(() => {})
+      }
+    }
+  }
 
   if (actorId) {
     const nextAssigneeId = 'assignee_id' in updates ? updates.assignee_id ?? null : normalized.assignee_id ?? null

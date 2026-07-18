@@ -226,6 +226,9 @@ export default function InvitationsPage() {
     return scopedUsers.filter((user) => user.role === 'pastor')
   }, [scopedUsers])
 
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
+
   const scopedInvitations = useMemo(() => {
     const base = role === 'dept_lead'
       ? invitations.filter((invitation) => invitation.department_id === profile?.department_id)
@@ -233,6 +236,19 @@ export default function InvitationsPage() {
 
     return [...base].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
   }, [invitations, profile?.department_id, role])
+
+  const visibleInvitations = useMemo(() => {
+    let result = scopedInvitations
+    if (statusFilter !== 'all') result = result.filter((i) => i.status === statusFilter)
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter((i) =>
+        i.email?.toLowerCase().includes(q) ||
+        userById.get(i.invited_by)?.name?.toLowerCase().includes(q),
+      )
+    }
+    return result
+  }, [scopedInvitations, statusFilter, searchQuery, userById])
 
   const departmentById = useMemo(
     () => new Map(departments.map((department) => [department.id, department])),
@@ -531,11 +547,39 @@ export default function InvitationsPage() {
       <section className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-[28px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">Pending & recent invitations</h2>
+            <h2 className="text-[28px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">Invitations</h2>
             <p className="mt-1 text-sm text-[var(--text-secondary)]">
               {summary.pending} pending · {summary.accepted} accepted · {summary.expired} expired
             </p>
           </div>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by email or inviter…"
+            className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            style={{ minWidth: 220 }}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {['all', 'pending', 'accepted', 'expired', 'revoked'].map((s) => {
+            const count = s === 'all' ? scopedInvitations.length : scopedInvitations.filter((i) => i.status === s).length
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatusFilter(s)}
+                className="rounded-full px-3 py-1 text-xs font-semibold transition-colors"
+                style={{
+                  background: statusFilter === s ? 'var(--accent)' : 'var(--surface-secondary)',
+                  color: statusFilter === s ? 'white' : 'var(--text-secondary)',
+                  border: '1px solid ' + (statusFilter === s ? 'var(--accent)' : 'var(--border)'),
+                }}
+              >
+                {s.charAt(0).toUpperCase() + s.slice(1)} ({count})
+              </button>
+            )
+          })}
         </div>
 
         <div className="overflow-x-auto rounded-[22px] border border-[var(--border)] bg-white">
@@ -550,7 +594,7 @@ export default function InvitationsPage() {
               </tr>
             </thead>
             <tbody>
-              {scopedInvitations.map((invitation) => {
+              {visibleInvitations.map((invitation) => {
                 const department = departmentById.get(invitation.department_id)
                 const invitedBy = userById.get(invitation.invited_by)
                 const roleBadge = roleTone(invitation.role)
@@ -679,7 +723,7 @@ export default function InvitationsPage() {
                 )
               })}
 
-              {!loading && scopedInvitations.length === 0 ? (
+              {!loading && visibleInvitations.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-10 text-center text-[var(--text-secondary)]">
                     No invitation records available.

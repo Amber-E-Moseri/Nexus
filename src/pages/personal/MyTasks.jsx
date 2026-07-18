@@ -79,12 +79,50 @@ export default function MyTasks() {
   // "Mine" = personal tasks + tasks assigned to me by others (assignee_id === me).
   // "Delegated" = tasks I created for someone else — tracked separately so
   // they don't inflate my own to-do totals.
-  const myTasks = tasks.filter((t) => t.assignee_id === profile?.id)
-  const delegatedTasks = tasks.filter((t) => isDelegatedTask(t, profile?.id))
+  const myTasks = useMemo(() => {
+    const directly = tasks.filter((t) =>
+      t.assignee_id === profile?.id ||
+      (t.assignees ?? []).some((a) => (a.user_id ?? a.id) === profile?.id),
+    )
+    // Pull in parent tasks already in the fetched set so their subtasks nest
+    // correctly in TaskListView. Without this, a parent created-by-me but
+    // not self-assigned is absent from the list, causing its subtasks to
+    // orphan-promote to top level and clutter the view.
+    const directIds = new Set(directly.map((t) => t.id))
+    const neededParentIds = new Set(
+      directly
+        .filter((t) => t.parent_task_id && !directIds.has(t.parent_task_id))
+        .map((t) => t.parent_task_id),
+    )
+    const missingParents = neededParentIds.size > 0
+      ? tasks.filter((t) => neededParentIds.has(t.id))
+      : []
+    return [...directly, ...missingParents]
+  }, [tasks, profile?.id])
+  const delegatedTasks = useMemo(() => tasks.filter((t) => isDelegatedTask(t, profile?.id)), [tasks, profile?.id])
+
+  // Don't double-count a subtask whose parent is also in my task list.
+  const myParentTaskIds = useMemo(
+    () => new Set(myTasks.filter((t) => !t.parent_task_id).map((t) => t.id)),
+    [myTasks],
+  )
+  const countableTasks = useMemo(
+    () => myTasks.filter((t) => !t.parent_task_id || !myParentTaskIds.has(t.parent_task_id)),
+    [myTasks, myParentTaskIds],
+  )
+  // Same deduplication for delegated tasks (don't count subtasks separately from parents)
+  const delegatedParentTaskIds = useMemo(
+    () => new Set(delegatedTasks.filter((t) => !t.parent_task_id).map((t) => t.id)),
+    [delegatedTasks],
+  )
+  const countableDelegatedTasks = useMemo(
+    () => delegatedTasks.filter((t) => !t.parent_task_id || !delegatedParentTaskIds.has(t.parent_task_id)),
+    [delegatedTasks, delegatedParentTaskIds],
+  )
   // Quick views are assignee-scoped at the query level, so the Delegated/Watching tabs
   // don't apply — pin them to "mine".
   const effectiveTab = quickView ? 'mine' : activeTab
-  const tabTasks = effectiveTab === 'delegated' ? delegatedTasks
+  const tabTasks = effectiveTab === 'delegated' ? countableDelegatedTasks
     : effectiveTab === 'watching' ? watchedTasks
     : myTasks
 
@@ -218,8 +256,8 @@ export default function MyTasks() {
         {quickView ? <span /> : (
         <div className="flex items-center gap-1 p-[3px]" style={{ background: 'var(--surface-sub)', border: '1px solid var(--border-1)', borderRadius: 10, width: 'fit-content' }}>
           {[
-            { id: 'mine', label: 'My Tasks', count: myTasks.length },
-            { id: 'delegated', label: 'Delegated', count: delegatedTasks.length },
+            { id: 'mine', label: 'My Tasks', count: countableTasks.length },
+            { id: 'delegated', label: 'Delegated', count: countableDelegatedTasks.length },
             { id: 'watching', label: 'Watching', count: watchedTasks.length },
           ].map((tab) => (
             <button
@@ -279,6 +317,7 @@ export default function MyTasks() {
                 onCreateTask={() => setModal({ mode: 'create' })}
                 onTaskStatusChange={handleTaskStatusChange}
                 canCreateTask={effectiveTab === 'mine'}
+                showSubtasks={effectiveTab !== 'delegated'}
               />
             </TasksProvider>
           </div>
@@ -295,6 +334,7 @@ export default function MyTasks() {
               people={memberMap}
               priorities={{}}
               teamMembers={Object.values(memberMap)}
+              showSubtaskCount={effectiveTab !== 'delegated'}
             />
           </div>
         )}

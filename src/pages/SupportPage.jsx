@@ -68,7 +68,7 @@ function TicketThread({ ticket, currentUserId, onStatusChange }) {
   const loadReplies = useCallback(async () => {
     const { data } = await supabase
       .from('support_ticket_replies')
-      .select('*, author:users(id, full_name, avatar_url)')
+      .select('*, author:users(id, name, avatar_url)')
       .eq('ticket_id', ticket.id)
       .order('created_at', { ascending: true })
     setReplies(data ?? [])
@@ -129,11 +129,11 @@ function TicketThread({ ticket, currentUserId, onStatusChange }) {
                 }}>
                   {msg.author?.avatar_url
                     ? <img src={msg.author.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : (msg.author?.full_name?.[0] ?? '?')}
+                    : (msg.author?.name?.[0] ?? '?')}
                 </div>
                 <div style={{ maxWidth: '80%' }}>
                   <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 3, textAlign: isMe ? 'right' : 'left' }}>
-                    {msg.isInitial ? 'You' : (msg.author?.full_name ?? 'Unknown')} · {new Date(msg.created_at).toLocaleString()}
+                    {msg.isInitial ? 'You' : (msg.author?.name ?? 'Unknown')} · {new Date(msg.created_at).toLocaleString()}
                   </div>
                   <div style={{
                     padding: '10px 14px',
@@ -302,7 +302,7 @@ export default function SupportPage() {
   const loadTickets = useCallback(async () => {
     const { data } = await supabase
       .from('support_tickets')
-      .select('*, submitter:users!support_tickets_submitted_by_fkey(id, full_name, avatar_url)')
+      .select('*, submitter:users!support_tickets_submitted_by_fkey(id, name, avatar_url)')
       .order('created_at', { ascending: false })
     setTickets(data ?? [])
     setLoading(false)
@@ -356,7 +356,7 @@ export default function SupportPage() {
 
         <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--border-1)', padding: 28, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           {view === 'new' && (
-            <NewTicketForm userId={user?.id} userName={profile?.full_name ?? 'A team member'} onCreated={() => { loadTickets(); setView('list') }} />
+            <NewTicketForm userId={user?.id} userName={profile?.name ?? 'A team member'} onCreated={() => { loadTickets(); setView('list') }} />
           )}
 
           {view === 'ticket' && selected && (

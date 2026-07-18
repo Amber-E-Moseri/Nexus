@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts'
+import { extractISODate } from '../_shared/dateUtils.ts'
 
 const SUPABASE_URL            = Deno.env.get('SUPABASE_URL')            ?? ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -220,17 +221,27 @@ interface ActionItem {
   priority?: string
 }
 
+// Non-null: falls back to today when date is absent. Used for the meeting date
+// (folder structure, doc title) where null would corrupt the Drive path.
+// Action-item due_date uses the shared extractISODate (nullable) instead.
+function extractIsoDate(raw: string): string {
+  return (raw || '').match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? new Date().toISOString().slice(0, 10)
+}
+
 function formatDocContent(params: {
-  title:       string
-  date:        string
-  attendees:   string
-  transcript:  string
-  notes:       string
-  actionItems: ActionItem[]
-  meetingType: string
+  title:          string
+  date:           string
+  attendees:      string
+  decisions:      string
+  detailed_notes: string
+  minutes:        string
+  next_steps:     string
+  actionItems:    ActionItem[]
+  meetingType:    string
 }): string {
   const divider = '═'.repeat(64)
-  const dateStr = new Date(params.date).toLocaleDateString('en-CA', {
+  const cleanDate = extractIsoDate(params.date)
+  const dateStr = new Date(cleanDate).toLocaleDateString('en-CA', {
     weekday: 'long',
     year:    'numeric',
     month:   'long',
@@ -246,12 +257,20 @@ function formatDocContent(params: {
   if (params.attendees) lines.push(`Attendees: ${params.attendees}`)
   lines.push('')
 
-  if (params.notes) {
-    lines.push(divider, 'SUMMARY', '', params.notes, '')
+  if (params.detailed_notes) {
+    lines.push(divider, 'SUMMARY / AI NOTES', '', params.detailed_notes, '')
   }
 
-  if (params.transcript) {
-    lines.push(divider, 'TRANSCRIPT', '', params.transcript, '')
+  if (params.decisions) {
+    lines.push(divider, 'DECISIONS', '', params.decisions, '')
+  }
+
+  if (params.minutes) {
+    lines.push(divider, 'DISCUSSION NOTES', '', params.minutes, '')
+  }
+
+  if (params.next_steps) {
+    lines.push(divider, 'NEXT STEPS', '', params.next_steps, '')
   }
 
   if (params.actionItems?.length > 0) {
@@ -260,8 +279,8 @@ function formatDocContent(params: {
       let line = `${i + 1}. ${item.action}`
       if (item.owner) line += ` | Owner: ${item.owner}`
       if (item.due_date) {
-        const due = new Date(item.due_date).toLocaleDateString('en-CA')
-        line += ` | Due: ${due}`
+        const due = extractISODate(item.due_date)
+        if (due) line += ` | Due: ${due}`
       }
       if (item.priority) line += ` | Priority: ${item.priority}`
       lines.push(line)
@@ -349,13 +368,15 @@ serve(async (req) => {
     // ── Meeting doc generation ──────────────────────────────────────────────
     const {
       meetingId,
-      title       = 'Untitled Meeting',
-      date        = new Date().toISOString(),
-      attendees   = '',
-      summary     = '',
-      meeting_notes = '',
-      meetingType = 'meeting',
-      actionItems = [],
+      title          = 'Untitled Meeting',
+      date           = new Date().toISOString(),
+      attendees      = '',
+      decisions      = '',
+      detailed_notes = '',
+      minutes        = '',
+      next_steps     = '',
+      meetingType    = 'meeting',
+      actionItems    = [],
     } = body
 
     if (!meetingId) return json(400, { error: 'meetingId is required' })
@@ -371,7 +392,8 @@ serve(async (req) => {
       throw err
     }
 
-    const d     = new Date(date)
+    const cleanDate = extractIsoDate(date)
+    const d     = new Date(cleanDate)
     const year  = d.getFullYear().toString()
     const month = d.toLocaleDateString('en-US', { month: 'long' })
 
@@ -382,19 +404,14 @@ serve(async (req) => {
 
     const content = formatDocContent({
       title, date, attendees,
-      transcript:  summary,
-      notes:       meeting_notes,
+      decisions, detailed_notes, minutes, next_steps,
       actionItems: actionItems as ActionItem[],
       meetingType,
     })
 
-    const dateStr  = date.split('T')[0]
-    const typeSlug = (meetingType || 'meeting').replace(/\s+/g, '-')
-    const titleSlug = (title || 'Meeting')
-      .replace(/[^a-zA-Z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .slice(0, 40)
-    const docTitle = `${dateStr}_${typeSlug}_${titleSlug}`
+    const dateStr = new Date(cleanDate).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
+    const safeTitle = (title || 'Meeting').replace(/[/\\?*:|"<>]/g, '').trim().slice(0, 60)
+    const docTitle = `${safeTitle} - ${dateStr}`
 
     console.log(`[meeting-doc] Uploading doc: ${docTitle}`)
     const { fileId, webViewLink } = await uploadAsGoogleDoc(content, docTitle, folderId, accessToken)

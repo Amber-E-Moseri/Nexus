@@ -3,12 +3,16 @@
 // Checked = that dept can see the category. If ALL are checked → org-wide (no restriction rows).
 // If NONE are checked the category still exists; admins should always leave at least one checked.
 
-import { useState } from 'react'
-import { Globe, Lock, Plus, Trash2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Globe, Lock, Plus, Trash2, Edit2 } from 'lucide-react'
+import { useAuth } from '../../../hooks/useAuth'
+import { supabase } from '../../../lib/supabase'
 import { useCategoryVisibility } from '../hooks/useCategoryVisibility'
 import { createEventType, deleteEventType } from '../lib/calendar'
+import EventTypeEditModal from './EventTypeEditModal'
 
 export default function CategoryVisibilityConfig() {
+  const { profile, role } = useAuth()
   const { matrix, categories, departments, loading, error, toggleVisibility, makeOrgWide, reload } = useCategoryVisibility()
   const [busyCell, setBusyCell] = useState(null)
   const [savedRow, setSavedRow] = useState(null)
@@ -17,6 +21,32 @@ export default function CategoryVisibilityConfig() {
   const [newCatColor, setNewCatColor] = useState('#6366F1')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(null)
+  const [editingEventType, setEditingEventType] = useState(null)
+  const [programsDeptId, setProgramsDeptId] = useState(null)
+  const [permissionLoading, setPermissionLoading] = useState(true)
+
+  // Load Programs department to check membership
+  useEffect(() => {
+    async function loadProgramsDept() {
+      try {
+        const { data } = await supabase
+          .from('departments')
+          .select('id')
+          .eq('is_programs', true)
+          .maybeSingle()
+        setProgramsDeptId(data?.id)
+      } catch (err) {
+        console.error('Failed to load Programs department:', err)
+      } finally {
+        setPermissionLoading(false)
+      }
+    }
+    loadProgramsDept()
+  }, [])
+
+  const isSuperAdmin = role === 'super_admin'
+  const isProgramsMember = profile?.department_id === programsDeptId
+  const canManageEventTypes = isSuperAdmin || isProgramsMember
 
   function isOrgWide(catName) {
     const row = matrix[catName] ?? {}
@@ -77,6 +107,34 @@ export default function CategoryVisibilityConfig() {
     } finally {
       setDeleting(null)
     }
+  }
+
+  // Show loading while checking permissions
+  if (permissionLoading) {
+    return (
+      <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'white', overflow: 'hidden', boxShadow: 'var(--card-shadow)', padding: 32, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+        Loading…
+      </div>
+    )
+  }
+
+  // Show permission error if user lacks access
+  if (!canManageEventTypes) {
+    return (
+      <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: '#FEF0ED', overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: 16 }}>
+          <Lock size={18} style={{ color: '#DC2626', marginTop: 2, flexShrink: 0 }} />
+          <div>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: '#DC2626', margin: 0 }}>
+              You don't have permission
+            </h3>
+            <p style={{ fontSize: 12, color: '#991B1B', margin: '3px 0 0' }}>
+              Only super admins and Programs team members can edit event categories.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -271,7 +329,7 @@ export default function CategoryVisibilityConfig() {
                   </th>
                 ))}
                 <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-tertiary)' }}>
-                  Delete
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -350,14 +408,41 @@ export default function CategoryVisibilityConfig() {
                       )
                     })}
 
-                    {/* Delete button */}
-                    <td style={{ padding: '11px 12px', textAlign: 'center' }}>
+                    {/* Action buttons (Edit, Delete) */}
+                    <td style={{ padding: '11px 12px', textAlign: 'center', display: 'flex', gap: 6, justifyContent: 'center' }}>
+                      <button
+                        onClick={() => setEditingEventType(cat)}
+                        disabled={deleting === cat.id || !!busyCell}
+                        title={`Edit ${cat.name}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 28,
+                          height: 28,
+                          padding: 0,
+                          borderRadius: 4,
+                          border: '1px solid var(--border)',
+                          background: 'var(--surface-secondary)',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          fontSize: 11,
+                          fontWeight: 600,
+                        }}
+                      >
+                        <Edit2 size={13} />
+                      </button>
                       <button
                         onClick={() => handleDeleteCategory(cat.id, cat.name)}
                         disabled={deleting === cat.id || !!busyCell}
                         title={`Delete ${cat.name}`}
                         style={{
-                          padding: '4px 8px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 28,
+                          height: 28,
+                          padding: 0,
                           borderRadius: 4,
                           border: '1px solid #FECACA',
                           background: '#FEE2E2',
@@ -368,7 +453,7 @@ export default function CategoryVisibilityConfig() {
                           opacity: deleting === cat.id ? 0.6 : 1,
                         }}
                       >
-                        {deleting === cat.id ? 'Deleting...' : <Trash2 size={13} />}
+                        {deleting === cat.id ? '...' : <Trash2 size={13} />}
                       </button>
                     </td>
                   </tr>
@@ -385,6 +470,15 @@ export default function CategoryVisibilityConfig() {
           Checked = visible to that space. Unchecked = hidden. "Org-wide" means no restrictions — all spaces see it. Super admins always see every category.
         </div>
       )}
+
+      <EventTypeEditModal
+        eventType={editingEventType}
+        onClose={() => setEditingEventType(null)}
+        onSaved={() => {
+          setEditingEventType(null)
+          reload()
+        }}
+      />
     </div>
   )
 }

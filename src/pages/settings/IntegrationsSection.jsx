@@ -3,7 +3,7 @@ import { safeHref } from '../../lib/urlUtils'
 import { migrateIntegrationRow, buildSavePayload } from '../../lib/integrations/loadTransform'
 
 const INTEGRATION_TYPES = ['foundation_school', 'zoom', 'canva', 'google_drive', 'custom']
-const VISIBILITY_OPTIONS = ['all', 'super_admin', 'dept_lead']
+const VISIBILITY_OPTIONS = ['all', 'super_admin', 'dept_lead', 'specific_users']
 const SCOPE_OPTIONS = ['global', 'departments', 'users']
 
 function UserSelect({ value, onChange, users, multiple = false }) {
@@ -223,6 +223,20 @@ function EditableIntegrationCard({
             <option value="users">Individual User(s)</option>
           </select>
         </label>
+
+        {integration.visible_to === 'specific_users' && (
+          <label className="space-y-1 md:col-span-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+              Specific users with access
+            </span>
+            <UserSelect
+              value={integration.user_ids}
+              onChange={(value) => onChange({ ...integration, user_ids: value })}
+              users={users}
+              multiple={true}
+            />
+          </label>
+        )}
 
         {integration.scope === 'departments' && (
           <label className="space-y-1 md:col-span-2">
@@ -528,6 +542,20 @@ export default function IntegrationsSection({ role, supabaseClient }) {
                   <option value="users">Individual User(s)</option>
                 </select>
               </label>
+
+              {newIntegration.visible_to === 'specific_users' && (
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                    Specific users with access
+                  </label>
+                  <UserSelect
+                    value={newIntegration.user_ids}
+                    onChange={(value) => setNewIntegration((prev) => ({ ...prev, user_ids: value }))}
+                    users={users}
+                    multiple={true}
+                  />
+                </div>
+              )}
 
               {newIntegration.scope === 'departments' && (
                 <div className="md:col-span-2">

@@ -256,6 +256,10 @@ async function executeAction(
           return { action_type: 'send_notification', result: { skipped: true, reason: 'no_user_id' } }
         }
 
+        if (config.skip_self_notify && typeof context.user_id === 'string' && context.user_id === userId) {
+          return { action_type: 'send_notification', result: { skipped: true, reason: 'self_notify_suppressed' } }
+        }
+
         const message = typeof config.message === 'string' ? renderTemplate(config.message, context) : ''
 
         await supabase.from('notifications').insert({

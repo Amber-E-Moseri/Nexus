@@ -6,6 +6,7 @@ import { createOpenItems } from '../lib/openItems'
 import { resolveAssignment, getOrgDepartments, getOrgUsers } from '../lib/ownerMatching'
 import { processSSELines } from '../../../lib/meetings/sseParser'
 import { SprintPicker } from '../../sprints'
+import { extractISODate } from '../../../lib/dateUtils'
 
 // Accept any audio type — browser MIME strings vary (audio/x-m4a, audio/x-mpeg, etc.)
 const isAudioType = (type) => type.startsWith('audio/') || type === 'video/webm'
@@ -24,6 +25,8 @@ export default function AudioTranscriptionPanel({
   onRecordingChange,
   onTranscriptionComplete,
   onActionItemsExtracted,
+  onExpand,
+  onCollapse,
 }) {
   const { profile } = useAuth()
   const [mode, setMode] = useState(() => {
@@ -556,7 +559,7 @@ export default function AudioTranscriptionPanel({
             assigneeId: assignment.assigneeId ?? null,
             departmentId: assignment.departmentId ?? null,
             sprintId: assignment.sprintId ?? null,
-            dueDate: item.due_date ?? null,
+            dueDate: extractISODate(item.due_date),
             description: item.owner && item.owner !== 'TBD' && !assignment.assigneeId ? `Owner: ${item.owner}` : null,
           }
         })
@@ -621,6 +624,7 @@ export default function AudioTranscriptionPanel({
   }
 
   const reset = () => {
+    if (!recordOnly && canRecord) onCollapse?.()
     setMode(recordOnly ? 'record' : canRecord ? null : 'upload')
     setAudioFile(null)
     setAudioPreview(null)
@@ -700,7 +704,7 @@ export default function AudioTranscriptionPanel({
           <div style={{ ...s.modeGrid, gridTemplateColumns: gridCols }}>
             <button
               style={s.modeBtn}
-              onClick={() => setMode('upload')}
+              onClick={() => { setMode('upload'); onExpand?.() }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92'; e.currentTarget.style.background = '#F5F2ED' }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E9E4D8'; e.currentTarget.style.background = '#fff' }}
             >
@@ -711,7 +715,7 @@ export default function AudioTranscriptionPanel({
             {canRecord && (
               <button
                 style={s.modeBtn}
-                onClick={() => setMode('record')}
+                onClick={() => { setMode('record'); onExpand?.() }}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92'; e.currentTarget.style.background = '#F5F2ED' }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E9E4D8'; e.currentTarget.style.background = '#fff' }}
               >
@@ -722,7 +726,7 @@ export default function AudioTranscriptionPanel({
             )}
             <button
               style={s.modeBtn}
-              onClick={() => setMode('paste')}
+              onClick={() => { setMode('paste'); onExpand?.() }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92'; e.currentTarget.style.background = '#F5F2ED' }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E9E4D8'; e.currentTarget.style.background = '#fff' }}
             >

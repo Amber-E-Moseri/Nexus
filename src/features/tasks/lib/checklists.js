@@ -91,7 +91,7 @@ export async function createChecklist(taskId, title = 'Checklist') {
     .insert({
       task_id: taskId,
       title: title?.trim() || 'Checklist',
-      sort_order: Date.now(),
+      sort_order: 0,
     })
     .select('id, task_id, title, sort_order, created_at')
     .single()
@@ -123,7 +123,7 @@ export async function addChecklistItem(checklistId, title) {
     .insert({
       checklist_id: checklistId,
       title: title?.trim() || 'New item',
-      sort_order: Date.now(),
+      sort_order: 0,
     })
     .select('id, checklist_id, title, is_checked, sort_order, created_at')
     .single()

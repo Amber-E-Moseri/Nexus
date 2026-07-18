@@ -44,6 +44,7 @@ export default function MeetingModal({ departmentId, onClose }) {
   const [savedMeeting, setSavedMeeting] = useState(null)
   const [creatingDraft, setCreatingDraft] = useState(false)
   const [actionItems, setActionItems] = useState([])
+  const [wide, setWide] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -179,8 +180,11 @@ export default function MeetingModal({ departmentId, onClose }) {
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            width: 'min(760px, 94vw)',
-            maxHeight: '90vh',
+            width: wide ? 'min(1100px, 96vw)' : 'min(760px, 94vw)',
+            transition: 'width 0.2s ease',
+            minHeight: '40vh',
+            maxHeight: '92vh',
+            height: 'auto',
             overflow: 'hidden',
             borderRadius: 18,
             background: 'white',
@@ -333,6 +337,8 @@ export default function MeetingModal({ departmentId, onClose }) {
                     canRecord
                     onTranscriptionComplete={({ transcript }) => setSummary(transcript)}
                     onActionItemsExtracted={fetchActionItems}
+                    onExpand={() => setWide(true)}
+                    onCollapse={() => setWide(false)}
                   />
 
                   {actionItems.length > 0 ? (

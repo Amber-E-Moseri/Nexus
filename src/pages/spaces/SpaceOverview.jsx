@@ -454,6 +454,7 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
 
   // Task status breakdown
   const tasksByStatus = mediaSpace ? {} : tasks.reduce((acc, task) => {
+    if (task.parent_task_id) return acc
     const key = task.status_category || 'open'
     acc[key] = (acc[key] ?? 0) + 1
     return acc

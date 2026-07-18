@@ -216,7 +216,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
             statuses={statuses}
           />
         ) : view === 'kanban' ? (
-          <div className="h-full overflow-hidden">
+          <div className="h-full overflow-x-auto">
             <KanbanBoard
               filteredTasks={hasTeams && teamView === 'my' ? getMyTeamTasks() : filtered}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
@@ -226,14 +226,17 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
             />
           </div>
         ) : view === 'list' ? (
-          <div className="h-full overflow-hidden rounded-[16px] border border-[var(--border)] bg-white">
+          <div className="overflow-y-auto rounded-[16px] border border-[var(--border)] bg-white" style={{ minHeight: 200 }}>
             <TaskListView
               tasks={hasTeams && teamView === 'my' ? getMyTeamTasks() : filtered}
               statuses={statuses}
+              canAddTask={canEdit}
+              onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, subtasks: draft.subtasks }) : undefined}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
               onTaskStatusChange={canEdit ? handleTaskStatusChange : undefined}
               people={Object.fromEntries(members.map((m) => [m.id, m]))}
               priorities={{}}
+              teamMembers={members}
             />
           </div>
         ) : (
