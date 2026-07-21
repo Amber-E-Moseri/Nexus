@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
-import { Calendar, CalendarRange, Check, Files, LayoutGrid, Link2, Mail, Pencil, Printer, RotateCcw, Search, Users, TrendingDown, Upload, UserCheck } from 'lucide-react'
+import { CalendarRange, Check, Files, LayoutGrid, Link2, Mail, Printer, RotateCcw, Search, Users, TrendingDown, Upload, UserCheck } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
@@ -607,11 +607,6 @@ function CategoryPillBar({ categoryOptions, selectedCategories, onToggle }) {
   )
 }
 
-function formatShareDate(dateStr) {
-  if (!dateStr) return ''
-  return new Date(`${dateStr}T12:00:00`).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
-}
-
 function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false }) {
   const [copiedIndex, setCopiedIndex] = useState(null)
 
@@ -619,13 +614,9 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
 
   const baseUrl = `${window.location.origin}/reports/${report.share_token}`
   const fullReportUrl = baseUrl
-  const meetingName = report.label || 'Meeting Report'
-  const meetingDate = report.report_date ? formatShareDate(report.report_date) : ''
-  const meetingLine = meetingDate ? `${meetingName} — ${meetingDate}` : meetingName
 
-  async function copyLink(url, index, contextLabel) {
-    const message = `${contextLabel ? `${contextLabel} | ` : ''}${meetingLine}\n${url}`
-    const success = await copyToClipboard(message)
+  async function copyLink(url, index) {
+    const success = await copyToClipboard(url)
     if (success) {
       setCopiedIndex(index)
       setTimeout(() => setCopiedIndex(null), 2000)
@@ -633,12 +624,11 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
   }
 
   async function copyAllLinks() {
-    const header = `Attendance Report: ${meetingLine}`
     const links = [
       `Full Report:\n${fullReportUrl}`,
       ...report.subgroups.map((sg) => `${sg}:\n${baseUrl}?subgroup=${encodeURIComponent(sg)}`),
     ].join('\n\n')
-    const success = await copyToClipboard(`${header}\n\n${links}`)
+    const success = await copyToClipboard(links)
     if (success) {
       setCopiedIndex('all')
       setTimeout(() => setCopiedIndex(null), 2000)
@@ -647,15 +637,8 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
 
   return (
     <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 12, padding: '16px', marginTop: 16 }}>
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#2D2A22' }}>{meetingName}</div>
-        {meetingDate && (
-          <div style={{ fontSize: 12, color: '#9E9488', marginTop: 2 }}>{meetingDate}</div>
-        )}
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ fontSize: 12, color: '#6B6560' }}>Share links include the meeting name when copied.</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#2D2A22' }}>Share Report</div>
         <button
           type="button"
           onClick={copyAllLinks}
@@ -668,8 +651,7 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
             fontSize: 12,
             fontWeight: 600,
             cursor: 'pointer',
-            transition: 'all 0.2s',
-            flexShrink: 0,
+            transition: 'all 0.2s'
           }}
           onMouseEnter={(e) => { if (copiedIndex !== 'all') e.target.style.background = '#5D3BA3' }}
           onMouseLeave={(e) => { if (copiedIndex !== 'all') e.target.style.background = '#4C2A92' }}
@@ -689,7 +671,7 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
           </div>
           <button
             type="button"
-            onClick={() => copyLink(fullReportUrl, 'full', 'Full Report')}
+            onClick={() => copyLink(fullReportUrl, 'full')}
             style={{
               background: copiedIndex === 'full' ? '#2D8653' : '#4C2A92',
               color: 'white',
@@ -721,7 +703,7 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
               </div>
               <button
                 type="button"
-                onClick={() => copyLink(linkUrl, subgroup, subgroup)}
+                onClick={() => copyLink(linkUrl, subgroup)}
                 style={{
                   background: copiedIndex === subgroup ? '#2D8653' : '#4C2A92',
                   color: 'white',
@@ -1095,7 +1077,6 @@ function buildReportFromHistoryRecord(record, rosterRows) {
     id: record.id,
     share_token: record.share_token,
     label: record.label,
-    report_date: record.report_date ?? null,
     subgroupFilter: record.subgroup_filter,
     expectedCount: record.expected_count,
     attendedCount: record.attended_count,
@@ -1151,8 +1132,6 @@ export default function MeetingReportTab() {
   const [editUpdating, setEditUpdating] = useState(false)
   const [editingLabel, setEditingLabel] = useState(false)
   const [labelDraft, setLabelDraft] = useState('')
-  const [editingDate, setEditingDate] = useState(false)
-  const [dateDraft, setDateDraft] = useState('')
 
   const [history, setHistory] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(true)
@@ -1477,9 +1456,7 @@ export default function MeetingReportTab() {
       return
     }
 
-    const reportDate = new Date().toISOString().slice(0, 10)
     const result = await buildReport(label, rosterRows ?? [], attendedNames, subgroupFilter)
-    result.report_date = reportDate
     setPhase('report')
     setReport(result)
     setActiveSubgroup('')
@@ -1524,7 +1501,7 @@ export default function MeetingReportTab() {
           .single()
         if (error) setSaveError(error.message)
         else {
-          const nextReport = { ...result, id: data.id, share_token: data.share_token, report_date: reportDate }
+          const nextReport = { ...result, id: data.id, share_token: data.share_token }
           setReport(nextReport)
           sessionStorage.setItem(
             'meeting_report_state',
@@ -1566,24 +1543,6 @@ export default function MeetingReportTab() {
     setReport((prev) => ({ ...prev, label: newLabel }))
     setMeetingLabel(newLabel)
     setEditingLabel(false)
-    loadHistory()
-  }
-
-  async function handleSaveDate() {
-    const newDate = dateDraft.trim()
-    if (!newDate || !report) { setEditingDate(false); return }
-    if (newDate === report.report_date) { setEditingDate(false); return }
-
-    if (report.id) {
-      const { error } = await supabase
-        .from('meeting_attendance_reports')
-        .update({ report_date: newDate })
-        .eq('id', report.id)
-      if (error) { setSaveError('Failed to update date: ' + error.message); return }
-    }
-
-    setReport((prev) => ({ ...prev, report_date: newDate }))
-    setEditingDate(false)
     loadHistory()
   }
 
@@ -1664,7 +1623,7 @@ export default function MeetingReportTab() {
         result.share_token = insertedRow.share_token
       }
 
-      const nextReport = { ...result, id: result.id ?? report.id, share_token: result.share_token ?? report.share_token, report_date: report.report_date }
+      const nextReport = { ...result, id: result.id ?? report.id, share_token: result.share_token ?? report.share_token }
       setReport(nextReport)
       setAttendedNames(editedNames)
       setAttendedRawCount(editedNames.length)
@@ -1937,43 +1896,6 @@ export default function MeetingReportTab() {
                         <CalendarRange size={13} />
                         {report.label}
                       </span>
-                    )}
-                    {report.report_date && (
-                      editingDate ? (
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 4,
-                          background: 'rgba(255,255,255,0.15)', borderRadius: 999, padding: '2px 4px 2px 10px',
-                        }}>
-                          <Calendar size={13} color="#F8FBFF" />
-                          <input
-                            type="date"
-                            autoFocus
-                            value={dateDraft}
-                            onChange={(e) => setDateDraft(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveDate(); if (e.key === 'Escape') setEditingDate(false) }}
-                            onBlur={handleSaveDate}
-                            style={{
-                              background: 'transparent', border: 'none', outline: 'none',
-                              color: '#FFFFFF', fontSize: 12, fontWeight: 600,
-                              padding: '2px 4px', colorScheme: 'dark',
-                            }}
-                          />
-                        </span>
-                      ) : (
-                        <span
-                          onClick={() => { setDateDraft(report.report_date); setEditingDate(true) }}
-                          title="Click to change date"
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                            background: 'rgba(255,255,255,0.08)', color: '#F8FBFF',
-                            borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 500,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <Calendar size={13} />
-                          {new Date(`${report.report_date}T12:00:00`).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })}
-                        </span>
-                      )
                     )}
                     {(report.subgroupFilter || activeSubgroup) && (
                       <span style={{
@@ -2510,11 +2432,6 @@ export default function MeetingReportTab() {
                       <div style={{ marginTop: 8, fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
                         {report.label}
                       </div>
-                      {report.report_date && (
-                        <div style={{ marginTop: 4, fontSize: 11, color: 'rgba(255,255,255,0.55)', fontWeight: 400 }}>
-                          {new Date(`${report.report_date}T12:00:00`).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })}
-                        </div>
-                      )}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', paddingTop: 4 }}>
@@ -2904,22 +2821,15 @@ export default function MeetingReportTab() {
               flexDirection: 'column'
             }}>
               {/* Header */}
-              <div style={{ padding: '20px', borderBottom: '1px solid #EDE8DC', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                  <div>
-                    <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>Share Report</h2>
-                    <div style={{ marginTop: 4, fontSize: 13, color: '#6B6560' }}>
-                      {report.label}{report.report_date ? ` — ${formatShareDate(report.report_date)}` : ''}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowShareModal(false)}
-                    style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#9E9488', padding: 0, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                  >
-                    ×
-                  </button>
-                </div>
+              <div style={{ padding: '20px', borderBottom: '1px solid #EDE8DC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>Share Report Links</h2>
+                <button
+                  type="button"
+                  onClick={() => setShowShareModal(false)}
+                  style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#9E9488', padding: 0, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  ×
+                </button>
               </div>
 
               {/* Content */}
@@ -2974,6 +2884,8 @@ export default function MeetingReportTab() {
         </div>
 
         <ReportModeSelector reportMode={reportMode} onChange={setReportMode} />
+
+        <SubgroupPillBar subgroupOptions={subgroupOptions} selectedSubgroups={selectedSubgroups} onToggle={handleToggleSubgroup} />
 
         <CategoryPillBar categoryOptions={leadershipCategoryOptions} selectedCategories={selectedCategories} onToggle={handleToggleCategory} />
 

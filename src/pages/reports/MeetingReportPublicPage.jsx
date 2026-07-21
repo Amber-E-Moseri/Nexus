@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState, useRef } from 'react'
-import { Calendar, CalendarRange, Filter, Link2, Printer, Users } from 'lucide-react'
+import { CalendarRange, Filter, Link2, Printer, Users } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { formatRelativeDate } from '../../lib/dateUtils'
 import { supabase } from '../../lib/supabase'
@@ -288,15 +288,6 @@ export default function MeetingReportPublicPage() {
   const subgroupFilter = report?.subgroup_filter || ''
   const isGroupView = !!(subgroupFilter || activeSubgroup)
 
-  useEffect(() => {
-    if (!report) return
-    const parts = [meetingTitle]
-    if (activeSubgroup) parts.push(activeSubgroup)
-    parts.push('Attendance Report')
-    document.title = parts.join(' — ')
-    return () => { document.title = 'BLW CAN NEXUS' }
-  }, [report, meetingTitle, activeSubgroup])
-
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: PAGE_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, fontSize: 14 }}>
@@ -402,152 +393,59 @@ export default function MeetingReportPublicPage() {
     <div className="public-report-page" style={{ minHeight: '100vh', background: PAGE_BG }}>
       <style>{PRINT_STYLES_FULL}</style>
 
-      <header className="public-report-header" style={{ background: HEADER_GRADIENT, padding: '36px 28px 28px' }}>
+      <header className="public-report-header" style={{ background: HEADER_GRADIENT, padding: '40px 28px' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          {/* Top row: branding + actions */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <img
-                src="/logo-purple-192.png"
-                alt=""
-                style={{ width: 36, height: 36, borderRadius: 10, border: '1.5px solid rgba(255,255,255,0.15)', flexShrink: 0 }}
-                onError={(e) => { e.target.style.display = 'none' }}
-              />
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                  BLW Canada
-                </div>
-              </div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', marginBottom: 24 }}>
+            <div style={{ flex: 1 }}>
+              <h1 style={{ fontSize: 32, fontWeight: 800, color: '#FFFFFF', margin: 0, marginBottom: 12, letterSpacing: '-0.01em' }}>{meetingTitle}</h1>
+              <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>{meetingDate ? dateStamp(meetingDate) : '-'}</div>
             </div>
-            <div className="public-report-actions" style={{ display: 'flex', gap: 8 }}>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  background: 'rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.85)',
-                  border: '1px solid rgba(255,255,255,0.18)',
-                  borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                }}
-              >
-                <Printer size={14} /> Print
-              </button>
+            {!isGroupView && (
               <button
                 type="button"
                 onClick={() => setShowLinkModal(true)}
+                className="public-report-actions"
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  background: 'rgba(255,255,255,0.12)', color: '#FFFFFF',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  background: 'rgba(255,255,255,0.12)',
+                  color: '#FFFFFF',
                   border: '1px solid rgba(255,255,255,0.25)',
-                  borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  borderRadius: 10,
+                  padding: '10px 16px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                 }}
+                onMouseEnter={(e) => { e.target.style.background = 'rgba(255,255,255,0.18)'; e.target.style.borderColor = 'rgba(255,255,255,0.35)' }}
+                onMouseLeave={(e) => { e.target.style.background = 'rgba(255,255,255,0.12)'; e.target.style.borderColor = 'rgba(255,255,255,0.25)' }}
               >
-                <Link2 size={14} /> Share
+                <Link2 size={16} />
+                Share
               </button>
-            </div>
+            )}
           </div>
-
-          {/* Meeting title + date + reach badge */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <span style={{
-                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em',
-                  padding: '3px 10px', borderRadius: 999,
-                  border: '1px solid rgba(184,212,255,0.22)',
-                  color: '#B8D4FF', background: 'rgba(255,255,255,0.05)',
-                }}>
-                  Attendance Report
-                </span>
-              </div>
-              <h1 style={{ fontSize: 28, fontWeight: 800, color: '#FFFFFF', margin: 0, letterSpacing: '-0.01em', lineHeight: 1.2 }}>
-                {meetingTitle}
-              </h1>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, flexWrap: 'wrap' }}>
-                {meetingDate && (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 500,
-                  }}>
-                    <Calendar size={14} />
-                    {dateStamp(meetingDate)}
-                  </span>
-                )}
-                {activeSubgroup && (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    background: 'rgba(255,255,255,0.12)', color: '#FFFFFF',
-                    borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600,
-                    border: '1px solid rgba(255,255,255,0.18)',
-                  }}>
-                    <Filter size={12} />
-                    {activeSubgroup}
-                  </span>
-                )}
-                {subgroupFilter && !activeSubgroup && (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    background: 'rgba(255,255,255,0.12)', color: '#FFFFFF',
-                    borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600,
-                    border: '1px solid rgba(255,255,255,0.18)',
-                  }}>
-                    <Filter size={12} />
-                    {subgroupFilter}
-                  </span>
-                )}
-              </div>
-            </div>
-            {/* Reach badge */}
-            <div style={{
-              textAlign: 'center', padding: '14px 20px', borderRadius: 14,
-              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
-              flexShrink: 0, minWidth: 90,
-            }}>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>
-                Reach
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: '#FFFFFF', lineHeight: 1 }}>
-                {reachPct}%
-              </div>
-            </div>
-          </div>
-
           {meetingDescription && (
-            <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 16, lineHeight: 1.6, maxWidth: 600 }}>
+            <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', marginBottom: 16, lineHeight: 1.6, maxWidth: 600 }}>
               {meetingDescription}
             </div>
           )}
+          {subgroupFilter && (
+            <div style={{ fontSize: 12, color: '#FFFFFF', display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: '8px 14px', border: '1px solid rgba(255,255,255,0.2)', fontWeight: 500 }}>
+              <Filter size={14} />
+              {subgroupFilter}
+            </div>
+          )}
 
-          {/* Subgroup tabs — let recipients switch between subgroups */}
-          {availableSubgroups.length > 1 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 18 }}>
-              <button
-                type="button"
-                onClick={() => setActiveSubgroup('')}
-                style={{
-                  border: !activeSubgroup ? '1px solid rgba(255,255,255,0.5)' : '1px solid rgba(255,255,255,0.15)',
-                  background: !activeSubgroup ? 'rgba(255,255,255,0.15)' : 'transparent',
-                  color: !activeSubgroup ? '#FFFFFF' : 'rgba(255,255,255,0.6)',
-                  borderRadius: 999, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                }}
-              >
-                All
-              </button>
-              {availableSubgroups.map((sg) => (
-                <button
-                  key={sg}
-                  type="button"
-                  onClick={() => setActiveSubgroup(sg)}
-                  style={{
-                    border: activeSubgroup === sg ? '1px solid rgba(255,255,255,0.5)' : '1px solid rgba(255,255,255,0.15)',
-                    background: activeSubgroup === sg ? 'rgba(255,255,255,0.15)' : 'transparent',
-                    color: activeSubgroup === sg ? '#FFFFFF' : 'rgba(255,255,255,0.6)',
-                    borderRadius: 999, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                  }}
-                >
-                  {sg}
-                </button>
-              ))}
+          {/* Subgroup filter badge — only on group-specific views */}
+          {subgroupFilter && (
+            <div style={{ fontSize: 12, color: '#FFFFFF', display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: '8px 14px', border: '1px solid rgba(255,255,255,0.2)', fontWeight: 500, marginTop: 8 }}>
+              <Filter size={14} />
+              {subgroupFilter}
             </div>
           )}
         </div>
@@ -792,11 +690,7 @@ export default function MeetingReportPublicPage() {
             {/* Header */}
             <div style={{ marginBottom: 28 }}>
               <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#1C1C1C', letterSpacing: '-0.01em' }}>Share Report</h2>
-              <div style={{ marginTop: 6, fontSize: 14, fontWeight: 600, color: '#2C2C2A' }}>{meetingTitle}</div>
-              {meetingDate && (
-                <div style={{ fontSize: 13, color: '#8B8680', marginTop: 2 }}>{dateStamp(meetingDate)}</div>
-              )}
-              <p style={{ margin: '10px 0 0 0', fontSize: 13, color: '#8B8680', lineHeight: 1.5 }}>Anyone with this link can view the report. The meeting name is included when you copy.</p>
+              <p style={{ margin: '8px 0 0 0', fontSize: 14, color: '#8B8680', lineHeight: 1.5 }}>Anyone with this link can view the report</p>
             </div>
 
             {/* Link Display */}
@@ -832,8 +726,7 @@ export default function MeetingReportPublicPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const dateLine = meetingDate ? ` — ${dateStamp(meetingDate)}` : ''
-                  const text = `${meetingTitle}${dateLine}\n${window.location.href}`
+                  const text = window.location.href
 
                   function onCopied() {
                     setCopiedLink(true)
@@ -888,25 +781,14 @@ export default function MeetingReportPublicPage() {
         </div>
       )}
 
-      <footer style={{ padding: '28px 28px 24px', textAlign: 'center', background: 'rgba(0,0,0,0.02)', borderTop: '1px solid #EDE8DC' }}>
+      <footer style={{ padding: '32px 28px 28px', textAlign: 'center', background: 'rgba(0,0,0,0.02)', borderTop: '1px solid #EDE8DC' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
-            <img
-              src="/logo-purple-192.png"
-              alt=""
-              style={{ width: 20, height: 20, borderRadius: 5, opacity: 0.5 }}
-              onError={(e) => { e.target.style.display = 'none' }}
-            />
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#B4AFA3', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              BLW CAN NEXUS
-            </span>
-          </div>
-          <div style={{ fontSize: 12, color: MUTED }}>
-            {meetingTitle} {meetingDate ? `— ${dateStamp(meetingDate)}` : ''}
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 6 }}>
+            Report generated on <span style={{ fontWeight: 600, color: TEXT }}>{dateStamp(report?.report_date)}</span>
           </div>
           {report?.id && (
-            <div style={{ fontSize: 10, color: '#C8C2B8', letterSpacing: '0.05em', fontFamily: 'monospace', marginTop: 6 }}>
-              Report {report.id.slice(0, 8).toUpperCase()}
+            <div style={{ fontSize: 11, color: '#B4AFA3', letterSpacing: '0.05em', fontFamily: 'monospace' }}>
+              {report.id.slice(0, 8).toUpperCase()}
             </div>
           )}
         </div>
