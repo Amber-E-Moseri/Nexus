@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth'
 import {
   assignPastorMember,
   listDepartments,
+  listPastorAccessGrantUserIds,
   listPastorMembers,
   listUsers,
   removePastorMember,
@@ -65,6 +66,7 @@ export default function PastoralAssignmentsPage() {
   const [users, setUsers] = useState([])
   const [departments, setDepartments] = useState([])
   const [assignments, setAssignments] = useState([])
+  const [pastorAccessGrantUserIds, setPastorAccessGrantUserIds] = useState(new Set())
   const [draftMemberByPastor, setDraftMemberByPastor] = useState({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -74,14 +76,16 @@ export default function PastoralAssignmentsPage() {
     setLoading(true)
     setError('')
     try {
-      const [nextUsers, nextDepartments, nextAssignments] = await Promise.all([
+      const [nextUsers, nextDepartments, nextAssignments, nextGrantUserIds] = await Promise.all([
         listUsers(),
         listDepartments(),
         listPastorMembers(),
+        listPastorAccessGrantUserIds(),
       ])
       setUsers(nextUsers)
       setDepartments(nextDepartments)
       setAssignments(nextAssignments)
+      setPastorAccessGrantUserIds(new Set(nextGrantUserIds))
     } catch (nextError) {
       setError(nextError.message)
     } finally {
@@ -125,8 +129,10 @@ export default function PastoralAssignmentsPage() {
   const canManageAssignments = role === 'super_admin' || role === 'dept_lead'
 
   const pastors = useMemo(
-    () => scopedUsers.filter((user) => user.role === 'pastor').sort((left, right) => left.name.localeCompare(right.name)),
-    [scopedUsers],
+    () => scopedUsers
+      .filter((user) => user.role === 'pastor' || pastorAccessGrantUserIds.has(user.id))
+      .sort((left, right) => left.name.localeCompare(right.name)),
+    [scopedUsers, pastorAccessGrantUserIds],
   )
 
   const members = useMemo(
