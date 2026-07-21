@@ -7,6 +7,7 @@ import { advanceSprintStatus, archiveSprintWithAutoDeactivation, calculateSprint
 import { supabase } from '../../lib/supabase'
 import { requestSprintAccess, getMySprintAccessRequests } from '../../lib/people/api'
 import { isTaskCompleted } from '../../lib/taskStatuses'
+import SprintModal from '../../features/sprints/components/SprintModal'
 import SprintProgressBar from '../../features/sprints/components/SprintProgressBar'
 import CalendarView from '../../features/calendar/components/CalendarView'
 import EventModal from '../../features/calendar/components/EventModal'
@@ -19,6 +20,7 @@ import SprintReview from './SprintReview'
 import FileList from '../../components/files/FileList'
 import SprintGoalsPanel from '../../features/sprints/components/SprintGoalsPanel'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
+import { hasSpaceRole } from '../../lib/permissions'
 
 const TABS = ['Overview', 'Tasks', 'Calendar', 'Teams', 'Members', 'Files', 'Review']
 const CALENDAR_EVENT_SELECT = 'id, title, description, event_type, start_date, end_date, all_day, location, zoom_join_url, sprint_id, space_id, created_by, created_at, status, department_id, approved_by, approved_at, rejection_note, is_org_wide'
@@ -165,9 +167,15 @@ export default function SprintOverview() {
   const [calendarDefaultDate, setCalendarDefaultDate] = useState(null)
   const [savingTeam, setSavingTeam] = useState(false)
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false)
+  const [showEditSprintModal, setShowEditSprintModal] = useState(false)
   const [showInviteExternalModal, setShowInviteExternalModal] = useState(false)
   const [temporaryMembers, setTemporaryMembers] = useState([])
-  const [canViewSprint, setCanViewSprint] = useState(role === 'super_admin' || role === 'regional_secretary')
+  const [canViewSprint, setCanViewSprint] = useState(
+    role === 'super_admin' ||
+    role === 'regional_secretary' ||
+    hasSpaceRole(profile, null, 'ors') ||
+    hasSpaceRole(profile, null, 'programs')
+  )
   const [accessDeniedSprint, setAccessDeniedSprint] = useState(null) // {name, description} when user lacks access
   const [accessRequestStatus, setAccessRequestStatus] = useState(null) // 'pending' | 'rejected' | null
   const [requestingAccess, setRequestingAccess] = useState(false)
@@ -191,16 +199,24 @@ export default function SprintOverview() {
   const canManage = role === 'super_admin' || role === 'regional_secretary' || detail?.members?.some(
     (member) => member.user?.id === profile?.id && ['owner', 'manager'].includes(member.role),
   )
+  const isMember = detail?.members?.some((m) => m.user?.id === profile?.id)
+  const canCreateTask = canManage || isMember
   const canAssignPrivilegedSprintRoles = role === 'super_admin' || detail?.members?.some(
     (member) => member.user?.id === profile?.id && member.role === 'owner',
   )
-  const canCreateSprint = role === 'super_admin' || role === 'dept_lead' || role === 'pastor'
+  const canCreateSprint = role === 'super_admin' || role === 'dept_lead' || role === 'pastor' || role === 'regional_secretary'
 
   async function loadDetail() {
     setLoading(true)
     setLoadError(null)
     try {
-      if (role !== 'super_admin' && role !== 'regional_secretary') {
+      const isPrivileged =
+        role === 'super_admin' ||
+        role === 'regional_secretary' ||
+        hasSpaceRole(profile, null, 'ors') ||
+        hasSpaceRole(profile, null, 'programs')
+
+      if (!isPrivileged) {
         const allowed = await hasSprintAccess(sprintId)
         setCanViewSprint(allowed)
         if (!allowed) {
@@ -576,6 +592,15 @@ export default function SprintOverview() {
                 {getNextAction(detail.sprint).label}
               </button>
             ) : null}
+            {canManage && !isArchived ? (
+              <button
+                type="button"
+                onClick={() => setShowEditSprintModal(true)}
+                className="rounded-xl border border-[var(--border-1)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ink-1)]"
+              >
+                Edit sprint
+              </button>
+            ) : null}
             <button type="button" onClick={handleArchive} disabled={isArchived} className="rounded-xl border border-[var(--border-1)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ink-1)] disabled:opacity-50">
               {isArchived ? 'Archived' : 'Archive sprint'}
             </button>
@@ -614,7 +639,7 @@ export default function SprintOverview() {
       {/* Tasks & Tabs */}
       {activeTab === 'Tasks' || activeTab === 'Overview' ? (
         <div className="flex flex-col rounded-[24px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)]" style={{ minHeight: 520 }}>
-          <SprintTaskBoard sprintId={detail.sprint.id} sprint={detail} canEdit={Boolean(canManage && !isArchived)} />
+          <SprintTaskBoard sprintId={detail.sprint.id} sprint={detail} canEdit={Boolean(canCreateTask && !isArchived)} initialTasks={tasks} />
         </div>
       ) : null}
 
@@ -637,7 +662,7 @@ export default function SprintOverview() {
               <h2 className="text-lg font-semibold text-[var(--text-primary)]">Sprint Teams</h2>
               <p className="mt-0.5 text-sm text-[var(--text-secondary)]">Cross-functional squads — name them and pull in members from any department.</p>
             </div>
-            {canManage && !isArchived && (
+            {(canManage || isMember) && !isArchived && (
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   type="button"
@@ -683,7 +708,7 @@ export default function SprintOverview() {
           sprintId={detail.sprint.id}
           sprintName={detail.sprint.name}
           sprintEndDate={detail.sprint.end_date}
-          canInvite={Boolean(canManage && !isArchived)}
+          canInvite={Boolean((canManage || isMember) && !isArchived)}
           canAssignPrivilegedRoles={Boolean(canAssignPrivilegedSprintRoles)}
           onClose={() => setShowInviteExternalModal(false)}
           onSuccess={() => { setShowInviteExternalModal(false); loadDetail() }}
@@ -724,6 +749,18 @@ export default function SprintOverview() {
             setShowCreateTeamModal(false)
             await loadDetail()
           }}
+        />
+      )}
+
+      {showEditSprintModal && (
+        <SprintModal
+          mode="edit"
+          sprint={detail.sprint}
+          onSaved={async () => {
+            setShowEditSprintModal(false)
+            await loadDetail()
+          }}
+          onClose={() => setShowEditSprintModal(false)}
         />
       )}
     </div>

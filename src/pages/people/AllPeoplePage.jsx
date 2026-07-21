@@ -593,7 +593,7 @@ export default function AllPeoplePage() {
   const [error, setError] = useState('')
 
   const canSeeInvitations = role === 'super_admin' || role === 'dept_lead'
-  const canSeePastoral = role === 'super_admin' || role === 'dept_lead' || role === 'pastor'
+  const canSeePastoral = role === 'super_admin' || role === 'dept_lead' || role === 'pastor' || role === 'regional_secretary'
 
   const tabs = [
     { id: 'users',      label: 'Users' },

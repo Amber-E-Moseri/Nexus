@@ -10,6 +10,7 @@ import { useToast } from '../../context/ToastContext'
 import { getSprintTasks } from '../../features/sprints/lib/sprints'
 import { supabase } from '../../lib/supabase'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
+import { hasSpaceRole } from '../../lib/permissions'
 
 const gridStagger = {
   hidden: {},
@@ -22,6 +23,8 @@ const cardEnter = {
 }
 
 const FILTERS = ['all', 'active', 'planning', 'completed', 'review', 'archived']
+const CATEGORY_FILTERS = ['all', 'group', 'regional']
+const CATEGORY_LABELS = { all: 'All categories', group: 'Group', regional: 'Regional' }
 const EMPTY_STATE = {
   icon: '⚡',
   title: 'No sprints yet',
@@ -48,6 +51,7 @@ export default function SprintsList() {
   const wantsNewSprint = searchParams.get('new') === '1' || searchParams.get('new') === 'true'
   const [sprints, setSprints] = useState([])
   const [filter, setFilter] = useState('all')
+  const [categoryFilter, setCategoryFilter] = useState('all')
   const [query, setQuery] = useState('')
   const [showModal, setShowModal] = useState(wantsNewSprint)
   const [loading, setLoading] = useState(true)
@@ -55,7 +59,11 @@ export default function SprintsList() {
   async function loadSprints() {
     setLoading(true)
     try {
-      const canSeeAll = role === 'super_admin' || role === 'regional_secretary'
+      const canSeeAll =
+        role === 'super_admin' ||
+        role === 'regional_secretary' ||
+        hasSpaceRole(profile, null, 'ors') ||
+        hasSpaceRole(profile, null, 'programs')
 
       const [allSprints, memberSprints, myRequests] = await Promise.all([
         getAllSprints(),
@@ -148,12 +156,25 @@ export default function SprintsList() {
   const filtered = useMemo(() => {
     let result = searched
 
-    if (filter !== 'all') {
-      result = result.filter((sprint) => sprint.status === filter)
+    if (filter === 'active') {
+      const d = new Date()
+      const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      result = result.filter(
+        (s) =>
+          s.status === 'active' &&
+          (!s.start_date || s.start_date <= today) &&
+          (!s.end_date || s.end_date >= today),
+      )
+    } else if (filter !== 'all') {
+      result = result.filter((s) => s.status === filter)
+    }
+
+    if (categoryFilter !== 'all') {
+      result = result.filter((s) => s.category === categoryFilter)
     }
 
     return result
-  }, [filter, searched])
+  }, [filter, categoryFilter, searched])
 
   async function handleDuplicate(sprintId) {
     await duplicateSprint(sprintId, profile.id)
@@ -213,7 +234,7 @@ export default function SprintsList() {
     closeModal()
   }
 
-  const canCreate = role === 'super_admin' || role === 'dept_lead' || role === 'pastor'
+  const canCreate = role === 'super_admin' || role === 'dept_lead' || role === 'pastor' || role === 'regional_secretary'
 
   return (
     <div className="space-y-5" style={{ fontFamily: FONT_BODY }}>
@@ -254,6 +275,18 @@ export default function SprintsList() {
           {FILTERS.map((option) => (
             <option key={option} value={option}>
               {option.charAt(0).toUpperCase() + option.slice(1)}
+            </option>
+          ))}
+        </select>
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="rounded-lg px-3 py-1.5 text-sm"
+          style={{ border: '1px solid var(--border-1)', background: 'var(--surface-card)', color: 'var(--ink-1)' }}
+        >
+          {CATEGORY_FILTERS.map((option) => (
+            <option key={option} value={option}>
+              {CATEGORY_LABELS[option]}
             </option>
           ))}
         </select>
