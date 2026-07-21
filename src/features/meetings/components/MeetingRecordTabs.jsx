@@ -16,7 +16,7 @@ export default function MeetingRecordTabs({ meeting }) {
   const [audioItemsAdded, setAudioItemsAdded] = useState(0)
 
   // ORS identity is a space_roles grant (Phase 3) — role === 'ors' no longer exists.
-  const canRecord = ['super_admin', 'dept_lead'].includes((role ?? '').toLowerCase()) ||
+  const canRecord = ['super_admin', 'dept_lead', 'pastor'].includes((role ?? '').toLowerCase()) ||
                     hasSpaceRole(profile, null, 'ors') ||
                     hasSpaceRole(profile, null, 'dept_lead')
 
