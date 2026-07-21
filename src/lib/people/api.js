@@ -31,6 +31,19 @@ export async function listPastorMembers() {
   return data ?? []
 }
 
+// Users with role !== 'pastor' who still hold pastoral-care duties (e.g. a
+// regional_secretary granted pastor_access) — additive to the role==='pastor' check,
+// not a replacement for it.
+export async function listPastorAccessGrantUserIds() {
+  const { data, error } = await supabase
+    .from('user_grants')
+    .select('user_id')
+    .eq('grant_type', 'pastor_access')
+
+  if (error) throw error
+  return (data ?? []).map((row) => row.user_id)
+}
+
 export async function listInvitations() {
   const { data, error } = await supabase
     .from('user_invitations')
