@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
 import { createNotification } from '../../notifications/lib/notifications'
-import { createRecurringMeetings } from '../lib/meetings'
-import { DAYS_OF_WEEK, MAX_OCCURRENCES, buildRecurrenceRule, generateOccurrenceDates } from '../lib/recurrence'
+import { createRecurringMeeting } from '../lib/meetings'
+import { DAYS_OF_WEEK, MAX_OCCURRENCES, buildRecurrenceRule } from '../lib/recurrence'
 
-const MEETING_TYPES = ['general', 'team', 'department', 'media']
+const MEETING_TYPES = ['general', 'team', 'department', 'media', '1_on_1_meeting']
+
+function formatMeetingTypeLabel(type) {
+  return type.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
 
 const inputStyle = {
   width: '100%',
@@ -77,42 +81,41 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
         date: meetingDate,
         meeting_type: meetingType,
         status: 'scheduled',
-        visibility: 'published',
+        // Private by default — sharing happens by inviting attendees
+        // (allowed_viewers below), not by publishing to the whole department.
+        visibility: 'private',
+        allowed_viewers: attendeeIds,
         created_by: profile?.id,
         department_id: profile?.department_id ?? null,
       }
       if (agenda.trim()) payload.agenda = agenda.trim()
 
-      let createdMeetings = []
-
       if (recurring && recurrenceData.frequency !== 'none') {
-        // Generate all occurrence dates and create recurring meetings
-        const startDateTime = new Date(meetingDate)
-        const occurrenceDates = generateOccurrenceDates(startDateTime, recurrenceData)
+        // Only the first meeting is created now. Future occurrences are
+        // generated progressively (~1 day ahead) by a scheduled edge function.
         const recurrenceRule = buildRecurrenceRule(recurring, recurrenceData)
 
-        createdMeetings = await createRecurringMeetings({
+        const meeting = await createRecurringMeeting({
           baseMeeting: payload,
           attendeeIds,
-          occurrenceDates,
           recurrenceRule,
         })
 
-        // Notify once per attendee (referencing first occurrence only)
-        if (createdMeetings.length > 0 && attendeeIds.length > 0) {
-          const firstMeeting = createdMeetings[0]
+        // Notify once per attendee for the series (not per future occurrence,
+        // since those don't exist yet).
+        if (attendeeIds.length > 0) {
           for (const uid of attendeeIds) {
             if (uid !== profile?.id) {
               createNotification(uid, 'meeting_scheduled', {
-                meetingId: firstMeeting.id,
-                title: `${firstMeeting.title} (recurring)`,
-                date: firstMeeting.date,
+                meetingId: meeting.id,
+                title: `${meeting.title} (recurring)`,
+                date: meeting.date,
               }).catch(() => {})
             }
           }
         }
 
-        onSaved?.(createdMeetings[0])
+        onSaved?.(meeting)
       } else {
         // Single non-recurring meeting
         const { data: meeting, error: insertError } = await supabase
@@ -215,7 +218,7 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
               <span style={labelStyle}>Type</span>
               <select style={inputStyle} value={meetingType} onChange={(e) => setMeetingType(e.target.value)}>
                 {MEETING_TYPES.map((t) => (
-                  <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                  <option key={t} value={t}>{formatMeetingTypeLabel(t)}</option>
                 ))}
               </select>
             </label>
