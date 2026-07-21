@@ -6,6 +6,7 @@ import {
   MaxRetriesExceededError,
   GCAL_RETRY_OPTIONS,
 } from '../_shared/retryWithBackoff.ts'
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 const ALLOWED_ORIGIN           = Deno.env.get('ALLOWED_ORIGIN') ?? ''
 const GOOGLE_CLIENT_ID         = Deno.env.get('GOOGLE_CLIENT_ID') ?? ''
@@ -577,6 +578,7 @@ async function syncOneSource(payload: Record<string, string>) {
 
     for (const item of data.items ?? []) {
       if (item.status === 'cancelled') continue
+      if (item.eventType === 'birthday') continue
       seenGoogleIds.add(item.id)
 
       const startObj   = item.start as Record<string, string>
@@ -1153,7 +1155,20 @@ async function runMultiSourceAutoSync(): Promise<void> {
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  const cors = getCorsHeaders(req)
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+
+  const res = await handleRequest(req)
+
+  // Overlay the request-aware CORS headers onto whatever the handler produced —
+  // handlers build responses via json(), which only knows the static ALLOWED_ORIGIN
+  // and can't see the actual request origin (blwcannexus.vercel.app vs a custom domain).
+  const headers = new Headers(res.headers)
+  for (const [key, value] of Object.entries(cors)) headers.set(key, value)
+  return new Response(res.body, { status: res.status, headers })
+})
+
+async function handleRequest(req: Request): Promise<Response> {
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' })
 
   let body: { action: string; payload: Record<string, unknown> }
@@ -1186,7 +1201,7 @@ Deno.serve(async (req) => {
     console.error('[google-calendar-sync]', err)
     return json(500, { error: String(err) })
   }
-})
+}
 
 // ── 15-minute multi-source auto-sync cron ─────────────────────────────────────
 // NOTE: Deno.cron not available in Supabase Edge Runtime v2.1.4. Auto-sync disabled for now.
