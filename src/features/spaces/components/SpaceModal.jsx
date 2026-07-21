@@ -66,7 +66,9 @@ export default function SpaceModal({ mode = 'create', space = null, onSaved, onC
 
   const visibleTypes = useMemo(() => {
     const base = ['program', 'personal', 'sandbox']
-    if (role === 'super_admin') return ['department', 'group', ...base]
+    // regional_secretary is near-super_admin (see FLOCK_CRM_CONFIG) and already
+    // has department-space visibility parity with super_admin in spaces.js.
+    if (role === 'super_admin' || role === 'regional_secretary') return ['department', 'group', ...base]
     if (role === 'pastor') return ['group', ...base]
     return base
   }, [role])

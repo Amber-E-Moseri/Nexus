@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
-import { CalendarRange, Files, LayoutGrid, Link2, Mail, Printer, RotateCcw, Users, TrendingDown } from 'lucide-react'
+import { Calendar, CalendarRange, Check, Files, LayoutGrid, Link2, Mail, Pencil, Printer, RotateCcw, Search, Users, TrendingDown, Upload, UserCheck } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
@@ -12,10 +12,12 @@ import AttendanceTrendsView from './AttendanceTrendsView'
 const PRINT_STYLES = `
 @media print {
   @page {
-    margin: 0.55in 0.6in 0.7in 0.6in;
+    margin: 0.5in 0.55in 0.65in 0.55in;
     size: A4 portrait;
   }
-  /* Un-clip shell overflow so content flows across pages */
+  @page:first {
+    margin-top: 0;
+  }
   html, body {
     height: auto !important;
     overflow: visible !important;
@@ -25,20 +27,17 @@ const PRINT_STYLES = `
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  /* Hide sidebar (<aside>), topbar (<header>), and all other shell chrome */
   body * { visibility: hidden !important; }
-  /* Show only the print-report subtree */
   #print-report,
   #print-report * { visibility: visible !important; }
-  /* Overlay at top-left so content spans multiple pages unclipped */
   #print-report {
     display: block !important;
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;
     width: 100% !important;
-    color: #2C2C2A !important;
-    font-family: Helvetica, Arial, sans-serif !important;
+    color: #1A1A1A !important;
+    font-family: 'Segoe UI', Helvetica, Arial, sans-serif !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
@@ -50,7 +49,6 @@ const PRINT_STYLES = `
   .print-section {
     page-break-inside: avoid;
     break-inside: avoid;
-    margin-top: 18px;
   }
   .print-section-header {
     page-break-after: avoid;
@@ -74,7 +72,7 @@ const PRINT_STYLES = `
     break-inside: avoid;
   }
   .print-doc {
-    padding-bottom: 44px;
+    padding-bottom: 36px;
   }
   .print-footer {
     position: fixed;
@@ -84,19 +82,23 @@ const PRINT_STYLES = `
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 6px 0;
-    font-size: 10px;
-    color: #5B5B59;
-    border-top: 1px solid #D8D4C8;
+    padding: 8px 0 4px;
+    font-size: 8.5px;
+    color: #8A857A;
+    border-top: 0.5px solid #D8D4C8;
     background: white;
+    letter-spacing: 0.02em;
   }
   .print-page-number::after {
     content: counter(page);
   }
-  .print-gridlines {
-    background-image:
-      linear-gradient(to right, rgba(44,44,42,0.08) 1px, transparent 1px);
-    background-size: 20% 100%;
+  .print-subgroup-page {
+    page-break-before: always;
+    break-before: page;
+  }
+  .print-name-row {
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 }
 #print-report { display: none; }
@@ -605,6 +607,11 @@ function CategoryPillBar({ categoryOptions, selectedCategories, onToggle }) {
   )
 }
 
+function formatShareDate(dateStr) {
+  if (!dateStr) return ''
+  return new Date(`${dateStr}T12:00:00`).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
 function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false }) {
   const [copiedIndex, setCopiedIndex] = useState(null)
 
@@ -612,9 +619,13 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
 
   const baseUrl = `${window.location.origin}/reports/${report.share_token}`
   const fullReportUrl = baseUrl
+  const meetingName = report.label || 'Meeting Report'
+  const meetingDate = report.report_date ? formatShareDate(report.report_date) : ''
+  const meetingLine = meetingDate ? `${meetingName} — ${meetingDate}` : meetingName
 
-  async function copyLink(url, index) {
-    const success = await copyToClipboard(url)
+  async function copyLink(url, index, contextLabel) {
+    const message = `${contextLabel ? `${contextLabel} | ` : ''}${meetingLine}\n${url}`
+    const success = await copyToClipboard(message)
     if (success) {
       setCopiedIndex(index)
       setTimeout(() => setCopiedIndex(null), 2000)
@@ -622,11 +633,12 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
   }
 
   async function copyAllLinks() {
+    const header = `Attendance Report: ${meetingLine}`
     const links = [
       `Full Report:\n${fullReportUrl}`,
       ...report.subgroups.map((sg) => `${sg}:\n${baseUrl}?subgroup=${encodeURIComponent(sg)}`),
     ].join('\n\n')
-    const success = await copyToClipboard(links)
+    const success = await copyToClipboard(`${header}\n\n${links}`)
     if (success) {
       setCopiedIndex('all')
       setTimeout(() => setCopiedIndex(null), 2000)
@@ -635,8 +647,15 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
 
   return (
     <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 12, padding: '16px', marginTop: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#2D2A22' }}>Share Report</div>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#2D2A22' }}>{meetingName}</div>
+        {meetingDate && (
+          <div style={{ fontSize: 12, color: '#9E9488', marginTop: 2 }}>{meetingDate}</div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ fontSize: 12, color: '#6B6560' }}>Share links include the meeting name when copied.</div>
         <button
           type="button"
           onClick={copyAllLinks}
@@ -649,7 +668,8 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
             fontSize: 12,
             fontWeight: 600,
             cursor: 'pointer',
-            transition: 'all 0.2s'
+            transition: 'all 0.2s',
+            flexShrink: 0,
           }}
           onMouseEnter={(e) => { if (copiedIndex !== 'all') e.target.style.background = '#5D3BA3' }}
           onMouseLeave={(e) => { if (copiedIndex !== 'all') e.target.style.background = '#4C2A92' }}
@@ -669,7 +689,7 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
           </div>
           <button
             type="button"
-            onClick={() => copyLink(fullReportUrl, 'full')}
+            onClick={() => copyLink(fullReportUrl, 'full', 'Full Report')}
             style={{
               background: copiedIndex === 'full' ? '#2D8653' : '#4C2A92',
               color: 'white',
@@ -701,7 +721,7 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
               </div>
               <button
                 type="button"
-                onClick={() => copyLink(linkUrl, subgroup)}
+                onClick={() => copyLink(linkUrl, subgroup, subgroup)}
                 style={{
                   background: copiedIndex === subgroup ? '#2D8653' : '#4C2A92',
                   color: 'white',
@@ -1075,6 +1095,7 @@ function buildReportFromHistoryRecord(record, rosterRows) {
     id: record.id,
     share_token: record.share_token,
     label: record.label,
+    report_date: record.report_date ?? null,
     subgroupFilter: record.subgroup_filter,
     expectedCount: record.expected_count,
     attendedCount: record.attended_count,
@@ -1102,6 +1123,9 @@ export default function MeetingReportTab() {
   const [viewMode, setViewMode] = useState('single') // 'single' | 'trends'
 
   const [phase, setPhase] = useState('input')
+  const [inputMode, setInputMode] = useState('csv') // 'csv' | 'checkin'
+  const [checkedNames, setCheckedNames] = useState(new Set())
+  const [checkinSearch, setCheckinSearch] = useState('')
   const [meetingLabel, setMeetingLabel] = useState('')
   const [reportMode, setReportMode] = useState('regional')
   const [selectedSubgroups, setSelectedSubgroups] = useState([])
@@ -1121,6 +1145,14 @@ export default function MeetingReportTab() {
   const [showShareModal, setShowShareModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [editingAttendance, setEditingAttendance] = useState(false)
+  const [editChecked, setEditChecked] = useState(new Set())
+  const [editSearch, setEditSearch] = useState('')
+  const [editUpdating, setEditUpdating] = useState(false)
+  const [editingLabel, setEditingLabel] = useState(false)
+  const [labelDraft, setLabelDraft] = useState('')
+  const [editingDate, setEditingDate] = useState(false)
+  const [dateDraft, setDateDraft] = useState('')
 
   const [history, setHistory] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(true)
@@ -1353,6 +1385,15 @@ export default function MeetingReportTab() {
     setUnexpectedPreview(preview)
   }, [attendedNames, attendedError, filteredRoster])
 
+  useEffect(() => {
+    if (inputMode === 'checkin') {
+      const names = [...checkedNames]
+      setAttendedNames(names)
+      setAttendedRawCount(names.length)
+      setAttendedError(null)
+    }
+  }, [inputMode, checkedNames])
+
   function handleToggleSubgroup(subgroup) {
     if (!subgroup) {
       setSelectedSubgroups([])
@@ -1436,7 +1477,9 @@ export default function MeetingReportTab() {
       return
     }
 
+    const reportDate = new Date().toISOString().slice(0, 10)
     const result = await buildReport(label, rosterRows ?? [], attendedNames, subgroupFilter)
+    result.report_date = reportDate
     setPhase('report')
     setReport(result)
     setActiveSubgroup('')
@@ -1481,7 +1524,7 @@ export default function MeetingReportTab() {
           .single()
         if (error) setSaveError(error.message)
         else {
-          const nextReport = { ...result, id: data.id, share_token: data.share_token }
+          const nextReport = { ...result, id: data.id, share_token: data.share_token, report_date: reportDate }
           setReport(nextReport)
           sessionStorage.setItem(
             'meeting_report_state',
@@ -1507,6 +1550,153 @@ export default function MeetingReportTab() {
     }
   }
 
+  async function handleSaveLabel() {
+    const newLabel = labelDraft.trim()
+    if (!newLabel || !report) { setEditingLabel(false); return }
+    if (newLabel === report.label) { setEditingLabel(false); return }
+
+    if (report.id) {
+      const { error } = await supabase
+        .from('meeting_attendance_reports')
+        .update({ label: newLabel })
+        .eq('id', report.id)
+      if (error) { setSaveError('Failed to rename: ' + error.message); return }
+    }
+
+    setReport((prev) => ({ ...prev, label: newLabel }))
+    setMeetingLabel(newLabel)
+    setEditingLabel(false)
+    loadHistory()
+  }
+
+  async function handleSaveDate() {
+    const newDate = dateDraft.trim()
+    if (!newDate || !report) { setEditingDate(false); return }
+    if (newDate === report.report_date) { setEditingDate(false); return }
+
+    if (report.id) {
+      const { error } = await supabase
+        .from('meeting_attendance_reports')
+        .update({ report_date: newDate })
+        .eq('id', report.id)
+      if (error) { setSaveError('Failed to update date: ' + error.message); return }
+    }
+
+    setReport((prev) => ({ ...prev, report_date: newDate }))
+    setEditingDate(false)
+    loadHistory()
+  }
+
+  function handleOpenEditAttendance() {
+    if (!report) return
+    const presentNames = new Set((report.present ?? []).map((p) => p.name))
+    setEditChecked(presentNames)
+    setEditSearch('')
+    setEditingAttendance(true)
+  }
+
+  async function handleApplyEditAttendance() {
+    if (!report) return
+    setEditUpdating(true)
+    setSaveError(null)
+
+    try {
+      const label = report.label || meetingLabel.trim() || todayLabel()
+      const subgroupFilter = report.subgroupFilter || null
+      const editedNames = [...editChecked]
+
+      const { data: rosterRows, error: rosterFetchError } = await fetchReportRoster()
+      if (rosterFetchError) {
+        setSaveError(rosterFetchError.message)
+        setEditUpdating(false)
+        return
+      }
+
+      const result = await buildReport(label, rosterRows ?? [], editedNames, subgroupFilter)
+
+      if (report.id) {
+        const { error: updateError } = await supabase
+          .from('meeting_attendance_reports')
+          .update({
+            expected_count: result.expectedCount,
+            attended_count: result.attendedCount,
+            absent_count: result.absentCount,
+            unexpected_count: result.unexpectedCount,
+            reach_pct: parseFloat((result.reachPct * 100).toFixed(2)),
+            present_names: result.present.map((p) => p.name),
+            absent_names: result.absent.map((p) => p.name),
+            unexpected_names: result.unexpected.map((p) => p.name),
+            by_subgroup: result.bySubgroup || null,
+          })
+          .eq('id', report.id)
+        if (updateError) {
+          setSaveError('Failed to save changes: ' + updateError.message)
+          setEditUpdating(false)
+          return
+        }
+      } else {
+        // Report was never saved to DB — insert it now so edits persist
+        const { data: insertedRow, error: insertError } = await supabase
+          .from('meeting_attendance_reports')
+          .insert({
+            label: label,
+            report_date: new Date().toISOString().slice(0, 10),
+            expected_count: result.expectedCount,
+            attended_count: result.attendedCount,
+            absent_count: result.absentCount,
+            unexpected_count: result.unexpectedCount,
+            reach_pct: parseFloat((result.reachPct * 100).toFixed(2)),
+            present_names: result.present.map((p) => p.name),
+            absent_names: result.absent.map((p) => p.name),
+            unexpected_names: result.unexpected.map((p) => p.name),
+            subgroup_filter: subgroupFilter,
+            by_subgroup: result.bySubgroup || null,
+            created_by: profile?.id ?? null,
+          })
+          .select('id, share_token')
+          .single()
+        if (insertError) {
+          setSaveError('Failed to save report: ' + insertError.message)
+          setEditUpdating(false)
+          return
+        }
+        result.id = insertedRow.id
+        result.share_token = insertedRow.share_token
+      }
+
+      const nextReport = { ...result, id: result.id ?? report.id, share_token: result.share_token ?? report.share_token, report_date: report.report_date }
+      setReport(nextReport)
+      setAttendedNames(editedNames)
+      setAttendedRawCount(editedNames.length)
+      setActiveCategory(null)
+
+      if (nextReport.id) {
+        setSearchParams({ report: nextReport.id })
+      }
+
+      sessionStorage.setItem(
+        'meeting_report_state',
+        JSON.stringify({
+          phase: 'report',
+          report: nextReport,
+          reportMode,
+          selectedSubgroups,
+          selectedCategories,
+          attendedRawCount: editedNames.length,
+          label,
+          savedAt: new Date().toISOString(),
+        }),
+      )
+
+      setEditingAttendance(false)
+      loadHistory()
+    } catch (err) {
+      setSaveError(err.message)
+    } finally {
+      setEditUpdating(false)
+    }
+  }
+
   function handleReset() {
     sessionStorage.removeItem('meeting_report_state')
     setSearchParams({})
@@ -1517,6 +1707,9 @@ export default function MeetingReportTab() {
     setPrintingSubgroup(null)
     setRestoredFromSession(false)
     setMeetingLabel('')
+    setInputMode('csv')
+    setCheckedNames(new Set())
+    setCheckinSearch('')
     setReportMode('regional')
     setSelectedSubgroups([])
     setSelectedCategories([])
@@ -1711,14 +1904,77 @@ export default function MeetingReportTab() {
                     </span>
                   </div>
                   <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      background: 'rgba(255,255,255,0.08)', color: '#F8FBFF',
-                      borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 500,
-                    }}>
-                      <CalendarRange size={13} />
-                      {report.label}
-                    </span>
+                    {editingLabel ? (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        background: 'rgba(255,255,255,0.15)', borderRadius: 999, padding: '2px 4px 2px 10px',
+                      }}>
+                        <CalendarRange size={13} color="#F8FBFF" />
+                        <input
+                          autoFocus
+                          value={labelDraft}
+                          onChange={(e) => setLabelDraft(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleSaveLabel(); if (e.key === 'Escape') setEditingLabel(false) }}
+                          onBlur={handleSaveLabel}
+                          style={{
+                            background: 'transparent', border: 'none', outline: 'none',
+                            color: '#FFFFFF', fontSize: 12, fontWeight: 600, width: Math.max(100, labelDraft.length * 7.5),
+                            padding: '2px 4px',
+                          }}
+                        />
+                      </span>
+                    ) : (
+                      <span
+                        onClick={() => { setLabelDraft(report.label); setEditingLabel(true) }}
+                        title="Click to rename"
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          background: 'rgba(255,255,255,0.08)', color: '#F8FBFF',
+                          borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 500,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <CalendarRange size={13} />
+                        {report.label}
+                      </span>
+                    )}
+                    {report.report_date && (
+                      editingDate ? (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          background: 'rgba(255,255,255,0.15)', borderRadius: 999, padding: '2px 4px 2px 10px',
+                        }}>
+                          <Calendar size={13} color="#F8FBFF" />
+                          <input
+                            type="date"
+                            autoFocus
+                            value={dateDraft}
+                            onChange={(e) => setDateDraft(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveDate(); if (e.key === 'Escape') setEditingDate(false) }}
+                            onBlur={handleSaveDate}
+                            style={{
+                              background: 'transparent', border: 'none', outline: 'none',
+                              color: '#FFFFFF', fontSize: 12, fontWeight: 600,
+                              padding: '2px 4px', colorScheme: 'dark',
+                            }}
+                          />
+                        </span>
+                      ) : (
+                        <span
+                          onClick={() => { setDateDraft(report.report_date); setEditingDate(true) }}
+                          title="Click to change date"
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            background: 'rgba(255,255,255,0.08)', color: '#F8FBFF',
+                            borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 500,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Calendar size={13} />
+                          {new Date(`${report.report_date}T12:00:00`).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })}
+                        </span>
+                      )
+                    )}
                     {(report.subgroupFilter || activeSubgroup) && (
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -1747,6 +2003,18 @@ export default function MeetingReportTab() {
                     <Link2 size={13} /> {copiedLink ? 'Link Copied!' : 'Share Report'}
                   </button>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={handleOpenEditAttendance}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: editingAttendance ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.10)', color: '#DCE9F8',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  <UserCheck size={13} /> Edit Attendance
+                </button>
                 <button
                   type="button"
                   onClick={handleEmailAbsentees}
@@ -1800,6 +2068,134 @@ export default function MeetingReportTab() {
               </div>
             </div>
           </header>
+
+          {editingAttendance && (
+            <div className="screen-only" style={{ background: 'white', borderBottom: '2px solid #4C2A92', padding: '0' }}>
+              <div style={{ maxWidth: 820, margin: '0 auto', padding: '16px 24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#2D2A22' }}>Edit Attendance</div>
+                    <div style={{ fontSize: 12, color: '#9E9488', marginTop: 2 }}>
+                      {editChecked.size} checked in — tap to add or remove people
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setEditingAttendance(false)}
+                      disabled={editUpdating}
+                      style={{ border: '1px solid #EDE8DC', background: 'white', color: '#6B6560', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApplyEditAttendance}
+                      disabled={editUpdating}
+                      style={{ border: 'none', background: '#4C2A92', color: 'white', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: editUpdating ? 'not-allowed' : 'pointer', opacity: editUpdating ? 0.6 : 1 }}
+                    >
+                      {editUpdating ? 'Updating...' : 'Update Report'}
+                    </button>
+                  </div>
+                </div>
+                <div style={{ border: '1px solid #EDE8DC', borderRadius: 12, overflow: 'hidden', background: '#FAFAF7' }}>
+                  <div style={{ padding: '10px 12px', borderBottom: '1px solid #EDE8DC', background: 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Search size={14} color="#9E9488" />
+                    <input
+                      type="text"
+                      value={editSearch}
+                      onChange={(e) => setEditSearch(e.target.value)}
+                      placeholder="Search roster..."
+                      autoFocus
+                      style={{ flex: 1, border: 'none', outline: 'none', fontSize: 13, color: '#2D2A22', background: 'transparent', fontFamily: 'inherit' }}
+                    />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#2D8653', background: '#EEF8F2', borderRadius: 999, padding: '2px 10px', flexShrink: 0 }}>
+                      {editChecked.size} checked in
+                    </span>
+                  </div>
+                  <div style={{ maxHeight: 320, overflowY: 'auto', padding: '4px 0' }}>
+                    {(() => {
+                      const searchLower = editSearch.toLowerCase().trim()
+                      const grouped = new Map()
+                      for (const row of roster) {
+                        if (searchLower && !row.full_name.toLowerCase().includes(searchLower)) continue
+                        const sg = displaySubgroup(row.subgroup) ?? 'Unassigned'
+                        if (!grouped.has(sg)) grouped.set(sg, [])
+                        grouped.get(sg).push(row)
+                      }
+                      const entries = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b))
+                      if (entries.length === 0) {
+                        return <div style={{ padding: '20px 14px', fontSize: 12.5, color: '#9E9488', textAlign: 'center' }}>No matches found.</div>
+                      }
+                      return entries.map(([subgroup, members]) => (
+                        <div key={subgroup}>
+                          <div style={{ padding: '6px 14px 4px', fontSize: 10.5, fontWeight: 700, color: '#9E9488', textTransform: 'uppercase', letterSpacing: '.06em', background: '#F4F1EA', borderTop: '1px solid #EDE8DC', borderBottom: '1px solid #EDE8DC' }}>
+                            {subgroup} ({members.filter((m) => editChecked.has(m.full_name)).length}/{members.length})
+                          </div>
+                          {members.map((row) => {
+                            const isChecked = editChecked.has(row.full_name)
+                            return (
+                              <button
+                                key={row.id}
+                                type="button"
+                                onClick={() => {
+                                  setEditChecked((prev) => {
+                                    const next = new Set(prev)
+                                    if (next.has(row.full_name)) next.delete(row.full_name)
+                                    else next.add(row.full_name)
+                                    return next
+                                  })
+                                }}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 10,
+                                  width: '100%',
+                                  padding: '8px 14px',
+                                  border: 'none',
+                                  borderBottom: '1px solid #F2EEE6',
+                                  background: isChecked ? '#F0FFF5' : 'white',
+                                  cursor: 'pointer',
+                                  textAlign: 'left',
+                                  fontSize: 13,
+                                  fontFamily: 'inherit',
+                                  transition: 'background 0.1s',
+                                }}
+                              >
+                                <span style={{
+                                  width: 20,
+                                  height: 20,
+                                  borderRadius: 5,
+                                  border: isChecked ? '2px solid #2D8653' : '2px solid #D8D3C9',
+                                  background: isChecked ? '#2D8653' : 'white',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                  transition: 'all 0.1s',
+                                }}>
+                                  {isChecked && <Check size={12} color="white" strokeWidth={3} />}
+                                </span>
+                                <span style={{ fontWeight: 600, color: isChecked ? '#1B5E3C' : '#2D2A22' }}>{row.full_name}</span>
+                                {row.leadership_category && (
+                                  <span style={{ fontSize: 10.5, color: '#9E9488', marginLeft: 'auto' }}>{row.leadership_category}</span>
+                                )}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      ))
+                    })()}
+                  </div>
+                </div>
+                {saveError && (
+                  <div style={{ marginTop: 10, fontSize: 12, color: '#C94830', background: '#FEF0ED', border: '1px solid #F5C4B8', borderRadius: 8, padding: '8px 12px' }}>
+                    {saveError}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <main style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ maxWidth: 820, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -2084,105 +2480,144 @@ export default function MeetingReportTab() {
         </div>
 
         <div id="print-report">
-          <div className="print-doc" style={{ width: '100%', color: '#2C2C2A', fontFamily: 'Helvetica, Arial, sans-serif' }}>
-            <div className="print-section print-no-break" style={{ marginTop: 0 }}>
-              <div style={{ width: '100%', background: '#3D1A78', color: 'white', padding: '20px 22px', boxSizing: 'border-box' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+          <div className="print-doc" style={{ width: '100%', color: '#1A1A1A', fontFamily: "'Segoe UI', Helvetica, Arial, sans-serif" }}>
+
+            {/* ═══ PAGE 1: COVER / EXECUTIVE SUMMARY ═══ */}
+            <div className="print-no-break" style={{ marginTop: 0 }}>
+              {/* Full-width branded header */}
+              <div style={{
+                width: '100%', boxSizing: 'border-box',
+                background: 'linear-gradient(135deg, #1E0E3E 0%, #3D1A78 60%, #5B2DAA 100%)',
+                color: 'white', padding: '28px 26px 24px',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
                     <img
                       src="/logo-purple-192.png"
                       alt=""
                       crossOrigin="anonymous"
-                      style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0, display: 'block' }}
+                      style={{ width: 48, height: 48, borderRadius: 12, flexShrink: 0, display: 'block', border: '2px solid rgba(255,255,255,0.15)' }}
                     />
                     <div>
-                      <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: '0.01em' }}>BLW CAN NEXUS</div>
-                      <div style={{ fontSize: 13, marginTop: 5, opacity: 0.92 }}>
-                        {printingSubgroup ? `${printingSubgroup} Attendance Report` : 'Regional Attendance Report'}
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)', marginBottom: 6 }}>
+                        BLW Canada Sub-Region
                       </div>
-                      <div style={{ fontSize: 11, marginTop: 8, color: '#E8DFFF' }}>{report.label}</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.01em', lineHeight: 1.15 }}>
+                        {printingSubgroup && printingSubgroup !== NEW_LEADERS_TAB
+                          ? `${printingSubgroup}`
+                          : 'Regional Attendance Report'}
+                      </div>
+                      <div style={{ marginTop: 8, fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
+                        {report.label}
+                      </div>
+                      {report.report_date && (
+                        <div style={{ marginTop: 4, fontSize: 11, color: 'rgba(255,255,255,0.55)', fontWeight: 400 }}>
+                          {new Date(`${report.report_date}T12:00:00`).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'inline-block', border: '1px solid rgba(255,255,255,0.45)', borderRadius: 999, padding: '5px 12px', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                      Internal Report
-                    </div>
-                    <div style={{ marginTop: 18, fontSize: 11, color: '#E8DFFF' }}>Generated {printedAt}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="print-section print-no-break" style={{ marginTop: 18 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.9fr', gap: 16, alignItems: 'stretch' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
-                  {[
-                    { label: 'Expected', value: printingSubgroup && printedSubgroupData ? printedSubgroupData.expected.length : visibleReport.expectedCount, accent: '#3D1A78' },
-                    { label: 'Present', value: printingSubgroup && printedSubgroupData ? printedSubgroupData.present.length : visibleReport.present.length, accent: '#085041' },
-                    { label: 'Absent', value: printingSubgroup && printedSubgroupData ? printedSubgroupData.absent.length : visibleReport.absent.length, accent: '#712B13' },
-                    { label: 'New Leaders', value: report.visitors?.length ?? 0, accent: '#633806' },
-                  ].map((tile) => (
-                    <div key={tile.label} style={{ background: '#FFFFFF', border: '1px solid #DDD7C8', borderLeft: `5px solid ${tile.accent}`, borderRadius: 10, padding: '12px 12px 14px' }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#6A675F' }}>{tile.label}</div>
-                      <div style={{ marginTop: 10, fontSize: 28, lineHeight: 1, fontWeight: 700, color: '#2C2C2A' }}>{tile.value}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ background: '#FFFFFF', border: '1px solid #DDD7C8', borderRadius: 12, padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ textAlign: 'right', paddingTop: 4 }}>
                     <div style={{
-                      width: 102,
-                      height: 102,
-                      borderRadius: '50%',
-                      border: '10px solid #E6E0D2',
-                      borderTopColor: band.fg,
-                      borderRightColor: band.fg,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
+                      display: 'inline-block', border: '1px solid rgba(255,255,255,0.3)',
+                      borderRadius: 999, padding: '4px 14px',
+                      fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
+                      color: 'rgba(255,255,255,0.7)',
                     }}>
-                      <div style={{ fontSize: 31, fontWeight: 700, color: '#633806', lineHeight: 1 }}>{pctDisplay}</div>
+                      Confidential
                     </div>
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#6A675F' }}>Attendance Reach</div>
-                      <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.4, color: '#2C2C2A' }}>
-                        {visibleReport.present.length} of {visibleReport.expectedCount} expected members attended
+                    <div style={{ marginTop: 14, fontSize: 10.5, color: 'rgba(255,255,255,0.5)' }}>
+                      Generated {printedAt}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Hero reach + KPI row */}
+              <div style={{ padding: '22px 0 0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, alignItems: 'stretch' }}>
+                  {/* Left: Reach hero */}
+                  <div style={{
+                    background: band.bg, border: `1.5px solid ${band.border}`,
+                    borderRadius: 14, padding: '24px 20px', textAlign: 'center',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: band.fg, marginBottom: 8 }}>
+                      Attendance Reach
+                    </div>
+                    <div style={{ fontSize: 52, fontWeight: 800, color: band.fg, lineHeight: 1, letterSpacing: '-0.02em' }}>
+                      {pctDisplay}
+                    </div>
+                    <div style={{ marginTop: 10, fontSize: 11, color: band.fg, opacity: 0.7, lineHeight: 1.4 }}>
+                      {printingSubgroup && printedSubgroupData
+                        ? `${printedSubgroupData.present.length} of ${printedSubgroupData.expected.length}`
+                        : `${visibleReport.present.length} of ${visibleReport.expectedCount}`
+                      } expected members attended
+                    </div>
+                  </div>
+
+                  {/* Right: KPI tiles in 2x2 grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {[
+                      { label: 'Expected', value: printingSubgroup && printedSubgroupData ? printedSubgroupData.expected.length : visibleReport.expectedCount, accent: '#3D1A78', bg: '#F8F6FD' },
+                      { label: 'Present', value: printingSubgroup && printedSubgroupData ? printedSubgroupData.present.length : visibleReport.present.length, accent: '#085041', bg: '#F2FAF6' },
+                      { label: 'Absent', value: printingSubgroup && printedSubgroupData ? printedSubgroupData.absent.length : visibleReport.absent.length, accent: '#712B13', bg: '#FEF5F2' },
+                      { label: 'New Leaders', value: report.visitors?.length ?? 0, accent: '#633806', bg: '#FDF8EE' },
+                    ].map((tile) => (
+                      <div key={tile.label} style={{
+                        background: tile.bg, borderLeft: `4px solid ${tile.accent}`,
+                        borderRadius: 10, padding: '14px 14px 16px',
+                      }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#7B776F' }}>
+                          {tile.label}
+                        </div>
+                        <div style={{ marginTop: 8, fontSize: 30, lineHeight: 1, fontWeight: 800, color: tile.accent }}>
+                          {tile.value}
+                        </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
 
+            {/* Subgroup summary table + bar chart (full report only) */}
             {!printingSubgroup && (
               <>
-                <div className="print-section">
-                  <div className="print-section-header" style={{ background: '#3D1A78', color: 'white', padding: '9px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>
-                    Subgroup Summary
+                <div className="print-section" style={{ marginTop: 22 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#3D1A78', marginBottom: 10 }}>
+                    Subgroup Overview
                   </div>
-                  <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #DDD7C8', borderTop: 'none' }}>
+                  <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
-                        {['Subgroup', 'Expected', 'Present', 'Absent', 'New Leaders', 'Attendance %'].map((heading) => (
-                          <th key={heading} style={{ background: '#3D1A78', color: 'white', padding: '10px 12px', fontSize: 11.5, textAlign: heading === 'Attendance %' ? 'right' : 'left' }}>{heading}</th>
+                        {['Subgroup', 'Expected', 'Present', 'Absent', 'Reach'].map((heading) => (
+                          <th key={heading} style={{
+                            background: '#3D1A78', color: 'white',
+                            padding: '9px 12px', fontSize: 10, fontWeight: 700,
+                            letterSpacing: '0.06em', textTransform: 'uppercase',
+                            textAlign: heading === 'Reach' ? 'right' : 'left',
+                            borderBottom: '2px solid #2E1160',
+                          }}>{heading}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {subgroupBreakdown.map((group, index) => {
                         const pct = Math.round(group.reachPct * 100)
-                        const tone = pct >= 50 ? '#085041' : pct >= 30 ? '#633806' : '#712B13'
+                        const tone = pct >= 80 ? '#085041' : pct >= 50 ? '#085041' : pct >= 30 ? '#633806' : '#712B13'
                         return (
-                          <tr key={group.subgroup} className="print-table-row" style={{ background: index % 2 === 0 ? '#FFFFFF' : '#F6F6F3' }}>
-                            <td style={{ padding: '10px 12px', fontSize: 11.5, borderBottom: '1px solid #E6E1D6', fontWeight: 700 }}>{group.subgroup}</td>
-                            <td style={{ padding: '10px 12px', fontSize: 11.5, borderBottom: '1px solid #E6E1D6' }}>{group.expectedCount}</td>
-                            <td style={{ padding: '10px 12px', fontSize: 11.5, borderBottom: '1px solid #E6E1D6' }}>{group.present.length}</td>
-                            <td style={{ padding: '10px 12px', fontSize: 11.5, borderBottom: '1px solid #E6E1D6' }}>{group.absent.length}</td>
-                            <td style={{ padding: '10px 12px', fontSize: 11.5, borderBottom: '1px solid #E6E1D6' }}>0</td>
-                            <td style={{ padding: '10px 12px', fontSize: 11.5, borderBottom: '1px solid #E6E1D6', textAlign: 'right' }}>
-                              <span style={{ display: 'inline-block', minWidth: 46, textAlign: 'center', borderRadius: 999, padding: '3px 10px', color: 'white', background: tone, fontWeight: 700 }}>
+                          <tr key={group.subgroup} className="print-table-row" style={{ background: index % 2 === 0 ? '#FFFFFF' : '#FAFAF7' }}>
+                            <td style={{ padding: '10px 12px', fontSize: 11, borderBottom: '0.5px solid #E6E1D6', fontWeight: 700, color: '#1A1A1A' }}>{group.subgroup}</td>
+                            <td style={{ padding: '10px 12px', fontSize: 11, borderBottom: '0.5px solid #E6E1D6', color: '#4A4A4A' }}>{group.expectedCount}</td>
+                            <td style={{ padding: '10px 12px', fontSize: 11, borderBottom: '0.5px solid #E6E1D6', color: '#085041', fontWeight: 600 }}>{group.present.length}</td>
+                            <td style={{ padding: '10px 12px', fontSize: 11, borderBottom: '0.5px solid #E6E1D6', color: group.absent.length > 0 ? '#712B13' : '#4A4A4A', fontWeight: group.absent.length > 0 ? 600 : 400 }}>{group.absent.length}</td>
+                            <td style={{ padding: '10px 12px', fontSize: 11, borderBottom: '0.5px solid #E6E1D6', textAlign: 'right' }}>
+                              <span style={{
+                                display: 'inline-block', minWidth: 44, textAlign: 'center',
+                                borderRadius: 999, padding: '3px 10px',
+                                color: 'white', background: tone, fontWeight: 700, fontSize: 10,
+                              }}>
                                 {pct}%
                               </span>
                             </td>
@@ -2193,146 +2628,256 @@ export default function MeetingReportTab() {
                   </table>
                 </div>
 
-                <div className="print-section print-no-break">
-                  <div className="print-section-header" style={{ color: '#3D1A78', fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 10 }}>
-                    Attendance by Subgroup
+                {/* Visual bar chart */}
+                <div className="print-section print-no-break" style={{ marginTop: 20 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#3D1A78', marginBottom: 10 }}>
+                    Attendance Distribution
                   </div>
-                  <div style={{ border: '1px solid #DDD7C8', borderRadius: 12, padding: '14px 16px', background: '#FFFFFF' }}>
-                    <div className="print-gridlines" style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingRight: 6 }}>
-                      {subgroupBreakdown.map((group) => {
-                        const pct = Math.round(group.reachPct * 100)
-                        const tone = pct >= 50 ? '#085041' : pct >= 30 ? '#633806' : '#712B13'
-                        return (
-                          <div key={group.subgroup} style={{ display: 'grid', gridTemplateColumns: '150px 1fr 54px', gap: 12, alignItems: 'center' }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: '#2C2C2A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.subgroup}</div>
-                            <div style={{ height: 16, background: '#F1EFE8', borderRadius: 999, overflow: 'hidden' }}>
-                              <div style={{ width: `${pct}%`, height: '100%', background: tone, borderRadius: 999 }} />
-                            </div>
-                            <div style={{ fontSize: 11, textAlign: 'right', fontWeight: 700, color: tone }}>{pct}%</div>
+                  <div style={{ border: '0.5px solid #E6E1D6', borderRadius: 10, padding: '16px 18px', background: '#FAFAF7' }}>
+                    {subgroupBreakdown.map((group, index) => {
+                      const pct = Math.round(group.reachPct * 100)
+                      const tone = pct >= 50 ? '#3D1A78' : pct >= 30 ? '#633806' : '#712B13'
+                      return (
+                        <div key={group.subgroup} style={{
+                          display: 'grid', gridTemplateColumns: '130px 1fr 48px', gap: 14, alignItems: 'center',
+                          padding: '8px 0',
+                          borderBottom: index < subgroupBreakdown.length - 1 ? '0.5px solid #E6E1D6' : 'none',
+                        }}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {group.subgroup}
                           </div>
-                        )
-                      })}
-                    </div>
+                          <div style={{ height: 14, background: '#E6E1D6', borderRadius: 999, overflow: 'hidden' }}>
+                            <div style={{ width: `${pct}%`, height: '100%', background: tone, borderRadius: 999, transition: 'width 0.3s' }} />
+                          </div>
+                          <div style={{ fontSize: 10.5, textAlign: 'right', fontWeight: 800, color: tone }}>{pct}%</div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </>
             )}
 
+            {/* ═══ SUBGROUP DETAIL PAGES — each on a fresh page ═══ */}
             {printingSubgroup === NEW_LEADERS_TAB ? (
-              <div key="new-leaders" className="print-section">
-                <div className="print-section-header" style={{ background: '#3D1A78', color: 'white', padding: '9px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>
-                  New Leaders ({report.visitors?.length ?? 0})
+              <div className="print-subgroup-page">
+                <div style={{
+                  background: '#3D1A78', color: 'white', borderRadius: '10px 10px 0 0',
+                  padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: '0.02em' }}>New Leaders</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.7 }}>{report.visitors?.length ?? 0} attendees</div>
                 </div>
-                {report.visitors?.length > 0 ? (
-                  <div style={{ border: '1px solid #DDD7C8', borderTop: 'none', borderRadius: '0 0 12px 12px', background: '#FFFFFF', padding: '4px 14px 6px' }}>
-                    {report.visitors.map((name, index) => (
-                      <div key={name + index} style={{ padding: '10px 0', borderBottom: index < report.visitors.length - 1 ? '1px solid #ECE8DE' : 'none' }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#2C2C2A' }}>{name}</div>
-                        <div style={{ marginTop: 3, fontSize: 8, color: '#7B776F' }}>New leader / unmatched roster entry</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ border: '1px solid #DDD7C8', borderTop: 'none', borderRadius: '0 0 12px 12px', background: '#FFFFFF', padding: '10px 14px', fontSize: 11, color: '#8A857A' }}>
-                    No new leaders.
-                  </div>
-                )}
+                <div style={{ border: '1px solid #E6E1D6', borderTop: 'none', borderRadius: '0 0 10px 10px', background: '#FFFFFF', padding: '6px 0' }}>
+                  {(report.visitors ?? []).map((name, index) => (
+                    <div key={name + index} className="print-name-row" style={{
+                      padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10,
+                      borderBottom: index < (report.visitors?.length ?? 0) - 1 ? '0.5px solid #F0ECE4' : 'none',
+                    }}>
+                      <span style={{
+                        width: 6, height: 6, borderRadius: 999, background: '#E8A020', flexShrink: 0,
+                      }} />
+                      <span style={{ fontSize: 11.5, fontWeight: 600, color: '#1A1A1A' }}>{name}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
-              printSubgroupList.map((subgroup, subgroupIndex) => {
+              printSubgroupList.map((subgroup) => {
                 const subgroupData = report.bySubgroup?.[subgroup]
                 if (!subgroupData) return null
-                const subgroupPct = subgroupData.expected.length > 0 ? Math.round((subgroupData.present.length / subgroupData.expected.length) * 100) : 0
-                const subgroupTone = subgroupPct >= 50 ? '#085041' : subgroupPct >= 30 ? '#633806' : '#712B13'
+                const sgExpected = subgroupData.expected.length
+                const sgPresent = subgroupData.present.length
+                const sgAbsent = subgroupData.absent.length
+                const sgPct = sgExpected > 0 ? Math.round((sgPresent / sgExpected) * 100) : 0
+                const sgBand = reachBand(sgExpected > 0 ? sgPresent / sgExpected : 0)
+
                 return (
-                  <div key={subgroup} className={`print-section ${!printingSubgroup && subgroupIndex > 0 ? 'print-page-break' : ''}`}>
-                    <div className="print-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: '#3D1A78', color: 'white', borderRadius: 999, padding: '8px 16px', fontSize: 12, fontWeight: 700 }}>
-                        <span>{subgroup}</span>
+                  <div key={subgroup} className="print-subgroup-page">
+                    {/* Subgroup header bar */}
+                    <div style={{
+                      background: '#3D1A78', color: 'white', borderRadius: '10px 10px 0 0',
+                      padding: '16px 20px',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+                        <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.01em' }}>{subgroup}</div>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
+                            {sgPresent} of {sgExpected}
+                          </span>
+                          <span style={{
+                            background: 'rgba(255,255,255,0.15)', borderRadius: 999,
+                            padding: '4px 14px', fontSize: 13, fontWeight: 800,
+                          }}>
+                            {sgPct}%
+                          </span>
+                        </div>
                       </div>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '6px 12px', background: '#FFFFFF', border: `1px solid ${subgroupTone}`, color: subgroupTone, fontSize: 11, fontWeight: 700 }}>
-                        {subgroupPct}% Attendance
+                      {/* Mini bar inside header */}
+                      <div style={{ marginTop: 10, height: 5, background: 'rgba(255,255,255,0.12)', borderRadius: 999, overflow: 'hidden' }}>
+                        <div style={{ width: `${sgPct}%`, height: '100%', background: 'rgba(255,255,255,0.5)', borderRadius: 999 }} />
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
+                    {/* Mini KPIs for this subgroup */}
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0,
+                      borderLeft: '1px solid #E6E1D6', borderRight: '1px solid #E6E1D6',
+                    }}>
                       {[
-                        { title: `Present (${subgroupData.present.length})`, people: subgroupData.present, tone: '#085041', bg: '#FBFDFC' },
-                        { title: `Absent (${subgroupData.absent.length})`, people: subgroupData.absent, tone: '#712B13', bg: '#FFFDFC' },
-                      ].map((column) => (
-                        <div key={column.title} style={{ background: column.bg, border: '1px solid #DDD7C8', borderRadius: 12, overflow: 'hidden' }}>
-                          <div style={{ padding: '10px 14px', borderBottom: '1px solid #E6E1D6', color: column.tone, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em' }}>
-                            {column.title}
+                        { label: 'Expected', value: sgExpected, color: '#3D1A78' },
+                        { label: 'Present', value: sgPresent, color: '#085041' },
+                        { label: 'Absent', value: sgAbsent, color: '#712B13' },
+                      ].map((kpi, i) => (
+                        <div key={kpi.label} style={{
+                          padding: '12px 16px', textAlign: 'center',
+                          borderRight: i < 2 ? '0.5px solid #E6E1D6' : 'none',
+                          borderBottom: '1px solid #E6E1D6',
+                          background: '#FAFAF7',
+                        }}>
+                          <div style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#8A857A' }}>
+                            {kpi.label}
                           </div>
-                          <div style={{ padding: '4px 14px 6px' }}>
-                            {column.people.length === 0 ? (
-                              <div style={{ padding: '10px 0', fontSize: 11, color: '#8A857A' }}>No members listed.</div>
-                            ) : column.people.map((person, index) => (
-                              <div key={person.name + index} style={{ padding: '10px 0', borderBottom: index < column.people.length - 1 ? '1px solid #ECE8DE' : 'none' }}>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: '#2C2C2A' }}>{person.name}</div>
-                                <div style={{ marginTop: 3, fontSize: 8, color: '#7B776F' }}>{person.leadership_category || 'No role listed'}</div>
-                              </div>
-                            ))}
+                          <div style={{ fontSize: 22, fontWeight: 800, color: kpi.color, marginTop: 4, lineHeight: 1 }}>
+                            {kpi.value}
                           </div>
                         </div>
                       ))}
                     </div>
 
-                    {printingSubgroup && report.visitors?.length > 0 && (
-                      <div className="print-no-break" style={{ marginTop: 14, border: '1px solid #DDD7C8', borderRadius: 12, overflow: 'hidden', background: '#FFFFFF' }}>
-                        <div style={{ padding: '10px 14px', borderBottom: '1px solid #E6E1D6', color: '#633806', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em' }}>
-                          New Leaders ({report.visitors.length})
+                    {/* Two-column Present / Absent */}
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0,
+                      border: '1px solid #E6E1D6', borderTop: 'none',
+                      borderRadius: '0 0 10px 10px', overflow: 'hidden',
+                    }}>
+                      {/* Present column */}
+                      <div style={{ borderRight: '0.5px solid #E6E1D6' }}>
+                        <div style={{
+                          padding: '10px 16px', borderBottom: '1px solid #E6E1D6',
+                          background: '#F2FAF6',
+                          fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em',
+                          color: '#085041', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        }}>
+                          <span>Present</span>
+                          <span style={{ background: '#085041', color: 'white', borderRadius: 999, padding: '1px 8px', fontSize: 9, fontWeight: 700 }}>
+                            {sgPresent}
+                          </span>
                         </div>
-                        <div style={{ padding: '4px 14px 6px' }}>
-                          {report.visitors.map((name, index) => (
-                            <div key={name + index} style={{ padding: '10px 0', borderBottom: index < report.visitors.length - 1 ? '1px solid #ECE8DE' : 'none' }}>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: '#2C2C2A' }}>{name}</div>
-                              <div style={{ marginTop: 3, fontSize: 8, color: '#7B776F' }}>New leader / unmatched roster entry</div>
+                        <div style={{ padding: '2px 0' }}>
+                          {subgroupData.present.length === 0 ? (
+                            <div style={{ padding: '14px 16px', fontSize: 10.5, color: '#8A857A', fontStyle: 'italic' }}>None absent — full attendance</div>
+                          ) : subgroupData.present.map((person, index) => (
+                            <div key={person.name + index} className="print-name-row" style={{
+                              padding: '7px 16px', display: 'flex', alignItems: 'center', gap: 8,
+                              borderBottom: index < subgroupData.present.length - 1 ? '0.5px solid #F0ECE4' : 'none',
+                            }}>
+                              <span style={{ width: 5, height: 5, borderRadius: 999, background: '#2D8653', flexShrink: 0 }} />
+                              <span style={{ fontSize: 11, fontWeight: 600, color: '#1A1A1A', flex: 1 }}>{person.name}</span>
+                              {person.leadership_category && (
+                                <span style={{ fontSize: 8.5, color: '#8A857A', flexShrink: 0 }}>{person.leadership_category}</span>
+                              )}
                             </div>
                           ))}
                         </div>
                       </div>
-                    )}
+
+                      {/* Absent column */}
+                      <div>
+                        <div style={{
+                          padding: '10px 16px', borderBottom: '1px solid #E6E1D6',
+                          background: '#FEF5F2',
+                          fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em',
+                          color: '#712B13', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        }}>
+                          <span>Absent</span>
+                          <span style={{ background: '#712B13', color: 'white', borderRadius: 999, padding: '1px 8px', fontSize: 9, fontWeight: 700 }}>
+                            {sgAbsent}
+                          </span>
+                        </div>
+                        <div style={{ padding: '2px 0' }}>
+                          {subgroupData.absent.length === 0 ? (
+                            <div style={{ padding: '14px 16px', fontSize: 10.5, color: '#8A857A', fontStyle: 'italic' }}>Full attendance</div>
+                          ) : subgroupData.absent.map((person, index) => (
+                            <div key={person.name + index} className="print-name-row" style={{
+                              padding: '7px 16px', display: 'flex', alignItems: 'center', gap: 8,
+                              borderBottom: index < subgroupData.absent.length - 1 ? '0.5px solid #F0ECE4' : 'none',
+                            }}>
+                              <span style={{ width: 5, height: 5, borderRadius: 999, background: '#C94830', flexShrink: 0 }} />
+                              <span style={{ fontSize: 11, fontWeight: 600, color: '#1A1A1A', flex: 1 }}>{person.name}</span>
+                              {person.leadership_category && (
+                                <span style={{ fontSize: 8.5, color: '#8A857A', flexShrink: 0 }}>{person.leadership_category}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )
               })
             )}
 
+            {/* New Leaders page (full report only) */}
             {!printingSubgroup && report.visitors?.length > 0 && (
-              <div className="print-section print-page-break">
-                <div className="print-section-header" style={{ background: '#3D1A78', color: 'white', padding: '9px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>
-                  New Leaders ({report.visitors.length})
+              <div className="print-subgroup-page">
+                <div style={{
+                  background: '#3D1A78', color: 'white', borderRadius: '10px 10px 0 0',
+                  padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <div style={{ fontSize: 14, fontWeight: 800 }}>New Leaders</div>
+                  <span style={{
+                    background: 'rgba(255,255,255,0.15)', borderRadius: 999,
+                    padding: '3px 12px', fontSize: 11, fontWeight: 700,
+                  }}>
+                    {report.visitors.length}
+                  </span>
                 </div>
-                <div style={{ border: '1px solid #DDD7C8', borderTop: 'none', borderRadius: '0 0 12px 12px', background: '#FFFFFF', padding: '4px 14px 6px' }}>
+                <div style={{ border: '1px solid #E6E1D6', borderTop: 'none', borderRadius: '0 0 10px 10px', background: '#FFFFFF', padding: '2px 0' }}>
                   {report.visitors.map((name, index) => (
-                    <div key={name + index} style={{ padding: '10px 0', borderBottom: index < report.visitors.length - 1 ? '1px solid #ECE8DE' : 'none' }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#2C2C2A' }}>{name}</div>
-                      <div style={{ marginTop: 3, fontSize: 8, color: '#7B776F' }}>New leader / unmatched roster entry</div>
+                    <div key={name + index} className="print-name-row" style={{
+                      padding: '9px 18px', display: 'flex', alignItems: 'center', gap: 10,
+                      borderBottom: index < report.visitors.length - 1 ? '0.5px solid #F0ECE4' : 'none',
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: 999, background: '#E8A020', flexShrink: 0 }} />
+                      <span style={{ fontSize: 11.5, fontWeight: 600, color: '#1A1A1A' }}>{name}</span>
+                      <span style={{ fontSize: 8.5, color: '#8A857A', marginLeft: 'auto' }}>New / unmatched</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            <div className="print-section print-no-break">
-              <div className="print-section-header" style={{ background: '#F1EFE8', color: '#2C2C2A', padding: '10px 14px', fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', border: '1px solid #DDD7C8' }}>
-                Report Notes
-              </div>
-              <div style={{ background: '#FFFFFF', padding: '12px 14px', fontSize: 11, border: '1px solid #DDD7C8', borderTop: 'none', lineHeight: 1.55 }}>
-                {[
-                  `Attendance CSV processed: ${attendedRawCount} records`,
-                  `Matched ${printingSubgroup && printedSubgroupData ? printedSubgroupData.present.length : visibleReport.present.length} of ${printingSubgroup && printedSubgroupData ? printedSubgroupData.expected.length : visibleReport.expectedCount} expected attendees`,
-                  `New Leaders: ${report.visitors?.length ?? 0}`,
-                  ...(selectedSubgroups.length > 0 ? [`Filter applied: ${selectedSubgroups.join(', ')}`] : []),
-                  ...(printingSubgroup ? [`Report scope: ${printingSubgroup}`] : []),
-                ].map((message) => (
-                  <div key={message} style={{ marginBottom: 7, color: '#2C2C2A' }}>{message}</div>
-                ))}
+            {/* Report notes — compact footer section */}
+            <div className="print-section print-no-break" style={{ marginTop: 24 }}>
+              <div style={{
+                borderTop: '2px solid #3D1A78', paddingTop: 12,
+                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 9.5, color: '#6A675F', lineHeight: 1.6,
+              }}>
+                <div>
+                  <div style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#3D1A78', marginBottom: 4, fontSize: 8.5 }}>
+                    Report Details
+                  </div>
+                  <div>Attendance records processed: {attendedRawCount}</div>
+                  <div>Matched: {printingSubgroup && printedSubgroupData ? printedSubgroupData.present.length : visibleReport.present.length} of {printingSubgroup && printedSubgroupData ? printedSubgroupData.expected.length : visibleReport.expectedCount} expected</div>
+                  <div>New leaders: {report.visitors?.length ?? 0}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#3D1A78', marginBottom: 4, fontSize: 8.5 }}>
+                    Scope
+                  </div>
+                  {selectedSubgroups.length > 0
+                    ? <div>Filter: {selectedSubgroups.join(', ')}</div>
+                    : <div>All subgroups included</div>
+                  }
+                  {printingSubgroup && <div>Printed: {printingSubgroup}</div>}
+                </div>
               </div>
             </div>
 
             <div className="print-footer">
-              <span>BLW CAN NEXUS | {report.label}</span>
+              <span>BLW CAN NEXUS</span>
+              <span style={{ fontWeight: 600, color: '#3D1A78' }}>{report.label}</span>
               <span>Page <span className="print-page-number" /></span>
             </div>
           </div>
@@ -2359,15 +2904,22 @@ export default function MeetingReportTab() {
               flexDirection: 'column'
             }}>
               {/* Header */}
-              <div style={{ padding: '20px', borderBottom: '1px solid #EDE8DC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>Share Report Links</h2>
-                <button
-                  type="button"
-                  onClick={() => setShowShareModal(false)}
-                  style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#9E9488', padding: 0, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  ×
-                </button>
+              <div style={{ padding: '20px', borderBottom: '1px solid #EDE8DC', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>Share Report</h2>
+                    <div style={{ marginTop: 4, fontSize: 13, color: '#6B6560' }}>
+                      {report.label}{report.report_date ? ` — ${formatShareDate(report.report_date)}` : ''}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowShareModal(false)}
+                    style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#9E9488', padding: 0, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
 
               {/* Content */}
@@ -2423,8 +2975,6 @@ export default function MeetingReportTab() {
 
         <ReportModeSelector reportMode={reportMode} onChange={setReportMode} />
 
-        <SubgroupPillBar subgroupOptions={subgroupOptions} selectedSubgroups={selectedSubgroups} onToggle={handleToggleSubgroup} />
-
         <CategoryPillBar categoryOptions={leadershipCategoryOptions} selectedCategories={selectedCategories} onToggle={handleToggleCategory} />
 
         {filteredRoster.length === 0 && !rosterLoading && !rosterError && (
@@ -2441,10 +2991,174 @@ export default function MeetingReportTab() {
         )}
 
         <div>
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: '#2D2A22', marginBottom: 6 }}>
-            Attended List CSV <span style={{ color: '#9E9488', fontWeight: 400 }}>(optional - leave empty for absence-only report)</span>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: '#2D2A22', marginBottom: 8 }}>
+            Mark Attendance
           </div>
-          <FileZone file={attendedFile} rowCount={attendedNames.length} error={attendedError} onFile={handleAttendedFile} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginBottom: 12 }}>
+            <button
+              type="button"
+              onClick={() => setInputMode('checkin')}
+              style={{
+                textAlign: 'left',
+                border: inputMode === 'checkin' ? '2px solid #4C2A92' : '1px solid #EDE8DC',
+                background: inputMode === 'checkin' ? '#F5F0FF' : 'white',
+                borderRadius: 10,
+                padding: '12px 14px',
+                cursor: 'pointer',
+                display: 'flex',
+                gap: 10,
+                alignItems: 'center',
+              }}
+            >
+              <span style={{ width: 30, height: 30, borderRadius: 999, background: inputMode === 'checkin' ? '#4C2A92' : '#F0EBFC', color: inputMode === 'checkin' ? 'white' : '#4C2A92', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <UserCheck size={14} />
+              </span>
+              <span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#2D2A22', display: 'block' }}>Check In</span>
+                <span style={{ fontSize: 11, color: '#9E9488' }}>Tap names from roster</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setInputMode('csv')}
+              style={{
+                textAlign: 'left',
+                border: inputMode === 'csv' ? '2px solid #4C2A92' : '1px solid #EDE8DC',
+                background: inputMode === 'csv' ? '#F5F0FF' : 'white',
+                borderRadius: 10,
+                padding: '12px 14px',
+                cursor: 'pointer',
+                display: 'flex',
+                gap: 10,
+                alignItems: 'center',
+              }}
+            >
+              <span style={{ width: 30, height: 30, borderRadius: 999, background: inputMode === 'csv' ? '#4C2A92' : '#F0EBFC', color: inputMode === 'csv' ? 'white' : '#4C2A92', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Upload size={14} />
+              </span>
+              <span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#2D2A22', display: 'block' }}>CSV Upload</span>
+                <span style={{ fontSize: 11, color: '#9E9488' }}>Import from file</span>
+              </span>
+            </button>
+          </div>
+
+          {inputMode === 'csv' ? (
+            <>
+              <div style={{ fontSize: 11.5, color: '#9E9488', marginBottom: 6 }}>
+                Optional — leave empty for absence-only report
+              </div>
+              <FileZone file={attendedFile} rowCount={attendedNames.length} error={attendedError} onFile={handleAttendedFile} />
+            </>
+          ) : (
+            <div style={{ border: '1px solid #EDE8DC', borderRadius: 12, overflow: 'hidden', background: '#FAFAF7' }}>
+              <div style={{ padding: '10px 12px', borderBottom: '1px solid #EDE8DC', background: 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Search size={14} color="#9E9488" />
+                <input
+                  type="text"
+                  value={checkinSearch}
+                  onChange={(e) => setCheckinSearch(e.target.value)}
+                  placeholder="Search roster..."
+                  style={{ flex: 1, border: 'none', outline: 'none', fontSize: 13, color: '#2D2A22', background: 'transparent', fontFamily: 'inherit' }}
+                />
+                {checkedNames.size > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#2D8653', background: '#EEF8F2', borderRadius: 999, padding: '2px 10px', flexShrink: 0 }}>
+                    {checkedNames.size} checked in
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 6, padding: '8px 12px', borderBottom: '1px solid #EDE8DC', background: 'white' }}>
+                <button
+                  type="button"
+                  onClick={() => setCheckedNames(new Set(filteredRoster.map((r) => r.full_name)))}
+                  style={{ border: '1px solid #EDE8DC', background: '#F9F7F3', color: '#4C2A92', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCheckedNames(new Set())}
+                  style={{ border: '1px solid #EDE8DC', background: '#F9F7F3', color: '#6B6560', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Clear All
+                </button>
+              </div>
+              <div style={{ maxHeight: 360, overflowY: 'auto', padding: '4px 0' }}>
+                {(() => {
+                  const searchLower = checkinSearch.toLowerCase().trim()
+                  const grouped = new Map()
+                  for (const row of filteredRoster) {
+                    if (searchLower && !row.full_name.toLowerCase().includes(searchLower)) continue
+                    const sg = displaySubgroup(row.subgroup) ?? 'Unassigned'
+                    if (!grouped.has(sg)) grouped.set(sg, [])
+                    grouped.get(sg).push(row)
+                  }
+                  const entries = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b))
+                  if (entries.length === 0) {
+                    return <div style={{ padding: '20px 14px', fontSize: 12.5, color: '#9E9488', textAlign: 'center' }}>No matches found.</div>
+                  }
+                  return entries.map(([subgroup, members]) => (
+                    <div key={subgroup}>
+                      <div style={{ padding: '6px 14px 4px', fontSize: 10.5, fontWeight: 700, color: '#9E9488', textTransform: 'uppercase', letterSpacing: '.06em', background: '#F4F1EA', borderTop: '1px solid #EDE8DC', borderBottom: '1px solid #EDE8DC' }}>
+                        {subgroup} ({members.filter((m) => checkedNames.has(m.full_name)).length}/{members.length})
+                      </div>
+                      {members.map((row) => {
+                        const isChecked = checkedNames.has(row.full_name)
+                        return (
+                          <button
+                            key={row.id}
+                            type="button"
+                            onClick={() => {
+                              setCheckedNames((prev) => {
+                                const next = new Set(prev)
+                                if (next.has(row.full_name)) next.delete(row.full_name)
+                                else next.add(row.full_name)
+                                return next
+                              })
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              width: '100%',
+                              padding: '9px 14px',
+                              border: 'none',
+                              borderBottom: '1px solid #F2EEE6',
+                              background: isChecked ? '#F0FFF5' : 'white',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              fontSize: 13,
+                              fontFamily: 'inherit',
+                              transition: 'background 0.1s',
+                            }}
+                          >
+                            <span style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: 6,
+                              border: isChecked ? '2px solid #2D8653' : '2px solid #D8D3C9',
+                              background: isChecked ? '#2D8653' : 'white',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                              transition: 'all 0.1s',
+                            }}>
+                              {isChecked && <Check size={14} color="white" strokeWidth={3} />}
+                            </span>
+                            <span style={{ fontWeight: 600, color: isChecked ? '#1B5E3C' : '#2D2A22' }}>{row.full_name}</span>
+                            {row.leadership_category && (
+                              <span style={{ fontSize: 10.5, color: '#9E9488', marginLeft: 'auto' }}>{row.leadership_category}</span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ))
+                })()}
+              </div>
+            </div>
+          )}
         </div>
 
         <UnexpectedPreviewPanel

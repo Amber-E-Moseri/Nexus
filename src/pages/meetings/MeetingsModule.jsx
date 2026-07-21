@@ -19,7 +19,11 @@ function MeetingsModuleFallback() {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(profile?.department_id ?? '')
   const [showModal, setShowModal] = useState(false)
   const [liveSession, setLiveSession] = useState(null)
-  const isSuperAdmin = role === 'super_admin'
+  // Named isSuperAdmin historically, but gates "see/filter all departments" —
+  // regional_secretary is near-super_admin and needs the same org-wide view
+  // (RLS already grants them unconditional meeting access; this was the one
+  // place the frontend still locked them to their own department).
+  const isSuperAdmin = role === 'super_admin' || role === 'regional_secretary'
   const canManage = ['super_admin', 'dept_lead'].includes((role ?? '').toLowerCase()) ||
                     hasSpaceRole(profile, null, 'ors') ||
                     hasSpaceRole(profile, null, 'dept_lead')

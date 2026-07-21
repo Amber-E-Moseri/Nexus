@@ -328,6 +328,9 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson, isMobile }) {
   }
 
   useEffect(() => {
+    setStats({ today: 0, overdue: 0, week: 0, total: 0 })
+    setDuePeople([])
+    setTodos([])
     fetchData()
 
     // Refresh on flock table changes (RLS scopes events to this pastor's rows)
@@ -356,8 +359,11 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson, isMobile }) {
       supabase.removeChannel(channel)
       document.removeEventListener('visibilitychange', onVisible)
     }
+    // Depend on user.id, not just role — two different pastors can share a
+    // role, and without this a same-tab account switch left the previous
+    // pastor's stats/due-list/todos on screen until a hard refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role])
+  }, [role, user?.id])
 
   return (
     <div style={{ display: 'grid', gap: '20px' }}>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { callFlockCRM as callFlockAPI, flockCard, FLOCK } from '../../lib/flockSupabase'
+import { useAuth } from '../../hooks/useAuth'
 
 const MANUAL_KEY = 'ct-manual-todos'
 
@@ -123,6 +124,7 @@ const inputStyle = {
 }
 
 export default function FlockTodosPanel() {
+  const { user } = useAuth()
   const [todos, setTodos] = useState([])
   const [people, setPeople] = useState([])
   const [loading, setLoading] = useState(true)
@@ -168,11 +170,15 @@ export default function FlockTodosPanel() {
     }
   }
 
+  // Depend on user.id — otherwise switching accounts in the same tab without a
+  // hard refresh left the previous pastor's todos/people on screen.
   useEffect(() => {
+    setTodos([])
+    setPeople([])
     loadTodos()
     loadPeople()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [user?.id])
 
   const assigneeOptions = useMemo(() => {
     const opts = [{ id: 'manual', name: 'My Tasks' }]

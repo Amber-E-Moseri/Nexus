@@ -46,8 +46,11 @@ export function invalidateSprintPickerCache() {
  *   disabled  — bool
  *   style     — style overrides for the <select>
  *   placeholder — text for the empty option (default "No sprint")
+ *   autoSelectIfSingle — when true and no value is set yet, auto-pick the
+ *     sprint if this space has exactly one linkable option (new tasks only —
+ *     never pass this for an existing task, which may intentionally have none)
  */
-export default function SprintPicker({ spaceId, value, onChange, disabled = false, style, placeholder = 'No sprint' }) {
+export default function SprintPicker({ spaceId, value, onChange, disabled = false, style, placeholder = 'No sprint', autoSelectIfSingle = false }) {
   const { profile } = useAuth()
   const isSuperAdmin = profile?.role === 'super_admin'
   const [sprints, setSprints] = useState([])
@@ -81,6 +84,14 @@ export default function SprintPicker({ spaceId, value, onChange, disabled = fals
 
   // Only sprints belonging to the given space are selectable.
   const options = sprints.filter((s) => !spaceId || s.department_id === spaceId)
+
+  // Intuit the sprint for a brand-new task: if this space has exactly one
+  // linkable sprint, default to it instead of leaving "No sprint" selected.
+  useEffect(() => {
+    if (!autoSelectIfSingle || loading || value) return
+    if (options.length === 1) onChange?.(options[0].id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSelectIfSingle, loading, value, options.length])
 
   const selectStyle = {
     padding: '6px 8px',

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, ChevronRight, Mail, Pencil, Phone, RefreshCw, Search, Sparkles, UserPlus, Users, X } from 'lucide-react'
 import { callFlockCRM as callFlockAPI, flockCard, initials, FLOCK } from '../../lib/flockSupabase'
+import { useAuth } from '../../hooks/useAuth'
 
 const inputStyle = {
   padding: '10px 12px',
@@ -449,6 +450,7 @@ function PersonCard({ person, expanded, onToggle, onLogCall, onPatched }) {
 }
 
 export default function FlockPeoplePanel({ preselectId = null, startAdding = false, onLogCall }) {
+  const { user } = useAuth()
   const [people, setPeople] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -477,9 +479,14 @@ export default function FlockPeoplePanel({ preselectId = null, startAdding = fal
     }
   }
 
+  // Refetch (and drop the previous user's cached rows) whenever the signed-in
+  // account changes — without this, switching accounts in the same tab without
+  // a hard refresh left the prior pastor's contacts on screen.
   useEffect(() => {
+    setPeople([])
     load()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
 
   useEffect(() => {
     if (preselectId) setExpandedId(preselectId)

@@ -18,12 +18,16 @@ export const FLOCK_CRM_CONFIG = {
   // Flock CRM is DB-backed (src/lib/flockSupabase.js) — always available;
   // access is purely role-based. The old VITE_FLOCK_CRM_* env gating applied
   // to the retired Google Apps Script integration.
+  //
+  // regional_secretary is treated as pastor-equivalent (near-super_admin):
+  // they get their own private flock, scoped by the same flock_contacts_own
+  // RLS as any pastor (pastor_id = auth.uid()) — not read access into others'.
   permissionKey: 'can_access_flock_crm',
 
   checkAccess: (userRole, userPermissions = []) => {
     return (
-      userRole === 'regional_secretary' ||
       userRole === 'pastor' ||
+      userRole === 'regional_secretary' ||
       userRole === 'super_admin' ||
       userPermissions.includes('can_access_flock_crm')
     )
