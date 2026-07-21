@@ -79,19 +79,22 @@ function SettingRow({ setting, onSave }) {
 }
 
 export default function FlockSettingsPanel() {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const [settings, setSettings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // Depend on user.id (not just []) — otherwise switching accounts in the same
+  // tab without a hard refresh left the previous pastor's settings on screen.
   useEffect(() => {
+    setSettings([])
     setLoading(true)
     setError(null)
     callFlockAPI('getSettings')
       .then((list) => setSettings(Array.isArray(list) ? list.filter((s) => FLOCK_SETTING_KEYS.includes(s.key)) : []))
       .catch((e) => setError(e.message || 'Could not load settings.'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [user?.id])
 
   const onSave = (key, val) => setSettings((cur) => cur.map((s) => (s.key === key ? { ...s, val } : s)))
 

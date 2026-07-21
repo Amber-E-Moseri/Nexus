@@ -213,7 +213,7 @@ function guessNameFromText(text) {
 }
 
 export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const [people, setPeople] = useState([])
   const [forPerson, setForPerson] = useState(preselect)
   const [logMode, setLogMode] = useState('text') // 'text' or 'voice'
@@ -233,11 +233,14 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
     setText(transcript)
   })
 
+  // Depend on user.id — otherwise switching accounts in the same tab without a
+  // hard refresh left the previous pastor's people list on screen.
   useEffect(() => {
+    setPeople([])
     callFlockAPI('people')
       .then((list) => setPeople(Array.isArray(list) ? list : []))
       .catch(() => setPeople([]))
-  }, [])
+  }, [user?.id])
 
   useEffect(() => { saveDraft(text) }, [text])
 
