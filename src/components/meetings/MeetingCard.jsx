@@ -95,7 +95,7 @@ export default function MeetingCard({
           }
         }}
       >
-      {/* Type + status badges */}
+      {/* Type + status + recurrence badges */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <div
           style={{
@@ -135,6 +135,21 @@ export default function MeetingCard({
         >
           {STATUS_LABELS[meeting.status] ?? STATUS_LABELS.scheduled}
         </div>
+        {meeting.recurrence_id && (
+          <div
+            title="Part of a recurring series"
+            style={{
+              padding: '4px 8px',
+              borderRadius: 999,
+              background: 'rgba(139,92,246,0.08)',
+              color: 'var(--purple-700)',
+              fontSize: 10.5,
+              fontWeight: 700,
+            }}
+          >
+            🔁 Recurring
+          </div>
+        )}
       </div>
 
       {/* Title */}

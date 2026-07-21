@@ -33,6 +33,8 @@ export async function getDeptMeetings(departmentId, { limit = MEETINGS_PAGE_SIZE
       allowed_viewers,
       created_by,
       created_at,
+      recurrence_id,
+      recurrence_rule,
       creator:users!created_by(id, name),
       attendance:meeting_attendance(user_id, status, attendee:users(id, name)),
       agendas(id, title, start_time, end_time, location, moderator_name, theme, created_by, agenda_items(id, segment, notes, duration_minutes, sort_order, is_pinned))
@@ -101,6 +103,47 @@ export async function createMeeting(meetingData) {
     ...data,
     attendance: attendanceUserIds.map((userId) => ({ user_id: userId, status: 'present' })),
   }
+}
+
+// Materializes one real `meetings` row per occurrence (own attendance/agenda/
+// minutes), sharing a `recurrence_id` so the series can be identified together.
+// Attendance rows use status: 'pending', matching ScheduleMeetingModal's
+// convention for meetings that haven't happened yet.
+export async function createRecurringMeetings({ baseMeeting, attendeeIds = [], occurrenceDates, recurrenceRule }) {
+  const recurrenceId = crypto.randomUUID()
+  const rows = occurrenceDates.map((occurrenceDate) => ({
+    ...baseMeeting,
+    date: occurrenceDate.toISOString(),
+    recurrence_id: recurrenceId,
+    recurrence_rule: recurrenceRule,
+  }))
+
+  const { data: created, error } = await supabase
+    .from('meetings')
+    .insert(rows)
+    .select('id, title, date, department_id')
+    .order('date', { ascending: true })
+
+  if (error) throw error
+
+  if (attendeeIds.length > 0) {
+    const attendanceRows = created.flatMap((meeting) =>
+      attendeeIds.map((userId) => ({ meeting_id: meeting.id, user_id: userId, status: 'pending' })),
+    )
+    const { error: attendanceError } = await supabase.from('meeting_attendance').insert(attendanceRows)
+    if (attendanceError) throw attendanceError
+  }
+
+  if (created.length > 0) {
+    recordActivity('meeting_created', {
+      entity_type: 'meeting',
+      entity_id: created[0].id,
+      entity_title: created[0].title,
+      department_id: created[0].department_id,
+    })
+  }
+
+  return created
 }
 
 export async function updateMeeting(meetingId, updates) {
@@ -263,6 +306,8 @@ export async function searchMeetings(query, departmentId) {
       summary,
       created_by,
       created_at,
+      recurrence_id,
+      recurrence_rule,
       attendance:meeting_attendance(user_id, status, attendee:users(id, name))
     `)
     .or(
