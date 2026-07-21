@@ -569,7 +569,17 @@ export default function UsersPage() {
               <select
                 value={draft.departmentId}
                 disabled={!canManageUser(selectedUser)}
-                onChange={(event) => setDraft((current) => ({ ...current, departmentId: event.target.value }))}
+                onChange={(event) => {
+                  const departmentId = event.target.value
+                  setDraft((current) => {
+                    // Assigned Pastor belongs to the old department — clear it so
+                    // Save doesn't send a pastor/department pair the RPC will reject.
+                    const stillValid = pastors.some(
+                      (pastor) => pastor.id === current.assignedPastorId && pastor.department_id === departmentId,
+                    )
+                    return { ...current, departmentId, assignedPastorId: stillValid ? current.assignedPastorId : '' }
+                  })
+                }}
                 className="w-full rounded-xl border border-[var(--border-1)] px-3 py-2 text-sm outline-none focus:border-[var(--purple-500)] disabled:bg-[var(--surface-secondary)]"
               >
                 <option value="">Unassigned</option>
