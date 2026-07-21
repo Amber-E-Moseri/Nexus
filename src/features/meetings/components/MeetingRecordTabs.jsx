@@ -17,7 +17,7 @@ export default function MeetingRecordTabs({ meeting }) {
 
   // ORS identity is a space_roles grant (Phase 3) — role === 'ors' no longer exists.
   // regional_secretary is treated as pastor-equivalent (near-super_admin) — see FLOCK_CRM_CONFIG.
-  const canRecord = ['super_admin', 'regional_secretary', 'dept_lead'].includes((role ?? '').toLowerCase()) ||
+  const canRecord = ['super_admin', 'regional_secretary', 'dept_lead', 'pastor'].includes((role ?? '').toLowerCase()) ||
                     hasSpaceRole(profile, null, 'ors') ||
                     hasSpaceRole(profile, null, 'dept_lead')
 
