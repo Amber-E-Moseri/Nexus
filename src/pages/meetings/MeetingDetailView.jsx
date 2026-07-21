@@ -94,6 +94,12 @@ function MeetingDetailViewInner() {
   const [titleDraft, setTitleDraft]               = useState('')
   const [savingTitle, setSavingTitle]             = useState(false)
   const [savingVisibility, setSavingVisibility]   = useState(false)
+  const [editingMeetingDate, setEditingMeetingDate] = useState(false)
+  const [meetingDateDraft, setMeetingDateDraft]     = useState('')
+  const [savingMeetingDate, setSavingMeetingDate]   = useState(false)
+  const [editingMeetingType, setEditingMeetingType] = useState(false)
+  const [meetingTypeDraft, setMeetingTypeDraft]     = useState('')
+  const [savingMeetingType, setSavingMeetingType]   = useState(false)
   const [shareModalOpen, setShareModalOpen]       = useState(false)
 
   // open items state
@@ -162,6 +168,17 @@ function MeetingDetailViewInner() {
     return () => clearTimeout(cacheTimeoutRef.current)
   }, [minutesText, decisionsText, nextStepsText, meetingId])
 
+  // ── cache AI extraction results ───────────────────────────────────────────
+  useEffect(() => {
+    if (!meetingId || !aiResult) return
+    const aiCacheKey = `meeting_ai_${meetingId}`
+    localStorage.setItem(aiCacheKey, JSON.stringify({
+      aiResult,
+      editableAiItems,
+      timestamp: Date.now(),
+    }))
+  }, [aiResult, editableAiItems, meetingId])
+
   // ── load draft from cache on mount ─────────────────────────────────────────
   useEffect(() => {
     if (!meetingId || !loading) return
@@ -170,10 +187,34 @@ function MeetingDetailViewInner() {
     if (cached) {
       try {
         const { minutesText: cM, decisionsText: cD, nextStepsText: cN } = JSON.parse(cached)
-        // Only restore if DB didn't already load these (avoid overwriting fetched data)
         if (!minutesText && cM) setMinutesText(cM)
         if (!decisionsText && cD) setDecisionsText(cD)
         if (!nextStepsText && cN) setNextStepsText(cN)
+      } catch {}
+    }
+    // Restore AI extraction results
+    const aiCacheKey = `meeting_ai_${meetingId}`
+    const aiCached = localStorage.getItem(aiCacheKey)
+    if (aiCached) {
+      try {
+        const parsed = JSON.parse(aiCached)
+        const hoursSince = (Date.now() - parsed.timestamp) / 3600000
+        if (hoursSince < 72 && parsed.aiResult) {
+          setAiResult(parsed.aiResult)
+          if (parsed.editableAiItems?.length) setEditableAiItems(parsed.editableAiItems)
+          if (parsed.aiResult.action_items?.length) {
+            setSelectedAiActionItems(new Set(parsed.aiResult.action_items.map((_, i) => i)))
+          }
+          if (parsed.aiResult.open_items?.length) {
+            const autoSelected = new Set()
+            parsed.aiResult.open_items.forEach((item, i) => {
+              if ((item.confidence_score ?? 0) >= 0.80) autoSelected.add(i)
+            })
+            setSelectedAiOpenItems(autoSelected)
+          }
+        } else {
+          localStorage.removeItem(aiCacheKey)
+        }
       } catch {}
     }
   }, [loading, meetingId])
@@ -340,7 +381,6 @@ function MeetingDetailViewInner() {
         .map((line) => line.replace(/^[•\-*]\s*/, '').trim())
         .filter(Boolean)
       const blob = await generateMinutesPDF({
-        // meeting.summary holds the raw transcript — deliberately NOT a fallback here
         summary: meeting?.meeting_notes || minutesText || '',
         decisions: splitLines(decisionsText),
         nextSteps: splitLines(nextStepsText),
@@ -349,7 +389,22 @@ function MeetingDetailViewInner() {
           action: t.title,
           owner: t.assignee?.name || 'Unassigned',
           dueDate: t.due_date,
+          status: t.statusName || t.status_definition?.name || '',
         })),
+        openItems: openItems.map((item) => ({
+          text: item.text || item.title || '',
+          type: item.type || 'exploration',
+          status: item.status || 'open',
+        })),
+        agenda: agenda.map((item) => ({
+          title: item.title || '',
+          mins: item.mins || null,
+        })),
+        attendees: (meeting?.attendance || []).map((a) => ({
+          name: a.attendee?.name || 'Unknown',
+          status: a.status || 'present',
+        })),
+        transcript: meeting?.summary || '',
       }, meeting)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -630,6 +685,57 @@ function MeetingDetailViewInner() {
     setEditingTitle(false)
   }
 
+  const MEETING_TYPE_OPTIONS = [
+    { value: 'general', label: 'General' },
+    { value: 'regional_group', label: 'Regional Group' },
+    { value: 'staff_meeting', label: 'Staff Meeting' },
+    { value: 'department_meeting', label: 'Department Meeting' },
+  ]
+
+  async function saveMeetingDate() {
+    const nextDate = meetingDateDraft.trim()
+    if (!nextDate) { setEditingMeetingDate(false); return }
+    if (nextDate === meeting?.date?.slice(0, 10)) { setEditingMeetingDate(false); return }
+
+    setSavingMeetingDate(true)
+    const { error } = await supabase
+      .from('meetings')
+      .update({ date: nextDate })
+      .eq('id', meetingId)
+    setSavingMeetingDate(false)
+
+    if (error) {
+      showToast(`Couldn't update date: ${error.message}`, { tone: 'error' })
+      return
+    }
+
+    setMeeting((current) => ({ ...current, date: nextDate }))
+    setEditingMeetingDate(false)
+    showToast('Meeting date updated.', { tone: 'success' })
+  }
+
+  async function saveMeetingType() {
+    const nextType = meetingTypeDraft.trim()
+    if (!nextType) { setEditingMeetingType(false); return }
+    if (nextType === meeting?.meeting_type) { setEditingMeetingType(false); return }
+
+    setSavingMeetingType(true)
+    const { error } = await supabase
+      .from('meetings')
+      .update({ meeting_type: nextType })
+      .eq('id', meetingId)
+    setSavingMeetingType(false)
+
+    if (error) {
+      showToast(`Couldn't update meeting type: ${error.message}`, { tone: 'error' })
+      return
+    }
+
+    setMeeting((current) => ({ ...current, meeting_type: nextType }))
+    setEditingMeetingType(false)
+    showToast('Meeting type updated.', { tone: 'success' })
+  }
+
   async function saveTitle() {
     const nextTitle = titleDraft.trim()
     if (!nextTitle) {
@@ -855,8 +961,30 @@ function MeetingDetailViewInner() {
               )}
             </div>
           )}
-          <div style={{ fontSize:11, color: isLive ? 'rgba(255,255,255,.55)' : FS.muted, marginTop:1 }}>
-            {isPost ? `Duration: ${fmt(elapsed)} · ` : ''}{dateLabel}
+          <div style={{ fontSize:11, color: isLive ? 'rgba(255,255,255,.55)' : FS.muted, marginTop:1, display:'flex', alignItems:'center', gap:6 }}>
+            {isPost ? `Duration: ${fmt(elapsed)} · ` : ''}
+            {editingMeetingDate ? (
+              <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
+                <input
+                  type="date"
+                  autoFocus
+                  value={meetingDateDraft}
+                  onChange={(e) => setMeetingDateDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveMeetingDate(); if (e.key === 'Escape') setEditingMeetingDate(false) }}
+                  onBlur={saveMeetingDate}
+                  disabled={savingMeetingDate}
+                  style={{ background:'transparent', border:`1px solid ${isLive ? 'rgba(255,255,255,.3)' : FS.border}`, borderRadius:4, color: isLive ? '#fff' : FS.text, fontSize:11, padding:'2px 6px', outline:'none', colorScheme: isLive ? 'dark' : 'light' }}
+                />
+              </span>
+            ) : (
+              <span
+                onClick={() => { if (canManage && !isLive) { setMeetingDateDraft(meeting.date?.slice(0,10) ?? ''); setEditingMeetingDate(true) } }}
+                style={{ cursor: canManage && !isLive ? 'pointer' : 'default', borderBottom: canManage && !isLive ? `1px dashed ${FS.muted}44` : 'none' }}
+                title={canManage && !isLive ? 'Click to change date' : undefined}
+              >
+                {dateLabel}
+              </span>
+            )}
           </div>
         </div>
 
@@ -936,8 +1064,49 @@ function MeetingDetailViewInner() {
                 Calendar
                 <span style={{ background: FS.sageL, color: FS.sage, borderRadius:999, padding:'2px 8px', fontSize:9 }}>Synced ✓</span>
               </div>
-              <div style={{ fontSize:12.5, fontWeight:700, color: FS.text, marginBottom:2 }}>{dateLabel}</div>
-              <div style={{ fontSize:11.5, color: FS.muted }}>{meeting.meeting_type ?? 'General'} meeting</div>
+              <div
+                onClick={() => { if (canManage && !isLive) { setMeetingDateDraft(meeting.date?.slice(0,10) ?? ''); setEditingMeetingDate(true) } }}
+                style={{ fontSize:12.5, fontWeight:700, color: FS.text, marginBottom:2, cursor: canManage && !isLive ? 'pointer' : 'default' }}
+                title={canManage && !isLive ? 'Click to change date' : undefined}
+              >
+                {editingMeetingDate ? (
+                  <input
+                    type="date"
+                    autoFocus
+                    value={meetingDateDraft}
+                    onChange={(e) => setMeetingDateDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveMeetingDate(); if (e.key === 'Escape') setEditingMeetingDate(false) }}
+                    onBlur={saveMeetingDate}
+                    onClick={(e) => e.stopPropagation()}
+                    disabled={savingMeetingDate}
+                    style={{ background:'#fff', border:`1px solid ${FS.border}`, borderRadius:5, color: FS.text, fontSize:12.5, fontWeight:700, padding:'3px 8px', outline:'none', width:'100%' }}
+                  />
+                ) : dateLabel}
+              </div>
+              <div
+                onClick={() => { if (canManage && !isLive) { setMeetingTypeDraft(meeting.meeting_type ?? 'general'); setEditingMeetingType(true) } }}
+                style={{ fontSize:11.5, color: FS.muted, cursor: canManage && !isLive ? 'pointer' : 'default' }}
+                title={canManage && !isLive ? 'Click to change meeting type' : undefined}
+              >
+                {editingMeetingType ? (
+                  <select
+                    autoFocus
+                    value={meetingTypeDraft}
+                    onChange={(e) => { setMeetingTypeDraft(e.target.value) }}
+                    onBlur={saveMeetingType}
+                    onKeyDown={(e) => { if (e.key === 'Escape') setEditingMeetingType(false) }}
+                    onClick={(e) => e.stopPropagation()}
+                    disabled={savingMeetingType}
+                    style={{ background:'#fff', border:`1px solid ${FS.border}`, borderRadius:5, color: FS.text, fontSize:11.5, padding:'3px 8px', outline:'none', width:'100%', cursor:'pointer' }}
+                  >
+                    {MEETING_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <>{(MEETING_TYPE_OPTIONS.find(o => o.value === meeting.meeting_type)?.label ?? meeting.meeting_type ?? 'General')} meeting</>
+                )}
+              </div>
               {isLive && (
                 <>
                   <div style={{ marginTop:8, height:3, background: FS.borderL, borderRadius:999, overflow:'hidden' }}>

@@ -36,6 +36,12 @@ const SETTINGS_ORDER = ['YOUR_NAME', 'REMINDER_EMAIL', 'MORNING_REMINDER_HOUR', 
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+async function myPastorId() {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.id) throw new Error('Not authenticated')
+  return user.id
+}
+
 function toIso(raw) {
   if (!raw) return null
   const s = String(raw).trim()
@@ -73,13 +79,15 @@ function missingDetailCols(error) {
 const CONTACT_BASE_COLS = 'id, full_name, role, fellowship, cadence_days, active, next_due_date, due_status, priority, notes'
 
 async function getContacts() {
+  const pid = await myPastorId()
   let res = await supabase
     .from('flock_contacts')
     .select(hasContactDetailCols ? `${CONTACT_BASE_COLS}, phone, email` : CONTACT_BASE_COLS)
+    .eq('pastor_id', pid)
     .order('full_name')
   if (res.error && missingDetailCols(res.error)) {
     hasContactDetailCols = false
-    res = await supabase.from('flock_contacts').select(CONTACT_BASE_COLS).order('full_name')
+    res = await supabase.from('flock_contacts').select(CONTACT_BASE_COLS).eq('pastor_id', pid).order('full_name')
   }
   if (res.error) throw new Error(res.error.message)
   return (res.data || []).map(c => ({
@@ -144,10 +152,12 @@ async function updateContact({ personId, name, role, fellowship, phone, email })
 async function updateCadence({ personId, cadenceDays }) {
   const n = parseInt(cadenceDays, 10)
   if (!n || n < 1) throw new Error('Invalid cadence value')
+  const pid = await myPastorId()
 
   const { data: contact } = await supabase
     .from('flock_contacts')
     .select('last_successful_contact')
+    .eq('pastor_id', pid)
     .eq('id', personId)
     .single()
 
@@ -175,9 +185,11 @@ async function setContactActive({ personId, active }) {
 // ── Interactions ──────────────────────────────────────────────────────────────
 
 async function getInteractions({ personId }) {
+  const pid = await myPastorId()
   const { data, error } = await supabase
     .from('flock_interactions')
     .select('id, interacted_at, result, outcome_type, summary, next_action, next_action_datetime')
+    .eq('pastor_id', pid)
     .eq('contact_id', personId)
     .order('interacted_at', { ascending: false })
   if (error) throw new Error(error.message)
@@ -235,9 +247,11 @@ async function searchInteractions({ query }) {
   // Strip characters that PostgREST parses as .or() filter syntax.
   const q = String(query).trim().replace(/[,()"]/g, ' ').trim()
   if (q.length < 2) return { results: [], total: 0 }
+  const pid = await myPastorId()
   const { data, error } = await supabase
     .from('flock_interactions')
     .select('id, contact_id, contact_name, interacted_at, result, outcome_type, summary, next_action')
+    .eq('pastor_id', pid)
     .or(`summary.ilike.%${q}%,contact_name.ilike.%${q}%`)
     .order('interacted_at', { ascending: false })
     .limit(50)
@@ -258,9 +272,11 @@ async function searchInteractions({ query }) {
 // ── Todos ─────────────────────────────────────────────────────────────────────
 
 async function getTodos() {
+  const pid = await myPastorId()
   const { data, error } = await supabase
     .from('flock_todos')
     .select('id, contact_id, contact_name, text, due_date, done, completed_at, created_at')
+    .eq('pastor_id', pid)
     .order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
   const todos = (data || []).map(t => ({
@@ -323,7 +339,8 @@ async function updateTodoAssignee({ todoId, personId, personName }) {
 }
 
 async function deleteTodo({ todoId }) {
-  const { error } = await supabase.from('flock_todos').delete().eq('id', todoId)
+  const pid = await myPastorId()
+  const { error } = await supabase.from('flock_todos').delete().eq('pastor_id', pid).eq('id', todoId)
   if (error) throw new Error(error.message)
   return { success: true }
 }
@@ -331,7 +348,8 @@ async function deleteTodo({ todoId }) {
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 async function getSettings() {
-  const { data, error } = await supabase.from('flock_settings').select('key, val')
+  const pid = await myPastorId()
+  const { data, error } = await supabase.from('flock_settings').select('key, val').eq('pastor_id', pid)
   if (error) throw new Error(error.message)
 
   const byKey = {}
@@ -364,14 +382,15 @@ async function saveSetting({ key, val }) {
 // ── Home panel aggregates ─────────────────────────────────────────────────────
 
 async function quickStats() {
+  const pid = await myPastorId()
   const today = todayIso()
   const weekAhead = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
 
   const [totalRes, todayRes, overdueRes, weekRes] = await Promise.all([
-    supabase.from('flock_contacts').select('*', { count: 'exact', head: true }).eq('active', true),
-    supabase.from('flock_contacts').select('*', { count: 'exact', head: true }).eq('active', true).eq('next_due_date', today),
-    supabase.from('flock_contacts').select('*', { count: 'exact', head: true }).eq('active', true).lt('next_due_date', today),
-    supabase.from('flock_contacts').select('*', { count: 'exact', head: true }).eq('active', true).gte('next_due_date', today).lte('next_due_date', weekAhead),
+    supabase.from('flock_contacts').select('*', { count: 'exact', head: true }).eq('pastor_id', pid).eq('active', true),
+    supabase.from('flock_contacts').select('*', { count: 'exact', head: true }).eq('pastor_id', pid).eq('active', true).eq('next_due_date', today),
+    supabase.from('flock_contacts').select('*', { count: 'exact', head: true }).eq('pastor_id', pid).eq('active', true).lt('next_due_date', today),
+    supabase.from('flock_contacts').select('*', { count: 'exact', head: true }).eq('pastor_id', pid).eq('active', true).gte('next_due_date', today).lte('next_due_date', weekAhead),
   ])
 
   return {
@@ -383,11 +402,13 @@ async function quickStats() {
 }
 
 async function duePeople() {
+  const pid = await myPastorId()
   const today = todayIso()
   const baseCols = 'id, full_name, next_due_date, due_status, fellowship'
   const query = (cols) => supabase
     .from('flock_contacts')
     .select(cols)
+    .eq('pastor_id', pid)
     .eq('active', true)
     .lte('next_due_date', today)
     .order('next_due_date')

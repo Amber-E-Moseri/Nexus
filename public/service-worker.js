@@ -83,6 +83,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Never cache dev server assets — Vite uses ?v= query strings that change
+  // on rebuild, and caching old chunks creates duplicate-React crashes.
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+    return;
+  }
+
   // Auth and realtime traffic must NEVER be cached (BLW-14): a cached token
   // response would be replayed after expiry and break session refresh.
   if (url.pathname.includes('/auth/v1/') || url.pathname.includes('/realtime/v1/')) {

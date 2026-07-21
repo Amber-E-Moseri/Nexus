@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState, useRef } from 'react'
-import { CalendarRange, Filter, Link2, Printer, Users } from 'lucide-react'
+import { Calendar, CalendarRange, Filter, Link2, Printer, Users } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { formatRelativeDate } from '../../lib/dateUtils'
 import { supabase } from '../../lib/supabase'
@@ -132,12 +132,12 @@ export default function MeetingReportPublicPage() {
     isInitialMount.current = false
   }, [])
 
-  // Lock activeSubgroup to subgroup_filter on shared links (only if not already set from URL)
+  // Default activeSubgroup to subgroup_filter on shared links (only if not already set from URL)
   useEffect(() => {
-    if (isSharedLink && report?.subgroup_filter && !activeSubgroup) {
+    if (report?.subgroup_filter && !activeSubgroup && isInitialMount.current === false) {
       setActiveSubgroup(report.subgroup_filter)
     }
-  }, [report, isSharedLink, activeSubgroup])
+  }, [report])
 
   // Sync activeSubgroup with URL query parameter using browser history API
   useEffect(() => {
@@ -286,6 +286,16 @@ export default function MeetingReportPublicPage() {
   const meetingDate = meeting.date || report?.report_date || ''
   const meetingDescription = meeting.description || ''
   const subgroupFilter = report?.subgroup_filter || ''
+  const isGroupView = !!(subgroupFilter || activeSubgroup)
+
+  useEffect(() => {
+    if (!report) return
+    const parts = [meetingTitle]
+    if (activeSubgroup) parts.push(activeSubgroup)
+    parts.push('Attendance Report')
+    document.title = parts.join(' — ')
+    return () => { document.title = 'BLW CAN NEXUS' }
+  }, [report, meetingTitle, activeSubgroup])
 
   if (loading) {
     return (
@@ -392,90 +402,150 @@ export default function MeetingReportPublicPage() {
     <div className="public-report-page" style={{ minHeight: '100vh', background: PAGE_BG }}>
       <style>{PRINT_STYLES_FULL}</style>
 
-      <header className="public-report-header" style={{ background: HEADER_GRADIENT, padding: '40px 28px' }}>
+      <header className="public-report-header" style={{ background: HEADER_GRADIENT, padding: '36px 28px 28px' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', marginBottom: 24 }}>
-            <div style={{ flex: 1 }}>
-              <h1 style={{ fontSize: 32, fontWeight: 800, color: '#FFFFFF', margin: 0, marginBottom: 12, letterSpacing: '-0.01em' }}>{meetingTitle}</h1>
-              <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>{meetingDate ? dateStamp(meetingDate) : '-'}</div>
+          {/* Top row: branding + actions */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <img
+                src="/logo-purple-192.png"
+                alt=""
+                style={{ width: 36, height: 36, borderRadius: 10, border: '1.5px solid rgba(255,255,255,0.15)', flexShrink: 0 }}
+                onError={(e) => { e.target.style.display = 'none' }}
+              />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  BLW Canada
+                </div>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowLinkModal(true)}
-              className="public-report-actions"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                background: 'rgba(255,255,255,0.12)',
-                color: '#FFFFFF',
-                border: '1px solid rgba(255,255,255,0.25)',
-                borderRadius: 10,
-                padding: '10px 16px',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                whiteSpace: 'nowrap',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-              }}
-              onMouseEnter={(e) => { e.target.style.background = 'rgba(255,255,255,0.18)'; e.target.style.borderColor = 'rgba(255,255,255,0.35)' }}
-              onMouseLeave={(e) => { e.target.style.background = 'rgba(255,255,255,0.12)'; e.target.style.borderColor = 'rgba(255,255,255,0.25)' }}
-            >
-              <Link2 size={16} />
-              Share
-            </button>
+            <div className="public-report-actions" style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  background: 'rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.85)',
+                  border: '1px solid rgba(255,255,255,0.18)',
+                  borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                <Printer size={14} /> Print
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowLinkModal(true)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  background: 'rgba(255,255,255,0.12)', color: '#FFFFFF',
+                  border: '1px solid rgba(255,255,255,0.25)',
+                  borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                <Link2 size={14} /> Share
+              </button>
+            </div>
           </div>
+
+          {/* Meeting title + date + reach badge */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em',
+                  padding: '3px 10px', borderRadius: 999,
+                  border: '1px solid rgba(184,212,255,0.22)',
+                  color: '#B8D4FF', background: 'rgba(255,255,255,0.05)',
+                }}>
+                  Attendance Report
+                </span>
+              </div>
+              <h1 style={{ fontSize: 28, fontWeight: 800, color: '#FFFFFF', margin: 0, letterSpacing: '-0.01em', lineHeight: 1.2 }}>
+                {meetingTitle}
+              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, flexWrap: 'wrap' }}>
+                {meetingDate && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 500,
+                  }}>
+                    <Calendar size={14} />
+                    {dateStamp(meetingDate)}
+                  </span>
+                )}
+                {activeSubgroup && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: 'rgba(255,255,255,0.12)', color: '#FFFFFF',
+                    borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600,
+                    border: '1px solid rgba(255,255,255,0.18)',
+                  }}>
+                    <Filter size={12} />
+                    {activeSubgroup}
+                  </span>
+                )}
+                {subgroupFilter && !activeSubgroup && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: 'rgba(255,255,255,0.12)', color: '#FFFFFF',
+                    borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600,
+                    border: '1px solid rgba(255,255,255,0.18)',
+                  }}>
+                    <Filter size={12} />
+                    {subgroupFilter}
+                  </span>
+                )}
+              </div>
+            </div>
+            {/* Reach badge */}
+            <div style={{
+              textAlign: 'center', padding: '14px 20px', borderRadius: 14,
+              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+              flexShrink: 0, minWidth: 90,
+            }}>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>
+                Reach
+              </div>
+              <div style={{ fontSize: 32, fontWeight: 800, color: '#FFFFFF', lineHeight: 1 }}>
+                {reachPct}%
+              </div>
+            </div>
+          </div>
+
           {meetingDescription && (
-            <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', marginBottom: 16, lineHeight: 1.6, maxWidth: 600 }}>
+            <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 16, lineHeight: 1.6, maxWidth: 600 }}>
               {meetingDescription}
             </div>
           )}
-          {subgroupFilter && (
-            <div style={{ fontSize: 12, color: '#FFFFFF', display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: '8px 14px', border: '1px solid rgba(255,255,255,0.2)', fontWeight: 500 }}>
-              <Filter size={14} />
-              {subgroupFilter}
-            </div>
-          )}
 
-          {/* Subgroup Navigation Tabs - Hidden on shared links */}
-          {!isSharedLink && availableSubgroups.length > 1 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+          {/* Subgroup tabs — let recipients switch between subgroups */}
+          {availableSubgroups.length > 1 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 18 }}>
               <button
                 type="button"
                 onClick={() => setActiveSubgroup('')}
                 style={{
-                  border: activeSubgroup ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.4)',
-                  background: activeSubgroup ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.12)',
-                  color: activeSubgroup ? '#B8D4FF' : '#FFFFFF',
-                  borderRadius: 999,
-                  padding: '6px 14px',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
+                  border: !activeSubgroup ? '1px solid rgba(255,255,255,0.5)' : '1px solid rgba(255,255,255,0.15)',
+                  background: !activeSubgroup ? 'rgba(255,255,255,0.15)' : 'transparent',
+                  color: !activeSubgroup ? '#FFFFFF' : 'rgba(255,255,255,0.6)',
+                  borderRadius: 999, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                 }}
               >
-                All Subgroups
+                All
               </button>
-              {availableSubgroups.map((subgroup) => (
+              {availableSubgroups.map((sg) => (
                 <button
-                  key={subgroup}
+                  key={sg}
                   type="button"
-                  onClick={() => setActiveSubgroup(subgroup)}
+                  onClick={() => setActiveSubgroup(sg)}
                   style={{
-                    border: activeSubgroup === subgroup ? '1px solid rgba(255,255,255,0.4)' : '1px solid rgba(255,255,255,0.2)',
-                    background: activeSubgroup === subgroup ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
-                    color: activeSubgroup === subgroup ? '#FFFFFF' : '#B8D4FF',
-                    borderRadius: 999,
-                    padding: '6px 14px',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
+                    border: activeSubgroup === sg ? '1px solid rgba(255,255,255,0.5)' : '1px solid rgba(255,255,255,0.15)',
+                    background: activeSubgroup === sg ? 'rgba(255,255,255,0.15)' : 'transparent',
+                    color: activeSubgroup === sg ? '#FFFFFF' : 'rgba(255,255,255,0.6)',
+                    borderRadius: 999, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                   }}
                 >
-                  {subgroup}
+                  {sg}
                 </button>
               ))}
             </div>
@@ -485,42 +555,233 @@ export default function MeetingReportPublicPage() {
 
       <main style={{ padding: '40px 28px' }}>
         <div className="public-report-shell" style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
-          <div className="report-kpi-section" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14 }}>
+          {/* Overall KPIs */}
+          <div className="report-kpi-section" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14 }}>
             <KpiTile label="Expected" value={expectedTotal} bg="#F4F1EA" bd="#EDE8DC" circle="rgba(76,42,146,.12)" labelColor="#9E9488" valueColor="#2D2A22" />
-            <KpiTile label="Attended" value={presentTotal} detail={`${attendancePct}%`} bg="#EEF6F1" bd="#C3E0CC" circle="rgba(45,134,83,.15)" labelColor="#2D8653" valueColor="#1B5E3C" />
+            <KpiTile label="Present" value={presentTotal} bg="#EEF6F1" bd="#C3E0CC" circle="rgba(45,134,83,.15)" labelColor="#2D8653" valueColor="#1B5E3C" />
             <KpiTile label="Absent" value={absentTotal} bg="#FEF0ED" bd="#F5C4B8" circle="rgba(201,72,48,.15)" labelColor="#C94830" valueColor="#7A1C24" />
-            <KpiTile label="Attendance %" value={`${attendancePct}%`} bg="#FFF4CC" bd="#EDD88A" circle="rgba(232,160,32,.15)" labelColor="#7A5A00" valueColor="#7A5A00" />
-            <KpiTile label="Unexpected" value={unexpectedTotal} bg="#FFF8EC" bd="#EDD88A" circle="rgba(232,160,32,.15)" labelColor="#E8A020" valueColor="#7A5A00" />
+            <KpiTile label="Reach" value={`${reachPct}%`} bg={band.bg} bd={band.border} circle={`${band.fg}22`} labelColor={band.fg} valueColor={band.fg} />
           </div>
 
-          {activeSubgroup && (
-            <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, padding: '16px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 6 }}>{activeSubgroup}</div>
-                <div style={{ display: 'flex', gap: 14, fontSize: 12, color: MUTED, flexWrap: 'wrap' }}>
-                  <span>Expected {expectedTotal}</span>
-                  <span>Present {presentTotal}</span>
-                  <span>Absent {absentTotal}</span>
+          {/* ── SUBGROUP VIEW (full report, no active subgroup filter) ── */}
+          {!activeSubgroup && availableSubgroups.length > 0 && report.bySubgroup ? (
+            <>
+              {/* Subgroup overview table */}
+              <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ background: '#3D1A78', color: 'white', padding: '12px 18px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  Subgroup Overview
                 </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {['Subgroup', 'Expected', 'Present', 'Absent', 'Reach'].map((h) => (
+                        <th key={h} style={{
+                          padding: '10px 16px', textAlign: h === 'Reach' ? 'right' : 'left',
+                          fontSize: 11, color: MUTED, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                          borderBottom: `1px solid ${PANEL_BORDER}`, background: '#FAFAF7',
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {availableSubgroups.map((sg, i) => {
+                      const sgData = report.bySubgroup[sg]
+                      if (!sgData) return null
+                      const sgExp = sgData.expected?.length ?? 0
+                      const sgPres = sgData.present?.length ?? 0
+                      const sgAbs = sgData.absent?.length ?? 0
+                      const sgPct = sgExp > 0 ? Math.round((sgPres / sgExp) * 100) : 0
+                      const sgBand = reachBand(sgExp > 0 ? sgPres / sgExp : 0)
+                      return (
+                        <tr key={sg} style={{ background: i % 2 === 0 ? 'transparent' : '#FAFAF7' }}>
+                          <td style={{ padding: '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, fontSize: 13, fontWeight: 700, color: TEXT }}>{sg}</td>
+                          <td style={{ padding: '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, fontSize: 13, color: '#4A4A4A' }}>{sgExp}</td>
+                          <td style={{ padding: '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, fontSize: 13, color: '#085041', fontWeight: 600 }}>{sgPres}</td>
+                          <td style={{ padding: '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, fontSize: 13, color: sgAbs > 0 ? '#712B13' : '#4A4A4A', fontWeight: sgAbs > 0 ? 600 : 400 }}>{sgAbs}</td>
+                          <td style={{ padding: '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, textAlign: 'right' }}>
+                            <span style={{
+                              display: 'inline-block', minWidth: 44, textAlign: 'center',
+                              borderRadius: 999, padding: '3px 10px', fontSize: 11,
+                              color: sgBand.fg, background: sgBand.bg, border: `1px solid ${sgBand.border}`, fontWeight: 700,
+                            }}>{sgPct}%</span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: band.fg, background: band.bg, borderRadius: 12, padding: '8px 12px' }}>
-                {reachPct}%
+
+              {/* Per-subgroup detail sections */}
+              {availableSubgroups.map((sg) => {
+                const sgData = report.bySubgroup[sg]
+                if (!sgData) return null
+                const sgExp = sgData.expected?.length ?? 0
+                const sgPres = sgData.present?.length ?? 0
+                const sgAbs = sgData.absent?.length ?? 0
+                const sgPct = sgExp > 0 ? Math.round((sgPres / sgExp) * 100) : 0
+                const sgBand = reachBand(sgExp > 0 ? sgPres / sgExp : 0)
+
+                return (
+                  <div key={sg} style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, overflow: 'hidden' }}>
+                    {/* Subgroup header */}
+                    <div style={{
+                      background: '#3D1A78', color: 'white', padding: '14px 18px',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '0.01em' }}>{sg}</div>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
+                          {sgPres} of {sgExp}
+                        </span>
+                        <span style={{
+                          background: 'rgba(255,255,255,0.15)', borderRadius: 999,
+                          padding: '4px 12px', fontSize: 13, fontWeight: 800,
+                        }}>
+                          {sgPct}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Mini KPIs */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: `1px solid ${PANEL_BORDER}` }}>
+                      {[
+                        { label: 'Expected', value: sgExp, color: '#3D1A78' },
+                        { label: 'Present', value: sgPres, color: '#085041' },
+                        { label: 'Absent', value: sgAbs, color: '#712B13' },
+                      ].map((kpi, i) => (
+                        <div key={kpi.label} style={{
+                          padding: '12px 16px', textAlign: 'center',
+                          borderRight: i < 2 ? `0.5px solid ${PANEL_BORDER}` : 'none',
+                          background: '#FAFAF7',
+                        }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: MUTED }}>{kpi.label}</div>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: kpi.color, marginTop: 4, lineHeight: 1 }}>{kpi.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Two-column present/absent */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+                      {/* Present */}
+                      <div style={{ borderRight: `0.5px solid ${PANEL_BORDER}` }}>
+                        <div style={{
+                          padding: '10px 16px', borderBottom: `1px solid ${PANEL_BORDER}`,
+                          background: '#F2FAF6', fontSize: 10, fontWeight: 700,
+                          textTransform: 'uppercase', letterSpacing: '0.1em', color: '#085041',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        }}>
+                          <span>Present</span>
+                          <span style={{ background: '#085041', color: 'white', borderRadius: 999, padding: '1px 8px', fontSize: 9, fontWeight: 700 }}>{sgPres}</span>
+                        </div>
+                        <div>
+                          {(sgData.present ?? []).length === 0 ? (
+                            <div style={{ padding: '16px', fontSize: 12, color: MUTED, fontStyle: 'italic' }}>Full attendance</div>
+                          ) : (sgData.present ?? []).map((person, index) => (
+                            <div key={(person.name ?? person) + index} style={{
+                              padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8,
+                              borderBottom: index < (sgData.present?.length ?? 0) - 1 ? `0.5px solid #F0ECE4` : 'none',
+                            }}>
+                              <span style={{ width: 5, height: 5, borderRadius: 999, background: '#2D8653', flexShrink: 0 }} />
+                              <span style={{ fontSize: 12.5, fontWeight: 600, color: TEXT, flex: 1 }}>{typeof person === 'string' ? person : person.name}</span>
+                              {person.leadership_category && (
+                                <span style={{ fontSize: 10, color: MUTED }}>{person.leadership_category}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Absent */}
+                      <div>
+                        <div style={{
+                          padding: '10px 16px', borderBottom: `1px solid ${PANEL_BORDER}`,
+                          background: '#FEF5F2', fontSize: 10, fontWeight: 700,
+                          textTransform: 'uppercase', letterSpacing: '0.1em', color: '#712B13',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        }}>
+                          <span>Absent</span>
+                          <span style={{ background: '#712B13', color: 'white', borderRadius: 999, padding: '1px 8px', fontSize: 9, fontWeight: 700 }}>{sgAbs}</span>
+                        </div>
+                        <div>
+                          {(sgData.absent ?? []).length === 0 ? (
+                            <div style={{ padding: '16px', fontSize: 12, color: MUTED, fontStyle: 'italic' }}>No absences</div>
+                          ) : (sgData.absent ?? []).map((person, index) => (
+                            <div key={(person.name ?? person) + index} style={{
+                              padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8,
+                              borderBottom: index < (sgData.absent?.length ?? 0) - 1 ? `0.5px solid #F0ECE4` : 'none',
+                            }}>
+                              <span style={{ width: 5, height: 5, borderRadius: 999, background: '#C94830', flexShrink: 0 }} />
+                              <span style={{ fontSize: 12.5, fontWeight: 600, color: TEXT, flex: 1 }}>{typeof person === 'string' ? person : person.name}</span>
+                              {person.leadership_category && (
+                                <span style={{ fontSize: 10, color: MUTED }}>{person.leadership_category}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* New Leaders section */}
+              {unexpectedTotal > 0 && (
+                <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{
+                    background: '#3D1A78', color: 'white', padding: '12px 18px',
+                    fontSize: 13, fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  }}>
+                    <span>New Leaders</span>
+                    <span style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 999, padding: '2px 10px', fontSize: 11, fontWeight: 700 }}>{unexpectedTotal}</span>
+                  </div>
+                  <div>
+                    {(report.unexpected_names ?? []).map((name, index) => (
+                      <div key={name + index} style={{
+                        padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10,
+                        borderBottom: index < (report.unexpected_names?.length ?? 0) - 1 ? `0.5px solid #F0ECE4` : 'none',
+                      }}>
+                        <span style={{ width: 6, height: 6, borderRadius: 999, background: '#E8A020', flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>{name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* ── SINGLE SUBGROUP or NO SUBGROUP DATA ── */}
+              {activeSubgroup && (
+                <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, padding: '16px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 6 }}>{activeSubgroup}</div>
+                    <div style={{ display: 'flex', gap: 14, fontSize: 12, color: MUTED, flexWrap: 'wrap' }}>
+                      <span>Expected {expectedTotal}</span>
+                      <span>Present {presentTotal}</span>
+                      <span>Absent {absentTotal}</span>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: band.fg, background: band.bg, borderRadius: 12, padding: '8px 12px' }}>
+                    {reachPct}%
+                  </div>
+                </div>
+              )}
+
+              <div className="report-list-section">
+                <ListTable title="Who Attended" count={presentNames.length} tone={{ bg: '#EEF6F1', fg: '#1B5E3C' }} data={visibleReport?.presentData || presentNames} />
               </div>
-            </div>
-          )}
 
-          <div className="report-list-section">
-            <ListTable title="Who Attended" count={presentNames.length} tone={{ bg: '#EEF6F1', fg: '#1B5E3C' }} data={visibleReport?.presentData || presentNames} />
-          </div>
+              <div className="report-list-section">
+                <ListTable title="Who Was Absent" count={absentNames.length} tone={{ bg: '#FEF0ED', fg: '#7A1C24' }} data={visibleReport?.absentData || absentNames} />
+              </div>
 
-          <div className="report-list-section">
-            <ListTable title="Who Was Absent" count={absentNames.length} tone={{ bg: '#FEF0ED', fg: '#7A1C24' }} data={visibleReport?.absentData || absentNames} />
-          </div>
-
-          {unexpectedTotal > 0 && (
-            <div className="report-list-section">
-              <ListTable title="Unexpected Attendees" count={unexpectedNames.length} tone={{ bg: '#FFF8EC', fg: '#7A5A00' }} data={visibleReport?.unexpectedData || unexpectedNames} />
-            </div>
+              {unexpectedTotal > 0 && (
+                <div className="report-list-section">
+                  <ListTable title="New Leaders" count={unexpectedNames.length} tone={{ bg: '#FFF8EC', fg: '#7A5A00' }} data={visibleReport?.unexpectedData || unexpectedNames} />
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
@@ -531,7 +792,11 @@ export default function MeetingReportPublicPage() {
             {/* Header */}
             <div style={{ marginBottom: 28 }}>
               <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#1C1C1C', letterSpacing: '-0.01em' }}>Share Report</h2>
-              <p style={{ margin: '8px 0 0 0', fontSize: 14, color: '#8B8680', lineHeight: 1.5 }}>Anyone with this link can view the report</p>
+              <div style={{ marginTop: 6, fontSize: 14, fontWeight: 600, color: '#2C2C2A' }}>{meetingTitle}</div>
+              {meetingDate && (
+                <div style={{ fontSize: 13, color: '#8B8680', marginTop: 2 }}>{dateStamp(meetingDate)}</div>
+              )}
+              <p style={{ margin: '10px 0 0 0', fontSize: 13, color: '#8B8680', lineHeight: 1.5 }}>Anyone with this link can view the report. The meeting name is included when you copy.</p>
             </div>
 
             {/* Link Display */}
@@ -567,7 +832,8 @@ export default function MeetingReportPublicPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const text = window.location.href
+                  const dateLine = meetingDate ? ` — ${dateStamp(meetingDate)}` : ''
+                  const text = `${meetingTitle}${dateLine}\n${window.location.href}`
 
                   function onCopied() {
                     setCopiedLink(true)
@@ -622,14 +888,25 @@ export default function MeetingReportPublicPage() {
         </div>
       )}
 
-      <footer style={{ padding: '32px 28px 28px', textAlign: 'center', background: 'rgba(0,0,0,0.02)', borderTop: '1px solid #EDE8DC' }}>
+      <footer style={{ padding: '28px 28px 24px', textAlign: 'center', background: 'rgba(0,0,0,0.02)', borderTop: '1px solid #EDE8DC' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          <div style={{ fontSize: 12, color: MUTED, marginBottom: 6 }}>
-            Report generated on <span style={{ fontWeight: 600, color: TEXT }}>{dateStamp(report?.report_date)}</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
+            <img
+              src="/logo-purple-192.png"
+              alt=""
+              style={{ width: 20, height: 20, borderRadius: 5, opacity: 0.5 }}
+              onError={(e) => { e.target.style.display = 'none' }}
+            />
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#B4AFA3', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              BLW CAN NEXUS
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: MUTED }}>
+            {meetingTitle} {meetingDate ? `— ${dateStamp(meetingDate)}` : ''}
           </div>
           {report?.id && (
-            <div style={{ fontSize: 11, color: '#B4AFA3', letterSpacing: '0.05em', fontFamily: 'monospace' }}>
-              {report.id.slice(0, 8).toUpperCase()}
+            <div style={{ fontSize: 10, color: '#C8C2B8', letterSpacing: '0.05em', fontFamily: 'monospace', marginTop: 6 }}>
+              Report {report.id.slice(0, 8).toUpperCase()}
             </div>
           )}
         </div>
