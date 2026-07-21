@@ -650,6 +650,7 @@ export default function TaskModal({
                   onChange={(id) => setSelectedSprintId(id || '')}
                   disabled={isReadOnly}
                   placeholder="No sprint — space board only"
+                  autoSelectIfSingle={!task}
                 />
                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>
                   Only sprints in this space that you can add tasks to are shown.
