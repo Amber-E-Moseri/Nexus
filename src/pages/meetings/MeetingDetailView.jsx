@@ -94,12 +94,6 @@ function MeetingDetailViewInner() {
   const [titleDraft, setTitleDraft]               = useState('')
   const [savingTitle, setSavingTitle]             = useState(false)
   const [savingVisibility, setSavingVisibility]   = useState(false)
-  const [editingMeetingDate, setEditingMeetingDate] = useState(false)
-  const [meetingDateDraft, setMeetingDateDraft]     = useState('')
-  const [savingMeetingDate, setSavingMeetingDate]   = useState(false)
-  const [editingMeetingType, setEditingMeetingType] = useState(false)
-  const [meetingTypeDraft, setMeetingTypeDraft]     = useState('')
-  const [savingMeetingType, setSavingMeetingType]   = useState(false)
   const [shareModalOpen, setShareModalOpen]       = useState(false)
 
   // open items state
@@ -135,7 +129,11 @@ function MeetingDetailViewInner() {
 
   const isMobile  = useMediaQuery('(max-width: 640px)')
   // ORS identity is a space_roles grant (Phase 3) — role === 'ors' no longer exists.
-  const canManage = ['super_admin', 'dept_lead'].includes((role ?? '').toLowerCase()) ||
+  // pastor/regional_secretary included: this is the actual gate behind live
+  // recording (canRecord={canManage} below) — MeetingRecordTabs.jsx has its
+  // own separate (already-fixed) copy of this check, but this page's gate is
+  // the one users actually hit when opening a meeting.
+  const canManage = ['super_admin', 'dept_lead', 'pastor', 'regional_secretary'].includes((role ?? '').toLowerCase()) ||
                     hasSpaceRole(profile, null, 'ors') ||
                     hasSpaceRole(profile, null, 'dept_lead')
   // Mirrors the meetings_update RLS policy: creator can always edit their own
@@ -685,57 +683,6 @@ function MeetingDetailViewInner() {
     setEditingTitle(false)
   }
 
-  const MEETING_TYPE_OPTIONS = [
-    { value: 'general', label: 'General' },
-    { value: 'regional_group', label: 'Regional Group' },
-    { value: 'staff_meeting', label: 'Staff Meeting' },
-    { value: 'department_meeting', label: 'Department Meeting' },
-  ]
-
-  async function saveMeetingDate() {
-    const nextDate = meetingDateDraft.trim()
-    if (!nextDate) { setEditingMeetingDate(false); return }
-    if (nextDate === meeting?.date?.slice(0, 10)) { setEditingMeetingDate(false); return }
-
-    setSavingMeetingDate(true)
-    const { error } = await supabase
-      .from('meetings')
-      .update({ date: nextDate })
-      .eq('id', meetingId)
-    setSavingMeetingDate(false)
-
-    if (error) {
-      showToast(`Couldn't update date: ${error.message}`, { tone: 'error' })
-      return
-    }
-
-    setMeeting((current) => ({ ...current, date: nextDate }))
-    setEditingMeetingDate(false)
-    showToast('Meeting date updated.', { tone: 'success' })
-  }
-
-  async function saveMeetingType() {
-    const nextType = meetingTypeDraft.trim()
-    if (!nextType) { setEditingMeetingType(false); return }
-    if (nextType === meeting?.meeting_type) { setEditingMeetingType(false); return }
-
-    setSavingMeetingType(true)
-    const { error } = await supabase
-      .from('meetings')
-      .update({ meeting_type: nextType })
-      .eq('id', meetingId)
-    setSavingMeetingType(false)
-
-    if (error) {
-      showToast(`Couldn't update meeting type: ${error.message}`, { tone: 'error' })
-      return
-    }
-
-    setMeeting((current) => ({ ...current, meeting_type: nextType }))
-    setEditingMeetingType(false)
-    showToast('Meeting type updated.', { tone: 'success' })
-  }
-
   async function saveTitle() {
     const nextTitle = titleDraft.trim()
     if (!nextTitle) {
@@ -961,30 +908,8 @@ function MeetingDetailViewInner() {
               )}
             </div>
           )}
-          <div style={{ fontSize:11, color: isLive ? 'rgba(255,255,255,.55)' : FS.muted, marginTop:1, display:'flex', alignItems:'center', gap:6 }}>
-            {isPost ? `Duration: ${fmt(elapsed)} · ` : ''}
-            {editingMeetingDate ? (
-              <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
-                <input
-                  type="date"
-                  autoFocus
-                  value={meetingDateDraft}
-                  onChange={(e) => setMeetingDateDraft(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') saveMeetingDate(); if (e.key === 'Escape') setEditingMeetingDate(false) }}
-                  onBlur={saveMeetingDate}
-                  disabled={savingMeetingDate}
-                  style={{ background:'transparent', border:`1px solid ${isLive ? 'rgba(255,255,255,.3)' : FS.border}`, borderRadius:4, color: isLive ? '#fff' : FS.text, fontSize:11, padding:'2px 6px', outline:'none', colorScheme: isLive ? 'dark' : 'light' }}
-                />
-              </span>
-            ) : (
-              <span
-                onClick={() => { if (canManage && !isLive) { setMeetingDateDraft(meeting.date?.slice(0,10) ?? ''); setEditingMeetingDate(true) } }}
-                style={{ cursor: canManage && !isLive ? 'pointer' : 'default', borderBottom: canManage && !isLive ? `1px dashed ${FS.muted}44` : 'none' }}
-                title={canManage && !isLive ? 'Click to change date' : undefined}
-              >
-                {dateLabel}
-              </span>
-            )}
+          <div style={{ fontSize:11, color: isLive ? 'rgba(255,255,255,.55)' : FS.muted, marginTop:1 }}>
+            {isPost ? `Duration: ${fmt(elapsed)} · ` : ''}{dateLabel}
           </div>
         </div>
 
@@ -1064,49 +989,8 @@ function MeetingDetailViewInner() {
                 Calendar
                 <span style={{ background: FS.sageL, color: FS.sage, borderRadius:999, padding:'2px 8px', fontSize:9 }}>Synced ✓</span>
               </div>
-              <div
-                onClick={() => { if (canManage && !isLive) { setMeetingDateDraft(meeting.date?.slice(0,10) ?? ''); setEditingMeetingDate(true) } }}
-                style={{ fontSize:12.5, fontWeight:700, color: FS.text, marginBottom:2, cursor: canManage && !isLive ? 'pointer' : 'default' }}
-                title={canManage && !isLive ? 'Click to change date' : undefined}
-              >
-                {editingMeetingDate ? (
-                  <input
-                    type="date"
-                    autoFocus
-                    value={meetingDateDraft}
-                    onChange={(e) => setMeetingDateDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') saveMeetingDate(); if (e.key === 'Escape') setEditingMeetingDate(false) }}
-                    onBlur={saveMeetingDate}
-                    onClick={(e) => e.stopPropagation()}
-                    disabled={savingMeetingDate}
-                    style={{ background:'#fff', border:`1px solid ${FS.border}`, borderRadius:5, color: FS.text, fontSize:12.5, fontWeight:700, padding:'3px 8px', outline:'none', width:'100%' }}
-                  />
-                ) : dateLabel}
-              </div>
-              <div
-                onClick={() => { if (canManage && !isLive) { setMeetingTypeDraft(meeting.meeting_type ?? 'general'); setEditingMeetingType(true) } }}
-                style={{ fontSize:11.5, color: FS.muted, cursor: canManage && !isLive ? 'pointer' : 'default' }}
-                title={canManage && !isLive ? 'Click to change meeting type' : undefined}
-              >
-                {editingMeetingType ? (
-                  <select
-                    autoFocus
-                    value={meetingTypeDraft}
-                    onChange={(e) => { setMeetingTypeDraft(e.target.value) }}
-                    onBlur={saveMeetingType}
-                    onKeyDown={(e) => { if (e.key === 'Escape') setEditingMeetingType(false) }}
-                    onClick={(e) => e.stopPropagation()}
-                    disabled={savingMeetingType}
-                    style={{ background:'#fff', border:`1px solid ${FS.border}`, borderRadius:5, color: FS.text, fontSize:11.5, padding:'3px 8px', outline:'none', width:'100%', cursor:'pointer' }}
-                  >
-                    {MEETING_TYPE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <>{(MEETING_TYPE_OPTIONS.find(o => o.value === meeting.meeting_type)?.label ?? meeting.meeting_type ?? 'General')} meeting</>
-                )}
-              </div>
+              <div style={{ fontSize:12.5, fontWeight:700, color: FS.text, marginBottom:2 }}>{dateLabel}</div>
+              <div style={{ fontSize:11.5, color: FS.muted }}>{meeting.meeting_type ?? 'General'} meeting</div>
               {isLive && (
                 <>
                   <div style={{ marginTop:8, height:3, background: FS.borderL, borderRadius:999, overflow:'hidden' }}>
