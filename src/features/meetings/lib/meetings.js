@@ -1,6 +1,8 @@
 import { supabase } from '../../../lib/supabase'
 import { getDefaultTaskStatusId, normalizeTaskRows } from '../../../lib/taskStatuses.js'
 import { recordActivity } from '../../../lib/activityFeed'
+import { addDays } from 'date-fns'
+import { getNextOccurrenceDate } from './recurrence'
 
 export const MEETINGS_PAGE_SIZE = 50
 
@@ -105,45 +107,151 @@ export async function createMeeting(meetingData) {
   }
 }
 
-// Materializes one real `meetings` row per occurrence (own attendance/agenda/
-// minutes), sharing a `recurrence_id` so the series can be identified together.
+// Creates only the FIRST meeting of a recurring series. Future occurrences are
+// NOT materialized here — they're generated progressively (~1 day ahead of
+// when they occur) by the generate-recurring-meetings edge function, driven by
+// `next_occurrence_scheduled`. This keeps the table from being bloated with
+// dozens of far-future rows up front, and lets each occurrence be edited
+// (time, attendees, agenda) independently before it's ever generated.
 // Attendance rows use status: 'pending', matching ScheduleMeetingModal's
 // convention for meetings that haven't happened yet.
-export async function createRecurringMeetings({ baseMeeting, attendeeIds = [], occurrenceDates, recurrenceRule }) {
+export async function createRecurringMeeting({ baseMeeting, attendeeIds = [], recurrenceRule }) {
   const recurrenceId = crypto.randomUUID()
-  const rows = occurrenceDates.map((occurrenceDate) => ({
-    ...baseMeeting,
-    date: occurrenceDate.toISOString(),
-    recurrence_id: recurrenceId,
-    recurrence_rule: recurrenceRule,
-  }))
 
-  const { data: created, error } = await supabase
+  // Schedule generation of occurrence #2 for one day before it's due to
+  // happen. If the series ends after just one occurrence, nothing to schedule.
+  const startDateTime = new Date(baseMeeting.date)
+  const secondOccurrenceDate = recurrenceRule ? getNextOccurrenceDate(recurrenceRule, startDateTime, 1) : null
+  const nextOccurrenceScheduled = secondOccurrenceDate ? addDays(secondOccurrenceDate, -1) : null
+
+  const meeting = {
+    ...baseMeeting,
+    recurrence_rule: recurrenceRule,
+    recurrence_id: recurrenceId,
+    series_instance_num: 1,
+    next_occurrence_scheduled: nextOccurrenceScheduled?.toISOString() ?? null,
+  }
+
+  const { data, error } = await supabase
     .from('meetings')
-    .insert(rows)
-    .select('id, title, date, department_id')
-    .order('date', { ascending: true })
+    .insert(meeting)
+    .select(`
+      id,
+      title,
+      department_id,
+      date,
+      meeting_type,
+      agenda,
+      visibility,
+      recurrence_id,
+      recurrence_rule,
+      created_by,
+      created_at
+    `)
+    .single()
 
   if (error) throw error
 
   if (attendeeIds.length > 0) {
-    const attendanceRows = created.flatMap((meeting) =>
-      attendeeIds.map((userId) => ({ meeting_id: meeting.id, user_id: userId, status: 'pending' })),
+    const { error: attendanceError } = await supabase.from('meeting_attendance').insert(
+      attendeeIds.map((userId) => ({ meeting_id: data.id, user_id: userId, status: 'pending' })),
     )
-    const { error: attendanceError } = await supabase.from('meeting_attendance').insert(attendanceRows)
     if (attendanceError) throw attendanceError
   }
 
-  if (created.length > 0) {
-    recordActivity('meeting_created', {
-      entity_type: 'meeting',
-      entity_id: created[0].id,
-      entity_title: created[0].title,
-      department_id: created[0].department_id,
-    })
+  recordActivity('meeting_created', {
+    entity_type: 'meeting',
+    entity_id: data.id,
+    entity_title: data.title,
+    department_id: data.department_id,
+  })
+
+  return data
+}
+
+// Applies an edit to a meeting that belongs to a recurring series.
+// editScope:
+//  - 'this': updates only this occurrence; marks it as an exception so it's
+//    no longer considered a "plain" generated instance.
+//  - 'future': updates this occurrence and every future occurrence already
+//    materialized in the same series (attendees/agenda/time-of-day changes
+//    apply going forward; each occurrence keeps its own date).
+//  - 'all': updates the series parent's `recurrence_rule`/fields so that
+//    occurrences generated from now on reflect the change. Already-generated
+//    future occurrences are also updated to match, mirroring 'future'.
+export async function editRecurringMeeting(meetingId, updates, editScope = 'this') {
+  const { data: current, error: fetchError } = await supabase
+    .from('meetings')
+    .select('id, date, recurrence_id')
+    .eq('id', meetingId)
+    .single()
+  if (fetchError) throw fetchError
+
+  if (editScope === 'this' || !current.recurrence_id) {
+    return updateMeeting(meetingId, { ...updates, exception_date: new Date().toISOString().split('T')[0] })
   }
 
-  return created
+  // 'future' and 'all' both propagate the change to this occurrence and every
+  // future occurrence already materialized in the series.
+  const { data: futureMeetings, error: futureError } = await supabase
+    .from('meetings')
+    .select('id')
+    .eq('recurrence_id', current.recurrence_id)
+    .gte('date', current.date)
+  if (futureError) throw futureError
+
+  const { date: _ignoredDate, ...updatesWithoutDate } = updates
+  const targetIds = futureMeetings.map((m) => m.id)
+
+  const { error: updateError } = await supabase
+    .from('meetings')
+    .update(updatesWithoutDate)
+    .in('id', targetIds)
+  if (updateError) throw updateError
+
+  if (editScope === 'all') {
+    // Also persist the new recurrence_rule (if provided) on the series parent
+    // so occurrences generated later follow the updated pattern.
+    if (updates.recurrence_rule) {
+      await supabase
+        .from('meetings')
+        .update({ recurrence_rule: updates.recurrence_rule })
+        .eq('id', current.recurrence_id)
+    }
+  }
+
+  recordActivity('meeting_updated', {
+    entity_type: 'meeting',
+    entity_id: meetingId,
+    entity_title: updates.title,
+  })
+
+  return { updatedIds: targetIds }
+}
+
+// Grants/revokes note visibility for one attendee of a private (e.g. one-on-one)
+// meeting. Meeting-level visibility (allowed_viewers) is separate — an attendee
+// can see the meeting exists without seeing its notes.
+export async function setNotesSharedWithAttendee(meetingId, userId, shared) {
+  const { data: current, error: fetchError } = await supabase
+    .from('meetings')
+    .select('notes_shared_with')
+    .eq('id', meetingId)
+    .single()
+  if (fetchError) throw fetchError
+
+  const existing = current?.notes_shared_with ?? []
+  const next = shared
+    ? [...new Set([...existing, userId])]
+    : existing.filter((id) => id !== userId)
+
+  const { error } = await supabase
+    .from('meetings')
+    .update({ notes_shared_with: next })
+    .eq('id', meetingId)
+  if (error) throw error
+
+  return next
 }
 
 export async function updateMeeting(meetingId, updates) {

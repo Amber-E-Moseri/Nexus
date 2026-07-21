@@ -89,3 +89,49 @@ export function generateOccurrenceDates(startDateTime, recurrenceData, { maxOccu
 
   return dates
 }
+
+const REVERSE_DAY_MAP = { SU: 'Sun', MO: 'Mon', TU: 'Tue', WE: 'Wed', TH: 'Thu', FR: 'Fri', SA: 'Sat' }
+
+// Reconstructs a recurrenceData-shaped object from a stored RRULE string
+// (the inverse of buildRecurrenceRule), so the progressive generator can
+// recompute occurrence dates without needing the original form state.
+export function parseRecurrenceRule(rrule) {
+  if (!rrule) return null
+  const parts = Object.fromEntries(rrule.split(';').map((p) => p.split('=')))
+  const interval = parts.INTERVAL ? parseInt(parts.INTERVAL, 10) : 1
+  const frequency = parts.FREQ === 'WEEKLY' && interval === 2 ? 'bi-weekly' : (parts.FREQ || '').toLowerCase()
+
+  const daysOfWeek = new Set()
+  if (parts.BYDAY) {
+    parts.BYDAY.split(',').forEach((d) => {
+      if (REVERSE_DAY_MAP[d]) daysOfWeek.add(REVERSE_DAY_MAP[d])
+    })
+  }
+
+  const dayOfMonth = parts.BYMONTHDAY ? parseInt(parts.BYMONTHDAY, 10) : 1
+
+  let endType = 'never'
+  let occurrences = MAX_OCCURRENCES
+  let endDate = null
+  if (parts.COUNT) {
+    endType = 'occurrences'
+    occurrences = parseInt(parts.COUNT, 10)
+  } else if (parts.UNTIL) {
+    endType = 'date'
+    const raw = parts.UNTIL
+    endDate = `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`
+  }
+
+  return { frequency, daysOfWeek, dayOfMonth, endType, occurrences, endDate }
+}
+
+// Computes the next occurrence date to generate for a recurring series, given
+// the series' original start date and how many occurrences already exist
+// (seriesInstanceNum: 1 for the first/parent meeting). Returns null once the
+// series' end condition (COUNT/UNTIL/cap) has been reached.
+export function getNextOccurrenceDate(recurrenceRule, seriesStartDate, seriesInstanceNum) {
+  const recurrenceData = parseRecurrenceRule(recurrenceRule)
+  if (!recurrenceData) return null
+  const allDates = generateOccurrenceDates(seriesStartDate, recurrenceData)
+  return allDates[seriesInstanceNum] ?? null
+}
