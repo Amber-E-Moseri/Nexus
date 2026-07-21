@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
 import { createNotification } from '../../notifications/lib/notifications'
+import { createRecurringMeetings } from '../lib/meetings'
+import { DAYS_OF_WEEK, MAX_OCCURRENCES, buildRecurrenceRule, generateOccurrenceDates } from '../lib/recurrence'
 
 const MEETING_TYPES = ['general', 'team', 'department', 'media']
 
@@ -39,6 +41,15 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
   const [orgMembers, setOrgMembers] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [recurring, setRecurring] = useState(false)
+  const [recurrenceData, setRecurrenceData] = useState({
+    frequency: 'none',
+    daysOfWeek: new Set(),
+    dayOfMonth: 1,
+    endType: 'occurrences',
+    occurrences: 10,
+    endDate: new Date().toISOString().split('T')[0],
+  })
 
   useEffect(() => {
     supabase.from('users').select('id, name').eq('status', 'active').order('name')
@@ -72,33 +83,66 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
       }
       if (agenda.trim()) payload.agenda = agenda.trim()
 
-      const { data: meeting, error: insertError } = await supabase
-        .from('meetings')
-        .insert(payload)
-        .select('id, title, date')
-        .single()
+      let createdMeetings = []
 
-      if (insertError) throw insertError
+      if (recurring && recurrenceData.frequency !== 'none') {
+        // Generate all occurrence dates and create recurring meetings
+        const startDateTime = new Date(meetingDate)
+        const occurrenceDates = generateOccurrenceDates(startDateTime, recurrenceData)
+        const recurrenceRule = buildRecurrenceRule(recurring, recurrenceData)
 
-      // Add attendance rows for selected attendees
-      if (attendeeIds.length > 0) {
-        await supabase.from('meeting_attendance').insert(
-          attendeeIds.map((uid) => ({ meeting_id: meeting.id, user_id: uid, status: 'pending' })),
-        )
+        createdMeetings = await createRecurringMeetings({
+          baseMeeting: payload,
+          attendeeIds,
+          occurrenceDates,
+          recurrenceRule,
+        })
 
-        // Notify each attendee (skip self)
-        for (const uid of attendeeIds) {
-          if (uid !== profile?.id) {
-            createNotification(uid, 'meeting_scheduled', {
-              meetingId: meeting.id,
-              title: meeting.title,
-              date: meeting.date,
-            }).catch(() => {})
+        // Notify once per attendee (referencing first occurrence only)
+        if (createdMeetings.length > 0 && attendeeIds.length > 0) {
+          const firstMeeting = createdMeetings[0]
+          for (const uid of attendeeIds) {
+            if (uid !== profile?.id) {
+              createNotification(uid, 'meeting_scheduled', {
+                meetingId: firstMeeting.id,
+                title: `${firstMeeting.title} (recurring)`,
+                date: firstMeeting.date,
+              }).catch(() => {})
+            }
           }
         }
-      }
 
-      onSaved?.(meeting)
+        onSaved?.(createdMeetings[0])
+      } else {
+        // Single non-recurring meeting
+        const { data: meeting, error: insertError } = await supabase
+          .from('meetings')
+          .insert(payload)
+          .select('id, title, date')
+          .single()
+
+        if (insertError) throw insertError
+
+        // Add attendance rows for selected attendees
+        if (attendeeIds.length > 0) {
+          await supabase.from('meeting_attendance').insert(
+            attendeeIds.map((uid) => ({ meeting_id: meeting.id, user_id: uid, status: 'pending' })),
+          )
+
+          // Notify each attendee (skip self)
+          for (const uid of attendeeIds) {
+            if (uid !== profile?.id) {
+              createNotification(uid, 'meeting_scheduled', {
+                meetingId: meeting.id,
+                title: meeting.title,
+                date: meeting.date,
+              }).catch(() => {})
+            }
+          }
+        }
+
+        onSaved?.(meeting)
+      }
     } catch (err) {
       setError(err.message ?? 'Failed to schedule meeting.')
     } finally {
@@ -176,6 +220,135 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
               </select>
             </label>
           </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={recurring}
+              onChange={(e) => setRecurring(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Repeat this meeting</span>
+          </label>
+
+          {recurring && (
+            <div style={{ padding: 12, background: 'var(--surface-tertiary)', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <label>
+                <span style={labelStyle}>Frequency</span>
+                <select
+                  style={inputStyle}
+                  value={recurrenceData.frequency}
+                  onChange={(e) => setRecurrenceData((prev) => ({ ...prev, frequency: e.target.value }))}
+                >
+                  <option value="none">None</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="bi-weekly">Bi-weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </label>
+
+              {(recurrenceData.frequency === 'weekly' || recurrenceData.frequency === 'bi-weekly') && (
+                <label>
+                  <span style={labelStyle}>Days of Week</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, fontSize: 12 }}>
+                    {DAYS_OF_WEEK.map((day) => (
+                      <label key={day} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={recurrenceData.daysOfWeek.has(day)}
+                          onChange={(e) => {
+                            const newDays = new Set(recurrenceData.daysOfWeek)
+                            if (e.target.checked) {
+                              newDays.add(day)
+                            } else {
+                              newDays.delete(day)
+                            }
+                            setRecurrenceData((prev) => ({ ...prev, daysOfWeek: newDays }))
+                          }}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        {day}
+                      </label>
+                    ))}
+                  </div>
+                </label>
+              )}
+
+              {recurrenceData.frequency === 'monthly' && (
+                <label>
+                  <span style={labelStyle}>Day of Month</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    style={inputStyle}
+                    value={recurrenceData.dayOfMonth}
+                    onChange={(e) => setRecurrenceData((prev) => ({ ...prev, dayOfMonth: Math.max(1, Math.min(31, parseInt(e.target.value) || 1)) }))}
+                  />
+                </label>
+              )}
+
+              <label>
+                <span style={labelStyle}>End After</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+                    <input
+                      type="radio"
+                      name="endType"
+                      value="occurrences"
+                      checked={recurrenceData.endType === 'occurrences'}
+                      onChange={(e) => setRecurrenceData((prev) => ({ ...prev, endType: e.target.value }))}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span>
+                      <input
+                        type="number"
+                        min="1"
+                        max={MAX_OCCURRENCES}
+                        style={{ width: 50, fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', marginRight: 6 }}
+                        value={recurrenceData.occurrences}
+                        onChange={(e) => setRecurrenceData((prev) => ({ ...prev, occurrences: Math.max(1, Math.min(MAX_OCCURRENCES, parseInt(e.target.value) || 1)) }))}
+                      />
+                      occurrences
+                    </span>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+                    <input
+                      type="radio"
+                      name="endType"
+                      value="date"
+                      checked={recurrenceData.endType === 'date'}
+                      onChange={(e) => setRecurrenceData((prev) => ({ ...prev, endType: e.target.value }))}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span>
+                      On date
+                      <input
+                        type="date"
+                        style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', marginLeft: 6 }}
+                        value={recurrenceData.endDate}
+                        onChange={(e) => setRecurrenceData((prev) => ({ ...prev, endDate: e.target.value }))}
+                      />
+                    </span>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+                    <input
+                      type="radio"
+                      name="endType"
+                      value="never"
+                      checked={recurrenceData.endType === 'never'}
+                      onChange={(e) => setRecurrenceData((prev) => ({ ...prev, endType: e.target.value }))}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    Never (up to {MAX_OCCURRENCES} meetings)
+                  </label>
+                </div>
+              </label>
+            </div>
+          )}
 
           <label>
             <span style={labelStyle}>Agenda (optional)</span>

@@ -511,6 +511,11 @@ export default function UnifiedMeetingsView({
                               🔒 Private
                             </span>
                           )}
+                          {meeting.recurrence_id && (
+                            <span title="Part of a recurring series" style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: 'var(--purple-700)', background: 'rgba(76,42,146,.08)', borderRadius: 999, padding: '2px 7px' }}>
+                              🔁 Recurring
+                            </span>
+                          )}
                           <span
                             style={{
                               display: 'inline-block', flexShrink: 0, padding: '2px 8px', borderRadius: 999,
