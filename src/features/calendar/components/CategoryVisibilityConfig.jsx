@@ -46,7 +46,7 @@ export default function CategoryVisibilityConfig() {
 
   const isSuperAdmin = role === 'super_admin'
   const isProgramsMember = profile?.department_id === programsDeptId
-  const canManageEventTypes = isSuperAdmin || isProgramsMember
+  const canManageEventTypes = isSuperAdmin || isProgramsMember || role === 'regional_secretary'
 
   function isOrgWide(catName) {
     const row = matrix[catName] ?? {}
@@ -129,7 +129,7 @@ export default function CategoryVisibilityConfig() {
               You don't have permission
             </h3>
             <p style={{ fontSize: 12, color: '#991B1B', margin: '3px 0 0' }}>
-              Only super admins and Programs team members can edit event categories.
+              Only super admins, regional secretaries, and Programs team members can edit event categories.
             </p>
           </div>
         </div>
