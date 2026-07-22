@@ -100,7 +100,7 @@ vi.mock('../src/lib/supabase', () => ({
   },
 }))
 
-const { createIdea, getSubIdeas, convertIdeaToTask } =
+const { createIdea, getSubIdeas } =
   await import('../src/features/ideaBank/lib/ideaBank.js')
 
 beforeEach(() => {
@@ -133,19 +133,14 @@ describe('Idea Bank data layer', () => {
     expect(subIdeas[0].id).toBe(child.id)
   })
 
-  it('convertIdeaToTask creates a task, marks the idea resolved, and links converted_to_task_id', async () => {
+  it('creates a private idea', async () => {
     const idea = await createIdea({
       spaceId: 'space-1',
-      title: 'Ship the thing',
-      itemText: 'We should ship it',
+      title: 'Sensitive topic',
+      itemText: 'Only admins should see this',
       itemType: 'decision_point',
+      isPrivate: true,
     })
-
-    const { task, idea: updatedIdea } = await convertIdeaToTask(idea.id)
-
-    expect(task.title).toBe('Ship the thing')
-    expect(task.department_id).toBe('space-1')
-    expect(updatedIdea.status).toBe('resolved')
-    expect(updatedIdea.converted_to_task_id).toBe(task.id)
+    expect(idea.is_private).toBe(true)
   })
 })

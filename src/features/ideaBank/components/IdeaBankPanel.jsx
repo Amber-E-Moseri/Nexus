@@ -4,7 +4,6 @@ import {
   createIdea,
   updateIdea,
   deleteIdea,
-  convertIdeaToTask,
 } from '../lib/ideaBank'
 
 const TYPE_EMOJI = {
@@ -22,14 +21,6 @@ const TYPE_OPTIONS = [
   { value: 'decision_point', label: 'Decision Point' },
   { value: 'future_consideration', label: 'Future Consideration' },
 ]
-
-const STATUS_OPTIONS = ['open', 'in_progress', 'resolved']
-
-const STATUS_COLORS = {
-  open: { bg: '#F2EEE6', fg: '#7A6F5E' },
-  in_progress: { bg: '#FBEFD6', fg: '#9A7226' },
-  resolved: { bg: '#E4EFE4', fg: '#3F7A4F' },
-}
 
 function buildTree(items) {
   const byParent = new Map()
@@ -61,8 +52,8 @@ export default function IdeaBankPanel({ spaceId, canManage }) {
 
   useEffect(() => { fetchItems() }, [fetchItems])
 
-  async function handleCreate({ title, itemText, itemType, parentItemId }) {
-    const created = await createIdea({ spaceId, title, itemText, itemType, parentItemId })
+  async function handleCreate({ title, itemText, itemType, parentItemId, isPrivate }) {
+    const created = await createIdea({ spaceId, title, itemText, itemType, parentItemId, isPrivate })
     setItems((prev) => [...prev, created])
     setShowCreate(false)
     setCreatingParentId(null)
@@ -76,11 +67,6 @@ export default function IdeaBankPanel({ spaceId, canManage }) {
   async function handleDelete(id) {
     await deleteIdea(id)
     setItems((prev) => prev.filter((i) => i.id !== id && i.parent_item_id !== id))
-  }
-
-  async function handleConvert(id) {
-    const { idea } = await convertIdeaToTask(id)
-    setItems((prev) => prev.map((i) => (i.id === id ? idea : i)))
   }
 
   const tree = buildTree(items)
@@ -112,7 +98,7 @@ export default function IdeaBankPanel({ spaceId, canManage }) {
               + New Idea
             </button>
           ) : (
-            <IdeaForm onSave={(vals) => handleCreate({ ...vals, parentItemId: null })} onCancel={() => setShowCreate(false)} />
+            <IdeaForm showPrivateOption onSave={(vals) => handleCreate({ ...vals, parentItemId: null })} onCancel={() => setShowCreate(false)} />
           )}
         </div>
       )}
@@ -136,7 +122,6 @@ export default function IdeaBankPanel({ spaceId, canManage }) {
               onCancelCreateChild={() => setCreatingParentId(null)}
               onUpdate={handleUpdate}
               onDelete={handleDelete}
-              onConvert={handleConvert}
             />
           ))}
         </div>
@@ -156,13 +141,10 @@ function IdeaNode({
   onCancelCreateChild,
   onUpdate,
   onDelete,
-  onConvert,
 }) {
   const [editing, setEditing] = useState(false)
-  const [converting, setConverting] = useState(false)
 
   const children = tree.get(item.id) ?? []
-  const statusColor = STATUS_COLORS[item.status] ?? STATUS_COLORS.open
 
   return (
     <div style={{ marginLeft: depth * 20 }}>
@@ -196,43 +178,17 @@ function IdeaNode({
                   </div>
                 )}
               </div>
-              <span
-                style={{
-                  fontSize: 10.5,
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '.04em',
-                  padding: '3px 8px',
-                  borderRadius: 999,
-                  background: statusColor.bg,
-                  color: statusColor.fg,
-                  flexShrink: 0,
-                }}
-              >
-                {item.status.replace('_', ' ')}
-              </span>
+              {item.is_private && (
+                <span
+                  title="Only visible to you and space admins"
+                  style={{ fontSize: 12, flexShrink: 0, marginTop: 1 }}
+                >
+                  🔒
+                </span>
+              )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
-              {canManage && (
-                <select
-                  value={item.status}
-                  onChange={(e) => onUpdate(item.id, { status: e.target.value })}
-                  style={{
-                    fontSize: 11.5,
-                    border: '1px solid var(--border)',
-                    borderRadius: 6,
-                    background: 'var(--surface)',
-                    color: 'var(--text-secondary)',
-                    padding: '3px 6px',
-                  }}
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>{s.replace('_', ' ')}</option>
-                  ))}
-                </select>
-              )}
-
               {canManage && (
                 <button type="button" onClick={() => setEditing(true)} style={linkButtonStyle}>
                   Edit
@@ -245,19 +201,15 @@ function IdeaNode({
                 </button>
               )}
 
-              {item.converted_to_task_id ? (
-                <span style={{ fontSize: 11.5, color: '#3F7A4F', fontWeight: 600, marginLeft: 'auto' }}>
-                  ✓ Converted to task
-                </span>
-              ) : canManage ? (
+              {canManage && (
                 <button
                   type="button"
-                  onClick={() => setConverting((v) => !v)}
+                  onClick={() => onUpdate(item.id, { is_private: !item.is_private })}
                   style={{ ...linkButtonStyle, marginLeft: 'auto' }}
                 >
-                  Convert to Task
+                  {item.is_private ? 'Make public' : 'Make private'}
                 </button>
-              ) : null}
+              )}
 
               {canManage && (
                 <button
@@ -270,36 +222,13 @@ function IdeaNode({
                 </button>
               )}
             </div>
-
-            {converting && (
-              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
-                <button
-                  type="button"
-                  onClick={async () => { await onConvert(item.id); setConverting(false) }}
-                  style={{
-                    border: 'none',
-                    borderRadius: 6,
-                    background: 'var(--text-primary)',
-                    color: 'var(--surface)',
-                    padding: '6px 12px',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Create Task
-                </button>
-                <button type="button" onClick={() => setConverting(false)} style={linkButtonStyle}>
-                  Cancel
-                </button>
-              </div>
-            )}
           </>
         )}
 
         {creatingParentId === item.id && (
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
             <IdeaForm
+              showPrivateOption
               onSave={(vals) => onCreateChild({ ...vals, parentItemId: item.id })}
               onCancel={onCancelCreateChild}
             />
@@ -322,7 +251,6 @@ function IdeaNode({
               onCancelCreateChild={onCancelCreateChild}
               onUpdate={onUpdate}
               onDelete={onDelete}
-              onConvert={onConvert}
             />
           ))}
         </div>
@@ -341,10 +269,11 @@ const linkButtonStyle = {
   padding: 0,
 }
 
-function IdeaForm({ initial, onSave, onCancel }) {
+function IdeaForm({ initial, onSave, onCancel, showPrivateOption = false }) {
   const [title, setTitle] = useState(initial?.title ?? '')
   const [itemText, setItemText] = useState(initial?.itemText ?? '')
   const [itemType, setItemType] = useState(initial?.itemType ?? 'exploration')
+  const [isPrivate, setIsPrivate] = useState(initial?.isPrivate ?? false)
   const [saving, setSaving] = useState(false)
 
   async function handleSubmit(e) {
@@ -352,7 +281,7 @@ function IdeaForm({ initial, onSave, onCancel }) {
     if (!title.trim() || !itemText.trim()) return
     setSaving(true)
     try {
-      await onSave({ title: title.trim(), itemText: itemText.trim(), itemType })
+      await onSave({ title: title.trim(), itemText: itemText.trim(), itemType, isPrivate })
     } finally {
       setSaving(false)
     }
@@ -381,6 +310,12 @@ function IdeaForm({ initial, onSave, onCancel }) {
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
+        {showPrivateOption && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
+            Private
+          </label>
+        )}
         <button
           type="submit"
           disabled={saving}

@@ -18,7 +18,7 @@ export async function getIdeaBankItems({ spaceId, status, parentItemId } = {}) {
   return data ?? []
 }
 
-export async function createIdea({ spaceId, title, itemText, itemType, parentItemId }) {
+export async function createIdea({ spaceId, title, itemText, itemType, parentItemId, isPrivate }) {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError) throw authError
   if (!user) throw new Error('You must be signed in to create an idea.')
@@ -31,6 +31,7 @@ export async function createIdea({ spaceId, title, itemText, itemType, parentIte
       item_text: itemText,
       item_type: itemType || 'exploration',
       parent_item_id: parentItemId ?? null,
+      is_private: isPrivate ?? false,
       user_id: user.id,
     })
     .select()
@@ -56,49 +57,6 @@ export async function deleteIdea(id) {
     .delete()
     .eq('id', id)
   if (error) throw error
-}
-
-export async function convertIdeaToTask(id) {
-  const { data: idea, error: fetchError } = await supabase
-    .from('idea_bank_items')
-    .select('*')
-    .eq('id', id)
-    .single()
-  if (fetchError) throw fetchError
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError) throw authError
-
-  const description = idea.implementation_plan
-    ? `${idea.item_text}\n\nImplementation plan: ${idea.implementation_plan}`
-    : idea.item_text
-
-  const { data: task, error: taskError } = await supabase
-    .from('tasks')
-    .insert({
-      title: idea.title,
-      description,
-      department_id: idea.space_id,
-      source: 'manual',
-      created_by: user?.id ?? null,
-    })
-    .select()
-    .single()
-  if (taskError) throw taskError
-
-  const { data: updatedIdea, error: updateError } = await supabase
-    .from('idea_bank_items')
-    .update({
-      converted_to_task_id: task.id,
-      status: 'resolved',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .select()
-    .single()
-  if (updateError) throw updateError
-
-  return { task, idea: updatedIdea }
 }
 
 export async function getSubIdeas(parentItemId) {
