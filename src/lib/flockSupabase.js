@@ -201,6 +201,7 @@ async function getInteractions({ personId }) {
     summary: i.summary || '',
     nextAction: i.next_action || 'None',
     nextDt: i.next_action_datetime ? fmtTs(i.next_action_datetime) : '',
+    nextActionDateTimeRaw: i.next_action_datetime || null,
   }))
 }
 
@@ -241,6 +242,22 @@ async function saveInteraction({ personId, fullName, result, summary, nextAction
   }
 
   return { success: true, interactionId: interaction.id }
+}
+
+async function updateInteraction({ interactionId, result, summary, nextAction, nextActionDateTime }) {
+  if (!interactionId) throw new Error('interactionId is required')
+  const patch = {}
+  if (result !== undefined) patch.result = result || ''
+  if (summary !== undefined) patch.summary = summary || ''
+  if (nextAction !== undefined) patch.next_action = nextAction || 'None'
+  if (nextActionDateTime !== undefined) patch.next_action_datetime = nextActionDateTime || null
+
+  const { error } = await supabase
+    .from('flock_interactions')
+    .update(patch)
+    .eq('id', interactionId)
+  if (error) throw new Error(error.message)
+  return { success: true }
 }
 
 async function searchInteractions({ query }) {
@@ -454,6 +471,17 @@ export async function callFlockCRM(action, params = {}) {
         nextActionDateTime: p.nextActionDateTime || p.dateTime || null,
         meetingId: p.meetingId || null,
         interactedAt: p.interactedAt || null,
+      })
+    }
+
+    case 'updateInteraction': {
+      const p = JSON.parse(params.payload || '{}')
+      return updateInteraction({
+        interactionId: p.interactionId,
+        result: p.result,
+        summary: p.summary,
+        nextAction: p.nextAction,
+        nextActionDateTime: p.nextActionDateTime,
       })
     }
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Check, Mic, Square, UserPlus, Wand2, X } from 'lucide-react'
 import { callFlockCRM as callFlockAPI, flockCard, FLOCK } from '../../lib/flockSupabase'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import FlockVoiceInteractionLogger from './FlockVoiceInteractionLogger'
 
@@ -228,6 +229,7 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
   const [quickAddName, setQuickAddName] = useState('')
   const [quickAddSaving, setQuickAddSaving] = useState(false)
   const [voiceLogSuccess, setVoiceLogSuccess] = useState(false)
+  const [summarizing, setSummarizing] = useState(false)
 
   const { listening, supported, start, stop } = useVoiceInput((transcript) => {
     setText(transcript)
@@ -265,10 +267,47 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
       result,
       nextAction,
       nextActionDateTime: dt ? toDatetimeLocal(dt) : '',
+      // Heuristic summary is just the raw text verbatim — genuinely no
+      // condensing happens here despite the panel's "Ai" name. Kicked off
+      // below: a real Claude summarization call (same edge function the
+      // voice-recording flow already uses) that replaces this with an
+      // actual 1-2 sentence summary once it resolves.
       summary: desc,
       todos: extractTodos(desc).map((t) => ({ text: t, keep: true })),
     })
     setParsing(false)
+    summarizeInBackground(desc, person.personName || quickAddName || forPerson?.name || 'this contact')
+  }
+
+  // Fire-and-forget — never blocks Parse & review. Falls back silently to
+  // the heuristic summary/todos already in state if the call fails, same
+  // resilience pattern already used by the voice-recording flow.
+  const summarizeInBackground = async (transcriptText, contactName) => {
+    setSummarizing(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('extract-flock-voice', {
+        body: { transcript: transcriptText, contactName },
+      })
+      if (error || !data) return
+      setParsed((p) => {
+        if (!p) return p
+        return {
+          ...p,
+          summary: data.summary || p.summary,
+          // AI result is more reliable than the regex heuristic when it
+          // returns a confident classification — same precedence already
+          // used in FlockVoiceInteractionLogger's save flow.
+          result: data.result || p.result,
+          todos: data.suggested_todos?.length
+            ? data.suggested_todos.map((t) => ({ text: t.text, keep: true }))
+            : p.todos,
+        }
+      })
+    } catch {
+      // network/edge-function failure — leave the heuristic result as-is
+    } finally {
+      setSummarizing(false)
+    }
   }
 
   const patch = (key, value) => {
@@ -383,38 +422,25 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
     )
   }
 
-  // Voice logging mode
-  if (logMode === 'voice' && forPerson) {
-    return (
-      <div style={{ display: 'grid', gap: '16px', maxWidth: '620px' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-            <Mic size={20} color={FLOCK.purple} />
-            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Voice interaction log</h2>
-          </div>
-          <p style={{ margin: '4px 0 0', fontSize: '13px', color: FLOCK.muted }}>
-            Speak to create follow-up todos for {forPerson.name}.
-          </p>
-        </div>
-        <FlockVoiceInteractionLogger
-          contactId={forPerson.id}
-          contactName={forPerson.name}
-          onSuccess={handleVoiceLogSuccess}
-          onClose={() => setLogMode('text')}
-        />
-      </div>
-    )
-  }
+  // Voice logging mode — was previously an early `return` here, rendering
+  // only the voice logger with no way back to the tab bar below (the "Text"
+  // tab lived exclusively in the other branch's JSX). Restructured so the
+  // header + mode tabs render unconditionally and only the body swaps.
+  const isVoiceMode = logMode === 'voice' && forPerson
 
   return (
     <div style={{ display: 'grid', gap: '16px', maxWidth: '620px' }}>
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
           <Mic size={20} color={FLOCK.purple} />
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Quick Call Log</h2>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>
+            {isVoiceMode ? 'Voice interaction log' : 'Quick Call Log'}
+          </h2>
         </div>
         <p style={{ margin: '4px 0 0', fontSize: '13px', color: FLOCK.muted }}>
-          Speak or type what happened on the call — Nexus will fill in the details.
+          {isVoiceMode
+            ? `Speak to create follow-up todos for ${forPerson.name}.`
+            : 'Speak or type what happened on the call — Nexus will fill in the details.'}
         </p>
       </div>
 
@@ -457,13 +483,23 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
         </button>
       </div>
 
-      {msg && (
+      {isVoiceMode ? (
+        <FlockVoiceInteractionLogger
+          contactId={forPerson.id}
+          contactName={forPerson.name}
+          onSuccess={handleVoiceLogSuccess}
+          onClose={() => setLogMode('text')}
+        />
+      ) : null}
+
+      {!isVoiceMode && msg && (
         <div style={{ ...flockCard({ padding: '12px 14px', background: FLOCK.redTint, borderColor: 'transparent' }), color: FLOCK.red, display: 'flex', gap: '8px', alignItems: 'center', fontSize: '13px' }}>
           <AlertCircle size={16} style={{ flexShrink: 0 }} />
           {msg.text}
         </div>
       )}
 
+      {!isVoiceMode && (
       <div style={flockCard({ padding: '16px', display: 'grid', gap: '12px' })}>
         {forPerson && !parsed && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifySelf: 'start', padding: '6px 12px', borderRadius: '999px', background: FLOCK.purpleTint, color: FLOCK.purple, fontSize: '12px', fontWeight: 700, fontFamily: FLOCK.fontBody }}>
@@ -527,8 +563,9 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
           )}
         </div>
       </div>
+      )}
 
-      {parsed && (
+      {!isVoiceMode && parsed && (
         <div style={flockCard({ padding: '18px', display: 'grid', gap: '16px' })}>
           <div style={{ fontSize: '13px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Review &amp; confirm</div>
 
@@ -621,7 +658,10 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
           )}
 
           <div>
-            <label style={labelStyle}>Notes</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <label style={{ ...labelStyle, marginBottom: 0 }}>Notes</label>
+              {summarizing && <span style={{ fontSize: '11px', color: FLOCK.purple, fontWeight: 600 }}>Summarizing…</span>}
+            </div>
             <textarea value={parsed.summary} onChange={(e) => patch('summary', e.target.value)} rows={3} style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }} />
           </div>
 
@@ -629,16 +669,24 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
             <div>
               <label style={labelStyle}>Suggested follow-ups</label>
               <div style={{ display: 'grid', gap: '6px' }}>
+                {/* Plain div, not <label> — a <label> forwards clicks anywhere
+                    inside it (including inside the text input below) to the
+                    checkbox, which would fight editing the text. */}
                 {parsed.todos.map((t, idx) => (
-                  <label key={idx} style={{ display: 'flex', gap: '9px', alignItems: 'flex-start', fontSize: '13px', color: FLOCK.text, background: FLOCK.surface, padding: '9px 11px', borderRadius: '8px', cursor: 'pointer' }}>
+                  <div key={idx} style={{ display: 'flex', gap: '9px', alignItems: 'center', fontSize: '13px', color: FLOCK.text, background: FLOCK.surface, padding: '9px 11px', borderRadius: '8px' }}>
                     <input
                       type="checkbox"
                       checked={t.keep}
                       onChange={(e) => patch('todos', parsed.todos.map((x, i) => (i === idx ? { ...x, keep: e.target.checked } : x)))}
-                      style={{ marginTop: '2px' }}
+                      style={{ flexShrink: 0, cursor: 'pointer' }}
                     />
-                    <span style={{ opacity: t.keep ? 1 : 0.5 }}>{t.text}</span>
-                  </label>
+                    <input
+                      type="text"
+                      value={t.text}
+                      onChange={(e) => patch('todos', parsed.todos.map((x, i) => (i === idx ? { ...x, text: e.target.value } : x)))}
+                      style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '13px', color: FLOCK.text, fontFamily: FLOCK.fontBody, opacity: t.keep ? 1 : 0.5, outline: 'none', padding: '2px 4px' }}
+                    />
+                  </div>
                 ))}
               </div>
             </div>

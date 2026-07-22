@@ -98,22 +98,25 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
       if (uploadError) throw new Error('Upload failed: ' + uploadError.message)
       uploaded = true
 
-      const response = await fetch('/functions/v1/transcribe-audio-deepgram', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`,
-        },
-        body: JSON.stringify({ audioPath }),
+      // supabase.functions.invoke builds the correct absolute functions URL
+      // and attaches auth automatically — a raw fetch('/functions/v1/...')
+      // is a relative path with nowhere to resolve to on the local dev
+      // server (no proxy configured for it), producing a 404 there even
+      // though the same call could reach Supabase directly in production.
+      const { data: result, error: invokeError } = await supabase.functions.invoke('transcribe-audio-deepgram', {
+        body: { audioPath },
       })
 
-      if (!response.ok) {
-        const err = await response.json()
-        throw new Error(err.error || `Transcription failed (${response.status})`)
+      if (invokeError) {
+        let message = `Transcription failed`
+        try {
+          const body = await invokeError.context?.json()
+          message = body?.error || message
+        } catch { /* fall back to generic message */ }
+        throw new Error(message)
       }
 
-      const result = await response.json()
-      const transcriptText = result.transcript || ''
+      const transcriptText = result?.transcript || ''
 
       if (!transcriptText.trim()) {
         throw new Error('Transcription was empty — please check the audio quality')
@@ -135,31 +138,28 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
   const extractTodos = async (transcriptText) => {
     setExtracting(true)
     try {
-      const response = await fetch('/functions/v1/extract-flock-voice', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`,
-        },
-        body: JSON.stringify({
-          transcript: transcriptText,
-          contactName: contactName,
-        }),
+      const { data, error: invokeError } = await supabase.functions.invoke('extract-flock-voice', {
+        body: { transcript: transcriptText, contactName },
       })
 
-      if (!response.ok) {
-        const err = await response.json()
-        throw new Error(err.error || `Extraction failed (${response.status})`)
+      if (invokeError) {
+        let message = `Extraction failed`
+        try {
+          const body = await invokeError.context?.json()
+          message = body?.error || message
+        } catch { /* fall back to generic message */ }
+        throw new Error(message)
       }
 
-      const data = await response.json()
       setExtractedData(data)
       // Pre-select all suggested todos
       setSelectedTodos(new Set(data.suggested_todos?.map((_, i) => i) || []))
     } catch (e) {
       console.error('Extraction error:', e)
       setExtractedData({
+        result: null,
         summary: 'Could not extract suggestions',
+        decisions: [],
         suggested_todos: [],
         next_action: null,
       })
@@ -181,12 +181,16 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
     setSaving(true)
     setError('')
     try {
-      // Step 1: save interaction (updates next_due_date automatically)
+      // Step 1: save interaction (updates next_due_date automatically).
+      // Prefer the AI's classified call outcome (it read the actual
+      // transcript, not just keyword-matched it) — fall back to the local
+      // heuristic only if extraction didn't return one.
+      const callResult = extractedData?.result || detectResult(transcript.toLowerCase())
       const interactionRes = await callFlockCRM('saveInteraction', {
         payload: JSON.stringify({
           personId: contactId,
           fullName: contactName,
-          result: detectResult(transcript.toLowerCase()),
+          result: callResult,
           summary: transcript,
           nextAction: selectedList.length ? 'Follow-up' : 'None',
           nextActionDateTime: '',
@@ -244,8 +248,26 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
 
         {extractedData.summary && (
           <div style={flockCard({ padding: '12px 14px', background: FLOCK.purpleTint, borderColor: 'transparent' })}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: FLOCK.purple, marginBottom: '4px' }}>Summary</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: FLOCK.purple }}>Summary</div>
+              {extractedData.result && (
+                <span style={{ fontSize: '11px', fontWeight: 700, color: FLOCK.purple, background: '#FFFFFF', borderRadius: '999px', padding: '2px 9px' }}>
+                  {extractedData.result}
+                </span>
+              )}
+            </div>
             <p style={{ margin: 0, fontSize: '13px', color: FLOCK.text }}>{extractedData.summary}</p>
+          </div>
+        )}
+
+        {extractedData.decisions?.length > 0 && (
+          <div>
+            <label style={labelStyle}>Discussed / agreed</label>
+            <ul style={{ margin: 0, paddingLeft: '18px', display: 'grid', gap: '4px' }}>
+              {extractedData.decisions.map((d, idx) => (
+                <li key={idx} style={{ fontSize: '13px', color: FLOCK.text }}>{d}</li>
+              ))}
+            </ul>
           </div>
         )}
 

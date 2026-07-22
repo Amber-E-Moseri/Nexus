@@ -52,6 +52,24 @@ function groupByDept(tasks) {
   return Array.from(map.values())
 }
 
+const STATUS_SECTIONS = [
+  { key: 'to_do',      label: 'To Do',       color: 'var(--text-tertiary)',  bg: 'var(--surface-secondary)' },
+  { key: 'in_progress',label: 'In Progress',  color: '#2563eb',              bg: '#eff6ff' },
+  { key: 'completed',  label: 'Completed',    color: '#16a34a',              bg: '#f0fdf4' },
+  { key: 'cancelled',  label: 'Cancelled',    color: '#9ca3af',              bg: '#f9fafb' },
+]
+
+function groupByStatus(tasks) {
+  const map = {}
+  for (const s of STATUS_SECTIONS) map[s.key] = []
+  for (const task of tasks) {
+    const cat = task.status_definition?.category ?? 'to_do'
+    if (map[cat]) map[cat].push(task)
+    else map['to_do'].push(task)
+  }
+  return map
+}
+
 function WorkloadSummary({ tasks, deptGroups }) {
   const now = new Date()
   const completed = tasks.filter((t) => isTaskCompleted(t)).length
@@ -174,10 +192,11 @@ export default function FlockView() {
     return RESTRICTED_DEPTS.has(name)
   }
 
-  // Index tasks by assignee_id
+  // Index tasks by flock member — use _flock_member_id (set by getFlockTasks)
+  // rather than assignee_id to correctly bucket sprint tasks and co-assigned tasks.
   const memberTasks = {}
   for (const task of allTasks) {
-    const aid = task.assignee_id
+    const aid = task._flock_member_id ?? task.assignee_id
     if (!memberTasks[aid]) memberTasks[aid] = []
     memberTasks[aid].push(task)
   }
@@ -185,6 +204,7 @@ export default function FlockView() {
   const selectedMember = members.find((m) => m.id === selectedId) ?? null
   const selectedTasks = selectedId ? (memberTasks[selectedId] ?? []) : []
   const deptGroups = groupByDept(selectedTasks)
+  const statusGroups = groupByStatus(selectedTasks)
 
   if (error) {
     return (
@@ -327,81 +347,107 @@ export default function FlockView() {
             ) : isMemberRestricted(selectedMember) ? (
               <WorkloadSummary tasks={selectedTasks} deptGroups={deptGroups} />
             ) : (
-              deptGroups.map(({ dept, tasks }) => (
-                <div key={dept?.id ?? 'none'} style={{ marginBottom: 24 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    {dept && (
+              STATUS_SECTIONS.map((section) => {
+                const tasks = statusGroups[section.key] ?? []
+                if (tasks.length === 0) return null
+                return (
+                  <div key={section.key} style={{ marginBottom: 24 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <span
                         style={{
-                          width: 8, height: 8, borderRadius: '50%',
-                          background: `#${dept.color}`, flexShrink: 0,
+                          fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                          letterSpacing: '0.08em', color: section.color,
                         }}
-                      />
-                    )}
-                    <span
-                      style={{
-                        fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)',
-                        textTransform: 'uppercase', letterSpacing: '0.08em',
-                      }}
-                    >
-                      {dept?.name ?? 'No department'}
-                    </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                      · {tasks.length}
-                    </span>
-                  </div>
+                      >
+                        {section.label}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 11, fontWeight: 600, color: 'white',
+                          background: section.color, borderRadius: 20,
+                          padding: '0px 7px', lineHeight: '18px',
+                        }}
+                      >
+                        {tasks.length}
+                      </span>
+                    </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {tasks.map((task) => {
-                      const isOverdue =
-                        task.due_date && new Date(task.due_date) < new Date() && !isTaskCompleted(task)
-                      const priority = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {tasks.map((task) => {
+                        const isOverdue =
+                          task.due_date && new Date(task.due_date) < new Date() && !isTaskCompleted(task)
+                        const priority = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium
+                        const statusName = task.status_definition?.name ?? task.status ?? ''
 
-                      return (
-                        <div
-                          key={task.id}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 10,
-                            padding: '9px 12px', borderRadius: 8,
-                            border: '1px solid var(--border)', background: 'white',
-                          }}
-                        >
-                          <span
+                        return (
+                          <div
+                            key={task.id}
                             style={{
-                              flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
-                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              display: 'flex', alignItems: 'center', gap: 10,
+                              padding: '9px 12px', borderRadius: 8,
+                              border: '1px solid var(--border)', background: 'white',
                             }}
                           >
-                            {task.title}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 20,
-                              background: priority.bg, color: priority.text, flexShrink: 0,
-                            }}
-                          >
-                            {task.priority}
-                          </span>
-                          {task.due_date && (
+                            {/* Status dot */}
                             <span
                               style={{
-                                fontSize: 11, flexShrink: 0,
-                                color: isOverdue ? 'var(--coral-dark)' : 'var(--text-tertiary)',
-                                fontWeight: isOverdue ? 500 : 400,
+                                width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                                background: task.status_definition?.color
+                                  ? `#${task.status_definition.color.replace('#', '')}`
+                                  : section.color,
+                              }}
+                            />
+                            <span
+                              style={{
+                                flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
+                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                               }}
                             >
-                              {isOverdue ? '⚠ ' : ''}
-                              {new Date(task.due_date).toLocaleDateString('en-CA', {
-                                month: 'short', day: 'numeric',
-                              })}
+                              {task.title}
                             </span>
-                          )}
-                        </div>
-                      )
-                    })}
+                            {/* Dept badge */}
+                            {task.department && (
+                              <span
+                                style={{
+                                  fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 20,
+                                  background: `#${task.department.color}22`,
+                                  color: `#${task.department.color}`,
+                                  flexShrink: 0, maxWidth: 80,
+                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {task.department.name}
+                              </span>
+                            )}
+                            <span
+                              style={{
+                                fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 20,
+                                background: priority.bg, color: priority.text, flexShrink: 0,
+                              }}
+                            >
+                              {task.priority}
+                            </span>
+                            {task.due_date && (
+                              <span
+                                style={{
+                                  fontSize: 11, flexShrink: 0,
+                                  color: isOverdue ? 'var(--coral-dark)' : 'var(--text-tertiary)',
+                                  fontWeight: isOverdue ? 500 : 400,
+                                }}
+                              >
+                                {isOverdue ? '⚠ ' : ''}
+                                {new Date(task.due_date).toLocaleDateString('en-CA', {
+                                  month: 'short', day: 'numeric',
+                                })}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             )}
           </>
         )}

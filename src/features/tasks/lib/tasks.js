@@ -137,11 +137,7 @@ export async function getDeptTasks(departmentId) {
       department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
       ${ASSIGNEES_SELECT},
-      meeting:meetings!meeting_id(id, title),
-      subtask_count:tasks!parent_task_id(count),
-      comments:task_comments(count),
-      files:task_files(count),
-      dependencies:task_dependencies!task_id(count)
+      subtask_count:tasks!parent_task_id(count)
     `)
     .eq('department_id', departmentId)
     .eq('is_personal', false)
@@ -162,10 +158,7 @@ export async function getSprintTasks(sprintId) {
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
-      subtask_count:tasks!parent_task_id(count),
-      comments:task_comments(count),
-      files:task_files(count),
-      dependencies:task_dependencies!task_id(count)
+      subtask_count:tasks!parent_task_id(count)
     `)
     .eq('sprint_id', sprintId)
     .eq('task_type', 'sprint')
@@ -209,9 +202,7 @@ export async function getMyTasks(userId) {
     ${ASSIGNEES_SELECT},
     department:departments(id, name, color),
     assignee:users!assignee_id(id, name, avatar_url),
-    subtask_count:tasks!parent_task_id(count),
-    comments:task_comments(count),
-    files:task_files(count)
+    subtask_count:tasks!parent_task_id(count)
   `
 
   if (taskIds !== null && taskIds.length > 0) {
@@ -269,6 +260,7 @@ export async function getFlockTasks(pastorId) {
     .from('pastor_members')
     .select(`
       member:users!member_id(
+        id,
         tasks:tasks!assignee_id(
           ${TASK_COLS},
           subtask_count:tasks!parent_task_id(count),
@@ -285,11 +277,17 @@ export async function getFlockTasks(pastorId) {
 
   if (error) throw error
 
-  // deleted_at can't be filtered inside the nested member.tasks embed via
-  // .is(), so drop soft-deleted rows client-side after the flatMap.
+  // Preserve the member_id from each pastor_members row so the UI can
+  // correctly bucket tasks per flock member without relying on assignee_id
+  // (which may differ for sprint tasks or co-assigned tasks).
   const tasks = (data ?? [])
-    .flatMap((assignment) => assignment.member?.tasks ?? [])
-    .filter((task) => !task.deleted_at)
+    .flatMap((assignment) =>
+      (assignment.member?.tasks ?? []).map((t) => ({
+        ...t,
+        _flock_member_id: assignment.member?.id,
+      }))
+    )
+    .filter((task) => !task.deleted_at && !task.parent_task_id)
   return normalizeTaskResultList(tasks)
 }
 
