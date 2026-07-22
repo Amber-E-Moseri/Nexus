@@ -51,8 +51,8 @@ const TABS = [
   { id: 'minutes', icon: '📝', label: 'Minutes',    badge: null },
   { id: 'actions', icon: '🎯', label: 'Actions',    badge: 'actions' },
   { id: 'audio',   icon: '🎙️', label: 'Audio',      badge: null },
-  { id: 'docs',    icon: '📎', label: 'Docs',       badge: 'docs' },
   { id: 'ai',      icon: '⚡', label: 'AI Extract', badge: null },
+  { id: 'docs',    icon: '📎', label: 'Docs',       badge: 'docs' },
 ]
 
 // For a <input type="datetime-local"> value, which has no timezone —
@@ -85,7 +85,6 @@ function MeetingDetailViewInner() {
   const [actionBadge, setActionBadge]           = useState(0)
   const [minutesText, setMinutesText]           = useState('')
   const [decisionsText, setDecisionsText]       = useState('')
-  const [nextStepsText, setNextStepsText]       = useState('')
   const [minutesSaveStatus, setMinutesSaveStatus] = useState('idle') // idle | saving | saved | error
   const [actionItems, setActionItems]           = useState([])
   const [showAddAction, setShowAddAction]       = useState(false)
@@ -168,12 +167,15 @@ function MeetingDetailViewInner() {
   // `summary` column. Every other canManage-gated action is unaffected and
   // stays leadership/creator-only.
   const canRecord = true
-  // One-on-one notes are hidden from invited attendees by default — they see
-  // the meeting on their calendar (via allowed_viewers) but not its notes
-  // unless the creator explicitly shares. Creator/canManage always sees notes.
+  // Notes are hidden from invited attendees by default on ANY private
+  // meeting, not just 1-on-1s — being on the calendar (allowed_viewers)
+  // means you can see the meeting exists, not that you can see its notes.
+  // Only a published meeting grants notes to everyone who can view it;
+  // otherwise the creator must explicitly share via notes_shared_with.
+  // Creator/canManage always sees notes regardless of visibility.
   const isOneOnOne = meeting?.meeting_type === '1_on_1_meeting'
   const isNotesCreator = meeting?.created_by === profile?.id
-  const canSeeNotes = !isOneOnOne || canManage || isNotesCreator ||
+  const canSeeNotes = meeting?.visibility === 'published' || canManage || isNotesCreator ||
                       (meeting?.notes_shared_with ?? []).includes(profile?.id)
   const isLive    = meeting?.status === 'in_progress'
   const isPost    = meeting?.status === 'completed' || meeting?.status === 'cancelled'
@@ -181,18 +183,17 @@ function MeetingDetailViewInner() {
 
   // ── fetch ──────────────────────────────────────────────────────────────────
 
-  useEffect(() => { if (meetingId) { fetchMeeting(); fetchActionItems() } }, [meetingId])
-  // Open items follow the same visibility as meeting notes (canSeeNotes) —
-  // gated on `meeting` being loaded first, since canSeeNotes defaults to
-  // true (!isOneOnOne) while meeting is still null, before we actually know
-  // whether this is a 1-on-1 that should be hidden.
-  useEffect(() => { if (meeting && canSeeNotes) fetchOpenItems() }, [meeting?.id, canSeeNotes])
+  useEffect(() => { if (meetingId) { fetchMeeting() } }, [meetingId])
+  // Action items and open items follow the same visibility as meeting notes
+  // (canSeeNotes) — gated on `meeting` being loaded first, since canSeeNotes
+  // defaults to canManage-only while meeting is still null, before we
+  // actually know this meeting's real visibility/sharing state.
+  useEffect(() => { if (meeting && canSeeNotes) { fetchActionItems(); fetchOpenItems() } }, [meeting?.id, canSeeNotes])
 
   // ── AI extraction: durable result bridged from useExtractionStatus ─────────
   // extraction.result is the source of truth (survives navigation/refresh —
   // WS1/WS3). Always sync the review-UI state so a completed extraction is
   // visible whether it just finished or the user is returning to it later.
-  const prevExtractionStatusRef = useRef('idle')
   useEffect(() => {
     setAiExtracting(extraction.status === 'processing')
     if (extraction.status === 'failed' && extraction.error) setAiError(extraction.error)
@@ -229,29 +230,57 @@ function MeetingDetailViewInner() {
       })()
     }
     if (extracted.open_items?.length) setSelectedAiOpenItems(autoSelectOpenItems(extracted.open_items))
+  }, [extraction.result])
 
-    // Auto-populate minutes/notes only on a genuine fresh completion (status
-    // transitioning into 'complete' during this session), not on cold mount
-    // of an already-completed extraction from a prior session — otherwise
-    // this would race fetchMeeting() and could clobber already-saved manual
-    // edits with stale raw-extraction text before the real saved values load.
-    const justCompleted = prevExtractionStatusRef.current !== 'complete' && extraction.status === 'complete'
-    prevExtractionStatusRef.current = extraction.status
-    if (!justCompleted || loading) return
+  // Auto-populate minutes/decisions/next-steps — split into its own effect,
+  // separately keyed on `loading`, so it gets a second chance to run once
+  // fetchMeeting() finishes. Previously this lived inside the effect above
+  // (keyed only on [extraction.result]): useExtractionStatus's own fetch
+  // often resolves before fetchMeeting() does, so `loading` was still true
+  // the one time this logic ran, it bailed out, and — since `loading`
+  // wasn't a dependency — nothing ever re-triggered it. The result: a
+  // genuinely complete extraction with real detailed_notes/decisions never
+  // made it into the Minutes tab at all, even though nothing was actually
+  // wrong with the extraction itself.
+  //
+  // Applied once per distinct completion (keyed by extraction_completed_at,
+  // not a status-transition ref) — a ref alone couldn't distinguish "still
+  // waiting for loading" from "already applied", which is exactly what
+  // caused the bug above. Only applies once loading is false, so
+  // minutesText/decisionsText reflect the real saved DB
+  // values (not the pre-load empty default) — preserves the original
+  // anti-clobber intent of never overwriting already-saved manual edits.
+  const appliedExtractionRef = useRef(null)
+  useEffect(() => {
+    if (extraction.status !== 'complete' || loading || !extraction.result) return
+    const completionKey = extraction.completedAt || 'unknown'
+    if (appliedExtractionRef.current === completionKey) return
+    appliedExtractionRef.current = completionKey
 
+    const extracted = extraction.result
     if (extracted.summary && !meeting?.meeting_notes) {
       supabase.from('meetings').update({ meeting_notes: extracted.summary }).eq('id', meetingId)
         .then(({ error: notesErr }) => { if (!notesErr) setMeeting((m) => ({ ...m, meeting_notes: extracted.summary })) })
     }
-    if (extracted.detailed_notes && !minutesText) setMinutesText(extracted.detailed_notes)
+    // Fall back to summary when detailed_notes wasn't populated (either the
+    // content gate zeroed it out for a low-confidence/non-meeting
+    // transcript, or the model just didn't return one) — leaving Discussion
+    // entirely blank when a perfectly good summary already exists is worse
+    // than showing the summary there instead. Next steps no longer gets its
+    // own field (folded into Discussion) — appended as a labeled section
+    // instead of a separate textarea.
+    const discussionParts = [
+      extracted.detailed_notes || extracted.summary,
+      extracted.next_steps?.length ? `Next steps:\n• ${extracted.next_steps.join('\n• ')}` : null,
+    ].filter(Boolean)
+    if (discussionParts.length && !minutesText) setMinutesText(discussionParts.join('\n\n'))
     if (extracted.decisions?.length && !decisionsText) {
       const decisionStrings = extracted.decisions
         .map((d) => (typeof d === 'string' ? d : d?.decision ?? null))
         .filter((d) => typeof d === 'string' && d !== null)
       setDecisionsText(decisionStrings.join('\n• '))
     }
-    if (extracted.next_steps?.length && !nextStepsText) setNextStepsText(extracted.next_steps.join('\n• '))
-  }, [extraction.result])
+  }, [extraction.status, extraction.result, extraction.completedAt, loading])
 
   // ── auto-cache to localStorage (debounced, crash-safety net only) ──────────
   useEffect(() => {
@@ -262,20 +291,22 @@ function MeetingDetailViewInner() {
       localStorage.setItem(cacheKey, JSON.stringify({
         minutesText,
         decisionsText,
-        nextStepsText,
         timestamp: Date.now(),
       }))
     }, 500)
     return () => clearTimeout(cacheTimeoutRef.current)
-  }, [minutesText, decisionsText, nextStepsText, meetingId])
+  }, [minutesText, decisionsText, meetingId])
 
-  // ── autosave minutes/decisions/next-steps to the database (debounced) ──────
+  // ── autosave minutes/decisions to the database (debounced) ─────────────────
   // Replaces the old manual "Publish minutes" button. Gated on
   // canEditVisibility so it never attempts a write the RLS trigger
   // (enforce_meetings_summary_only_update) would reject for non-editors —
   // matches the same predicate the UI already uses to show/hide edit
   // affordances. Skipped while `loading` so it can't fire on initial mount
   // before fetchMeeting() has populated minutesText/etc from the DB.
+  // next_steps is no longer written here — folded into minutes (Discussion)
+  // instead of its own field; the column is left alone (read-only, legacy
+  // fallback for exports) rather than actively cleared.
   useEffect(() => {
     if (!meetingId || loading || !canEditVisibility) return
     clearTimeout(minutesDbTimeoutRef.current)
@@ -284,7 +315,6 @@ function MeetingDetailViewInner() {
       const { error } = await supabase.from('meetings').update({
         minutes: minutesText,
         decisions: decisionsText,
-        next_steps: nextStepsText,
       }).eq('id', meetingId)
       if (error) {
         setMinutesSaveStatus('error')
@@ -293,10 +323,19 @@ function MeetingDetailViewInner() {
         localStorage.removeItem(`meeting_draft_${meetingId}`)
         setMinutesSaveStatus('saved')
         setTimeout(() => setMinutesSaveStatus('idle'), 3000)
+        // Keep the local `meeting` object in sync with what was just saved —
+        // without this, anything reading meeting.minutes/meeting.decisions
+        // directly (rather than the minutesText/decisionsText state used by
+        // the textareas) sees stale, pre-edit content. Concretely:
+        // endMeeting() spreads `meeting` into the payload it hands to
+        // syncFlockInteractionForMeeting, so the Flock CRM interaction's
+        // logged summary was silently built from whatever was loaded at
+        // page-open, never the notes actually typed during the meeting.
+        setMeeting((m) => (m ? { ...m, minutes: minutesText, decisions: decisionsText } : m))
       }
     }, 2500)
     return () => clearTimeout(minutesDbTimeoutRef.current)
-  }, [minutesText, decisionsText, nextStepsText, meetingId, canEditVisibility, loading])
+  }, [minutesText, decisionsText, meetingId, canEditVisibility, loading])
 
   // ── cache AI extraction results ───────────────────────────────────────────
   useEffect(() => {
@@ -316,10 +355,9 @@ function MeetingDetailViewInner() {
     const cached = localStorage.getItem(cacheKey)
     if (cached) {
       try {
-        const { minutesText: cM, decisionsText: cD, nextStepsText: cN } = JSON.parse(cached)
+        const { minutesText: cM, decisionsText: cD } = JSON.parse(cached)
         if (!minutesText && cM) setMinutesText(cM)
         if (!decisionsText && cD) setDecisionsText(cD)
-        if (!nextStepsText && cN) setNextStepsText(cN)
       } catch {}
     }
     // Restore AI extraction results
@@ -394,9 +432,17 @@ function MeetingDetailViewInner() {
         .eq('meeting_id', meetingId)
         .maybeSingle()
       setMinutesRecord(mm ?? null)
-      if (data.minutes) setMinutesText(data.minutes)
+      // next_steps used to be its own field — folded into Discussion now, so
+      // a legacy meeting that already has separate next_steps content gets
+      // it appended here (labeled) rather than silently dropped from view.
+      // The next_steps column is left untouched (no longer written to), so
+      // this fold re-runs on every load — guard against re-appending
+      // (and growing without bound) once the merged text has already been
+      // saved back into `minutes` by checking it isn't already present.
+      const alreadyFolded = data.next_steps && data.minutes?.includes(data.next_steps)
+      const discussionParts = [data.minutes, data.next_steps && !alreadyFolded ? `Next steps:\n${data.next_steps}` : null].filter(Boolean)
+      if (discussionParts.length) setMinutesText(discussionParts.join('\n\n'))
       if (data.decisions) setDecisionsText(data.decisions)
-      if (data.next_steps) setNextStepsText(data.next_steps)
       if (data.context) setContext(data.context)
 
       const items = data.agendas?.[0]?.agenda_items
@@ -488,7 +534,11 @@ function MeetingDetailViewInner() {
     const { error } = await supabase
       .from('meetings').update({ status: 'completed', ended_at }).eq('id', meetingId)
     if (error) { showToast(`Couldn't end the meeting: ${error.message}`, { tone: 'error' }); return }
-    const updated = { ...meeting, status: 'completed', ended_at }
+    // minutesText/decisionsText (not meeting.minutes/meeting.decisions) are
+    // the always-current source of truth for what's on screen — the DB
+    // autosave is debounced 2.5s, so ending the meeting right after typing
+    // could otherwise race it and hand Flock stale/empty notes.
+    const updated = { ...meeting, status: 'completed', ended_at, minutes: minutesText, decisions: decisionsText }
     setMeeting(updated)
     if (updated.meeting_type === '1_on_1_meeting') {
       syncFlockInteractionForMeeting(updated, profile?.id).catch(() => {})
@@ -506,7 +556,11 @@ function MeetingDetailViewInner() {
       const blob = await generateMinutesPDF({
         summary: meeting?.meeting_notes || minutesText || '',
         decisions: splitLines(decisionsText),
-        nextSteps: splitLines(nextStepsText),
+        // next_steps is folded into Discussion (minutesText) now rather
+        // than its own field — meeting?.next_steps is only ever populated
+        // for meetings that had it saved before the fold, as a legacy
+        // fallback.
+        nextSteps: splitLines(meeting?.next_steps || ''),
         detailedNotes: minutesText || '',
         actionItems: actionItems.map((t) => ({
           action: t.title,
@@ -877,11 +931,16 @@ function MeetingDetailViewInner() {
     // reflects edits immediately; mins/id are re-derived after the DB round
     // trip so `id` stays a real agenda_items id (needed for the `key` prop
     // and for the sort_order this list already relies on for navigation).
+    const previousAgenda = agenda
     setAgenda(editorItems.map((item, i) => ({ id: `pending-${i}`, title: item.segment, mins: item.duration })))
     try {
       await saveAgendaItemsForMeeting(meeting, editorItems, profile?.id)
       await fetchMeeting()
     } catch (err) {
+      // Roll back the optimistic update on failure — otherwise the editor
+      // looks saved (items still show in the read view) until the next
+      // full refresh silently drops them, since nothing ever reached the DB.
+      setAgenda(previousAgenda)
       showToast(`Couldn't save agenda: ${err.message}`, { tone: 'error' })
     }
   }
@@ -1415,8 +1474,8 @@ function MeetingDetailViewInner() {
                   </div>
                 )}
 
-                {/* One-on-one: share notes with attendees (creator/managers only) */}
-                {isOneOnOne && (canManage || isNotesCreator) && (
+                {/* Any private meeting: share notes with attendees (creator/managers only) */}
+                {meeting?.visibility !== 'published' && (canManage || isNotesCreator) && (
                   <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'14px 16px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
                     <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>🔒 Notes hidden by default — share with</div>
                     <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
@@ -1454,20 +1513,24 @@ function MeetingDetailViewInner() {
                 {canSeeNotes ? (
                   <>
                     {/* 📝 Discussion */}
-                    <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden' }}>
+                    {/* flexShrink:0 is load-bearing: overflow:'hidden' resets a flex
+                        item's automatic min-height to 0 per spec, so without this the
+                        scrolling flex-column tab body could compress this card (and its
+                        textarea) to zero height instead of scrolling past it. */}
+                    <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden', flexShrink:0 }}>
                       <div style={{ padding:'11px 14px', borderBottom:`1px solid ${FS.borderL}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                         <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted }}>📝 Discussion</div>
-                        <span style={{ fontSize:10, color: minutesSaveStatus === 'error' ? FS.coral : FS.sage, fontWeight:600 }}>
+                        <span style={{ fontSize:10, color: minutesSaveStatus === 'error' ? FS.coral : canEditVisibility ? FS.sage : FS.muted, fontWeight:600 }}>
                           {minutesSaveStatus === 'saving' ? '⏳ Saving…'
                             : minutesSaveStatus === 'saved' ? '✓ Saved'
                             : minutesSaveStatus === 'error' ? '⚠ Save failed'
-                            : canEditVisibility ? '✓ Auto-saving' : ''}
+                            : canEditVisibility ? '✓ Auto-saving' : '🔒 Read-only — only the creator or a manager can edit'}
                         </span>
                       </div>
                       <textarea
                         value={minutesText}
                         onChange={e => setMinutesText(e.target.value)}
-                        placeholder="Capture what's being discussed…"
+                        placeholder="Capture what's being discussed, including any next steps…"
                         rows={6}
                         disabled={!canEditVisibility}
                         style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background: canEditVisibility ? 'transparent' : FS.surface, fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
@@ -1475,7 +1538,7 @@ function MeetingDetailViewInner() {
                     </div>
 
                     {/* ✅ Decisions Made */}
-                    <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden' }}>
+                    <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden', flexShrink:0 }}>
                       <div style={{ padding:'11px 14px', borderBottom:`1px solid ${FS.borderL}` }}>
                         <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted }}>✅ Decisions Made</div>
                       </div>
@@ -1483,21 +1546,6 @@ function MeetingDetailViewInner() {
                         value={decisionsText}
                         onChange={e => setDecisionsText(e.target.value)}
                         placeholder="Key decisions reached in this meeting…"
-                        rows={4}
-                        disabled={!canEditVisibility}
-                        style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background: canEditVisibility ? 'transparent' : FS.surface, fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
-                      />
-                    </div>
-
-                    {/* ➡ Next Steps */}
-                    <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden' }}>
-                      <div style={{ padding:'11px 14px', borderBottom:`1px solid ${FS.borderL}` }}>
-                        <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted }}>➡ Next Steps</div>
-                      </div>
-                      <textarea
-                        value={nextStepsText}
-                        onChange={e => setNextStepsText(e.target.value)}
-                        placeholder="Agreed next steps…"
                         rows={4}
                         disabled={!canEditVisibility}
                         style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background: canEditVisibility ? 'transparent' : FS.surface, fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
@@ -1524,6 +1572,11 @@ function MeetingDetailViewInner() {
             {/* ACTIONS TAB */}
             {activeTab === 'actions' && (
               <div style={{ flex:1, overflowY:'auto', padding: isMobile ? 12 : 18, display:'flex', flexDirection:'column', gap: isMobile ? 8 : 12, animation:'fadein .18s ease' }}>
+                {/* ── Action items: same visibility as notes — canSeeNotes.
+                    Tasks created from a private meeting shouldn't surface to
+                    a plain attendee who was never explicitly note-shared. ── */}
+                {canSeeNotes ? (
+                <>
                 {/* Header */}
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>
@@ -1610,6 +1663,14 @@ function MeetingDetailViewInner() {
                         </div>
                       )
                     })}
+                  </div>
+                )}
+                </>
+                ) : (
+                  <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'24px 16px', textAlign:'center', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
+                    <div style={{ fontSize:24, marginBottom:8 }}>🔒</div>
+                    <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>Action items hidden by creator</div>
+                    <div style={{ fontSize:12, color: FS.muted, marginTop:4 }}>The organizer hasn't shared notes from this meeting with you yet.</div>
                   </div>
                 )}
 
@@ -1880,7 +1941,7 @@ function MeetingDetailViewInner() {
 
                 {/* Saved transcript */}
                 {meeting?.summary && (
-                  <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
+                  <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,.06)', flexShrink:0 }}>
                     <div style={{ padding:'12px 16px', borderBottom:`1px solid ${FS.borderL}`, display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
                       <div style={{ minWidth:0 }}>
                         <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>📄 Saved Transcript</div>
@@ -1992,7 +2053,6 @@ function MeetingDetailViewInner() {
                       openItems={openItems}
                       decisionsText={decisionsText}
                       minutesText={minutesText}
-                      nextStepsText={nextStepsText}
                       onSuccess={(result) => setMeeting(m => ({ ...m, doc_drive_url: result.docUrl, doc_title: result.docTitle }))}
                     />
                   </div>
@@ -2211,7 +2271,6 @@ function MeetingDetailViewInner() {
                           openItems={openItems}
                           decisionsText={decisionsText}
                           minutesText={minutesText}
-                          nextStepsText={nextStepsText}
                           onSuccess={(result) => setMeeting(m => ({ ...m, doc_drive_url: result.docUrl, doc_title: result.docTitle }))}
                         />
                       </div>

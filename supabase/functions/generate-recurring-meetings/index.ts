@@ -1,14 +1,5 @@
-// Register cron job in Supabase SQL Editor with:
-// select cron.schedule(
-//   'generate-recurring-meetings-hourly',
-//   '0 * * * *',  -- Every hour
-//   $$
-//   select net.http_post(
-//     url := '[SUPABASE_PROJECT_URL]/functions/v1/generate-recurring-meetings',
-//     headers := '{"Authorization": "Bearer [SERVICE_ROLE_KEY]"}'::jsonb
-//   );
-//   $$
-// );
+// Registered via supabase/migrations/20270724000202_fix_recurring_meetings_net_http_post_schema.sql
+// (public.generate_recurring_meetings_trigger(), called hourly by pg_cron).
 //
 // Progressively materializes the next occurrence of each recurring meeting
 // series, ~1 day before it's due to happen, instead of creating dozens of
@@ -20,6 +11,22 @@
 // NOTE: the recurrence-date math here (parseRule/nextOccurrenceDate) mirrors
 // src/features/meetings/lib/recurrence.js. Keep the two in sync if the
 // recurrence rule format ever changes.
+//
+// AUTH: this project has both legacy JWT-based and new opaque (sb_secret_...)
+// API keys active. Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') resolves to the
+// NEW-format key here, but Supabase's Edge Functions gateway currently only
+// accepts the LEGACY-format key as a valid `apikey`/Authorization value for
+// invoking a function at all — so comparing against SUPABASE_SERVICE_ROLE_KEY
+// can never succeed for a caller that actually gets past the gateway. This
+// function instead checks Authorization against a dedicated CRON_SHARED_SECRET
+// (decoupled from Supabase's own key rotation). One-time manual setup required:
+//   supabase secrets set CRON_SHARED_SECRET=<a random value you generate>
+//   insert into public.app_settings (key, value) values
+//     ('recurring_meetings_cron_secret', '<the same random value>')
+//   on conflict (key) do update set value = excluded.value;
+// (public.generate_recurring_meetings_trigger() sends `apikey` from
+// app_settings.service_role_key — the LEGACY key, to satisfy the gateway —
+// and `Authorization: Bearer` from app_settings.recurring_meetings_cron_secret.)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -36,12 +43,12 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   })
 }
 
-async function verifyServiceRole(req: Request): Promise<boolean> {
+function verifyCronSecret(req: Request): boolean {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return false
   const token = authHeader.replace('Bearer ', '')
-  const expectedToken = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  return token === expectedToken
+  const expectedToken = Deno.env.get('CRON_SHARED_SECRET')
+  return !!expectedToken && token === expectedToken
 }
 
 const MAX_OCCURRENCES = 52
@@ -170,7 +177,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return jsonResponse(405, { error: 'Method not allowed' })
   }
-  if (!(await verifyServiceRole(req))) {
+  if (!verifyCronSecret(req)) {
     return jsonResponse(401, { error: 'Unauthorized' })
   }
 
