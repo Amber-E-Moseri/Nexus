@@ -8,29 +8,30 @@
 -- to a tab switch, refresh-past-TTL, or device change meant losing real work
 -- with no way to regenerate it.
 --
--- Repurposes the dormant extraction_cache/extraction_cached_at columns
--- (added by 20260628000000_meeting_caching_foundation.sql for a Redis-style
--- memoization model the extract-meeting-data edge function never actually
--- adopted — it has its own separate Upstash Redis cache) as the durable,
--- canonical home for "the last completed extraction result for this
--- meeting". Confirmed via grep across src/ and supabase/functions/ that
--- nothing reads or writes the old column names — renaming is zero-risk.
+-- 20260628000000_meeting_caching_foundation.sql (which adds
+-- extraction_cache/extraction_cached_at/etc via ADD COLUMN IF NOT EXISTS)
+-- is tracked as applied in this project's migration history, but the live
+-- `meetings` table does not actually have these columns — confirmed by a
+-- failed push attempt (`column "extraction_cache" does not exist`,
+-- SQLSTATE 42703). History and live schema have drifted for this one; not
+-- something this migration can safely investigate further, so it no longer
+-- assumes the dormant columns exist. Adds the five extraction-bookkeeping
+-- columns directly instead of renaming — idempotent regardless of whether
+-- the old columns are actually present on any given environment.
 -- =============================================================================
 
 alter table public.meetings
-  rename column extraction_cache to extraction_result;
-
-alter table public.meetings
-  rename column extraction_cached_at to extraction_completed_at;
-
-alter table public.meetings
+  add column if not exists extraction_result jsonb default null,
+  add column if not exists extraction_completed_at timestamptz default null,
   add column if not exists extraction_status text not null default 'idle'
     check (extraction_status in ('idle', 'processing', 'complete', 'failed')),
   add column if not exists extraction_started_at timestamptz,
   add column if not exists extraction_error text;
 
--- extraction_cache_valid / transcript_hash are equally dead (same grep) —
--- dropped as cleanup rather than left dormant alongside the renamed columns.
+-- extraction_cache_valid / transcript_hash: dead (per grep across src/ and
+-- supabase/functions/) wherever they do exist — dropped defensively with
+-- IF EXISTS since, per the above, we can no longer assume any particular
+-- environment actually has them.
 alter table public.meetings
   drop column if exists extraction_cache_valid,
   drop column if exists transcript_hash;
