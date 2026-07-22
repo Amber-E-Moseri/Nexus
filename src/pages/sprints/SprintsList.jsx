@@ -59,9 +59,14 @@ export default function SprintsList() {
   async function loadSprints() {
     setLoading(true)
     try {
+      // regional_secretary deliberately excluded — sprints (unlike meetings/
+      // tasks elsewhere in this app) are membership-gated for everyone
+      // except super_admin/programs/ors; a regional_secretary who wants
+      // into a sprint requests access like anyone else. Matches
+      // can_manage_sprint()'s own authority model, which never granted
+      // regional_secretary a blanket bypass either.
       const canSeeAll =
         role === 'super_admin' ||
-        role === 'regional_secretary' ||
         hasSpaceRole(profile, null, 'ors') ||
         hasSpaceRole(profile, null, 'programs')
 

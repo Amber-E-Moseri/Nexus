@@ -105,9 +105,11 @@ export default function SprintCard({
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
             {!hasAccess ? '🔒 ' : isArchived ? '📦 ' : shouldAutoStartSprint(sprint) ? '⚡ ' : ''}{sprint.name}
           </div>
-          {sprint.department_name && (
+          {(sprint.department_name || sprint.category) && (
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
-              {sprint.department_name}
+              {[sprint.department_name, sprint.category === 'group' ? 'Group' : sprint.category === 'regional' ? 'Regional' : null]
+                .filter(Boolean)
+                .join(' · ')}
             </div>
           )}
         </div>

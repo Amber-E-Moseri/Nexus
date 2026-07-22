@@ -4,6 +4,7 @@ import { createNotification } from '../../notifications'
 import Badge from '../../../components/ui/Badge'
 import {
   addSprintMember,
+  addPastorGroupToSprint,
   getActiveUsers,
   removeSprintMember,
   updateSprintMemberRole,
@@ -64,6 +65,10 @@ export default function SprintMemberPanel({
   onChanged,
 }) {
   const { profile } = useAuth()
+  const isMember = members.some((m) => m.user?.id === profile?.id)
+  const isSuperAdmin = profile?.role === 'super_admin'
+  const isPastor = profile?.role === 'pastor'
+
   const [orgUsers, setOrgUsers] = useState([])
   const [pendingInvitations, setPendingInvitations] = useState([])
   const [accessRequests, setAccessRequests] = useState([])
@@ -77,12 +82,13 @@ export default function SprintMemberPanel({
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [reactivating, setReactivating] = useState(null)
   const [loadingPending, setLoadingPending] = useState(false)
+  const [addingGroup, setAddingGroup] = useState(false)
 
   useEffect(() => {
-    if (!canEdit || isArchived) return
+    if (!isSuperAdmin || isArchived) return
     setLoadingUsers(true)
     getActiveUsers().then(setOrgUsers).catch(() => setOrgUsers([])).finally(() => setLoadingUsers(false))
-  }, [canEdit, isArchived])
+  }, [isSuperAdmin, isArchived])
 
   useEffect(() => {
     setLoadingPending(true)
@@ -121,6 +127,19 @@ export default function SprintMemberPanel({
       alert(`Error rejecting request: ${err.message}`)
     } finally {
       setRespondingRequestId(null)
+    }
+  }
+
+  async function handleAddGroup() {
+    setAddingGroup(true)
+    try {
+      const added = await addPastorGroupToSprint(sprintId)
+      await onChanged?.()
+      if (added === 0) alert('All group members are already in this sprint.')
+    } catch (err) {
+      alert(`Error adding group members: ${err.message}`)
+    } finally {
+      setAddingGroup(false)
     }
   }
 
@@ -373,7 +392,28 @@ export default function SprintMemberPanel({
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {canEdit && !isArchived && (
+            {isPastor && isMember && !isArchived && (
+              <button
+                onClick={handleAddGroup}
+                disabled={addingGroup}
+                style={{
+                  padding: '8px 16px',
+                  background: TOKENS.accent,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: addingGroup ? 'not-allowed' : 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  fontFamily: 'DM Sans, system-ui, sans-serif',
+                  opacity: addingGroup ? 0.7 : 1,
+                  transition: 'all 0.12s',
+                }}
+              >
+                {addingGroup ? 'Adding…' : '+ Add my group'}
+              </button>
+            )}
+            {(canEdit || isMember) && !isArchived && (
               <button
                 onClick={() => setShowInviteModal(true)}
                 style={{
@@ -567,8 +607,8 @@ export default function SprintMemberPanel({
         </div>
       </div>
 
-      {/* Add Member Form */}
-      {canEdit && !isArchived ? (
+      {/* Add Member Form — super_admin only */}
+      {isSuperAdmin && !isArchived ? (
         <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>
           <div style={{ marginBottom: 12, fontSize: 14, fontWeight: 600, color: TOKENS.textPrimary }}>Add member</div>
           {loadingUsers ? (
@@ -699,7 +739,7 @@ export default function SprintMemberPanel({
           sprintId={sprintId}
           sprintEndDate={sprintEndDate}
           sprintName={sprintName}
-          canInvite={Boolean(canEdit && !isArchived)}
+          canInvite={Boolean((canEdit || isMember) && !isArchived)}
           canAssignPrivilegedRoles={Boolean(
             profile?.role === 'super_admin' ||
             members?.some((member) => member.user_id === profile?.id && member.role === 'owner')

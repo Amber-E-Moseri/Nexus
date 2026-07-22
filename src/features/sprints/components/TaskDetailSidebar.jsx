@@ -387,6 +387,7 @@ export default function TaskDetailSidebar({
   fieldSettings = null,
   departmentId,
   sprintId,
+  sprintTeams,
   listId,
   isPersonal = false,
   isModal = false,
@@ -410,6 +411,15 @@ export default function TaskDetailSidebar({
   const [dueDate, setDueDate] = useState(task?.due_date ?? defaultDueDate ?? '')
   const [personal, setPersonal] = useState(task?.is_personal ?? isPersonal)
   const [subtasks, setSubtasks] = useState(task?.subtasks ?? [])
+
+  function resolveDeptFromTeams(userId) {
+    if (!userId || !sprintTeams?.length) return null
+    const match = sprintTeams.find(
+      (t) => t.department_id && t.sprint_team_members?.some((m) => m.user_id === userId),
+    )
+    return match?.department_id ?? null
+  }
+
   const deptMembers = useDeptMembers(departmentId)
   const [members, setMembers] = useState(sprintId ? [] : deptMembers)
   const [saving, setSaving] = useState(false)
@@ -486,7 +496,7 @@ export default function TaskDetailSidebar({
         due_date: dueDate || null,
         is_personal: personal,
         source: 'manual',
-        department_id: personal ? departmentId ?? null : sprintId ? null : departmentId ?? null,
+        department_id: departmentId || resolveDeptFromTeams(primaryAssigneeId) || null,
         sprint_id: personal ? null : sprintId ?? task?.sprint_id ?? null,
         list_id: personal ? null : listId ?? task?.list_id ?? null,
         task_type: personal ? 'personal' : sprintId || task?.sprint_id ? 'sprint' : 'space',
@@ -518,11 +528,9 @@ export default function TaskDetailSidebar({
           if (notifyError) console.error(notifyError)
         }
 
-        // Notify assignee on meaningful status transitions (completed or blocked only).
-        // Use legacy_key for blocked — it shares category 'in_progress' with review.
+        // Notify assignee on meaningful status transitions (completed only).
         const statusChanged = selectedStatus?.id && selectedStatus.id !== previousStatusId
-        const isNotifyTransition =
-          selectedStatus?.category === 'completed' || selectedStatus?.legacy_key === 'blocked'
+        const isNotifyTransition = selectedStatus?.category === 'completed'
         const notifyTarget = primaryAssigneeId || updated.assignee_id
         if (statusChanged && isNotifyTransition && notifyTarget && notifyTarget !== profile?.id) {
           supabase.rpc('create_task_notification', {
@@ -548,6 +556,7 @@ export default function TaskDetailSidebar({
   async function handleDelete() {
     if (!confirmDelete) {
       setConfirmDelete(true)
+      setError(null)
       return
     }
 

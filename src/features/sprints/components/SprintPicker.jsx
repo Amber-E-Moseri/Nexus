@@ -83,7 +83,7 @@ export default function SprintPicker({ spaceId, value, onChange, disabled = fals
   }, [profile?.id, isSuperAdmin])
 
   // Only sprints belonging to the given space are selectable.
-  const options = sprints.filter((s) => !spaceId || s.department_id === spaceId)
+  const options = sprints.filter((s) => !spaceId || s.department_id === spaceId || s.department_id === null)
 
   // Intuit the sprint for a brand-new task: if this space has exactly one
   // linkable sprint, default to it instead of leaving "No sprint" selected.

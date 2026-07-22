@@ -12,7 +12,7 @@ export async function getDepartments() {
   return data || []
 }
 
-const SPRINT_TEAM_SELECT = 'id, sprint_id, name, description, lead_user_id, created_at'
+const SPRINT_TEAM_SELECT = 'id, sprint_id, name, description, lead_user_id, department_id, created_at'
 const SPRINT_TEAM_MEMBERS_SELECT = 'team_id, user_id, role, joined_at, users:user_id(id, name, email, department_id, status)'
 const SPRINT_MEMBER_SELECT = 'sprint_id, user_id, role, joined_at'
 const SPRINT_MEMBER_WITH_TEMP_SELECT = 'sprint_id, user_id, role, joined_at, membership_end_date, is_temporary, invited_by'
@@ -92,15 +92,13 @@ export async function getAllSprints() {
 
 export async function getSprintDetail(sprintId) {
   if (!sprintId) throw Object.assign(new Error('Sprint ID is required'), { code: 'PGRST116' })
-  const sprintRes = await supabase
-    .from('sprints')
-    .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
-    .eq('id', sprintId)
-    .single()
 
-  if (sprintRes.error) throw sprintRes.error
-
-  const [teamsRes, membersRes, reviewRes] = await Promise.all([
+  const [sprintRes, teamsRes, membersRes, reviewRes] = await Promise.all([
+    supabase
+      .from('sprints')
+      .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
+      .eq('id', sprintId)
+      .single(),
     supabase.from('sprint_teams').select(SPRINT_TEAM_SELECT).eq('sprint_id', sprintId).order('created_at'),
     supabase.from('sprint_members').select(`${SPRINT_MEMBER_WITH_TEMP_SELECT}, user:user_id(id, name, email, status, is_temporary)`).eq('sprint_id', sprintId).order('joined_at'),
     (async () => {
@@ -111,6 +109,8 @@ export async function getSprintDetail(sprintId) {
       }
     })(),
   ])
+
+  if (sprintRes.error) throw sprintRes.error
 
   if (teamsRes.error) throw teamsRes.error
   if (membersRes.error) throw membersRes.error
@@ -457,7 +457,7 @@ export async function listAllTeams() {
 export async function listSprintTeamsIndependent(sprintId) {
   const { data, error } = await supabase
     .from('sprint_teams')
-    .select('id, name, description, lead_user_id')
+    .select('id, name, description, lead_user_id, department_id')
     .eq('sprint_id', sprintId)
     .eq('is_archived', false)
     .order('created_at', { ascending: false })
@@ -1109,6 +1109,9 @@ export async function createSprintGoal(sprintId, goalData, createdBy) {
     .from('goals')
     .insert({
       sprint_id: sprintId,
+      // null = collective, whole-sprint goal (existing default behavior);
+      // set = scoped to just this one team within the sprint.
+      sprint_team_id: goalData.sprintTeamId || null,
       title: goalData.title,
       description: goalData.description || null,
       owner_id: createdBy,
@@ -1118,7 +1121,7 @@ export async function createSprintGoal(sprintId, goalData, createdBy) {
       status: goalData.status || 'not_started',
       department_id: goalData.departmentId || null,
     })
-    .select('id, sprint_id, title, description, owner_id, target_value, current_value, due_date, status, created_at')
+    .select('id, sprint_id, sprint_team_id, title, description, owner_id, target_value, current_value, due_date, status, created_at')
     .single()
 
   if (error) throw error
@@ -1128,7 +1131,7 @@ export async function createSprintGoal(sprintId, goalData, createdBy) {
 export async function getSprintGoals(sprintId) {
   const { data, error } = await supabase
     .from('goals')
-    .select('id, sprint_id, title, description, owner_id, target_value, current_value, due_date, status, created_at, users:owner_id(id, name, email)')
+    .select('id, sprint_id, sprint_team_id, title, description, owner_id, target_value, current_value, due_date, status, created_at, users:owner_id(id, name, email), team:sprint_team_id(id, name)')
     .eq('sprint_id', sprintId)
     .order('created_at', { ascending: false })
 
@@ -1146,9 +1149,10 @@ export async function updateSprintGoal(goalId, updates) {
       current_value: updates.currentValue || undefined,
       due_date: updates.dueDate || null,
       status: updates.status || undefined,
+      sprint_team_id: updates.sprintTeamId !== undefined ? (updates.sprintTeamId || null) : undefined,
     })
     .eq('id', goalId)
-    .select('id, sprint_id, title, description, owner_id, target_value, current_value, due_date, status, created_at')
+    .select('id, sprint_id, sprint_team_id, title, description, owner_id, target_value, current_value, due_date, status, created_at')
     .single()
 
   if (error) throw error

@@ -59,7 +59,7 @@ export default function AllTeamsBoard({
                 onCreateTask={onCreateTask}
                 readOnly={readOnly}
                 teamMembers={teamMembers}
-                statuses={statuses}
+                statusesOverride={statuses}
               />
             )}
           </div>
