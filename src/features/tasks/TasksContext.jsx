@@ -60,9 +60,9 @@ export function TasksProvider({ departmentId, sprintId, children }) {
       if (!Array.from(statusMap.values()).some(s => s.category === 'open')) {
         try {
           const allStatuses = await listTaskStatuses({ departmentId, includeInactive: true })
-          const openStatus = allStatuses.find(s => s.category === 'open')
+          const openStatus = allStatuses.find(s => s.category === 'open' && s.active)
           if (openStatus) {
-            statusMap.set(`open:${openStatus.legacy_key || openStatus.name}`, { ...openStatus, active: true })
+            statusMap.set(`open:${openStatus.legacy_key || openStatus.name}`, openStatus)
           }
         } catch { /* ignore */ }
         // Last resort: synthetic To Do if nothing in DB

@@ -96,7 +96,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: 'How do task statuses work?',
-        a: 'NEXUS uses a two-tier status system. Every department status maps to one of 6 canonical org-wide statuses (Not Started, In Progress, Review, Blocked, Completed, Cancelled), so reporting stays consistent even though each department can customize its own status names and colors.',
+        a: 'NEXUS uses a two-tier status system. Every department status maps to one of 5 canonical org-wide statuses (To Do, In Progress, Review, Completed, Cancelled), so reporting stays consistent even though each department can customize its own status names and colors.',
       },
       {
         q: 'Do completed or cancelled tasks get deleted automatically?',
