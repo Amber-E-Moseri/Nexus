@@ -273,8 +273,8 @@ export default function TaskListView({
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         {visibleGroups.map(({ status, items }) => (
-          <section key={status.id} style={{ border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden', background: '#FFFFFF' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 16px', borderBottom: '1px solid var(--border)', background: '#FCFAF6' }}>
+          <section key={status.id} style={{ border: '1px solid var(--border)', borderRadius: 18, background: '#FFFFFF' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 16px', borderBottom: '1px solid var(--border)', background: '#FCFAF6', borderRadius: '17px 17px 0 0' }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: status.color }} />
               <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>
                 {status.name}
