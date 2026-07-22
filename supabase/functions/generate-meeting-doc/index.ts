@@ -219,6 +219,23 @@ interface ActionItem {
   owner?:    string
   due_date?: string
   priority?: string
+  status?:   string
+}
+
+interface AttendanceEntry {
+  name:   string
+  status: string
+}
+
+interface AgendaEntry {
+  title: string
+  mins?: number | string | null
+}
+
+interface OpenItemEntry {
+  text:   string
+  type?:  string
+  status?: string
 }
 
 // Non-null: falls back to today when date is absent. Used for the meeting date
@@ -228,14 +245,39 @@ function extractIsoDate(raw: string): string {
   return (raw || '').match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? new Date().toISOString().slice(0, 10)
 }
 
+// Strips markdown syntax (## headings, **bold**, -/* bullets) from AI-generated
+// text so it reads clean in the plain-text Google Doc, which has no rich-text
+// rendering. Headings get a blank line before them since that's the only
+// visual separation plain text can offer.
+function cleanMarkdownBlock(text: string): string {
+  if (!text) return text
+  const out: string[] = []
+  text.split('\n').forEach((rawLine) => {
+    const line = rawLine.trim()
+    if (!line) { out.push(''); return }
+
+    const isHeading = /^#{1,6}\s/.test(line)
+    const isBullet  = /^[•\-*]\s/.test(line)
+    let cleaned = line.replace(/^#{1,6}\s*/, '').replace(/\*\*/g, '')
+
+    if (isBullet) cleaned = `• ${cleaned.replace(/^[•\-*]\s*/, '')}`
+    if (isHeading && out.length > 0 && out[out.length - 1] !== '') out.push('')
+    out.push(cleaned)
+  })
+  return out.join('\n')
+}
+
 function formatDocContent(params: {
   title:          string
   date:           string
   attendees:      string
+  attendance:     AttendanceEntry[]
+  agenda:         AgendaEntry[]
   decisions:      string
   detailed_notes: string
   minutes:        string
   next_steps:     string
+  openItems:      OpenItemEntry[]
   actionItems:    ActionItem[]
   meetingType:    string
 }): string {
@@ -254,23 +296,38 @@ function formatDocContent(params: {
     `Date: ${dateStr}`,
     `Type: ${params.meetingType || 'Meeting'}`,
   ]
-  if (params.attendees) lines.push(`Attendees: ${params.attendees}`)
+  if (!params.attendance?.length && params.attendees) lines.push(`Attendees: ${params.attendees}`)
   lines.push('')
 
+  if (params.attendance?.length > 0) {
+    const present = params.attendance.filter((a) => a.status === 'present')
+    const absent  = params.attendance.filter((a) => a.status !== 'present')
+    lines.push(divider, 'ATTENDANCE', '')
+    if (present.length > 0) lines.push(`Present (${present.length}): ${present.map((a) => a.name).sort().join(', ')}`)
+    if (absent.length > 0) lines.push(`Absent (${absent.length}): ${absent.map((a) => a.name).sort().join(', ')}`)
+    lines.push('')
+  }
+
+  if (params.agenda?.length > 0) {
+    lines.push(divider, 'AGENDA', '')
+    params.agenda.forEach((item, i) => {
+      let line = `${i + 1}. ${item.title}`
+      if (item.mins) line += ` (${item.mins} min)`
+      lines.push(line)
+    })
+    lines.push('')
+  }
+
   if (params.detailed_notes) {
-    lines.push(divider, 'SUMMARY / AI NOTES', '', params.detailed_notes, '')
+    lines.push(divider, 'SUMMARY / AI NOTES', '', cleanMarkdownBlock(params.detailed_notes), '')
   }
 
   if (params.decisions) {
-    lines.push(divider, 'DECISIONS', '', params.decisions, '')
+    lines.push(divider, 'DECISIONS', '', cleanMarkdownBlock(params.decisions), '')
   }
 
   if (params.minutes) {
-    lines.push(divider, 'DISCUSSION NOTES', '', params.minutes, '')
-  }
-
-  if (params.next_steps) {
-    lines.push(divider, 'NEXT STEPS', '', params.next_steps, '')
+    lines.push(divider, 'DISCUSSION NOTES', '', cleanMarkdownBlock(params.minutes), '')
   }
 
   if (params.actionItems?.length > 0) {
@@ -283,9 +340,25 @@ function formatDocContent(params: {
         if (due) line += ` | Due: ${due}`
       }
       if (item.priority) line += ` | Priority: ${item.priority}`
+      if (item.status) line += ` | Status: ${item.status}`
       lines.push(line)
     })
     lines.push('')
+  }
+
+  if (params.openItems?.length > 0) {
+    lines.push(divider, 'OPEN ITEMS & DISCUSSION POINTS', '')
+    params.openItems.forEach((item, i) => {
+      let line = `${i + 1}. ${item.text}`
+      if (item.type) line += ` | Type: ${item.type}`
+      if (item.status) line += ` | Status: ${item.status}`
+      lines.push(line)
+    })
+    lines.push('')
+  }
+
+  if (params.next_steps) {
+    lines.push(divider, 'NEXT STEPS', '', cleanMarkdownBlock(params.next_steps), '')
   }
 
   return lines.join('\n')
@@ -371,10 +444,13 @@ serve(async (req) => {
       title          = 'Untitled Meeting',
       date           = new Date().toISOString(),
       attendees      = '',
+      attendance     = [],
+      agenda         = [],
       decisions      = '',
       detailed_notes = '',
       minutes        = '',
       next_steps     = '',
+      openItems      = [],
       meetingType    = 'meeting',
       actionItems    = [],
     } = body
@@ -404,7 +480,10 @@ serve(async (req) => {
 
     const content = formatDocContent({
       title, date, attendees,
+      attendance: attendance as AttendanceEntry[],
+      agenda: agenda as AgendaEntry[],
       decisions, detailed_notes, minutes, next_steps,
+      openItems: openItems as OpenItemEntry[],
       actionItems: actionItems as ActionItem[],
       meetingType,
     })

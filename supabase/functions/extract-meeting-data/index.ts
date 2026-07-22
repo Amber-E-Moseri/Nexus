@@ -16,6 +16,48 @@ const MAX_TRANSCRIPT_CHARS = Number(Deno.env.get("MAX_TRANSCRIPT_CHARS")) || 600
 // real meeting length — only hit by degenerate input.
 const MAX_CHUNKS = Number(Deno.env.get("MAX_TRANSCRIPT_CHUNKS")) || 6;
 
+// A hung Anthropic call (no timeout, network stall, upstream never
+// responding) previously left the meeting's extraction_status stuck at
+// 'processing' forever — nothing downstream ever ran to write a terminal
+// state, and the client's realtime subscription just waits indefinitely.
+// Every direct Anthropic fetch below is bounded so a stall surfaces as a
+// normal thrown error (caught by the handler's outer try/catch, which
+// persists extraction_status='failed') instead of hanging.
+//
+// 90s (the original value here) was too aggressive and immediately started
+// killing legitimate long-running calls: max_tokens is 12288 and
+// detailed_notes is near-verbatim, so a genuinely long meeting transcript
+// can take several minutes to generate — confirmed live ("Claude API call
+// timed out after 90000ms" on a real extraction that was still actively
+// generating, not hung). 4 minutes gives real generations room to finish
+// while still being a bounded number instead of "forever".
+const ANTHROPIC_TIMEOUT_MS = Number(Deno.env.get("ANTHROPIC_TIMEOUT_MS")) || 240000;
+
+async function fetchAnthropic(body: unknown, anthropicKey: string, extraHeaders: Record<string, string> = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ANTHROPIC_TIMEOUT_MS);
+  try {
+    return await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": anthropicKey,
+        "anthropic-version": "2023-06-01",
+        ...extraHeaders,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Claude API call timed out after ${ANTHROPIC_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Redis is optional — if secrets aren't set, caching is skipped but extraction still works
 let _redis: Redis | null = null;
 function getRedis(): Redis | null {
@@ -364,19 +406,11 @@ function parseExtractionJSON(text: string) {
 }
 
 async function extractChunk(prompt: string, anthropicKey: string) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": anthropicKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 12288,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
+  const response = await fetchAnthropic({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 12288,
+    messages: [{ role: "user", content: prompt }],
+  }, anthropicKey);
   if (!response.ok) {
     const err = await response.json();
     throw new Error(`Claude API error: ${err.error?.message || response.status}`);
@@ -466,19 +500,11 @@ async function synthesizeSummary(summaries: string[], anthropicKey: string): Pro
   const prompt = `These are summaries of sequential parts of one continuous meeting. Combine them into a single contextual summary (4-6 sentences) of the whole meeting, in prose — cover why the meeting happened, the main topics, notable outcomes, and overall tone. Do not reference "part 1", "part 2", etc.\n\n${summaries.map((s, i) => `Part ${i + 1}: ${s}`).join("\n\n")}`;
 
   try {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 512,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+    const resp = await fetchAnthropic({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 512,
+      messages: [{ role: "user", content: prompt }],
+    }, anthropicKey);
     if (!resp.ok) return summaries.join(" ");
     const result = await resp.json();
     return result.content?.[0]?.text?.trim() || summaries.join(" ");
@@ -623,23 +649,14 @@ serve(async (req) => {
       // exactly as before — no change in UX for normal-length meetings.
       if (chunks.length === 1) {
         const prompt = promptFor(chunks[0], 0);
-        const upstreamResp = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": anthropicKey,
-            "anthropic-version": "2023-06-01",
-            "anthropic-beta": "messages-2023-12-15",
-          },
-          body: JSON.stringify({
-            model: "claude-haiku-4-5-20251001",
-            // 8192: detailed_notes is near-verbatim and is the dominant output-token
-            // driver; 4096 truncated long meetings mid-JSON. See costLimits note.
-            max_tokens: 12288,
-            stream: true,
-            messages: [{ role: "user", content: prompt }],
-          }),
-        });
+        const upstreamResp = await fetchAnthropic({
+          model: "claude-haiku-4-5-20251001",
+          // 8192: detailed_notes is near-verbatim and is the dominant output-token
+          // driver; 4096 truncated long meetings mid-JSON. See costLimits note.
+          max_tokens: 12288,
+          stream: true,
+          messages: [{ role: "user", content: prompt }],
+        }, anthropicKey, { "anthropic-beta": "messages-2023-12-15" });
 
         if (!upstreamResp.ok) {
           const err = await upstreamResp.json();
@@ -654,7 +671,19 @@ serve(async (req) => {
             let accumulated = "";
             try {
               while (true) {
-                const { done, value } = await reader.read();
+                // Bounded read: the initial connect fetch above already timed
+                // out via AbortController, but that controller only guards
+                // establishing the connection — a stream that connects fine
+                // and then stalls mid-transfer (no more chunks, connection
+                // never closes) needs its own guard, or this loop hangs
+                // forever and the meeting's extraction_status never leaves
+                // 'processing'.
+                const { done, value } = await Promise.race([
+                  reader.read(),
+                  new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error(`Stream stalled — no data for ${ANTHROPIC_TIMEOUT_MS}ms`)), ANTHROPIC_TIMEOUT_MS)
+                  ),
+                ]);
                 if (done) break;
                 const combined = buffer + decoder.decode(value);
                 const lines = combined.split("\n");
@@ -701,6 +730,16 @@ serve(async (req) => {
                 }
               }
             } catch (err) {
+              // Previously this only called controller.error(err) — the DB
+              // row was never told the run failed, so a stalled/aborted
+              // stream left extraction_status stuck at 'processing'
+              // permanently (the exact "runs indefinitely" symptom).
+              if (canPersist) {
+                await persistExtraction(supabase, meetingId, {
+                  extraction_status: "failed",
+                  extraction_error: String((err as Error)?.message || err),
+                });
+              }
               controller.error(err);
             } finally {
               controller.close();
@@ -742,6 +781,15 @@ serve(async (req) => {
               });
             }
           } catch (err) {
+            // Same fix as the single-chunk stream above — without this, a
+            // failed/stalled chunk here left extraction_status stuck at
+            // 'processing' forever with no terminal write.
+            if (canPersist) {
+              await persistExtraction(supabase, meetingId, {
+                extraction_status: "failed",
+                extraction_error: String((err as Error)?.message || err),
+              });
+            }
             controller.error(err);
           } finally {
             controller.close();

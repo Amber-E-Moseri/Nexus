@@ -17,7 +17,7 @@ const FS = {
   amberL: 'rgba(245,158,11,.12)',
 }
 
-export default function GenerateMeetingDocButton({ meetingId, meeting, actionItems = [], onSuccess }) {
+export default function GenerateMeetingDocButton({ meetingId, meeting, actionItems = [], agenda = [], openItems = [], decisionsText, minutesText, nextStepsText, onSuccess }) {
   const { generateAndUploadDoc, isGenerating } = useMeetingDocGeneration()
   const [connStatus, setConnStatus] = useState(null) // null=loading, 'connected', 'not_connected', 'reauth_required'
   const [genStatus, setGenStatus]   = useState(null) // null | 'success' | 'error'
@@ -43,16 +43,30 @@ export default function GenerateMeetingDocButton({ meetingId, meeting, actionIte
         title:         meeting?.title,
         date:          sanitizeMeetingDate(meeting?.date),
         attendees:     meeting?.attendees ?? '',
-        decisions:      meeting?.decisions ?? '',
+        attendance:    (meeting?.attendance ?? []).map(a => ({
+          name:   a.attendee?.name || 'Unknown',
+          status: a.status || 'present',
+        })),
+        agenda:        (agenda ?? []).map(item => ({
+          title: item.title || '',
+          mins:  item.mins || null,
+        })),
+        decisions:      decisionsText ?? meeting?.decisions ?? '',
         detailed_notes: meeting?.meeting_notes ?? '',
-        minutes:        meeting?.minutes ?? '',
-        next_steps:     meeting?.next_steps ?? '',
+        minutes:        minutesText ?? meeting?.minutes ?? '',
+        next_steps:     nextStepsText ?? meeting?.next_steps ?? '',
+        openItems:     (openItems ?? []).map(item => ({
+          text:   item.text || item.title || '',
+          type:   item.type || 'exploration',
+          status: item.status || 'open',
+        })),
         meetingType:    meeting?.meeting_type ?? 'meeting',
         actionItems:   actionItems.map(t => ({
           action:   t.title || t.action,
           owner:    t.assignee?.name || t.owner || 'Unassigned',
           due_date: t.due_date,
           priority: t.priority ?? 'medium',
+          status:   t.statusName || t.status_definition?.name || '',
         })),
       })
 

@@ -454,29 +454,6 @@ export async function generateMinutesPDF(minutesData, meeting) {
     y += 4;
   }
 
-  // ── TRANSCRIPT (collapsed) ────────────────────────────────────────────────
-
-  const transcript = minutesData.transcript || '';
-  if (transcript.trim() && transcript.trim() !== summaryText.trim() && transcript.trim() !== detailedNotes.trim()) {
-    doc.addPage();
-    y = 20;
-    y = drawSectionHeader(doc, y, 'Full Transcript', pw);
-
-    doc.setFont('Helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(...C.muted);
-
-    const tLines = transcript.split('\n');
-    tLines.forEach((rawLine) => {
-      const line = rawLine.trim();
-      if (!line) { y += 2; return; }
-      y = ensureSpace(doc, y, 5);
-      const wrapped = doc.splitTextToSize(line, contentWidth);
-      doc.text(wrapped, MARGIN, y);
-      y += wrapped.length * 3.8 + 1;
-    });
-  }
-
   // ── FOOTER ON EVERY PAGE ──────────────────────────────────────────────────
 
   const totalPages = doc.internal.getNumberOfPages();
