@@ -7,6 +7,11 @@
 
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
+-- cron.schedule() returns a bigint job id via a plain SELECT — it's not an
+-- INSERT, so ON CONFLICT can't attach to it. Unschedule any prior job with
+-- this name first instead, so the migration stays safe to re-run.
+SELECT cron.unschedule(jobid) FROM cron.job WHERE jobname = 'generate-recurring-meetings-hourly';
+
 SELECT cron.schedule(
   'generate-recurring-meetings-hourly',
   '0 * * * *',
@@ -20,7 +25,7 @@ SELECT cron.schedule(
     body := '{}'::jsonb
   );
   $$
-) ON CONFLICT DO NOTHING;
+);
 
 -- Manual test trigger:
 -- SELECT net.http_post(

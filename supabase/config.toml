@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions."calendar-task-feed"]
 verify_jwt = false
+
+[functions."generate-recurring-meetings"]
+verify_jwt = false
