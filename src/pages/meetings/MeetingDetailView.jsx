@@ -12,7 +12,7 @@ import MeetingDocsTab from '../../features/meetings/components/MeetingDocsTab'
 import MeetingSummaryEditor from '../../features/meetings/components/MeetingSummaryEditor'
 import GenerateMeetingDocButton from '../../features/meetings/components/GenerateMeetingDocButton'
 import MeetingShareModal from '../../features/meetings/components/MeetingShareModal'
-import { createTasksFromActionItems } from '../../features/meetings/lib/meetings'
+import { createTasksFromActionItems, setNotesSharedWithAttendee, editRecurringMeeting } from '../../features/meetings/lib/meetings'
 import { resolveAssignment, getOrgDepartments, getOrgUsers } from '../../features/meetings/lib/ownerMatching'
 import { getOpenItemsByMeeting, createOpenItems, updateOpenItem, updateOpenItemStatus, deleteOpenItem, convertOpenItemToTask } from '../../features/meetings/lib/openItems'
 import { getCategoryStatusId, STATUS_CATEGORIES } from '../../lib/taskStatuses'
@@ -48,6 +48,16 @@ const TABS = [
   { id: 'docs',    icon: '📎', label: 'Docs',       badge: 'docs' },
   { id: 'ai',      icon: '⚡', label: 'AI Extract', badge: null },
 ]
+
+// For a <input type="datetime-local"> value, which has no timezone —
+// this renders the date/time as the browser's local zone, matching how
+// `new Date(meeting.date)` is displayed everywhere else on this page.
+function toLocalDateTimeInput(value) {
+  const date = new Date(value)
+  const offset = date.getTimezoneOffset()
+  const local = new Date(date.getTime() - offset * 60_000)
+  return local.toISOString().slice(0, 16)
+}
 
 function MeetingDetailViewInner() {
   const { meetingId } = useParams()
@@ -93,6 +103,10 @@ function MeetingDetailViewInner() {
   const [editingTitle, setEditingTitle]           = useState(false)
   const [titleDraft, setTitleDraft]               = useState('')
   const [savingTitle, setSavingTitle]             = useState(false)
+  const [editingDate, setEditingDate]             = useState(false)
+  const [dateDraft, setDateDraft]                 = useState('')
+  const [savingDate, setSavingDate]               = useState(false)
+  const [pendingDateISO, setPendingDateISO]       = useState(null) // set while the recurrence-scope choice is showing
   const [savingVisibility, setSavingVisibility]   = useState(false)
   const [shareModalOpen, setShareModalOpen]       = useState(false)
 
@@ -115,11 +129,13 @@ function MeetingDetailViewInner() {
   // meeting_minutes record (AI-extracted notes)
   const [minutesRecord, setMinutesRecord]               = useState(null)
   const [togglingPrivacy, setTogglingPrivacy]           = useState(false)
+  const [sharingNotesId, setSharingNotesId]             = useState(null)
 
   // attendees edit
   const [editingAttendees, setEditingAttendees]         = useState(false)
   const [attendeeDraft, setAttendeeDraft]               = useState([])
   const [savingAttendees, setSavingAttendees]           = useState(false)
+  const [attendeesError, setAttendeesError]             = useState(null)
 
   const timerRef       = useRef(null)
   const startRef       = useRef(null)
@@ -139,6 +155,20 @@ function MeetingDetailViewInner() {
   // Mirrors the meetings_update RLS policy: creator can always edit their own
   // meeting, regardless of current visibility (private or published).
   const canEditVisibility = canManage || meeting?.created_by === profile?.id
+  // Live audio recording is available to everyone who can view this meeting —
+  // not just leadership. Persisting the recorded/uploaded summary for
+  // non-editors is enforced narrowly at the DB layer (see migration
+  // 20270723000006), which restricts non-editors to only ever writing the
+  // `summary` column. Every other canManage-gated action is unaffected and
+  // stays leadership/creator-only.
+  const canRecord = true
+  // One-on-one notes are hidden from invited attendees by default — they see
+  // the meeting on their calendar (via allowed_viewers) but not its notes
+  // unless the creator explicitly shares. Creator/canManage always sees notes.
+  const isOneOnOne = meeting?.meeting_type === '1_on_1_meeting'
+  const isNotesCreator = meeting?.created_by === profile?.id
+  const canSeeNotes = !isOneOnOne || canManage || isNotesCreator ||
+                      (meeting?.notes_shared_with ?? []).includes(profile?.id)
   const isLive    = meeting?.status === 'in_progress'
   const isPost    = meeting?.status === 'completed' || meeting?.status === 'cancelled'
   const isPrep    = !isLive && !isPost
@@ -226,6 +256,7 @@ function MeetingDetailViewInner() {
           id, title, department_id, date, meeting_type, agenda, minutes,
           decisions, next_steps, summary, polished_transcript, context, meeting_notes, doc_drive_url, doc_title,
           zoom_join_url, drive_url, status, started_at, visibility, allowed_viewers,
+          notes_shared_with, recurrence_id, series_instance_num,
           created_by, created_at,
           agendas(id, title, agenda_items(id, segment, notes, duration_minutes, sort_order)),
           attendance:meeting_attendance(user_id, status, attendee:users(id, name))
@@ -402,7 +433,6 @@ function MeetingDetailViewInner() {
           name: a.attendee?.name || 'Unknown',
           status: a.status || 'present',
         })),
-        transcript: meeting?.summary || '',
       }, meeting)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -628,24 +658,27 @@ function MeetingDetailViewInner() {
 
   async function saveAttendees() {
     setSavingAttendees(true)
+    setAttendeesError(null)
     try {
-      await supabase.from('meeting_attendance').delete().eq('meeting_id', meetingId)
-      if (attendeeDraft.length > 0) {
-        await supabase.from('meeting_attendance').insert(
-          attendeeDraft.map(userId => ({ meeting_id: meetingId, user_id: userId, status: 'present' }))
-        )
-      }
-    } catch (err) {
-      console.warn('Failed to save attendees:', err)
-    } finally {
-      // Re-fetch to sync UI with DB state regardless of success/failure
+      const { error } = await supabase.rpc('set_meeting_attendance', {
+        p_meeting_id: meetingId,
+        p_user_ids: attendeeDraft,
+      })
+      if (error) throw error
+
+      // Only sync local state from the DB — and only close the editor — on
+      // success. On failure, leave attendeeDraft/editingAttendees alone so
+      // the user's in-progress edit isn't lost.
       const { data } = await supabase
         .from('meeting_attendance')
         .select('user_id, status, attendee:users(id, name)')
         .eq('meeting_id', meetingId)
       setMeeting(m => ({ ...m, attendance: data ?? [] }))
-      setSavingAttendees(false)
       setEditingAttendees(false)
+    } catch (err) {
+      setAttendeesError(err.message || 'Failed to save attendees.')
+    } finally {
+      setSavingAttendees(false)
     }
   }
 
@@ -712,6 +745,60 @@ function MeetingDetailViewInner() {
     showToast('Meeting renamed.', { tone: 'success' })
   }
 
+  function startDateEdit() {
+    setDateDraft(toLocalDateTimeInput(meeting?.date))
+    setEditingDate(true)
+  }
+
+  function cancelDateEdit() {
+    setDateDraft(toLocalDateTimeInput(meeting?.date))
+    setEditingDate(false)
+    setPendingDateISO(null)
+  }
+
+  // For a recurring meeting, a time change needs to ask "this occurrence
+  // only" or "this and every future occurrence" before it's applied — a
+  // plain meeting just saves immediately.
+  function saveDate() {
+    if (!dateDraft) {
+      showToast('Meeting date is required.', { tone: 'error' })
+      return
+    }
+    const nextISO = new Date(dateDraft).toISOString()
+    if (nextISO === new Date(meeting?.date).toISOString()) {
+      setEditingDate(false)
+      return
+    }
+    if (meeting?.recurrence_id) {
+      setPendingDateISO(nextISO)
+    } else {
+      commitDateChange(nextISO, 'this')
+    }
+  }
+
+  async function commitDateChange(nextISO, scope) {
+    setSavingDate(true)
+    setPendingDateISO(null)
+    try {
+      if (meeting?.recurrence_id) {
+        await editRecurringMeeting(meetingId, { date: nextISO }, scope)
+      } else {
+        const { error } = await supabase.from('meetings').update({ date: nextISO }).eq('id', meetingId)
+        if (error) throw error
+      }
+      setMeeting((current) => ({ ...current, date: nextISO }))
+      setEditingDate(false)
+      showToast(
+        scope === 'this' ? 'Meeting rescheduled.' : 'Meeting time updated for this and future occurrences.',
+        { tone: 'success' },
+      )
+    } catch (err) {
+      showToast(`Couldn't reschedule the meeting: ${err.message}`, { tone: 'error' })
+    } finally {
+      setSavingDate(false)
+    }
+  }
+
   // Visibility (private/published) is editable any time, not just before the
   // first publish — the RLS policy already permits the creator/managers to
   // update the meeting regardless of its current visibility.
@@ -731,6 +818,21 @@ function MeetingDetailViewInner() {
 
     setMeeting((current) => ({ ...current, visibility: nextVisibility }))
     showToast(nextVisibility === 'private' ? 'Meeting is now private.' : 'Meeting is now published.', { tone: 'success' })
+  }
+
+  // Notes visibility is separate from meeting visibility: an invited attendee
+  // of a one-on-one can see the meeting on their calendar without seeing its
+  // notes until the creator shares them explicitly.
+  async function toggleNotesShare(userId, currentlyShared) {
+    setSharingNotesId(userId)
+    try {
+      const next = await setNotesSharedWithAttendee(meetingId, userId, !currentlyShared)
+      setMeeting((current) => ({ ...current, notes_shared_with: next }))
+    } catch (err) {
+      showToast(`Couldn't update notes sharing: ${err.message}`, { tone: 'error' })
+    } finally {
+      setSharingNotesId(null)
+    }
   }
 
   function avatarColor(name = '') {
@@ -910,6 +1012,7 @@ function MeetingDetailViewInner() {
           )}
           <div style={{ fontSize:11, color: isLive ? 'rgba(255,255,255,.55)' : FS.muted, marginTop:1 }}>
             {isPost ? `Duration: ${fmt(elapsed)} · ` : ''}{dateLabel}
+            {meeting.recurrence_id && meeting.series_instance_num ? ` · 🔁 Meeting #${meeting.series_instance_num} in series` : ''}
           </div>
         </div>
 
@@ -922,7 +1025,7 @@ function MeetingDetailViewInner() {
                 <div style={{ fontFamily:"'DM Mono', monospace", fontSize:22, fontWeight:500, lineHeight:1, color:'#fff' }}>{fmt(elapsed)}</div>
                 <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.08em', textTransform:'uppercase', color:'rgba(255,255,255,.4)', marginTop:2 }}>Elapsed</div>
               </div>
-              {canManage && (
+              {canRecord && (
                 <button
                   onClick={() => { if (!recording) { setRecording(true); setActiveTab('audio') } else { setRecording(false) } }}
                   style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'7px 13px', borderRadius:999, border:'none', fontFamily:'inherit', fontSize:11.5, fontWeight:700, cursor:'pointer', background: recording ? FS.coral : 'rgba(255,255,255,.15)', color:'#fff', transition:'all .2s' }}
@@ -989,7 +1092,56 @@ function MeetingDetailViewInner() {
                 Calendar
                 <span style={{ background: FS.sageL, color: FS.sage, borderRadius:999, padding:'2px 8px', fontSize:9 }}>Synced ✓</span>
               </div>
-              <div style={{ fontSize:12.5, fontWeight:700, color: FS.text, marginBottom:2 }}>{dateLabel}</div>
+              {editingDate ? (
+                <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:2 }}>
+                  <input
+                    type="datetime-local"
+                    value={dateDraft}
+                    onChange={(e) => setDateDraft(e.target.value)}
+                    disabled={savingDate}
+                    autoFocus
+                    aria-label="Meeting date and time"
+                    style={{ fontSize:12.5, fontWeight:700, color: FS.text, border:`1px solid ${FS.border}`, borderRadius:6, padding:'5px 7px', background:'#fff', outline:'none', fontFamily:'inherit' }}
+                  />
+                  {pendingDateISO ? (
+                    <div style={{ display:'flex', flexDirection:'column', gap:4, padding:'8px 9px', borderRadius:6, background: FS.navyGhost, border:`1px solid ${FS.borderL}` }}>
+                      <div style={{ fontSize:10.5, color: FS.muted, marginBottom:2 }}>This is part of a recurring series. Apply the new time to:</div>
+                      <button type="button" disabled={savingDate} onClick={() => commitDateChange(pendingDateISO, 'this')} style={{ textAlign:'left', padding:'6px 8px', border:'none', borderRadius:5, background:'#fff', color: FS.text, fontFamily:'inherit', fontSize:11.5, fontWeight:600, cursor: savingDate ? 'wait' : 'pointer' }}>
+                        This meeting only
+                      </button>
+                      <button type="button" disabled={savingDate} onClick={() => commitDateChange(pendingDateISO, 'future')} style={{ textAlign:'left', padding:'6px 8px', border:'none', borderRadius:5, background:'#fff', color: FS.text, fontFamily:'inherit', fontSize:11.5, fontWeight:600, cursor: savingDate ? 'wait' : 'pointer' }}>
+                        This and following meetings
+                      </button>
+                      <button type="button" disabled={savingDate} onClick={cancelDateEdit} style={{ textAlign:'left', padding:'6px 8px', border:'none', borderRadius:5, background:'transparent', color: FS.muted, fontFamily:'inherit', fontSize:11.5, fontWeight:600, cursor:'pointer' }}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display:'flex', gap:6 }}>
+                      <button type="button" onClick={saveDate} disabled={savingDate} style={{ padding:'5px 10px', border:'none', borderRadius:6, background: FS.purple, color:'#fff', fontFamily:'inherit', fontSize:11, fontWeight:700, cursor: savingDate ? 'wait' : 'pointer', opacity: savingDate ? 0.7 : 1 }}>
+                        {savingDate ? 'Saving...' : 'Save'}
+                      </button>
+                      <button type="button" onClick={cancelDateEdit} disabled={savingDate} style={{ padding:'5px 10px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:11, fontWeight:700, cursor: savingDate ? 'default' : 'pointer' }}>
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
+                  <div style={{ fontSize:12.5, fontWeight:700, color: FS.text }}>{dateLabel}</div>
+                  {canManage && !isLive && meeting.status !== 'completed' && (
+                    <button
+                      type="button"
+                      onClick={startDateEdit}
+                      title="Reschedule"
+                      style={{ flexShrink:0, padding:'2px 7px', border:`1px solid ${FS.border}`, borderRadius:999, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:10, fontWeight:700, cursor:'pointer' }}
+                    >
+                      Reschedule
+                    </button>
+                  )}
+                </div>
+              )}
               <div style={{ fontSize:11.5, color: FS.muted }}>{meeting.meeting_type ?? 'General'} meeting</div>
               {isLive && (
                 <>
@@ -1054,6 +1206,7 @@ function MeetingDetailViewInner() {
                     onClick={() => {
                       setAttendeeDraft((meeting?.attendance ?? []).map(a => a.user_id))
                       if (!orgUsers.length) getOrgUsers().then(u => setOrgUsers(u)).catch(() => {})
+                      setAttendeesError(null)
                       setEditingAttendees(true)
                     }}
                     style={{ fontFamily:'inherit', fontSize:10, fontWeight:700, color: FS.navy, border:'none', background:'none', cursor:'pointer', padding:0 }}
@@ -1064,6 +1217,11 @@ function MeetingDetailViewInner() {
               </div>
               {editingAttendees ? (
                 <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                  {attendeesError && (
+                    <div style={{ fontSize:11, color: FS.coral, background: FS.coralL, borderRadius:6, padding:'6px 8px' }}>
+                      {attendeesError}
+                    </div>
+                  )}
                   <div style={{ display:'flex', flexDirection:'column', gap:4, maxHeight:160, overflowY:'auto' }}>
                     {orgUsers.map(u => (
                       <label key={u.id} style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, color: FS.text, cursor:'pointer' }}>
@@ -1080,7 +1238,7 @@ function MeetingDetailViewInner() {
                     <button onClick={saveAttendees} disabled={savingAttendees} style={{ flex:1, padding:'5px 0', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
                       {savingAttendees ? 'Saving…' : 'Save'}
                     </button>
-                    <button onClick={() => setEditingAttendees(false)} style={{ flex:1, padding:'5px 0', border:`1px solid ${FS.border}`, borderRadius:6, background:'transparent', color: FS.muted, fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                    <button onClick={() => { setEditingAttendees(false); setAttendeesError(null) }} style={{ flex:1, padding:'5px 0', border:`1px solid ${FS.border}`, borderRadius:6, background:'transparent', color: FS.muted, fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
                       Cancel
                     </button>
                   </div>
@@ -1171,71 +1329,117 @@ function MeetingDetailViewInner() {
                   </div>
                 )}
 
-                {/* 📝 Discussion */}
-                <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden' }}>
-                  <div style={{ padding:'11px 14px', borderBottom:`1px solid ${FS.borderL}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                    <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted }}>📝 Discussion</div>
-                    <span style={{ fontSize:10, color: FS.sage, fontWeight:600 }}>✓ Auto-saving</span>
+                {/* One-on-one: share notes with attendees (creator/managers only) */}
+                {isOneOnOne && (canManage || isNotesCreator) && (
+                  <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'14px 16px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
+                    <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>🔒 Notes hidden by default — share with</div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      {(meeting.attendance ?? []).filter((a) => a.user_id !== profile?.id).map((a) => {
+                        const shared = (meeting.notes_shared_with ?? []).includes(a.user_id)
+                        return (
+                          <div key={a.user_id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 8px', borderRadius:8, border:`1px solid ${FS.borderL}` }}>
+                            <span style={{ fontSize:13, color: FS.text, fontWeight:600 }}>{a.attendee?.name ?? 'Unknown'}</span>
+                            <button
+                              type="button"
+                              onClick={() => toggleNotesShare(a.user_id, shared)}
+                              disabled={sharingNotesId === a.user_id}
+                              style={{
+                                padding:'5px 12px', borderRadius:999,
+                                border: shared ? 'none' : `1px solid ${FS.border}`,
+                                background: shared ? FS.sageL : FS.surface,
+                                color: shared ? FS.sage : FS.muted,
+                                fontFamily:'inherit', fontSize:11, fontWeight:700,
+                                cursor: sharingNotesId === a.user_id ? 'wait' : 'pointer',
+                                opacity: sharingNotesId === a.user_id ? 0.6 : 1,
+                              }}
+                            >
+                              {shared ? '✓ Shared' : 'Share notes'}
+                            </button>
+                          </div>
+                        )
+                      })}
+                      {(meeting.attendance ?? []).filter((a) => a.user_id !== profile?.id).length === 0 && (
+                        <div style={{ fontSize:12, color: FS.xmuted }}>No other attendees invited yet.</div>
+                      )}
+                    </div>
                   </div>
-                  <textarea
-                    value={minutesText}
-                    onChange={e => setMinutesText(e.target.value)}
-                    placeholder="Capture what's being discussed…"
-                    rows={6}
-                    style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background:'transparent', fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
-                  />
-                </div>
+                )}
 
-                {/* ✅ Decisions Made */}
-                <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden' }}>
-                  <div style={{ padding:'11px 14px', borderBottom:`1px solid ${FS.borderL}` }}>
-                    <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted }}>✅ Decisions Made</div>
+                {canSeeNotes ? (
+                  <>
+                    {/* 📝 Discussion */}
+                    <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden' }}>
+                      <div style={{ padding:'11px 14px', borderBottom:`1px solid ${FS.borderL}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                        <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted }}>📝 Discussion</div>
+                        <span style={{ fontSize:10, color: FS.sage, fontWeight:600 }}>✓ Auto-saving</span>
+                      </div>
+                      <textarea
+                        value={minutesText}
+                        onChange={e => setMinutesText(e.target.value)}
+                        placeholder="Capture what's being discussed…"
+                        rows={6}
+                        style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background:'transparent', fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
+                      />
+                    </div>
+
+                    {/* ✅ Decisions Made */}
+                    <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden' }}>
+                      <div style={{ padding:'11px 14px', borderBottom:`1px solid ${FS.borderL}` }}>
+                        <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted }}>✅ Decisions Made</div>
+                      </div>
+                      <textarea
+                        value={decisionsText}
+                        onChange={e => setDecisionsText(e.target.value)}
+                        placeholder="Key decisions reached in this meeting…"
+                        rows={4}
+                        style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background:'transparent', fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
+                      />
+                    </div>
+
+                    {/* ➡ Next Steps */}
+                    <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden' }}>
+                      <div style={{ padding:'11px 14px', borderBottom:`1px solid ${FS.borderL}` }}>
+                        <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted }}>➡ Next Steps</div>
+                      </div>
+                      <textarea
+                        value={nextStepsText}
+                        onChange={e => setNextStepsText(e.target.value)}
+                        placeholder="Agreed next steps…"
+                        rows={4}
+                        style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background:'transparent', fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
+                      />
+                    </div>
+
+                    {/* Publish minutes toggle */}
+                    <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
+                      <div>
+                        <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>Publish minutes</div>
+                        <div style={{ fontSize:11, color: FS.muted, marginTop:2 }}>Share with all attendees automatically</div>
+                      </div>
+                      <button
+                        onClick={publishMinutes}
+                        disabled={saving}
+                        style={{
+                          position:'relative', width:44, height:24, borderRadius:999, border:'none', cursor:'pointer', transition:'background .2s',
+                          background: published ? FS.sage : FS.border,
+                        }}
+                      >
+                        <span style={{
+                          position:'absolute', top:3, left: published ? 22 : 2, width:18, height:18, borderRadius:'50%',
+                          background:'#fff', transition:'left .2s', boxShadow:'0 1px 3px rgba(0,0,0,.2)',
+                        }} />
+                      </button>
+                    </div>
+
+                    {published && <div style={{ fontSize:12, color: FS.sage, fontWeight:600 }}>✓ Minutes saved & published</div>}
+                  </>
+                ) : (
+                  <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'24px 16px', textAlign:'center', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
+                    <div style={{ fontSize:24, marginBottom:8 }}>🔒</div>
+                    <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>Notes hidden by creator</div>
+                    <div style={{ fontSize:12, color: FS.muted, marginTop:4 }}>The organizer hasn't shared notes from this meeting with you yet.</div>
                   </div>
-                  <textarea
-                    value={decisionsText}
-                    onChange={e => setDecisionsText(e.target.value)}
-                    placeholder="Key decisions reached in this meeting…"
-                    rows={4}
-                    style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background:'transparent', fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
-                  />
-                </div>
-
-                {/* ➡ Next Steps */}
-                <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden' }}>
-                  <div style={{ padding:'11px 14px', borderBottom:`1px solid ${FS.borderL}` }}>
-                    <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted }}>➡ Next Steps</div>
-                  </div>
-                  <textarea
-                    value={nextStepsText}
-                    onChange={e => setNextStepsText(e.target.value)}
-                    placeholder="Agreed next steps…"
-                    rows={4}
-                    style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background:'transparent', fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
-                  />
-                </div>
-
-                {/* Publish minutes toggle */}
-                <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
-                  <div>
-                    <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>Publish minutes</div>
-                    <div style={{ fontSize:11, color: FS.muted, marginTop:2 }}>Share with all attendees automatically</div>
-                  </div>
-                  <button
-                    onClick={publishMinutes}
-                    disabled={saving}
-                    style={{
-                      position:'relative', width:44, height:24, borderRadius:999, border:'none', cursor:'pointer', transition:'background .2s',
-                      background: published ? FS.sage : FS.border,
-                    }}
-                  >
-                    <span style={{
-                      position:'absolute', top:3, left: published ? 22 : 2, width:18, height:18, borderRadius:'50%',
-                      background:'#fff', transition:'left .2s', boxShadow:'0 1px 3px rgba(0,0,0,.2)',
-                    }} />
-                  </button>
-                </div>
-
-                {published && <div style={{ fontSize:12, color: FS.sage, fontWeight:600 }}>✓ Minutes saved & published</div>}
+                )}
               </div>
             )}
 
@@ -1518,12 +1722,12 @@ function MeetingDetailViewInner() {
               <div style={{ flex:1, overflowY:'auto', padding: isMobile ? 12 : 18, display:'flex', flexDirection:'column', gap: isMobile ? 12 : 16, animation:'fadein .18s ease' }}>
 
                 {/* Live Recording */}
-                {canManage && (
+                {canRecord && (
                   <AudioTranscriptionPanel
                     key={`record-${meetingId}`}
                     meetingId={meetingId}
                     departmentId={meeting.department_id}
-                    canRecord={canManage}
+                    canRecord={canRecord}
                     meetingContext={context}
                     recordOnly
                     startImmediately={recording}
@@ -1695,6 +1899,11 @@ function MeetingDetailViewInner() {
                       meetingId={meetingId}
                       meeting={meeting}
                       actionItems={actionItems}
+                      agenda={agenda}
+                      openItems={openItems}
+                      decisionsText={decisionsText}
+                      minutesText={minutesText}
+                      nextStepsText={nextStepsText}
                       onSuccess={(result) => setMeeting(m => ({ ...m, doc_drive_url: result.docUrl, doc_title: result.docTitle }))}
                     />
                   </div>
@@ -1909,6 +2118,11 @@ function MeetingDetailViewInner() {
                           meetingId={meetingId}
                           meeting={meeting}
                           actionItems={actionItems}
+                          agenda={agenda}
+                          openItems={openItems}
+                          decisionsText={decisionsText}
+                          minutesText={minutesText}
+                          nextStepsText={nextStepsText}
                           onSuccess={(result) => setMeeting(m => ({ ...m, doc_drive_url: result.docUrl, doc_title: result.docTitle }))}
                         />
                       </div>

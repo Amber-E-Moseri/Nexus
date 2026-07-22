@@ -132,9 +132,9 @@ describe('processSSELines — error handling', () => {
 
     // Should have logged the error
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[sseParser] SSE parse error:'),
+      expect.stringContaining('[sseParser] Skipping malformed SSE event'),
       expect.any(String),
-      expect.objectContaining({ line: 'data: {BROKEN JSON}' })
+      'data: {BROKEN JSON}'
     )
 
     consoleSpy.mockRestore()

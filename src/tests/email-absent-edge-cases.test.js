@@ -2,10 +2,15 @@ import { describe, test, expect } from 'vitest'
 
 /**
  * Name normalization utility for matching absent members with roster
- * Matches the implementation in MeetingReportTab.jsx line 104
+ * Matches the implementation in MeetingReportTab.jsx normalizeNameKey()
  */
 function normalizeNameKey(name) {
-  return (name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').trim()
+  return (name ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .trim()
 }
 
 function namesMatch(name1, name2) {
@@ -44,11 +49,13 @@ describe('Email Absent - Name Matching Edge Cases', () => {
     })
 
     test('matches names with hyphens - removes hyphens', () => {
-      // Mary-Jane Smith -> maryjanesmit
+      // Mary-Jane Smith -> maryjanesmith
       expect(namesMatch('Mary-Jane Smith', 'MaryJaneSmith')).toBe(true)
       expect(namesMatch('Smith-Jones', 'SmithJones')).toBe(true)
-      // But won't match with spaces: 'maryjane smith' != 'maryjanesmit'
-      expect(namesMatch('Mary-Jane Smith', 'mary jane smith')).toBe(false)
+      // normalizeNameKey strips ALL non-alphanumeric characters, including
+      // both hyphens and spaces, so a hyphenated name and its space-separated
+      // equivalent normalize to the same key and DO match.
+      expect(namesMatch('Mary-Jane Smith', 'mary jane smith')).toBe(true)
     })
 
     test('matches names with accents - accents are removed', () => {
