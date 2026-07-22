@@ -27,13 +27,11 @@ import OrgReportExport from '../features/dashboard/components/OrgReportExport'
 import ActionItemsWidget from '../features/dashboard/components/ActionItemsWidget'
 import TeamWorkloadWidget from '../features/dashboard/components/TeamWorkloadWidget'
 import PastoralMembersWidget from '../features/dashboard/components/PastoralMembersWidget'
-import AbsentMembersWidget from '../features/dashboard/components/AbsentMembersWidget'
 import TeamActivityHeatmap from '../features/dashboard/components/TeamActivityHeatmap'
 import TeamVelocityWidget from '../features/dashboard/components/TeamVelocityWidget'
 import FlockCallsDueWidget from '../features/dashboard/components/FlockCallsDueWidget'
 import WeeklyWinsWidget from '../features/dashboard/components/WeeklyWinsWidget'
 import PersonalRemindersWidget from '../features/dashboard/components/PersonalRemindersWidget'
-import TeamAvailabilityWidget from '../features/dashboard/components/TeamAvailabilityWidget'
 import ChartWidget from '../features/dashboard/components/ChartWidget'
 import CalculationWidget from '../features/dashboard/components/CalculationWidget'
 import GoalsWidget from '../features/dashboard/components/GoalsWidget'
@@ -600,13 +598,11 @@ const WIDGET_META = {
   team_workload:          { title: 'Team Workload',             Component: TeamWorkloadWidget },
   pastoral_members:       { title: 'Pastoral Members',          Component: PastoralMembersWidget },
   flock_calls_due:        { title: 'Flock Calls Due',           Component: FlockCallsDueWidget },
-  absent_members_alert:   { title: 'Absent Members Alert',      Component: AbsentMembersWidget },
   team_activity_heatmap:  { title: 'Team Activity Heatmap',     Component: TeamActivityHeatmap },
   team_velocity:          { title: 'Team Velocity Trend',       Component: TeamVelocityWidget },
   quick_actions:          { title: 'Quick Actions',             Component: QuickActionsWidget },
   my_spaces:              { title: 'My Spaces',                 Component: MySpacesWidget },
   personal_reminders:     { title: 'Personal Reminders',        Component: PersonalRemindersWidget },
-  team_availability:      { title: 'Team Availability',         Component: TeamAvailabilityWidget },
   chart_widget:           { title: 'Chart',                     Component: ChartWidget, configurable: true },
   calculation_widget:     { title: 'Calculation',                Component: CalculationWidget, configurable: true },
   goals:                  { title: 'Goals & OKRs',              Component: GoalsWidget },
