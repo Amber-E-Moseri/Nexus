@@ -29,6 +29,12 @@ export async function saveAgendaItemsForMeeting(meeting, items, createdBy) {
       date: dateStr,
       startTime,
       endTime,
+      // agendas.theme is NOT NULL with a DB-side default of 'cream_purple',
+      // but a caller that omits the key entirely still depends on that
+      // default actually being live on this environment — pass it
+      // explicitly rather than relying on it (same class of migration-
+      // history/live-schema drift already hit once this session).
+      theme: 'cream_purple',
       createdBy,
     },
     items,

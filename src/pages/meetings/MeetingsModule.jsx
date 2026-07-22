@@ -138,7 +138,12 @@ function MeetingsModuleFallback() {
 
 const TABS = [
   { key: 'meetings', label: 'Meetings' },
-  { key: 'report', label: 'Report', restricted: true },
+  // Report tab is open to everyone — meeting_attendance_reports RLS already
+  // scopes select/insert/delete to `created_by = auth.uid()`, so anyone can
+  // already generate and manage their own reports; the tab was previously
+  // gated shut behind the same flag as Roster, which blocked ordinary
+  // members from ever reaching their own report history to delete one.
+  { key: 'report', label: 'Report' },
   { key: 'roster', label: '⚙ Roster', restricted: true },
 ]
 
@@ -182,16 +187,17 @@ export default function MeetingsModule() {
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [searchParams, setSearchParams] = useSearchParams()
 
-  // Check if user has access to report/roster tabs
+  // Roster (expected-attendees management) stays leadership-only. Report is
+  // no longer gated by this — see TABS above.
   const normalizedRole = (role ?? '').toLowerCase()
-  const canViewReportRoster =
+  const canViewRoster =
     ['super_admin', 'regional_secretary'].includes(normalizedRole) ||
     hasSpaceRole(profile, null, 'ors') ||
     hasSpaceRole(profile, null, 'programs') ||
     hasSpaceRole(profile, null, 'dept_lead')
 
   // Filter tabs based on access
-  const visibleTabs = TABS.filter(tab => !tab.restricted || canViewReportRoster)
+  const visibleTabs = TABS.filter(tab => !tab.restricted || canViewRoster)
 
   const [activeTab, setActiveTab] = useState(() => {
     const initial = searchParams.get('report') ? 'report' : searchParams.get('tab') === 'roster' ? 'roster' : 'meetings'

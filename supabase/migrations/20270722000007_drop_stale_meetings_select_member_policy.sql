@@ -1,0 +1,28 @@
+-- Drop the stale "meetings_select_member" policy — it's the actual reason
+-- private meetings were still visible to people they shouldn't be.
+--
+-- Postgres ORs together every permissive policy on a table for a given
+-- command. "meetings_select_member" (from 20260710000000_fix_null_department_rls.sql)
+-- was never dropped by any of the many later migrations that rewrote
+-- "meetings_select" (20260911000000, 20261216000000, 20270102000000,
+-- 20270721000004, 20270722000002/000006). Its condition:
+--
+--   current_user_can_bypass_department() OR department_id = current_user_department()
+--
+-- ...does not check visibility at all. current_user_can_bypass_department()
+-- returns true for super_admin AND regional_secretary, so this one dead
+-- policy alone granted those roles (and every member of the same
+-- department) unconditional access to every meeting including private
+-- ones — silently undoing every visibility-scoping fix made to
+-- "meetings_select" above it, since permissive policies combine with OR.
+--
+-- This is why regionalsecretary@lwcanada.org's private meetings were still
+-- visible to the other regional_secretary account, and why the super_admin
+-- carve-out in 20270722000006 wasn't actually effective either.
+--
+-- "meetings_select" already covers the legitimate case this policy was
+-- meant for (a member seeing their own department's published meetings),
+-- correctly scoped to visibility = 'published'. Dropping this policy loses
+-- no legitimate access, only the visibility bypass.
+
+drop policy if exists "meetings_select_member" on public.meetings;
