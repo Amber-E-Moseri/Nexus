@@ -92,7 +92,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: 'How do I create a new folder or list?',
-        a: 'Hover a space in the sidebar and click the + icon, or use "Create folder" / "Create list" from the space\'s quick-add menu. dept_lead and super_admin roles can create spaces themselves via the + next to the "Spaces" section label.',
+        a: 'Two ways: (1) In the sidebar, hover the space (and a folder, for a list inside it) and click the "+" / "➕ Add list" control that appears. (2) Open the space\'s Overview tab, where the folder/list tree has its own "+ Add List" / "New List" buttons next to each folder and for top-level lists. Creating folders and lists is limited to that space\'s dept_lead and super_admin — regular members won\'t see the + controls. Separately, dept_lead and super_admin can also create whole new spaces via the + next to the "Spaces" section label in the sidebar.',
       },
       {
         q: 'How do task statuses work?',
