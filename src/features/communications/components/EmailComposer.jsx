@@ -43,6 +43,7 @@ function fileIcon(mimeType) {
 // Default available variables
 const DEFAULT_VARIABLES = [
   '{{name}}',
+  '{{first_name}}',
   '{{email}}',
   '{{subgroup}}',
   '{{role}}',
@@ -262,13 +263,19 @@ function EmailPreviewPane({ body, subject, isMobile }) {
 function TestEmailForm({ onSendTest, subject, loading }) {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
+  const [error, setError] = useState(null)
 
   const handleSend = async () => {
     if (!email.trim()) return
-    await onSendTest(email)
-    setSent(true)
-    setEmail('')
-    setTimeout(() => setSent(false), 3000)
+    setError(null)
+    try {
+      await onSendTest(email)
+      setSent(true)
+      setEmail('')
+      setTimeout(() => setSent(false), 3000)
+    } catch (err) {
+      setError(err.message || 'Failed to send test email.')
+    }
   }
 
   return (
@@ -313,6 +320,7 @@ function TestEmailForm({ onSendTest, subject, loading }) {
           {sent ? 'Sent' : 'Send'}
         </button>
       </div>
+      {error ? <div style={{ marginTop: 6, fontSize: 11, fontWeight: 600, color: '#C94830' }}>{error}</div> : null}
     </div>
   )
 }
