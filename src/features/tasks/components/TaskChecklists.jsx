@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import {
   addChecklistItem,
   createChecklist,
@@ -16,6 +17,7 @@ export default function TaskChecklists({ taskId }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [focusChecklistId, setFocusChecklistId] = useState(null)
+  const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
     if (!taskId) return undefined
@@ -139,73 +141,97 @@ export default function TaskChecklists({ taskId }) {
     }
   }
 
+  const allItems = checklists.flatMap((checklist) => checklist.items ?? [])
+  const totalCount = allItems.length
+  const openCount = allItems.filter((item) => !item.is_checked).length
+  const doneCount = totalCount - openCount
+  const progressPercent = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0
+  const progressColor = progressPercent >= 100 ? '#2D8653' : progressPercent > 0 ? '#C47E0A' : 'transparent'
+
   return (
-    <div
-      style={{
-        marginTop: 16,
-        padding: 16,
-        borderRadius: 10,
-        background: 'var(--surface-secondary)',
-        border: '1px solid var(--border)',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
-            Checklists
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
-            Lightweight checkboxes inside this task.
-          </div>
-        </div>
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <button
           type="button"
-          onClick={() => { void handleCreateChecklist() }}
+          onClick={() => setCollapsed((c) => !c)}
           style={{
-            border: '1px solid var(--border)',
-            background: '#FFFFFF',
-            color: 'var(--text-primary)',
-            borderRadius: 8,
-            padding: '8px 12px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            background: 'none',
+            border: 'none',
             cursor: 'pointer',
+            padding: 0,
             fontSize: 12,
             fontWeight: 600,
-            flexShrink: 0,
+            color: 'var(--text-secondary)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
           }}
         >
-          + Add checklist
+          {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+          Checklists
+          {totalCount > 0 ? (
+            <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 0, color: 'var(--text-tertiary)' }}>
+              {openCount} open
+            </span>
+          ) : null}
         </button>
+        {totalCount > 0 ? (
+          <span aria-hidden="true" style={{ flex: '0 1 56px', minWidth: 44, height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+            <span style={{ display: 'block', height: '100%', width: `${progressPercent}%`, background: progressColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
+          </span>
+        ) : null}
       </div>
 
-      {error ? (
-        <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--coral-dark)' }}>
-          {error}
-        </div>
-      ) : null}
+      {!collapsed ? (
+        <>
+          {error ? (
+            <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--coral-dark)' }}>
+              {error}
+            </div>
+          ) : null}
 
-      {loading ? (
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Loading checklists...</div>
-      ) : checklists.length === 0 ? (
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-          No checklists yet.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {checklists.map((checklist) => (
-            <TaskChecklist
-              key={checklist.id}
-              checklist={checklist}
-              autoFocusTitle={focusChecklistId === checklist.id}
-              onRename={handleRenameChecklist}
-              onDelete={handleDeleteChecklist}
-              onAddItem={handleAddItem}
-              onToggleItem={handleToggleItem}
-              onUpdateItemTitle={handleUpdateItemTitle}
-              onDeleteItem={handleDeleteItem}
-            />
-          ))}
-        </div>
-      )}
+          {loading ? (
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Loading checklists...</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {checklists.map((checklist) => (
+                <TaskChecklist
+                  key={checklist.id}
+                  checklist={checklist}
+                  autoFocusTitle={focusChecklistId === checklist.id}
+                  onRename={handleRenameChecklist}
+                  onDelete={handleDeleteChecklist}
+                  onAddItem={handleAddItem}
+                  onToggleItem={handleToggleItem}
+                  onUpdateItemTitle={handleUpdateItemTitle}
+                  onDeleteItem={handleDeleteItem}
+                />
+              ))}
+              <button
+                type="button"
+                onClick={() => { void handleCreateChecklist() }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  border: 'none',
+                  background: 'none',
+                  color: 'var(--text-tertiary)',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  padding: '4px 0',
+                  textAlign: 'left',
+                }}
+              >
+                <span style={{ color: '#C8BFAF', fontSize: 14 }}>+</span>
+                Add checklist
+              </button>
+            </div>
+          )}
+        </>
+      ) : null}
     </div>
   )
 }

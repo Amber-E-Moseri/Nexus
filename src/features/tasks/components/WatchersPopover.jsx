@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Eye } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
+import { useAuth } from '../../../hooks/useAuth'
 import { followTask, getTaskFollowers, unfollowTask } from '../lib/followers'
+import { useToast } from '../../../context/ToastContext'
 
-export default function WatchersPopover({ taskId, pending = [], onPendingChange }) {
+export default function WatchersPopover({ taskId, pending = [], onPendingChange, canRemove = true }) {
+  const { user: currentUser } = useAuth()
+  const { showToast } = useToast()
   const [open, setOpen] = useState(false)
   const [watchers, setWatchers] = useState([])
   const [query, setQuery] = useState('')
@@ -53,8 +57,13 @@ export default function WatchersPopover({ taskId, pending = [], onPendingChange 
   async function addWatcher(user) {
     if (currentIds.has(user.id)) return
     if (taskId) {
-      await followTask(taskId, user.id)
-      setWatchers((prev) => [...prev, { user_id: user.id, user }])
+      try {
+        await followTask(taskId, user.id, currentUser?.id)
+        setWatchers((prev) => [...prev, { user_id: user.id, user }])
+      } catch {
+        showToast('Could not add watcher. You may not have permission.', { tone: 'error' })
+        return
+      }
     } else {
       onPendingChange?.([...pending, user])
     }
@@ -64,8 +73,12 @@ export default function WatchersPopover({ taskId, pending = [], onPendingChange 
 
   async function removeWatcher(userId) {
     if (taskId) {
-      await unfollowTask(taskId, userId)
-      setWatchers((prev) => prev.filter((f) => f.user_id !== userId))
+      try {
+        await unfollowTask(taskId, userId)
+        setWatchers((prev) => prev.filter((f) => f.user_id !== userId))
+      } catch {
+        showToast('Could not remove watcher. You may not have permission.', { tone: 'error' })
+      }
     } else {
       onPendingChange?.(pending.filter((u) => u.id !== userId))
     }
@@ -133,24 +146,26 @@ export default function WatchersPopover({ taskId, pending = [], onPendingChange 
                   }}
                 >
                   {user.name}
-                  <button
-                    type="button"
-                    onClick={() => removeWatcher(user.id)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: '#9B8EC4',
-                      padding: '0 2px',
-                      fontSize: 14,
-                      lineHeight: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                    }}
-                    title={`Remove ${user.name}`}
-                  >
-                    ×
-                  </button>
+                  {(canRemove || user.id === currentUser?.id) && (
+                    <button
+                      type="button"
+                      onClick={() => removeWatcher(user.id)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#9B8EC4',
+                        padding: '0 2px',
+                        fontSize: 14,
+                        lineHeight: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                      title={`Remove ${user.name}`}
+                    >
+                      ×
+                    </button>
+                  )}
                 </span>
               ))}
             </div>

@@ -21,10 +21,13 @@ export async function isFollowingTask(taskId, userId) {
   return Boolean(data)
 }
 
-export async function followTask(taskId, userId) {
+export async function followTask(taskId, userId, addedBy) {
+  const row = { task_id: taskId, user_id: userId, added_via: 'manual' }
+  if (addedBy && addedBy !== userId) row.added_by = addedBy
+
   const { error } = await supabase
     .from('task_follows')
-    .upsert({ task_id: taskId, user_id: userId }, { onConflict: 'user_id,task_id' })
+    .upsert(row, { onConflict: 'user_id,task_id' })
 
   if (error) throw error
 }

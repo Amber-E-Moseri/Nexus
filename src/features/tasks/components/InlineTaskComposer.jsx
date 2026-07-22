@@ -28,8 +28,8 @@ export default function InlineTaskComposer({
   const [dueTime, setDueTime] = useState('')
   const [assigneeIds, setAssigneeIds] = useState([])
   const [statusId, setStatusId] = useState(() => {
-    const notStarted = statuses.find((s) => s.name === 'Not Started')
-    if (notStarted) return notStarted.id
+    const toDo = statuses.find((s) => s.name === 'To Do')
+    if (toDo) return toDo.id
     return statuses.find((s) => s.category === 'open')?.id ?? ''
   })
   const [saving, setSaving] = useState(false)
