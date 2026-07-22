@@ -49,10 +49,7 @@ const TASK_SELECT = `
   ),
   assignee:users!assignee_id(id, name, avatar_url),
   creator:users!created_by(id, name),
-  space:departments(id, name, color),
-  comments:task_comments(count),
-  files:task_files(count),
-  dependencies:task_dependencies!task_id(count)
+  space:departments(id, name, color)
 `
 
 function toDateOnly(value: Date | string | null | undefined) {
@@ -246,13 +243,29 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     load()
   }, [userId, filterKey, dateRange])
 
-  // Real-time sync for tasks
-  // Subscribe only to tasks assigned to this user. We do not subscribe to
-  // created_by because delegated tasks (created by user, assigned to someone
-  // else) are excluded from My Tasks — patching them in would contradict the
-  // fetch query. Quick-view scopes are assignee-only, so this filter covers
-  // them fully; INSERT/UPDATE re-fetches through load(), which re-applies the
-  // scope's server + client filters.
+  // Real-time sync for tasks.
+  //
+  // Two channels, because a Postgres Realtime filter is evaluated against the
+  // NEW row on UPDATE — it can only tell you a row now matches, never that it
+  // used to and no longer does. So each channel only catches transitions
+  // *into* its own column match, not out of it:
+  //   - assignee_id channel: catches "now assigned to me" (e.g. reassigned to
+  //     me from someone else). Known gap: a task reassigned AWAY from me to
+  //     someone else won't be caught by this channel (the new row no longer
+  //     matches `assignee_id=eq.userId`) — it goes stale on "Mine" until the
+  //     next fresh load()/navigation. Same root cause as the created_by gap
+  //     below, just on the opposite tab; no filter shape covers "used to
+  //     match, now doesn't" for either column.
+  //   - created_by channel: catches "now delegated" (self → someone else),
+  //     which is exactly the transition that used to be invisible here. Only
+  //     needed for the default (unscoped) fetch — quick-view scopes are
+  //     assignee-only by design (see load() above) and deliberately exclude
+  //     delegated tasks, so no created_by subscription is needed for them.
+  //
+  // Note: a task where created_by === userId AND assignee_id === userId will
+  // match both channels and fire handlePayload twice per change. That's safe,
+  // not a duplicate-row bug — INSERT/UPDATE both funnel into load(), which
+  // does a full fetch + setTasks(filtered) replace, not an append.
   useEffect(() => {
     if (!userId) return
 
@@ -281,10 +294,27 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
       )
       .subscribe()
 
+    const createdBySubscription = filters?.scope
+      ? null
+      : supabase
+          .channel(`tasks:created_by:${userId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'tasks',
+              filter: `created_by=eq.${userId}`,
+            },
+            handlePayload,
+          )
+          .subscribe()
+
     return () => {
       supabase.removeChannel(assignedSubscription)
+      if (createdBySubscription) supabase.removeChannel(createdBySubscription)
     }
-  }, [userId])
+  }, [userId, filters?.scope])
 
   return {
     tasks,
