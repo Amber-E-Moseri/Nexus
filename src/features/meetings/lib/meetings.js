@@ -195,19 +195,35 @@ export async function editRecurringMeeting(meetingId, updates, editScope = 'this
   // future occurrence already materialized in the series.
   const { data: futureMeetings, error: futureError } = await supabase
     .from('meetings')
-    .select('id')
+    .select('id, date')
     .eq('recurrence_id', current.recurrence_id)
     .gte('date', current.date)
   if (futureError) throw futureError
 
-  const { date: _ignoredDate, ...updatesWithoutDate } = updates
+  const { date: newDate, ...otherUpdates } = updates
   const targetIds = futureMeetings.map((m) => m.id)
 
-  const { error: updateError } = await supabase
-    .from('meetings')
-    .update(updatesWithoutDate)
-    .in('id', targetIds)
-  if (updateError) throw updateError
+  if (newDate) {
+    // A date change on a multi-occurrence edit means "change the time of
+    // day" — each occurrence keeps its own calendar date, only the
+    // hours/minutes shift, so the series doesn't collapse onto one day.
+    const newTime = new Date(newDate)
+    const results = await Promise.all(
+      futureMeetings.map((m) => {
+        const own = new Date(m.date)
+        own.setHours(newTime.getHours(), newTime.getMinutes(), 0, 0)
+        return supabase.from('meetings').update({ ...otherUpdates, date: own.toISOString() }).eq('id', m.id)
+      }),
+    )
+    const failed = results.find((r) => r.error)
+    if (failed) throw failed.error
+  } else if (Object.keys(otherUpdates).length > 0) {
+    const { error: updateError } = await supabase
+      .from('meetings')
+      .update(otherUpdates)
+      .in('id', targetIds)
+    if (updateError) throw updateError
+  }
 
   if (editScope === 'all') {
     // Also persist the new recurrence_rule (if provided) on the series parent
@@ -376,6 +392,20 @@ export async function createTasksFromActionItems(meetingId, departmentId, action
       task_type: item.sprintId ? 'sprint' : 'space',
     }
   })
+
+  // A space task with no department_id is orphaned — invisible on every board.
+  // This can only happen when the meeting itself is org-wide (department_id
+  // null) and neither the per-item picker nor the assignee's own department
+  // resolved one. Sprint-linked tasks are exempt (task_type='sprint' doesn't
+  // need a department). Fail loudly instead of silently creating a task no
+  // one will ever see.
+  const missingDept = actionItems.filter((item, i) => !tasks[i].department_id && !item.sprintId)
+  if (missingDept.length > 0) {
+    const titles = missingDept.map((item) => `"${item.title}"`).join(', ')
+    throw new Error(
+      `Please select a space for: ${titles}. This meeting is org-wide, so a space can't be inferred automatically.`
+    )
+  }
 
   const { data, error } = await supabase
     .from('tasks')

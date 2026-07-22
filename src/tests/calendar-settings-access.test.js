@@ -12,6 +12,8 @@
  * strings like 'admin_manager' or 'programs_manager'.
  */
 
+import { describe, it, expect } from 'vitest'
+
 describe('CalendarSettingsPage Access Control', () => {
   describe('Role Gate: canManageConnections', () => {
     const testCase = (role, isProgramsMember, isAdminMember, expectedAccess) => ({

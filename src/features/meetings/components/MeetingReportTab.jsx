@@ -105,7 +105,15 @@ const PRINT_STYLES = `
 `
 
 function normalizeNameKey(name) {
-  return (name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').trim()
+  // Strip diacritics (José -> Jose) before the alphanumeric filter, which
+  // would otherwise delete accented letters outright instead of matching
+  // their unaccented roster equivalent.
+  return (name ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .trim()
 }
 
 function isNamedSubgroup(subgroup) {

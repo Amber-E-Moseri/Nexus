@@ -102,7 +102,7 @@ describe('Audio Transcription (Deepgram)', () => {
 
   test('Progress bar caps at 90 during transcription', () => {
     let progress = 0;
-    while (progress < 100) {
+    while (progress < 90) {
       progress = Math.min(progress + 10, 90);
     }
     expect(progress).toBe(90);

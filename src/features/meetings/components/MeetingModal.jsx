@@ -1,6 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
+import { useMediaQuery } from '../../../hooks/useMediaQuery'
 import { useMeetings } from '../MeetingsContext'
 import { supabase } from '../../../lib/supabase'
 import AudioTranscriptionPanel from './AudioTranscriptionPanel'
@@ -23,6 +24,7 @@ function toLocalDateTime(value) {
 export default function MeetingModal({ departmentId, onClose }) {
   const { profile } = useAuth()
   const { addMeeting, editMeeting } = useMeetings()
+  const isMobile = useMediaQuery('(max-width: 640px)')
   const [members, setMembers] = useState([])
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(() => toLocalDateTime(new Date().toISOString()))
@@ -32,7 +34,10 @@ export default function MeetingModal({ departmentId, onClose }) {
   const [zoomJoinUrl, setZoomJoinUrl] = useState('')
   const [driveUrl, setDriveUrl] = useState('')
   const [attendeeIds, setAttendeeIds] = useState([])
-  const [isPrivate, setIsPrivate] = useState(false)
+  // Default to private — creator, admins, and anyone explicitly shared with
+  // can see it; toggle off to make it visible to the whole department.
+  const [isPrivate, setIsPrivate] = useState(true)
+  const [isOrgWide, setIsOrgWide] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -69,6 +74,8 @@ export default function MeetingModal({ departmentId, onClose }) {
     )
   }
 
+  const effectiveDeptId = isOrgWide ? null : departmentId
+
   async function ensureDraftMeeting() {
     if (savedMeeting || creatingDraft || !title.trim()) return
 
@@ -78,7 +85,7 @@ export default function MeetingModal({ departmentId, onClose }) {
     try {
       const created = await addMeeting({
         title: title.trim(),
-        department_id: departmentId,
+        department_id: effectiveDeptId,
         date: new Date(date).toISOString(),
         meeting_type: meetingType,
         visibility: isPrivate ? 'private' : 'published',
@@ -129,20 +136,15 @@ export default function MeetingModal({ departmentId, onClose }) {
           drive_url: driveUrl.trim() || null,
         })
 
-        await supabase.from('meeting_attendance').delete().eq('meeting_id', savedMeeting.id)
-        if (attendeeIds.length > 0) {
-          await supabase.from('meeting_attendance').insert(
-            attendeeIds.map((userId) => ({
-              meeting_id: savedMeeting.id,
-              user_id: userId,
-              status: 'present',
-            })),
-          )
-        }
+        const { error: attendanceError } = await supabase.rpc('set_meeting_attendance', {
+          p_meeting_id: savedMeeting.id,
+          p_user_ids: attendeeIds,
+        })
+        if (attendanceError) throw attendanceError
       } else {
         await addMeeting({
           title: title.trim(),
-          department_id: departmentId,
+          department_id: effectiveDeptId,
           date: new Date(date).toISOString(),
           meeting_type: meetingType,
           visibility: isPrivate ? 'private' : 'published',
@@ -177,16 +179,16 @@ export default function MeetingModal({ departmentId, onClose }) {
           aria-describedby={undefined}
           style={{
             position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: wide ? 'min(1100px, 96vw)' : 'min(760px, 94vw)',
+            top: isMobile ? 0 : '50%',
+            left: isMobile ? 0 : '50%',
+            transform: isMobile ? 'none' : 'translate(-50%, -50%)',
+            width: isMobile ? '100vw' : wide ? 'min(1100px, 96vw)' : 'min(760px, 94vw)',
             transition: 'width 0.2s ease',
-            minHeight: '40vh',
-            maxHeight: '92vh',
-            height: 'auto',
+            minHeight: isMobile ? '50vh' : '40vh',
+            maxHeight: isMobile ? '95dvh' : '92vh',
+            height: isMobile ? '95dvh' : 'auto',
             overflow: 'hidden',
-            borderRadius: 18,
+            borderRadius: isMobile ? '16px 16px 0 0' : 18,
             background: 'white',
             boxShadow: '0 24px 64px rgba(14,14,30,0.22)',
             zIndex: 50,
@@ -218,7 +220,7 @@ export default function MeetingModal({ departmentId, onClose }) {
               </div>
             ) : null}
 
-            <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'minmax(0, 1.5fr) minmax(220px, 1fr) minmax(180px, 1fr)' }}>
+            <div style={{ display: 'grid', gap: 14, gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.5fr) minmax(220px, 1fr) minmax(180px, 1fr)' }}>
               <div>
                 <label style={labelStyle}>Title *</label>
                 <input
@@ -271,7 +273,7 @@ export default function MeetingModal({ departmentId, onClose }) {
                 role="switch"
                 aria-checked={isPrivate}
                 aria-label="Make meeting private"
-                onClick={() => setIsPrivate((value) => !value)}
+                onClick={() => { setIsPrivate((value) => !value); setIsOrgWide(false) }}
                 style={{
                   width: 38,
                   height: 22,
@@ -299,6 +301,63 @@ export default function MeetingModal({ departmentId, onClose }) {
                 />
               </button>
             </div>
+
+            {profile?.role === 'super_admin' && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  marginTop: 10,
+                  borderRadius: 10,
+                  border: '1px solid var(--border)',
+                  background: isOrgWide ? 'rgba(34, 197, 94, 0.06)' : 'white',
+                  padding: '12px 14px',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                    🌐 Org-Wide
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                    Visible to all departments. Off = visible to your department only.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isOrgWide}
+                  aria-label="Make meeting org-wide"
+                  onClick={() => { setIsOrgWide((v) => !v); setIsPrivate(false) }}
+                  style={{
+                    width: 38,
+                    height: 22,
+                    borderRadius: 999,
+                    border: 'none',
+                    background: isOrgWide ? '#16a34a' : '#C9C0B0',
+                    position: 'relative',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s',
+                    flexShrink: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: 3,
+                      left: isOrgWide ? 19 : 3,
+                      width: 16,
+                      height: 16,
+                      borderRadius: 999,
+                      background: 'white',
+                      transition: 'left 0.15s',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                    }}
+                  />
+                </button>
+              </div>
+            )}
 
             <div style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr', marginTop: 14 }}>
               <div>
