@@ -7,6 +7,7 @@ import { resolveAssignment, getOrgDepartments, getOrgUsers } from '../lib/ownerM
 import { processSSELines } from '../../../lib/meetings/sseParser'
 import { SprintPicker } from '../../sprints'
 import { extractISODate } from '../../../lib/dateUtils'
+import { autoSelectOpenItems } from '../lib/applyExtraction'
 
 // Accept any audio type — browser MIME strings vary (audio/x-m4a, audio/x-mpeg, etc.)
 const isAudioType = (type) => type.startsWith('audio/') || type === 'video/webm'
@@ -17,6 +18,7 @@ export default function AudioTranscriptionPanel({
   meetingId,
   departmentId,
   canRecord,
+  canManage = true,
   meetingContext = '',    // WIN 2: context from meetings.context for better extraction
   startImmediately = false,
   stopImmediately = false,  // when true while recording → stop the recorder
@@ -187,15 +189,7 @@ export default function AudioTranscriptionPanel({
       } else {
         setActionAssignments([])
       }
-      if (result.open_items?.length) {
-        const autoSelected = new Set()
-        result.open_items.forEach((item, i) => {
-          if ((item.confidence_score ?? 0) >= 0.80) autoSelected.add(i)
-        })
-        setSelectedOpenItems(autoSelected)
-      } else {
-        setSelectedOpenItems(new Set())
-      }
+      setSelectedOpenItems(result.open_items?.length ? autoSelectOpenItems(result.open_items) : new Set())
       setOpenItemsMergeSuccess(false)
     }
 
@@ -258,6 +252,7 @@ export default function AudioTranscriptionPanel({
           linked_spaces: linkedSpaces,
           participants,
           stream: true,
+          meetingId,
         }),
       })
 
@@ -334,7 +329,7 @@ export default function AudioTranscriptionPanel({
       try {
         const { data: extractData, error: extractErr } = await supabase.functions.invoke(
           'extract-meeting-data',
-          { body: { transcript: transcriptText, context: meetingContext || '', linked_spaces: linkedSpaces, participants } }
+          { body: { transcript: transcriptText, context: meetingContext || '', linked_spaces: linkedSpaces, participants, meetingId } }
         )
         if (!extractErr && extractData?.extracted) {
           setExtractedData({
@@ -555,11 +550,11 @@ export default function AudioTranscriptionPanel({
         .map(({ item, i }) => {
           const assignment = actionAssignments[i] ?? {}
           return {
-            title: item.title,
+            title: assignment.title ?? item.title,
             assigneeId: assignment.assigneeId ?? null,
             departmentId: assignment.departmentId ?? null,
             sprintId: assignment.sprintId ?? null,
-            dueDate: extractISODate(item.due_date),
+            dueDate: extractISODate(assignment.due_date ?? item.due_date),
             description: item.owner && item.owner !== 'TBD' && !assignment.assigneeId ? `Owner: ${item.owner}` : null,
           }
         })
@@ -786,7 +781,7 @@ export default function AudioTranscriptionPanel({
             </>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} } @keyframes spin { to{transform:rotate(360deg)} }`}</style>
       </div>
     )
@@ -841,7 +836,7 @@ export default function AudioTranscriptionPanel({
             </div>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
       </div>
     )
   }
@@ -899,7 +894,7 @@ export default function AudioTranscriptionPanel({
             </div>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} />}
+        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
       </div>
     )
   }
@@ -1017,7 +1012,7 @@ function DetailedNotes({ notes, scriptureRefs = [], s }) {
 }
 
 // ── Transcript + extracted data card ─────────────────────────────────────────────
-function TranscriptCard({ transcript, extractedData, extracting, selectedItems, toggleItem, onMerge, merging, mergeSuccess, selectedOpenItems, toggleOpenItem, onMergeOpenItems, mergingOpenItems, openItemsMergeSuccess, error, s, orgDirectory, departmentId, assignments, onAssignmentChange }) {
+function TranscriptCard({ transcript, extractedData, extracting, selectedItems, toggleItem, onMerge, merging, mergeSuccess, selectedOpenItems, toggleOpenItem, onMergeOpenItems, mergingOpenItems, openItemsMergeSuccess, error, s, orgDirectory, departmentId, assignments, onAssignmentChange, canManage = true }) {
   return (
     <div style={s.card}>
       <h3 style={s.title}>Transcript</h3>
@@ -1076,13 +1071,18 @@ function TranscriptCard({ transcript, extractedData, extracting, selectedItems, 
                   <label key={`action-item-${i}`} style={{ ...s.checkRow, flexDirection: 'column', alignItems: 'stretch' }}>
                     <div
                       style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', borderLeft: `2px solid ${selectedItems.has(i) ? '#4C2A92' : 'transparent'}`, paddingLeft: 4 }}
-                      onClick={() => toggleItem(i)}
                     >
                       <input type="checkbox" checked={selectedItems.has(i)} onChange={() => toggleItem(i)} style={{ marginTop: 2, cursor: 'pointer', accentColor: '#4C2A92' }} />
-                      <div>
-                        <div style={{ fontWeight: 600 }}>{item.title}</div>
+                      <div style={{ flex: 1 }} onClick={(e) => e.stopPropagation()}>
+                        <input
+                          value={assignment.title ?? item.title}
+                          onChange={(e) => onAssignmentChange(i, 'title', e.target.value)}
+                          style={{ width: '100%', fontWeight: 600, fontSize: 13, border: '1px solid transparent', borderRadius: 4, padding: '2px 4px', fontFamily: 'inherit', background: 'transparent', color: '#2D2A22' }}
+                          onFocus={(e) => { e.target.style.border = '1px solid #E9E4D8'; e.target.style.background = '#fff' }}
+                          onBlur={(e) => { e.target.style.border = '1px solid transparent'; e.target.style.background = 'transparent' }}
+                        />
                         <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 2 }}>
-                          AI suggested owner: {item.owner || 'TBD'}{item.due_date ? ` · Due ${item.due_date}` : ''}
+                          AI suggested owner: {item.owner || 'TBD'}
                           {item.suggested_space ? ` · Space: ${item.suggested_space}` : ''}
                         </div>
                       </div>
@@ -1091,6 +1091,13 @@ function TranscriptCard({ transcript, extractedData, extracting, selectedItems, 
                       style={{ display: 'flex', gap: 8, marginTop: 8, marginLeft: 26 }}
                       onClick={(e) => e.stopPropagation()}
                     >
+                      <input
+                        type="date"
+                        aria-label="Due date"
+                        value={extractISODate(assignment.due_date ?? item.due_date) || ''}
+                        onChange={(e) => onAssignmentChange(i, 'due_date', e.target.value)}
+                        style={{ flex: 1, padding: '6px 8px', fontSize: 12, border: '1px solid #E9E4D8', borderRadius: 6, background: '#fff', color: '#2D2A22' }}
+                      />
                       <select
                         aria-label="Assignee"
                         value={assignment.assigneeId ?? ''}
@@ -1156,7 +1163,10 @@ function TranscriptCard({ transcript, extractedData, extracting, selectedItems, 
             mergingOpenItems={mergingOpenItems}
             openItemsMergeSuccess={openItemsMergeSuccess}
             s={s}
+            canManage={canManage}
           />
+
+          <DetectedEntitiesBadges entities={extractedData.detected_entities} />
         </div>
       )}
 
@@ -1173,7 +1183,7 @@ const TYPE_LABELS = {
   future_consideration: '💡 Future',
 }
 
-function OpenItemsConfirmation({ openItems, selectedOpenItems, toggleOpenItem, onMergeOpenItems, mergingOpenItems, openItemsMergeSuccess, s }) {
+function OpenItemsConfirmation({ openItems, selectedOpenItems, toggleOpenItem, onMergeOpenItems, mergingOpenItems, openItemsMergeSuccess, s, canManage = true }) {
   const [showLow, setShowLow] = useState(false)
 
   if (!openItems?.length) return null
@@ -1270,7 +1280,7 @@ function OpenItemsConfirmation({ openItems, selectedOpenItems, toggleOpenItem, o
 
       {openItemsMergeSuccess ? (
         <div style={s.success}>✅ {selectedOpenItems.size} open item{selectedOpenItems.size !== 1 ? 's' : ''} saved for tracking.</div>
-      ) : (
+      ) : canManage ? (
         <div style={{ ...s.btnGroup, marginTop: 12 }}>
           <button
             style={{
@@ -1285,7 +1295,49 @@ function OpenItemsConfirmation({ openItems, selectedOpenItems, toggleOpenItem, o
             {mergingOpenItems ? '⏳ Saving...' : `✓ Save ${selectedOpenItems.size} open item${selectedOpenItems.size !== 1 ? 's' : ''}`}
           </button>
         </div>
+      ) : (
+        <div style={{ fontSize: 11, color: '#9A8F7E', marginTop: 12 }}>Only meeting editors can save open items.</div>
       )}
+    </div>
+  )
+}
+
+const ENTITY_BADGE_META = {
+  testimonies: '🙏', pledges: '💰', teaching_sessions: '📖', announcements: '📢',
+  attendance_metrics: '📊', recognition_segments: '🏆', campaigns: '🚀',
+  strategic_initiatives: '🎯', budget_discussions: '💵', q_and_a: '❓', other: '📌',
+}
+
+function DetectedEntitiesBadges({ entities }) {
+  if (!entities || typeof entities !== 'object') return null
+  const types = Object.keys(entities).filter((k) => entities[k]?.detected && entities[k]?.count > 0)
+  if (types.length === 0) return null
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: '#2D2A22', marginBottom: 6 }}>
+        Detected Content
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {types.map((type) => {
+          const icon = ENTITY_BADGE_META[type] || '📌'
+          const label = type.replace(/_/g, ' ')
+          const count = entities[type].count
+          return (
+            <span
+              key={type}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '3px 10px', borderRadius: 12,
+                background: '#F3F0FF', border: '1px solid #E9E4F8',
+                fontSize: 11, fontWeight: 500, color: '#4C2A92',
+              }}
+            >
+              {icon} {label} <strong>{count}</strong>
+            </span>
+          )
+        })}
+      </div>
     </div>
   )
 }

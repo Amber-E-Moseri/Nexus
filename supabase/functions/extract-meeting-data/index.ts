@@ -98,7 +98,7 @@ function buildSystemPrompt({ transcriptChunk, chunkIndex, totalChunks, context, 
     ? `\n\nNOTE: This is part ${chunkIndex + 1} of ${totalChunks} from one continuous meeting recording, split only because of length. Extract only what appears in THIS portion — do not assume content from other parts. The parts will be merged programmatically after extraction, so do not reference "part ${chunkIndex + 1}" in your output.`
     : "";
 
-  return `SYSTEM PROMPT — extract-meeting-data (v2.1, merged classification + space validation)
+  return `SYSTEM PROMPT — extract-meeting-data (v3.0, flexible entity detection)
 
 You are processing a transcript. First validate participant data, then classify content,
 then extract accordingly.
@@ -142,7 +142,11 @@ Determine content_type: "meeting" | "raw_note" | "list_data" | "other"
 
 === DETAILED NOTES RULES (only apply if content_type = meeting, confidence >= 0.6) ===
 - "detailed_notes" is the full-detail record layer — NOT a second summary.
-  * "summary" stays a short compressed synthesis (unchanged behavior).
+  * "summary" is a contextual synthesis, not a one-line blurb — aim for 4-6
+    sentences in prose covering: why the meeting happened, the main topics
+    discussed, notable outcomes or shifts, and overall tone/takeaway. It should
+    give a reader who wasn't there a real sense of what happened, while still
+    being far shorter and less granular than detailed_notes.
   * "detailed_notes" is a near-verbatim, cleaned-up account of the meeting in
     markdown: chronological, organized under topic headings (## Heading).
   * Remove filler, false starts, crosstalk, and repetition — but cut NOTHING
@@ -191,7 +195,7 @@ Return ONLY valid JSON (no markdown, no extra text):
   ],
   "cleaned_transcript": "string with filler removed, or null if content_type != meeting",
   "chapters": [{ "title": "string", "start_marker": "string" }],
-  "summary": "string or null",
+  "summary": "string (4-6 sentence contextual synthesis) or null",
   "detailed_notes": "markdown string (chronological, topic-headed, near-verbatim) or null if content_type != meeting",
   "scripture_references": [
     {
@@ -221,8 +225,68 @@ Return ONLY valid JSON (no markdown, no extra text):
       "notes": "string or null — optional context"
     }
   ],
-  "key_topics": ["string"]
+  "key_topics": ["string"],
+  "detected_entities": {
+    "<entity_type>": {
+      "detected": true,
+      "count": number,
+      "confidence": 0.0 to 1.0,
+      "items": [array of entity-specific objects],
+      "ambiguities": ["string descriptions of uncertain items"]
+    }
+  }
 }
+
+=== FLEXIBLE ENTITY DETECTION (only apply if content_type = meeting, confidence >= 0.6) ===
+In addition to the standard fields above, scan the transcript for these entity types.
+For each type, ONLY include it in "detected_entities" if you find actual instances.
+Do NOT include a type with detected:false — omit absent types entirely.
+If no additional entities beyond the standard fields are found, return detected_entities: {}.
+
+Entity types to scan for:
+- "testimonies": Personal testimonies or faith stories shared during the meeting.
+  Each item: { "person": string, "campus": string|null, "theme": string,
+               "impact_pillars": [string], "key_decision": string|null,
+               "transcript_excerpt": string }
+- "pledges": Financial or service commitments made by individuals.
+  Each item: { "person": string, "region": string|null,
+               "commitment_type": "day"|"week"|"month"|"one_time"|string,
+               "amount": string|null, "target_date": string|null,
+               "transcript_excerpt": string }
+- "teaching_sessions": Teaching, Bible study, or training segments.
+  Each item: { "title": string, "facilitator": string|null,
+               "estimated_duration": string|null, "core_topics": [string],
+               "scripture": [string], "reusability": "high"|"medium"|"low",
+               "transcript_excerpt": string }
+- "announcements": Organizational announcements shared with attendees.
+  Each item: { "content": string, "announced_by": string|null,
+               "effective_date": string|null, "transcript_excerpt": string }
+- "attendance_metrics": Attendance numbers or growth metrics mentioned.
+  Each item: { "metric": string, "value": string|number,
+               "comparison": string|null, "transcript_excerpt": string }
+- "recognition_segments": Awards, shout-outs, top-performer recognitions.
+  Each item: { "award_type": string, "period": string|null,
+               "recipients": [string], "transcript_excerpt": string }
+- "campaigns": Ministry campaigns, fundraising drives, or organizational initiatives discussed.
+  Each item: { "campaign_name": string, "goal": string|null,
+               "target": string|null, "tiers": [string]|null,
+               "transcript_excerpt": string }
+- "strategic_initiatives": Long-term strategic items discussed.
+  Each item: { "initiative": string, "owner": string|null,
+               "timeline": string|null, "transcript_excerpt": string }
+- "budget_discussions": Budget or financial discussions.
+  Each item: { "topic": string, "amount": string|null,
+               "decision": string|null, "transcript_excerpt": string }
+- "q_and_a": Question and answer segments.
+  Each item: { "question": string, "asked_by": string|null,
+               "answer_summary": string|null, "answered_by": string|null,
+               "transcript_excerpt": string }
+- "other": Any notable structured data that doesn't fit above categories.
+  Each item: { "label": string, "description": string,
+               "transcript_excerpt": string }
+
+For each detected type include: detected (true), count, confidence (0.0-1.0), items array,
+and ambiguities array. Only include entity types genuinely present — do NOT force-detect.
 
 === OPEN ITEMS EXTRACTION RULES (only apply if content_type = meeting, confidence >= 0.6) ===
 Open items are discussion points, questions, or considerations that are NOT action items.
@@ -294,6 +358,7 @@ function parseExtractionJSON(text: string) {
       action_items: [],
       open_items: [],
       key_topics: [],
+      detected_entities: {},
     };
   }
 }
@@ -308,7 +373,7 @@ async function extractChunk(prompt: string, anthropicKey: string) {
     },
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 8192,
+      max_tokens: 12288,
       messages: [{ role: "user", content: prompt }],
     }),
   });
@@ -347,6 +412,24 @@ function mergeScriptureRefs(refs: any[]): any[] {
   return [...map.values()];
 }
 
+function mergeDetectedEntities(parts: any[]): any {
+  const merged: any = {};
+  for (const part of parts) {
+    const entities = part.detected_entities ?? {};
+    for (const [type, data] of Object.entries(entities) as [string, any][]) {
+      if (!data?.detected) continue;
+      if (!merged[type]) {
+        merged[type] = { detected: true, count: 0, confidence: 0, items: [], ambiguities: [] };
+      }
+      merged[type].count += data.count ?? 0;
+      merged[type].confidence = Math.max(merged[type].confidence, data.confidence ?? 0);
+      merged[type].items.push(...(data.items ?? []));
+      merged[type].ambiguities.push(...(data.ambiguities ?? []));
+    }
+  }
+  return merged;
+}
+
 // Merge per-chunk extraction results into one meeting-level result. `summary`
 // is left off (callers should combine `summaries` via synthesizeSummary) since
 // naively concatenating short summaries reads poorly.
@@ -370,6 +453,7 @@ function mergeExtractions(parts: any[]): any {
     action_items: parts.flatMap((p) => p.action_items ?? []),
     open_items: parts.flatMap((p) => p.open_items ?? []),
     key_topics: dedupeTopics(parts.flatMap((p) => p.key_topics ?? [])),
+    detected_entities: mergeDetectedEntities(parts),
   };
 }
 
@@ -379,7 +463,7 @@ async function synthesizeSummary(summaries: string[], anthropicKey: string): Pro
   if (summaries.length === 0) return null;
   if (summaries.length === 1) return summaries[0];
 
-  const prompt = `These are summaries of sequential parts of one continuous meeting. Combine them into a single short summary (2-4 sentences) of the whole meeting, in prose. Do not reference "part 1", "part 2", etc.\n\n${summaries.map((s, i) => `Part ${i + 1}: ${s}`).join("\n\n")}`;
+  const prompt = `These are summaries of sequential parts of one continuous meeting. Combine them into a single contextual summary (4-6 sentences) of the whole meeting, in prose — cover why the meeting happened, the main topics, notable outcomes, and overall tone. Do not reference "part 1", "part 2", etc.\n\n${summaries.map((s, i) => `Part ${i + 1}: ${s}`).join("\n\n")}`;
 
   try {
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
@@ -408,6 +492,41 @@ function applyContentGate(extracted: any) {
     extracted.detailed_notes = null;
     extracted.scripture_references = [];
     extracted.open_items = [];
+    extracted.detected_entities = {};
+  }
+}
+
+// Read-only access check under the CALLER's own RLS (not the service-role
+// client) — confirms this caller can actually see the target meeting before
+// we persist anything against it, so a guessed meetingId can't be used to
+// overwrite another meeting's extraction state.
+async function userCanAccessMeeting(authHeader: string, meetingId: string): Promise<boolean> {
+  try {
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data, error } = await userClient.from("meetings").select("id").eq("id", meetingId).maybeSingle();
+    return !error && !!data;
+  } catch {
+    return false;
+  }
+}
+
+// Persistence writes MUST go through the service-role `supabase` client
+// (constructed below with SUPABASE_SERVICE_ROLE_KEY), never the short-lived
+// caller client above. The enforce_meetings_summary_only_update trigger's
+// extraction-column exemption is keyed on auth.uid() IS NULL, which is only
+// true for a service-role JWT — a write through the caller's own client
+// would resolve auth.uid() to the real (often non-editor) user and get
+// silently rejected by the trigger's ordinary-viewer branch.
+async function persistExtraction(supabase: ReturnType<typeof createClient>, meetingId: string | undefined, patch: Record<string, unknown>) {
+  if (!meetingId) return;
+  try {
+    await supabase.from("meetings").update(patch).eq("id", meetingId);
+  } catch (err) {
+    console.warn("extract-meeting-data: failed to persist extraction:", err);
   }
 }
 
@@ -449,15 +568,29 @@ serve(async (req) => {
   }
   // ─────────────────────────────────────────────────────────────────────────
 
+  let canPersist = false;
+  let meetingId: string | undefined;
   try {
     const body = await req.json();
     const { transcript, context, stream: wantStream, linked_spaces = [], participants = [], meeting_date = new Date().toISOString() } = body;
+    meetingId = body.meetingId;
 
     if (!transcript || typeof transcript !== "string") {
       return new Response(JSON.stringify({ error: "Missing transcript" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    if (meetingId) {
+      canPersist = await userCanAccessMeeting(authHeader, meetingId);
+      if (canPersist) {
+        await persistExtraction(supabase, meetingId, {
+          extraction_status: "processing",
+          extraction_started_at: new Date().toISOString(),
+          extraction_error: null,
+        });
+      }
     }
 
     // Step 1: Format participant data for validation
@@ -502,7 +635,7 @@ serve(async (req) => {
             model: "claude-haiku-4-5-20251001",
             // 8192: detailed_notes is near-verbatim and is the dominant output-token
             // driver; 4096 truncated long meetings mid-JSON. See costLimits note.
-            max_tokens: 8192,
+            max_tokens: 12288,
             stream: true,
             messages: [{ role: "user", content: prompt }],
           }),
@@ -518,6 +651,7 @@ serve(async (req) => {
             const reader = upstreamResp.body!.getReader();
             const decoder = new TextDecoder();
             let buffer = "";
+            let accumulated = "";
             try {
               while (true) {
                 const { done, value } = await reader.read();
@@ -534,6 +668,7 @@ serve(async (req) => {
                     if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
                       const text = evt.delta.text || "";
                       if (text) {
+                        accumulated += text;
                         controller.enqueue(
                           new TextEncoder().encode(`data: ${JSON.stringify({ text })}\n\n`)
                         );
@@ -547,6 +682,24 @@ serve(async (req) => {
               controller.enqueue(
                 new TextEncoder().encode(`data: ${JSON.stringify({ done: true, truncated })}\n\n`)
               );
+              if (canPersist) {
+                let parsed: any = null;
+                try { parsed = JSON.parse(accumulated); } catch {
+                  const m = accumulated.match(/```(?:json)?\s*([\s\S]*?)```/);
+                  if (m) { try { parsed = JSON.parse(m[1]); } catch { /* fall through */ } }
+                }
+                if (parsed) {
+                  applyContentGate(parsed);
+                  await persistExtraction(supabase, meetingId, {
+                    extraction_result: parsed, extraction_status: "complete",
+                    extraction_completed_at: new Date().toISOString(), extraction_error: null,
+                  });
+                } else {
+                  await persistExtraction(supabase, meetingId, {
+                    extraction_status: "failed", extraction_error: "Could not parse streamed extraction result",
+                  });
+                }
+              }
             } catch (err) {
               controller.error(err);
             } finally {
@@ -582,6 +735,12 @@ serve(async (req) => {
             controller.enqueue(
               new TextEncoder().encode(`data: ${JSON.stringify({ done: true, truncated })}\n\n`)
             );
+            if (canPersist) {
+              await persistExtraction(supabase, meetingId, {
+                extraction_result: merged, extraction_status: "complete",
+                extraction_completed_at: new Date().toISOString(), extraction_error: null,
+              });
+            }
           } catch (err) {
             controller.error(err);
           } finally {
@@ -607,6 +766,12 @@ serve(async (req) => {
     const cached = await getCachedExtraction(transcriptHash);
     if (cached) {
       const outputMode = cached.content_type === "meeting" && cached.confidence >= 0.6 ? "organized" : "full_transcript";
+      if (canPersist) {
+        await persistExtraction(supabase, meetingId, {
+          extraction_result: cached, extraction_status: "complete",
+          extraction_completed_at: new Date().toISOString(), extraction_error: null,
+        });
+      }
       return new Response(JSON.stringify({ success: true, extracted: cached, transcript, output_mode: outputMode, cached: true, truncated }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -628,6 +793,13 @@ serve(async (req) => {
 
     await setCachedExtraction(transcriptHash, extracted);
 
+    if (canPersist) {
+      await persistExtraction(supabase, meetingId, {
+        extraction_result: extracted, extraction_status: "complete",
+        extraction_completed_at: new Date().toISOString(), extraction_error: null,
+      });
+    }
+
     const outputMode = extracted.content_type === "meeting" && extracted.confidence >= 0.6 ? "organized" : "full_transcript";
 
     return new Response(JSON.stringify({ success: true, extracted, transcript, output_mode: outputMode, cached: false, truncated }), {
@@ -636,6 +808,11 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("extract-meeting-data error:", error);
+    if (canPersist) {
+      await persistExtraction(supabase, meetingId, {
+        extraction_status: "failed", extraction_error: String(error?.message || error),
+      });
+    }
     return new Response(
       JSON.stringify({ error: error.message || "Extraction failed" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

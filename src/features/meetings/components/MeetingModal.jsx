@@ -6,12 +6,15 @@ import { useMeetings } from '../MeetingsContext'
 import { supabase } from '../../../lib/supabase'
 import AudioTranscriptionPanel from './AudioTranscriptionPanel'
 import GenerateMeetingDocButton from './GenerateMeetingDocButton'
+import MeetingAgendaEditor from './MeetingAgendaEditor'
+import { saveAgendaItemsForMeeting } from '../lib/agendaSync'
 
 const MEETING_TYPES = [
   { value: 'general', label: 'General' },
   { value: 'regional_group', label: 'Regional Group' },
   { value: 'staff_meeting', label: 'Staff Meeting' },
   { value: 'department_meeting', label: 'Department Meeting' },
+  { value: '1_on_1_meeting', label: '1-on-1 Meeting' },
 ]
 
 function toLocalDateTime(value) {
@@ -50,6 +53,12 @@ export default function MeetingModal({ departmentId, onClose }) {
   const [creatingDraft, setCreatingDraft] = useState(false)
   const [actionItems, setActionItems] = useState([])
   const [wide, setWide] = useState(false)
+  const [agendaItems, setAgendaItems] = useState([])
+  // Tracks the linked agendas.id across repeated saves of the same draft
+  // (title-blur creates a draft row, then explicit Save can fire again) so
+  // saveAgendaItemsForMeeting updates in place instead of creating a new
+  // agenda row on every save.
+  const [agendaRecordId, setAgendaRecordId] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -141,8 +150,17 @@ export default function MeetingModal({ departmentId, onClose }) {
           p_user_ids: attendeeIds,
         })
         if (attendanceError) throw attendanceError
+
+        if (agendaItems.length > 0) {
+          const linkedId = await saveAgendaItemsForMeeting(
+            { id: savedMeeting.id, title: title.trim(), meeting_type: meetingType, department_id: effectiveDeptId, date: new Date(date).toISOString(), agendas: agendaRecordId ? [{ id: agendaRecordId }] : [] },
+            agendaItems,
+            profile?.id,
+          ).catch(() => null)
+          if (linkedId) setAgendaRecordId(linkedId)
+        }
       } else {
-        await addMeeting({
+        const created = await addMeeting({
           title: title.trim(),
           department_id: effectiveDeptId,
           date: new Date(date).toISOString(),
@@ -155,6 +173,10 @@ export default function MeetingModal({ departmentId, onClose }) {
           created_by: profile?.id,
           attendanceUserIds: attendeeIds,
         })
+
+        if (agendaItems.length > 0 && created?.id) {
+          await saveAgendaItemsForMeeting(created, agendaItems, profile?.id).catch(() => {})
+        }
       }
       onClose()
     } catch (nextError) {
@@ -368,6 +390,11 @@ export default function MeetingModal({ departmentId, onClose }) {
                 <label style={labelStyle}>Zoom URL</label>
                 <input value={zoomJoinUrl} onChange={(event) => setZoomJoinUrl(event.target.value)} placeholder="https://zoom.us/..." style={inputStyle} />
               </div>
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <label style={labelStyle}>Agenda</label>
+              <MeetingAgendaEditor items={agendaItems} onChange={setAgendaItems} />
             </div>
 
             <div style={{ marginTop: 14 }}>

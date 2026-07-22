@@ -8,6 +8,7 @@ function PlainKanbanColumn({
   readOnly = false,
   showSubtasks = true,
   checklistCounts = {},
+  teamLabelByAssigneeId = null,
 }) {
   return (
     <div
@@ -56,6 +57,7 @@ function PlainKanbanColumn({
             onClick={() => onTaskClick(task)}
             showSubtasks={showSubtasks}
             checklistCount={checklistCounts[task.id] ?? null}
+            teamLabel={teamLabelByAssigneeId?.[task.assignee_id] ?? null}
           />
         ))}
       </div>
@@ -70,13 +72,32 @@ export default memo(function PlainKanbanBoard({
   statuses = [],
   showSubtasks = true,
   checklistCounts = {},
+  teamLabelByAssigneeId = null,
 }) {
   const tasks = filteredTasks ?? []
   const boardStatuses = statusesOverride?.length ? statusesOverride : statuses
 
   function taskMatchesStatus(task, status) {
     const ids = status._mergedIds ?? [status.id]
-    return ids.includes(task.status_id) || (!task.status_id && task.status === status.legacy_key)
+    if (ids.includes(task.status_id)) return true
+    if (!task.status_id && task.status === status.legacy_key) return true
+    if (!task.status_id && task.status && status.category) {
+      const taskCat = task.status_category ?? task.status_definition?.category
+      return taskCat === status.category
+    }
+    return false
+  }
+
+  const matchedIds = new Set()
+  const groups = boardStatuses
+    .map((status) => {
+      const statusTasks = tasks.filter((task) => taskMatchesStatus(task, status))
+      statusTasks.forEach((t) => matchedIds.add(t.id))
+      return { status, statusTasks }
+    })
+  const ungrouped = tasks.filter((t) => !matchedIds.has(t.id))
+  if (ungrouped.length > 0) {
+    groups.push({ status: { id: '__other', name: 'Other', color: '#7A7D86', category: 'open', _mergedIds: ['__other'] }, statusTasks: ungrouped })
   }
 
   return (
@@ -91,8 +112,7 @@ export default memo(function PlainKanbanBoard({
         alignItems: 'flex-start',
       }}
     >
-      {boardStatuses
-        .map((status) => ({ status, statusTasks: tasks.filter((task) => taskMatchesStatus(task, status)) }))
+      {groups
         .filter(({ statusTasks }) => statusTasks.length > 0)
         .map(({ status, statusTasks }) => (
           <PlainKanbanColumn
@@ -103,6 +123,7 @@ export default memo(function PlainKanbanBoard({
             readOnly
             showSubtasks={showSubtasks}
             checklistCounts={checklistCounts}
+            teamLabelByAssigneeId={teamLabelByAssigneeId}
           />
         ))}
     </div>

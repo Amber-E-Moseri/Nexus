@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
-import { getSprintMembers, listSprintTeamsIndependent } from '../lib/sprints'
-import { supabase } from '../../../lib/supabase'
 import AssignedToMeToggle from '../../tasks/components/AssignedToMeToggle'
 import KanbanBoard from '../../tasks/components/KanbanBoard'
 import TaskFilters from '../../tasks/components/TaskFilters'
@@ -15,8 +13,29 @@ import { useTaskFilters } from '../../tasks/hooks/useTaskFilters'
 function SprintTasksInner({ sprintId, sprint, canEdit }) {
   const { profile } = useAuth()
   const { tasks, loading, error, statuses, defaultStatusId, moveTask, addTask } = useTasks()
-  const [members, setMembers] = useState([])
-  const [teamsWithMembers, setTeamsWithMembers] = useState([])
+
+  // Sprint boards always show the 6 canonical org-level status columns only.
+  // Tasks with dept-specific status_ids are matched via org_status_id (stored on
+  // each dept status in the merged `statuses` array) so they still appear.
+  const orgStatusColumns = useMemo(() => {
+    const orgOnes = statuses.filter((s) => s.is_org_status)
+
+    // If no org statuses in the merged array (all replaced by dept equivalents), fall back
+    if (!orgOnes.length) return statuses
+
+    // Build a lookup: orgStatusId → [deptStatusId, ...]
+    const deptIdsByOrgId = {}
+    for (const s of statuses) {
+      if (!s.is_org_status && s.org_status_id) {
+        ;(deptIdsByOrgId[s.org_status_id] ??= []).push(s.id)
+      }
+    }
+
+    return orgOnes.map((orgStatus) => ({
+      ...orgStatus,
+      _mergedIds: [orgStatus.id, ...(deptIdsByOrgId[orgStatus.id] ?? [])],
+    }))
+  }, [statuses])
   const [view, setView] = useState('kanban')
   const [teamView, setTeamView] = useState('all')
   const [modal, setModal] = useState(null)
@@ -24,11 +43,23 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
   const assignedToMe = Boolean(profile?.id) && filters.assigneeId === profile.id
   const toggleAssignedToMe = () => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))
 
+  const members = sprint?.members ?? []
+
+  const teamsWithMembers = useMemo(() => {
+    const teams = sprint?.teams ?? []
+    const allMembers = sprint?.members ?? []
+    return teams.map((team) => ({
+      ...team,
+      sprint_team_members: allMembers
+        .filter((m) => m.sprint_team_ids?.includes(team.id))
+        .map((m) => ({ user_id: m.user_id, users: m.user })),
+    }))
+  }, [sprint?.teams, sprint?.members])
+
   function handleTaskStatusChange({ taskId, newStatus }) {
     moveTask(taskId, newStatus)
   }
 
-  // Get current user's teams in this sprint
   const getMyTeams = useCallback(() => {
     if (!teamsWithMembers) return []
     return teamsWithMembers.filter((team) =>
@@ -36,22 +67,39 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
     )
   }, [teamsWithMembers, profile?.id])
 
-  // Filter tasks for "My Team" view
   const getMyTeamTasks = useCallback(() => {
     if (!filtered) return []
     const myTeams = getMyTeams()
     const myTeamIds = myTeams.map((t) => t.id)
 
     return filtered.filter((task) => {
-      // Show if: 1) Task assigned to me, OR 2) Task assigned to someone in my team
       return (
         task.assignee_id === profile?.id ||
         myTeamIds.some((teamId) =>
-          sprint?.teams?.find((t) => t.id === teamId)?.sprint_team_members?.some((m) => m.user_id === task.assignee_id),
+          teamsWithMembers.find((t) => t.id === teamId)?.sprint_team_members?.some((m) => m.user_id === task.assignee_id),
         )
       )
     })
-  }, [filtered, sprint, profile?.id, getMyTeams])
+  }, [filtered, teamsWithMembers, profile?.id, getMyTeams])
+
+  // "My Team" merges every team the viewer belongs to into one flat list
+  // with no team attribution — confusing when the viewer is in more than
+  // one team. Only computed (and only passed to the board) in that case;
+  // a single-team viewer doesn't need the disambiguation.
+  const teamLabelByAssigneeId = useMemo(() => {
+    const myTeams = getMyTeams()
+    if (myTeams.length <= 1 || !teamsWithMembers) return null
+    const map = {}
+    for (const team of teamsWithMembers) {
+      for (const member of team.sprint_team_members ?? []) {
+        // An assignee can themselves belong to more than one team — join
+        // all matching team names into one badge rather than picking one
+        // arbitrarily or depending on iteration order.
+        map[member.user_id] = map[member.user_id] ? `${map[member.user_id]}, ${team.name}` : team.name
+      }
+    }
+    return map
+  }, [teamsWithMembers, getMyTeams])
 
   // Group tasks by team for "All Teams" view
   const getTasksByTeam = useMemo(() => {
@@ -69,38 +117,14 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
     return grouped
   }, [filtered, teamsWithMembers])
 
-  useEffect(() => {
-    Promise.all([
-      getSprintMembers(sprintId),
-      (async () => {
-        try {
-          const teams = await listSprintTeamsIndependent(sprintId)
-          // Fetch team members for each team
-          const teamsWithMembersData = await Promise.all(
-            teams.map(async (team) => {
-              const { data: teamMembers } = await supabase
-                .from('sprint_team_members')
-                .select('user_id, users:user_id(id, name, email)')
-                .eq('team_id', team.id)
-              return {
-                ...team,
-                sprint_team_members: teamMembers ?? [],
-              }
-            })
-          )
-          return teamsWithMembersData
-        } catch {
-          return []
-        }
-      })(),
-    ]).then(([sprintMembers, teams]) => {
-      setMembers(sprintMembers)
-      setTeamsWithMembers(teams)
-    }).catch(() => {
-      setMembers([])
-      setTeamsWithMembers([])
-    })
-  }, [sprintId])
+  const resolveDeptId = useCallback((assigneeId) => {
+    if (sprint?.sprint?.department_id) return sprint.sprint.department_id
+    if (!assigneeId || !teamsWithMembers?.length) return null
+    const match = teamsWithMembers.find(
+      (t) => t.department_id && t.sprint_team_members?.some((m) => m.user_id === assigneeId),
+    )
+    return match?.department_id ?? null
+  }, [sprint?.sprint?.department_id, teamsWithMembers])
 
   if (loading) {
     return <div className="p-6 text-sm text-[var(--text-tertiary)]">Loading sprint tasks…</div>
@@ -210,28 +234,30 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
             sprint={sprint}
             currentUser={profile}
             onTaskClick={(task) => setModal({ mode: 'edit', task })}
-            onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, subtasks: draft.subtasks }) : undefined}
+            onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, department_id: resolveDeptId(draft.assigneeId), subtasks: draft.subtasks }) : undefined}
             readOnly={!canEdit}
             teamMembers={members}
-            statuses={statuses}
+            statuses={orgStatusColumns}
           />
         ) : view === 'kanban' ? (
           <div className="h-full overflow-x-auto">
             <KanbanBoard
               filteredTasks={hasTeams && teamView === 'my' ? getMyTeamTasks() : filtered}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
-              onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, subtasks: draft.subtasks }) : undefined}
+              onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, department_id: resolveDeptId(draft.assigneeId), subtasks: draft.subtasks }) : undefined}
               readOnly={!canEdit}
               teamMembers={members}
+              statusesOverride={orgStatusColumns}
+              teamLabelByAssigneeId={teamView === 'my' ? teamLabelByAssigneeId : null}
             />
           </div>
         ) : view === 'list' ? (
           <div className="overflow-y-auto rounded-[16px] border border-[var(--border)] bg-white" style={{ minHeight: 200 }}>
             <TaskListView
               tasks={hasTeams && teamView === 'my' ? getMyTeamTasks() : filtered}
-              statuses={statuses}
+              statuses={orgStatusColumns}
               canAddTask={canEdit}
-              onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, subtasks: draft.subtasks }) : undefined}
+              onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, department_id: resolveDeptId(draft.assigneeId), subtasks: draft.subtasks }) : undefined}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
               onTaskStatusChange={canEdit ? handleTaskStatusChange : undefined}
               people={Object.fromEntries(members.map((m) => [m.id, m]))}
@@ -253,6 +279,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
           defaultStatus={modal.defaultStatus ?? ''}
           sprintId={sprintId}
           departmentId={sprint?.sprint?.department_id}
+          sprintTeams={teamsWithMembers}
           isReadOnly={!canEdit}
           onClose={() => setModal(null)}
         />
@@ -261,9 +288,9 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
   )
 }
 
-export default function SprintTaskBoard({ sprintId, sprint, canEdit }) {
+export default function SprintTaskBoard({ sprintId, sprint, canEdit, initialTasks }) {
   return (
-    <TasksProvider sprintId={sprintId} departmentId={sprint?.sprint?.department_id}>
+    <TasksProvider sprintId={sprintId} departmentId={sprint?.sprint?.department_id} initialTasks={initialTasks}>
       <SprintTasksInner sprintId={sprintId} sprint={sprint} canEdit={canEdit} />
     </TasksProvider>
   )

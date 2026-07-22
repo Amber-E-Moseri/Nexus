@@ -18,11 +18,11 @@ import { FONT_BODY, FONT_HEADING } from '../../../lib/fonts'
 import { createTask, deleteTask, getAllOrgMembers, getSubtasks, getTaskBlockers, updateTask } from '../lib/tasks'
 import {
   getTaskStatusId,
-  getTaskStatusLabel,
   listTaskStatuses,
   selectDefaultStatus,
   selectActiveTaskStatuses,
 } from '../../../lib/taskStatuses'
+import { dedupeTaskStatuses } from '../../../lib/taskStatusSelectors'
 import AssigneeSelector from './AssigneeSelector'
 import TaskComments from './TaskComments'
 import TaskDependencies from './TaskDependencies'
@@ -208,6 +208,7 @@ export default function TaskModal({
   fieldSettings = null,
   departmentId,
   sprintId,
+  sprintTeams,
   listId,
   isPersonal = false,
   isReadOnly = false,
@@ -239,6 +240,15 @@ export default function TaskModal({
   const [spaces, setSpaces] = useState([])
   const [selectedSpaceId, setSelectedSpaceId] = useState(departmentId ?? '')
   const [selectedSprintId, setSelectedSprintId] = useState(sprintId ?? task?.sprint_id ?? '')
+
+  function resolveDeptFromTeams(userId) {
+    if (!userId || !sprintTeams?.length) return null
+    const match = sprintTeams.find(
+      (t) => t.department_id && t.sprint_team_members?.some((m) => m.user_id === userId),
+    )
+    return match?.department_id ?? null
+  }
+
   // Space-scoped members react to the in-modal space picker (selectedSpaceId),
   // not just the fixed departmentId prop — otherwise a modal opened without a
   // department (e.g. the header "New Task" button) never populates members
@@ -247,6 +257,14 @@ export default function TaskModal({
   // Org-wide roles can assign to anyone, regardless of the selected space.
   const canAssignOrgWide = role === 'super_admin' || role === 'regional_secretary' ||
     hasSpaceRole(profile, null, 'ors') || hasSpaceRole(profile, null, 'programs')
+  // UX-only guard (RLS is the real gate — 20270724000103_pastors_space_privacy.sql):
+  // avoid a confusing silent-reject by not even offering other pastors as
+  // assignees within the Pastors space. Deliberately NOT reusing
+  // canAssignOrgWide — super_admin/ORS/programs don't get the Pastors
+  // exception, only regional_secretary does. Only reliably known in
+  // create mode (spaces is only populated then); edit mode falls through
+  // to normal behavior and relies on RLS.
+  const isPastorsSpace = spaces.find((s) => s.id === (selectedSpaceId || departmentId))?.name === 'Pastors'
   const [orgMembers, setOrgMembers] = useState([])
   const [members, setMembers] = useState(sprintId ? [] : deptMembers)
   const [pendingWatchers, setPendingWatchers] = useState([])
@@ -281,21 +299,27 @@ export default function TaskModal({
 
   useEffect(() => {
     if (!sprintId) {
-      setMembers(canAssignOrgWide ? orgMembers : deptMembers)
+      if (isPastorsSpace && role !== 'regional_secretary') {
+        setMembers(profile?.id ? deptMembers.filter((m) => m.id === profile.id) : [])
+      } else {
+        setMembers(canAssignOrgWide ? orgMembers : deptMembers)
+      }
     }
-  }, [deptMembers, orgMembers, canAssignOrgWide, sprintId])
+  }, [deptMembers, orgMembers, canAssignOrgWide, sprintId, isPastorsSpace, role, profile?.id])
 
   useEffect(() => {
     if (contextStatuses.length > 0) {
-      setStatuses(selectActiveTaskStatuses(contextStatuses))
+      setStatuses(dedupeTaskStatuses(selectActiveTaskStatuses(contextStatuses)))
       setStatusId((current) => current || selectDefaultStatus(contextStatuses)?.id || '')
       return
     }
 
+    const effectiveDepartmentId = selectedSpaceId || departmentId
+
     ;(async () => {
       try {
         const [deptStatuses, globalStatuses] = await Promise.all([
-          listTaskStatuses({ departmentId }),
+          listTaskStatuses({ departmentId: effectiveDepartmentId }),
           listTaskStatuses(),
         ])
 
@@ -311,10 +335,10 @@ export default function TaskModal({
 
         if (!Array.from(statusMap.values()).some(s => s.category === 'open')) {
           try {
-            const allStatuses = await listTaskStatuses({ departmentId, includeInactive: true })
-            const openStatus = allStatuses.find(s => s.category === 'open')
+            const allStatuses = await listTaskStatuses({ departmentId: effectiveDepartmentId, includeInactive: true })
+            const openStatus = allStatuses.find(s => s.category === 'open' && s.active)
             if (openStatus) {
-              statusMap.set(`open:${openStatus.legacy_key || openStatus.name}`, { ...openStatus, active: true })
+              statusMap.set(`open:${openStatus.legacy_key || openStatus.name}`, openStatus)
             }
           } catch { /* ignore */ }
           if (!Array.from(statusMap.values()).some(s => s.category === 'open')) {
@@ -331,7 +355,7 @@ export default function TaskModal({
           }
         }
 
-        const merged = selectActiveTaskStatuses(Array.from(statusMap.values()))
+        const merged = dedupeTaskStatuses(selectActiveTaskStatuses(Array.from(statusMap.values())))
         setStatuses(merged)
         const defaultSt = selectDefaultStatus(merged)
         setStatusId((current) => current || defaultSt?.id || '')
@@ -340,7 +364,7 @@ export default function TaskModal({
         setStatuses([])
       }
     })()
-  }, [contextStatuses, departmentId])
+  }, [contextStatuses, departmentId, selectedSpaceId])
 
   useEffect(() => {
     titleRef.current?.focus()
@@ -399,6 +423,11 @@ export default function TaskModal({
       return
     }
 
+    if (!personal && !departmentId && !selectedSpaceId) {
+      setError('Please select a space.')
+      return
+    }
+
     setSaving(true)
     setError(null)
 
@@ -424,7 +453,7 @@ export default function TaskModal({
         due_time: (dueDate && dueTime) ? dueTime : null,
         is_personal: personal,
         source: 'manual',
-        department_id: personal ? departmentId ?? null : effectiveSprintId ? null : (selectedSpaceId || departmentId) ?? null,
+        department_id: personal ? departmentId ?? null : (selectedSpaceId || departmentId || resolveDeptFromTeams(assigneeIds[0])) ?? null,
         sprint_id: effectiveSprintId,
         list_id: personal || effectiveSprintId ? null : listId ?? task?.list_id ?? null,
         task_type: personal ? 'personal' : effectiveSprintId ? 'sprint' : 'space',
@@ -461,11 +490,9 @@ export default function TaskModal({
           if (notifyError) console.error(notifyError)
         }
 
-        // Notify assignee on meaningful status transitions (completed or blocked only).
-        // Use legacy_key for blocked — it shares category 'in_progress' with review.
+        // Notify assignee on meaningful status transitions (completed only).
         const statusChanged = selectedStatus?.id && selectedStatus.id !== previousStatusId
-        const isNotifyTransition =
-          selectedStatus?.category === 'completed' || selectedStatus?.legacy_key === 'blocked'
+        const isNotifyTransition = selectedStatus?.category === 'completed'
         const notifyTarget = assigneeIds[0] || updated.assignee_id
         if (statusChanged && isNotifyTransition && notifyTarget && notifyTarget !== profile?.id) {
           supabase.rpc('create_task_notification', {
@@ -491,6 +518,7 @@ export default function TaskModal({
   async function handleDelete() {
     if (!confirmDelete) {
       setConfirmDelete(true)
+      setError(null)
       return
     }
 
@@ -559,6 +587,12 @@ export default function TaskModal({
                   taskId={mode === 'edit' ? task?.id : null}
                   pending={pendingWatchers}
                   onPendingChange={setPendingWatchers}
+                  canRemove={
+                    role === 'super_admin' ||
+                    role === 'regional_secretary' ||
+                    role === 'dept_lead' ||
+                    profile?.id === task?.created_by
+                  }
                 />
               )}
               <Dialog.Close
@@ -592,7 +626,7 @@ export default function TaskModal({
                   fontWeight: 500,
                 }}
               >
-                📦 Archived sprint — view only
+                View only
               </div>
             )}
             {error ? (
@@ -610,7 +644,7 @@ export default function TaskModal({
               </div>
             ) : null}
 
-            {blockers.length > 0 && getTaskStatusLabel(task) === 'Blocked' && (
+            {blockers.length > 0 && (
               <div
                 style={{
                   marginBottom: 14,
@@ -623,6 +657,25 @@ export default function TaskModal({
                 }}
               >
                 🚫 Blocked by: {blockers.map((b) => b.task?.title || b.depends_on?.title || 'Unknown').join(', ')}
+              </div>
+            )}
+
+            {!personal && !departmentId && (
+              <div style={{ marginBottom: 18 }}>
+                <label style={labelStyle}>Space *</label>
+                <select
+                  disabled={isReadOnly}
+                  value={selectedSpaceId}
+                  onChange={(e) => { setSelectedSpaceId(e.target.value); setStatusId('') }}
+                  style={inputStyle}
+                >
+                  <option value="">-- Choose space --</option>
+                  {spaces.map((space) => (
+                    <option key={space.id} value={space.id}>
+                      {space.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 
@@ -753,7 +806,7 @@ export default function TaskModal({
                 members={members}
                 selectedIds={assigneeIds}
                 onSelectionChange={setAssigneeIds}
-                isMultiSelect={false}
+
               />
             </div>
 
