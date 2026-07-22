@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useMeetings } from '../MeetingsContext'
 import { useAuth } from '../../../hooks/useAuth'
 import { createTasksFromActionItems } from '../lib/meetings'
+import { getDeptMembers } from '../../tasks/lib/tasks'
 
 function draftKey(meetingId) {
   return `live-meeting-draft:${meetingId}`
@@ -35,8 +36,27 @@ function LiveMinutesModeInner({ meeting, onClose }) {
   const [lastSavedAt, setLastSavedAt] = useState(null)
   const [ending, setEnding] = useState(false)
   const [endError, setEndError] = useState(null)
+  const [members, setMembers] = useState([])
+  const [editingCaptureId, setEditingCaptureId] = useState(null)
   const notesRef = useRef(null)
   const timerRef = useRef(null)
+
+  useEffect(() => {
+    if (!meeting.department_id) return
+    let cancelled = false
+    getDeptMembers(meeting.department_id)
+      .then((rows) => { if (!cancelled) setMembers(rows) })
+      .catch((err) => console.error('Failed to load members for assignment:', err))
+    return () => { cancelled = true }
+  }, [meeting.department_id])
+
+  function updateCapturedItem(id, patch) {
+    setCapturedItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)))
+  }
+
+  function removeCapturedItem(id) {
+    setCapturedItems((prev) => prev.filter((item) => item.id !== id))
+  }
 
   const notes = itemNotes[currentItemIndex] ?? ''
   const setNotes = (value) => setItemNotes((prev) => ({ ...prev, [currentItemIndex]: value }))
@@ -142,7 +162,7 @@ function LiveMinutesModeInner({ meeting, onClose }) {
         await createTasksFromActionItems(
           meeting.id,
           meeting.department_id,
-          actions.map((item) => ({ title: item.text })),
+          actions.map((item) => ({ title: item.text, assigneeId: item.assigneeId || null })),
           profile?.id ?? null,
         )
       }
@@ -557,13 +577,55 @@ function LiveMinutesModeInner({ meeting, onClose }) {
                         }}
                       />
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: 'white' }}>
-                          {item.text}
-                        </div>
+                        {editingCaptureId === item.id ? (
+                          <input
+                            autoFocus
+                            value={item.text}
+                            onChange={(e) => updateCapturedItem(item.id, { text: e.target.value })}
+                            onBlur={() => setEditingCaptureId(null)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') setEditingCaptureId(null) }}
+                            style={{
+                              width: '100%', fontSize: 12, fontWeight: 600, color: 'white',
+                              background: '#1A1030', border: '1px solid #4C2A92', borderRadius: 4,
+                              padding: '2px 6px', fontFamily: 'inherit', outline: 'none',
+                            }}
+                          />
+                        ) : (
+                          <div
+                            onClick={() => setEditingCaptureId(item.id)}
+                            style={{ fontSize: 12, fontWeight: 600, color: 'white', cursor: 'text' }}
+                          >
+                            {item.text}
+                          </div>
+                        )}
                         <div style={{ marginTop: 2, fontSize: 10, color: '#999' }}>
                           {item.timestamp}
                         </div>
+                        {item.type === 'action' && (
+                          <select
+                            value={item.assigneeId || ''}
+                            onChange={(e) => updateCapturedItem(item.id, { assigneeId: e.target.value || null })}
+                            style={{
+                              marginTop: 6, width: '100%', fontSize: 11, color: 'white',
+                              background: '#1A1030', border: '1px solid #333', borderRadius: 4,
+                              padding: '3px 6px', fontFamily: 'inherit',
+                            }}
+                          >
+                            <option value="">Unassigned</option>
+                            {members.map((m) => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                        )}
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => removeCapturedItem(item.id)}
+                        aria-label="Remove"
+                        style={{ background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
+                      >
+                        ×
+                      </button>
                     </div>
                   </div>
                 ))}

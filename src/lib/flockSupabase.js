@@ -204,7 +204,7 @@ async function getInteractions({ personId }) {
   }))
 }
 
-async function saveInteraction({ personId, fullName, result, summary, nextAction, nextActionDateTime }) {
+async function saveInteraction({ personId, fullName, result, summary, nextAction, nextActionDateTime, meetingId, interactedAt }) {
   const { data: interaction, error: intErr } = await supabase
     .from('flock_interactions')
     .insert({
@@ -214,7 +214,8 @@ async function saveInteraction({ personId, fullName, result, summary, nextAction
       summary: summary || '',
       next_action: nextAction || 'None',
       next_action_datetime: nextActionDateTime || null,
-      interacted_at: new Date().toISOString(),
+      interacted_at: interactedAt || new Date().toISOString(),
+      meeting_id: meetingId || null,
     })
     .select('id')
     .single()
@@ -451,6 +452,8 @@ export async function callFlockCRM(action, params = {}) {
         summary: p.summary || p.notes || '',
         nextAction: p.nextAction || 'None',
         nextActionDateTime: p.nextActionDateTime || p.dateTime || null,
+        meetingId: p.meetingId || null,
+        interactedAt: p.interactedAt || null,
       })
     }
 

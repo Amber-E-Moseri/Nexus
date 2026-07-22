@@ -4,6 +4,9 @@ import { supabase } from '../../../lib/supabase'
 import { createNotification } from '../../notifications/lib/notifications'
 import { createRecurringMeeting } from '../lib/meetings'
 import { DAYS_OF_WEEK, MAX_OCCURRENCES, buildRecurrenceRule } from '../lib/recurrence'
+import MeetingAgendaEditor from './MeetingAgendaEditor'
+import FlockContactPicker from './FlockContactPicker'
+import { saveAgendaItemsForMeeting } from '../lib/agendaSync'
 
 const MEETING_TYPES = ['general', 'team', 'department', 'media', '1_on_1_meeting']
 
@@ -40,7 +43,9 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
   const [time, setTime] = useState('')
   const [durationMinutes, setDurationMinutes] = useState(60)
   const [meetingType, setMeetingType] = useState('general')
-  const [agenda, setAgenda] = useState('')
+  const [agendaItems, setAgendaItems] = useState([])
+  const [isPrivate, setIsPrivate] = useState(true)
+  const [flockContactId, setFlockContactId] = useState(null)
   const [attendeeIds, setAttendeeIds] = useState([])
   const [orgMembers, setOrgMembers] = useState([])
   const [saving, setSaving] = useState(false)
@@ -83,12 +88,13 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
         status: 'scheduled',
         // Private by default — sharing happens by inviting attendees
         // (allowed_viewers below), not by publishing to the whole department.
-        visibility: 'private',
+        // Now user-controllable (previously hardcoded) via the toggle below.
+        visibility: isPrivate ? 'private' : 'published',
         allowed_viewers: attendeeIds,
         created_by: profile?.id,
         department_id: profile?.department_id ?? null,
       }
-      if (agenda.trim()) payload.agenda = agenda.trim()
+      if (meetingType === '1_on_1_meeting' && flockContactId) payload.flock_contact_id = flockContactId
 
       if (recurring && recurrenceData.frequency !== 'none') {
         // Only the first meeting is created now. Future occurrences are
@@ -115,13 +121,16 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
           }
         }
 
+        if (agendaItems.length > 0) {
+          await saveAgendaItemsForMeeting(meeting, agendaItems, profile?.id).catch(() => {})
+        }
         onSaved?.(meeting)
       } else {
         // Single non-recurring meeting
         const { data: meeting, error: insertError } = await supabase
           .from('meetings')
           .insert(payload)
-          .select('id, title, date')
+          .select('id, title, date, meeting_type, department_id')
           .single()
 
         if (insertError) throw insertError
@@ -144,6 +153,9 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
           }
         }
 
+        if (agendaItems.length > 0) {
+          await saveAgendaItemsForMeeting(meeting, agendaItems, profile?.id).catch(() => {})
+        }
         onSaved?.(meeting)
       }
     } catch (err) {
@@ -353,15 +365,27 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
             </div>
           )}
 
-          <label>
-            <span style={labelStyle}>Agenda (optional)</span>
-            <textarea
-              style={{ ...inputStyle, minHeight: 72, resize: 'vertical' }}
-              value={agenda}
-              onChange={(e) => setAgenda(e.target.value)}
-              placeholder="Optional agenda or notes"
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={!isPrivate}
+              onChange={(e) => setIsPrivate(!e.target.checked)}
+              style={{ cursor: 'pointer' }}
             />
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Publish to department (default: private, only invited attendees see it)</span>
           </label>
+
+          {meetingType === '1_on_1_meeting' && (
+            <label>
+              <span style={labelStyle}>Flock CRM contact (optional)</span>
+              <FlockContactPicker value={flockContactId} onChange={setFlockContactId} style={inputStyle} />
+            </label>
+          )}
+
+          <div>
+            <span style={labelStyle}>Agenda (optional)</span>
+            <MeetingAgendaEditor items={agendaItems} onChange={setAgendaItems} />
+          </div>
 
           <div>
             <span style={labelStyle}>Attendees</span>

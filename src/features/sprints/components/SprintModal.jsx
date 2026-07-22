@@ -10,6 +10,7 @@ import {
   getDepartments,
   updateSprint,
   updateSprintMember,
+  updateSprintMemberTeams,
 } from '../lib/sprints'
 
 const inputStyle = {
@@ -40,6 +41,7 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
   const [description, setDescription] = useState(sprint?.description ?? '')
   const [startDate, setStartDate] = useState(sprint?.start_date ?? '')
   const [endDate, setEndDate] = useState(sprint?.end_date ?? '')
+  const [category, setCategory] = useState(sprint?.category ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [template, setTemplate] = useState(initialDepartmentId ? 'single' : 'custom')
@@ -60,9 +62,11 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
       start_date: startDate || null,
       end_date: endDate || null,
       department_id: departmentId,
+      category: category || null,
+      sprint_type: template === 'single' ? 'single_dept' : 'multi_dept',
     }
 
-    const sprintRecord = await createSprint(sprintPayload, profile.id)
+    const sprintRecord = await createSprint(sprintPayload, profile.id, profile.role)
     const activeUsers = await getActiveUsers()
     const createdTeamsLocal = []
 
@@ -89,7 +93,7 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
       )
 
       if (creatorBelongsToTeam) {
-        await updateSprintMember(sprintRecord.id, profile.id, { sprint_team_id: team.id })
+        await updateSprintMemberTeams(sprintRecord.id, profile.id, [team.id])
       }
 
       createdTeamsLocal.push({
@@ -162,6 +166,9 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
             )
 
             if (result) {
+              if (category) {
+                await updateSprint(result.sprint_id, { category })
+              }
               saved = {
                 id: result.sprint_id,
                 name: name.trim(),
@@ -174,6 +181,7 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
                 created_by: profile.id,
                 created_at: new Date().toISOString(),
                 department_id: template === 'single' ? selectedDepts[0] : null,
+                category: category || null,
               }
               setCreatedTeams(result.created_teams || [])
               setSuccess(true)
@@ -195,8 +203,10 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
             start_date: startDate || null,
             end_date: endDate || null,
             department_id: null,
+            category: category || null,
+            sprint_type: 'custom',
           }
-          saved = await createSprint(payload, profile.id)
+          saved = await createSprint(payload, profile.id, profile.role)
           setSuccess(true)
         }
       } else {
@@ -206,6 +216,7 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
           description: description.trim() || null,
           start_date: startDate || null,
           end_date: endDate || null,
+          category: category || null,
         }
         saved = await updateSprint(sprint.id, payload)
         setSuccess(true)
@@ -434,7 +445,7 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
                   <div>
                     <label style={labelStyle}>Start date</label>
                     <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={inputStyle} />
@@ -443,6 +454,15 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
                     <label style={labelStyle}>End date</label>
                     <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={inputStyle} />
                   </div>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Category</label>
+                  <select value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle}>
+                    <option value="">— None —</option>
+                    <option value="group">Group</option>
+                    <option value="regional">Regional</option>
+                  </select>
                 </div>
               </>
             )}

@@ -22,7 +22,7 @@ function OverflowBadge({ count }) {
   )
 }
 
-function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtasks = true, checklistCount = null }) {
+function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtasks = true, checklistCount = null, teamLabel = null }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSortDragging } =
     useSortable({ id: task.id })
   const { editTask, addTask } = useTasks()
@@ -135,9 +135,17 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
   const priorityColor = PRIORITY_COLORS[localTask.priority] ?? '#B0A898'
   const subtasks = localTask.subtasks ?? []
   const parentTitle = localTask.parent?.title ?? localTask.parent_task?.title ?? null
-  const assignees = Array.isArray(localTask.assignees)
-    ? localTask.assignees.filter(Boolean)
-    : localTask.assignee ? [localTask.assignee] : []
+  const assignees = (
+    Array.isArray(localTask.assignees) && localTask.assignees.length > 0
+      ? localTask.assignees.filter(Boolean).map((a) => {
+          const user = a.user
+          if (user?.name || user?.full_name) return user
+          // user join was null (cross-dept RLS); fall back to direct assignee join if IDs match
+          if (localTask.assignee && (a.user_id === localTask.assignee.id)) return localTask.assignee
+          return a.user ?? a
+        })
+      : localTask.assignee ? [localTask.assignee] : []
+  )
   const visibleAssignees = assignees.slice(0, 3)
   const overflowCount = Math.max(0, assignees.length - visibleAssignees.length)
   const dueColor = due.status === 'overdue' ? 'var(--coral-dark)'
@@ -204,6 +212,15 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
 
         {parentTitle ? (
           <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: '-6px 0 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↳ {parentTitle}</p>
+        ) : null}
+
+        {/* Team label — only shown when the viewer is in multiple sprint
+            teams (see SprintTaskBoard's "My Team" view), to disambiguate
+            which team a task belongs to in an otherwise-merged list. */}
+        {teamLabel ? (
+          <span style={{ display: 'inline-block', fontSize: 9.5, fontWeight: 700, color: '#4C2A92', background: '#EDE8F8', borderRadius: 999, padding: '2px 8px', margin: '-4px 0 8px' }}>
+            {teamLabel}
+          </span>
         ) : null}
 
         {/* Meta row */}
@@ -286,20 +303,6 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
 
           {/* Paperclip */}
           <Paperclip size={12} style={{ color: '#C8BFAF', flexShrink: 0 }} />
-
-          {/* Checklist badge */}
-          {checklistCount && checklistCount.total > 0 ? (
-            <div
-              title={`${checklistCount.checked} of ${checklistCount.total} checklist items done`}
-              style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10.5, color: checklistCount.checked === checklistCount.total ? '#2D8653' : 'var(--text-tertiary)', flexShrink: 0 }}
-            >
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                <rect x="1" y="1" width="14" height="14" rx="3" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                <path d="M4 8l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              {checklistCount.checked}/{checklistCount.total}
-            </div>
-          ) : null}
 
           {/* Subtask toggle */}
           {showSubtasks && subtasks.length > 0 ? (

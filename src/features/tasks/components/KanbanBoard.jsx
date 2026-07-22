@@ -20,7 +20,13 @@ const STATUS_CATEGORY_DOT_COLORS = {
 
 function taskMatchesStatus(task, status) {
   const ids = status._mergedIds ?? [status.id]
-  return ids.includes(task.status_id) || (!task.status_id && task.status === status.legacy_key)
+  if (ids.includes(task.status_id)) return true
+  if (!task.status_id && task.status === status.legacy_key) return true
+  if (!task.status_id && task.status && status.category) {
+    const taskCat = task.status_category ?? task.status_definition?.category
+    return taskCat === status.category
+  }
+  return false
 }
 
 function mapStatusForBoard(status) {
@@ -45,6 +51,7 @@ export default function KanbanBoard({
   onTaskStatusChange,
   teamMembers = [],
   showSubtasks = true,
+  teamLabelByAssigneeId = null,
 }) {
   const { tasks: contextTasks, moveTask: contextMoveTask, statuses } = useTasks()
   // filteredTasks may come from a source unrelated to TasksContext (e.g. a
@@ -99,10 +106,21 @@ export default function KanbanBoard({
 
   // Memoize task grouping by status to avoid O(n×columns) filtering on every render.
   // Prevents re-renders during drag operations and maintains stable array references for memoized KanbanColumn.
+  const OTHER_STATUS = useMemo(() => ({
+    id: '__other',
+    name: 'Other',
+    color: '#7A7D86',
+    category: 'open',
+    legacy_key: 'other',
+    _mergedIds: ['__other'],
+  }), [])
+
   const tasksByStatus = useMemo(() => {
     const map = {}
+    const matchedIds = new Set()
     boardStatuses.forEach((status) => {
       const col = tasks.filter((task) => taskMatchesStatus(task, status))
+      col.forEach((t) => matchedIds.add(t.id))
       col.sort((a, b) => {
         if (!a.due_date && !b.due_date) return 0
         if (!a.due_date) return 1
@@ -111,13 +129,17 @@ export default function KanbanBoard({
       })
       map[status.id] = col
     })
+    const ungrouped = tasks.filter((t) => !matchedIds.has(t.id))
+    if (ungrouped.length > 0) {
+      map[OTHER_STATUS.id] = ungrouped
+    }
     return map
-  }, [tasks, boardStatuses])
+  }, [tasks, boardStatuses, OTHER_STATUS])
 
   const [checklistCounts, setChecklistCounts] = useState({})
 
   useEffect(() => {
-    const ids = tasks.map((t) => t.id).filter(Boolean)
+    const ids = tasks.map((t) => t.id).filter((id) => id && !String(id).startsWith('temp-'))
     if (!ids.length) { setChecklistCounts({}); return }
     getChecklistCounts(ids)
       .then(setChecklistCounts)
@@ -193,7 +215,7 @@ export default function KanbanBoard({
         alignItems: 'flex-start',
       }}
     >
-      {boardStatuses.map((status) => (
+      {[...boardStatuses, ...(tasksByStatus[OTHER_STATUS.id]?.length ? [OTHER_STATUS] : [])].map((status) => (
         <KanbanColumn
           key={status.id}
           status={status}
@@ -221,12 +243,13 @@ export default function KanbanBoard({
           readOnly={!canCreateTask}
           isOver={overColumnId === status.id}
           showSubtasks={showSubtasks}
+          teamLabelByAssigneeId={teamLabelByAssigneeId}
         />
       ))}
     </div>
   )
 
-  if (readOnly) {
+  if (readOnly && !canCreateTask) {
     return (
       <PlainKanbanBoard
         filteredTasks={tasks}
@@ -234,8 +257,13 @@ export default function KanbanBoard({
         statuses={boardStatuses}
         showSubtasks={showSubtasks}
         checklistCounts={checklistCounts}
+        teamLabelByAssigneeId={teamLabelByAssigneeId}
       />
     )
+  }
+
+  if (readOnly) {
+    return columns
   }
 
   return (

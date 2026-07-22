@@ -16,6 +16,12 @@ import { createTasksFromActionItems, setNotesSharedWithAttendee, editRecurringMe
 import { resolveAssignment, getOrgDepartments, getOrgUsers } from '../../features/meetings/lib/ownerMatching'
 import { getOpenItemsByMeeting, createOpenItems, updateOpenItem, updateOpenItemStatus, deleteOpenItem, convertOpenItemToTask } from '../../features/meetings/lib/openItems'
 import { getCategoryStatusId, STATUS_CATEGORIES } from '../../lib/taskStatuses'
+import { useExtractionStatus } from '../../features/meetings/hooks/useExtractionStatus'
+import { autoSelectOpenItems } from '../../features/meetings/lib/applyExtraction'
+import { syncFlockInteractionForMeeting } from '../../features/meetings/lib/flockLink'
+import FlockContactPicker from '../../features/meetings/components/FlockContactPicker'
+import MeetingAgendaEditor from '../../features/meetings/components/MeetingAgendaEditor'
+import { saveAgendaItemsForMeeting } from '../../features/meetings/lib/agendaSync'
 
 // exact colors from the HTML reference
 const FS = {
@@ -64,9 +70,11 @@ function MeetingDetailViewInner() {
   const navigate      = useNavigate()
   const { role, profile } = useAuth()
   const { showToast } = useToast()
+  const extraction = useExtractionStatus(meetingId)
 
   const [meeting, setMeeting]   = useState(null)
   const [agenda, setAgenda]     = useState([])
+  const [editingAgenda, setEditingAgenda] = useState(false)
   const [loading, setLoading]   = useState(true)
   const [fetchErr, setFetchErr] = useState(null)
 
@@ -78,9 +86,7 @@ function MeetingDetailViewInner() {
   const [minutesText, setMinutesText]           = useState('')
   const [decisionsText, setDecisionsText]       = useState('')
   const [nextStepsText, setNextStepsText]       = useState('')
-  const [minutesPublished, setMinutesPublished] = useState(false)
-  const [published, setPublished]               = useState(false)
-  const [saving, setSaving]                     = useState(false)
+  const [minutesSaveStatus, setMinutesSaveStatus] = useState('idle') // idle | saving | saved | error
   const [actionItems, setActionItems]           = useState([])
   const [showAddAction, setShowAddAction]       = useState(false)
   const [docsBadge, setDocsBadge]               = useState(0)
@@ -141,7 +147,7 @@ function MeetingDetailViewInner() {
   const startRef       = useRef(null)
   const totalSecs      = 90 * 60 // estimate 90 min for progress bar
   const cacheTimeoutRef = useRef(null)
-  const [cacheStatus, setCacheStatus] = useState('') // empty, 'saving', 'saved'
+  const minutesDbTimeoutRef = useRef(null)
 
   const isMobile  = useMediaQuery('(max-width: 640px)')
   // ORS identity is a space_roles grant (Phase 3) — role === 'ors' no longer exists.
@@ -175,14 +181,83 @@ function MeetingDetailViewInner() {
 
   // ── fetch ──────────────────────────────────────────────────────────────────
 
-  useEffect(() => { if (meetingId) { fetchMeeting(); fetchActionItems(); fetchOpenItems() } }, [meetingId])
+  useEffect(() => { if (meetingId) { fetchMeeting(); fetchActionItems() } }, [meetingId])
+  // Open items follow the same visibility as meeting notes (canSeeNotes) —
+  // gated on `meeting` being loaded first, since canSeeNotes defaults to
+  // true (!isOneOnOne) while meeting is still null, before we actually know
+  // whether this is a 1-on-1 that should be hidden.
+  useEffect(() => { if (meeting && canSeeNotes) fetchOpenItems() }, [meeting?.id, canSeeNotes])
 
-  // ── auto-cache to localStorage (debounced) ─────────────────────────────────
+  // ── AI extraction: durable result bridged from useExtractionStatus ─────────
+  // extraction.result is the source of truth (survives navigation/refresh —
+  // WS1/WS3). Always sync the review-UI state so a completed extraction is
+  // visible whether it just finished or the user is returning to it later.
+  const prevExtractionStatusRef = useRef('idle')
+  useEffect(() => {
+    setAiExtracting(extraction.status === 'processing')
+    if (extraction.status === 'failed' && extraction.error) setAiError(extraction.error)
+  }, [extraction.status, extraction.error])
+
+  useEffect(() => {
+    if (!extraction.result) return
+    const extracted = extraction.result
+    setAiResult(extracted)
+    if (extracted.action_items?.length) {
+      setSelectedAiActionItems(new Set(extracted.action_items.map((_, i) => i)))
+      ;(async () => {
+        let users = orgUsers
+        let depts = orgDepartments
+        if (!users.length || !depts.length) {
+          try {
+            const [u, d] = await Promise.all([getOrgUsers(), getOrgDepartments()])
+            users = u; depts = d
+            setOrgUsers(u); setOrgDepartments(d)
+          } catch { /* directory fetch is best-effort */ }
+        }
+        const directory = { departments: depts, users }
+        setEditableAiItems(extracted.action_items.map((raw) => {
+          const item = typeof raw === 'string' ? { title: raw, owner: '', due_date: '' } : raw
+          const resolved = resolveAssignment(item, directory)
+          return {
+            title: item.title || '',
+            owner: item.owner || '',
+            due_date: item.due_date || '',
+            assigneeId: resolved.assigneeId || '',
+            departmentId: resolved.departmentId || meeting?.department_id || '',
+          }
+        }))
+      })()
+    }
+    if (extracted.open_items?.length) setSelectedAiOpenItems(autoSelectOpenItems(extracted.open_items))
+
+    // Auto-populate minutes/notes only on a genuine fresh completion (status
+    // transitioning into 'complete' during this session), not on cold mount
+    // of an already-completed extraction from a prior session — otherwise
+    // this would race fetchMeeting() and could clobber already-saved manual
+    // edits with stale raw-extraction text before the real saved values load.
+    const justCompleted = prevExtractionStatusRef.current !== 'complete' && extraction.status === 'complete'
+    prevExtractionStatusRef.current = extraction.status
+    if (!justCompleted || loading) return
+
+    if (extracted.summary && !meeting?.meeting_notes) {
+      supabase.from('meetings').update({ meeting_notes: extracted.summary }).eq('id', meetingId)
+        .then(({ error: notesErr }) => { if (!notesErr) setMeeting((m) => ({ ...m, meeting_notes: extracted.summary })) })
+    }
+    if (extracted.detailed_notes && !minutesText) setMinutesText(extracted.detailed_notes)
+    if (extracted.decisions?.length && !decisionsText) {
+      const decisionStrings = extracted.decisions
+        .map((d) => (typeof d === 'string' ? d : d?.decision ?? null))
+        .filter((d) => typeof d === 'string' && d !== null)
+      setDecisionsText(decisionStrings.join('\n• '))
+    }
+    if (extracted.next_steps?.length && !nextStepsText) setNextStepsText(extracted.next_steps.join('\n• '))
+  }, [extraction.result])
+
+  // ── auto-cache to localStorage (debounced, crash-safety net only) ──────────
   useEffect(() => {
     if (!meetingId) return
     const cacheKey = `meeting_draft_${meetingId}`
     clearTimeout(cacheTimeoutRef.current)
-    setCacheStatus('saving')
     cacheTimeoutRef.current = setTimeout(() => {
       localStorage.setItem(cacheKey, JSON.stringify({
         minutesText,
@@ -190,11 +265,38 @@ function MeetingDetailViewInner() {
         nextStepsText,
         timestamp: Date.now(),
       }))
-      setCacheStatus('saved')
-      setTimeout(() => setCacheStatus(''), 2000)
     }, 500)
     return () => clearTimeout(cacheTimeoutRef.current)
   }, [minutesText, decisionsText, nextStepsText, meetingId])
+
+  // ── autosave minutes/decisions/next-steps to the database (debounced) ──────
+  // Replaces the old manual "Publish minutes" button. Gated on
+  // canEditVisibility so it never attempts a write the RLS trigger
+  // (enforce_meetings_summary_only_update) would reject for non-editors —
+  // matches the same predicate the UI already uses to show/hide edit
+  // affordances. Skipped while `loading` so it can't fire on initial mount
+  // before fetchMeeting() has populated minutesText/etc from the DB.
+  useEffect(() => {
+    if (!meetingId || loading || !canEditVisibility) return
+    clearTimeout(minutesDbTimeoutRef.current)
+    minutesDbTimeoutRef.current = setTimeout(async () => {
+      setMinutesSaveStatus('saving')
+      const { error } = await supabase.from('meetings').update({
+        minutes: minutesText,
+        decisions: decisionsText,
+        next_steps: nextStepsText,
+      }).eq('id', meetingId)
+      if (error) {
+        setMinutesSaveStatus('error')
+        setTimeout(() => setMinutesSaveStatus('idle'), 5000)
+      } else {
+        localStorage.removeItem(`meeting_draft_${meetingId}`)
+        setMinutesSaveStatus('saved')
+        setTimeout(() => setMinutesSaveStatus('idle'), 3000)
+      }
+    }, 2500)
+    return () => clearTimeout(minutesDbTimeoutRef.current)
+  }, [minutesText, decisionsText, nextStepsText, meetingId, canEditVisibility, loading])
 
   // ── cache AI extraction results ───────────────────────────────────────────
   useEffect(() => {
@@ -257,6 +359,8 @@ function MeetingDetailViewInner() {
           decisions, next_steps, summary, polished_transcript, context, meeting_notes, doc_drive_url, doc_title,
           zoom_join_url, drive_url, status, started_at, visibility, allowed_viewers,
           notes_shared_with, recurrence_id, series_instance_num,
+          extraction_result, extraction_status, extraction_started_at, extraction_completed_at, extraction_error,
+          flock_contact_id,
           created_by, created_at,
           agendas(id, title, agenda_items(id, segment, notes, duration_minutes, sort_order)),
           attendance:meeting_attendance(user_id, status, attendee:users(id, name))
@@ -384,21 +488,11 @@ function MeetingDetailViewInner() {
     const { error } = await supabase
       .from('meetings').update({ status: 'completed', ended_at }).eq('id', meetingId)
     if (error) { showToast(`Couldn't end the meeting: ${error.message}`, { tone: 'error' }); return }
-    setMeeting(m => ({ ...m, status: 'completed', ended_at }))
-  }
-
-  async function publishMinutes() {
-    setSaving(true)
-    const { error } = await supabase.from('meetings').update({
-      minutes: minutesText,
-      decisions: decisionsText,
-      next_steps: nextStepsText,
-    }).eq('id', meetingId)
-    setSaving(false)
-    if (error) { showToast(`Couldn't save minutes: ${error.message}`, { tone: 'error' }); return }
-    localStorage.removeItem(`meeting_draft_${meetingId}`)
-    setPublished(true)
-    setTimeout(() => setPublished(false), 3000)
+    const updated = { ...meeting, status: 'completed', ended_at }
+    setMeeting(updated)
+    if (updated.meeting_type === '1_on_1_meeting') {
+      syncFlockInteractionForMeeting(updated, profile?.id).catch(() => {})
+    }
   }
 
   async function exportPdf() {
@@ -448,86 +542,35 @@ function MeetingDetailViewInner() {
     }
   }
 
-  async function runAiExtraction() {
+  function runAiExtraction() {
     const transcript = meeting?.summary
     if (!transcript) {
       setAiError('No transcript found. Upload and transcribe audio first, then come back here.')
       return
     }
-    setAiExtracting(true)
     setAiError('')
     setAiResult(null)
     setSelectedAiActionItems(new Set())
     setAiMergeSuccess(false)
     setSelectedAiOpenItems(new Set())
     setAiOpenItemsMergeSuccess(false)
-    try {
-      const { data, error } = await supabase.functions.invoke('extract-meeting-data', {
-        body: { transcript, context: context || '' }
-      })
-      if (error) throw error
-      const extracted = data?.extracted ?? null
-      setAiResult(extracted)
-      if (extracted?.action_items?.length) {
-        setSelectedAiActionItems(new Set(extracted.action_items.map((_, i) => i)))
-        let users = orgUsers
-        let depts = orgDepartments
-        if (!users.length || !depts.length) {
-          try {
-            const [u, d] = await Promise.all([getOrgUsers(), getOrgDepartments()])
-            users = u; depts = d
-            setOrgUsers(u); setOrgDepartments(d)
-          } catch {}
-        }
-        const directory = { departments: depts, users }
-        setEditableAiItems(extracted.action_items.map((raw) => {
-          const item = typeof raw === 'string' ? { title: raw, owner: '', due_date: '' } : raw
-          const resolved = resolveAssignment(item, directory)
-          return {
-            title: item.title || '',
-            owner: item.owner || '',
-            due_date: item.due_date || '',
-            assigneeId: resolved.assigneeId || '',
-            departmentId: resolved.departmentId || meeting?.department_id || '',
-          }
-        }))
+    // Optimistic — the realtime subscription in useExtractionStatus confirms
+    // shortly after via the edge function's own 'processing' write. Not
+    // awaited: the edge function persists its result server-side (WS1), so
+    // the caller doesn't need to stay mounted for the result to land — the
+    // bridging effect above picks it up whenever it arrives.
+    setAiExtracting(true)
+    supabase.functions.invoke('extract-meeting-data', {
+      body: { transcript, context: context || '', meetingId },
+    }).then(({ error }) => {
+      if (error) {
+        setAiExtracting(false)
+        setAiError(error.message || 'Extraction failed.')
       }
-      if (extracted?.open_items?.length) {
-        const autoSelected = new Set()
-        extracted.open_items.forEach((item, i) => {
-          if ((item.confidence_score ?? 0) >= 0.80) autoSelected.add(i)
-        })
-        setSelectedAiOpenItems(autoSelected)
-      }
-      // Save the AI summary to meeting_notes — never to `summary`, which holds
-      // the transcript (overwriting it would destroy the transcript and make
-      // re-running extraction operate on the summary instead). Manual edits to
-      // meeting_notes win: only fill it when empty.
-      if (extracted?.summary && !meeting?.meeting_notes) {
-        const { error: notesErr } = await supabase
-          .from('meetings')
-          .update({ meeting_notes: extracted.summary })
-          .eq('id', meetingId)
-        if (!notesErr) setMeeting(m => ({ ...m, meeting_notes: extracted.summary }))
-      }
-      // Auto-populate minutes fields if empty
-      if (extracted?.detailed_notes && !minutesText) {
-        setMinutesText(extracted.detailed_notes)
-      }
-      if (extracted?.decisions?.length && !decisionsText) {
-        const decisionStrings = extracted.decisions
-          .map((d) => (typeof d === 'string' ? d : d?.decision ?? null))
-          .filter((d) => typeof d === 'string' && d !== null)
-        setDecisionsText(decisionStrings.join('\n• '))
-      }
-      if (extracted?.next_steps?.length && !nextStepsText) {
-        setNextStepsText(extracted.next_steps.join('\n• '))
-      }
-    } catch (err) {
-      setAiError(err.message || 'Extraction failed.')
-    } finally {
+    }).catch((err) => {
       setAiExtracting(false)
-    }
+      setAiError(err.message || 'Extraction failed.')
+    })
   }
 
   function toggleAiActionItem(i) {
@@ -700,12 +743,6 @@ function MeetingDetailViewInner() {
     }
   }
 
-  async function togglePublishMinutes() {
-    const newVal = !minutesPublished
-    setMinutesPublished(newVal)
-    await publishMinutes()
-  }
-
   function startTitleEdit() {
     setTitleDraft(meeting?.title ?? '')
     setEditingTitle(true)
@@ -833,6 +870,26 @@ function MeetingDetailViewInner() {
     } finally {
       setSharingNotesId(null)
     }
+  }
+
+  async function handleAgendaItemsChange(editorItems) {
+    // Optimistic local update so the (unrelated) live-navigation list above
+    // reflects edits immediately; mins/id are re-derived after the DB round
+    // trip so `id` stays a real agenda_items id (needed for the `key` prop
+    // and for the sort_order this list already relies on for navigation).
+    setAgenda(editorItems.map((item, i) => ({ id: `pending-${i}`, title: item.segment, mins: item.duration })))
+    try {
+      await saveAgendaItemsForMeeting(meeting, editorItems, profile?.id)
+      await fetchMeeting()
+    } catch (err) {
+      showToast(`Couldn't save agenda: ${err.message}`, { tone: 'error' })
+    }
+  }
+
+  async function handleFlockContactChange(contactId) {
+    const { error } = await supabase.from('meetings').update({ flock_contact_id: contactId }).eq('id', meetingId)
+    if (error) { showToast(`Couldn't link Flock contact: ${error.message}`, { tone: 'error' }); return }
+    setMeeting((m) => ({ ...m, flock_contact_id: contactId }))
   }
 
   function avatarColor(name = '') {
@@ -1049,14 +1106,14 @@ function MeetingDetailViewInner() {
               >
                 {exportingPdf ? '⏳ Exporting…' : '📤 Export PDF'}
               </button>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <button onClick={publishMinutes} disabled={saving} style={{ padding:'7px 13px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}>
-                  {saving ? 'Saving…' : published ? '✓ Saved!' : 'Publish minutes →'}
-                </button>
-                {cacheStatus && <span style={{ fontSize:10, color: FS.muted, opacity: cacheStatus === 'saved' ? 1 : 0.6 }}>
-                  {cacheStatus === 'saving' ? '⏳ Auto-saving draft...' : cacheStatus === 'saved' ? '✓ Draft saved locally' : ''}
-                </span>}
-              </div>
+              {canEditVisibility && (
+                <span style={{ fontSize:10, color: FS.muted, opacity: minutesSaveStatus === 'saved' ? 1 : 0.7 }}>
+                  {minutesSaveStatus === 'saving' ? '⏳ Saving…'
+                    : minutesSaveStatus === 'saved' ? '✓ Saved'
+                    : minutesSaveStatus === 'error' ? '⚠ Save failed — retrying'
+                    : 'Auto-saves as you type'}
+                </span>
+              )}
             </>
           )}
 
@@ -1159,9 +1216,24 @@ function MeetingDetailViewInner() {
             {/* Agenda */}
             <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
               Agenda
-              <button style={{ fontFamily:'inherit', fontSize:10, fontWeight:700, color: FS.navy, border:'none', background:'none', cursor:'pointer', padding:0 }}>+ Add</button>
+              {canManage && (
+                <button
+                  onClick={() => setEditingAgenda((v) => !v)}
+                  style={{ fontFamily:'inherit', fontSize:10, fontWeight:700, color: FS.navy, border:'none', background:'none', cursor:'pointer', padding:0 }}
+                >
+                  {editingAgenda ? 'Done' : agenda.length === 0 ? '+ Add' : 'Edit'}
+                </button>
+              )}
             </div>
 
+            {editingAgenda ? (
+              <div style={{ marginBottom:14 }}>
+                <MeetingAgendaEditor
+                  items={agenda.map((item) => ({ segment: item.title, duration: item.mins || 15 }))}
+                  onChange={handleAgendaItemsChange}
+                />
+              </div>
+            ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:14 }}>
               {agenda.length === 0 ? (
                 <div style={{ fontSize:12, color: FS.xmuted, textAlign:'center', padding:'12px 0' }}>No agenda items</div>
@@ -1187,6 +1259,7 @@ function MeetingDetailViewInner() {
                 )
               })}
             </div>
+            )}
 
             {isLive && currentIdx < agenda.length - 1 && (
               <button
@@ -1329,6 +1402,19 @@ function MeetingDetailViewInner() {
                   </div>
                 )}
 
+                {/* One-on-one: link to a Flock CRM contact (creator only — Flock RLS is pastor_id = auth.uid()) */}
+                {isOneOnOne && isNotesCreator && (
+                  <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'14px 16px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
+                    <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>🐑 Flock CRM contact</div>
+                    <FlockContactPicker
+                      value={meeting.flock_contact_id}
+                      onChange={handleFlockContactChange}
+                      style={{ width:'100%', padding:'8px 10px', border:`1px solid ${FS.border}`, borderRadius:8, fontSize:13, color: FS.text, fontFamily:'inherit', background:'#fff' }}
+                    />
+                    <div style={{ fontSize:11, color: FS.muted, marginTop:6 }}>When this meeting ends, it's logged as an interaction for the linked contact.</div>
+                  </div>
+                )}
+
                 {/* One-on-one: share notes with attendees (creator/managers only) */}
                 {isOneOnOne && (canManage || isNotesCreator) && (
                   <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'14px 16px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
@@ -1371,14 +1457,20 @@ function MeetingDetailViewInner() {
                     <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden' }}>
                       <div style={{ padding:'11px 14px', borderBottom:`1px solid ${FS.borderL}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                         <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted }}>📝 Discussion</div>
-                        <span style={{ fontSize:10, color: FS.sage, fontWeight:600 }}>✓ Auto-saving</span>
+                        <span style={{ fontSize:10, color: minutesSaveStatus === 'error' ? FS.coral : FS.sage, fontWeight:600 }}>
+                          {minutesSaveStatus === 'saving' ? '⏳ Saving…'
+                            : minutesSaveStatus === 'saved' ? '✓ Saved'
+                            : minutesSaveStatus === 'error' ? '⚠ Save failed'
+                            : canEditVisibility ? '✓ Auto-saving' : ''}
+                        </span>
                       </div>
                       <textarea
                         value={minutesText}
                         onChange={e => setMinutesText(e.target.value)}
                         placeholder="Capture what's being discussed…"
                         rows={6}
-                        style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background:'transparent', fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
+                        disabled={!canEditVisibility}
+                        style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background: canEditVisibility ? 'transparent' : FS.surface, fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
                       />
                     </div>
 
@@ -1392,7 +1484,8 @@ function MeetingDetailViewInner() {
                         onChange={e => setDecisionsText(e.target.value)}
                         placeholder="Key decisions reached in this meeting…"
                         rows={4}
-                        style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background:'transparent', fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
+                        disabled={!canEditVisibility}
+                        style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background: canEditVisibility ? 'transparent' : FS.surface, fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
                       />
                     </div>
 
@@ -1406,32 +1499,17 @@ function MeetingDetailViewInner() {
                         onChange={e => setNextStepsText(e.target.value)}
                         placeholder="Agreed next steps…"
                         rows={4}
-                        style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background:'transparent', fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
+                        disabled={!canEditVisibility}
+                        style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background: canEditVisibility ? 'transparent' : FS.surface, fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
                       />
                     </div>
 
-                    {/* Publish minutes toggle */}
-                    <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
-                      <div>
-                        <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>Publish minutes</div>
-                        <div style={{ fontSize:11, color: FS.muted, marginTop:2 }}>Share with all attendees automatically</div>
-                      </div>
-                      <button
-                        onClick={publishMinutes}
-                        disabled={saving}
-                        style={{
-                          position:'relative', width:44, height:24, borderRadius:999, border:'none', cursor:'pointer', transition:'background .2s',
-                          background: published ? FS.sage : FS.border,
-                        }}
-                      >
-                        <span style={{
-                          position:'absolute', top:3, left: published ? 22 : 2, width:18, height:18, borderRadius:'50%',
-                          background:'#fff', transition:'left .2s', boxShadow:'0 1px 3px rgba(0,0,0,.2)',
-                        }} />
-                      </button>
+                    <div style={{ fontSize:11, color: FS.muted, textAlign:'right' }}>
+                      {minutesSaveStatus === 'saving' ? '⏳ Saving…'
+                        : minutesSaveStatus === 'saved' ? '✓ Saved'
+                        : minutesSaveStatus === 'error' ? '⚠ Save failed — retrying'
+                        : 'Auto-saves as you type'}
                     </div>
-
-                    {published && <div style={{ fontSize:12, color: FS.sage, fontWeight:600 }}>✓ Minutes saved & published</div>}
                   </>
                 ) : (
                   <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'24px 16px', textAlign:'center', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
@@ -1535,7 +1613,8 @@ function MeetingDetailViewInner() {
                   </div>
                 )}
 
-                {/* ── Open Items Section ────────────────────────────────── */}
+                {/* ── Open Items Section (same visibility as notes — canSeeNotes) ── */}
+                {canSeeNotes ? (
                 <div style={{ marginTop: 24 }}>
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 8 }}>
                     <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>
@@ -1714,6 +1793,13 @@ function MeetingDetailViewInner() {
                     </div>
                   )}
                 </div>
+                ) : (
+                  <div style={{ marginTop: 24, background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'24px 16px', textAlign:'center' }}>
+                    <div style={{ fontSize:24, marginBottom:8 }}>🔒</div>
+                    <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>Open items hidden by creator</div>
+                    <div style={{ fontSize:12, color: FS.muted, marginTop:4 }}>The organizer hasn't shared open items from this meeting with you yet.</div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1728,6 +1814,7 @@ function MeetingDetailViewInner() {
                     meetingId={meetingId}
                     departmentId={meeting.department_id}
                     canRecord={canRecord}
+                    canManage={canManage}
                     meetingContext={context}
                     recordOnly
                     startImmediately={recording}
@@ -1744,6 +1831,7 @@ function MeetingDetailViewInner() {
                   meetingId={meetingId}
                   departmentId={meeting.department_id}
                   canRecord={false}
+                  canManage={canManage}
                   meetingContext={context}
                   onTranscriptionComplete={({ transcript }) => setMeeting(m => ({ ...m, summary: transcript }))}
                   onActionItemsExtracted={() => { fetchActionItems(); setActiveTab('actions') }}
@@ -1755,6 +1843,7 @@ function MeetingDetailViewInner() {
                   meetingId={meetingId}
                   departmentId={meeting.department_id}
                   canRecord={false}
+                  canManage={canManage}
                   meetingContext={context}
                   pasteOnly
                   onTranscriptionComplete={({ transcript }) => setMeeting(m => ({ ...m, summary: transcript }))}
