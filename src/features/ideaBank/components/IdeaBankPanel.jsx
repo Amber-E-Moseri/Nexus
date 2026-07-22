@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useAuth } from '../../../hooks/useAuth'
 import {
   getIdeaBankItems,
   createIdea,
@@ -33,6 +34,7 @@ function buildTree(items) {
 }
 
 export default function IdeaBankPanel({ spaceId, canManage }) {
+  const { profile } = useAuth()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
@@ -78,7 +80,7 @@ export default function IdeaBankPanel({ spaceId, canManage }) {
 
   return (
     <div style={{ padding: '20px 20px 40px' }}>
-      {canManage && (
+      {profile?.id && (
         <div style={{ marginBottom: 16 }}>
           {!showCreate ? (
             <button
@@ -116,6 +118,7 @@ export default function IdeaBankPanel({ spaceId, canManage }) {
               depth={0}
               tree={tree}
               canManage={canManage}
+              currentUserId={profile?.id}
               creatingParentId={creatingParentId}
               onStartCreateChild={setCreatingParentId}
               onCreateChild={handleCreate}
@@ -135,6 +138,7 @@ function IdeaNode({
   depth,
   tree,
   canManage,
+  currentUserId,
   creatingParentId,
   onStartCreateChild,
   onCreateChild,
@@ -145,6 +149,10 @@ function IdeaNode({
   const [editing, setEditing] = useState(false)
 
   const children = tree.get(item.id) ?? []
+  // Anyone can capture an idea (DB insert policy is user_id = auth.uid(),
+  // no role check) — edit/delete/privacy stays limited to the idea's own
+  // creator or a space admin, matching idea_bank_items_update/_delete.
+  const canEdit = canManage || item.user_id === currentUserId
 
   return (
     <div style={{ marginLeft: depth * 20 }}>
@@ -189,19 +197,17 @@ function IdeaNode({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
-              {canManage && (
+              {canEdit && (
                 <button type="button" onClick={() => setEditing(true)} style={linkButtonStyle}>
                   Edit
                 </button>
               )}
 
-              {canManage && (
-                <button type="button" onClick={() => onStartCreateChild(item.id)} style={linkButtonStyle}>
-                  + Sub-idea
-                </button>
-              )}
+              <button type="button" onClick={() => onStartCreateChild(item.id)} style={linkButtonStyle}>
+                + Sub-idea
+              </button>
 
-              {canManage && (
+              {canEdit && (
                 <button
                   type="button"
                   onClick={() => onUpdate(item.id, { is_private: !item.is_private })}
@@ -211,7 +217,7 @@ function IdeaNode({
                 </button>
               )}
 
-              {canManage && (
+              {canEdit && (
                 <button
                   type="button"
                   onClick={() => onDelete(item.id)}
@@ -245,6 +251,7 @@ function IdeaNode({
               depth={depth + 1}
               tree={tree}
               canManage={canManage}
+              currentUserId={currentUserId}
               creatingParentId={creatingParentId}
               onStartCreateChild={onStartCreateChild}
               onCreateChild={onCreateChild}
