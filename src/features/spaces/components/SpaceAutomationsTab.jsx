@@ -177,6 +177,7 @@ export default function SpaceAutomationsTab({ space, canManage }) {
                     </div>
                   </div>
 
+                  {canManage && (
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
@@ -226,6 +227,7 @@ export default function SpaceAutomationsTab({ space, canManage }) {
                       Delete
                     </button>
                   </div>
+                  )}
                 </div>
               </div>
             )

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { useHasPermission } from '../../hooks/useHasPermission'
 import { ACTION_LABELS, TRIGGER_LABELS, deleteAutomation, getRecentAutomationRuns, toggleAutomation, getAllDepartments, getAllUsers, getAllAutomations, getAutomationRunLog, getWebhookDeliveryLog, AutomationBuilder } from '../../features/automations'
 import { AUTOMATION_TEMPLATES, TEMPLATE_CATEGORIES } from '../../features/automations/lib/automationTemplates'
 import { formatLastActive } from '../../lib/dateUtils'
@@ -55,6 +56,7 @@ function RunBadge({ status }) {
 
 export default function AutomationsPage({ embedded = false, initialDepartmentId = null }) {
   const { profile, role } = useAuth()
+  const canManageAutomations = useHasPermission('automations:manage')
   const [deptId, setDeptId] = useState(initialDepartmentId ?? profile?.department_id ?? null)
   const [departments, setDepartments] = useState([])
   const [users, setUsers] = useState([])
@@ -197,6 +199,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
             >
               {showTemplates ? 'Hide Templates' : 'Browse Templates'}
             </button>
+            {canManageAutomations && (
             <button
               type="button"
               onClick={() => {
@@ -207,6 +210,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
             >
               + New Automation
             </button>
+            )}
           </div>
         </div>
       ) : null}
@@ -226,6 +230,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
             >
               {showTemplates ? 'Hide Templates' : 'Browse Templates'}
             </button>
+            {canManageAutomations && (
             <button
               type="button"
               onClick={() => {
@@ -236,6 +241,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
             >
               + New Automation
             </button>
+            )}
           </div>
         </div>
       ) : null}
@@ -396,6 +402,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
                       </div>
                     </div>
 
+                    {canManageAutomations && (
                     <div className="flex items-center gap-3 sm:self-start">
                       <Toggle
                         checked={automation.enabled}
@@ -409,6 +416,7 @@ export default function AutomationsPage({ embedded = false, initialDepartmentId 
                         }}
                       />
                     </div>
+                    )}
                   </div>
                 </div>
               )

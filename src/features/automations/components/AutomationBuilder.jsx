@@ -743,7 +743,7 @@ export default function AutomationBuilder({
                           config: { ...current.config, payload: event.target.value },
                         }))}
                         className={`${INPUT_CLASS} min-h-[96px] resize-y font-mono text-xs`}
-                        placeholder='{"task":"{{task.title}}"}'
+                        placeholder='{"task":"{{title}}"}'
                       />
                     </div>
                   ) : null}
