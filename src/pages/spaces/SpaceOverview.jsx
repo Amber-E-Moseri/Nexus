@@ -36,8 +36,9 @@ import GroupSpaceMembersPanel from '../../features/spaces/components/GroupSpaceM
 import MeetingModal from '../../features/meetings/components/MeetingModal'
 import SpaceOpenItemsTab from '../../features/meetings/components/SpaceOpenItemsTab'
 import { getOpenItemsBySpace } from '../../features/meetings/lib/openItems'
+import IdeaBankTab from '../../features/ideaBank/components/IdeaBankTab'
 
-const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Meetings', 'Open Items', 'Automations', 'Members']
+const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Meetings', 'Open Items', 'Idea Bank', 'Automations', 'Members']
 
 const STATUS_ACCENT = {
   open: '#C9BEAD',
@@ -1963,6 +1964,7 @@ export default function SpaceOverview() {
       {activeTab === 'Sprints' ? <div role="tabpanel" id="tabpanel-sprints" aria-labelledby="tab-sprints" tabIndex={0}><SpaceSprintsTab canManage={canManage} sprints={spaceSprints} spaceColor={space.color} onCreate={() => setShowSprintModal(true)} onOpen={(sprint) => navigate(`/sprints/${sprint.id}`)} /></div> : null}
       {activeTab === 'Meetings' ? <div role="tabpanel" id="tabpanel-meetings" aria-labelledby="tab-meetings" tabIndex={0}><SpaceMeetingsTab meetings={spaceMeetings} spaceId={spaceId} spaceName={space.name} canManage={canManage} onMeetingCreated={async () => { setSpaceMeetings(await getSpaceMeetings(spaceId)) }} /></div> : null}
       {activeTab === 'Open Items' ? <div role="tabpanel" id="tabpanel-openitems" aria-labelledby="tab-openitems" tabIndex={0}><SpaceOpenItemsTab spaceId={spaceId} canManage={canManage} /></div> : null}
+      {activeTab === 'Idea Bank' ? <div role="tabpanel" id="tabpanel-idea-bank" aria-labelledby="tab-idea-bank" tabIndex={0}><IdeaBankTab spaceId={spaceId} canManage={canManage} /></div> : null}
       {activeTab === 'Automations' ? <div role="tabpanel" id="tabpanel-automations" aria-labelledby="tab-automations" tabIndex={0}><SpaceAutomationsTab space={space} canManage={canManageStatuses} /></div> : null}
       {activeTab === 'Members' ? (
         <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}>
