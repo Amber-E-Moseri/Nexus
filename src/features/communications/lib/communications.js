@@ -1,5 +1,18 @@
 ﻿export const COMMUNICATION_ROLES = ['super_admin', 'dept_lead', 'pastor', 'member']
 
+// supabase-js sets error.message to a generic "non-2xx status code" string on Edge
+// Function failures; the actual reason lives in the response body (error.context).
+export async function getFunctionErrorMessage(error, fallback = 'Failed to send email.') {
+  if (!error) return null
+  try {
+    const body = await error.context?.clone().json()
+    if (body?.error) return body.error
+  } catch {
+    // response body wasn't JSON (or already consumed) — fall through
+  }
+  return error.message || fallback
+}
+
 export function normalizeEmail(email = '') {
   return email.trim().toLowerCase()
 }

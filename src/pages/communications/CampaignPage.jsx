@@ -7,6 +7,7 @@ import EmailComposer from '../../features/communications/components/EmailCompose
 import EmailPreviewModal from '../../features/communications/components/EmailPreviewModal'
 import EmailSignatureEditor from '../../features/communications/components/EmailSignatureEditor'
 import SegmentBuilderAdvanced from '../../features/communications/components/SegmentBuilderAdvanced'
+import { getFunctionErrorMessage } from '../../features/communications/lib/communications'
 import { Edit2, BarChart3 } from 'lucide-react'
 import { FONT_HEADING } from '../../lib/fonts'
 
@@ -263,9 +264,14 @@ function CampaignForm({ initial, onSaved, onCancel }) {
 
   async function handleSendTest(testEmail) {
     const finalBody = useOrgSignature && orgSignature ? `${body}\n\n${orgSignature}` : body
-    await supabase.functions.invoke('send-communication-email', {
+    const { error: sendError } = await supabase.functions.invoke('send-communication-email', {
       body: { to: [{ name: 'Test Recipient', email: testEmail }], subject: `[TEST] ${subject}`, body: finalBody },
     })
+    if (sendError) {
+      const message = await getFunctionErrorMessage(sendError)
+      setError(message)
+      throw new Error(message)
+    }
   }
 
   const stepLabels = ['Details', 'Recipients', 'Content', 'Schedule', 'Review']

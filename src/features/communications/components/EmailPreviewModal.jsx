@@ -67,6 +67,7 @@ export default function EmailPreviewModal({ subject, body, previewRecipient, onC
   const [testEmail, setTestEmail] = useState(previewRecipient?.email ?? '')
   const [testSent, setTestSent]   = useState(false)
   const [testSending, setTestSending] = useState(false)
+  const [testError, setTestError] = useState(null)
 
   const filledSubject = fillVars(subject, previewRecipient)
   const filledBody    = fillVars(body, previewRecipient)
@@ -75,9 +76,12 @@ export default function EmailPreviewModal({ subject, body, previewRecipient, onC
   async function handleSendTest() {
     if (!testEmail.trim() || testSending) return
     setTestSending(true)
+    setTestError(null)
     try {
       await onSendTest(testEmail.trim())
       setTestSent(true)
+    } catch (err) {
+      setTestError(err.message || 'Failed to send test email.')
     } finally {
       setTestSending(false)
     }
@@ -157,24 +161,27 @@ export default function EmailPreviewModal({ subject, body, previewRecipient, onC
         </div>
 
         {/* Test send */}
-        <div style={{ borderTop: `1px solid ${BORDER}`, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 13, color: TEXT, fontWeight: 600, flexShrink: 0 }}>Send a test email to:</span>
-          <input
-            type="email"
-            value={testEmail}
-            onChange={(e) => { setTestEmail(e.target.value); setTestSent(false) }}
-            placeholder="test@example.com"
-            style={{ flex: 1, minWidth: 180, border: `1px solid ${BORDER}`, borderRadius: 8, padding: '7px 11px', fontSize: 13, color: TEXT, outline: 'none', fontFamily: 'inherit' }}
-          />
-          <button
-            type="button"
-            onClick={handleSendTest}
-            disabled={testSending || !testEmail.trim()}
-            style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: testSending || !testEmail.trim() ? 'not-allowed' : 'pointer', opacity: testSending || !testEmail.trim() ? 0.6 : 1, flexShrink: 0 }}
-          >
-            {testSending ? 'Sending...' : 'Send Test'}
-          </button>
-          {testSent ? <span style={{ fontSize: 12, fontWeight: 700, color: '#2D8653' }}>✓ Test sent!</span> : null}
+        <div style={{ borderTop: `1px solid ${BORDER}`, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, color: TEXT, fontWeight: 600, flexShrink: 0 }}>Send a test email to:</span>
+            <input
+              type="email"
+              value={testEmail}
+              onChange={(e) => { setTestEmail(e.target.value); setTestSent(false); setTestError(null) }}
+              placeholder="test@example.com"
+              style={{ flex: 1, minWidth: 180, border: `1px solid ${BORDER}`, borderRadius: 8, padding: '7px 11px', fontSize: 13, color: TEXT, outline: 'none', fontFamily: 'inherit' }}
+            />
+            <button
+              type="button"
+              onClick={handleSendTest}
+              disabled={testSending || !testEmail.trim()}
+              style={{ border: 'none', background: PRIMARY, color: '#FFFFFF', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: testSending || !testEmail.trim() ? 'not-allowed' : 'pointer', opacity: testSending || !testEmail.trim() ? 0.6 : 1, flexShrink: 0 }}
+            >
+              {testSending ? 'Sending...' : 'Send Test'}
+            </button>
+            {testSent ? <span style={{ fontSize: 12, fontWeight: 700, color: '#2D8653' }}>✓ Test sent!</span> : null}
+          </div>
+          {testError ? <span style={{ fontSize: 12, fontWeight: 600, color: '#C94830' }}>{testError}</span> : null}
         </div>
       </div>
     </div>

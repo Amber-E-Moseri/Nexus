@@ -30,6 +30,7 @@ import {
   COMMUNICATION_ROLES,
   escapeHtml,
   fillTemplateTags,
+  getFunctionErrorMessage,
   getRecipientPillKey,
   loadCommunicationSources,
   normalizeEmail,
@@ -157,6 +158,7 @@ function ToolbarButton({ icon: Icon, label, onClick }) {
 const TOKEN_GROUPS = {
   People: [
     { label: '{{name}}', value: '{{name}}' },
+    { label: '{{first_name}}', value: '{{first_name}}' },
     { label: '{{email}}', value: '{{email}}' },
     { label: '{{subgroup}}', value: '{{subgroup}}' },
     { label: '{{leadership_category}}', value: '{{leadership_category}}' },
@@ -965,7 +967,10 @@ export default function EmailComposerPage() {
       })
 
       if (invokeError || data?.failed > 0) {
-        throw new Error(invokeError?.message ?? `${data?.failed ?? 1} email(s) failed to send.`)
+        const message = invokeError
+          ? await getFunctionErrorMessage(invokeError)
+          : `${data?.failed ?? 1} email(s) failed to send.`
+        throw new Error(message)
       }
 
       setStatus('sent')
@@ -999,7 +1004,7 @@ export default function EmailComposerPage() {
         },
       })
 
-      if (invokeError) throw invokeError
+      if (invokeError) throw new Error(await getFunctionErrorMessage(invokeError))
       setMessage(`Test email sent to ${testEmail.trim()}.`)
     } catch (err) {
       setError(err.message ?? String(err))

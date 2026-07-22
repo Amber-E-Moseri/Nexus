@@ -146,8 +146,11 @@ async function resolveAllTags(
   const frontendUrl = Deno.env.get('FRONTEND_URL') ?? ''
   const unsubUrl = `${frontendUrl}/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`
 
+  const firstName = (recipient.name ?? '').split(/\s+/)[0] || ''
+
   return template
     .replace(/\{\{name\}\}/g, recipient.name ?? '')
+    .replace(/\{\{first_name\}\}/g, firstName)
     .replace(/\{\{subgroup\}\}/g, recipient.subgroup ?? '')
     .replace(/\{\{leadership_category\}\}/g, recipient.leadership_category ?? '')
     .replace(/\{\{space_name\}\}/g, context.space_name ?? '')
@@ -421,7 +424,7 @@ Deno.serve(async (request) => {
       .eq('id', authData.user.id)
       .single()
 
-    if (!profile || !['super_admin', 'dept_lead'].includes(profile.role ?? '')) {
+    if (!profile || !['super_admin', 'dept_lead', 'regional_secretary'].includes(profile.role ?? '')) {
       return respond(403, { error: 'You do not have permission to send campaigns.' })
     }
 
