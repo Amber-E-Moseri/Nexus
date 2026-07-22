@@ -23,11 +23,35 @@ export function dedupeTaskStatuses(statuses = []) {
   const byKey = new Map()
   for (const status of sortTaskStatuses(statuses)) {
     const key = `${status.category}|${(status.name ?? '').trim().toLowerCase()}`
+    const incoming = status._mergedIds ?? [status.id]
     const existing = byKey.get(key)
     if (existing) {
-      existing._mergedIds.push(status.id)
+      for (const id of incoming) {
+        if (!existing._mergedIds.includes(id)) existing._mergedIds.push(id)
+      }
+      const existingIsCanonical = existing.is_org_status === true || existing.legacy_key != null
+      const incomingIsCanonical = status.is_org_status === true || status.legacy_key != null
+      if (!existingIsCanonical && incomingIsCanonical) {
+        byKey.set(key, { ...status, _mergedIds: existing._mergedIds })
+      } else if (!existingIsCanonical && !incomingIsCanonical) {
+        // Neither duplicate is canonical -- this can't be resolved correctly
+        // on the client; it means a genuinely orphaned pair reached the
+        // picker. Surface it instead of silently picking one by array order.
+        console.warn(
+          `[dedupeTaskStatuses] Two non-canonical statuses collided with no clear winner: ${existing.id} vs ${status.id} (${key}). Needs a DB-level fix (retire the duplicate), not a client-side pick.`,
+        )
+      } else if (existingIsCanonical && incomingIsCanonical) {
+        // Two rows that both look canonical collided (e.g. a department-scoped
+        // duplicate the department_id-IS-NULL unique index can't catch). First
+        // -seen wins by construction here, but that's a data problem, not a
+        // client-side judgment call -- log it so it doesn't silently mask a
+        // second orphan pair.
+        console.warn(
+          `[dedupeTaskStatuses] Two canonical-looking statuses collided: ${existing.id} vs ${status.id} (${key}). Likely a department-scoped duplicate.`,
+        )
+      }
     } else {
-      byKey.set(key, { ...status, _mergedIds: [status.id] })
+      byKey.set(key, { ...status, _mergedIds: [...incoming] })
     }
   }
   return [...byKey.values()]

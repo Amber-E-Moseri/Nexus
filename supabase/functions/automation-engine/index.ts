@@ -85,8 +85,11 @@ function isSafeWebhookUrl(value: string): boolean {
 }
 
 function renderTemplate(template: string, context: Record<string, unknown>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-    const value = context[key]
+  return template.replace(/\{\{([\w.]+)\}\}/g, (_, key) => {
+    // Support dotted keys (e.g. task.title, meeting.title, list.name) by
+    // stripping the namespace prefix and looking up the flat context key.
+    const flatKey = key.includes('.') ? key.split('.').pop()! : key
+    const value = context[flatKey] ?? context[key]
     return value != null ? String(value) : `{{${key}}}`
   })
 }
@@ -229,6 +232,96 @@ function evaluateTriggerConditions(
   }
 
   return true
+}
+
+const TASK_MUTATING_ACTIONS = new Set([
+  'update_task_status', 'assign_task', 'set_field', 'clear_field', 'move_to_list', 'shift_dependent_dates',
+])
+
+async function validateActionScope(
+  supabase: ReturnType<typeof createClient>,
+  automation: Record<string, unknown>,
+  action: { type?: string; config?: Record<string, unknown> },
+  context: Record<string, unknown>,
+): Promise<{ allowed: boolean; reason?: string }> {
+  if (!action.type || !TASK_MUTATING_ACTIONS.has(action.type)) return { allowed: true }
+
+  const automationDeptId = typeof automation.department_id === 'string' ? automation.department_id : null
+  if (!automationDeptId) return { allowed: true }
+
+  const taskId = typeof context.task_id === 'string' ? context.task_id
+    : (typeof context.id === 'string' ? context.id : null)
+  if (!taskId) return { allowed: true }
+
+  const { data: task } = await supabase
+    .from('tasks')
+    .select('department_id, sprint_id')
+    .eq('id', taskId)
+    .single()
+
+  if (!task) return { allowed: true }
+  if (!task.department_id) return { allowed: true }
+
+  if (task.department_id !== automationDeptId) {
+    return { allowed: false, reason: `task belongs to department ${task.department_id}, automation scoped to ${automationDeptId}` }
+  }
+
+  if (action.type === 'move_to_list') {
+    const listId = typeof action.config?.list_id === 'string' ? action.config.list_id : null
+    if (listId) {
+      const { data: list } = await supabase
+        .from('lists')
+        .select('folder_id, folders!inner(space_id, spaces!inner(department_id))')
+        .eq('id', listId)
+        .single()
+
+      const destDeptId = (list as any)?.folders?.spaces?.department_id
+      if (destDeptId && destDeptId !== automationDeptId) {
+        return { allowed: false, reason: `destination list belongs to department ${destDeptId}` }
+      }
+    }
+  }
+
+  if (action.type === 'assign_task') {
+    const config = action.config ?? {}
+    let assigneeId: string | null = null
+    if (config.assignee_id === '__creator__') {
+      assigneeId = typeof context.created_by === 'string' ? context.created_by : null
+    } else if (typeof config.assignee_id === 'string' && config.assignee_id) {
+      assigneeId = config.assignee_id
+    }
+
+    if (assigneeId && task.department_id) {
+      const { data: spaceRole } = await supabase
+        .from('space_roles')
+        .select('id')
+        .eq('user_id', assigneeId)
+        .eq('space_id', task.department_id)
+        .limit(1)
+        .maybeSingle()
+
+      if (!spaceRole) {
+        return { allowed: false, reason: `assignee ${assigneeId} has no space_roles entry for department ${task.department_id}` }
+      }
+    }
+
+    if (assigneeId && task.sprint_id) {
+      const { data: tempMember } = await supabase
+        .from('sprint_members')
+        .select('is_temporary')
+        .eq('sprint_id', task.sprint_id)
+        .eq('user_id', assigneeId)
+        .eq('is_temporary', true)
+        .limit(1)
+        .maybeSingle()
+
+      if (tempMember) {
+        return { allowed: false, reason: `assignee ${assigneeId} is a temporary sprint member` }
+      }
+    }
+  }
+
+  return { allowed: true }
 }
 
 async function executeAction(
@@ -376,13 +469,16 @@ async function executeAction(
         // client-supplied value from action config — otherwise a department's
         // automation could be configured to create tasks inside another
         // department's space.
+        // When this action supports sprint_id, validateActionScope must mirror
+        // sync_task_department_id's resolution order — see migration
+        // 20270720000029_sprint_task_dept_sync.sql.
         const { data: task, error } = await supabase
           .from('tasks')
           .insert({
             title,
             department_id: typeof automation.department_id === 'string' ? automation.department_id : null,
             assignee_id: assigneeId,
-            status: 'backlog',
+            status: 'to_do',
             priority: typeof config.priority === 'string' ? config.priority : 'medium',
             source: 'automation',
             source_name: String(automation.name ?? 'Automation'),
@@ -511,13 +607,15 @@ async function executeAction(
 
         const { data: dependents, error: depsError } = await supabase
           .from('task_dependencies')
-          .select('task_id, tasks!task_id(id, due_date, start_date)')
+          .select('task_id, tasks!task_id(id, due_date, start_date, department_id)')
           .eq('depends_on_id', taskId)
 
         if (depsError) throw depsError
         if (!dependents?.length) {
           return { action_type: 'shift_dependent_dates', result: { shifted: 0 } }
         }
+
+        const sourceDeptId = typeof context.department_id === 'string' ? context.department_id : null
 
         const shiftDate = (value: unknown, days: number): string | null => {
           if (typeof value !== 'string') return null
@@ -528,8 +626,9 @@ async function executeAction(
 
         let shifted = 0
         for (const dep of dependents) {
-          const dependentTask = (dep as { tasks?: { id: string; due_date: string | null; start_date: string | null } }).tasks
+          const dependentTask = (dep as { tasks?: { id: string; due_date: string | null; start_date: string | null; department_id: string | null } }).tasks
           if (!dependentTask) continue
+          if (sourceDeptId && dependentTask.department_id && dependentTask.department_id !== sourceDeptId) continue
 
           const update: Record<string, string | null> = {}
           if (dueDelta && dependentTask.due_date) update.due_date = shiftDate(dependentTask.due_date, dueDelta)
@@ -616,6 +715,7 @@ Deno.serve(async (req) => {
   // role claim without signature verification — if role === 'service_role' we trust
   // it as a valid internal call. All other callers still go through full JWT verification.
   let isServiceRole = false
+  let callerSub = 'service_role'
   try {
     const payload = JSON.parse(atob(token.split('.')[1]))
     isServiceRole = payload?.role === 'service_role'
@@ -626,6 +726,7 @@ Deno.serve(async (req) => {
     if (!jwtData) {
       return jsonResponse(401, { error: 'Invalid JWT token' })
     }
+    callerSub = jwtData.sub
   }
 
   let body: Record<string, unknown>
@@ -848,7 +949,8 @@ Deno.serve(async (req) => {
             actions_executed: actionsExecuted,
             success: true,
             error_message: null,
-            triggered_by_user_id: jwtData.sub,
+            triggered_by: callerSub,
+            automation_owner_id: typeof automation.created_by === 'string' ? automation.created_by : null,
           })
           continue
         }
@@ -861,7 +963,41 @@ Deno.serve(async (req) => {
         start_date_delta_days: startDateDeltaDays,
       }
 
+      let scopeViolationNotified = false
       for (const action of automation.actions ?? []) {
+        const scopeCheck = await validateActionScope(supabase, automation, action, actionContext)
+        if (!scopeCheck.allowed) {
+          actionsExecuted.push({
+            action_type: action.type,
+            result: { skipped: true, reason: 'scope_violation', detail: scopeCheck.reason },
+          })
+
+          if (!scopeViolationNotified && typeof automation.created_by === 'string') {
+            const oneDayAgo = new Date(Date.now() - 86400000).toISOString()
+            const { data: recentViolation } = await supabase
+              .from('automation_run_log')
+              .select('id')
+              .eq('automation_id', automation.id)
+              .gte('ran_at', oneDayAgo)
+              .containedBy('actions_executed', [{ result: { reason: 'scope_violation' } }])
+              .limit(1)
+
+            if (!recentViolation?.length) {
+              await supabase.from('notifications').insert({
+                user_id: automation.created_by,
+                type: 'automation',
+                payload: {
+                  message: `Your automation "${automation.name}" was blocked — it tried to reach outside its department scope.`,
+                  automation_id: automation.id,
+                },
+              })
+            }
+            scopeViolationNotified = true
+          }
+
+          continue
+        }
+
         const actionResult = await executeAction(supabase, action, actionContext, automation)
         actionsExecuted.push(actionResult)
 
@@ -889,7 +1025,8 @@ Deno.serve(async (req) => {
       actions_executed: actionsExecuted,
       success: runSuccess,
       error_message: runError,
-      triggered_by_user_id: jwtData.sub,
+      triggered_by: callerSub,
+      automation_owner_id: typeof automation.created_by === 'string' ? automation.created_by : null,
     })
 
     results.push({ automation_id: automation.id, success: runSuccess, actions: actionsExecuted.length })

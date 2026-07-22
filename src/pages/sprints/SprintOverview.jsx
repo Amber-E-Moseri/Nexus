@@ -170,9 +170,11 @@ export default function SprintOverview() {
   const [showEditSprintModal, setShowEditSprintModal] = useState(false)
   const [showInviteExternalModal, setShowInviteExternalModal] = useState(false)
   const [temporaryMembers, setTemporaryMembers] = useState([])
+  // regional_secretary deliberately excluded from the unrestricted bypass —
+  // sprints are membership-gated for everyone except super_admin/programs/
+  // ors; matches can_manage_sprint()'s own authority model.
   const [canViewSprint, setCanViewSprint] = useState(
     role === 'super_admin' ||
-    role === 'regional_secretary' ||
     hasSpaceRole(profile, null, 'ors') ||
     hasSpaceRole(profile, null, 'programs')
   )
@@ -196,7 +198,7 @@ export default function SprintOverview() {
     return grouped
   }, [tasks])
 
-  const canManage = role === 'super_admin' || role === 'regional_secretary' || detail?.members?.some(
+  const canManage = role === 'super_admin' || detail?.members?.some(
     (member) => member.user?.id === profile?.id && ['owner', 'manager'].includes(member.role),
   )
   const isMember = detail?.members?.some((m) => m.user?.id === profile?.id)
@@ -212,7 +214,6 @@ export default function SprintOverview() {
     try {
       const isPrivileged =
         role === 'super_admin' ||
-        role === 'regional_secretary' ||
         hasSpaceRole(profile, null, 'ors') ||
         hasSpaceRole(profile, null, 'programs')
 
@@ -632,7 +633,7 @@ export default function SprintOverview() {
       {/* Sprint Goals */}
       {activeTab === 'Overview' && (
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <SprintGoalsPanel sprintId={detail.sprint.id} departmentId={detail.sprint.department_id} />
+          <SprintGoalsPanel sprintId={detail.sprint.id} departmentId={detail.sprint.department_id} teams={detail.teams} />
         </div>
       )}
 

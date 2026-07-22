@@ -137,11 +137,7 @@ export async function getDeptTasks(departmentId) {
       department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
       ${ASSIGNEES_SELECT},
-      meeting:meetings!meeting_id(id, title),
-      subtask_count:tasks!parent_task_id(count),
-      comments:task_comments(count),
-      files:task_files(count),
-      dependencies:task_dependencies!task_id(count)
+      subtask_count:tasks!parent_task_id(count)
     `)
     .eq('department_id', departmentId)
     .eq('is_personal', false)
@@ -162,10 +158,7 @@ export async function getSprintTasks(sprintId) {
       ${TASK_LIST_SELECT},
       department:departments(id, name, color),
       assignee:users!assignee_id(id, name, avatar_url),
-      subtask_count:tasks!parent_task_id(count),
-      comments:task_comments(count),
-      files:task_files(count),
-      dependencies:task_dependencies!task_id(count)
+      subtask_count:tasks!parent_task_id(count)
     `)
     .eq('sprint_id', sprintId)
     .eq('task_type', 'sprint')
@@ -209,9 +202,7 @@ export async function getMyTasks(userId) {
     ${ASSIGNEES_SELECT},
     department:departments(id, name, color),
     assignee:users!assignee_id(id, name, avatar_url),
-    subtask_count:tasks!parent_task_id(count),
-    comments:task_comments(count),
-    files:task_files(count)
+    subtask_count:tasks!parent_task_id(count)
   `
 
   if (taskIds !== null && taskIds.length > 0) {
@@ -269,6 +260,7 @@ export async function getFlockTasks(pastorId) {
     .from('pastor_members')
     .select(`
       member:users!member_id(
+        id,
         tasks:tasks!assignee_id(
           ${TASK_COLS},
           subtask_count:tasks!parent_task_id(count),
@@ -285,11 +277,17 @@ export async function getFlockTasks(pastorId) {
 
   if (error) throw error
 
-  // deleted_at can't be filtered inside the nested member.tasks embed via
-  // .is(), so drop soft-deleted rows client-side after the flatMap.
+  // Preserve the member_id from each pastor_members row so the UI can
+  // correctly bucket tasks per flock member without relying on assignee_id
+  // (which may differ for sprint tasks or co-assigned tasks).
   const tasks = (data ?? [])
-    .flatMap((assignment) => assignment.member?.tasks ?? [])
-    .filter((task) => !task.deleted_at)
+    .flatMap((assignment) =>
+      (assignment.member?.tasks ?? []).map((t) => ({
+        ...t,
+        _flock_member_id: assignment.member?.id,
+      }))
+    )
+    .filter((task) => !task.deleted_at && !task.parent_task_id)
   return normalizeTaskResultList(tasks)
 }
 
@@ -525,40 +523,58 @@ export async function updateTask(taskId, updates, actorId = null) {
 }
 
 export async function deleteTask(taskId, permanent = false) {
-  // Get current user's role
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) throw new Error('Not authenticated')
-
-  const { data: userData } = await supabase
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  const userRole = userData?.role
-
-  // Only dept_lead and super_admin can do permanent delete
-  if (permanent && !['dept_lead', 'super_admin'].includes(userRole)) {
-    throw new Error('Only department leads and admins can permanently delete tasks. Your task has been soft-deleted instead.')
-  }
-
   if (permanent) {
-    // Hard delete - permanently remove from database
-    const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+    // Hard delete via RPC — requires the task already be in trash and
+    // authorizes narrowly (super_admin/regional_secretary/dept_lead/creator).
+    const { error } = await supabase.rpc('hard_delete_task', { p_task_id: taskId })
     if (error) throw error
   } else {
-    // Soft delete - mark as deleted
-    const { error } = await supabase
-      .from('tasks')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', taskId)
+    // Soft delete via RPC — bypasses tasks_update WITH CHECK entirely.
+    const { error } = await supabase.rpc('soft_delete_task', { p_task_id: taskId })
     if (error) throw error
   }
 }
 
 export async function hardDeleteTask(taskId) {
-  // Permanently delete a task (requires permission check in deleteTask)
+  // Permanently delete a task (requires task already be in trash; RPC authorizes)
   return deleteTask(taskId, true)
+}
+
+export async function restoreTask(taskId) {
+  const { error } = await supabase.rpc('restore_task', { p_task_id: taskId })
+  if (error) throw error
+}
+
+export async function getTrashTasks() {
+  const { data, error } = await supabase.rpc('get_trash_tasks')
+  if (error) throw error
+  const rows = data ?? []
+  if (rows.length === 0) return rows
+
+  // get_trash_tasks() returns raw `tasks` rows (setof public.tasks, no
+  // joins) — enrich with department/creator names in a couple of batched
+  // follow-up queries so the Trash page doesn't have to show bare UUIDs.
+  const departmentIds = [...new Set(rows.map((t) => t.department_id).filter(Boolean))]
+  const userIds = [...new Set(rows.flatMap((t) => [t.created_by, t.assignee_id]).filter(Boolean))]
+
+  const [{ data: departments }, { data: users }] = await Promise.all([
+    departmentIds.length
+      ? supabase.from('departments').select('id, name, color').in('id', departmentIds)
+      : Promise.resolve({ data: [] }),
+    userIds.length
+      ? supabase.from('users').select('id, name, avatar_url').in('id', userIds)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  const deptById = new Map((departments ?? []).map((d) => [d.id, d]))
+  const userById = new Map((users ?? []).map((u) => [u.id, u]))
+
+  return rows.map((t) => ({
+    ...t,
+    department: t.department_id ? deptById.get(t.department_id) ?? null : null,
+    creator: t.created_by ? userById.get(t.created_by) ?? null : null,
+    assignee: t.assignee_id ? userById.get(t.assignee_id) ?? null : null,
+  }))
 }
 
 // --- Subtasks ----------------------------------------------------------------

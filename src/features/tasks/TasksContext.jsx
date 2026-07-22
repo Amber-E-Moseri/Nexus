@@ -1,14 +1,14 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createTask, deleteTask, getDeptTasks, getSprintTasks, updateTask } from './lib/tasks'
 import { listTaskStatuses, selectDefaultStatus, selectActiveTaskStatuses } from '../../lib/taskStatuses'
 import { supabase } from '../../lib/supabase'
 
 export const TasksContext = createContext(null)
 
-export function TasksProvider({ departmentId, sprintId, children }) {
-  const [tasks, setTasks] = useState([])
+export function TasksProvider({ departmentId, sprintId, initialTasks, children }) {
+  const [tasks, setTasks] = useState(initialTasks ?? [])
   const [statuses, setStatuses] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!initialTasks)
   const [error, setError] = useState(null)
 
   // Silent background sync — refreshes tasks without triggering the loading state.
@@ -21,28 +21,34 @@ export function TasksProvider({ departmentId, sprintId, children }) {
     } catch { /* ignore — next explicit load will recover */ }
   }, [departmentId, sprintId])
 
+  const skipFirstTaskFetch = useRef(Boolean(initialTasks?.length))
+
   const loadTasks = useCallback(async () => {
+    const skipTasks = skipFirstTaskFetch.current
+    skipFirstTaskFetch.current = false
+
     try {
-      setLoading(true)
+      if (!skipTasks) setLoading(true)
       setError(null)
 
       if (!departmentId && !sprintId) {
-        // No scope provided — provider is used for context/utilities only
         setTasks([])
         setStatuses([])
         return
       }
 
-      // Load both global and department-specific statuses
       const statusPromises = [listTaskStatuses()]
       if (departmentId) {
         statusPromises.push(listTaskStatuses({ departmentId }))
       }
 
-      const [taskData, ...statusResults] = await Promise.all([
-        sprintId ? getSprintTasks(sprintId) : getDeptTasks(departmentId),
-        ...statusPromises,
-      ])
+      const promises = skipTasks
+        ? statusPromises
+        : [sprintId ? getSprintTasks(sprintId) : getDeptTasks(departmentId), ...statusPromises]
+
+      const results = await Promise.all(promises)
+      const taskData = skipTasks ? null : results[0]
+      const statusResults = skipTasks ? results : results.slice(1)
 
       // Deduplicate by category + legacy_key, preferring dept-specific over global
       const statusMap = new Map()
@@ -60,9 +66,9 @@ export function TasksProvider({ departmentId, sprintId, children }) {
       if (!Array.from(statusMap.values()).some(s => s.category === 'open')) {
         try {
           const allStatuses = await listTaskStatuses({ departmentId, includeInactive: true })
-          const openStatus = allStatuses.find(s => s.category === 'open')
+          const openStatus = allStatuses.find(s => s.category === 'open' && s.active)
           if (openStatus) {
-            statusMap.set(`open:${openStatus.legacy_key || openStatus.name}`, { ...openStatus, active: true })
+            statusMap.set(`open:${openStatus.legacy_key || openStatus.name}`, openStatus)
           }
         } catch { /* ignore */ }
         // Last resort: synthetic To Do if nothing in DB
@@ -82,7 +88,7 @@ export function TasksProvider({ departmentId, sprintId, children }) {
 
       const finalStatuses = selectActiveTaskStatuses(Array.from(statusMap.values()))
       setStatuses(finalStatuses)
-      setTasks(taskData)
+      if (taskData) setTasks(taskData)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -215,7 +221,7 @@ export function TasksProvider({ departmentId, sprintId, children }) {
         ...taskData,
         statusId: taskData.statusId ?? resolvedStatus?.id,
         statusCategory: resolvedStatus?.category,
-        department_id: 'department_id' in taskData ? taskData.department_id : sprintId ? null : departmentId,
+        department_id: 'department_id' in taskData ? taskData.department_id : departmentId,
         sprint_id: sprintId ?? null,
         task_type: taskData.is_personal ? 'personal' : sprintId ? 'sprint' : 'space',
       }
@@ -245,9 +251,6 @@ export function TasksProvider({ departmentId, sprintId, children }) {
         created_by: payload.created_by ?? null,
         created_at: new Date().toISOString(),
         subtasks: [],
-        comments: [{ count: 0 }],
-        files: [{ count: 0 }],
-        dependencies: [{ count: 0 }],
       }
 
       setTasks((prev) => [...prev, optimisticTask])

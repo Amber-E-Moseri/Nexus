@@ -93,17 +93,153 @@ function interactionTone(i) {
   return { fg: FLOCK.red, bg: FLOCK.redTint }
 }
 
-function InteractionCard({ i }) {
+const RESULT_OPTIONS = ['Reached', 'No Answer', 'Left Message', 'Rescheduled Call']
+const SUMMARY_CLAMP_LINES = 5
+
+function toDateTimeLocalValue(raw) {
+  if (!raw) return ''
+  const d = new Date(raw)
+  if (isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function InteractionCard({ i, onUpdated }) {
   const tone = interactionTone(i)
+  const [editing, setEditing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [form, setForm] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  const isLong = (i.summary || '').length > 260 || (i.summary || '').split('\n').length > SUMMARY_CLAMP_LINES
+
+  const startEdit = () => {
+    setForm({
+      result: i.result || 'Reached',
+      summary: i.summary || '',
+      nextAction: i.nextAction && i.nextAction !== 'None' ? i.nextAction : '',
+      nextActionDateTime: toDateTimeLocalValue(i.nextActionDateTimeRaw),
+    })
+    setError(null)
+    setEditing(true)
+  }
+
+  const save = async () => {
+    if (saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      await callFlockAPI('updateInteraction', {
+        payload: JSON.stringify({
+          interactionId: i.id,
+          result: form.result,
+          summary: form.summary,
+          nextAction: form.nextAction.trim() || 'None',
+          nextActionDateTime: form.nextActionDateTime ? new Date(form.nextActionDateTime).toISOString() : null,
+        }),
+      })
+      const nextIso = form.nextActionDateTime ? new Date(form.nextActionDateTime).toISOString() : null
+      onUpdated?.(i.id, {
+        result: form.result,
+        summary: form.summary,
+        nextAction: form.nextAction.trim() || 'None',
+        nextDt: nextIso ? new Date(nextIso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '',
+        nextActionDateTimeRaw: nextIso,
+      })
+      setEditing(false)
+    } catch (err) {
+      setError(err.message || 'Could not save changes.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (editing && form) {
+    return (
+      <div style={flockCard({ padding: '13px 15px', borderRadius: '12px', boxShadow: 'none', background: FLOCK.surface })}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+          <span style={{ fontFamily: FLOCK.fontMono, fontSize: '12px', color: FLOCK.muted }}>{i.timestamp || '—'}</span>
+          <select value={form.result} onChange={(e) => setForm((f) => ({ ...f, result: e.target.value }))} style={{ ...inputStyle, padding: '5px 8px', fontSize: '12px' }}>
+            {RESULT_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+        <textarea
+          value={form.summary}
+          onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))}
+          rows={4}
+          style={{ ...inputStyle, width: '100%', resize: 'vertical', fontFamily: FLOCK.fontBody }}
+          placeholder="Notes…"
+        />
+        <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+          <input
+            value={form.nextAction}
+            onChange={(e) => setForm((f) => ({ ...f, nextAction: e.target.value }))}
+            placeholder="Next action (optional)"
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <input
+            type="datetime-local"
+            value={form.nextActionDateTime}
+            onChange={(e) => setForm((f) => ({ ...f, nextActionDateTime: e.target.value }))}
+            style={{ ...inputStyle }}
+          />
+        </div>
+        {error && <div style={{ marginTop: '8px', fontSize: '12px', color: FLOCK.red }}>{error}</div>}
+        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+          <button onClick={save} disabled={saving} style={btnPrimary({ padding: '7px 14px', fontSize: '12px', opacity: saving ? 0.6 : 1 })}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button onClick={() => setEditing(false)} disabled={saving} style={btnGhost({ padding: '7px 14px', fontSize: '12px' })}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={flockCard({ padding: '13px 15px', borderRadius: '12px', boxShadow: 'none', background: FLOCK.surface })}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
         <span style={{ fontFamily: FLOCK.fontMono, fontSize: '12px', color: FLOCK.muted }}>{i.timestamp || '—'}</span>
-        <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 9px', borderRadius: '999px', color: tone.fg, background: tone.bg, fontFamily: FLOCK.fontBody, whiteSpace: 'nowrap' }}>
-          {i.result || i.outcome || 'Attempt'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 9px', borderRadius: '999px', color: tone.fg, background: tone.bg, fontFamily: FLOCK.fontBody, whiteSpace: 'nowrap' }}>
+            {i.result || i.outcome || 'Attempt'}
+          </span>
+          <button
+            onClick={startEdit}
+            title="Edit note"
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', border: 'none', background: 'transparent', color: FLOCK.muted, cursor: 'pointer', borderRadius: '6px' }}
+          >
+            <Pencil size={13} />
+          </button>
+        </div>
       </div>
-      {i.summary && <div style={{ marginTop: '8px', fontSize: '13px', lineHeight: 1.5, color: FLOCK.text, fontFamily: FLOCK.fontBody }}>{i.summary}</div>}
+      {i.summary && (
+        <div
+          style={{
+            marginTop: '8px',
+            fontSize: '13px',
+            lineHeight: 1.5,
+            color: FLOCK.text,
+            fontFamily: FLOCK.fontBody,
+            whiteSpace: 'pre-wrap',
+            ...(isLong && !expanded
+              ? { display: '-webkit-box', WebkitLineClamp: String(SUMMARY_CLAMP_LINES), WebkitBoxOrient: 'vertical', overflow: 'hidden' }
+              : {}),
+          }}
+        >
+          {i.summary}
+        </div>
+      )}
+      {isLong && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          style={{ marginTop: '4px', padding: 0, border: 'none', background: 'transparent', color: FLOCK.purple, fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: FLOCK.fontBody }}
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
       {i.nextAction && i.nextAction !== 'None' && (
         <div style={{ marginTop: '8px', fontSize: '12px', color: FLOCK.purple, fontWeight: 600, fontFamily: FLOCK.fontBody }}>
           Next: {i.nextAction}
@@ -442,7 +578,13 @@ function PersonCard({ person, expanded, onToggle, onLogCall, onPatched }) {
           {!loadingHistory && !historyError && interactions && interactions.length === 0 && (
             <div style={{ fontSize: '13px', color: FLOCK.muted }}>No call history yet — log your first call above.</div>
           )}
-          {!loadingHistory && !historyError && interactions && interactions.map((i, idx) => <InteractionCard key={i.id || idx} i={i} />)}
+          {!loadingHistory && !historyError && interactions && interactions.map((i, idx) => (
+            <InteractionCard
+              key={i.id || idx}
+              i={i}
+              onUpdated={(id, patch) => setInteractions((list) => (list || []).map((x) => (x.id === id ? { ...x, ...patch } : x)))}
+            />
+          ))}
         </div>
       )}
     </div>

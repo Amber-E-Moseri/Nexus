@@ -128,23 +128,37 @@ Rule of thumb for where state lives:
 ## Status Hierarchy (Two-Tier System)
 
 **Schema:**
-- `task_status_definitions.is_org_status` — true for 6 canonical org-wide statuses, false for dept-specific
+- `task_status_definitions.is_org_status` — true for 5 canonical org-wide statuses, false for dept-specific
 - `task_status_definitions.org_status_id` — FK to parent org status (null for org statuses)
 - **CHECK constraint** — ensures all non-org statuses have an `org_status_id`
 
-**The 6 Canonical Statuses:**
-1. **Not Started** (open) — default for new tasks
+**The 5 Canonical Statuses:**
+1. **To Do** (open, `legacy_key='to_do'`) — default for new tasks
 2. **In Progress** (in_progress) — work in flight
 3. **Review** (in_progress) — awaiting review
-4. **Blocked** (in_progress) — blocked on dependency
-5. **Completed** (completed) — done
-6. **Cancelled** (cancelled) — canceled
+4. **Completed** (completed) — done
+5. **Cancelled** (cancelled) — canceled
 
 **Dept-Specific Mappings:**
-- "To Do" → "Not Started" (semantic equivalent)
 - "Done" → "Completed" (semantic equivalent)
 - "In Review" → "In Progress" (review is a type of in-progress)
 - All other dept statuses → map to their org parent by category + legacy_key
+
+**⚠️ "Not Started" (`legacy_key='backlog'`) is retired, not canonical.** It was
+the original open-category default before `20260623000003_task_status_to_do_default.sql`
+replaced it with "To Do". It was left `active=true` for a year, causing
+every space to show 7 statuses instead of 6 (both "To Do" and "Not Started").
+`20270720000008_retire_backlog_status_duplicate.sql` deactivated all
+`legacy_key='backlog'` rows and remapped any tasks still on them to "To Do".
+`get_space_statuses()` now filters on `active = true`, so deactivated
+statuses never surface in Kanban/TaskModal pickers again.
+
+**⚠️ "Blocked" (`legacy_key='blocked'`) is retired, not canonical.**
+`20270720000019_retire_blocked_status.sql` deactivated the org-wide row and
+any dept-scoped "Blocked" duplicates, re-pointed dept statuses parented to it
+onto "In Progress" (same category), and remapped any live tasks onto "In
+Progress" too. Don't reference `legacy_key='blocked'` in new code — it will
+never appear active again.
 
 **Usage in Code:**
 ```javascript

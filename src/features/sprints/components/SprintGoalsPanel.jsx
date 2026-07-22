@@ -10,6 +10,7 @@ const DEFAULT_FORM_DATA = {
   currentValue: 0,
   dueDate: '',
   status: 'not_started',
+  sprintTeamId: '',
 }
 
 const goalFormInputStyle = {
@@ -40,7 +41,7 @@ const goalFormLabelStyle = {
   color: 'var(--text-secondary)',
 }
 
-export default function SprintGoalsPanel({ sprintId, departmentId }) {
+export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] }) {
   const { profile } = useAuth()
   const [goals, setGoals] = useState([])
   const [loading, setLoading] = useState(true)
@@ -83,7 +84,11 @@ export default function SprintGoalsPanel({ sprintId, departmentId }) {
         await updateSprintGoal(editingGoalId, formData)
         setEditingGoalId(null)
       } else {
-        await createSprintGoal(sprintId, formData, profile.id)
+        // departmentId was previously accepted as a prop but never actually
+        // forwarded here — every goal silently got department_id=null,
+        // meaning it could never show up on that department's dashboard
+        // "Goals & OKRs" widget regardless of intent.
+        await createSprintGoal(sprintId, { ...formData, departmentId }, profile.id)
       }
 
       setFormData(DEFAULT_FORM_DATA)
@@ -121,6 +126,7 @@ export default function SprintGoalsPanel({ sprintId, departmentId }) {
       currentValue: goal.current_value,
       dueDate: goal.due_date || '',
       status: goal.status,
+      sprintTeamId: goal.sprint_team_id || '',
     })
     setEditingGoalId(goal.id)
     setError(null)
@@ -288,6 +294,23 @@ export default function SprintGoalsPanel({ sprintId, departmentId }) {
                     </select>
                   </div>
                 </div>
+
+                {teams.length > 0 && (
+                  <div style={{ marginTop: 14 }}>
+                    <label style={goalFormLabelStyle}>Team</label>
+                    <select
+                      value={formData.sprintTeamId}
+                      onChange={(e) => setFormData({ ...formData, sprintTeamId: e.target.value })}
+                      style={goalFormInputStyle}
+                      disabled={saving}
+                    >
+                      <option value="">Collective (whole sprint)</option>
+                      {teams.map((team) => (
+                        <option key={team.id} value={team.id}>{team.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--border)', background: 'var(--surface-secondary)', padding: '14px 20px' }}>
@@ -361,6 +384,7 @@ export default function SprintGoalsPanel({ sprintId, departmentId }) {
                   Progress: {goal.current_value} / {goal.target_value}
                 </div>
                 {goal.due_date && <div>Due: {new Date(goal.due_date).toLocaleDateString()}</div>}
+                {teams.length > 0 && <div>{goal.team?.name ? `Team: ${goal.team.name}` : 'Collective'}</div>}
               </div>
 
               <div style={styles.goalActions}>

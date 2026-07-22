@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
+import { useAuth } from '../../../hooks/useAuth'
 import { useMeetings } from '../MeetingsContext'
 import { searchMeetings } from '../lib/meetings'
 import StatsCards from './StatsCards'
@@ -134,6 +135,7 @@ export default function UnifiedMeetingsView({
   onStartLive,
 }) {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const { meetings, loading, removeMeeting, hasMore, loadMore, reload: reloadMeetings, totalCount: totalMeetingCount } = useMeetings()
   const [activeType, setActiveType] = useState('all')
   const [activeStatus, setActiveStatus] = useState('all')
@@ -540,7 +542,7 @@ export default function UnifiedMeetingsView({
                           <AttendanceSummary attendance={meeting.attendance} />
                         </div>
                       </div>
-                      {canManage && (
+                      {(canManage || meeting.created_by === profile?.id) && (
                         <button
                           type="button"
                           onClick={(e) => handleDelete(e, meeting)}

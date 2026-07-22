@@ -1,6 +1,3 @@
--- ============================================================================
--- HELD FOR MANUAL REVIEW / APPLY — DO NOT AUTO-RUN
--- ============================================================================
 -- Relax sprint-task insertion so ANY sprint member (not only managers/leads) can
 -- create a task linked to a sprint they belong to.
 --

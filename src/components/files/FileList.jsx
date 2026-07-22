@@ -91,14 +91,16 @@ export default function FileList({ entityType, entityId, showUpload = false }) {
     if (!window.confirm(`Delete ${file.file_name}?`)) return
 
     try {
+      // Delete DB row first: a DB-success + storage-failure leaves a harmless orphaned blob,
+      // whereas the reverse leaves a broken reference visible in the UI.
+      const { error: dbError } = await supabase.from('file_attachments').delete().eq('id', file.id)
+      if (dbError) throw dbError
+
       const { error: storageError } = await supabase.storage
         .from('os-attachments')
         .remove([file.storage_path])
 
       if (storageError) throw storageError
-
-      const { error: dbError } = await supabase.from('file_attachments').delete().eq('id', file.id)
-      if (dbError) throw dbError
 
       setFiles((current) => current.filter((entry) => entry.id !== file.id))
     } catch (error) {

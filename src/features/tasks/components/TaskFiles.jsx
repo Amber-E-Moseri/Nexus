@@ -106,14 +106,19 @@ export default function TaskFiles({ taskId }) {
 
       const { web_view_link } = await response.json()
 
-      // Add the file to the list
-      const newFile = {
-        id: `drive-${Date.now()}`,
-        name: file.name,
-        url: web_view_link,
+      // Persist to task_files so the link survives a page reload
+      const { data: linkedFile, error: linkError } = await supabase
+        .from('task_files')
+        .insert({ task_id: taskId, name: file.name, url: web_view_link, uploaded_by: profile?.id })
+        .select()
+        .single()
+
+      if (linkError) {
+        setUploadError("Uploaded to Drive but couldn't link to this task — refresh to try again.")
+        return
       }
 
-      setFiles((prev) => [...prev, newFile])
+      setFiles((prev) => [...prev, linkedFile])
     } catch (err) {
       setUploadError(`Upload error: ${String(err)}`)
     } finally {
@@ -216,18 +221,16 @@ export default function TaskFiles({ taskId }) {
             />
 
             {adding ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => { setAdding(false); setName(''); setUrl('') }}
-                  style={{
-                    fontSize: 11, padding: '0',
-                    background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)',
-                  }}
-                >
-                  + Attach link
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => { setAdding(false); setName(''); setUrl('') }}
+                style={{
+                  fontSize: 11, padding: '0',
+                  background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)',
+                }}
+              >
+                Cancel
+              </button>
             ) : (
               <button
                 type="button"

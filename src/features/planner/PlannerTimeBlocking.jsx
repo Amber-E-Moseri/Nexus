@@ -85,19 +85,6 @@ export default function PlannerTimeBlocking() {
     [priorityFilter],
   )
 
-  const groups = useMemo(() => {
-    const pool = parents.filter((t) => isActionable(t) && matchesPriority(t))
-    const due = (t) => (t.due_date ? t.due_date.slice(0, 10) : null)
-    const todayOverdue = pool.filter((t) => due(t) && due(t) <= todayISO)
-    const thisWeek = pool.filter((t) => due(t) && due(t) > todayISO && due(t) <= weekEndISO)
-    const backlog = pool.filter((t) => !due(t) || due(t) > weekEndISO)
-    return [
-      { name: 'Today & Overdue', tasks: todayOverdue, defaultOpen: todayOverdue.length > 0 },
-      { name: 'This Week', tasks: thisWeek, defaultOpen: true },
-      { name: 'Backlog', tasks: backlog, defaultOpen: true },
-    ]
-  }, [parents, matchesPriority, todayISO, weekEndISO])
-
   const scheduledBlocksByTaskId = useMemo(() => {
     const map = new Map()
     for (const b of timeBlocks) {
@@ -108,6 +95,19 @@ export default function PlannerTimeBlocking() {
   }, [timeBlocks])
 
   const scheduledTaskIds = useMemo(() => new Set(scheduledBlocksByTaskId.keys()), [scheduledBlocksByTaskId])
+
+  const groups = useMemo(() => {
+    const pool = parents.filter((t) => isActionable(t) && matchesPriority(t) && !scheduledTaskIds.has(t.id))
+    const due = (t) => (t.due_date ? t.due_date.slice(0, 10) : null)
+    const todayOverdue = pool.filter((t) => due(t) && due(t) <= todayISO)
+    const thisWeek = pool.filter((t) => due(t) && due(t) > todayISO && due(t) <= weekEndISO)
+    const backlog = pool.filter((t) => !due(t) || due(t) > weekEndISO)
+    return [
+      { name: 'Today & Overdue', tasks: todayOverdue, defaultOpen: todayOverdue.length > 0 },
+      { name: 'This Week', tasks: thisWeek, defaultOpen: true },
+      { name: 'Backlog', tasks: backlog, defaultOpen: true },
+    ]
+  }, [parents, matchesPriority, todayISO, weekEndISO, scheduledTaskIds])
 
   const kpis = useMemo(() => {
     const due = (t) => (t.due_date ? t.due_date.slice(0, 10) : null)

@@ -35,9 +35,6 @@ export default function TaskChecklist({
   }, [editingTitle])
 
   const items = checklist.items ?? []
-  const checkedCount = items.filter((item) => item.is_checked).length
-  const totalCount = items.length
-  const progressPercent = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0
 
   async function handleTitleCommit() {
     const nextTitle = titleDraft.trim() || 'Checklist'
@@ -122,9 +119,6 @@ export default function TaskChecklist({
               {checklist.title || 'Checklist'}
             </button>
           )}
-          <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-tertiary)' }}>
-            {checkedCount}/{totalCount}
-          </div>
         </div>
 
         <button
@@ -145,17 +139,6 @@ export default function TaskChecklist({
         </button>
       </div>
 
-      <div style={{ height: 6, background: '#F2EEE6', borderRadius: 999, overflow: 'hidden' }}>
-        <div
-          style={{
-            width: `${progressPercent}%`,
-            height: '100%',
-            background: progressPercent === 100 ? '#2D8653' : '#4C2A92',
-            transition: 'width 0.2s ease',
-          }}
-        />
-      </div>
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {items.map((item) => (
           <div
@@ -167,11 +150,21 @@ export default function TaskChecklist({
               padding: '6px 0',
             }}
           >
-            <input
-              type="checkbox"
-              checked={item.is_checked}
-              onChange={(event) => onToggleItem(item.id, event.target.checked)}
-              style={{ accentColor: 'var(--accent)', width: 15, height: 15, cursor: 'pointer' }}
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={item.is_checked}
+              onClick={() => onToggleItem(item.id, !item.is_checked)}
+              style={{
+                flexShrink: 0,
+                width: 16,
+                height: 16,
+                borderRadius: '50%',
+                border: `1.5px solid ${item.is_checked ? 'var(--accent)' : '#C8BFAF'}`,
+                background: item.is_checked ? 'var(--accent)' : 'transparent',
+                cursor: 'pointer',
+                padding: 0,
+              }}
             />
             {editingItemId === item.id ? (
               <input
@@ -240,35 +233,22 @@ export default function TaskChecklist({
         ))}
       </div>
 
-      <form onSubmit={(event) => { void handleAddItem(event) }} style={{ display: 'flex', gap: 8 }}>
+      <form onSubmit={(event) => { void handleAddItem(event) }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
+        <span style={{ color: '#C8BFAF', fontSize: 14 }}>+</span>
         <input
           value={newItemTitle}
           onChange={(event) => setNewItemTitle(event.target.value)}
           placeholder="Add item"
           style={{
             flex: 1,
-            border: '1px solid #D9D1C4',
-            borderRadius: 8,
-            padding: '8px 10px',
+            border: 'none',
+            background: 'transparent',
+            padding: '4px 0',
             fontSize: 13,
+            color: 'var(--text-primary)',
             outline: 'none',
           }}
         />
-        <button
-          type="submit"
-          style={{
-            border: '1px solid var(--border)',
-            background: '#FCFAF6',
-            color: 'var(--text-secondary)',
-            borderRadius: 8,
-            padding: '8px 10px',
-            cursor: 'pointer',
-            fontSize: 12,
-            fontWeight: 600,
-          }}
-        >
-          Add
-        </button>
       </form>
     </div>
   )

@@ -259,24 +259,16 @@ Deno.serve(async (request) => {
     return jsonResponse(403, { error: 'Department leads may send invitations in their own department only' }, origin)
   }
 
-  if (new Date(invitation.expires_at).getTime() < Date.now()) {
-    await supabase
-      .from('user_invitations')
-      .update({
-        status: 'expired',
-        delivery_status: 'expired',
-        delivery_error: null,
-      })
-      .eq('id', invitation.id)
-
-    return jsonResponse(422, { error: 'Invitation has expired and can no longer be sent' }, origin)
-  }
-
-  if (['accepted', 'revoked', 'expired'].includes(invitation.status)) {
-    return jsonResponse(422, { error: `Invitation cannot be sent while ${invitation.status}` }, origin)
-  }
-
   if (mode === 'resend') {
+    // Resend is explicitly the recovery path for a pending invitation whose
+    // expiry window has passed — resend_user_invitation() resets expires_at
+    // and status='pending' regardless of current expiry/status. Only block
+    // it for statuses that represent a deliberate terminal decision:
+    // 'accepted' (already activated) or 'revoked' (explicitly withdrawn).
+    if (['accepted', 'revoked'].includes(invitation.status)) {
+      return jsonResponse(422, { error: `Invitation cannot be resent while ${invitation.status}` }, origin)
+    }
+
     const { error: resendError } = await supabase.rpc('resend_user_invitation', {
       p_invitation_id: invitationId,
     })
@@ -286,6 +278,23 @@ Deno.serve(async (request) => {
     }
 
     invitation = await loadInvitation()
+  } else {
+    if (new Date(invitation.expires_at).getTime() < Date.now()) {
+      await supabase
+        .from('user_invitations')
+        .update({
+          status: 'expired',
+          delivery_status: 'expired',
+          delivery_error: null,
+        })
+        .eq('id', invitation.id)
+
+      return jsonResponse(422, { error: 'Invitation has expired and can no longer be sent' }, origin)
+    }
+
+    if (['accepted', 'revoked', 'expired'].includes(invitation.status)) {
+      return jsonResponse(422, { error: `Invitation cannot be sent while ${invitation.status}` }, origin)
+    }
   }
 
   const { data: tokenData, error: tokenError } = await supabase.rpc('issue_user_invitation_token', {

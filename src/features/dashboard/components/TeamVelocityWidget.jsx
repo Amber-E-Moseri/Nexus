@@ -28,7 +28,12 @@ export default function TeamVelocityWidget() {
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: maxHeight, marginBottom: 16 }}>
         {sprints.map((sprint) => {
           const rate = sprint.completion_rate_percent || 0
-          const height = (rate / 100) * maxHeight
+          // Clamp defensively — a completion rate should never exceed 100%,
+          // but nothing here enforces that server-side beyond correct data
+          // (see the get_team_velocity fan-out bug this fixed). Without a
+          // clamp, a bad rate turns into a bar taller than its container,
+          // visually overflowing across the rest of the page.
+          const height = (Math.min(rate, 100) / 100) * maxHeight
 
           return (
             <div key={sprint.sprint_id} style={{ flex: 1, textAlign: 'center' }}>

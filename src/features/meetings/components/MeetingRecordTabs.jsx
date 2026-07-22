@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../../../hooks/useAuth'
-import { hasSpaceRole } from '../../../lib/permissions.js'
 import { getMeetingTasks } from '../lib/meetings'
 import { getTaskStatusColor, isTaskCompleted } from '../../../lib/taskStatuses'
 import AudioTranscriptionPanel from './AudioTranscriptionPanel'
@@ -9,17 +7,14 @@ import AudioTranscriptionPanel from './AudioTranscriptionPanel'
 const TABS = ['Summary', 'Agenda', 'Actions', 'Minutes', 'Audio']
 
 export default function MeetingRecordTabs({ meeting }) {
-  const { profile, role } = useAuth()
   const [activeTab, setActiveTab] = useState('Summary')
   const [tasks, setTasks] = useState(null)
   const [tasksError, setTasksError] = useState(null)
   const [audioItemsAdded, setAudioItemsAdded] = useState(0)
 
-  // ORS identity is a space_roles grant (Phase 3) — role === 'ors' no longer exists.
-  // regional_secretary is treated as pastor-equivalent (near-super_admin) — see FLOCK_CRM_CONFIG.
-  const canRecord = ['super_admin', 'regional_secretary', 'dept_lead', 'pastor'].includes((role ?? '').toLowerCase()) ||
-                    hasSpaceRole(profile, null, 'ors') ||
-                    hasSpaceRole(profile, null, 'dept_lead')
+  // Live recording is available to everyone who can view the meeting — this
+  // used to be gated to leadership roles only.
+  const canRecord = true
 
   useEffect(() => {
     let active = true

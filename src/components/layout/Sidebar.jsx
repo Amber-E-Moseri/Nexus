@@ -1383,6 +1383,12 @@ export default function Sidebar() {
           ) : null
         })()}
         <SidebarItem
+          active={isPathActive(location.pathname, '/trash')}
+          icon={Trash2}
+          label="Trash"
+          to="/trash"
+        />
+        <SidebarItem
           active={isPathActive(location.pathname, '/help')}
           icon={HelpCircle}
           label="Help & FAQ"

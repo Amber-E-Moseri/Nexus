@@ -310,13 +310,11 @@ export async function updateMeeting(meetingId, updates) {
 export async function deleteMeeting(meetingId) {
   if (!meetingId) throw new Error('Meeting ID is required')
 
-  // Delete related records first (cascade cleanup)
-  const { error: attendanceError } = await supabase
-    .from('meeting_attendance')
-    .delete()
-    .eq('meeting_id', meetingId)
-
-  if (attendanceError) throw new Error(`Failed to delete attendance records: ${attendanceError.message}`)
+  // meeting_attendance.meeting_id is ON DELETE CASCADE — no need to delete
+  // it manually here; that was an extra round-trip on every meeting delete
+  // for something the DB already does for free. agendas.meeting_id is only
+  // ON DELETE SET NULL (not cascade), so that one still needs an explicit
+  // delete below or agendas would be orphaned instead of removed.
 
   // Delete related agendas
   const { error: agendaError } = await supabase

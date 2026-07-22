@@ -56,6 +56,7 @@ const AbsenceEmailLogPage = lazy(() => import('./pages/meetings/AbsenceEmailLogP
 const AttendanceTrendsDashboard = lazy(() => import('./pages/AttendanceTrendsDashboard'))
 const MyTasks = lazyRoute('/my-tasks', () => import('./pages/personal/MyTasks'))
 const PersonalList = lazyRoute('/personal-list', () => import('./pages/personal/PersonalListPage'))
+const TrashPage = lazyRoute('/trash', () => import('./pages/tasks/TrashPage'))
 const Planner = lazyRoute('/planner', () => import('./pages/Planner'))
 const AllPeoplePage = lazy(() => import('./pages/people/AllPeoplePage'))
 const DepartmentsPage = lazy(() => import('./pages/people/DepartmentsPage'))
@@ -165,6 +166,7 @@ export default function App() {
           <Route path="/my-tasks" element={<MyTasks />} />
           <Route path="/my-tasks/:view" element={<MyTasks />} />
           <Route path="/personal-list" element={<PersonalList />} />
+          <Route path="/trash" element={<TrashPage />} />
           <Route path="/planner" element={<Planner />} />
           <Route path="/calendar" element={<MinistryCalendar />} />
           <Route

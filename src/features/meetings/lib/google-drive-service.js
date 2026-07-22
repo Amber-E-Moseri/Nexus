@@ -107,6 +107,7 @@ export async function ensureNexusReportFolder(accessToken) {
  */
 export async function generateReportPdf(report, reportElement) {
   let restoreDisplay = null
+  let restoreWidth = null
   try {
     let canvas
 
@@ -115,18 +116,28 @@ export async function generateReportPdf(report, reportElement) {
       // #print-report is `display: none` outside of @media print, which makes
       // html2canvas render a blank canvas. Force it visible for the capture.
       const priorDisplay = reportElement.style.display
+      const priorWidth = reportElement.style.width
       reportElement.style.display = 'block'
+      reportElement.style.width = '816px' // Match print page width (A4 at ~96dpi)
       restoreDisplay = () => { reportElement.style.display = priorDisplay }
+      restoreWidth = () => { reportElement.style.width = priorWidth }
+
+      // Wait a frame for layout to settle
+      await new Promise(resolve => setTimeout(resolve, 100))
 
       canvas = await html2canvas(reportElement, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
+        allowTaint: true,
+        windowHeight: reportElement.scrollHeight, // Capture full height
       })
 
       restoreDisplay()
       restoreDisplay = null
+      if (restoreWidth) restoreWidth()
+      restoreWidth = null
     } else {
       // Fallback: Create a simple formatted text document
       canvas = await createSimpleReportCanvas(report)
@@ -167,6 +178,7 @@ export async function generateReportPdf(report, reportElement) {
     throw new Error(`Failed to generate PDF: ${err.message}`)
   } finally {
     if (restoreDisplay) restoreDisplay()
+    if (restoreWidth) restoreWidth()
   }
 }
 

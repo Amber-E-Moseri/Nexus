@@ -36,8 +36,10 @@ import GroupSpaceMembersPanel from '../../features/spaces/components/GroupSpaceM
 import MeetingModal from '../../features/meetings/components/MeetingModal'
 import SpaceOpenItemsTab from '../../features/meetings/components/SpaceOpenItemsTab'
 import { getOpenItemsBySpace } from '../../features/meetings/lib/openItems'
+import IdeaBankTab from '../../features/ideaBank/components/IdeaBankTab'
+import { MeetingsProvider } from '../../features/meetings/MeetingsContext'
 
-const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Meetings', 'Open Items', 'Automations', 'Members']
+const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Meetings', 'Open Items', 'Idea Bank', 'Automations', 'Members']
 
 const STATUS_ACCENT = {
   open: '#C9BEAD',
@@ -485,20 +487,21 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
         <button
           type="button"
           title="Sync tasks to calendar"
+          aria-label="Sync tasks to calendar"
           onClick={() => setCalFeedOpen(true)}
-          className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)] hover:bg-[var(--surface-hover)]"
+          className="rounded-xl border border-[var(--border)] bg-white p-2 text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)] hover:bg-[var(--surface-hover)]"
         >
-          <CalendarDays size={13} />
-          Sync to Calendar
+          <CalendarDays size={16} />
         </button>
         <div className="relative">
           <button
             type="button"
+            title="Customize widgets"
+            aria-label="Customize widgets"
             onClick={() => setCustomizeOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)] hover:bg-[var(--surface-hover)]"
+            className="rounded-xl border border-[var(--border)] bg-white p-2 text-[var(--text-secondary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)] hover:bg-[var(--surface-hover)]"
           >
-            <Settings size={12} />
-            Customize
+            <Settings size={16} />
           </button>
           {customizeOpen ? (
             <div className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[220px] rounded-[14px] border border-[var(--border)] bg-white p-3 shadow-[0_8px_24px_rgba(14,14,30,0.14)]">
@@ -1363,7 +1366,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
     + filters.source.length
     + (filters.hasComments ? 1 : 0)
     + (filters.hasDependencies ? 1 : 0)
-    + (filters.showDone ? 1 : 0)
+    + (filters.showDone ? 0 : 1)
     + (filters.assigneeId ? 1 : 0)
   ), [filters])
   const visibleStatuses = statuses
@@ -1448,7 +1451,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
               title="Sync tasks to calendar"
               aria-label="Sync tasks to calendar"
               onClick={() => setCalFeedOpen(true)}
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-[var(--border)] text-[var(--text-primary)]"
             >
               <CalendarDays size={14} />
             </button>
@@ -1471,7 +1474,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
               <button
                 type="button"
                 onClick={() => setBoardFiltersOpen((current) => !current)}
-                className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
+                className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-primary)]"
               >
                 <SlidersHorizontal size={14} />
                 <span>Filter</span>
@@ -1491,13 +1494,15 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
           <div className="min-h-[520px]">
             <KanbanBoard
               filteredTasks={visibleTasks}
+              statusesOverride={visibleStatuses}
               departmentId={spaceId}
               listId={selectedListId}
               spaceName={spaceName}
               departments={departmentOptions}
               defaultDepartmentId={spaceId}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
-              onCreateTask={canManage ? handleInlineCreateTask : undefined}
+              onCreateTask={handleInlineCreateTask}
+              canCreateTask
               readOnly={!canManage}
             />
           </div>
@@ -1509,7 +1514,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
               departments={departmentOptions}
               defaultDepartmentId={spaceId}
               listId={selectedListId}
-              canAddTask={canManage}
+              canAddTask
               onCreateTask={handleInlineCreateTask}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
               onTaskStatusChange={canManage ? handleTaskStatusChange : undefined}
@@ -1707,7 +1712,7 @@ export default function SpaceOverview() {
   const [activeTab, setActiveTab] = useState('Overview')
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [canManage, setCanManage] = useState(false)
+  const [canManage, setCanManage] = useState(null)
   const [calendarEvents, setCalendarEvents] = useState([])
   const [spaceMembers, setSpaceMembers] = useState([])
   const [spaceSprints, setSpaceSprints] = useState([])
@@ -1728,6 +1733,10 @@ export default function SpaceOverview() {
   const [calendarTaskModal, setCalendarTaskModal] = useState(null)
   const [treeData, setTreeData] = useState({ folders: [], lists: [] })
   const [showStatusesModal, setShowStatusesModal] = useState(false)
+  // Bumped whenever the status settings dialog closes, to force TasksProvider
+  // (and the KanbanBoard/status pickers beneath it) to remount and refetch —
+  // otherwise status edits/toggles require a full page reload to show up.
+  const [statusVersion, setStatusVersion] = useState(0)
 
   const canManageStatuses = effectiveRole === 'super_admin' || effectiveRole === 'dept_lead'
   const visibleTabs = TABS.filter((tab) => (tab === 'Settings' ? canManage : true))
@@ -1867,8 +1876,8 @@ export default function SpaceOverview() {
   const tabContent = (
     <>
       {activeTab === 'Overview' ? <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}><SpaceOverviewTab space={space} listsCount={listsCount} members={spaceMembers} tasks={overviewTasks} sprints={spaceSprints} meetings={spaceMeetings} selectedFolder={selectedFolder} selectedList={selectedList} canManage={canManage} onSelectList={(id) => { setSelectedListId(id); setSelectedFolderId(null); setActiveTab('List'); navigate(`/spaces/${spaceId}?list=${id}`) }} onTreeDataChange={(next) => { setTreeData(next); setListsCount(next.lists.length) }} /></div> : null}
-      {activeTab === 'Board' ? <div role="tabpanel" id="tabpanel-board" aria-labelledby="tab-board" tabIndex={0}><TasksProvider departmentId={spaceId}><SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="kanban" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} /></TasksProvider></div> : null}
-      {activeTab === 'List' ? <div role="tabpanel" id="tabpanel-list" aria-labelledby="tab-list" tabIndex={0}><TasksProvider departmentId={spaceId}><SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="list" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} /></TasksProvider></div> : null}
+      {activeTab === 'Board' ? <div role="tabpanel" id="tabpanel-board" aria-labelledby="tab-board" tabIndex={0}><TasksProvider key={statusVersion} departmentId={spaceId}>{canManage === null ? <div style={{ padding: '2rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading board…</div> : <SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="kanban" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} />}</TasksProvider></div> : null}
+      {activeTab === 'List' ? <div role="tabpanel" id="tabpanel-list" aria-labelledby="tab-list" tabIndex={0}><TasksProvider key={statusVersion} departmentId={spaceId}>{canManage === null ? <div style={{ padding: '2rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading…</div> : <SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="list" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} />}</TasksProvider></div> : null}
       {activeTab === 'Calendar' ? (
         <div role="tabpanel" id="tabpanel-calendar" aria-labelledby="tab-calendar" tabIndex={0}>
           <div className="space-y-4">
@@ -1963,6 +1972,7 @@ export default function SpaceOverview() {
       {activeTab === 'Sprints' ? <div role="tabpanel" id="tabpanel-sprints" aria-labelledby="tab-sprints" tabIndex={0}><SpaceSprintsTab canManage={canManage} sprints={spaceSprints} spaceColor={space.color} onCreate={() => setShowSprintModal(true)} onOpen={(sprint) => navigate(`/sprints/${sprint.id}`)} /></div> : null}
       {activeTab === 'Meetings' ? <div role="tabpanel" id="tabpanel-meetings" aria-labelledby="tab-meetings" tabIndex={0}><SpaceMeetingsTab meetings={spaceMeetings} spaceId={spaceId} spaceName={space.name} canManage={canManage} onMeetingCreated={async () => { setSpaceMeetings(await getSpaceMeetings(spaceId)) }} /></div> : null}
       {activeTab === 'Open Items' ? <div role="tabpanel" id="tabpanel-openitems" aria-labelledby="tab-openitems" tabIndex={0}><SpaceOpenItemsTab spaceId={spaceId} canManage={canManage} /></div> : null}
+      {activeTab === 'Idea Bank' ? <div role="tabpanel" id="tabpanel-idea-bank" aria-labelledby="tab-idea-bank" tabIndex={0}><IdeaBankTab spaceId={spaceId} canManage={canManage} /></div> : null}
       {activeTab === 'Automations' ? <div role="tabpanel" id="tabpanel-automations" aria-labelledby="tab-automations" tabIndex={0}><SpaceAutomationsTab space={space} canManage={canManageStatuses} /></div> : null}
       {activeTab === 'Members' ? (
         <div role="tabpanel" id="tabpanel-members" aria-labelledby="tab-members" tabIndex={0}>
@@ -1983,6 +1993,7 @@ export default function SpaceOverview() {
   )
 
   return (
+    <MeetingsProvider departmentId={spaceId}>
     <div className="flex flex-col gap-5">
       <SpaceHeader
         space={space}
@@ -2045,8 +2056,16 @@ export default function SpaceOverview() {
           }}
         />
       ) : null}
-      <StatusSettingsDialog open={showStatusesModal} onOpenChange={setShowStatusesModal} space={space} />
+      <StatusSettingsDialog
+        open={showStatusesModal}
+        onOpenChange={(open) => {
+          setShowStatusesModal(open)
+          if (!open) setStatusVersion((v) => v + 1)
+        }}
+        space={space}
+      />
     </div>
+    </MeetingsProvider>
   )
 }
 

@@ -599,3 +599,106 @@ Interview answer: "Dependencies and files are in their own tables, not JSONB col
 - **DECISION-037** shows resilience thinking by keeping the Meeting OS embed optional rather than brittle.
 - **DECISION-040** shows realistic thinking about user-controlled delivery channels.
 - **DECISION-043** shows governance thinking around who should have broadcast communications access.
+
+## Phase 8 — Permission Model Refinement & Hardening
+
+### [DECISION-044] — Recurring meetings generated progressively via cron, not bulk-materialized
+**Phase:** Phase 8
+**Category:** Architecture / Performance
+**What I decided:** Replaced the original recurrence approach (materializing up to 52 future meeting rows at series-creation time) with an hourly `pg_cron` job (`generate-recurring-meetings` edge function) that generates each occurrence roughly a day ahead of when it's needed, tracked via `series_instance_num`, `next_occurrence_scheduled`, and `exception_date`.
+**Why I decided it:** Bulk-materializing a year of occurrences up front means every edit to a recurring series — a time change, a cancellation, a rule change — has to rewrite dozens of already-created rows, most of which are months away and may never be needed if the series changes or ends early. Generating progressively keeps only near-term occurrences live, makes "this/future/all" edits cheap since most rows don't exist yet, and avoids garbage rows for series that get cancelled.
+**What I considered instead:** Keep bulk materialization at creation time (rejected — expensive to edit, wastes rows for series that don't run their full course); generate on-demand at read time with no persisted rows (rejected — breaks anything that needs to reference a concrete meeting record, like attendance or action items).
+**Interview answer (30 seconds):** "Recurring meetings used to materialize up to a year of rows the moment you created the series. I moved that to an hourly cron function that only generates the next occurrence a day or so ahead of when it's needed. It made edits and cancellations dramatically cheaper because most of the series doesn't exist as rows yet, and it closed a class of bugs where editing 'this and future' meetings had to hunt down and rewrite dozens of already-materialized rows."
+**Follow-up questions this invites:**
+- Why not generate all occurrences and just batch-update them on edit?
+- How do you handle a single skipped or modified occurrence in this model?
+**Ecosystem connection:** N/A — specific to OS meeting recurrence.
+
+### [DECISION-045] — Additive capability grants layered on top of fixed roles
+**Phase:** Phase 8
+**Category:** Architecture / Product
+**What I decided:** Introduced narrow, named capability grants (e.g. `pastor_access`, `regional_secretary_access`) that extend a user's existing role rather than requiring a new role enum value for every organizational exception.
+**Why I decided it:** The role set (`super_admin`, `dept_lead`, `pastor`, `member`, `regional_secretary`...) covers the common cases, but real org structure has exceptions — someone who isn't formally a pastor but needs to be assignable as one, for example. Adding a new role for every exception bloats the enum and every RLS policy that switches on role. A grant is a targeted yes/no capability checked alongside role, so exceptions don't force a redesign of the base permission model.
+**What I considered instead:** A new role per exception (rejected — the role enum and every RLS policy switching on it balloons, and a person with one exception ends up misclassified for everything else they do); per-user permission overrides stored as JSON (rejected — harder to audit and reason about than a small set of named grants).
+**Interview answer (30 seconds):** "Instead of adding a role for every permission exception, I added named grants like `pastor_access` that layer on top of someone's real role. A regional secretary can hold that grant and be assignable as a pastor without the system reclassifying them as a pastor everywhere else. It keeps the base role model small while still handling real organizational exceptions."
+**Follow-up questions this invites:**
+- How do grants interact with RLS policies that check role directly?
+- How do you audit who holds which grants?
+**Ecosystem connection:** Same pattern underlies `regional_secretary_access` (DECISION-046).
+
+### [DECISION-046] — `regional_secretary` as a broad cross-department role short of super_admin
+**Phase:** Phase 8
+**Category:** Product / Security
+**What I decided:** Added `regional_secretary` as a role with near-`super_admin` visibility (all departments' tasks, meetings, sprints) but explicitly excluded from the most sensitive surfaces — campus photos, permissions management, integrations, and support tickets.
+**Why I decided it:** The role exists to give regional oversight without handing out full admin power. Blanket `super_admin` would over-grant; a department-scoped role would under-grant for someone who legitimately needs visibility across all departments. An explicit allowlist of exclusions keeps the elevated-but-not-total access auditable — every restriction is a deliberate line drawn in route guards and RLS, not an accident of a broad role check.
+**What I considered instead:** Grant full `super_admin` (rejected — too much power for the role's actual scope); scope to a single department like other leads (rejected — defeats the purpose of a cross-department oversight role).
+**Interview answer (30 seconds):** "`regional_secretary` sits between `dept_lead` and `super_admin`. It sees everything across departments — tasks, meetings, sprints — but is explicitly excluded from campus photos, permissions, integrations, and support tickets. I built that as an allowlist of exclusions rather than a coarse role check, so every restriction is a deliberate call, not a gap."
+**Follow-up questions this invites:**
+- How do you decide what a near-admin role should NOT see?
+- How is this enforced consistently across RLS and frontend route guards?
+**Ecosystem connection:** Uses the additive-grant pattern (DECISION-045) for edge cases like pastor assignment.
+
+### [DECISION-047] — Departments extended into Spaces instead of a parallel spaces table
+**Phase:** Phase 8
+**Category:** Architecture / Trade-off
+**What I decided:** When Spaces were introduced as a product concept (`space_type`, `visibility`, `status`, `owner_id`, start/end dates), extended the existing `departments` table with those columns instead of standing up a new `spaces` table and migrating onto it.
+**Why I decided it:** Departments were already the primary work-context entity — tasks, sprints, meetings, RLS policies, and most of the frontend keyed off `department_id`. A parallel `spaces` table would have meant either a large migration and a dual-write period, or two competing entities meaning the same thing. Extending departments in place kept every existing foreign key and RLS policy valid while adding the new Spaces semantics: a permanent department is simply a space with `space_type = 'department'`.
+**What I considered instead:** A separate `spaces` table with departments migrated into it (rejected — this was the original plan; abandoned once it was clear departments already modeled the concept and the migration risk outweighed the naming benefit); keep departments and spaces as two separate concurrent concepts (rejected — no clear source of truth for which entity a task belongs to).
+**Interview answer (30 seconds):** "The original plan was a brand-new `spaces` table with departments migrated onto it. Once I looked at how much already pointed at `department_id` — tasks, RLS, sprints — a parallel table would've meant a risky migration for what's really a naming and type expansion. So I extended departments in place: it gained `space_type`, `visibility`, and `status` columns, and a permanent department is just a `space_type` of `'department'`. Everything that already worked kept working."
+**Follow-up questions this invites:**
+- What would force you to actually split them into separate tables later?
+- How do group/temporary spaces differ from departments now?
+**Ecosystem connection:** Explains why the product-level term is "Spaces" but the schema-level table is still `departments`.
+
+### [DECISION-048] — P0 RLS hardening pass closing five live data-leak paths in one migration
+**Phase:** Phase 8
+**Category:** Security
+**What I decided:** Ran a dedicated hardening pass that enabled RLS on `sprint_invite_tokens`, gated `task_comments` inserts behind `user_can_view_task()`, excluded soft-deleted tasks (`deleted_at`) from three SELECT policies that were still returning them, and locked two RPCs to only act on the caller's own `auth.uid()`.
+**Why I decided it:** Each of these was a real, live gap rather than a theoretical one — soft-deleted tasks were still readable through SELECT policies that predated the trash/soft-delete feature, and RPCs that trusted a client-supplied user id let a caller potentially act as someone else if that parameter was tampered with. Bundling the fixes into a single audited migration meant verifying the full surface together and recording it as one hardening milestone, rather than trusting that ad hoc fixes over time added up to full coverage.
+**What I considered instead:** Patch each issue individually as discovered (rejected — no single point of confidence that the surface was fully covered); rewrite the affected RLS policies from scratch (rejected — unnecessary risk when the fix was a narrow, additive condition on each existing policy).
+**Interview answer (30 seconds):** "I ran a P0 hardening pass that closed five specific RLS gaps at once — soft-deleted tasks leaking through old SELECT policies, comment inserts that didn't check task visibility, sprint invite tokens with RLS never enabled, and two RPCs that trusted a caller-supplied user id instead of the authenticated session. Bundling them into one audited migration meant I could verify the whole surface at once instead of hoping ad hoc fixes added up to full coverage."
+**Follow-up questions this invites:**
+- How did you find these five issues — what was the audit process?
+- How do you prevent a new feature (like soft-delete) from silently reopening an old policy?
+**Ecosystem connection:** The `deleted_at` exclusion pattern from this pass is now the template applied to newer soft-delete features (Task Trash, Idea Bank) to avoid repeating the same class of leak.
+
+### [DECISION-049] — Shared multi-origin CORS helper for edge functions
+**Phase:** Phase 8
+**Category:** Architecture / Tooling
+**What I decided:** Replaced a single static `ALLOWED_ORIGIN` check in the Google Calendar sync edge function with a shared `getCorsHeaders()` helper that allowlists multiple origins, and adopted it as the standard pattern for edge functions going forward.
+**Why I decided it:** A hardcoded single origin breaks the moment the app is reachable from more than one hostname (a preview deployment, a custom domain alongside the default Vercel URL) — CORS preflight fails with no useful error surfaced to the end user, just a silently broken OAuth callback. A shared helper with an explicit allowlist fixes it once and keeps every edge function's CORS behavior consistent and auditable in one place instead of copy-pasted per function.
+**What I considered instead:** Wildcard CORS (`*`) (rejected — too permissive for endpoints that handle auth callbacks and tokens); hardcode each known origin per function as it's added (rejected — exactly the bug that caused this fix, doesn't scale).
+**Interview answer (30 seconds):** "Calendar connect was silently failing from one deployment origin because the edge function checked against a single hardcoded `ALLOWED_ORIGIN`. I replaced that with a shared CORS helper that allowlists multiple known origins, and rolled it out as the standard pattern instead of leaving each edge function to hardcode its own check."
+**Follow-up questions this invites:**
+- Why not just use a wildcard origin for internal tools?
+- How do you add a new allowed origin safely?
+**Ecosystem connection:** Applies to every edge function called directly from the browser — calendar sync, task API, automation engine, communications sends.
+
+## Interview Prep Summary — v1.5
+
+### Strongest Phase 8 decisions to lead with
+
+**DECISION-048 — P0 RLS hardening pass** is the strongest security decision from this stretch. It shows an audit mindset — finding and closing a *set* of related gaps in one verified pass rather than fixing issues one at a time as they surface.
+
+**DECISION-047 — Departments extended into Spaces instead of a parallel table** is the strongest architecture/trade-off decision. It's a concrete example of abandoning an original plan once the codebase evidence made a simpler path clearly safer.
+
+**DECISION-045 — Additive capability grants** is the strongest product/architecture decision. It shows a general-purpose pattern (grants vs. roles) applied to solve a recurring org-modeling problem, not a one-off hack.
+
+### Deep technical follow-up candidate
+
+**DECISION-044 — Progressive recurring-meeting generation via cron** is the most likely deep technical follow-up, because it touches cron scheduling, idempotency of generation runs, exception handling for single-occurrence edits, and the tradeoff against the simpler bulk-materialization approach it replaced.
+
+### Product-thinking signals
+
+- **DECISION-046** shows governance thinking — deciding what a near-admin role should explicitly *not* see.
+- **DECISION-047** shows willingness to revise an existing plan when the codebase evidence changes the right answer.
+- **DECISION-049** shows operational thinking beyond a single bug fix — turning a one-off CORS fix into a reusable pattern.
+
+### Updated totals
+- 49 decisions documented
+- Phases covered: 1, 1.5, 1.6, 1.7, 2, 3, 4, 5, 6, 7, 8, UI polish
+- Categories: Architecture, Security, Performance, Tooling, Product, Trade-off, Process
+
+---
+
+*Catalog is now v1.5 with 49 decisions. Paste this as the running catalog for the next build session.*

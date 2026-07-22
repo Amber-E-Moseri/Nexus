@@ -7,7 +7,7 @@ export const AUTOMATION_TEMPLATES = [
     trigger_type: 'task_overdue',
     trigger_config: {},
     conditions: [],
-    actions: [{ type: 'send_notification', config: { message: 'Task "{{task.title}}" is overdue' } }],
+    actions: [{ type: 'send_notification', config: { message: 'Heads up — "{{title}}" is past due' } }],
   },
   {
     id: 'status-to-done-notify',
@@ -17,7 +17,7 @@ export const AUTOMATION_TEMPLATES = [
     trigger_type: 'task_status_change',
     trigger_config: { to_category: 'completed' },
     conditions: [],
-    actions: [{ type: 'send_notification', config: { message: 'Task "{{task.title}}" has been completed' } }],
+    actions: [{ type: 'send_notification', config: { message: '"{{title}}" is done!' } }],
   },
   {
     id: 'assign-notify',
@@ -27,7 +27,7 @@ export const AUTOMATION_TEMPLATES = [
     trigger_type: 'task_assigned',
     trigger_config: {},
     conditions: [],
-    actions: [{ type: 'send_notification', config: { message: 'You have been assigned "{{task.title}}"' } }],
+    actions: [{ type: 'send_notification', config: { message: 'You\'ve been assigned "{{title}}"' } }],
   },
   {
     id: 'delegated-due-soon',
@@ -37,7 +37,7 @@ export const AUTOMATION_TEMPLATES = [
     trigger_type: 'delegated_task_due_soon',
     trigger_config: { hours_before: 24 },
     conditions: [],
-    actions: [{ type: 'send_notification', config: { message: 'Delegated task "{{task.title}}" is due soon' } }],
+    actions: [{ type: 'send_notification', config: { message: 'Reminder: "{{title}}" (delegated) is due soon' } }],
   },
   {
     id: 'meeting-logged-create-task',
@@ -47,7 +47,7 @@ export const AUTOMATION_TEMPLATES = [
     trigger_type: 'meeting_created',
     trigger_config: {},
     conditions: [],
-    actions: [{ type: 'create_task', config: { title: 'Follow up: {{meeting.title}}', priority: 'medium' } }],
+    actions: [{ type: 'create_task', config: { title: 'Follow up: {{title}}', priority: 'medium' } }],
   },
   {
     id: 'status-change-email',
@@ -57,7 +57,7 @@ export const AUTOMATION_TEMPLATES = [
     trigger_type: 'task_status_change',
     trigger_config: {},
     conditions: [],
-    actions: [{ type: 'send_email', config: { subject: 'Task "{{task.title}}" status updated' } }],
+    actions: [{ type: 'send_email', config: { subject: 'Status update on "{{title}}"' } }],
   },
   {
     id: 'inactive-task-reminder',
@@ -67,7 +67,7 @@ export const AUTOMATION_TEMPLATES = [
     trigger_type: 'task_inactive',
     trigger_config: { days: 7 },
     conditions: [],
-    actions: [{ type: 'send_notification', config: { message: 'Task "{{task.title}}" has been inactive for 7 days' } }],
+    actions: [{ type: 'send_notification', config: { message: '"{{title}}" hasn\'t had activity in 7 days' } }],
   },
   {
     id: 'task-moved-list-notify',
@@ -77,7 +77,7 @@ export const AUTOMATION_TEMPLATES = [
     trigger_type: 'task_moved_list',
     trigger_config: {},
     conditions: [],
-    actions: [{ type: 'send_notification', config: { message: 'Task "{{task.title}}" moved to {{list.name}}' } }],
+    actions: [{ type: 'send_notification', config: { message: '"{{title}}" was moved to {{list_name}}' } }],
   },
   {
     id: 'comment-notify-assignee',
@@ -87,7 +87,7 @@ export const AUTOMATION_TEMPLATES = [
     trigger_type: 'comment_added',
     trigger_config: {},
     conditions: [],
-    actions: [{ type: 'send_notification', config: { message: 'New comment on "{{task.title}}"' } }],
+    actions: [{ type: 'send_notification', config: { message: 'New comment on "{{title}}"' } }],
   },
   {
     id: 'webhook-status-change',

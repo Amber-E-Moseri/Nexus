@@ -54,12 +54,12 @@ beforeEach(() => {
 })
 
 describe('BLW-01: list queries fetch counts, not nested arrays', () => {
-  it('getDeptTasks selects subtask/comment/file counts only', async () => {
+  it('getDeptTasks selects subtask counts only (no unused comment/file/dependency joins)', async () => {
     await getDeptTasks('dept-1')
     const [sel] = selectStringsFor('tasks')
     expect(sel).toContain('subtask_count:tasks!parent_task_id(count)')
-    expect(sel).toContain('comments:task_comments(count)')
-    expect(sel).toContain('files:task_files(count)')
+    expect(sel).not.toContain('comments:task_comments(count)')
+    expect(sel).not.toContain('files:task_files(count)')
     // No eagerly-embedded subtask rows in the list query
     expect(sel).not.toMatch(/subtasks:tasks!parent_task_id\(\s*[^c)]/)
     expect(sel).not.toContain('*')
