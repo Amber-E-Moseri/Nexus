@@ -23,7 +23,7 @@ const STATUS_STYLE = {
 }
 
 const VARIABLE_CHIPS = [
-  '{{name}}', '{{subgroup}}', '{{leadership_category}}', '{{space_name}}',
+  '{{name}}', '{{first_name}}', '{{subgroup}}', '{{leadership_category}}', '{{space_name}}',
   '{{pastor_name}}', '{{sender_name}}', '{{org_name}}', '{{date_today}}',
   '{{meeting_label}}', '{{next_date}}', '{{recap}}',
 ]

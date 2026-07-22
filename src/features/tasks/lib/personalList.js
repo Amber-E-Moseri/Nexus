@@ -16,10 +16,7 @@ const TASK_SELECT = `
   ),
   assignee:users!assignee_id(id, name, avatar_url),
   creator:users!created_by(id, name),
-  space:departments(id, name, color),
-  comments:task_comments(count),
-  files:task_files(count),
-  dependencies:task_dependencies!task_id(count)
+  space:departments(id, name, color)
 `
 
 // Private tasks the user owns (created or assigned). Unlike getPersonalTasks

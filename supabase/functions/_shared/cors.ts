@@ -3,13 +3,14 @@
 
 const PRIMARY_ORIGIN = Deno.env.get('ALLOWED_ORIGIN') ?? ''
 
-// Origins always allowed regardless of env var (local dev + preview).
+// Origins always allowed regardless of env var (local dev + preview + Vercel).
 const DEV_ORIGINS = new Set([
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
+  'https://blwcannexus.vercel.app',
 ])
 
 export function getCorsHeaders(req: Request): Record<string, string> {

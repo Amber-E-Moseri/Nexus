@@ -145,6 +145,7 @@ export default function SpaceStatusSettings({ departmentId, departmentName }) {
   const [editingId, setEditingId] = useState(null)
   const [draftName, setDraftName] = useState('')
   const [orgStatuses, setOrgStatuses] = useState([])
+  const [defaultOrgStatusId, setDefaultOrgStatusId] = useState(null)
   const [disabledOrgStatusIds, setDisabledOrgStatusIds] = useState(new Set())
   const [togglingOrgId, setTogglingOrgId] = useState(null)
 
@@ -173,6 +174,13 @@ export default function SpaceStatusSettings({ departmentId, departmentName }) {
       setStatuses(rows)
       setUsingGlobals(rows.length === 0)
       setOrgStatuses(orgRows ?? [])
+      // Prefer the canonical 'to_do' legacy_key as the default org parent for new dept
+      // statuses. orgRows includes inactive rows (e.g. the retired 'backlog'/"Not Started"
+      // duplicate), so every candidate here must also require active, or a new custom
+      // status could get parented to a status that no longer surfaces anywhere.
+      const openOrg = (orgRows ?? []).find(r => r.legacy_key === 'to_do' && r.active)
+        ?? [...(orgRows ?? [])].filter(r => r.active).sort((a, b) => a.sort_order - b.sort_order).find(r => r.category === 'open')
+      setDefaultOrgStatusId(openOrg?.id ?? null)
       setDisabledOrgStatusIds(new Set((disabledRows ?? []).map((r) => r.org_status_id)))
     } catch (nextError) {
       setMessage(nextError.message)
@@ -298,6 +306,7 @@ export default function SpaceStatusSettings({ departmentId, departmentName }) {
         name: `New Status ${sortedStatuses.length + 1}`,
         department_id: departmentId,
         sort_order: sortedStatuses.length + 1,
+        org_status_id: defaultOrgStatusId,
       }
 
       const { data, error } = await supabase

@@ -51,6 +51,24 @@
       "port": 5544
     },
     {
+      "name": "dev-alt8",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5622", "--strictPort"],
+      "port": 5622
+    },
+    {
+      "name": "dev-alt9",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5699", "--strictPort"],
+      "port": 5699
+    },
+    {
+      "name": "dev-alt10",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5788", "--strictPort"],
+      "port": 5788
+    },
+    {
       "name": "design",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "9877", "--directory", "C:/Users/moser/Downloads"],

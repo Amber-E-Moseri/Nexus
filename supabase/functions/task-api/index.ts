@@ -238,7 +238,7 @@ Deno.serve(async (request) => {
         description: body.description?.trim() || null,
         // Prefer status_id if the caller supplies it; otherwise pass status (legacy
         // string) and let the trigger resolve status_id from it.
-        ...(body.status_id ? { status_id: body.status_id } : { status: body.status ?? 'backlog' }),
+        ...(body.status_id ? { status_id: body.status_id } : { status: body.status ?? 'to_do' }),
         priority: body.priority ?? 'medium',
         due_date: body.due_date ?? null,
         department_id: departmentId,

@@ -153,36 +153,34 @@ function TicketThread({ ticket, currentUserId, onStatusChange }) {
         </div>
       )}
 
-      {ticket.status !== 'closed' && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', borderTop: '1px solid var(--border-1)', paddingTop: 16 }}>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send() }}
-            placeholder="Reply… (Ctrl+Enter to send)"
-            rows={3}
-            style={{
-              flex: 1, resize: 'none', padding: '10px 12px', borderRadius: 10,
-              border: '1px solid var(--border-1)', fontFamily: FONT_BODY, fontSize: 13,
-              color: 'var(--ink-1)', outline: 'none',
-            }}
-          />
-          <button
-            type="button"
-            onClick={send}
-            disabled={sending || !body.trim()}
-            style={{
-              padding: '10px 16px', borderRadius: 10, border: 'none', cursor: sending || !body.trim() ? 'not-allowed' : 'pointer',
-              background: sending || !body.trim() ? '#e5e7eb' : '#4C2A92',
-              color: sending || !body.trim() ? '#9ca3af' : '#fff',
-              display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
-            }}
-          >
-            <Send size={14} />
-            Send
-          </button>
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', borderTop: '1px solid var(--border-1)', paddingTop: 16 }}>
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send() }}
+          placeholder="Reply… (Ctrl+Enter to send)"
+          rows={3}
+          style={{
+            flex: 1, resize: 'none', padding: '10px 12px', borderRadius: 10,
+            border: '1px solid var(--border-1)', fontFamily: FONT_BODY, fontSize: 13,
+            color: 'var(--ink-1)', outline: 'none',
+          }}
+        />
+        <button
+          type="button"
+          onClick={send}
+          disabled={sending || !body.trim()}
+          style={{
+            padding: '10px 16px', borderRadius: 10, border: 'none', cursor: sending || !body.trim() ? 'not-allowed' : 'pointer',
+            background: sending || !body.trim() ? '#e5e7eb' : '#4C2A92',
+            color: sending || !body.trim() ? '#9ca3af' : '#fff',
+            display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
+          }}
+        >
+          <Send size={14} />
+          Send
+        </button>
+      </div>
     </div>
   )
 }
