@@ -1181,12 +1181,14 @@ export async function getMySprintMembershipIds() {
 export async function hasSprintAccess(sprintId) {
   if (!sprintId) return false
 
-  const { data, error } = await supabase
-    .from('sprint_members')
-    .select('sprint_id')
-    .eq('sprint_id', sprintId)
-    .limit(1)
+  // can_view_sprint() mirrors the sprints_select RLS policy (creator,
+  // member, own-department, privileged roles). A raw sprint_members
+  // existence check here previously returned true if the sprint had ANY
+  // member at all (not specifically the caller), which happened to work
+  // only because RLS silently scoped the rows -- and returned false for
+  // everyone, including super_admin, if the sprint had zero members.
+  const { data, error } = await supabase.rpc('can_view_sprint', { p_sprint_id: sprintId })
 
   if (error) throw error
-  return Array.isArray(data) && data.length > 0
+  return !!data
 }

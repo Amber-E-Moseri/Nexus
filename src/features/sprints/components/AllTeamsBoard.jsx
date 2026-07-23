@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import KanbanBoard from '../../tasks/components/KanbanBoard'
 
 export default function AllTeamsBoard({
@@ -12,6 +13,17 @@ export default function AllTeamsBoard({
   teamMembers,
   statuses,
 }) {
+  const [collapsedTeams, setCollapsedTeams] = useState(() => new Set())
+
+  function toggleTeam(teamId) {
+    setCollapsedTeams((prev) => {
+      const next = new Set(prev)
+      if (next.has(teamId)) next.delete(teamId)
+      else next.add(teamId)
+      return next
+    })
+  }
+
   if (!tasksByTeam || Object.keys(tasksByTeam).length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>
@@ -22,9 +34,18 @@ export default function AllTeamsBoard({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {Object.entries(tasksByTeam).map(([teamId, { team, tasks: teamTasks }]) => (
+      {Object.entries(tasksByTeam).map(([teamId, { team, tasks: teamTasks }]) => {
+        const collapsed = collapsedTeams.has(teamId)
+        return (
         <div key={teamId}>
-          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div
+            onClick={() => toggleTeam(teamId)}
+            style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}
+          >
+            <ChevronDown
+              size={14}
+              style={{ color: 'var(--text-tertiary)', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0 }}
+            />
             <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
               {team.name}
             </h3>
@@ -46,13 +67,12 @@ export default function AllTeamsBoard({
             )}
           </div>
 
-          {/* Team's Kanban board */}
-          <div style={{ background: 'var(--surface-secondary)', borderRadius: 12, padding: 12 }}>
-            {teamTasks.length === 0 ? (
-              <p style={{ fontSize: 12, color: 'var(--text-tertiary)', textAlign: 'center', padding: '2rem 0', margin: 0 }}>
-                No tasks assigned to this team
-              </p>
-            ) : (
+          {/* Team's Kanban board — KanbanBoard renders empty columns with their
+              own add-task composer, so it's safe to render even with 0 tasks;
+              a bare "no tasks" message here would be a dead end with no way
+              to add one. */}
+          {!collapsed && (
+            <div style={{ background: 'var(--surface-secondary)', borderRadius: 12, padding: 12 }}>
               <KanbanBoard
                 filteredTasks={teamTasks}
                 onTaskClick={onTaskClick}
@@ -61,10 +81,11 @@ export default function AllTeamsBoard({
                 teamMembers={teamMembers}
                 statusesOverride={statuses}
               />
-            )}
-          </div>
+            </div>
+          )}
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
