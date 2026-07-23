@@ -16,7 +16,8 @@ const SPRINT_TEAM_SELECT = 'id, sprint_id, name, description, lead_user_id, depa
 const SPRINT_TEAM_MEMBERS_SELECT = 'team_id, user_id, role, joined_at, users:user_id(id, name, email, department_id, status)'
 const SPRINT_MEMBER_SELECT = 'sprint_id, user_id, role, joined_at'
 const SPRINT_MEMBER_WITH_TEMP_SELECT = 'sprint_id, user_id, role, joined_at, membership_end_date, is_temporary, invited_by'
-const TEMP_MEMBER_SELECT = 'id, sprint_id, user_id, role, membership_end_date, is_temporary, invited_by, joined_at, users:user_id(id, name, email, status, is_temporary)'
+// sprint_members has a composite key (sprint_id, user_id) — no surrogate id column.
+const TEMP_MEMBER_SELECT = 'sprint_id, user_id, role, membership_end_date, is_temporary, invited_by, joined_at, users:user_id(id, name, email, status, is_temporary)'
 const SPRINT_REVIEW_SELECT = 'id, sprint_id, completed_at, completed_by, lessons_learned, goals_achieved, outstanding_items, wins_testimonies, recommendations, final_decisions, created_at'
 const VALID_SPRINT_STATUSES = ['planning', 'active', 'completed', 'review', 'archived']
 
@@ -737,7 +738,7 @@ export async function getSprintInvitePermissions(sprintId) {
     supabase.rpc('can_manage_sprint', { p_sprint_id: sprintId }),
     supabase.from('sprints').select('created_by').eq('id', sprintId).maybeSingle(),
     supabase.from('users').select('role').eq('id', userId).maybeSingle(),
-    supabase.from('sprint_members').select('id').eq('sprint_id', sprintId).eq('user_id', userId).maybeSingle(),
+    supabase.from('sprint_members').select('user_id').eq('sprint_id', sprintId).eq('user_id', userId).maybeSingle(),
   ])
 
   if (manageError) throw manageError
