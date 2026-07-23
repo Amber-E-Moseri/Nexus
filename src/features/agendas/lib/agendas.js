@@ -31,6 +31,7 @@ export async function createAgenda(agendaData, agendaItems) {
   }
 
   // Insert agenda items
+  let insertedItems = []
   if (agendaItems && agendaItems.length > 0) {
     const itemsToInsert = agendaItems.map((item, index) => ({
       agenda_id: agendaRecord.id,
@@ -41,18 +42,20 @@ export async function createAgenda(agendaData, agendaItems) {
       is_pinned: item.isPinned || false,
     }))
 
-    const { error: itemsError } = await supabase
+    const { data, error: itemsError } = await supabase
       .from('agenda_items')
       .insert(itemsToInsert)
+      .select('id, agenda_id, segment, notes, duration_minutes, sort_order, is_pinned')
 
     if (itemsError) {
       // Clean up agenda if items fail
       await deleteAgenda(agendaRecord.id)
       throw new Error(`Failed to create agenda items: ${itemsError.message}`)
     }
+    insertedItems = data
   }
 
-  return agendaRecord
+  return { ...agendaRecord, agenda_items: insertedItems }
 }
 
 export async function updateAgenda(agendaId, updates) {
@@ -156,14 +159,19 @@ export async function updateAgendaItems(agendaId, items) {
       is_pinned: item.isPinned || false,
     }))
 
-    const { error: insertError } = await supabase
+    const { data, error: insertError } = await supabase
       .from('agenda_items')
       .insert(itemsToInsert)
+      .select('id, agenda_id, segment, notes, duration_minutes, sort_order, is_pinned')
 
     if (insertError) {
       throw new Error(`Failed to insert agenda items: ${insertError.message}`)
     }
+
+    return data
   }
+
+  return []
 }
 
 export async function getAgendaItems(agendaId) {

@@ -6,13 +6,13 @@ import { createAgenda, updateAgenda, updateAgendaItems } from '../../agendas/lib
 // agendas-table fields from the meeting itself) and links it via
 // meeting_id — same underlying tables the standalone /meetings/wizard
 // flow uses, just reached from a different entry point.
-// Returns the agenda id (existing or newly created) so the caller can
-// update its own local state.
+// Returns { agendaId, items } (items carry real agenda_items ids) so the
+// caller can update its own local state directly, without a full re-fetch.
 export async function saveAgendaItemsForMeeting(meeting, items, createdBy) {
   const existingAgendaId = meeting?.agendas?.[0]?.id
   if (existingAgendaId) {
-    await updateAgendaItems(existingAgendaId, items)
-    return existingAgendaId
+    const savedItems = await updateAgendaItems(existingAgendaId, items)
+    return { agendaId: existingAgendaId, items: savedItems }
   }
 
   const date = new Date(meeting.date || Date.now())
@@ -40,5 +40,5 @@ export async function saveAgendaItemsForMeeting(meeting, items, createdBy) {
     items,
   )
   await updateAgenda(agenda.id, { meeting_id: meeting.id })
-  return agenda.id
+  return { agendaId: agenda.id, items: agenda.agenda_items ?? [] }
 }
