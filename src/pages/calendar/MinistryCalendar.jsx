@@ -33,6 +33,7 @@ export default function MinistryCalendar() {
   const location = useLocation()
   const navigate = useNavigate()
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768)
@@ -52,6 +53,7 @@ export default function MinistryCalendar() {
   const [canApprove, setCanApprove] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [eventTypes, setEventTypes] = useState([])
+  const [eventTypeColors, setEventTypeColors] = useState({})
   const [selectedEventTypes, setSelectedEventTypes] = useState(new Set())
   const [hiddenCategories, setHiddenCategories] = useState(null) // null = no restrictions
   const [hiddenSourceIds, setHiddenSourceIds] = useState(new Set())
@@ -114,7 +116,12 @@ export default function MinistryCalendar() {
     try {
       const types = await getEventTypes()
       const typeNames = types.map((t) => typeof t === 'string' ? t : t.name)
+      const colors = {}
+      types.forEach((t) => {
+        if (typeof t !== 'string' && t.color) colors[t.name] = t.color
+      })
       setEventTypes(typeNames)
+      setEventTypeColors(colors)
       setSelectedEventTypes(new Set(typeNames))
     } catch (err) {
       console.error('Failed to load event types:', err)
@@ -335,14 +342,17 @@ export default function MinistryCalendar() {
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '240px 1fr', gap: '20px', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : sidebarCollapsed ? '40px 1fr' : '240px 1fr', gap: '20px', alignItems: 'start', transition: 'grid-template-columns 0.15s' }}>
         {!isMobile && <CalendarSidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
           year={year}
           month={month}
           onPrevMonth={goPrevMonth}
           onNextMonth={goNextMonth}
           events={filteredEvents}
           eventTypes={hiddenCategories ? eventTypes.filter((t) => !hiddenCategories.has(t)) : eventTypes}
+          eventTypeColors={eventTypeColors}
           selectedEventTypes={selectedEventTypes}
           onToggleType={(type, checked) => {
             const newSet = new Set(selectedEventTypes)
@@ -409,7 +419,7 @@ export default function MinistryCalendar() {
               Export
             </motion.button>
 
-            {(effectiveRole === 'super_admin' || effectiveRole === 'regional_secretary') && (
+            {(effectiveRole === 'super_admin' || effectiveRole === 'regional_secretary' || isProgramsMember) && (
               <motion.button
                 onClick={handleSyncAllSources}
                 disabled={syncing}

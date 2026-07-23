@@ -77,7 +77,7 @@ export default function CalendarView({
         </div>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[1.8fr_0.9fr]">
+      <div className="grid gap-5 xl:grid-cols-[1fr_300px]">
         <CalendarGrid
           year={year}
           month={month}
