@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Check, ChevronDown, ChevronRight, Mail, Pencil, Phone, RefreshCw, Search, Sparkles, UserPlus, Users, X } from 'lucide-react'
 import { callFlockCRM as callFlockAPI, flockCard, initials, FLOCK } from '../../lib/flockSupabase'
 import { useAuth } from '../../hooks/useAuth'
@@ -245,6 +246,14 @@ function InteractionCard({ i, onUpdated }) {
           Next: {i.nextAction}
           {i.nextDt ? <span style={{ fontFamily: FLOCK.fontMono, fontWeight: 400 }}> · {i.nextDt}</span> : null}
         </div>
+      )}
+      {i.meetingId && (
+        <Link
+          to={`/meetings/${i.meetingId}`}
+          style={{ display: 'inline-block', marginTop: '8px', fontSize: '12px', color: FLOCK.purple, fontWeight: 600, fontFamily: FLOCK.fontBody, textDecoration: 'none' }}
+        >
+          → Open linked meeting
+        </Link>
       )}
     </div>
   )

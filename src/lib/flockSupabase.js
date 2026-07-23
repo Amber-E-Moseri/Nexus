@@ -188,7 +188,7 @@ async function getInteractions({ personId }) {
   const pid = await myPastorId()
   const { data, error } = await supabase
     .from('flock_interactions')
-    .select('id, interacted_at, result, outcome_type, summary, next_action, next_action_datetime')
+    .select('id, interacted_at, result, outcome_type, summary, next_action, next_action_datetime, meeting_id')
     .eq('pastor_id', pid)
     .eq('contact_id', personId)
     .order('interacted_at', { ascending: false })
@@ -202,6 +202,7 @@ async function getInteractions({ personId }) {
     nextAction: i.next_action || 'None',
     nextDt: i.next_action_datetime ? fmtTs(i.next_action_datetime) : '',
     nextActionDateTimeRaw: i.next_action_datetime || null,
+    meetingId: i.meeting_id || null,
   }))
 }
 

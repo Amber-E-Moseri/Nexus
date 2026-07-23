@@ -50,13 +50,20 @@ export function TasksProvider({ departmentId, sprintId, initialTasks, children }
       const taskData = skipTasks ? null : results[0]
       const statusResults = skipTasks ? results : results.slice(1)
 
-      // Deduplicate by category + legacy_key, preferring dept-specific over global
+      // Deduplicate by category + legacy_key, preferring dept-specific over global.
+      // get_space_statuses() orders org-wide rows before dept-scoped ones
+      // (`ORDER BY is_org_status DESC`), so a plain "first array wins" or
+      // "first-seen-in-iteration wins" rule silently picks the org-wide row
+      // whenever both appear in the same result array — the opposite of the
+      // stated intent, and a different id than what get_space_statuses'
+      // callers elsewhere (task creation, board columns) end up persisting.
+      // Compare is_org_status explicitly instead of relying on encounter order.
       const statusMap = new Map()
-      for (let i = statusResults.length - 1; i >= 0; i--) {
-        const statusList = statusResults[i]
+      for (const statusList of statusResults) {
         for (const status of statusList) {
           const key = `${status.category}:${status.legacy_key || status.name}`
-          if (!statusMap.has(key)) {
+          const existing = statusMap.get(key)
+          if (!existing || (existing.is_org_status && !status.is_org_status)) {
             statusMap.set(key, status)
           }
         }

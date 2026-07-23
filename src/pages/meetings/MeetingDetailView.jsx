@@ -96,6 +96,7 @@ function MeetingDetailViewInner() {
   const [mergingAiActions, setMergingAiActions] = useState(false)
   const [aiMergeSuccess, setAiMergeSuccess]     = useState(false)
   const [editableAiItems, setEditableAiItems]   = useState([])
+  const [editableOpenItems, setEditableOpenItems] = useState([])
   const [orgUsers, setOrgUsers]                 = useState([])
   const [orgDepartments, setOrgDepartments]     = useState([])
   const [editingTranscript, setEditingTranscript] = useState(false)
@@ -229,7 +230,15 @@ function MeetingDetailViewInner() {
         }))
       })()
     }
-    if (extracted.open_items?.length) setSelectedAiOpenItems(autoSelectOpenItems(extracted.open_items))
+    if (extracted.open_items?.length) {
+      setSelectedAiOpenItems(autoSelectOpenItems(extracted.open_items))
+      setEditableOpenItems(extracted.open_items.map((item) => ({
+        item_text: item.item_text || '',
+        item_type: item.item_type || 'exploration',
+        transcript_excerpt: item.transcript_excerpt || null,
+        confidence_score: item.confidence_score ?? null,
+      })))
+    }
   }, [extraction.result])
 
   // Auto-populate minutes/decisions/next-steps — split into its own effect,
@@ -344,9 +353,10 @@ function MeetingDetailViewInner() {
     localStorage.setItem(aiCacheKey, JSON.stringify({
       aiResult,
       editableAiItems,
+      editableOpenItems,
       timestamp: Date.now(),
     }))
-  }, [aiResult, editableAiItems, meetingId])
+  }, [aiResult, editableAiItems, editableOpenItems, meetingId])
 
   // ── load draft from cache on mount ─────────────────────────────────────────
   useEffect(() => {
@@ -370,6 +380,7 @@ function MeetingDetailViewInner() {
         if (hoursSince < 72 && parsed.aiResult) {
           setAiResult(parsed.aiResult)
           if (parsed.editableAiItems?.length) setEditableAiItems(parsed.editableAiItems)
+          if (parsed.editableOpenItems?.length) setEditableOpenItems(parsed.editableOpenItems)
           if (parsed.aiResult.action_items?.length) {
             setSelectedAiActionItems(new Set(parsed.aiResult.action_items.map((_, i) => i)))
           }
@@ -674,10 +685,10 @@ function MeetingDetailViewInner() {
   }
 
   async function handleAiOpenItemsMerge() {
-    if (!aiResult?.open_items?.length) return
+    if (!editableOpenItems.length) return
     setMergingAiOpenItems(true)
     try {
-      const items = aiResult.open_items
+      const items = editableOpenItems
         .filter((_, i) => selectedAiOpenItems.has(i))
         .map((item) => ({
           item_text: item.item_text,
@@ -2017,16 +2028,6 @@ function MeetingDetailViewInner() {
                         </p>
                       </div>
                     )}
-                    {!editingTranscript && (
-                      <div style={{ padding:'10px 16px', borderTop:`1px solid ${FS.borderL}` }}>
-                        <button
-                          onClick={() => { setMinutesText(t => t ? `${t}\n\n${meeting.summary}` : meeting.summary); setActiveTab('minutes') }}
-                          style={{ padding:'7px 14px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.navy, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
-                        >
-                          → Copy to Minutes
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -2197,28 +2198,42 @@ function MeetingDetailViewInner() {
                       </div>
                     )}
                     {/* Open Items from AI extraction */}
-                    {aiResult?.open_items?.length > 0 && (
+                    {editableOpenItems.length > 0 && (
                       <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
-                        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: '#2D8653', marginBottom:8 }}>Open Discussion Items — select to track</div>
-                        {aiResult.open_items.map((item, i) => {
-                          const typeLabels = { question: '❓ Question', exploration: '🔍 Exploration', blocker: '🚫 Blocker', decision_point: '⚖️ Decision', future_consideration: '💡 Future' }
+                        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: '#2D8653', marginBottom:8 }}>Open Discussion Items — edit &amp; select to track</div>
+                        {editableOpenItems.map((item, i) => {
+                          const typeOptions = [
+                            { value: 'question', label: '❓ Question' },
+                            { value: 'exploration', label: '🔍 Exploration' },
+                            { value: 'blocker', label: '🚫 Blocker' },
+                            { value: 'decision_point', label: '⚖️ Decision' },
+                            { value: 'future_consideration', label: '💡 Future' },
+                          ]
                           const score = item.confidence_score ?? 0
                           return (
                             <div
                               key={i}
                               style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'8px 10px', background: FS.surface, borderRadius:6, border:`1px solid ${selectedAiOpenItems.has(i) ? '#2D8653' : FS.borderL}`, marginBottom:6 }}
                             >
-                              <input type="checkbox" checked={selectedAiOpenItems.has(i)} onChange={() => toggleAiOpenItem(i)} style={{ marginTop:4, cursor:'pointer', accentColor:'#2D8653' }} />
-                              <div style={{ flex:1 }}>
-                                <div style={{ fontSize:13, fontWeight:600, color: FS.text }}>{item.item_text}</div>
-                                <div style={{ display:'flex', gap:8, marginTop:3, fontSize:11, color: FS.muted, flexWrap:'wrap' }}>
-                                  <span style={{ padding:'1px 6px', borderRadius:4, background:'#E8F5E9', color:'#2D8653', fontSize:10, fontWeight:600 }}>
-                                    {typeLabels[item.item_type] || item.item_type}
-                                  </span>
-                                  <span>{Math.round(score * 100)}% confidence</span>
+                              <input type="checkbox" checked={selectedAiOpenItems.has(i)} onChange={() => toggleAiOpenItem(i)} style={{ marginTop:6, cursor:'pointer', accentColor:'#2D8653' }} />
+                              <div style={{ flex:1, display:'flex', flexDirection:'column', gap:4 }}>
+                                <input
+                                  value={item.item_text}
+                                  onChange={(e) => setEditableOpenItems((prev) => prev.map((it, j) => j === i ? { ...it, item_text: e.target.value } : it))}
+                                  style={{ fontSize:13, fontWeight:600, color: FS.text, border:`1px solid ${FS.borderL}`, borderRadius:4, padding:'4px 6px', fontFamily:'inherit', width:'100%', background:'#fff' }}
+                                />
+                                <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                                  <select
+                                    value={item.item_type}
+                                    onChange={(e) => setEditableOpenItems((prev) => prev.map((it, j) => j === i ? { ...it, item_type: e.target.value } : it))}
+                                    style={{ fontSize:11, color: FS.text, border:`1px solid ${FS.borderL}`, borderRadius:4, padding:'3px 6px', fontFamily:'inherit', background:'#fff' }}
+                                  >
+                                    {typeOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                  </select>
+                                  <span style={{ fontSize:11, color: FS.muted }}>{Math.round(score * 100)}% confidence</span>
                                 </div>
                                 {item.transcript_excerpt && (
-                                  <div style={{ fontSize:11, color: '#9A8F7E', marginTop:4, fontStyle:'italic' }}>
+                                  <div style={{ fontSize:11, color: '#9A8F7E', marginTop:2, fontStyle:'italic' }}>
                                     "{item.transcript_excerpt.slice(0, 120)}{item.transcript_excerpt.length > 120 ? '…' : ''}"
                                   </div>
                                 )}
