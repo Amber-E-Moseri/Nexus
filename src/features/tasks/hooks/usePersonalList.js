@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { getPersonalTasks, getPinnedTasks } from '../lib/personalList'
+import { updateTask } from '../lib/tasks'
 
 // Data for the Personal List page: the user's private tasks plus team tasks
 // pinned as a second location. Realtime keeps both halves live — pins via
@@ -68,5 +69,40 @@ export function usePersonalList(userId) {
     }
   }, [userId])
 
-  return { personalTasks, pinnedTasks, isLoading, error, refetch: load }
+  // Personal List's board/list views aren't wrapped in a scoped TasksProvider
+  // (there's no departmentId/sprintId to key one), so drag-and-drop had no
+  // optimistic path -- KanbanBoard/TaskListView's onTaskStatusChange fell
+  // through to nothing, and the card only moved once the realtime refetch
+  // round-trip landed. Mirror TasksContext.moveTask's pattern here instead.
+  const moveTask = useCallback(async ({ taskId, newStatus }) => {
+    const statusId = typeof newStatus === 'string' ? newStatus : newStatus?.id ?? null
+    if (!statusId) return
+    setPersonalTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              status: newStatus?.legacy_key ?? task.status,
+              status_id: statusId,
+              status_definition: newStatus,
+              status_name: newStatus?.name ?? task.status_name,
+              status_color: newStatus?.color ?? task.status_color,
+              status_category: newStatus?.category ?? task.status_category,
+            }
+          : task,
+      ),
+    )
+    try {
+      await updateTask(taskId, {
+        status: newStatus?.legacy_key ?? undefined,
+        statusId,
+        statusCategory: newStatus?.category,
+      })
+    } catch (err) {
+      load()
+      throw err
+    }
+  }, [load])
+
+  return { personalTasks, pinnedTasks, isLoading, error, refetch: load, moveTask }
 }

@@ -258,6 +258,11 @@ export default function NotificationsPage() {
       )
     } else if (type === 'meeting_created' && payload?.meeting_id) {
       navigate('/meetings')
+    } else if (
+      (type === 'sprint_access_requested' || type === 'sprint_access_approved' || type === 'sprint_access_rejected')
+      && payload?.sprint_id
+    ) {
+      navigate(`/sprints/${payload.sprint_id}`)
     }
   }
 

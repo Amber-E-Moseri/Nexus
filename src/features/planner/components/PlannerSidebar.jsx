@@ -32,6 +32,11 @@ function KpiTile({ label, value, accent }) {
 }
 
 const PRIORITY_FILTERS = ['urgent', 'high', 'medium', 'low']
+const OWNERSHIP_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'mine', label: 'Mine' },
+  { value: 'delegated', label: 'Delegated' },
+]
 
 /**
  * Left sidebar: priority filters, grouped unschedulable-vs-backlog tasks with
@@ -42,6 +47,8 @@ export default function PlannerSidebar({
   kpis, // { dueThisWeek, overdue, completedThisWeek, unscheduled }
   priorityFilter, // Set of enabled priorities (empty = all)
   onTogglePriority,
+  ownershipFilter, // 'all' | 'mine' | 'delegated'
+  onSetOwnership,
   expandedTaskIds,
   subtasksByParentId,
   scheduledBlocksByTaskId,
@@ -56,6 +63,32 @@ export default function PlannerSidebar({
   const [winsOpen, setWinsOpen] = useState(true)
   return (
     <div style={{ width: isMobile ? '100%' : 280, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden', maxHeight: isMobile ? 340 : 'none', overflowY: isMobile ? 'auto' : 'visible' }}>
+      {/* Ownership filter: whose tasks show in the backlog + KPIs below */}
+      <div style={{ display: 'flex', gap: 4, padding: 3, background: SLOT_HOVER, borderRadius: 8 }}>
+        {OWNERSHIP_FILTERS.map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onSetOwnership(value)}
+            aria-pressed={ownershipFilter === value}
+            style={{
+              flex: 1,
+              border: 'none',
+              borderRadius: 6,
+              padding: '4px 6px',
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: 'pointer',
+              background: ownershipFilter === value ? 'white' : 'transparent',
+              color: ownershipFilter === value ? PRIMARY : MUTED,
+              boxShadow: ownershipFilter === value ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Priority filters */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {PRIORITY_FILTERS.map((p) => {
