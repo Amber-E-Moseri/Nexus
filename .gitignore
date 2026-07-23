@@ -16,3 +16,6 @@ supabase/supabase/
 
 # Google Apps Script configuration with sensitive credentials
 supabase/functions/google-apps-script/CONFIG.gs
+
+# Generated test-run output, not source
+test-results.log
