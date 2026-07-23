@@ -59,7 +59,7 @@ function typeIcon(type) {
   return def.icon
 }
 
-function InboxRow({ item, isSelected, isLast, onOpen, onMarkRead, onMarkUnread, onDelete }) {
+function InboxRow({ item, isSelected, isLast, onOpen, onMarkRead, onMarkUnread, onDelete, checked, onToggleCheck, checkboxVisible }) {
   const [hovered, setHovered] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -88,6 +88,20 @@ function InboxRow({ item, isSelected, isLast, onOpen, onMarkRead, onMarkUnread, 
         position: 'relative',
       }}
     >
+      {/* Bulk-select checkbox */}
+      <div
+        style={{ width: (checkboxVisible || hovered || checked) ? 16 : 0, flexShrink: 0, overflow: 'hidden', transition: 'width 0.13s' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => onToggleCheck(item.id)}
+          aria-label={checked ? 'Deselect notification' : 'Select notification'}
+          style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--purple-700)' }}
+        />
+      </div>
+
       {/* Unread dot */}
       <div style={{ width: 8, height: 8, flexShrink: 0 }}>
         {!item.read && (
@@ -320,6 +334,7 @@ export default function Inbox() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [taskModal, setTaskModal] = useState(null)
+  const [checkedIds, setCheckedIds] = useState(() => new Set())
 
   useEffect(() => {
     if (!profile?.id) return
@@ -358,6 +373,26 @@ export default function Inbox() {
   const unreadCount = notifications.filter((n) => !n.read).length
   const filteredFeed = filter === 'Unread' ? notifications.filter((n) => !n.read) : notifications
   const groups = groupByRecency(filteredFeed)
+  const checkedCount = checkedIds.size
+  const allVisibleChecked = filteredFeed.length > 0 && filteredFeed.every((n) => checkedIds.has(n.id))
+
+  function toggleChecked(id) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleCheckAll() {
+    setCheckedIds((prev) => {
+      if (allVisibleChecked) return new Set()
+      const next = new Set(prev)
+      for (const n of filteredFeed) next.add(n.id)
+      return next
+    })
+  }
 
   async function markAllRead() {
     const ids = notifications.filter((n) => !n.read).map((n) => n.id)
@@ -387,6 +422,25 @@ export default function Inbox() {
     setNotifications((prev) => prev.filter((n) => n.id !== item.id))
     if (selected?.id === item.id) setSelected(null)
     await supabase.from('notifications').delete().eq('id', item.id)
+  }
+
+  async function deleteChecked() {
+    const ids = Array.from(checkedIds)
+    if (!ids.length) return
+    if (!window.confirm(`Delete ${ids.length} notification${ids.length === 1 ? '' : 's'}? This can't be undone.`)) return
+    setNotifications((prev) => prev.filter((n) => !checkedIds.has(n.id)))
+    if (selected && checkedIds.has(selected.id)) setSelected(null)
+    setCheckedIds(new Set())
+    await supabase.from('notifications').delete().in('id', ids)
+  }
+
+  async function markCheckedRead() {
+    const ids = Array.from(checkedIds)
+    if (!ids.length) return
+    setNotifications((prev) => prev.map((n) => (checkedIds.has(n.id) ? { ...n, read: true } : n)))
+    if (selected && checkedIds.has(selected.id)) setSelected((s) => ({ ...s, read: true }))
+    setCheckedIds(new Set())
+    await supabase.from('notifications').update({ read: true }).in('id', ids)
   }
 
   async function handleItemClick(item) {
@@ -475,6 +529,72 @@ export default function Inbox() {
           })}
         </div>
 
+        {/* Select-all / bulk actions bar */}
+        {filteredFeed.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, minHeight: 30 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12.5, color: 'var(--ink-2)', fontFamily: FONT_BODY }}>
+              <input
+                type="checkbox"
+                checked={allVisibleChecked}
+                onChange={toggleCheckAll}
+                style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--purple-700)' }}
+              />
+              Select all
+            </label>
+
+            <AnimatePresence>
+              {checkedCount > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -6 }}
+                  transition={{ duration: 0.12 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                >
+                  <span style={{ fontSize: 12.5, color: 'var(--ink-3)', fontFamily: FONT_MONO }}>
+                    {checkedCount} selected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={markCheckedRead}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border-1)',
+                      background: 'var(--surface-card)', color: 'var(--ink-2)',
+                      fontFamily: FONT_BODY, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    <Check size={12} /> Mark read
+                  </button>
+                  <button
+                    type="button"
+                    onClick={deleteChecked}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '5px 12px', borderRadius: 8, border: '1px solid var(--red-200, #fecaca)',
+                      background: 'var(--red-50, #fef2f2)', color: 'var(--red-500, #ef4444)',
+                      fontFamily: FONT_BODY, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    <Trash2 size={12} /> Delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCheckedIds(new Set())}
+                    style={{
+                      padding: '5px 10px', borderRadius: 8, border: 'none',
+                      background: 'transparent', color: 'var(--ink-3)',
+                      fontFamily: FONT_BODY, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
         {/* Body: list + detail panel side by side */}
         <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
           {/* List */}
@@ -531,6 +651,9 @@ export default function Inbox() {
                           onMarkRead={markItemRead}
                           onMarkUnread={markItemUnread}
                           onDelete={deleteItem}
+                          checked={checkedIds.has(item.id)}
+                          onToggleCheck={toggleChecked}
+                          checkboxVisible={checkedCount > 0}
                         />
                       ))}
                     </div>
