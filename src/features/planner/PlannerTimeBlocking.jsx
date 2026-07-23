@@ -3,7 +3,7 @@ import { DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensor
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../context/ToastContext'
 import { useMyTasks } from '../tasks/hooks/useMyTasks'
-import { getSubtasks } from '../tasks/lib/tasks'
+import { getSubtasks, isDelegatedTask } from '../tasks/lib/tasks'
 import { isTaskCancelled, isTaskCompleted } from '../../lib/taskStatuses'
 import TaskModal from '../tasks/components/TaskModal'
 import GlobalTaskFeedPanel from '../calendar/components/GlobalTaskFeedPanel'
@@ -58,6 +58,10 @@ export default function PlannerTimeBlocking() {
     useTimeBlocks(userId, weekStartISO, weekEndISO)
 
   const [priorityFilter, setPriorityFilter] = useState(() => new Set())
+  // 'all' | 'mine' | 'delegated' -- unscoped useMyTasks blends tasks the user
+  // is assigned (mine) with tasks they created for someone else (delegated),
+  // same distinction as the My Tasks page's Mine/Delegated tabs.
+  const [ownershipFilter, setOwnershipFilter] = useState('all')
   const [expandedTaskIds, setExpandedTaskIds] = useState(() => new Set())
   const [subtasksByParentId, setSubtasksByParentId] = useState({})
   const [modalTask, setModalTask] = useState(null)
@@ -85,6 +89,15 @@ export default function PlannerTimeBlocking() {
     [priorityFilter],
   )
 
+  const matchesOwnership = useCallback(
+    (t) => {
+      if (ownershipFilter === 'mine') return t.assignee_id === userId
+      if (ownershipFilter === 'delegated') return isDelegatedTask(t, userId)
+      return true
+    },
+    [ownershipFilter, userId],
+  )
+
   const scheduledBlocksByTaskId = useMemo(() => {
     const map = new Map()
     for (const b of timeBlocks) {
@@ -97,7 +110,7 @@ export default function PlannerTimeBlocking() {
   const scheduledTaskIds = useMemo(() => new Set(scheduledBlocksByTaskId.keys()), [scheduledBlocksByTaskId])
 
   const groups = useMemo(() => {
-    const pool = parents.filter((t) => isActionable(t) && matchesPriority(t) && !scheduledTaskIds.has(t.id))
+    const pool = parents.filter((t) => isActionable(t) && matchesPriority(t) && matchesOwnership(t) && !scheduledTaskIds.has(t.id))
     const due = (t) => (t.due_date ? t.due_date.slice(0, 10) : null)
     const todayOverdue = pool.filter((t) => due(t) && due(t) <= todayISO)
     const thisWeek = pool.filter((t) => due(t) && due(t) > todayISO && due(t) <= weekEndISO)
@@ -107,22 +120,23 @@ export default function PlannerTimeBlocking() {
       { name: 'This Week', tasks: thisWeek, defaultOpen: true },
       { name: 'Backlog', tasks: backlog, defaultOpen: true },
     ]
-  }, [parents, matchesPriority, todayISO, weekEndISO, scheduledTaskIds])
+  }, [parents, matchesPriority, matchesOwnership, todayISO, weekEndISO, scheduledTaskIds])
 
   const kpis = useMemo(() => {
     const due = (t) => (t.due_date ? t.due_date.slice(0, 10) : null)
-    const actionableParents = parents.filter(isActionable)
+    const actionableParents = parents.filter((t) => isActionable(t) && matchesOwnership(t))
     return {
       dueThisWeek: actionableParents.filter((t) => due(t) && due(t) >= weekStartISO && due(t) <= weekEndISO).length,
       overdue: actionableParents.filter((t) => due(t) && due(t) < todayISO).length,
       completedThisWeek: parents.filter((t) => {
+        if (!matchesOwnership(t)) return false
         if (!isTaskCompleted(t) || !t.completed_at) return false
         const doneISO = t.completed_at.slice(0, 10)
         return doneISO >= weekStartISO && doneISO <= weekEndISO
       }).length,
       unscheduled: actionableParents.filter((t) => !scheduledTaskIds.has(t.id)).length,
     }
-  }, [parents, weekStartISO, weekEndISO, todayISO, scheduledTaskIds])
+  }, [parents, matchesOwnership, weekStartISO, weekEndISO, todayISO, scheduledTaskIds])
 
   // ---- Block relationships & warnings ------------------------------------
   const childBlocksByParentBlockId = useMemo(() => {
@@ -202,6 +216,10 @@ export default function PlannerTimeBlocking() {
       else next.add(p)
       return next
     })
+  }, [])
+
+  const handleSetOwnership = useCallback((value) => {
+    setOwnershipFilter(value)
   }, [])
 
   // ---- Drag & drop --------------------------------------------------------
@@ -481,6 +499,8 @@ export default function PlannerTimeBlocking() {
               kpis={kpis}
               priorityFilter={priorityFilter}
               onTogglePriority={handleTogglePriority}
+              ownershipFilter={ownershipFilter}
+              onSetOwnership={handleSetOwnership}
               expandedTaskIds={expandedTaskIds}
               subtasksByParentId={subtasksByParentId}
               scheduledBlocksByTaskId={scheduledBlocksByTaskId}

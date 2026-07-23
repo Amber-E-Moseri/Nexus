@@ -13,7 +13,15 @@ export default function AllTeamsBoard({
   teamMembers,
   statuses,
 }) {
-  const [collapsedTeams, setCollapsedTeams] = useState(() => new Set())
+  // Teams with no tasks start collapsed -- an empty 5-column board per team
+  // buries the teams that actually have work under a wall of blank columns.
+  const [collapsedTeams, setCollapsedTeams] = useState(
+    () => new Set(
+      Object.entries(tasksByTeam ?? {})
+        .filter(([, { tasks: teamTasks }]) => teamTasks.length === 0)
+        .map(([teamId]) => teamId),
+    ),
+  )
 
   function toggleTeam(teamId) {
     setCollapsedTeams((prev) => {

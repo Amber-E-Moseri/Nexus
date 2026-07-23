@@ -291,7 +291,7 @@ function PinnedTaskRow({ task, onOpen, onUnpin }) {
 export default function PersonalListPage() {
   const { profile } = useAuth()
   const { showToast } = useToast()
-  const { personalTasks, pinnedTasks, isLoading, refetch } = usePersonalList(profile?.id ?? '')
+  const { personalTasks, pinnedTasks, isLoading, refetch, moveTask } = usePersonalList(profile?.id ?? '')
   const [statuses, setStatuses] = useState([])
   const [modal, setModal] = useState(null)
   const [viewMode, setViewMode] = useState(loadViewMode)
@@ -318,6 +318,14 @@ export default function PersonalListPage() {
       setShowAddExisting(false)
       showToast(`Added "${task.title}" to your Personal List`)
       refetch()
+    } catch (err) {
+      showToast(err.message, { tone: 'error' })
+    }
+  }
+
+  async function handleMoveTask({ taskId, newStatus }) {
+    try {
+      await moveTask({ taskId, newStatus })
     } catch (err) {
       showToast(err.message, { tone: 'error' })
     }
@@ -404,6 +412,7 @@ export default function PersonalListPage() {
                     statusesOverride={statuses}
                     onTaskClick={(task) => setModal({ mode: 'edit', task })}
                     onCreateTask={() => setModal({ mode: 'create' })}
+                    onTaskStatusChange={handleMoveTask}
                   />
                 </TasksProvider>
               </div>
@@ -416,6 +425,7 @@ export default function PersonalListPage() {
                   canAddTask
                   onCreateTask={() => setModal({ mode: 'create' })}
                   onTaskClick={(task) => setModal({ mode: 'edit', task })}
+                  onTaskStatusChange={handleMoveTask}
                   people={{}}
                   priorities={{}}
                   teamMembers={[]}
