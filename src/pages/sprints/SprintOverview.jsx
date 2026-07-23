@@ -172,11 +172,12 @@ export default function SprintOverview() {
   const [temporaryMembers, setTemporaryMembers] = useState([])
   // regional_secretary deliberately excluded from the unrestricted bypass —
   // sprints are membership-gated for everyone except super_admin/programs/
-  // ors; matches can_manage_sprint()'s own authority model.
+  // ors/dept_lead; matches can_manage_sprint()'s own authority model.
   const [canViewSprint, setCanViewSprint] = useState(
     role === 'super_admin' ||
     hasSpaceRole(profile, null, 'ors') ||
-    hasSpaceRole(profile, null, 'programs')
+    hasSpaceRole(profile, null, 'programs') ||
+    hasSpaceRole(profile, null, 'dept_lead')
   )
   const [accessDeniedSprint, setAccessDeniedSprint] = useState(null) // {name, description} when user lacks access
   const [accessRequestStatus, setAccessRequestStatus] = useState(null) // 'pending' | 'rejected' | null
@@ -198,15 +199,15 @@ export default function SprintOverview() {
     return grouped
   }, [tasks])
 
-  const canManage = role === 'super_admin' || detail?.members?.some(
+  const canManage = role === 'super_admin' || hasSpaceRole(profile, null, 'dept_lead') || detail?.members?.some(
     (member) => member.user?.id === profile?.id && ['owner', 'manager'].includes(member.role),
   )
   const isMember = detail?.members?.some((m) => m.user?.id === profile?.id)
   const canCreateTask = canManage || isMember
-  const canAssignPrivilegedSprintRoles = role === 'super_admin' || detail?.members?.some(
+  const canAssignPrivilegedSprintRoles = role === 'super_admin' || hasSpaceRole(profile, null, 'dept_lead') || detail?.members?.some(
     (member) => member.user?.id === profile?.id && member.role === 'owner',
   )
-  const canCreateSprint = role === 'super_admin' || role === 'dept_lead' || role === 'pastor' || role === 'regional_secretary'
+  const canCreateSprint = role === 'super_admin' || role === 'dept_lead' || role === 'pastor' || role === 'regional_secretary' || hasSpaceRole(profile, null, 'dept_lead')
 
   async function loadDetail() {
     setLoading(true)
