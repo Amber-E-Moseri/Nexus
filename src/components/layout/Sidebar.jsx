@@ -711,7 +711,7 @@ export default function Sidebar() {
                 />
               ) : space.name}
               glyph={<SpaceGlyph color={space.color} label={space.name?.charAt(0)?.toUpperCase() ?? '?'} />}
-              trailing={canManageSpaces && (hoveredSpaceId === space.id || openSpaceMenuId === space.id || openQuickAddMenuId === space.id) ? (
+              trailing={(hoveredSpaceId === space.id || openSpaceMenuId === space.id || openQuickAddMenuId === space.id) ? (
                 <motion.div
                   initial={{ opacity: 0, x: 4 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -785,99 +785,101 @@ export default function Sidebar() {
                       </DropdownMenu.Content>
                     </DropdownMenu.Portal>
                   </DropdownMenu.Root>
-                  <DropdownMenu.Root open={openSpaceMenuId === space.id} onOpenChange={(open) => setOpenSpaceMenuId(open ? space.id : null)}>
-                    <DropdownMenu.Trigger asChild>
-                      <motion.button
-                        type="button"
-                        onClick={(event) => event.stopPropagation()}
-                        aria-label={`More options for ${space.name}`}
-                        whileHover={{ backgroundColor: '#5F3BB8', color: '#FFFFFF' }}
-                        whileTap={{ scale: 0.9 }}
-                        style={{
-                          width: 22,
-                          height: 22,
-                          border: 'none',
-                          background: openSpaceMenuId === space.id ? '#5F3BB8' : 'rgba(95,59,184,0)',
-                          borderRadius: 6,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: openSpaceMenuId === space.id ? '#FFFFFF' : '#6D6860',
-                          cursor: 'pointer',
-                          flexShrink: 0,
-                        }}
-                      >
-                        <MoreHorizontal size={14} />
-                      </motion.button>
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.Content
-                        side="right"
-                        align="start"
-                        sideOffset={8}
-                        collisionPadding={8}
-                        onCloseAutoFocus={(event) => event.preventDefault()}
-                        style={{
-                          minWidth: 196,
-                          background: '#FFFFFF',
-                          border: '1px solid var(--border-1)',
-                          borderRadius: 12,
-                          boxShadow: '0 8px 28px rgba(28,22,16,.14)',
-                          padding: 6,
-                          zIndex: 60,
-                        }}
-                      >
-                        <DropdownMenu.Item
-                          onSelect={() => {
-                            setInlineRenameId(space.id)
-                            setInlineRenameValue(space.name)
+                  {canManageSpaces ? (
+                    <DropdownMenu.Root open={openSpaceMenuId === space.id} onOpenChange={(open) => setOpenSpaceMenuId(open ? space.id : null)}>
+                      <DropdownMenu.Trigger asChild>
+                        <motion.button
+                          type="button"
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={`More options for ${space.name}`}
+                          whileHover={{ backgroundColor: '#5F3BB8', color: '#FFFFFF' }}
+                          whileTap={{ scale: 0.9 }}
+                          style={{
+                            width: 22,
+                            height: 22,
+                            border: 'none',
+                            background: openSpaceMenuId === space.id ? '#5F3BB8' : 'rgba(95,59,184,0)',
+                            borderRadius: 6,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: openSpaceMenuId === space.id ? '#FFFFFF' : '#6D6860',
+                            cursor: 'pointer',
+                            flexShrink: 0,
                           }}
-                          className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                         >
-                          <Pencil size={14} />
-                          <span>Rename</span>
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                          onSelect={() => navigate(`/dept/${slugifySpaceName(space.slug ?? space.name)}`)}
-                          className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                          <MoreHorizontal size={14} />
+                        </motion.button>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content
+                          side="right"
+                          align="start"
+                          sideOffset={8}
+                          collisionPadding={8}
+                          onCloseAutoFocus={(event) => event.preventDefault()}
+                          style={{
+                            minWidth: 196,
+                            background: '#FFFFFF',
+                            border: '1px solid var(--border-1)',
+                            borderRadius: 12,
+                            boxShadow: '0 8px 28px rgba(28,22,16,.14)',
+                            padding: 6,
+                            zIndex: 60,
+                          }}
                         >
-                          <Settings size={14} />
-                          <span>Task Statuses</span>
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                          onSelect={() => handleHideSpace(space.id)}
-                          className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
-                        >
-                          <EyeOff size={14} />
-                          <span>Hide Space</span>
-                        </DropdownMenu.Item>
-                        {role === 'super_admin' ? (
                           <DropdownMenu.Item
                             onSelect={() => {
-                              if (space.status === 'archived') {
-                                handleRestoreSpace(space).catch(console.error)
-                              } else {
-                                handleArchiveSpace(space).catch(console.error)
-                              }
+                              setInlineRenameId(space.id)
+                              setInlineRenameValue(space.name)
                             }}
                             className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                           >
-                            <Archive size={14} />
-                            <span>{space.status === 'archived' ? 'Restore' : 'Archive'}</span>
+                            <Pencil size={14} />
+                            <span>Rename</span>
                           </DropdownMenu.Item>
-                        ) : null}
-                        {role === 'super_admin' ? (
                           <DropdownMenu.Item
-                            onSelect={() => handleDeleteSpace(space).catch(console.error)}
-                            className="cu-menu-item cu-menu-item-danger" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none', color: 'var(--accent-red)' }}
+                            onSelect={() => navigate(`/dept/${slugifySpaceName(space.slug ?? space.name)}`)}
+                            className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
                           >
-                            <Trash2 size={14} />
-                            <span>Delete</span>
+                            <Settings size={14} />
+                            <span>Task Statuses</span>
                           </DropdownMenu.Item>
-                        ) : null}
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu.Root>
+                          <DropdownMenu.Item
+                            onSelect={() => handleHideSpace(space.id)}
+                            className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                          >
+                            <EyeOff size={14} />
+                            <span>Hide Space</span>
+                          </DropdownMenu.Item>
+                          {role === 'super_admin' ? (
+                            <DropdownMenu.Item
+                              onSelect={() => {
+                                if (space.status === 'archived') {
+                                  handleRestoreSpace(space).catch(console.error)
+                                } else {
+                                  handleArchiveSpace(space).catch(console.error)
+                                }
+                              }}
+                              className="cu-menu-item" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none' }}
+                            >
+                              <Archive size={14} />
+                              <span>{space.status === 'archived' ? 'Restore' : 'Archive'}</span>
+                            </DropdownMenu.Item>
+                          ) : null}
+                          {role === 'super_admin' ? (
+                            <DropdownMenu.Item
+                              onSelect={() => handleDeleteSpace(space).catch(console.error)}
+                              className="cu-menu-item cu-menu-item-danger" style={{ display: 'flex', alignItems: 'center', gap: 8, borderRadius: 8, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', outline: 'none', color: 'var(--accent-red)' }}
+                            >
+                              <Trash2 size={14} />
+                              <span>Delete</span>
+                            </DropdownMenu.Item>
+                          ) : null}
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
+                  ) : null}
                 </motion.div>
               ) : null}
               onClick={() => go(`/spaces/${space.id}`)}

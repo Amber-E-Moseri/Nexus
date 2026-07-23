@@ -433,7 +433,7 @@ function OpenItemsWidget({ spaceId, onViewAll }) {
   )
 }
 
-function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings, selectedFolder, selectedList, canManage, onSelectList, onTreeDataChange }) {
+function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings, selectedFolder, selectedList, canManage, canCreate, onSelectList, onTreeDataChange }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const [calFeedOpen, setCalFeedOpen] = useState(false)
@@ -571,6 +571,7 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
             selectedListId={selectedList?.id ?? null}
             onSelectList={onSelectList}
             canManage={canManage}
+            canCreate={canCreate}
             onTreeDataChange={onTreeDataChange}
             members={members}
           />
@@ -764,7 +765,7 @@ function UnfoldedListsDropZone({ lists, selectedListId, onSelectList, onEditList
   )
 }
 
-function DroppableFolder({ folder, isOpen, onToggle, onEdit, onDelete, canEditFolder, canManage, onNewList, children, onShare }) {
+function DroppableFolder({ folder, isOpen, onToggle, onEdit, onDelete, canEditFolder, canManage, canCreate = canManage, onNewList, children, onShare }) {
   const { setNodeRef, isOver } = useDroppable({ id: folder.id })
   const [menuOpen, setMenuOpen] = useState(false)
   const [updating, setUpdating] = useState(false)
@@ -779,7 +780,7 @@ function DroppableFolder({ folder, isOpen, onToggle, onEdit, onDelete, canEditFo
           <span>📁</span>
           <span className="truncate">{folder.name}</span>
         </button>
-        {(canEditFolder(folder) || canManage) ? (
+        {(canEditFolder(folder) || canManage || canCreate) ? (
           <div className="relative">
             <button
               type="button"
@@ -844,7 +845,7 @@ function DroppableFolder({ folder, isOpen, onToggle, onEdit, onDelete, canEditFo
                         </DropdownMenu.Item>
                       </>
                     ) : null}
-                    {canManage ? (
+                    {canCreate ? (
                       <DropdownMenu.Item
                         onSelect={() => { onNewList(folder); setMenuOpen(false) }}
                         className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none"
@@ -874,6 +875,7 @@ function FolderTree({
   onToggleFolder,
   onSelectList,
   canManage,
+  canCreate = canManage,
   canEditFolder,
   canEditList,
   onEditFolder,
@@ -938,6 +940,7 @@ function FolderTree({
                   onDelete={onDeleteFolder}
                   canEditFolder={canEditFolder}
                   canManage={canManage}
+                  canCreate={canCreate}
                   onNewList={onNewList}
                   onShare={onShareFolder}
                 >
@@ -952,7 +955,7 @@ function FolderTree({
 
           {folders.length === 0 ? <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-6 text-sm text-[var(--text-tertiary)]">No folders yet. Create one to organize lists in this space.</div> : null}
 
-          {(unfoldedLists.length > 0 || canManage) ? (
+          {(unfoldedLists.length > 0 || canCreate) ? (
             <UnfoldedListsDropZone
               lists={unfoldedLists}
               selectedListId={selectedListId}
@@ -962,13 +965,13 @@ function FolderTree({
               onMoveList={onMoveList}
               onDeleteList={onDeleteList}
               onNewUnfoldedList={onNewUnfoldedList}
-              canManage={canManage}
+              canManage={canCreate}
               onShareList={onShareList}
               onToggleListVisibility={onToggleListVisibility}
             />
           ) : null}
 
-          {canManage ? (
+          {canCreate ? (
             <div className="grid grid-cols-2 gap-2">
               <button type="button" onClick={onNewFolder} className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
                 + Add Folder
@@ -1064,7 +1067,7 @@ function ShareModal({ kind, item, members, onClose }) {
   )
 }
 
-function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage, onTreeDataChange, members = [] }) {
+function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage, canCreate = canManage, onTreeDataChange, members = [] }) {
   const { effectiveRole, profile } = useAuth()
   const [folders, setFolders] = useState([])
   const [lists, setLists] = useState([])
@@ -1248,6 +1251,7 @@ function SpaceOrganizerPanel({ spaceId, selectedListId, onSelectList, canManage,
           onToggleFolder={(folderId) => setOpenFolders((current) => ({ ...current, [folderId]: !current[folderId] }))}
           onSelectList={onSelectList}
           canManage={canManage}
+          canCreate={canCreate}
           canEditFolder={canEditFolderSettings}
           canEditList={canEditListSettings}
           onEditFolder={(folder) => {
@@ -1740,6 +1744,12 @@ export default function SpaceOverview() {
 
   const canManageStatuses = effectiveRole === 'super_admin' || effectiveRole === 'dept_lead'
   const visibleTabs = TABS.filter((tab) => (tab === 'Settings' ? canManage : true))
+  // Any space member can create folders/lists (matches folders_write/lists_write
+  // RLS, which already allows created_by = auth.uid() for department members and
+  // space_members rows) — separate from canManage, which stays scoped to editing
+  // others' items, Settings, Integrations, and archiving/deleting the space.
+  const isSpaceMember = spaceMembers.some((member) => (member.user?.id ?? member.id) === profile?.id)
+  const canCreate = Boolean(canManage) || isSpaceMember
   const selectedList = useMemo(() => treeData.lists.find((list) => list.id === selectedListId) ?? null, [treeData.lists, selectedListId])
   const selectedFolder = useMemo(() => treeData.folders.find((folder) => folder.id === selectedList?.folder_id) ?? null, [treeData.folders, selectedList])
   const overviewTasks = useMemo(() => {
@@ -1875,7 +1885,7 @@ export default function SpaceOverview() {
 
   const tabContent = (
     <>
-      {activeTab === 'Overview' ? <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}><SpaceOverviewTab space={space} listsCount={listsCount} members={spaceMembers} tasks={overviewTasks} sprints={spaceSprints} meetings={spaceMeetings} selectedFolder={selectedFolder} selectedList={selectedList} canManage={canManage} onSelectList={(id) => { setSelectedListId(id); setSelectedFolderId(null); setActiveTab('List'); navigate(`/spaces/${spaceId}?list=${id}`) }} onTreeDataChange={(next) => { setTreeData(next); setListsCount(next.lists.length) }} /></div> : null}
+      {activeTab === 'Overview' ? <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}><SpaceOverviewTab space={space} listsCount={listsCount} members={spaceMembers} tasks={overviewTasks} sprints={spaceSprints} meetings={spaceMeetings} selectedFolder={selectedFolder} selectedList={selectedList} canManage={canManage} canCreate={canCreate} onSelectList={(id) => { setSelectedListId(id); setSelectedFolderId(null); setActiveTab('List'); navigate(`/spaces/${spaceId}?list=${id}`) }} onTreeDataChange={(next) => { setTreeData(next); setListsCount(next.lists.length) }} /></div> : null}
       {activeTab === 'Board' ? <div role="tabpanel" id="tabpanel-board" aria-labelledby="tab-board" tabIndex={0}><TasksProvider key={statusVersion} departmentId={spaceId}>{canManage === null ? <div style={{ padding: '2rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading board…</div> : <SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="kanban" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} />}</TasksProvider></div> : null}
       {activeTab === 'List' ? <div role="tabpanel" id="tabpanel-list" aria-labelledby="tab-list" tabIndex={0}><TasksProvider key={statusVersion} departmentId={spaceId}>{canManage === null ? <div style={{ padding: '2rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading…</div> : <SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="list" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} />}</TasksProvider></div> : null}
       {activeTab === 'Calendar' ? (
