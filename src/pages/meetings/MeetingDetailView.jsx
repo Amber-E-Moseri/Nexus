@@ -928,14 +928,16 @@ function MeetingDetailViewInner() {
 
   async function handleAgendaItemsChange(editorItems) {
     // Optimistic local update so the (unrelated) live-navigation list above
-    // reflects edits immediately; mins/id are re-derived after the DB round
-    // trip so `id` stays a real agenda_items id (needed for the `key` prop
-    // and for the sort_order this list already relies on for navigation).
+    // reflects edits immediately; real ids come back from the save call
+    // below and replace these placeholders without a full page refetch.
     const previousAgenda = agenda
     setAgenda(editorItems.map((item, i) => ({ id: `pending-${i}`, title: item.segment, mins: item.duration })))
     try {
-      await saveAgendaItemsForMeeting(meeting, editorItems, profile?.id)
-      await fetchMeeting()
+      const result = await saveAgendaItemsForMeeting(meeting, editorItems, profile?.id)
+      setAgenda((result.items ?? []).map((item) => ({ id: item.id, title: item.segment, mins: item.duration_minutes })))
+      if (result.agendaId && !meeting.agendas?.[0]?.id) {
+        setMeeting((current) => ({ ...current, agendas: [{ id: result.agendaId, title: current.title, agenda_items: result.items }] }))
+      }
     } catch (err) {
       // Roll back the optimistic update on failure — otherwise the editor
       // looks saved (items still show in the read view) until the next

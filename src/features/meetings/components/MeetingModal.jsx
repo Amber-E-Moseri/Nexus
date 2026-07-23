@@ -152,12 +152,12 @@ export default function MeetingModal({ departmentId, onClose }) {
         if (attendanceError) throw attendanceError
 
         if (agendaItems.length > 0) {
-          const linkedId = await saveAgendaItemsForMeeting(
+          const result = await saveAgendaItemsForMeeting(
             { id: savedMeeting.id, title: title.trim(), meeting_type: meetingType, department_id: effectiveDeptId, date: new Date(date).toISOString(), agendas: agendaRecordId ? [{ id: agendaRecordId }] : [] },
             agendaItems,
             profile?.id,
           ).catch(() => null)
-          if (linkedId) setAgendaRecordId(linkedId)
+          if (result?.agendaId) setAgendaRecordId(result.agendaId)
         }
       } else {
         const created = await addMeeting({
