@@ -323,14 +323,18 @@ export default function TaskModal({
           listTaskStatuses(),
         ])
 
+        // Prefer dept-specific rows over org-wide ones explicitly — deptStatuses
+        // (get_space_statuses) returns org-wide rows before dept-scoped ones for
+        // the same category, so relying on encounter/array order here picked
+        // the org-wide id, different from what actually gets persisted
+        // elsewhere (see the matching fix in TasksContext.jsx).
         const statusMap = new Map()
-        for (const status of globalStatuses) {
+        for (const status of [...globalStatuses, ...deptStatuses]) {
           const key = `${status.category}:${status.legacy_key || status.name}`
-          statusMap.set(key, status)
-        }
-        for (const status of deptStatuses) {
-          const key = `${status.category}:${status.legacy_key || status.name}`
-          statusMap.set(key, status)
+          const existing = statusMap.get(key)
+          if (!existing || (existing.is_org_status && !status.is_org_status)) {
+            statusMap.set(key, status)
+          }
         }
 
         if (!Array.from(statusMap.values()).some(s => s.category === 'open')) {
