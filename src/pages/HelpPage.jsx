@@ -40,7 +40,11 @@ const FAQ_SECTIONS = [
       },
       {
         q: 'What is Planner for?',
-        a: 'Planner is a super_admin-only cross-team scheduling view for laying out work across departments and sprints at a glance. It also includes a Weekly Wins board where teams log highlight achievements each week — visible to leadership without digging into task lists.',
+        a: 'Planner is a personal time-blocking calendar, open to everyone (not role-gated). Drag your tasks onto the weekly grid to schedule when you\'ll actually work on them; it flags overload and scheduling conflicts as you go. It also has a Weekly Wins panel where you log highlight achievements each week.',
+      },
+      {
+        q: 'What happens to a task when I delete it?',
+        a: 'Deleting a task sends it to Trash (in the sidebar under My Tasks), not permanent deletion. From Trash you can Restore it back to its original list. Permanently deleting ("Delete Forever") is limited to dept_lead, regional_secretary, and super_admin for that task\'s department, and cannot be undone.',
       },
       {
         q: 'What is Personal List?',
@@ -127,6 +131,10 @@ const FAQ_SECTIONS = [
       {
         q: 'Where do I see sprints outside my own team?',
         a: 'Click "All Sprints" at the bottom of the Sprints section in the sidebar, or visit All Teams from the Sprints list to see active and planning sprints across every department.',
+      },
+      {
+        q: 'What\'s the difference between a single-department, multi-department, and custom sprint — and where do the tasks show up?',
+        a: 'A single-department sprint is tied to one space: its tasks automatically surface in that space\'s Board/List/Space Overview stats, in addition to the sprint\'s own board. A multi-department sprint has teams mapped to real departments (e.g. a "Media" team, a "PFCC" team) — each task shows up in its assignee\'s own department space as well as the sprint board, so multiple spaces see a slice of the sprint\'s work. A custom sprint (used for one-off events like a conference or festival) never attaches tasks to any department space, even if its teams happen to reuse department names for convenience — its tasks live only on the sprint\'s own board, keeping one-off event work out of every department\'s regular reporting. If an event sprint\'s tasks are unexpectedly appearing on a department\'s board, its sprint_type is probably set to multi-department when it should be custom.',
       },
     ],
   },
@@ -259,6 +267,10 @@ const FAQ_SECTIONS = [
       {
         q: 'How does the fuzzy person search work?',
         a: 'The person search in Flock CRM tolerates spelling differences — searching "Emeka" also surfaces "Emeka-Chijioke" or "Emeca". If you\'re not finding someone, try a shorter version of the name or their phone number.',
+      },
+      {
+        q: 'Does Flock CRM connect to Meetings?',
+        a: 'Yes — when you end a 1-on-1 meeting, NEXUS automatically logs a Flock CRM interaction for the matching contact (matched via the meeting\'s linked contact, the other attendee\'s linked account, or fuzzy name matching against your contacts), using the meeting notes as the summary. That interaction entry shows a "→ Open linked meeting" link back to the full meeting record. This only runs for 1-on-1 meetings you created, and it fails silently if no confident contact match is found — it never blocks ending the meeting.',
       },
       {
         q: 'Where are Flock CRM settings?',
