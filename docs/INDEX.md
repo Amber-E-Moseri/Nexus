@@ -1,7 +1,9 @@
 # 📚 Nexus Documentation Index
 
-**Last Updated:** 2026-06-26  
+**Last Updated:** 2026-07-23  
 **Status:** Complete & Organized
+
+> A batch of stray `.md`/`.txt`/`.sql`/`.sh` files previously sitting loose in the repo root were sorted into the folders below on 2026-07-23 (see each section's "moved from repo root" notes). Only `README.md` and `CLAUDE.md` stay at the repo root, plus standard tooling config (`package.json`, `vite.config.js`, etc.). Loose diagnostic/test scripts moved to `scripts/`.
 
 ---
 
@@ -11,6 +13,7 @@
 - **[README.md](../README.md)** — Project overview
 - **[IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)** — What's been built
 - **[FINAL_STATUS.md](./FINAL_STATUS.md)** — Current project status
+- **[INTERVIEW_PREP.md](./INTERVIEW_PREP.md)** — Technical interview prep Q&A grounded in the actual system (moved from repo root)
 
 ### For Deployment
 - **[Deployment Checklist](./deployment/DEPLOYMENT_CHECKLIST.md)** — Step-by-step deployment
@@ -27,6 +30,8 @@
 - `DEPLOYMENT_READY.md` — Pre-deploy verification
 - `SPRINT_TEAMS_DEPLOYMENT_GUIDE.md` — Sprint teams feature deploy
 - `WEBPUSH_DEPLOYMENT_SUMMARY.md` — Web push notifications
+- `DEPLOYMENT_GUIDE.md` — General deployment guide (moved from repo root)
+- `VAULT_ENCRYPTION_DEPLOYMENT.md` — Vault secrets encryption deploy (moved from repo root)
 
 ### `audit/` — 5-Phase Testing Audit
 - `NEXUS_FEATURE_DOCUMENT.md` — Complete audit (Phases 0-5)
@@ -44,10 +49,22 @@
 - `CRITICAL_ISSUES_VERIFICATION.md` — Issue validation
 - `SOFT_LAUNCH_AUDIT_REPORT.md` — Launch readiness
 - `PHASES_1_4_COMPLETE.md` — Phase completion status
+- `FIX_3B_COMPLETION_SUMMARY.md`, `FIX_3B_VERIFICATION.md` — Fix 3B completion + verification (moved from repo root)
+- `FOLLOW_UP_FIXES_COMPLETE.md` — Follow-up fixes report (moved from repo root)
+- `P0_COMPLETION_SUMMARY.md`, `P0_SUMMARY_AND_NEXT_STEPS.md` — P0 completion status (moved from repo root)
+- `PERFORMANCE_OPTIMIZATION_SUMMARY.md` — Performance optimization report (moved from repo root)
+- `TESTER_CHECKLIST.md` — Manual QA checklist (moved from repo root)
 
 ### `setup/` — Configuration & Setup
 - `DEEPGRAM_SETUP.md` — Speech-to-text integration
 - `CLAUDE_API_SETUP.md` — Claude API configuration
+
+### `guides/` — User & Admin Guides
+- `SECURITY_HOTFIXES_GUIDE.md` — Security updates
+- `PWA_QUICK_START.md` — Progressive Web App setup
+- `QUICK_TEST_REFERENCE.md` — Testing quick reference
+- `SUBSCRIPTION_MIGRATION_GUIDE.md` — Subscription migration guide (moved from repo root)
+- `QUICK_START.txt` — Original quick-start notes (moved from repo root)
 
 ### `features/` — Feature Documentation
 - `NEXUS_MEETINGS_IMPLEMENTATION.md` — Meetings module
@@ -62,22 +79,23 @@
 - `PHASE1_VALIDATION_CHECKLIST.md` — Phase 1 checklist
 - Multiple phase completion prompts
 
-### `guides/` — User & Admin Guides
-- `SECURITY_HOTFIXES_GUIDE.md` — Security updates
-- `PWA_QUICK_START.md` — Progressive Web App setup
-- `QUICK_TEST_REFERENCE.md` — Testing quick reference
-
 ### `architecture/` — System Architecture
 - `PUBLIC_REPORT_ARCHITECTURE.md` — Report system design
 - `REPOSITORY_STRUCTURE.md` — Project layout
 
 ### `investigations/` — Technical Research
 - `RSVP_SCHEMA_INVESTIGATION.md` — RSVP system research
+- `DUPLICATE_ACCOUNT_CLEANUP.md` — Duplicate account investigation (moved from repo root)
+- `SECURE_PASSWORD_RESET_TEST.md` — Password reset security test (moved from repo root)
 
 ### `audits/` — Compliance & Data Audits
 - `COMMUNICATIONS_AUDIT.md` — Communications audit
 - `DATA_AUDIT_RESULTS.md` — Data audit findings
 - `SCHEMA_FINDINGS_SUMMARY.md` — Schema analysis
+- `AUDIT_SUMMARY.md`, `MEETING_CACHING_AUDIT_2026-06-28.md` — Meeting module caching audit (moved from repo root)
+- `SPRINT_INVITE_PROVISIONING_AUDIT.md` — Sprint invite provisioning audit (moved from repo root)
+- `PHASE3_AUDIT.md` — Phase 3 (space roles) permissions audit (moved from repo root)
+- `P0_1_RLS_AUDIT_COMPLETE.md` — P0.1 RLS audit (moved from repo root)
 
 ### `archive/` — Historical Documentation
 - Cached implementations, performance analysis, session summaries
