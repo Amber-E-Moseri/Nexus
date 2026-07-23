@@ -97,6 +97,8 @@ function MeetingDetailViewInner() {
   const [aiMergeSuccess, setAiMergeSuccess]     = useState(false)
   const [editableAiItems, setEditableAiItems]   = useState([])
   const [editableOpenItems, setEditableOpenItems] = useState([])
+  const [editableSummary, setEditableSummary]   = useState('')
+  const [editableDecisions, setEditableDecisions] = useState([])
   const [orgUsers, setOrgUsers]                 = useState([])
   const [orgDepartments, setOrgDepartments]     = useState([])
   const [editingTranscript, setEditingTranscript] = useState(false)
@@ -204,6 +206,12 @@ function MeetingDetailViewInner() {
     if (!extraction.result) return
     const extracted = extraction.result
     setAiResult(extracted)
+    setEditableSummary(extracted.summary || '')
+    setEditableDecisions(
+      Array.isArray(extracted.decisions)
+        ? extracted.decisions.map((d) => (typeof d === 'string' ? { decision: d, context: '' } : { decision: d.decision || '', context: d.context || '' }))
+        : []
+    )
     if (extracted.action_items?.length) {
       setSelectedAiActionItems(new Set(extracted.action_items.map((_, i) => i)))
       ;(async () => {
@@ -354,9 +362,11 @@ function MeetingDetailViewInner() {
       aiResult,
       editableAiItems,
       editableOpenItems,
+      editableSummary,
+      editableDecisions,
       timestamp: Date.now(),
     }))
-  }, [aiResult, editableAiItems, editableOpenItems, meetingId])
+  }, [aiResult, editableAiItems, editableOpenItems, editableSummary, editableDecisions, meetingId])
 
   // ── load draft from cache on mount ─────────────────────────────────────────
   useEffect(() => {
@@ -381,6 +391,8 @@ function MeetingDetailViewInner() {
           setAiResult(parsed.aiResult)
           if (parsed.editableAiItems?.length) setEditableAiItems(parsed.editableAiItems)
           if (parsed.editableOpenItems?.length) setEditableOpenItems(parsed.editableOpenItems)
+          if (parsed.editableSummary) setEditableSummary(parsed.editableSummary)
+          if (parsed.editableDecisions?.length) setEditableDecisions(parsed.editableDecisions)
           if (parsed.aiResult.action_items?.length) {
             setSelectedAiActionItems(new Set(parsed.aiResult.action_items.map((_, i) => i)))
           }
@@ -2110,24 +2122,40 @@ function MeetingDetailViewInner() {
                   <>
                     {aiResult.summary && (
                       <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
-                        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>Summary</div>
-                        <div style={{ fontSize:13, color: FS.text, lineHeight:1.7 }}>{aiResult.summary}</div>
+                        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>Summary — edit before saving</div>
+                        <textarea
+                          value={editableSummary}
+                          onChange={(e) => setEditableSummary(e.target.value)}
+                          rows={5}
+                          style={{ width:'100%', fontSize:13, color: FS.text, lineHeight:1.7, fontFamily:'inherit', border:`1px solid ${FS.borderL}`, borderRadius:6, padding:'8px 10px', resize:'vertical', background:'#fff' }}
+                        />
                       </div>
                     )}
-                    {aiResult.decisions?.length > 0 && (
+                    {editableDecisions.length > 0 && (
                       <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
-                        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>Decisions extracted</div>
-                        <ul style={{ margin:0, paddingLeft:18 }}>
-                          {aiResult.decisions.map((d, i) => (
-                            <li key={i} style={{ fontSize:13, color: FS.text, lineHeight:1.6, marginBottom:4 }}>
-                              {typeof d === 'string' ? d : d.decision}
-                              {typeof d !== 'string' && d.context && (
+                        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>Decisions extracted — edit before saving</div>
+                        {editableDecisions.map((d, i) => (
+                          <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:8, marginBottom:8 }}>
+                            <div style={{ flex:1 }}>
+                              <input
+                                value={d.decision}
+                                onChange={(e) => setEditableDecisions((prev) => prev.map((it, j) => j === i ? { ...it, decision: e.target.value } : it))}
+                                style={{ width:'100%', fontSize:13, fontWeight:600, color: FS.text, border:`1px solid ${FS.borderL}`, borderRadius:4, padding:'5px 8px', fontFamily:'inherit', background:'#fff' }}
+                              />
+                              {d.context && (
                                 <div style={{ fontSize:11, color: FS.muted, marginTop:2 }}>{d.context}</div>
                               )}
-                            </li>
-                          ))}
-                        </ul>
-                        <button onClick={() => { setDecisionsText(aiResult.decisions.map(d => typeof d === 'string' ? d : d.decision).join('\n• ')); setActiveTab('minutes') }} style={{ marginTop:12, padding:'7px 14px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                            </div>
+                            <button
+                              onClick={() => setEditableDecisions((prev) => prev.filter((_, j) => j !== i))}
+                              title="Remove decision"
+                              style={{ border:'none', background:'none', color: FS.muted, cursor:'pointer', fontSize:16, lineHeight:1, padding:'4px 6px' }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        <button onClick={() => { setDecisionsText(editableDecisions.map(d => d.decision).join('\n• ')); setActiveTab('minutes') }} style={{ marginTop:4, padding:'7px 14px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}>
                           → Copy to Minutes
                         </button>
                       </div>
