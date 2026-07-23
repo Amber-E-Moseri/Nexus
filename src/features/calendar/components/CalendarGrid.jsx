@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core'
 import { useDndSensors } from '../../../dnd'
 import { CalendarEventChip, EVENT_COLORS } from './CalendarEventCard'
 import CalendarDraggableEvent from './CalendarDraggableEvent'
+import DayEventsPopover from './DayEventsPopover'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -34,6 +36,7 @@ export default function CalendarGrid({
   onDateReschedule,
 }) {
   const sensors = useDndSensors()
+  const [expandedDay, setExpandedDay] = useState(null)
   const gridStart = startOfGrid(year, month)
   const today = new Date()
   const days = Array.from({ length: 42 }, (_, index) => {
@@ -138,7 +141,7 @@ export default function CalendarGrid({
                     <CalendarEventChip key={event.id} event={event} onClick={onEventClick} />
                   ))}
                   {hiddenCount > 0 ? (
-                    <button type="button" onClick={() => onDayClick?.(day)} className="text-xs font-medium text-[var(--accent)] opacity-70 hover:opacity-100">
+                    <button type="button" onClick={() => setExpandedDay(day)} className="text-xs font-medium text-[var(--accent)] opacity-70 hover:opacity-100">
                       +{hiddenCount} more
                     </button>
                   ) : null}
@@ -152,6 +155,13 @@ export default function CalendarGrid({
       <DragOverlay>
         {/* No overlay needed for calendar events */}
       </DragOverlay>
+
+      <DayEventsPopover
+        date={expandedDay}
+        events={expandedDay ? eventsForDay(events, expandedDay) : []}
+        onClose={() => setExpandedDay(null)}
+        onEventClick={onEventClick}
+      />
     </DndContext>
   )
 }

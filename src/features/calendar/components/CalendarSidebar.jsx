@@ -5,10 +5,10 @@
 // them), and a staggered entrance. Visual layer only — every handler is
 // passed in from MinistryCalendar unchanged.
 
+import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { ChevronLeft, ChevronRight, Share2, Download, Settings } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Share2, Download, Settings, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { EVENT_COLORS } from './CalendarEventCard'
-import CalendarSourcesPanel from './CalendarSourcesPanel'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
 
 // Hex literals inside framer-motion animate targets mirror existing tokens
@@ -93,7 +93,7 @@ function NavChevron({ title, onClick, children }) {
   )
 }
 
-export function SectionLabel({ children }) {
+export function SectionLabel({ children, collapsible, expanded, onToggle }) {
   return (
     <div
       style={{
@@ -105,9 +105,20 @@ export function SectionLabel({ children }) {
         color: 'var(--text-tertiary)',
         padding: '10px 14px 6px',
         userSelect: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        cursor: collapsible ? 'pointer' : 'default',
       }}
+      onClick={collapsible ? onToggle : undefined}
     >
       {children}
+      {collapsible && (
+        <ChevronDown
+          size={11}
+          style={{ opacity: 0.7, transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}
+        />
+      )}
     </div>
   )
 }
@@ -135,10 +146,10 @@ function MiniCalendarGrid({ year, month, events = [], onDayClick }) {
   })
 
   return (
-    <div style={{ padding: '4px 10px 10px', fontFamily: FONT_BODY }}>
+    <div style={{ padding: '2px 10px 6px', fontFamily: FONT_BODY }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px' }}>
         {MINI_DAYS.map((d, i) => (
-          <div key={i} style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', padding: '2px 0 4px', letterSpacing: '0.04em' }}>
+          <div key={i} style={{ textAlign: 'center', fontSize: 9.5, fontWeight: 600, color: 'var(--text-tertiary)', padding: '1px 0 3px', letterSpacing: '0.04em' }}>
             {d}
           </div>
         ))}
@@ -156,31 +167,31 @@ function MiniCalendarGrid({ year, month, events = [], onDayClick }) {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                padding: '2px 0',
+                padding: '1px 0',
                 cursor: onDayClick ? 'pointer' : 'default',
                 borderRadius: 4,
                 opacity: inMonth ? 1 : 0.3,
               }}
             >
               <div style={{
-                width: 22,
-                height: 22,
+                width: 19,
+                height: 19,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderRadius: '50%',
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: isToday ? 700 : 400,
                 color: isToday ? 'white' : 'var(--text-primary)',
                 background: isToday ? 'var(--accent)' : 'transparent',
               }}>
                 {day.getDate()}
               </div>
-              <div style={{ display: 'flex', gap: 2, marginTop: 1, minHeight: 5 }}>
+              <div style={{ display: 'flex', gap: 2, marginTop: 0, minHeight: 4 }}>
                 {dots.map((e, i) => (
                   <span key={i} style={{
-                    width: 4,
-                    height: 4,
+                    width: 3.5,
+                    height: 3.5,
                     borderRadius: '50%',
                     background: e.color ?? EVENT_COLORS[e.event_type] ?? EVENT_COLORS.event,
                     display: 'block',
@@ -202,13 +213,56 @@ export default function CalendarSidebar({
   onNextMonth,
   events,
   eventTypes,
+  eventTypeColors = {},
   selectedEventTypes,
   onToggleType,
   onShare,
   onDownload,
   onOpenSettings,
+  collapsed = false,
+  onToggleCollapse,
 }) {
   const monthLabel = new Date(year, month, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })
+  const [eventTypesExpanded, setEventTypesExpanded] = useState(true)
+  const [miniCalendarExpanded, setMiniCalendarExpanded] = useState(true)
+
+  if (collapsed) {
+    return (
+      <motion.aside
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          paddingTop: 12,
+          borderRadius: 12,
+          border: '1px solid var(--border)',
+          background: 'white',
+          boxShadow: 'var(--card-shadow)',
+        }}
+      >
+        <button
+          type="button"
+          title="Expand calendar sidebar"
+          aria-label="Expand calendar sidebar"
+          onClick={onToggleCollapse}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 24,
+            height: 24,
+            borderRadius: 6,
+            border: 'none',
+            background: 'transparent',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            padding: 0,
+          }}
+        >
+          <PanelLeftOpen size={16} />
+        </button>
+      </motion.aside>
+    )
+  }
 
   return (
     <motion.aside
@@ -275,18 +329,40 @@ export default function CalendarSidebar({
           <NavChevron title="Next month" onClick={onNextMonth}>
             <ChevronRight size={15} />
           </NavChevron>
+          <NavChevron
+            title={miniCalendarExpanded ? 'Collapse mini calendar' : 'Expand mini calendar'}
+            onClick={() => setMiniCalendarExpanded((prev) => !prev)}
+          >
+            <ChevronDown
+              size={15}
+              style={{ transform: miniCalendarExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}
+            />
+          </NavChevron>
+          {onToggleCollapse && (
+            <NavChevron title="Collapse sidebar" onClick={onToggleCollapse}>
+              <PanelLeftClose size={15} />
+            </NavChevron>
+          )}
         </motion.div>
       </motion.div>
 
       {/* Mini calendar grid */}
-      <motion.div variants={sectionEnter} style={{ borderBottom: '1px solid var(--border-light)' }}>
-        <MiniCalendarGrid year={year} month={month} events={events} />
-      </motion.div>
+      {miniCalendarExpanded && (
+        <motion.div variants={sectionEnter} style={{ borderBottom: '1px solid var(--border-light)' }}>
+          <MiniCalendarGrid year={year} month={month} events={events} />
+        </motion.div>
+      )}
 
       {/* Event type filters */}
       <motion.div variants={sectionEnter} style={{ paddingBottom: 6 }}>
-        <SectionLabel>Event Types</SectionLabel>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <SectionLabel
+          collapsible
+          expanded={eventTypesExpanded}
+          onToggle={() => setEventTypesExpanded((prev) => !prev)}
+        >
+          Event Types
+        </SectionLabel>
+        {eventTypesExpanded && <div style={{ display: 'flex', flexDirection: 'column' }}>
           {eventTypes.map((type) => {
             const typeName = typeof type === 'string' ? type : type.name
             return (
@@ -317,7 +393,7 @@ export default function CalendarSidebar({
                     width: 8,
                     height: 8,
                     borderRadius: '50%',
-                    backgroundColor: EVENT_COLORS[typeName],
+                    backgroundColor: eventTypeColors[typeName] ?? EVENT_COLORS[typeName] ?? EVENT_COLORS.event,
                     flexShrink: 0,
                   }}
                 />
@@ -325,12 +401,7 @@ export default function CalendarSidebar({
               </motion.label>
             )
           })}
-        </div>
-      </motion.div>
-
-      {/* Calendar sources (renders nothing until an admin connects a source) */}
-      <motion.div variants={sectionEnter}>
-        <CalendarSourcesPanel />
+        </div>}
       </motion.div>
 
     </motion.aside>

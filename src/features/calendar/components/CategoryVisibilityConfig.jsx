@@ -472,6 +472,7 @@ export default function CategoryVisibilityConfig() {
       )}
 
       <EventTypeEditModal
+        key={editingEventType?.id ?? 'closed'}
         eventType={editingEventType}
         onClose={() => setEditingEventType(null)}
         onSaved={() => {

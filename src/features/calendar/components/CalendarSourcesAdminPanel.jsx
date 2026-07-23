@@ -171,6 +171,23 @@ export default function CalendarSourcesAdminPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // CategoryVisibilityConfig (rendered as a sibling on the same Settings page)
+  // writes to calendar_event_types independently — without this, adding/editing/
+  // deleting a category there leaves this panel's Category dropdown stale until
+  // a full page reload.
+  useEffect(() => {
+    const channel = supabase
+      .channel('calendar_sources_admin_event_types')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_event_types' }, () => {
+        loadEventTypes()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [loadEventTypes])
+
   function handleConnect() {
     window.location.href = getMinistryCalendarConnectOAuthUrl()
   }

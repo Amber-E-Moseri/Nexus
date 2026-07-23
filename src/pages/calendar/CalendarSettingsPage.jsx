@@ -77,7 +77,7 @@ export default function CalendarSettingsPage() {
   const canManageConnections = isSuperAdmin || isDeptLeadOfCalendarSpace || isProgramsMember || role === 'regional_secretary'
 
   // A non-manager who isn't on the Programs team has nothing to manage here.
-  const hasNoAccess = membersLoaded && !isSuperAdmin && !isDeptLeadOfCalendarSpace && !isProgramsMember
+  const hasNoAccess = membersLoaded && !canManageConnections && !canManageVisibility
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '760px' }}>
