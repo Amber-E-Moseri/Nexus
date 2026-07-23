@@ -513,6 +513,15 @@ async function syncOneSource(payload: Record<string, string>) {
 
         console.error(`[google-calendar-sync] Push failed for event ${ev.id}:`, String(err))
 
+        if (errorCode === 404 && ev.google_event_id) {
+          // The event was deleted directly in Google Calendar (not via Nexus) —
+          // the stale google_event_id is the problem, not a real sync failure.
+          // Clear it so the next run recreates it via POST instead of repeatedly
+          // failing the same PATCH and spamming calendar managers every sync.
+          await supabase.from('calendar_events').update({ google_event_id: null }).eq('id', ev.id)
+          continue
+        }
+
         if (errorCode === 403) {
           // Google rejected the write — this source can't accept pushes
           // (e.g. it's actually read-only). Disable push and stop rather
