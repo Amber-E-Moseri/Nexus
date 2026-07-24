@@ -28,6 +28,10 @@ function MeetingsModuleFallback() {
                     hasSpaceRole(profile, null, 'ors') ||
                     hasSpaceRole(profile, null, 'dept_lead')
   const canLog = canManage || role === 'media'
+  // "all" is a UI-only sentinel for the department filter (see UnifiedMeetingsView/meetings.js
+  // reads) — it's not a real department id, so a meeting insert must never receive it literally
+  // (department_id is a uuid column). Fall back to the user's own department, or null (org-wide).
+  const modalDepartmentId = selectedDepartmentId === 'all' ? (profile?.department_id ?? null) : selectedDepartmentId
 
   useEffect(() => {
     let active = true
@@ -70,7 +74,7 @@ function MeetingsModuleFallback() {
     return (
       <MeetingsProvider key={selectedDepartmentId} departmentId={selectedDepartmentId}>
         <LiveMinutesMode meeting={liveSession} onClose={() => setLiveSession(null)} />
-        {showModal ? <MeetingModal departmentId={selectedDepartmentId} onClose={() => setShowModal(false)} /> : null}
+        {showModal ? <MeetingModal departmentId={modalDepartmentId} onClose={() => setShowModal(false)} /> : null}
       </MeetingsProvider>
     )
   }
@@ -130,7 +134,7 @@ function MeetingsModuleFallback() {
           onStartLive={(meeting) => setLiveSession(meeting)}
         />
 
-        {showModal ? <MeetingModal departmentId={selectedDepartmentId} onClose={() => setShowModal(false)} /> : null}
+        {showModal ? <MeetingModal departmentId={modalDepartmentId} onClose={() => setShowModal(false)} /> : null}
       </div>
     </MeetingsProvider>
   )

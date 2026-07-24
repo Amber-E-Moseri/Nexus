@@ -83,7 +83,9 @@ export default function MeetingModal({ departmentId, onClose }) {
     )
   }
 
-  const effectiveDeptId = isOrgWide ? null : departmentId
+  // 'all' is the "All Departments" filter sentinel used by pages like MeetingsModule —
+  // never a real department id, so it must not reach a uuid column on insert.
+  const effectiveDeptId = isOrgWide || departmentId === 'all' ? null : departmentId
 
   async function ensureDraftMeeting() {
     if (savedMeeting || creatingDraft || !title.trim()) return
