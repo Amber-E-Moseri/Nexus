@@ -74,6 +74,7 @@ const SpaceOverview = lazyRoute('/spaces', () => import('./pages/spaces/SpaceOve
 const SprintOverview = lazy(() => import('./pages/sprints/SprintOverview'))
 const SprintsList = lazyRoute('/sprints', () => import('./pages/sprints/SprintsList'))
 const NotificationsPage = lazyRoute('/notifications', () => import('./pages/NotificationsPage'))
+const OrgChartPage = lazyRoute('/org', () => import('./pages/OrgChartPage'))
 const Settings = lazyRoute('/settings', () => import('./pages/settings/Settings'))
 const IntegrationStatusPage = lazy(() => import('./pages/settings/IntegrationStatusPage'))
 const GoogleDriveAuthCallback = lazy(() => import('./pages/auth/GoogleDriveAuthCallback'))
@@ -163,6 +164,7 @@ export default function App() {
             }
           />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/org" element={<OrgChartPage />} />
           <Route path="/my-tasks" element={<MyTasks />} />
           <Route path="/my-tasks/:view" element={<MyTasks />} />
           <Route path="/personal-list" element={<PersonalList />} />

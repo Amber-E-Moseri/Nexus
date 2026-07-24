@@ -19,6 +19,7 @@ import {
   MailPlus,
   Map,
   MoreHorizontal,
+  Network,
   Phone,
   Pencil,
   Plus,
@@ -502,7 +503,8 @@ export default function Sidebar() {
     <aside
       ref={sidebarRef}
       style={{
-        width: 222,
+        position: 'relative',
+        width: collapsed ? 64 : 222,
         background: '#FAFAF8',
         borderRight: '1px solid #EDE8DC',
         display: 'flex',
@@ -510,14 +512,45 @@ export default function Sidebar() {
         height: '100vh',
         flexShrink: 0,
         fontFamily: FONT_BODY,
+        transition: 'width 0.16s ease',
       }}
     >
+      {!isMobileDrawer && (
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          style={{
+            position: 'absolute',
+            top: 22,
+            right: -12,
+            width: 24,
+            height: 24,
+            borderRadius: 999,
+            border: '1px solid #EDE8DC',
+            background: '#FFFFFF',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#7A6F5E',
+            cursor: 'pointer',
+            boxShadow: '0 1px 4px rgba(28,22,16,.14)',
+            zIndex: 10,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#4C2A92' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#7A6F5E' }}
+        >
+          {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+        </button>
+      )}
       <div
         style={{
-          padding: '14px 16px',
+          padding: collapsed ? '14px 8px' : '14px 16px',
           borderBottom: '1px solid #EDE8DC',
           display: 'flex',
           alignItems: 'center',
+          justifyContent: collapsed ? 'center' : 'flex-start',
           gap: 10,
         }}
       >
@@ -547,37 +580,39 @@ export default function Sidebar() {
             }}
           />
         </div>
-        <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 13.5,
-              fontWeight: 800,
-              color: '#1C1610',
-              lineHeight: 1.15,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            BLW CAN NEXUS
+        {!collapsed && (
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 13.5,
+                fontWeight: 800,
+                color: '#1C1610',
+                lineHeight: 1.15,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              BLW CAN NEXUS
+            </div>
+            <div
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.16em',
+                color: '#B0A696',
+                marginTop: 2,
+              }}
+            >
+              Operations
+            </div>
           </div>
-          <div
-            style={{
-              fontSize: 9,
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.16em',
-              color: '#B0A696',
-              marginTop: 2,
-            }}
-          >
-            Operations
-          </div>
-        </div>
+        )}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 6px 12px' }}>
-        <SidebarSectionLabel>Workspace</SidebarSectionLabel>
+      <div className={collapsed ? 'sidebar-nav sidebar-nav--collapsed' : 'sidebar-nav'} style={{ flex: 1, overflowY: 'auto', padding: '8px 6px 12px' }}>
+        {!collapsed && <SidebarSectionLabel>Workspace</SidebarSectionLabel>}
         <SidebarItem
           active={isPathActive(location.pathname, '/dashboard')}
           icon={LayoutGrid}
@@ -591,54 +626,65 @@ export default function Sidebar() {
           badge={inboxCount > 0 ? inboxCount : 0}
           to="/inbox"
         />
-        <div
-          style={{
-            ...ITEM_BASE_STYLE,
-            borderLeft: location.pathname === '/my-tasks' ? '3px solid #4C2A92' : '3px solid transparent',
-            background: location.pathname === '/my-tasks' ? '#EDE8F8' : 'transparent',
-            color: location.pathname === '/my-tasks' ? '#4C2A92' : '#1C1610',
-            fontWeight: location.pathname === '/my-tasks' ? 700 : 500,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}
-          onMouseEnter={(e) => {
-            if (location.pathname !== '/my-tasks') e.currentTarget.style.background = '#F2EEE6'
-          }}
-          onMouseLeave={(e) => {
-            if (location.pathname !== '/my-tasks') e.currentTarget.style.background = 'transparent'
-          }}
-        >
-          <Check size={15} style={{ opacity: 0.85, flexShrink: 0 }} />
-          <button
-            type="button"
+        {collapsed ? (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/my-tasks')}
+            icon={Check}
+            label="My Tasks"
             onClick={() => go('/my-tasks')}
-            style={{ flex: 1, border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'inherit', fontSize: 'inherit' }}
-          >
-            My Tasks
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              setMyTasksExpanded(!myTasksExpanded)
-            }}
-            style={{ border: 'none', background: 'none', padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'inherit' }}
-          >
-            <ChevronDown size={15} style={{ opacity: 0.85, transform: myTasksExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
-          </button>
-        </div>
-        {myTasksExpanded ? (
-          <div style={{ paddingLeft: 18 }}>
-            <SidebarItem
-              active={isPathActive(location.pathname, '/my-tasks/today')}
-              icon={CalendarClock}
-              label="Today & Tomorrow"
-              badge={myTaskCounts.todayTomorrow}
-              to="/my-tasks/today"
-            />
-          </div>
-        ) : null}
+          />
+        ) : (
+          <>
+            <div
+              style={{
+                ...ITEM_BASE_STYLE,
+                borderLeft: location.pathname === '/my-tasks' ? '3px solid #4C2A92' : '3px solid transparent',
+                background: location.pathname === '/my-tasks' ? '#EDE8F8' : 'transparent',
+                color: location.pathname === '/my-tasks' ? '#4C2A92' : '#1C1610',
+                fontWeight: location.pathname === '/my-tasks' ? 700 : 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+              }}
+              onMouseEnter={(e) => {
+                if (location.pathname !== '/my-tasks') e.currentTarget.style.background = '#F2EEE6'
+              }}
+              onMouseLeave={(e) => {
+                if (location.pathname !== '/my-tasks') e.currentTarget.style.background = 'transparent'
+              }}
+            >
+              <Check size={15} style={{ opacity: 0.85, flexShrink: 0 }} />
+              <button
+                type="button"
+                onClick={() => go('/my-tasks')}
+                style={{ flex: 1, border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'inherit', fontSize: 'inherit' }}
+              >
+                My Tasks
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMyTasksExpanded(!myTasksExpanded)
+                }}
+                style={{ border: 'none', background: 'none', padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'inherit' }}
+              >
+                <ChevronDown size={15} style={{ opacity: 0.85, transform: myTasksExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+              </button>
+            </div>
+            {myTasksExpanded ? (
+              <div style={{ paddingLeft: 18 }}>
+                <SidebarItem
+                  active={isPathActive(location.pathname, '/my-tasks/today')}
+                  icon={CalendarClock}
+                  label="Today & Tomorrow"
+                  badge={myTaskCounts.todayTomorrow}
+                  to="/my-tasks/today"
+                />
+              </div>
+            ) : null}
+          </>
+        )}
         <SidebarItem
           active={isPathActive(location.pathname, '/personal-list')}
           icon={Lock}
@@ -665,8 +711,7 @@ export default function Sidebar() {
             to="/flock"
           />
         ) : null}
-
-        <SidebarSectionLabel onAdd={canCreateSpace ? () => setShowSpaceModal(true) : undefined}>Spaces</SidebarSectionLabel>
+        {!collapsed && <SidebarSectionLabel onAdd={canCreateSpace ? () => setShowSpaceModal(true) : undefined}>Spaces</SidebarSectionLabel>}
         {displaySpaces.map((space) => (
           <div
             key={space.id}
@@ -711,7 +756,7 @@ export default function Sidebar() {
                 />
               ) : space.name}
               glyph={<SpaceGlyph color={space.color} label={space.name?.charAt(0)?.toUpperCase() ?? '?'} />}
-              trailing={(hoveredSpaceId === space.id || openSpaceMenuId === space.id || openQuickAddMenuId === space.id) ? (
+              trailing={!collapsed && (hoveredSpaceId === space.id || openSpaceMenuId === space.id || openQuickAddMenuId === space.id) ? (
                 <motion.div
                   initial={{ opacity: 0, x: 4 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -884,17 +929,19 @@ export default function Sidebar() {
               ) : null}
               onClick={() => go(`/spaces/${space.id}`)}
             />
-            <SidebarSpaceTree
-              spaceId={space.id}
-              spaceName={space.name}
-              spaceColor={space.color}
-              isActive={isPathActive(location.pathname, `/spaces/${space.id}`)}
-              canManage={canManageSpaces}
-              refreshToken={treeVersions[space.id] ?? 0}
-            />
+            {!collapsed && (
+              <SidebarSpaceTree
+                spaceId={space.id}
+                spaceName={space.name}
+                spaceColor={space.color}
+                isActive={isPathActive(location.pathname, `/spaces/${space.id}`)}
+                canManage={canManageSpaces}
+                refreshToken={treeVersions[space.id] ?? 0}
+              />
+            )}
           </div>
         ))}
-        {archivedSpaces.length > 0 ? (
+        {!collapsed && archivedSpaces.length > 0 ? (
           <>
             <button
               type="button"
@@ -1035,7 +1082,7 @@ export default function Sidebar() {
         ) : null}
         {/* Group members only see Sprints once added to one; otherwise the
             whole section (label + All Sprints browse link) is hidden. */}
-        {(!isGroupMember || displayedSprints.length > 0) ? (
+        {!collapsed && (!isGroupMember || displayedSprints.length > 0) ? (
           <SidebarSectionLabel onAdd={canCreateSpace ? () => setShowSprintModal(true) : undefined}>Sprints</SidebarSectionLabel>
         ) : null}
         {displayedSprints.map((sprint) => (
@@ -1073,6 +1120,7 @@ export default function Sidebar() {
             entirely for group members — they have no platform access. */}
         {!isGroupMember ? (
         <>
+        {!collapsed && (
         <SidebarSectionLabel
           collapsible
           expanded={isPlatformExpanded}
@@ -1080,8 +1128,23 @@ export default function Sidebar() {
         >
           Platform
         </SidebarSectionLabel>
-        {isPlatformExpanded ? (
+        )}
+        {(collapsed || isPlatformExpanded) ? (
         <>
+        {collapsed ? (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/meetings')}
+            icon={Video}
+            label="Meetings"
+            onClick={() => {
+              if (role === 'member' && profile?.department_id) {
+                go(`/spaces/${profile.department_id}?action=meetings`)
+              } else {
+                go('/meetings')
+              }
+            }}
+          />
+        ) : (
         <div
           style={{
             ...ITEM_BASE_STYLE,
@@ -1127,7 +1190,8 @@ export default function Sidebar() {
             <ChevronDown size={15} style={{ opacity: 0.85, transform: meetingsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
           </button>
         </div>
-        {meetingsExpanded ? (
+        )}
+        {!collapsed && meetingsExpanded ? (
           <>
             {showAdminPlatform ? (
               <SidebarItem
@@ -1158,6 +1222,14 @@ export default function Sidebar() {
           </>
         ) : null}
         {canAccessCommunications && (
+          collapsed ? (
+            <SidebarItem
+              active={isPathActive(location.pathname, '/communications')}
+              icon={Send}
+              label="Communications"
+              onClick={() => go('/communications')}
+            />
+          ) : (
         <div
           style={{
             ...ITEM_BASE_STYLE,
@@ -1193,8 +1265,9 @@ export default function Sidebar() {
             <ChevronDown size={15} style={{ opacity: 0.85, transform: communicationsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
           </button>
         </div>
+          )
         )}
-        {(communicationsExpanded && canAccessCommunications) ? (
+        {(!collapsed && communicationsExpanded && canAccessCommunications) ? (
           <>
             <SidebarItem
               active={isPathActive(location.pathname, '/communications/campaigns')}
@@ -1257,7 +1330,7 @@ export default function Sidebar() {
         )}
         {FLOCK_CRM_CONFIG.checkAccess(role) ? (
           <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12 }}>
-            <div style={{ ...SECTION_LABEL_STYLE }}>Confidential</div>
+            {!collapsed && <div style={{ ...SECTION_LABEL_STYLE }}>Confidential</div>}
             <SidebarItem
               active={isPathActive(location.pathname, '/flock-crm')}
               icon={Phone}
@@ -1271,7 +1344,7 @@ export default function Sidebar() {
         </>
         ) : null}
 
-        {(role === 'regional_secretary' || role === 'super_admin' || hasGrant(profile, 'regional_secretary_access')) ? (
+        {!collapsed && (role === 'regional_secretary' || role === 'super_admin' || hasGrant(profile, 'regional_secretary_access')) ? (
           <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 10 }}>
             <div style={{ ...SECTION_LABEL_STYLE }}>{role === 'super_admin' ? 'Regional Updates' : 'Regional Secretary'}</div>
             <div style={{ marginTop: 8 }}>
@@ -1292,7 +1365,7 @@ export default function Sidebar() {
 
         {showPeople ? (
           <>
-            <SidebarSectionLabel>Settings & Admin</SidebarSectionLabel>
+            {!collapsed && <SidebarSectionLabel>Settings & Admin</SidebarSectionLabel>}
             <SidebarItem
               active={isPathActive(location.pathname, '/settings')}
               icon={Settings}
@@ -1308,7 +1381,7 @@ export default function Sidebar() {
           </>
         ) : null}
         {/* Tools & Resources - SOPs and Tools */}
-        {(() => {
+        {!collapsed && (() => {
           const sops = integrations.filter((i) => i.type === 'sop')
           const colorMap = {
             default: { bg: '#FDF3DC', bgHover: '#FBE8B8', color: '#B45309' },
@@ -1385,6 +1458,12 @@ export default function Sidebar() {
           ) : null
         })()}
         <SidebarItem
+          active={isPathActive(location.pathname, '/org')}
+          icon={Network}
+          label="Org"
+          to="/org"
+        />
+        <SidebarItem
           active={isPathActive(location.pathname, '/trash')}
           icon={Trash2}
           label="Trash"
@@ -1417,11 +1496,12 @@ export default function Sidebar() {
           style={{
             display: 'flex',
             alignItems: 'center',
+            justifyContent: collapsed ? 'center' : 'flex-start',
             gap: 10,
             background: '#F9F7F3',
             border: '1px solid #EDE8DC',
             borderRadius: 10,
-            padding: '8px 10px',
+            padding: collapsed ? '8px' : '8px 10px',
             width: '100%',
             cursor: 'pointer',
           }}
@@ -1453,53 +1533,57 @@ export default function Sidebar() {
           >
             {initials}
           </div>
-          <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
-            <div
-              style={{
-                fontSize: 12.5,
-                fontWeight: 700,
-                color: '#1C1610',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {profile?.name ?? 'User'}
-            </div>
-            <div
-              style={{
-                fontSize: 9.5,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                color: '#7A6F5E',
-              }}
-            >
-              {role?.replace('_', ' ') ?? ''}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              signOut()
-            }}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              padding: 0,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#B0A696',
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-            aria-label="Sign out"
-            title="Sign out"
-          >
-            <ChevronDown size={14} />
-          </button>
+          {!collapsed && (
+            <>
+              <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
+                <div
+                  style={{
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    color: '#1C1610',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {profile?.name ?? 'User'}
+                </div>
+                <div
+                  style={{
+                    fontSize: 9.5,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    color: '#7A6F5E',
+                  }}
+                >
+                  {role?.replace('_', ' ') ?? ''}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  signOut()
+                }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#B0A696',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+                aria-label="Sign out"
+                title="Sign out"
+              >
+                <ChevronDown size={14} />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
