@@ -115,7 +115,7 @@ function SectionTitle({ children }) {
   )
 }
 
-export default function TaskFilters({ filters, setFilters, clearFilters, hasActiveFilters, members = [], statuses = [], tasks = [], forceExpanded = false }) {
+export default function TaskFilters({ filters, setFilters, clearFilters, hasActiveFilters, members = [], statuses = [], tasks = [], forceExpanded = false, showDateClosedFilter = false }) {
   const [showFilters, setShowFilters] = useState(false)
   const availableSources = Array.from(new Set(tasks.map((task) => task.source ?? 'manual')))
   const availableTypes = Array.from(new Set(tasks.map((task) => task.task_type).filter(Boolean)))
@@ -220,6 +220,50 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
               ))}
             </div>
           </div>
+
+          {showDateClosedFilter ? (
+            <div style={{ display: 'grid', gap: 10 }}>
+              <SectionTitle>Date Closed</SectionTitle>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <select
+                  value={filters.dateClosedOperator}
+                  onChange={(event) => setFilters((prev) => ({ ...prev, dateClosedOperator: event.target.value }))}
+                  style={{
+                    fontSize: 13,
+                    padding: '8px 10px',
+                    border: '1px solid var(--border)',
+                    borderRadius: 10,
+                    background: 'white',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  <option value="is">Is</option>
+                  <option value="is_not">Is not</option>
+                </select>
+                <select
+                  value={filters.dateClosedRangeDays ?? 'any'}
+                  onChange={(event) => setFilters((prev) => ({
+                    ...prev,
+                    dateClosedRangeDays: event.target.value === 'any' ? null : Number(event.target.value),
+                  }))}
+                  style={{
+                    flex: 1,
+                    fontSize: 13,
+                    padding: '8px 10px',
+                    border: '1px solid var(--border)',
+                    borderRadius: 10,
+                    background: filters.dateClosedRangeDays !== null ? 'var(--accent-light)' : 'white',
+                    color: filters.dateClosedRangeDays !== null ? 'var(--accent)' : 'var(--text-primary)',
+                  }}
+                >
+                  <option value="any">Any time</option>
+                  <option value="7">Last 7 days</option>
+                  <option value="14">Last 14 days</option>
+                  <option value="30">Last 30 days</option>
+                </select>
+              </div>
+            </div>
+          ) : null}
 
           <div style={{ display: 'grid', gap: 10 }}>
             <SectionTitle>Date Range</SectionTitle>
@@ -407,12 +451,14 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
           <div style={{ display: 'grid', gap: 10 }}>
             <SectionTitle>More</SectionTitle>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              <FilterPill
-                label="Include completed"
-                active={filters.showDone}
-                onClick={() => toggleBoolean('showDone')}
-                onRemove={() => toggleBoolean('showDone')}
-              />
+              {!showDateClosedFilter ? (
+                <FilterPill
+                  label="Include completed"
+                  active={filters.showDone}
+                  onClick={() => toggleBoolean('showDone')}
+                  onRemove={() => toggleBoolean('showDone')}
+                />
+              ) : null}
               <FilterPill
                 label="Has comments"
                 active={filters.hasComments}
