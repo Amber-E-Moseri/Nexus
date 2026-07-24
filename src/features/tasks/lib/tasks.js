@@ -577,6 +577,52 @@ export async function getTrashTasks() {
   }))
 }
 
+// --- Archive -------------------------------------------------------------
+// Weekly (space tasks) / biweekly (personal tasks) auto-archive of
+// completed tasks, plus manual archive/unarchive. Mirrors the Trash
+// functions above: archived_at is RLS-hidden from normal reads (see
+// 20270729000002_task_archive_rls.sql), so access goes through
+// SECURITY DEFINER RPCs.
+
+export async function archiveTask(taskId) {
+  const { error } = await supabase.rpc('archive_task', { p_task_id: taskId })
+  if (error) throw error
+}
+
+export async function unarchiveTask(taskId) {
+  const { error } = await supabase.rpc('unarchive_task', { p_task_id: taskId })
+  if (error) throw error
+}
+
+export async function getArchivedTasks() {
+  const { data, error } = await supabase.rpc('get_archived_tasks')
+  if (error) throw error
+  const rows = data ?? []
+  if (rows.length === 0) return rows
+
+  const departmentIds = [...new Set(rows.map((t) => t.department_id).filter(Boolean))]
+  const userIds = [...new Set(rows.flatMap((t) => [t.created_by, t.assignee_id]).filter(Boolean))]
+
+  const [{ data: departments }, { data: users }] = await Promise.all([
+    departmentIds.length
+      ? supabase.from('departments').select('id, name, color').in('id', departmentIds)
+      : Promise.resolve({ data: [] }),
+    userIds.length
+      ? supabase.from('users').select('id, name, avatar_url').in('id', userIds)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  const deptById = new Map((departments ?? []).map((d) => [d.id, d]))
+  const userById = new Map((users ?? []).map((u) => [u.id, u]))
+
+  return rows.map((t) => ({
+    ...t,
+    department: t.department_id ? deptById.get(t.department_id) ?? null : null,
+    creator: t.created_by ? userById.get(t.created_by) ?? null : null,
+    assignee: t.assignee_id ? userById.get(t.assignee_id) ?? null : null,
+  }))
+}
+
 // --- Subtasks ----------------------------------------------------------------
 // Subtasks are tasks with parent_task_id set. These helpers give them full
 // property parity with parent tasks (assignee, due date, priority, status,
