@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Clock,
   Copy,
@@ -266,7 +267,7 @@ const EmojiGlyph = memo(function EmojiGlyph({ emoji }) {
   )
 })
 
-export default function Sidebar() {
+export default function Sidebar({ isMobileDrawer = false }) {
   const { profile, role, signOut } = useAuth()
   const { inboxCount } = useInboxCount()
   const { activeSprints, planningSprints } = useSprints()
@@ -306,6 +307,8 @@ export default function Sidebar() {
     // Defer to profile load, will initialize after
     return []
   })
+  const [collapsedPref, setCollapsedPref] = useState(() => getItemSafe(CACHE_KEYS.SIDEBAR_COLLAPSED) === true)
+  const collapsed = !isMobileDrawer && collapsedPref
   const sidebarRef = useRef(null)
 
   // ors/programs/media/dept_lead authority comes from space_roles rows
@@ -369,6 +372,14 @@ export default function Sidebar() {
       setItemSafe(cacheKey, hiddenSpaceIds)
     }
   }, [hiddenSpaceIds, profile?.id])
+
+  function toggleCollapsed() {
+    setCollapsedPref((value) => {
+      const next = !value
+      setItemSafe(CACHE_KEYS.SIDEBAR_COLLAPSED, next)
+      return next
+    })
+  }
 
   useEffect(() => {
     let active = true
