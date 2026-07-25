@@ -15,7 +15,7 @@ import {
 } from '../../../lib/activityLog'
 import { normalizeTaskFieldSettings } from '../../../lib/taskFieldSettings'
 import { FONT_BODY, FONT_HEADING } from '../../../lib/fonts'
-import { createTask, deleteTask, getAllOrgMembers, getSubtasks, getTaskBlockers, updateTask } from '../lib/tasks'
+import { archiveTask, createTask, deleteTask, getAllOrgMembers, getSubtasks, getTaskBlockers, unarchiveTask, updateTask } from '../lib/tasks'
 import {
   getTaskStatusId,
   listTaskStatuses,
@@ -463,6 +463,8 @@ export default function TaskModal({
         task_type: personal ? 'personal' : effectiveSprintId ? 'sprint' : 'space',
       }
 
+      console.log('[TaskModal] payload before save:', { mode, dueDate, dueTime, payload })
+
       if (mode === 'create') {
         payload.created_by = profile?.id
         const created = ctx ? await ctx.addTask(payload) : await createTask(payload)
@@ -483,7 +485,9 @@ export default function TaskModal({
 
         onSaved?.(created)
       } else {
+        console.log('[TaskModal] updating task with payload:', { taskId: task.id, dueDate, dueTime, payload })
         const updated = ctx ? await ctx.editTask(task.id, payload) : await updateTask(task.id, payload)
+        console.log('[TaskModal] update response:', { due_time: updated?.due_time })
 
         if (assigneeIds[0] && assigneeIds[0] !== previousAssigneeId && assigneeIds[0] !== profile?.id) {
           const { error: notifyError } = await supabase.rpc('create_task_notification', {
@@ -541,6 +545,22 @@ export default function TaskModal({
     }
   }
 
+  async function handleArchiveToggle() {
+    setSaving(true)
+    try {
+      if (task.archived_at) {
+        await unarchiveTask(task.id)
+      } else {
+        await archiveTask(task.id)
+      }
+      onDeleted?.(task.id)
+      onClose()
+    } catch (err) {
+      setError(err.message)
+      setSaving(false)
+    }
+  }
+
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
       <Dialog.Portal>
@@ -582,8 +602,13 @@ export default function TaskModal({
               borderBottom: '1px solid var(--border-1)',
             }}
           >
-            <Dialog.Title style={{ fontFamily: FONT_HEADING, fontSize: 15, fontWeight: 600, color: 'var(--ink-1)', margin: 0 }}>
+            <Dialog.Title style={{ fontFamily: FONT_HEADING, fontSize: 15, fontWeight: 600, color: 'var(--ink-1)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
               {mode === 'create' ? 'New task' : 'Edit task'}
+              {task?.archived_at ? (
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', background: 'var(--surface-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px' }}>
+                  Archived
+                </span>
+              ) : null}
             </Dialog.Title>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {!isReadOnly && (
@@ -882,7 +907,7 @@ export default function TaskModal({
               background: 'var(--surface-secondary)',
             }}
           >
-            <div>
+            <div style={{ display: 'flex', gap: 8 }}>
               {mode === 'edit' && !isReadOnly ? (
                 <button
                   type="button"
@@ -901,6 +926,26 @@ export default function TaskModal({
                   }}
                 >
                   {confirmDelete ? 'Confirm delete' : 'Delete'}
+                </button>
+              ) : null}
+              {mode === 'edit' && !isReadOnly && task?.id ? (
+                <button
+                  type="button"
+                  onClick={handleArchiveToggle}
+                  disabled={saving}
+                  title={task.archived_at ? 'Bring this task back into its board' : 'Hide this task without deleting it — still accessible from Archive'}
+                  style={{
+                    fontSize: 13,
+                    padding: '7px 14px',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    background: 'transparent',
+                    color: 'var(--text-tertiary)',
+                    border: '1px solid var(--border)',
+                    fontWeight: 400,
+                  }}
+                >
+                  {task.archived_at ? 'Unarchive' : 'Archive'}
                 </button>
               ) : null}
             </div>

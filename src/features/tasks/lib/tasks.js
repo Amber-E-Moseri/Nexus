@@ -473,6 +473,8 @@ export async function updateTask(taskId, updates, actorId = null) {
   applyCompletionMetadata(patch, updates.statusCategory, updates.completed_at)
   if (nextAssigneeIds !== null) delete patch.assignee_id
 
+  console.log('[updateTask] patch to send:', { taskId, patch, updates })
+
   let data = null
   if (Object.keys(patch).length > 0) {
     const { data: updatedRow, error } = await supabase
@@ -481,7 +483,11 @@ export async function updateTask(taskId, updates, actorId = null) {
       .eq('id', taskId)
       .select(TASK_FULL_SELECT)
       .single()
-    if (error) throw error
+    if (error) {
+      console.error('[updateTask] Supabase error:', error)
+      throw error
+    }
+    console.log('[updateTask] response data:', { taskId, due_time: updatedRow.due_time })
     data = updatedRow
   }
 
