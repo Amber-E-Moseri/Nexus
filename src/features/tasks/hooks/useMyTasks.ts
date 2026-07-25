@@ -122,15 +122,31 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     setError(null)
 
     try {
-      // Build base query: created_by OR assigned_to OR space owner
+      // Fetch task IDs where user is a multi-assignee (via task_assignees table)
+      const { data: assignedTasks } = await supabase
+        .from('task_assignees')
+        .select('task_id')
+        .eq('user_id', userId)
+
+      const assignedTaskIds = (assignedTasks ?? []).map((a) => a.task_id)
+
+      // Build base query: created_by OR assigned_to OR multi-assigned
       let query = supabase.from('tasks').select(TASK_SELECT).is('deleted_at', null).is('archived_at', null)
 
       // Filter by user. Quick-view scopes are assignee-only; the default view
       // also includes tasks the user created (for the Delegated tab).
       if (filters?.scope) {
-        query = query.eq('assignee_id', userId)
+        if (assignedTaskIds.length > 0) {
+          query = query.or(`assignee_id.eq.${userId},id.in.(${assignedTaskIds.join(',')})`)
+        } else {
+          query = query.eq('assignee_id', userId)
+        }
       } else {
-        query = query.or(`created_by.eq.${userId},assignee_id.eq.${userId}`)
+        if (assignedTaskIds.length > 0) {
+          query = query.or(`created_by.eq.${userId},assignee_id.eq.${userId},id.in.(${assignedTaskIds.join(',')})`)
+        } else {
+          query = query.or(`created_by.eq.${userId},assignee_id.eq.${userId}`)
+        }
       }
 
       if (filters?.scope === 'today_tomorrow') {
@@ -310,9 +326,26 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
           )
           .subscribe()
 
+    // Watch for multi-assignee changes (task_assignees) — when a task is @mentioned,
+    // it's added to task_assignees. A new INSERT means the user was just assigned.
+    const multiAssigneeSubscription = supabase
+      .channel(`task_assignees:user_id:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'task_assignees',
+          filter: `user_id=eq.${userId}`,
+        },
+        handlePayload,
+      )
+      .subscribe()
+
     return () => {
       supabase.removeChannel(assignedSubscription)
       if (createdBySubscription) supabase.removeChannel(createdBySubscription)
+      supabase.removeChannel(multiAssigneeSubscription)
     }
   }, [userId, filters?.scope])
 
