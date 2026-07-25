@@ -47,17 +47,17 @@ export function CalendarEventChip({ event, onClick }) {
     <button
       type="button"
       onClick={() => onClick?.(event)}
-      className="flex w-full items-center gap-1.5 overflow-hidden rounded-lg px-2 py-[3px] text-left text-[11px] text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-tertiary)]"
-      style={{ borderLeft: `3px solid ${color}`, background: `${color}0f` }}
+      className="flex w-full items-center gap-1 overflow-hidden rounded-lg px-2 py-1 text-left text-xs transition-colors hover:opacity-80"
+      style={{ background: color, color: 'white' }}
       title={event.title}
     >
-      {event.recurrence_rule && <span style={{ fontSize: '10px', flexShrink: 0 }}>🔁</span>}
+      {event.recurrence_rule && <span style={{ fontSize: '11px', flexShrink: 0 }}>🔁</span>}
       {showTime && (
-        <span style={{ color, fontWeight: 600, flexShrink: 0, fontSize: '10px' }}>
+        <span style={{ fontWeight: 700, flexShrink: 0, fontSize: '11px' }}>
           {formatTime(event.start_date)}
         </span>
       )}
-      <span className="truncate font-medium">{event.title}</span>
+      <span className="line-clamp-1 font-bold text-xs">{event.title}</span>
     </button>
   )
 }

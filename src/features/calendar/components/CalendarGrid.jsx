@@ -104,7 +104,7 @@ export default function CalendarGrid({
               <div
                 key={day.toISOString()}
                 id={dayId}
-                className="group min-h-[80px] sm:min-h-[132px] rounded-[12px] sm:rounded-[18px] border border-[var(--border)] p-1 sm:p-2 transition-colors hover:border-[var(--border-hover,var(--border))]"
+                className="group min-h-[110px] sm:min-h-[160px] rounded-[12px] sm:rounded-[18px] border border-[var(--border)] p-2 sm:p-3 transition-colors hover:border-[var(--border-hover,var(--border))]"
                 style={{ background: inMonth ? 'white' : 'var(--surface-tertiary)' }}
               >
                 <div className="mb-2 flex items-center justify-between">
@@ -130,7 +130,7 @@ export default function CalendarGrid({
                   )}
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {dayEvents.slice(0, 3).map((event) => canEdit && event.id ? (
                     <CalendarDraggableEvent
                       key={event.id}
@@ -141,7 +141,7 @@ export default function CalendarGrid({
                     <CalendarEventChip key={event.id} event={event} onClick={onEventClick} />
                   ))}
                   {hiddenCount > 0 ? (
-                    <button type="button" onClick={() => setExpandedDay(day)} className="text-xs font-medium text-[var(--accent)] opacity-70 hover:opacity-100">
+                    <button type="button" onClick={() => setExpandedDay(day)} className="mt-1 text-xs font-bold text-[var(--accent)] opacity-80 hover:opacity-100">
                       +{hiddenCount} more
                     </button>
                   ) : null}
