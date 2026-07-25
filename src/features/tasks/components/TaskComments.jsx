@@ -515,11 +515,11 @@ export default function TaskComments({ taskId }) {
           {pickerOpen && filteredMembers.length > 0 ? (
             <div
               style={{
-                position: 'fixed',
+                position: 'absolute',
                 top: pickerPosition.top + 4,
                 left: pickerPosition.left,
                 width: 260,
-                maxHeight: 300,
+                maxHeight: 400,
                 background: 'white',
                 border: '1px solid var(--border)',
                 borderRadius: 10,
