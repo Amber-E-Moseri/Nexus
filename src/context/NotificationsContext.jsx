@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { getNotifications, getUnreadCount, markAllAsRead, markAsRead } from '../features/notifications'
+import { getNotifications, getUnreadCount, markAllAsRead, markAsRead, sendBrowserPushNotification, formatNotificationMessage, NOTIFICATION_TYPES } from '../features/notifications'
 import { supabase } from '../lib/supabase'
 
 const NotificationsContext = createContext(null)
@@ -52,6 +52,14 @@ export function NotificationsProvider({ children }) {
         (payload) => {
           setNotifications((prev) => [payload.new, ...prev])
           setUnreadCount((prev) => prev + 1)
+          // Fire desktop alert if browser permission granted
+          if (Notification.permission === 'granted') {
+            const notif = payload.new
+            const def = NOTIFICATION_TYPES[notif.type]
+            const title = def?.label ?? 'BLW CAN NEXUS'
+            const body = formatNotificationMessage(notif)
+            sendBrowserPushNotification(title, { body, tag: notif.type, data: { url: '/inbox' } }).catch(() => {})
+          }
         },
       )
       .subscribe()
