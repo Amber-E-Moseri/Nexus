@@ -29,6 +29,7 @@ import {
   Trash2,
   Users,
   Users2,
+  Video,
   Image,
   Zap,
 } from 'lucide-react'
