@@ -1,24 +1,96 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Info, Network, X } from 'lucide-react'
+import { Info, Network, Pencil, X } from 'lucide-react'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
+import { useCanEditOrgChart } from '../hooks/useCanEditOrgChart'
+import { useOrgChartContent } from '../hooks/useOrgChartContent'
+import OrgChartEntryEditForm from '../components/orgChart/OrgChartEntryEditForm'
 
-// ── Data ──────────────────────────────────────────────────────────────────
+// ── Layout ────────────────────────────────────────────────────────────────
 // Positions live on a fixed 1600x740 canvas (matches the source blueprint) so
 // the two zones — Group Level and Regional Level — line up visually. Accent
 // keys map to the app's existing department color tokens (see ACCENTS below)
 // so this chart reuses the same colors as space glyphs elsewhere in NEXUS.
+//
+// Only layout/styling fields live here. Text (code/title/sub/details/label/
+// flowCaption) is editable by regional_secretary/super_admin and is fetched
+// from org_chart_nodes / org_chart_edges — FALLBACK_NODE_TEXT/FALLBACK_EDGE_TEXT
+// below is the pre-migration copy of that text, used only until the query
+// resolves (or if a DB row is ever missing) so the page never flashes empty.
+
+const NODE_LAYOUT = [
+  { id: 'regsec', tier: 'apex', accent: 'apex', x: 625, y: 20, w: 280, h: 80 },
+
+  { id: 'pastorsOffice', tier: 'office', accent: 'pastors', x: 60, y: 170, w: 300, h: 80 },
+  { id: 'admin', tier: 'dept', accent: 'admin', x: 20, y: 330, w: 100, h: 70 },
+  { id: 'pfcc', tier: 'dept', accent: 'pfcc', x: 130, y: 330, w: 100, h: 70 },
+  { id: 'groupMedia', tier: 'dept', accent: 'media', x: 240, y: 330, w: 100, h: 70 },
+  { id: 'cellLeaders', tier: 'hub', accent: 'hub', x: 90, y: 470, w: 200, h: 65 },
+
+  { id: 'regionalStaff', tier: 'office', accent: 'office', x: 600, y: 170, w: 910, h: 80 },
+
+  { id: 'regionalPfcc', tier: 'dept', accent: 'pfcc', x: 630, y: 330, w: 180, h: 70 },
+
+  { id: 'orsOffice', tier: 'office', accent: 'ors', x: 830, y: 330, w: 430, h: 70 },
+  { id: 'regionalMedia', tier: 'dept', accent: 'media', x: 845, y: 470, w: 190, h: 65, flow: ['Fellowship media', 'Group media', 'Regional page'] },
+  { id: 'technical', tier: 'sub-dept', accent: 'media', x: 850, y: 590, w: 55, h: 60 },
+  { id: 'asset', tier: 'sub-dept', accent: 'media', x: 913, y: 590, w: 55, h: 60 },
+  { id: 'social', tier: 'sub-dept', accent: 'media', x: 976, y: 590, w: 55, h: 60 },
+  { id: 'dataMgmt', tier: 'sub-dept', accent: 'ors', x: 1050, y: 470, w: 90, h: 65 },
+  { id: 'finance', tier: 'sub-dept', accent: 'ors', x: 1155, y: 470, w: 90, h: 65 },
+
+  { id: 'programs', tier: 'dept', accent: 'programs', x: 1280, y: 330, w: 200, h: 70 },
+]
+
+const EDGE_LAYOUT = [
+  { id: 'e1', from: 'regsec', s1: 'bottom', to: 'pastorsOffice', s2: 'top', type: 'authority', bend: [490, 135] },
+  { id: 'e2', from: 'regsec', s1: 'bottom', to: 'regionalStaff', s2: 'top', type: 'authority', bend: [910, 135] },
+
+  { id: 'e3', from: 'pastorsOffice', s1: 'bottom', to: 'admin', s2: 'top', type: 'authority', bend: [140, 290] },
+  { id: 'e4', from: 'pastorsOffice', s1: 'bottom', to: 'pfcc', s2: 'top', type: 'authority', bend: [195, 290] },
+  { id: 'e5', from: 'pastorsOffice', s1: 'bottom', to: 'groupMedia', s2: 'top', type: 'authority', bend: [250, 290] },
+
+  { id: 'e6', from: 'regionalStaff', s1: 'bottom', to: 'regionalPfcc', s2: 'top', type: 'authority', bend: [888, 290] },
+  { id: 'e7', from: 'regionalStaff', s1: 'bottom', to: 'orsOffice', s2: 'top', type: 'authority', bend: [1050, 290] },
+  { id: 'e8', from: 'regionalStaff', s1: 'bottom', to: 'programs', s2: 'top', type: 'authority', bend: [1220, 290] },
+
+  { id: 'e9', from: 'orsOffice', s1: 'bottom', to: 'regionalMedia', s2: 'top', type: 'authority', bend: [990, 435] },
+  { id: 'e10', from: 'orsOffice', s1: 'bottom', to: 'dataMgmt', s2: 'top', type: 'authority', bend: [1070, 435] },
+  { id: 'e11', from: 'orsOffice', s1: 'bottom', to: 'finance', s2: 'top', type: 'authority', bend: [1120, 435] },
+
+  { id: 'e12', from: 'regionalMedia', s1: 'bottom', to: 'technical', s2: 'top', type: 'authority', bend: [905, 560] },
+  { id: 'e13', from: 'regionalMedia', s1: 'bottom', to: 'asset', s2: 'top', type: 'authority', bend: [940, 560] },
+  { id: 'e14', from: 'regionalMedia', s1: 'bottom', to: 'social', s2: 'top', type: 'authority', bend: [975, 560] },
+
+  { id: 'e16', from: 'admin', s1: 'right', to: 'pfcc', s2: 'left', type: 'handshake', bend: [125, 365] },
+  { id: 'e17', from: 'pfcc', s1: 'right', to: 'groupMedia', s2: 'left', type: 'handshake', bend: [235, 365] },
+
+  { id: 'e18', from: 'groupMedia', s1: 'bottom', to: 'regionalMedia', s2: 'top', type: 'handshake', bend: [615, 435] },
+  { id: 'e19', from: 'pfcc', s1: 'bottom', to: 'regionalPfcc', s2: 'bottom', type: 'handshake', bend: [450, 460] },
+
+  { id: 'e20', from: 'admin', s1: 'bottom', to: 'dataMgmt', s2: 'top', type: 'reporting', bend: [583, 435] },
+
+  { id: 'e21', from: 'pfcc', s1: 'bottom', to: 'cellLeaders', s2: 'top', type: 'authority', bend: [185, 415] },
+  { id: 'e22', from: 'pastorsOffice', s1: 'bottom', to: 'cellLeaders', s2: 'top', type: 'handshake', bend: [125, 345] },
+
+  { id: 'e23', from: 'programs', s1: 'left', to: 'groupMedia', s2: 'right', type: 'handshake', bend: [760, 280] },
+]
+
+const GROUPS = [
+  { code: 'R.SEC', title: 'Regional Secretary', ids: ['regsec'] },
+  { code: 'PST.OFC', title: "Pastors' Office (Group Level)", ids: ['pastorsOffice', 'admin', 'pfcc', 'groupMedia', 'cellLeaders'] },
+  { code: 'R.STF', title: 'Regional Staff (Regional Level)', ids: ['regionalStaff', 'regionalPfcc', 'orsOffice', 'regionalMedia', 'technical', 'asset', 'social', 'dataMgmt', 'finance', 'programs'] },
+]
 
 const DEFAULT_AUTH = ['This is a direct line of authority — the office above leads and directs the office below.']
 
-const NODES = [
-  { id: 'regsec', code: 'R.SEC', title: 'Regional Secretary', sub: 'In charge of the region', tier: 'apex', accent: 'apex', x: 625, y: 20, w: 280, h: 80,
+const FALLBACK_NODE_TEXT = {
+  regsec: { code: 'R.SEC', title: 'Regional Secretary', sub: 'In charge of the region',
     details: [
       'In charge of the region. Sets and carries vision from the regional secretary and the man of God, cascading it region → group → department.',
       "Two peer offices report directly: the Pastors' Office at the group level, and Regional Staff at the regional level.",
       'Regional Staff houses three peer departments — ORS, Regional PFCC and Programs — none of which outranks the Pastors\' Office. Only the Regional Secretary sits above both branches.',
     ] },
-
-  { id: 'pastorsOffice', code: 'PST.OFC', title: "Pastors' Office", sub: 'Group & Subgroup Pastors — Directorate', tier: 'office', accent: 'pastors', x: 60, y: 170, w: 300, h: 80,
+  pastorsOffice: { code: 'PST.OFC', title: "Pastors' Office", sub: 'Group & Subgroup Pastors — Directorate',
     details: [
       'Directorate. Sets and carries vision at the group level.',
       'Responsible for group growth qualitatively (individuals maturing) and quantitatively (numbers growing).',
@@ -27,7 +99,7 @@ const NODES = [
       "Owns cell-leader accountability as a primary task — PFCC supports this but doesn't own it.",
       'Head of Foundation School vision within the group.',
     ] },
-  { id: 'admin', code: 'ADM', title: 'Admin', sub: 'Data completeness & accuracy', tier: 'dept', accent: 'admin', x: 20, y: 330, w: 100, h: 70,
+  admin: { code: 'ADM', title: 'Admin', sub: 'Data completeness & accuracy',
     details: [
       'Reports to: Pastors (hierarchy) and ORS Data Management (regional oversight)',
       'Operations for the group pastor — organizes information and makes the vision executable. Internal-facing.',
@@ -37,7 +109,7 @@ const NODES = [
       'Central collaboration point — works with the group pastor, PFCC, Programs and Media.',
       'Confirmed as the intended long-term owner of ongoing data oversight/cleaning — PFCC currently does some of this as a stopgap.',
     ] },
-  { id: 'pfcc', code: 'PFCC', title: 'PFCC', sub: 'Growth — cell system & outreach', tier: 'dept', accent: 'pfcc', x: 130, y: 330, w: 100, h: 70,
+  pfcc: { code: 'PFCC', title: 'PFCC', sub: 'Growth — cell system & outreach',
     details: [
       'Reports to: Pastors',
       'Growth — brings people from outside into the structure (Admin moves people within it).',
@@ -48,44 +120,40 @@ const NODES = [
       'CMP handshake with Admin: jointly validates new data at entry — PFCC confirms the funnel, Admin confirms accuracy.',
       'Coordinates with Regional PFCC on cell trends and outreach initiatives that reach beyond the group.',
     ] },
-  { id: 'groupMedia', code: 'MED.G', title: 'Media', sub: 'Group-level', tier: 'dept', accent: 'media', x: 240, y: 330, w: 100, h: 70,
+  groupMedia: { code: 'MED.G', title: 'Media', sub: 'Group-level',
     details: [
       'Reports to: Pastors',
       "Group-level media — handles the group's own technical, asset-style and social tasks at group scale.",
       "Keeps tabs on fellowship-level media pages within the group, aiding and supporting them as needed.",
       'Coordinates with Regional Media for regional-scale distribution and standards.',
     ] },
-  { id: 'cellLeaders', code: 'CELL', title: 'Cell Leaders & Coordinators', sub: 'Fellowship level', tier: 'hub', accent: 'hub', x: 90, y: 470, w: 200, h: 65,
+  cellLeaders: { code: 'CELL', title: 'Cell Leaders & Coordinators', sub: 'Fellowship level',
     details: [
       'Fellowship-level cell leaders and coordinators.',
       'Pastor holds primary accountability; PFCC executes day-to-day tracking and follow-up against monthly plans.',
       'Admin can prompt cell leaders directly when reports are missing, though PFCC owns that relationship primarily.',
     ] },
-
-  { id: 'regionalStaff', code: 'R.STF', title: 'Regional Staff', sub: 'ORS · Regional PFCC · Programs', tier: 'office', accent: 'office', x: 600, y: 170, w: 910, h: 80,
+  regionalStaff: { code: 'R.STF', title: 'Regional Staff', sub: 'ORS · Regional PFCC · Programs',
     details: [
       "Regional-level umbrella covering the region's non-group functions.",
       'Houses three peer departments: ORS (Data Management, Finance and Regional Media), Regional PFCC, and Programs.',
       'Carries regional responsibilities, but authority still flows from the Regional Secretary — Regional Staff does not outrank the Pastors\' Office.',
     ] },
-
-  { id: 'regionalPfcc', code: 'R.PFCC', title: 'Regional PFCC', sub: 'Regional growth & cell oversight', tier: 'dept', accent: 'pfcc', x: 630, y: 330, w: 180, h: 70,
+  regionalPfcc: { code: 'R.PFCC', title: 'Regional PFCC', sub: 'Regional growth & cell oversight',
     details: [
       'Reports to: Regional Secretary',
       "Regional-level counterpart to each group's PFCC — cell and growth oversight at the regional scale.",
       'Sits alongside ORS and Programs as a peer under Regional Staff.',
       "Coordinates with each group's PFCC on cell trends, escalations and outreach initiatives that reach beyond one group.",
     ] },
-
-  { id: 'orsOffice', code: 'ORS.OFC', title: 'ORS', sub: 'Office of Regional Secretary', tier: 'office', accent: 'ors', x: 830, y: 330, w: 430, h: 70,
+  orsOffice: { code: 'ORS.OFC', title: 'ORS', sub: 'Office of Regional Secretary',
     details: [
       'Regional staff — Office of Regional Secretary.',
       'Houses Data Management, Finance and Regional Media — its three core functions.',
       'Regional Media is Regional ORS Media — the same regional-level media function lives inside ORS, alongside Data Management and Finance.',
       'Sits alongside Regional PFCC and Programs as a peer under Regional Staff — it does not sit above them.',
     ] },
-  { id: 'regionalMedia', code: 'MED.OFC', title: 'Regional Media', sub: 'Technical · Asset · Social', tier: 'dept', accent: 'media', x: 845, y: 470, w: 190, h: 65,
-    flow: ['Fellowship media', 'Group media', 'Regional page'],
+  regionalMedia: { code: 'MED.OFC', title: 'Regional Media', sub: 'Technical · Asset · Social',
     flowCaption: 'Priority order for support — fellowship reaches actual people, group shows identity, the regional page shows all of Canada.',
     details: [
       'Reports to: ORS',
@@ -94,18 +162,17 @@ const NODES = [
       'Requests are routed by type: a social media post goes to Social Media; imagery or branded materials go to Asset Media.',
       "Coordinates with each group's own Media department, which handles group-level distribution and keeps tabs on fellowship media pages.",
     ] },
-  { id: 'technical', code: 'MED.T', title: 'Technical', sub: '', tier: 'sub-dept', accent: 'media', x: 850, y: 590, w: 55, h: 60,
+  technical: { code: 'MED.T', title: 'Technical', sub: '',
     details: ['Reports to: Regional Media', 'Service presentation tools, technical setup and streaming.', 'Photography and videography capture.'] },
-  { id: 'asset', code: 'MED.A', title: 'Asset', sub: '', tier: 'sub-dept', accent: 'media', x: 913, y: 590, w: 55, h: 60,
+  asset: { code: 'MED.A', title: 'Asset', sub: '',
     details: ['Reports to: Regional Media', 'Central repository and organization of all media content — photos, videos, event archives.', 'Manages video editors and other content producers.', 'Owns the distribution kit: branded pull-up banners, table covers and standardized flyers for outreach events.', 'Manages external designers and vendors producing these assets.'] },
-  { id: 'social', code: 'MED.S', title: 'Social', sub: '', tier: 'sub-dept', accent: 'media', x: 976, y: 590, w: 55, h: 60,
+  social: { code: 'MED.S', title: 'Social', sub: '',
     details: ['Reports to: Regional Media', 'Content creation and management for assigned platforms.', 'Platform owners have full reign — expected to research and actively grow reach and influence, not just post on instruction.'] },
-  { id: 'dataMgmt', code: 'ORS.DM', title: 'Data Mgmt', sub: 'Region-wide data oversight', tier: 'sub-dept', accent: 'ors', x: 1050, y: 470, w: 90, h: 65,
+  dataMgmt: { code: 'ORS.DM', title: 'Data Mgmt', sub: 'Region-wide data oversight',
     details: ['Reports to: ORS', 'Owns region-wide data oversight.'] },
-  { id: 'finance', code: 'ORS.FIN', title: 'Finance', sub: 'Tithes, partnership & accounts', tier: 'sub-dept', accent: 'ors', x: 1155, y: 470, w: 90, h: 65,
+  finance: { code: 'ORS.FIN', title: 'Finance', sub: 'Tithes, partnership & accounts',
     details: ['Reports to: ORS', 'Manages tithes, partnership and account administration.', 'Uses administrative means to encourage financial participation region-wide.'] },
-
-  { id: 'programs', code: 'R.PRG', title: 'Programs', sub: 'Project management', tier: 'dept', accent: 'programs', x: 1280, y: 330, w: 200, h: 70,
+  programs: { code: 'R.PRG', title: 'Programs', sub: 'Project management',
     details: [
       'Reports to: Regional Secretary',
       'Project management for regional, group and fellowship events — an independent peer function under Regional Staff, alongside ORS and Regional PFCC.',
@@ -115,67 +182,34 @@ const NODES = [
       'Manages ministry-assigned initiatives — Healing Streams, prayer & fasting, Reach Out World — with advance-warning task tracking.',
       "Owns post-program reporting: before a project is archived, a report captures what worked, what didn't, and improvement areas, tracked in Nexus.",
     ] },
-]
+}
 
-const EDGES = [
-  { id: 'e1', from: 'regsec', s1: 'bottom', to: 'pastorsOffice', s2: 'top', type: 'authority', bend: [490, 135], label: 'Direct Authority',
-    details: ['Both offices report directly to the Regional Secretary, who is the only office positioned above either branch.'] },
-  { id: 'e2', from: 'regsec', s1: 'bottom', to: 'regionalStaff', s2: 'top', type: 'authority', bend: [910, 135], label: 'Direct Authority',
-    details: ['Both offices report directly to the Regional Secretary, who is the only office positioned above either branch.'] },
-
-  { id: 'e3', from: 'pastorsOffice', s1: 'bottom', to: 'admin', s2: 'top', type: 'authority', bend: [140, 290], label: 'Leads & Directs', details: DEFAULT_AUTH },
-  { id: 'e4', from: 'pastorsOffice', s1: 'bottom', to: 'pfcc', s2: 'top', type: 'authority', bend: [195, 290], label: 'Leads & Directs', details: DEFAULT_AUTH },
-  { id: 'e5', from: 'pastorsOffice', s1: 'bottom', to: 'groupMedia', s2: 'top', type: 'authority', bend: [250, 290], label: 'Leads & Directs', details: DEFAULT_AUTH },
-
-  { id: 'e6', from: 'regionalStaff', s1: 'bottom', to: 'regionalPfcc', s2: 'top', type: 'authority', bend: [888, 290], label: 'Peer Department',
-    details: ['Regional PFCC is one of three peer departments under Regional Staff.'] },
-  { id: 'e7', from: 'regionalStaff', s1: 'bottom', to: 'orsOffice', s2: 'top', type: 'authority', bend: [1050, 290], label: 'Peer Department',
-    details: ['ORS is one of three peer departments under Regional Staff — it does not sit above Regional PFCC or Programs.'] },
-  { id: 'e8', from: 'regionalStaff', s1: 'bottom', to: 'programs', s2: 'top', type: 'authority', bend: [1220, 290], label: 'Peer Department',
-    details: ['Programs is one of three peer departments under Regional Staff.'] },
-
-  { id: 'e9', from: 'orsOffice', s1: 'bottom', to: 'regionalMedia', s2: 'top', type: 'authority', bend: [990, 435], label: 'ORS Function',
-    details: ["Regional Media is one of ORS's three core functions, alongside Data Management and Finance."] },
-  { id: 'e10', from: 'orsOffice', s1: 'bottom', to: 'dataMgmt', s2: 'top', type: 'authority', bend: [1070, 435], label: 'ORS Function',
-    details: ["Data Management is one of ORS's three core functions, alongside Finance and Regional Media."] },
-  { id: 'e11', from: 'orsOffice', s1: 'bottom', to: 'finance', s2: 'top', type: 'authority', bend: [1120, 435], label: 'ORS Function',
-    details: ["Finance is one of ORS's three core functions, alongside Data Management and Regional Media."] },
-
-  { id: 'e12', from: 'regionalMedia', s1: 'bottom', to: 'technical', s2: 'top', type: 'authority', bend: [905, 560], label: 'Media Wing',
-    details: ["The three media sub-departments generally shouldn't overlap in responsibility."] },
-  { id: 'e13', from: 'regionalMedia', s1: 'bottom', to: 'asset', s2: 'top', type: 'authority', bend: [940, 560], label: 'Media Wing',
-    details: ["The three media sub-departments generally shouldn't overlap in responsibility."] },
-  { id: 'e14', from: 'regionalMedia', s1: 'bottom', to: 'social', s2: 'top', type: 'authority', bend: [975, 560], label: 'Media Wing',
-    details: ["The three media sub-departments generally shouldn't overlap in responsibility."] },
-
-  { id: 'e16', from: 'admin', s1: 'right', to: 'pfcc', s2: 'left', type: 'handshake', bend: [125, 365], label: 'CMP Data Entry & Check-in',
+const FALLBACK_EDGE_TEXT = {
+  e1: { label: 'Direct Authority', details: ['Both offices report directly to the Regional Secretary, who is the only office positioned above either branch.'] },
+  e2: { label: 'Direct Authority', details: ['Both offices report directly to the Regional Secretary, who is the only office positioned above either branch.'] },
+  e3: { label: 'Leads & Directs', details: DEFAULT_AUTH },
+  e4: { label: 'Leads & Directs', details: DEFAULT_AUTH },
+  e5: { label: 'Leads & Directs', details: DEFAULT_AUTH },
+  e6: { label: 'Peer Department', details: ['Regional PFCC is one of three peer departments under Regional Staff.'] },
+  e7: { label: 'Peer Department', details: ['ORS is one of three peer departments under Regional Staff — it does not sit above Regional PFCC or Programs.'] },
+  e8: { label: 'Peer Department', details: ['Programs is one of three peer departments under Regional Staff.'] },
+  e9: { label: 'ORS Function', details: ["Regional Media is one of ORS's three core functions, alongside Data Management and Finance."] },
+  e10: { label: 'ORS Function', details: ["Data Management is one of ORS's three core functions, alongside Finance and Regional Media."] },
+  e11: { label: 'ORS Function', details: ["Finance is one of ORS's three core functions, alongside Data Management and Regional Media."] },
+  e12: { label: 'Media Wing', details: ["The three media sub-departments generally shouldn't overlap in responsibility."] },
+  e13: { label: 'Media Wing', details: ["The three media sub-departments generally shouldn't overlap in responsibility."] },
+  e14: { label: 'Media Wing', details: ["The three media sub-departments generally shouldn't overlap in responsibility."] },
+  e16: { label: 'CMP Data Entry & Check-in',
     details: ["At the point of data entry — e.g. a new member's details from a cell report — PFCC confirms the person came through the funnel correctly and Admin confirms the data itself is accurate. Both sign off before it's accepted.",
       'The same joint check happens for service check-in verification: Admin validates identity/details, PFCC confirms attendance was captured against the right cell.'] },
-  { id: 'e17', from: 'pfcc', s1: 'right', to: 'groupMedia', s2: 'left', type: 'handshake', bend: [235, 365], label: 'Media Requests Routing',
-    details: ['Admin and PFCC route group media requests by type: a social media post goes to Social Media, imagery or branded materials go to Asset Media.'] },
-
-  { id: 'e18', from: 'groupMedia', s1: 'bottom', to: 'regionalMedia', s2: 'top', type: 'handshake', bend: [615, 435], label: 'Group ↔ Regional Media Coordination',
-    details: ['Group Media keeps tabs on fellowship media pages and handles group-level distribution; it coordinates with Regional Media (inside ORS) for regional-scale needs and standards.'] },
-  { id: 'e19', from: 'pfcc', s1: 'bottom', to: 'regionalPfcc', s2: 'bottom', type: 'handshake', bend: [450, 460], label: 'Group ↔ Regional PFCC Coordination',
-    details: ["Each group's PFCC coordinates with Regional PFCC on cell trends, escalations, and outreach initiatives that extend beyond one group."] },
-
-  { id: 'e20', from: 'admin', s1: 'bottom', to: 'dataMgmt', s2: 'top', type: 'reporting', bend: [583, 435], label: 'Reports Up — Data Visibility',
-    details: ['Admin reports up to the ORS Data Management Manager so the region has visibility into group activity — this is a reporting line, not a line of authority.'] },
-
-  { id: 'e21', from: 'pfcc', s1: 'bottom', to: 'cellLeaders', s2: 'top', type: 'authority', bend: [185, 415], label: 'Executes Accountability',
-    details: ["PFCC acts as the group pastor's administrative hands, keeping cell leaders on track against monthly plans."] },
-  { id: 'e22', from: 'pastorsOffice', s1: 'bottom', to: 'cellLeaders', s2: 'top', type: 'handshake', bend: [125, 345], label: 'Primary Ownership',
-    details: ["Cell-leader accountability is a primary task for the group pastor — formal and informal one-on-ones with coordinators and leaders. PFCC supports this but doesn't own it."] },
-
-  { id: 'e23', from: 'programs', s1: 'left', to: 'groupMedia', s2: 'right', type: 'handshake', bend: [760, 280], label: 'Programs ↔ Media Coordination',
-    details: ['Programs and Media collaborate on event execution and media coverage.'] },
-]
-
-const GROUPS = [
-  { code: 'R.SEC', title: 'Regional Secretary', ids: ['regsec'] },
-  { code: 'PST.OFC', title: "Pastors' Office (Group Level)", ids: ['pastorsOffice', 'admin', 'pfcc', 'groupMedia', 'cellLeaders'] },
-  { code: 'R.STF', title: 'Regional Staff (Regional Level)', ids: ['regionalStaff', 'regionalPfcc', 'orsOffice', 'regionalMedia', 'technical', 'asset', 'social', 'dataMgmt', 'finance', 'programs'] },
-]
+  e17: { label: 'Media Requests Routing', details: ['Admin and PFCC route group media requests by type: a social media post goes to Social Media, imagery or branded materials go to Asset Media.'] },
+  e18: { label: 'Group ↔ Regional Media Coordination', details: ['Group Media keeps tabs on fellowship media pages and handles group-level distribution; it coordinates with Regional Media (inside ORS) for regional-scale needs and standards.'] },
+  e19: { label: 'Group ↔ Regional PFCC Coordination', details: ["Each group's PFCC coordinates with Regional PFCC on cell trends, escalations, and outreach initiatives that extend beyond one group."] },
+  e20: { label: 'Reports Up — Data Visibility', details: ['Admin reports up to the ORS Data Management Manager so the region has visibility into group activity — this is a reporting line, not a line of authority.'] },
+  e21: { label: 'Executes Accountability', details: ["PFCC acts as the group pastor's administrative hands, keeping cell leaders on track against monthly plans."] },
+  e22: { label: 'Primary Ownership', details: ["Cell-leader accountability is a primary task for the group pastor — formal and informal one-on-ones with coordinators and leaders. PFCC supports this but doesn't own it."] },
+  e23: { label: 'Programs ↔ Media Coordination', details: ['Programs and Media collaborate on event execution and media coverage.'] },
+}
 
 // Accent palette — reuses the app's existing department identity colors
 // (--dept-admin/--dept-pfcc/--dept-media/--dept-ors, same hexes as space
@@ -201,8 +235,6 @@ const EDGE_COLORS = {
   reporting: 'var(--ink-3)',
 }
 
-const byId = Object.fromEntries(NODES.map((n) => [n.id, n]))
-
 function anchor(node, side) {
   const cx = node.x + node.w / 2
   const cy = node.y + node.h / 2
@@ -212,7 +244,7 @@ function anchor(node, side) {
   return [node.x + node.w, cy]
 }
 
-function edgePath(edge) {
+function edgePath(edge, byId) {
   const a = byId[edge.from]
   const b = byId[edge.to]
   const [x1, y1] = anchor(a, edge.s1)
@@ -225,9 +257,29 @@ export default function OrgChartPage() {
   const [viewMode, setViewMode] = useState('diagram')
   const [hiddenTypes, setHiddenTypes] = useState(() => new Set())
   const [panel, setPanel] = useState(null) // { kind: 'node'|'edge', id }
+  const [isEditingPanel, setIsEditingPanel] = useState(false)
   const [revealed, setRevealed] = useState(false)
   const [openGroups, setOpenGroups] = useState(() => new Set(['R.SEC']))
   const reduceMotion = useMemo(() => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches, [])
+
+  const canEdit = useCanEditOrgChart()
+  const { nodeTextById, edgeTextById, saveNode, saveEdge } = useOrgChartContent()
+
+  const nodes = useMemo(() => NODE_LAYOUT.map((n) => {
+    const dbRow = nodeTextById[n.id]
+    const text = dbRow
+      ? { code: dbRow.code, title: dbRow.title, sub: dbRow.sub, flowCaption: dbRow.flow_caption, details: dbRow.details }
+      : (FALLBACK_NODE_TEXT[n.id] ?? {})
+    return { ...n, ...text }
+  }), [nodeTextById])
+
+  const edges = useMemo(() => EDGE_LAYOUT.map((e) => {
+    const dbRow = edgeTextById[e.id]
+    const text = dbRow ? { label: dbRow.label, details: dbRow.details } : (FALLBACK_EDGE_TEXT[e.id] ?? {})
+    return { ...e, ...text }
+  }), [edgeTextById])
+
+  const byId = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n])), [nodes])
 
   useEffect(() => {
     const t = setTimeout(() => setRevealed(true), reduceMotion ? 0 : 40)
@@ -244,24 +296,27 @@ export default function OrgChartPage() {
   }
 
   function openNode(id) {
+    setIsEditingPanel(false)
     setPanel({ kind: 'node', id })
   }
   function openEdge(id) {
+    setIsEditingPanel(false)
     setPanel({ kind: 'edge', id })
   }
   function closePanel() {
+    setIsEditingPanel(false)
     setPanel(null)
   }
 
   const highlightedNodeId = panel?.kind === 'node' ? panel.id : null
   const connectedEdgeIds = useMemo(() => {
     if (!highlightedNodeId) return new Set()
-    return new Set(EDGES.filter((e) => e.from === highlightedNodeId || e.to === highlightedNodeId).map((e) => e.id))
-  }, [highlightedNodeId])
+    return new Set(edges.filter((e) => e.from === highlightedNodeId || e.to === highlightedNodeId).map((e) => e.id))
+  }, [highlightedNodeId, edges])
   const selectedEdgeId = panel?.kind === 'edge' ? panel.id : null
 
   const panelNode = panel?.kind === 'node' ? byId[panel.id] : null
-  const panelEdge = panel?.kind === 'edge' ? EDGES.find((e) => e.id === panel.id) : null
+  const panelEdge = panel?.kind === 'edge' ? edges.find((e) => e.id === panel.id) : null
 
   return (
     <div style={{ fontFamily: FONT_BODY, maxWidth: 1320 }}>
@@ -340,10 +395,10 @@ export default function OrgChartPage() {
               <text x="594" y="165" fontSize="13" fontWeight="700" letterSpacing="0.08em" fill="var(--ink-2)" style={{ textTransform: 'uppercase' }}>REGIONAL LEVEL — REGIONAL STAFF</text>
 
               <g>
-                {EDGES.map((edge, i) => {
+                {edges.map((edge, i) => {
                   const hidden = hiddenTypes.has(edge.type)
                   const isSelected = selectedEdgeId === edge.id || connectedEdgeIds.has(edge.id)
-                  const d = edgePath(edge)
+                  const d = edgePath(edge, byId)
                   return (
                     <g
                       key={edge.id}
@@ -373,7 +428,7 @@ export default function OrgChartPage() {
               </g>
 
               <g>
-                {NODES.map((node, i) => {
+                {nodes.map((node, i) => {
                   const accent = ACCENTS[node.accent] ?? ACCENTS.hub
                   const isSub = node.tier === 'sub-dept'
                   const codeColor = isSub ? (SUBDEPT_CODE_COLOR[node.accent] ?? 'var(--purple-700)') : accent.code
@@ -503,7 +558,32 @@ export default function OrgChartPage() {
         >
           <X size={16} />
         </button>
-        {panelNode ? (
+        {canEdit && (panelNode || panelEdge) && !isEditingPanel ? (
+          <button
+            type="button"
+            onClick={() => setIsEditingPanel(true)}
+            aria-label="Edit"
+            style={{
+              position: 'absolute', top: 20, right: 60, background: 'var(--bg-app)', border: '1px solid var(--border-1)',
+              color: 'var(--purple-700)', width: 32, height: 32, borderRadius: 10, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Pencil size={14} />
+          </button>
+        ) : null}
+
+        {isEditingPanel && panelNode ? (
+          <>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', color: 'var(--amber)', textTransform: 'uppercase', marginBottom: 16 }}>Edit · {panelNode.code}</div>
+            <OrgChartEntryEditForm
+              kind="node"
+              entry={panelNode}
+              onSave={(patch) => saveNode(panelNode.id, patch).then(() => setIsEditingPanel(false))}
+              onCancel={() => setIsEditingPanel(false)}
+            />
+          </>
+        ) : panelNode ? (
           <>
             <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', color: 'var(--amber)', textTransform: 'uppercase', marginBottom: 10 }}>{panelNode.code}</div>
             <div style={{ fontWeight: 800, fontSize: 25, margin: '0 0 4px', lineHeight: 1.15, color: 'var(--ink-1)', fontFamily: FONT_HEADING }}>{panelNode.title}</div>
@@ -524,7 +604,17 @@ export default function OrgChartPage() {
             <DetailList items={panelNode.details} />
           </>
         ) : null}
-        {panelEdge ? (
+        {isEditingPanel && panelEdge ? (
+          <>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', color: 'var(--amber)', textTransform: 'uppercase', marginBottom: 16 }}>Edit · {panelEdge.type}</div>
+            <OrgChartEntryEditForm
+              kind="edge"
+              entry={panelEdge}
+              onSave={(patch) => saveEdge(panelEdge.id, patch).then(() => setIsEditingPanel(false))}
+              onCancel={() => setIsEditingPanel(false)}
+            />
+          </>
+        ) : panelEdge ? (
           <>
             <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', color: 'var(--amber)', textTransform: 'uppercase', marginBottom: 10 }}>{panelEdge.type}</div>
             <div style={{ fontWeight: 800, fontSize: 25, margin: '0 0 4px', lineHeight: 1.15, color: 'var(--ink-1)', fontFamily: FONT_HEADING }}>{panelEdge.label}</div>
