@@ -47,6 +47,28 @@ const SUBTASK_SELECT = `
   ${TASK_STATUS_SELECT}
 `
 
+const TASK_FULL_SELECT = `
+  ${TASK_COLS},
+  ${TASK_STATUS_SELECT},
+  ${TASK_LIST_SELECT},
+  department:departments(id, name, color),
+  assignee:users!assignee_id(id, name, avatar_url),
+  ${ASSIGNEES_SELECT},
+  subtasks:tasks!parent_task_id(${SUBTASK_SELECT})
+`
+
+// Atomically replaces a task's assignee set via the set_task_assignees RPC
+// (see 20270802000000_fix_assignee_sync_and_permissions.sql) and throws on
+// failure — a silent RLS rejection here used to leave the UI showing an
+// assignee that was never actually written to the database.
+async function syncTaskAssignees(taskId, userIds) {
+  const { error } = await supabase.rpc('set_task_assignees', {
+    p_task_id: taskId,
+    p_user_ids: userIds,
+  })
+  if (error) throw error
+}
+
 const TASK_COMMENT_SELECT = `
   id,
   body,
@@ -96,6 +118,11 @@ function buildTaskPayload(taskData = {}) {
   if ('dueDate' in payload) {
     payload.due_date = payload.dueDate
     delete payload.dueDate
+  }
+
+  if ('dueTime' in payload) {
+    payload.due_time = payload.dueTime
+    delete payload.dueTime
   }
 
   if ('statusCategory' in payload) {
@@ -352,27 +379,26 @@ export async function createTask(taskData) {
   const { data, error } = await supabase
     .from('tasks')
     .insert(payload)
-    .select(`
-      ${TASK_COLS},
-      ${TASK_STATUS_SELECT},
-      ${TASK_LIST_SELECT},
-      department:departments(id, name, color),
-      assignee:users!assignee_id(id, name, avatar_url),
-      ${ASSIGNEES_SELECT},
-      subtasks:tasks!parent_task_id(${SUBTASK_SELECT})
-    `)
+    .select(TASK_FULL_SELECT)
     .single()
 
   if (error) throw error
 
   // Sync junction table for multi-assignee. assigneeIds may be passed alongside
-  // assignee_id; if absent, fall back to the single assignee_id.
+  // assignee_id; if absent, fall back to the single assignee_id. Errors here
+  // must throw, not be swallowed — see syncTaskAssignees.
   const assigneeIds = taskData.assigneeIds ?? (payload.assignee_id ? [payload.assignee_id] : [])
   if (assigneeIds.length > 0) {
-    await supabase.from('task_assignees').upsert(
-      assigneeIds.map((uid) => ({ task_id: data.id, user_id: uid })),
-      { onConflict: 'task_id,user_id' },
-    )
+    await syncTaskAssignees(data.id, assigneeIds)
+    // The insert's own .select() ran before assignees existed, so its
+    // `assignees` embed is empty — re-read to return the real state.
+    const { data: freshData, error: freshError } = await supabase
+      .from('tasks')
+      .select(TASK_FULL_SELECT)
+      .eq('id', data.id)
+      .single()
+    if (freshError) throw freshError
+    Object.assign(data, freshData)
   }
 
   recordActivity('task_created', {
@@ -425,35 +451,59 @@ export async function updateTask(taskId, updates, actorId = null) {
 
   if (existingTaskError) throw existingTaskError
 
+  // The assignee set is always resolved to an explicit array (or left null
+  // if this update doesn't touch assignment at all) and written through the
+  // set_task_assignees RPC below — never as a direct `assignee_id` column
+  // write. `assigneeIds` (plural) is the multi-assignee source of truth;
+  // `assignee_id`/`assigneeId` alone (TaskDetailSidebar, SubtaskList) is
+  // treated as a one-element set. Routing both shapes through the same RPC
+  // keeps tasks.assignee_id and task_assignees from drifting apart — a
+  // direct assignee_id write used to leave the junction table stale, and the
+  // next unrelated task_assignees change anywhere else would silently
+  // revert it via the sync_primary_assignee trigger.
+  let nextAssigneeIds = null
+  if (Array.isArray(updates.assigneeIds)) {
+    nextAssigneeIds = updates.assigneeIds
+  } else if ('assignee_id' in updates || 'assigneeId' in updates) {
+    const single = updates.assignee_id ?? updates.assigneeId ?? null
+    nextAssigneeIds = single ? [single] : []
+  }
+
   const patch = buildTaskPayload(updates)
   applyCompletionMetadata(patch, updates.statusCategory, updates.completed_at)
+  if (nextAssigneeIds !== null) delete patch.assignee_id
 
-  const { data, error } = await supabase
-    .from('tasks')
-    .update(patch)
-    .eq('id', taskId)
-    .select(`
-      ${TASK_COLS},
-      ${TASK_STATUS_SELECT},
-      ${TASK_LIST_SELECT},
-      department:departments(id, name, color),
-      assignee:users!assignee_id(id, name, avatar_url),
-      ${ASSIGNEES_SELECT},
-      subtasks:tasks!parent_task_id(${SUBTASK_SELECT})
-    `)
-    .single()
-
-  if (error) throw error
-  const normalized = normalizeTaskResult(data)
-
-  // Sync junction table when assigneeIds is explicitly provided.
-  if (Array.isArray(updates.assigneeIds)) {
-    const ids = updates.assigneeIds
-    await supabase.from('task_assignees').delete().eq('task_id', taskId)
-    if (ids.length > 0) {
-      await supabase.from('task_assignees').insert(ids.map((uid) => ({ task_id: taskId, user_id: uid })))
-    }
+  let data = null
+  if (Object.keys(patch).length > 0) {
+    const { data: updatedRow, error } = await supabase
+      .from('tasks')
+      .update(patch)
+      .eq('id', taskId)
+      .select(TASK_FULL_SELECT)
+      .single()
+    if (error) throw error
+    data = updatedRow
   }
+
+  if (nextAssigneeIds !== null) {
+    await syncTaskAssignees(taskId, nextAssigneeIds)
+  }
+
+  // Either the direct update was skipped (assignee-only change) or the
+  // assignee sync above may have changed assignee_id/assignees via the
+  // sync_primary_assignee trigger — re-read so the returned task reflects
+  // the true final state rather than a pre-sync snapshot.
+  if (!data || nextAssigneeIds !== null) {
+    const { data: freshRow, error: freshError } = await supabase
+      .from('tasks')
+      .select(TASK_FULL_SELECT)
+      .eq('id', taskId)
+      .single()
+    if (freshError) throw freshError
+    data = freshRow
+  }
+
+  const normalized = normalizeTaskResult(data)
 
   // Item 7: notify parent-task assignees when a subtask is marked completed.
   const isNowCompleted = updates.statusCategory === STATUS_CATEGORIES.COMPLETED
@@ -478,7 +528,7 @@ export async function updateTask(taskId, updates, actorId = null) {
   }
 
   if (actorId) {
-    const nextAssigneeId = 'assignee_id' in updates ? updates.assignee_id ?? null : normalized.assignee_id ?? null
+    const nextAssigneeId = nextAssigneeIds !== null ? nextAssigneeIds[0] ?? null : normalized.assignee_id ?? null
     if (nextAssigneeId && nextAssigneeId !== existingTask.assignee_id) {
       void recordActivity('task_assigned', {
         task_id: normalized.id,
