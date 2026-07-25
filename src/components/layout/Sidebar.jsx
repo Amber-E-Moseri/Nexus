@@ -305,6 +305,8 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const [spaceActionsOpenId, setSpaceActionsOpenId] = useState(null)
   const [openSpaceMenuId, setOpenSpaceMenuId] = useState(null)
   const [toolsExpanded, setToolsExpanded] = useState(false)
+  const [adminExpanded, setAdminExpanded] = useState(false)
+  const [helpExpanded, setHelpExpanded] = useState(false)
   const [hiddenSpaceIds, setHiddenSpaceIds] = useState(() => {
     // Defer to profile load, will initialize after
     return []
@@ -1385,12 +1387,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
               label="Settings"
               to="/settings"
             />
-            <SidebarItem
-              active={isPathActive(location.pathname, '/people')}
-              icon={Users2}
-              label="People Management"
-              to="/people/users"
-            />
           </>
         ) : null}
         {/* Tools & Resources - SOPs and Tools */}
@@ -1470,38 +1466,114 @@ export default function Sidebar({ isMobileDrawer = false }) {
             </>
           ) : null
         })()}
+
+        {/* Org - standalone */}
         <SidebarItem
           active={isPathActive(location.pathname, '/org')}
           icon={Network}
           label="Org"
           to="/org"
         />
-        <SidebarItem
-          active={isPathActive(location.pathname, '/trash')}
-          icon={Trash2}
-          label="Trash"
-          to="/trash"
-        />
-        <SidebarItem
-          active={isPathActive(location.pathname, '/help')}
-          icon={HelpCircle}
-          label="Help & FAQ"
-          to="/help"
-        />
-        <SidebarItem
-          active={isPathActive(location.pathname, '/support')}
-          icon={HeadphonesIcon}
-          label="Get Support"
-          to="/support"
-        />
-        {role === 'super_admin' ? (
-          <SidebarItem
-            active={isPathActive(location.pathname, '/admin/tickets')}
-            icon={Ticket}
-            label="Support Tickets"
-            to="/admin/tickets"
-          />
-        ) : null}
+
+        {/* Administration - collapsible */}
+        {showPeople && (
+          <>
+            {!collapsed && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  color: '#9E9488',
+                  margin: '8px 0 6px',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setAdminExpanded(!adminExpanded)}
+              >
+                <span>Administration</span>
+                <ChevronDown
+                  size={12}
+                  style={{
+                    transform: adminExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.15s',
+                  }}
+                />
+              </div>
+            )}
+            {(collapsed || adminExpanded) && (
+              <>
+                <SidebarItem
+                  active={isPathActive(location.pathname, '/people')}
+                  icon={Users2}
+                  label="People Management"
+                  to="/people/users"
+                />
+                <SidebarItem
+                  active={isPathActive(location.pathname, '/trash')}
+                  icon={Trash2}
+                  label="Trash"
+                  to="/trash"
+                />
+              </>
+            )}
+          </>
+        )}
+
+        {/* Help & Support - collapsible */}
+        {!collapsed && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: 10,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: '#9E9488',
+              margin: '8px 0 6px',
+              cursor: 'pointer',
+            }}
+            onClick={() => setHelpExpanded(!helpExpanded)}
+          >
+            <span>Help & Support</span>
+            <ChevronDown
+              size={12}
+              style={{
+                transform: helpExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.15s',
+              }}
+            />
+          </div>
+        )}
+        {(collapsed || helpExpanded) && (
+          <>
+            <SidebarItem
+              active={isPathActive(location.pathname, '/help')}
+              icon={HelpCircle}
+              label="Help & FAQ"
+              to="/help"
+            />
+            <SidebarItem
+              active={isPathActive(location.pathname, '/support')}
+              icon={HeadphonesIcon}
+              label="Get Support"
+              to="/support"
+            />
+            {role === 'super_admin' && (
+              <SidebarItem
+                active={isPathActive(location.pathname, '/admin/tickets')}
+                icon={Ticket}
+                label="Support Tickets"
+                to="/admin/tickets"
+              />
+            )}
+          </>
+        )}
       </div>
 
       <div style={{ borderTop: '1px solid #EDE8DC', padding: 10, marginTop: 'auto' }}>
