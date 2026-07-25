@@ -237,7 +237,10 @@ export function formatNotificationMessage(notification) {
     case 'subtask_completed':
       return `✅ "${payload.title ?? 'A subtask'}" was completed on "${payload.parentTitle ?? 'your task'}"`
     case 'mention':
-      return `${payload.actor_name ?? 'Someone'} mentioned you`
+      if (payload.is_new_assignment) {
+        return `${payload.actor_name ?? 'Someone'} assigned you to "${payload.task_title ?? 'a task'}"\n\n"${payload.comment_preview ?? ''}"`
+      }
+      return `${payload.actor_name ?? 'Someone'} mentioned you in "${payload.task_title ?? 'a task'}"\n\n"${payload.comment_preview ?? ''}"`
     case 'task_due_soon':
       return `"${payload.task_title ?? 'A task'}" is due soon`
     case 'event_approved':

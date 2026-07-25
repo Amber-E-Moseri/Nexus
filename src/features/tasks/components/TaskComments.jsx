@@ -514,12 +514,13 @@ export default function TaskComments({ taskId }) {
                 top: pickerPosition.top + 4,
                 left: pickerPosition.left,
                 width: 260,
+                maxHeight: 300,
                 background: 'white',
                 border: '1px solid var(--border)',
                 borderRadius: 10,
                 boxShadow: '0 10px 30px rgba(14,14,30,0.12)',
                 zIndex: 80,
-                overflow: 'hidden',
+                overflow: 'auto',
               }}
             >
               {filteredMembers.map((member, index) => (
