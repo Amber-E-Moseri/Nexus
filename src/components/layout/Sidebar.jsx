@@ -307,6 +307,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const [toolsExpanded, setToolsExpanded] = useState(false)
   const [adminExpanded, setAdminExpanded] = useState(false)
   const [helpExpanded, setHelpExpanded] = useState(false)
+  const [regionalUpdatesExpanded, setRegionalUpdatesExpanded] = useState(false)
   const [hiddenSpaceIds, setHiddenSpaceIds] = useState(() => {
     // Defer to profile load, will initialize after
     return []
@@ -1329,12 +1330,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
             to="/instagram"
           />
         )}
-        <SidebarItem
-          active={isPathActive(location.pathname, '/map')}
-          icon={Map}
-          label="CAN Map"
-          to="/map"
-        />
         {(role === 'super_admin' || hasSpaceRole(profile, null, 'ors')) && (
           <SidebarItem
             active={isPathActive(location.pathname, '/settings/campus-photos')}
@@ -1361,10 +1356,35 @@ export default function Sidebar({ isMobileDrawer = false }) {
 
         {!collapsed && (role === 'regional_secretary' || role === 'super_admin' || hasGrant(profile, 'regional_secretary_access')) ? (
           <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 10 }}>
-            <div style={{ ...SECTION_LABEL_STYLE }}>{role === 'super_admin' ? 'Regional Updates' : 'Regional Secretary'}</div>
-            <div style={{ marginTop: 8 }}>
-              <RegionalUpdateCompose />
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                color: '#9E9488',
+                marginBottom: 6,
+                cursor: 'pointer',
+              }}
+              onClick={() => setRegionalUpdatesExpanded(!regionalUpdatesExpanded)}
+            >
+              <span>{role === 'super_admin' ? 'Regional Updates' : 'Regional Secretary'}</span>
+              <ChevronDown
+                size={12}
+                style={{
+                  transform: regionalUpdatesExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.15s',
+                }}
+              />
             </div>
+            {regionalUpdatesExpanded && (
+              <div style={{ marginTop: 8 }}>
+                <RegionalUpdateCompose />
+              </div>
+            )}
           </div>
         ) : null}
 
@@ -1386,6 +1406,12 @@ export default function Sidebar({ isMobileDrawer = false }) {
               icon={Settings}
               label="Settings"
               to="/settings"
+            />
+            <SidebarItem
+              active={isPathActive(location.pathname, '/map')}
+              icon={Map}
+              label="CAN Map"
+              to="/map"
             />
           </>
         ) : null}
