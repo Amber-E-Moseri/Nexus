@@ -40,7 +40,7 @@ interface UseMyTasksReturn {
  * Includes real-time sync
  */
 const TASK_SELECT = `
-  id, title, description, priority, status, status_id, due_date, created_at,
+  id, title, description, priority, status, status_id, due_date, due_time, created_at,
   department_id, assignee_id, created_by, task_type, sprint_id, list_id,
   source, meeting_id, parent_task_id, completed_at,
   subtask_count:tasks!parent_task_id(count),
@@ -123,7 +123,7 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
 
     try {
       // Build base query: created_by OR assigned_to OR space owner
-      let query = supabase.from('tasks').select(TASK_SELECT).is('deleted_at', null)
+      let query = supabase.from('tasks').select(TASK_SELECT).is('deleted_at', null).is('archived_at', null)
 
       // Filter by user. Quick-view scopes are assignee-only; the default view
       // also includes tasks the user created (for the Delegated tab).
@@ -363,6 +363,7 @@ export function useWatchedTasks(userId: string): UseWatchedTasksReturn {
         .select(TASK_SELECT)
         .in('id', taskIds)
         .is('deleted_at', null)
+        .is('archived_at', null)
 
       if (tasksError) throw tasksError
 
