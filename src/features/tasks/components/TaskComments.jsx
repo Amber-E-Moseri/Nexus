@@ -239,22 +239,26 @@ export default function TaskComments({ taskId }) {
         })
       }
 
-      // @mention: notify + grant task_follows visibility atomically per mentioned user.
+      // @mention: assign to task + send rich notification with context per mentioned user.
       // Errors are logged, not thrown — a failed mention shouldn't roll back the
       // comment that already posted successfully. The RPC returns false (no push) when
-      // the mentioned user muted in-app mention notifications or mentioned themselves —
-      // task_follows visibility is still granted either way.
+      // the mentioned user muted in-app mention notifications or mentioned themselves.
       for (const mentioned of mentions) {
         void supabase
-          .rpc('mention_user_on_task', { p_task_id: taskId, p_user_id: mentioned.id })
+          .rpc('assign_via_mention', {
+            p_task_id: taskId,
+            p_user_id: mentioned.id,
+            p_comment_body: body,
+            p_commenter_name: profile.name ?? 'Someone',
+          })
           .then(({ data: notified, error }) => {
             if (error) { console.error(error); return }
             if (notified) {
               sendTaskPushNotification(mentioned.id, {
                 taskId,
-                title: "I'm @mentioned",
-                message: `${profile.name ?? 'Someone'} mentioned you`,
-                url: '/inbox',
+                title: `${profile.name ?? 'Someone'} assigned you a task`,
+                message: task?.title ?? 'New task assignment',
+                url: `/tasks/${taskId}`,
                 type: 'mention',
               }).catch(() => {})
             }
