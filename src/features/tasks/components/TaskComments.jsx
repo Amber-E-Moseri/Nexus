@@ -507,6 +507,8 @@ export default function TaskComments({ taskId }) {
               fontSize: 13, padding: '7px 10px', resize: 'vertical',
               border: '1px solid var(--border)', borderRadius: 8, outline: 'none',
               lineHeight: 1.5, color: 'var(--text-primary)', background: 'white',
+              position: 'relative',
+              zIndex: 1,
             }}
             onFocus={(event) => { event.target.style.borderColor = 'var(--accent)' }}
             onBlur={(event) => { event.target.style.borderColor = 'var(--border)' }}
@@ -516,15 +518,16 @@ export default function TaskComments({ taskId }) {
             <div
               style={{
                 position: 'absolute',
-                top: pickerPosition.top + 4,
-                left: pickerPosition.left,
+                top: '100%',
+                left: 0,
                 width: 260,
                 maxHeight: 400,
+                marginTop: 4,
                 background: 'white',
                 border: '1px solid var(--border)',
                 borderRadius: 10,
                 boxShadow: '0 10px 30px rgba(14,14,30,0.12)',
-                zIndex: 80,
+                zIndex: 0,
                 overflow: 'auto',
               }}
             >
