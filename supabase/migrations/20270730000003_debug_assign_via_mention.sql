@@ -1,6 +1,8 @@
 -- Debug: improve assign_via_mention to return assignment info and trace issues
 
-create or replace function public.assign_via_mention(
+drop function if exists public.assign_via_mention(uuid, uuid, text, text);
+
+create function public.assign_via_mention(
   p_task_id uuid,
   p_user_id uuid,
   p_comment_body text,
