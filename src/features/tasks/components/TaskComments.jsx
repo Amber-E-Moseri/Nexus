@@ -252,7 +252,11 @@ export default function TaskComments({ taskId }) {
             p_commenter_name: profile.name ?? 'Someone',
           })
           .then(({ data: notified, error }) => {
-            if (error) { console.error(error); return }
+            if (error) {
+              console.error('[assign_via_mention] error:', error)
+              return
+            }
+            console.log('[assign_via_mention] success, notified:', notified)
             if (notified) {
               sendTaskPushNotification(mentioned.id, {
                 taskId,
