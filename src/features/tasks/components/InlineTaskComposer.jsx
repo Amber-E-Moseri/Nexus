@@ -93,7 +93,6 @@ export default function InlineTaskComposer({
   async function handleSubmit(event) {
     event.preventDefault()
     if (!title.trim()) { setError('Task title is required.'); return }
-    if (departments.length > 0 && !departmentId) { setError('Select a department.'); return }
     setSaving(true)
     setError('')
     try {
