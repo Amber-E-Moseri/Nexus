@@ -30,6 +30,7 @@ import {
   Users,
   Users2,
   Video,
+  Send,
   Image,
   Zap,
 } from 'lucide-react'
