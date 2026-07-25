@@ -178,7 +178,12 @@ function TaskModalTabs({ taskId, departmentId, sprintId }) {
 
       {activeTab === 'comments' ? (
         <div role="tabpanel" id="tabpanel-comments" aria-labelledby="tab-comments" tabIndex={0}>
-          <TaskComments taskId={taskId} />
+          <TaskComments
+            taskId={taskId}
+            onMentionAssigned={(userId) => {
+              setAssigneeIds((prev) => prev.includes(userId) ? prev : [...prev, userId])
+            }}
+          />
         </div>
       ) : null}
       {activeTab === 'files' ? (

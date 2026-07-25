@@ -75,7 +75,7 @@ function getCaretCoordinates(textarea, caretPosition) {
   return coordinates
 }
 
-export default function TaskComments({ taskId }) {
+export default function TaskComments({ taskId, onMentionAssigned }) {
   const { profile } = useAuth()
   const [comments, setComments] = useState([])
   const [task, setTask] = useState(null)
@@ -258,6 +258,8 @@ export default function TaskComments({ taskId }) {
             }
             console.log('[assign_via_mention] success for', mentioned.name, ':', data)
             const result = Array.isArray(data) ? data[0] : data
+            // Notify the modal to merge the new assignee so it's not wiped on next save
+            onMentionAssigned?.(mentioned.id)
             if (result?.notify_sent) {
               sendTaskPushNotification(mentioned.id, {
                 taskId,
