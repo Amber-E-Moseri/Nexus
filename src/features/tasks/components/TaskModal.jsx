@@ -235,6 +235,8 @@ export default function TaskModal({
   )
   const [dueDate, setDueDate] = useState(task?.due_date ?? defaultDueDate ?? '')
   const [dueTime, setDueTime] = useState(task?.due_time ?? '')
+
+  console.log('[TaskModal] opened with task:', { taskId: task?.id, due_date: task?.due_date, due_time: task?.due_time })
   const [personal, setPersonal] = useState(task?.is_personal ?? isPersonal)
   const [subtasks, setSubtasks] = useState(task?.subtasks ?? [])
   const [spaces, setSpaces] = useState([])
