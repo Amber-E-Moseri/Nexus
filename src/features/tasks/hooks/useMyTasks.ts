@@ -42,12 +42,13 @@ interface UseMyTasksReturn {
 const TASK_SELECT = `
   id, title, description, priority, status, status_id, due_date, due_time, created_at,
   department_id, assignee_id, created_by, task_type, sprint_id, list_id,
-  source, meeting_id, parent_task_id, completed_at,
+  source, meeting_id, parent_task_id, completed_at, is_personal,
   subtask_count:tasks!parent_task_id(count),
   status_definition:task_status_definitions!status_id(
     id, name, color, category, legacy_key, department_id
   ),
   assignee:users!assignee_id(id, name, avatar_url),
+  assignees:task_assignees(user_id),
   creator:users!created_by(id, name),
   space:departments(id, name, color)
 `
@@ -401,7 +402,10 @@ export function useWatchedTasks(userId: string): UseWatchedTasksReturn {
       if (tasksError) throw tasksError
 
       const followedOnly = (tasksData ?? []).filter(
-        (t: any) => t.assignee_id !== userId && t.created_by !== userId,
+        (t: any) =>
+          t.assignee_id !== userId &&
+          t.created_by !== userId &&
+          !(t.assignees ?? []).some((a: any) => (a.user_id ?? a.id) === userId),
       )
       setTasks(normalizeTaskRows(followedOnly))
     } catch (err) {

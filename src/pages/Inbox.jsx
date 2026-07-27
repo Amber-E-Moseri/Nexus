@@ -2,7 +2,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Bell, Check, Circle, Trash2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { formatRelativeDate } from '../lib/dateUtils'
-import { getTaskById } from '../features/tasks/lib/tasks'
 import { formatNotificationMessage, NOTIFICATION_TYPES } from '../features/notifications/lib/notifications'
 import { supabase } from '../lib/supabase'
 import TaskModal from '../features/tasks/components/TaskModal'
@@ -331,10 +330,12 @@ export default function Inbox() {
   const { profile } = useAuth()
   const [filter, setFilter] = useState('All')
   const [notifications, setNotifications] = useState([])
+  const [assignedComments, setAssignedComments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(null)
   const [selected, setSelected] = useState(null)
-  const [taskModal, setTaskModal] = useState(null)
   const [checkedIds, setCheckedIds] = useState(() => new Set())
+  const [commentToTask, setCommentToTask] = useState(null)
 
   useEffect(() => {
     if (!profile?.id) return
@@ -342,25 +343,42 @@ export default function Inbox() {
 
     async function loadInbox() {
       setLoading(true)
+      setFetchError(null)
       try {
-        const { data, error } = await supabase
-          .from('notifications')
-          .select('id, user_id, type, payload, read, created_at')
-          .eq('user_id', profile.id)
-          .order('created_at', { ascending: false })
-          .limit(100)
+        const [notifResult, commentResult] = await Promise.all([
+          supabase
+            .from('notifications')
+            .select('id, user_id, type, payload, read, created_at')
+            .eq('user_id', profile.id)
+            .order('created_at', { ascending: false })
+            .limit(100),
+          supabase
+            .from('task_comments')
+            .select(`
+              id, body, created_at, task_id, resolved_at,
+              author:users!author_id(id, name),
+              task:tasks!task_id(id, title, department_id, parent_task_id, parent_task:tasks!parent_task_id(id, title, department_id))
+            `)
+            .eq('assigned_to', profile.id)
+            .is('resolved_at', null)
+            .order('created_at', { ascending: false })
+            .limit(50),
+        ])
 
         if (!active) return
-        if (error) throw error
 
-        const mapped = (data ?? []).map((n) => ({
+        if (notifResult.error) throw notifResult.error
+
+        const mapped = (notifResult.data ?? []).map((n) => ({
           ...n,
           title: NOTIFICATION_TYPES[n.type]?.label ?? n.type,
           description: formatNotificationMessage(n),
         }))
         setNotifications(mapped)
+        setAssignedComments(commentResult.data ?? [])
       } catch (err) {
         console.error('Failed to load notifications:', err)
+        setFetchError(err.message ?? 'Failed to load inbox')
       } finally {
         if (active) setLoading(false)
       }
@@ -443,16 +461,20 @@ export default function Inbox() {
     await supabase.from('notifications').update({ read: true }).in('id', ids)
   }
 
+  async function resolveComment(commentId) {
+    setAssignedComments((prev) => prev.filter((c) => c.id !== commentId))
+    await supabase
+      .from('task_comments')
+      .update({ resolved_at: new Date().toISOString(), resolved_by: profile.id })
+      .eq('id', commentId)
+  }
+
   async function handleItemClick(item) {
     // Mark read + open detail panel
     if (!item.read) await markItemRead(item)
     else setNotifications((prev) => prev.map((n) => n.id === item.id ? { ...n, read: true } : n))
     setSelected((prev) => prev?.id === item.id ? null : { ...item, read: true })
 
-    if (item.payload?.task_id) {
-      const task = await getTaskById(item.payload.task_id)
-      setTaskModal(task)
-    }
   }
 
   return (
@@ -599,6 +621,69 @@ export default function Inbox() {
         <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
           {/* List */}
           <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Fetch error */}
+            {fetchError && (
+              <div style={{ padding: '10px 14px', marginBottom: 12, borderRadius: 10, background: 'var(--red-50,#fef2f2)', border: '1px solid var(--red-200,#fecaca)', color: 'var(--red-500,#ef4444)', fontSize: 12.5, fontFamily: FONT_BODY }}>
+                Failed to load inbox: {fetchError}
+              </div>
+            )}
+
+            {/* Assigned comment threads — these count toward the bell badge */}
+            {!loading && assignedComments.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <GroupHeader>Assigned to you</GroupHeader>
+                <div style={{ borderRadius: 14, border: '1px solid var(--border-1)', background: 'var(--surface-card)', boxShadow: '0 1px 3px rgba(28,22,16,.04)', overflow: 'hidden' }}>
+                  {assignedComments.map((c, idx) => (
+                    <div
+                      key={c.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 12,
+                        padding: '12px 14px',
+                        borderBottom: idx < assignedComments.length - 1 ? '1px solid var(--border-1)' : 'none',
+                      }}
+                    >
+                      {/* unread dot placeholder for alignment */}
+                      <div style={{ width: 8, height: 8, marginTop: 5, flexShrink: 0, borderRadius: '50%', background: 'var(--purple-600)' }} />
+                      <div style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, background: 'var(--amber-50,#fffbeb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
+                        💬
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: FONT_BODY, fontSize: 13, fontWeight: 600, color: 'var(--ink-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          Comment assigned to you
+                        </div>
+                        <div style={{ marginTop: 2, fontFamily: FONT_BODY, fontSize: 12, color: 'var(--ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.author?.name ?? 'Someone'} on "
+                          {c.task?.parent_task ? `${c.task.parent_task.title} → ${c.task.title}` : (c.task?.title ?? 'Unknown task')}
+                          " — {c.body?.slice(0, 60)}{c.body?.length > 60 ? '…' : ''}
+                        </div>
+                        <div style={{ marginTop: 3, fontFamily: FONT_MONO, fontSize: 10.5, color: 'var(--ink-3)' }}>
+                          {formatRelativeDate(c.created_at, { includeTime: true })}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => setCommentToTask(c)}
+                          style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border-1)', background: 'var(--surface-sub)', color: 'var(--ink-2)', fontFamily: FONT_BODY, fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}
+                        >
+                          → Task
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => resolveComment(c.id)}
+                          style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid var(--purple-700)', background: 'var(--purple-700)', color: '#fff', fontFamily: FONT_BODY, fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}
+                        >
+                          Resolve
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {loading ? (
               <div
                 style={{
@@ -612,7 +697,7 @@ export default function Inbox() {
               >
                 Loading inbox…
               </div>
-            ) : groups.length === 0 ? (
+            ) : groups.length === 0 && assignedComments.length === 0 ? (
               <div
                 style={{
                   padding: '40px 24px',
@@ -627,7 +712,7 @@ export default function Inbox() {
                 <Bell size={28} style={{ opacity: 0.3, marginBottom: 10 }} />
                 <div>No notifications yet</div>
               </div>
-            ) : (
+            ) : groups.length > 0 ? (
               <motion.div variants={listStagger} initial="hidden" animate="show" key={filter}>
                 {groups.map((group) => (
                   <div key={group.label}>
@@ -660,7 +745,7 @@ export default function Inbox() {
                   </div>
                 ))}
               </motion.div>
-            )}
+            ) : null}
           </div>
 
           {/* Detail panel */}
@@ -679,15 +764,32 @@ export default function Inbox() {
         </div>
       </div>
 
-      {taskModal ? (
+      {commentToTask ? (
         <TaskModal
-          mode="edit"
-          task={taskModal}
-          departmentId={taskModal.department_id}
-          sprintId={taskModal.sprint_id}
-          onClose={() => setTaskModal(null)}
-          onSaved={setTaskModal}
-          onDeleted={() => setTaskModal(null)}
+          mode="create"
+          parentTaskId={commentToTask.task?.parent_task_id ?? commentToTask.task_id}
+          departmentId={
+            commentToTask.task?.department_id
+            ?? commentToTask.task?.parent_task?.department_id
+            ?? undefined
+          }
+          task={{
+            title: `Follow up: ${commentToTask.task?.title ?? 'task'}`,
+            description: commentToTask.body ?? '',
+            assignee_id: profile?.id,
+          }}
+          onClose={() => setCommentToTask(null)}
+          onSaved={async (savedTask) => {
+            // Add the original @mentioner as a watcher so they get notified on completion
+            if (commentToTask.author?.id && savedTask?.id) {
+              import('../features/tasks/lib/followers').then(({ followTask }) => {
+                followTask(savedTask.id, commentToTask.author.id, profile?.id).catch(() => {})
+              })
+            }
+            resolveComment(commentToTask.id)
+            setCommentToTask(null)
+          }}
+          onDeleted={() => setCommentToTask(null)}
         />
       ) : null}
     </>

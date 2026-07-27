@@ -69,6 +69,11 @@ export default function AudioTranscriptionPanel({
   const audioChunks = useRef([])
   const recordingInterval = useRef(null)
   const fileInputRef = useRef(null)
+  // Mirrors props into refs so the unmount-cleanup effect below (empty deps,
+  // so it only fires once on true unmount) always sees the latest meetingId,
+  // not whatever it was on first render.
+  const meetingIdRef = useRef(meetingId)
+  meetingIdRef.current = meetingId
 
   useEffect(() => {
     if (isRecordingNow) {
@@ -78,6 +83,54 @@ export default function AudioTranscriptionPanel({
     }
     return () => clearInterval(recordingInterval.current)
   }, [isRecordingNow])
+
+  // Warn before a full tab close/reload while actively recording — the only
+  // way to guarantee the mic gets released is to not lose the in-memory
+  // audio chunks out from under an active MediaRecorder.
+  useEffect(() => {
+    function handleBeforeUnload(e) {
+      if (mediaRecorder.current?.state === 'recording') {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
+
+  // Safety net for in-app navigation (closing this modal, routing away) —
+  // there's no reliable "confirm before leaving" hook available with this
+  // app's plain BrowserRouter (no data router = no useBlocker), so instead:
+  // if this component unmounts while still recording, stop the recorder
+  // (releases the mic — the actual leak) and upload whatever was captured
+  // so far as a raw backup, rather than silently discarding it. The normal
+  // onstop handler in handleStartRecording calls setState, which would warn/
+  // no-op post-unmount, so it's swapped out for an upload-only handler here.
+  useEffect(() => {
+    return () => {
+      if (mediaRecorder.current?.state === 'recording') {
+        const chunksSoFar = audioChunks.current
+        const meetingIdAtUnmount = meetingIdRef.current
+        mediaRecorder.current.onstop = () => {
+          mediaRecorder.current?.stream?.getTracks().forEach((t) => t.stop())
+          const blob = new Blob(chunksSoFar, { type: 'audio/webm' })
+          const fileName = `private/${meetingIdAtUnmount}-${Date.now()}-autosaved.webm`
+          supabase.storage
+            .from('meeting-audio')
+            .upload(fileName, blob, { cacheControl: '3600', upsert: false })
+            .then(({ error: uploadErr }) => {
+              if (uploadErr) {
+                console.error('[AudioTranscriptionPanel] Failed to back up interrupted recording:', uploadErr)
+              } else {
+                console.warn(`[AudioTranscriptionPanel] Recording was interrupted mid-session; backed up to storage at meeting-audio/${fileName}`)
+              }
+            })
+        }
+        mediaRecorder.current.stop()
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Auto-start recording when header button triggers it
   useEffect(() => {

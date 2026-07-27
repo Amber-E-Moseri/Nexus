@@ -9,6 +9,7 @@ import { hasSpaceRole } from '../../../lib/permissions'
 import { getAllOrgMembers, getDeptMembers } from '../lib/tasks'
 import { useTasks } from '../TasksContext'
 import { useAuth } from '../../../hooks/useAuth'
+import { useToast } from '../../../context/ToastContext'
 import {
   FlagIcon, Avatar, PRIORITY_COLORS,
   DueDatePickerPopover, PriorityPickerPopover, AssigneePickerPopover,
@@ -27,6 +28,7 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
     useSortable({ id: task.id })
   const { editTask, addTask } = useTasks()
   const { profile, role } = useAuth()
+  const { showToast } = useToast()
 
   const [subtasksExpanded, setSubtasksExpanded] = useState(false)
   const [dueDateOpen, setDueDateOpen] = useState(false)
@@ -91,13 +93,19 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
   }
 
   async function handleAssigneeToggle(memberId) {
+    const previousTask = localTask
     const currentIds = (localTask.assignees ?? []).map((a) => a.id ?? a)
     const newIds = currentIds.includes(memberId)
       ? currentIds.filter((id) => id !== memberId)
       : [...currentIds, memberId]
     const newAssignees = members.filter((m) => newIds.includes(m.id)).map((m) => ({ id: m.id, name: m.full_name }))
     setLocalTask((t) => ({ ...t, assignees: newAssignees, assignee_id: newIds[0] ?? null }))
-    await editTask(localTask.id, { assigneeIds: newIds })
+    try {
+      await editTask(localTask.id, { assigneeIds: newIds })
+    } catch (error) {
+      setLocalTask(previousTask)
+      showToast(error.message || 'Failed to update assignee — try again', { tone: 'error' })
+    }
   }
 
   async function handleAddSubtask(e) {

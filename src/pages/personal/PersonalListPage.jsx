@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link2, Lock, Pin, PinOff, Plus, Search, X } from 'lucide-react'
+import { Link2, Lock, Pin, PinOff, Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../context/ToastContext'
@@ -9,7 +9,8 @@ import {
   removeTaskFromPersonalList,
   searchPinnableTasks,
 } from '../../features/tasks/lib/personalList'
-import { listTaskStatuses } from '../../lib/taskStatuses'
+import { createTask } from '../../features/tasks/lib/tasks'
+import { isStaleCompletedTask, isTaskCompleted, listTaskStatuses, STALE_COMPLETED_TASK_DAYS } from '../../lib/taskStatuses'
 import { formatDueDate } from '../../lib/dateUtils'
 import { TasksProvider } from '../../features/tasks/TasksContext'
 import TaskModal from '../../features/tasks/components/TaskModal'
@@ -296,6 +297,50 @@ export default function PersonalListPage() {
   const [modal, setModal] = useState(null)
   const [viewMode, setViewMode] = useState(loadViewMode)
   const [showAddExisting, setShowAddExisting] = useState(false)
+  const [showFilterPanel, setShowFilterPanel] = useState(false)
+  const filterRef = useRef(null)
+  const [dateClosedFilter, setDateClosedFilter] = useState(() => {
+    const fallback = { operator: 'is', rangeDays: STALE_COMPLETED_TASK_DAYS.PERSONAL }
+    try {
+      const stored = localStorage.getItem('blw_personal_list_date_closed_filter')
+      if (!stored) return fallback
+      const parsed = JSON.parse(stored)
+      return {
+        operator: parsed.operator === 'is_not' ? 'is_not' : 'is',
+        rangeDays: parsed.rangeDays === null ? null : Number(parsed.rangeDays) || fallback.rangeDays,
+      }
+    } catch {
+      return fallback
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('blw_personal_list_date_closed_filter', JSON.stringify(dateClosedFilter))
+    } catch {
+      // Ignore write failures (e.g. private browsing) — persistence is a nicety, not a requirement.
+    }
+  }, [dateClosedFilter])
+
+  useEffect(() => {
+    if (!showFilterPanel) return
+    function handleOutside(e) {
+      if (filterRef.current && !filterRef.current.contains(e.target)) {
+        setShowFilterPanel(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [showFilterPanel])
+
+  const visiblePersonalTasks = useMemo(() => {
+    if (dateClosedFilter.rangeDays === null) return personalTasks
+    return personalTasks.filter((t) => {
+      if (!isTaskCompleted(t)) return true
+      const isOutsideRange = isStaleCompletedTask(t, dateClosedFilter.rangeDays)
+      return dateClosedFilter.operator === 'is_not' ? isOutsideRange : !isOutsideRange
+    })
+  }, [personalTasks, dateClosedFilter])
 
   // Personal tasks always use the global (org default) status set —
   // createTask resolves their statuses with departmentId null.
@@ -329,6 +374,12 @@ export default function PersonalListPage() {
     } catch (err) {
       showToast(err.message, { tone: 'error' })
     }
+  }
+
+  async function handleCreateTask(draft) {
+    const { departmentId: _d, listId: _l, ...rest } = draft
+    await createTask({ ...rest, is_personal: true, department_id: null, list_id: null })
+    refetch()
   }
 
   async function handleUnpin(task) {
@@ -392,6 +443,87 @@ export default function PersonalListPage() {
                 </button>
               ))}
             </div>
+            <div ref={filterRef} style={{ position: 'relative' }}>
+              {/* Filter icon button — dot when non-default */}
+              <button
+                type="button"
+                onClick={() => setShowFilterPanel((v) => !v)}
+                aria-label="Filters"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 36,
+                  height: 36,
+                  border: `1px solid ${showFilterPanel ? 'var(--purple-700)' : 'var(--border-1)'}`,
+                  borderRadius: 10,
+                  background: showFilterPanel ? 'var(--purple-50, #f3eeff)' : 'var(--surface-card)',
+                  color: showFilterPanel ? 'var(--purple-700)' : 'var(--ink-3)',
+                  cursor: 'pointer',
+                  position: 'relative',
+                }}
+              >
+                <SlidersHorizontal size={15} />
+                {(dateClosedFilter.rangeDays !== 14 || dateClosedFilter.operator !== 'is') && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: 5,
+                      right: 5,
+                      width: 6,
+                      height: 6,
+                      borderRadius: 999,
+                      background: 'var(--purple-700)',
+                      border: '1.5px solid var(--surface-card)',
+                    }}
+                  />
+                )}
+              </button>
+
+              {showFilterPanel && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    width: 240,
+                    background: 'var(--surface-card)',
+                    border: '1px solid var(--border-1)',
+                    borderRadius: 12,
+                    boxShadow: '0 8px 24px rgba(28,22,16,0.12)',
+                    padding: '12px 14px',
+                    zIndex: 50,
+                  }}
+                >
+                  <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Date closed
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <select
+                      value={dateClosedFilter.operator}
+                      onChange={(e) => setDateClosedFilter((prev) => ({ ...prev, operator: e.target.value }))}
+                      style={{ width: '100%', border: '1px solid var(--border-1)', borderRadius: 8, padding: '6px 10px', fontSize: 13, background: 'var(--surface-card)', color: 'var(--ink-1)', fontFamily: 'inherit' }}
+                    >
+                      <option value="is">Is</option>
+                      <option value="is_not">Is not</option>
+                    </select>
+                    <select
+                      value={dateClosedFilter.rangeDays ?? 'any'}
+                      onChange={(e) => setDateClosedFilter((prev) => ({
+                        ...prev,
+                        rangeDays: e.target.value === 'any' ? null : Number(e.target.value),
+                      }))}
+                      style={{ width: '100%', border: '1px solid var(--border-1)', borderRadius: 8, padding: '6px 10px', fontSize: 13, background: 'var(--surface-card)', color: 'var(--ink-1)', fontFamily: 'inherit' }}
+                    >
+                      <option value="any">Any time</option>
+                      <option value="7">Last 7 days</option>
+                      <option value="14">Last 14 days</option>
+                      <option value="30">Last 30 days</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -405,13 +537,13 @@ export default function PersonalListPage() {
               <div className="min-h-[420px]">
                 <TasksProvider>
                   <KanbanBoard
-                    filteredTasks={personalTasks}
+                    filteredTasks={visiblePersonalTasks}
                     departmentId={null}
                     spaceName="Personal List"
                     departments={[]}
                     statusesOverride={statuses}
                     onTaskClick={(task) => setModal({ mode: 'edit', task })}
-                    onCreateTask={() => setModal({ mode: 'create' })}
+                    onCreateTask={handleCreateTask}
                     onTaskStatusChange={handleMoveTask}
                   />
                 </TasksProvider>
@@ -419,11 +551,11 @@ export default function PersonalListPage() {
             ) : (
               <div className="min-h-[420px] rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--card-shadow)]">
                 <TaskListView
-                  tasks={personalTasks}
+                  tasks={visiblePersonalTasks}
                   statuses={statuses}
                   departments={[]}
                   canAddTask
-                  onCreateTask={() => setModal({ mode: 'create' })}
+                  onCreateTask={handleCreateTask}
                   onTaskClick={(task) => setModal({ mode: 'edit', task })}
                   onTaskStatusChange={handleMoveTask}
                   people={{}}

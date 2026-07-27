@@ -17,6 +17,24 @@ import { EMPTY_FILTERS, applyTaskFilters } from '../../features/tasks/hooks/useT
 import { getTaskTypeInfo } from '../../features/tasks/lib/task-types'
 import { isDelegatedTask, updateTask } from '../../features/tasks/lib/tasks'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
+import { STALE_COMPLETED_TASK_DAYS } from '../../lib/taskStatuses'
+
+const MY_TASKS_DATE_CLOSED_KEY = 'blw_date_closed_filter_my_tasks'
+
+function readMyTasksDateClosedFilter() {
+  const fallback = { operator: 'is', rangeDays: STALE_COMPLETED_TASK_DAYS.PERSONAL }
+  try {
+    const stored = localStorage.getItem(MY_TASKS_DATE_CLOSED_KEY)
+    if (!stored) return fallback
+    const parsed = JSON.parse(stored)
+    return {
+      operator: parsed.operator === 'is_not' ? 'is_not' : 'is',
+      rangeDays: parsed.rangeDays === null ? null : Number(parsed.rangeDays) || fallback.rangeDays,
+    }
+  } catch {
+    return fallback
+  }
+}
 
 function loadViewMode() {
   return localStorage.getItem('blw_mytasks_view') ?? 'list'
@@ -50,8 +68,22 @@ export default function MyTasks() {
   const [modal, setModal] = useState(null)
   const [viewMode, setViewMode] = useState(loadViewMode)
   const [activeTab, setActiveTab] = useState('mine')
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [filters, setFilters] = useState(() => {
+    const { operator, rangeDays } = readMyTasksDateClosedFilter()
+    return { ...EMPTY_FILTERS, dateClosedOperator: operator, dateClosedRangeDays: rangeDays }
+  })
   const [filtersOpen, setFiltersOpen] = useState(false)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MY_TASKS_DATE_CLOSED_KEY, JSON.stringify({
+        operator: filters.dateClosedOperator,
+        rangeDays: filters.dateClosedRangeDays,
+      }))
+    } catch {
+      // Ignore write failures (e.g. private browsing) — persistence is a nicety, not a requirement.
+    }
+  }, [filters.dateClosedOperator, filters.dateClosedRangeDays])
   const deptMembers = useDeptMembers(profile?.department_id)
 
   // My Tasks spans every space, so equivalent statuses ("To Do", "Done") exist
@@ -214,10 +246,16 @@ export default function MyTasks() {
     filters.source.length > 0 ||
     filters.hasComments ||
     filters.hasDependencies ||
-    !filters.showDone
+    !filters.showDone ||
+    filters.dateClosedRangeDays !== STALE_COMPLETED_TASK_DAYS.PERSONAL ||
+    (filters.dateClosedRangeDays !== null && filters.dateClosedOperator !== 'is')
 
   function clearFilters() {
-    setFilters(EMPTY_FILTERS)
+    setFilters((prev) => ({
+      ...EMPTY_FILTERS,
+      dateClosedOperator: prev.dateClosedOperator,
+      dateClosedRangeDays: prev.dateClosedRangeDays,
+    }))
   }
 
   const departmentOptions = departments.map((d) => ({ id: d.id, name: d.name, color: d.color }))
@@ -294,7 +332,7 @@ export default function MyTasks() {
 
             {filtersOpen ? (
               <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[640px] max-w-[80vw] max-h-[70vh] overflow-y-auto rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--shadow-lg)]">
-                <TaskFilters forceExpanded filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={statusGroups.display} tasks={tabTasks} />
+                <TaskFilters forceExpanded filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={statusGroups.display} tasks={tabTasks} showDateClosedFilter />
               </div>
             ) : null}
           </div>
@@ -313,7 +351,7 @@ export default function MyTasks() {
                 spaceName="My Tasks"
                 departments={departmentOptions}
                 statusesOverride={statuses}
-                onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab !== 'mine' })}
+                onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab === 'watching' })}
                 onCreateTask={() => setModal({ mode: 'create' })}
                 onTaskStatusChange={handleTaskStatusChange}
                 canCreateTask={effectiveTab === 'mine'}
@@ -329,7 +367,7 @@ export default function MyTasks() {
               departments={departmentOptions}
               canAddTask={effectiveTab === 'mine'}
               onCreateTask={() => setModal({ mode: 'create' })}
-              onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab !== 'mine' })}
+              onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab === 'watching' })}
               onTaskStatusChange={handleTaskStatusChange}
               people={memberMap}
               priorities={{}}

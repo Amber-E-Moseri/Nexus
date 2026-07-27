@@ -52,14 +52,19 @@ export function NotificationsProvider({ children }) {
         (payload) => {
           setNotifications((prev) => [payload.new, ...prev])
           setUnreadCount((prev) => prev + 1)
-          // Fire desktop alert if browser permission granted
-          if (Notification.permission === 'granted') {
-            const notif = payload.new
-            const def = NOTIFICATION_TYPES[notif.type]
-            const title = def?.label ?? 'BLW CAN NEXUS'
-            const body = formatNotificationMessage(notif)
-            sendBrowserPushNotification(title, { body, tag: notif.type, data: { url: '/inbox' } }).catch(() => {})
-          }
+          // Fire desktop alert if browser permission granted.
+          // Use new Notification() directly — avoids the serviceWorker.ready hang
+          // that occurs when the SW isn't active (dev mode, first load, etc.).
+          try {
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              const notif = payload.new
+              const def = NOTIFICATION_TYPES[notif.type]
+              const title = def?.label ?? 'BLW CAN NEXUS'
+              const body = formatNotificationMessage(notif)
+              // eslint-disable-next-line no-new
+              new Notification(title, { body, tag: notif.type, icon: '/logo.png' })
+            }
+          } catch (_) {}
         },
       )
       .subscribe()

@@ -16,6 +16,7 @@ import TaskListView from '../../features/tasks/components/TaskListView'
 import TaskModal from '../../features/tasks/components/TaskModal'
 import { TasksProvider, useTasks } from '../../features/tasks/TasksContext'
 import { useTaskFilters } from '../../features/tasks/hooks/useTaskFilters'
+import { STALE_COMPLETED_TASK_DAYS } from '../../lib/taskStatuses'
 
 const TABS = [
   { key: 'board', label: 'Board' },
@@ -135,7 +136,10 @@ function DeptBoardView({ dept, onTaskClick, onAddTask }) {
   const { profile } = useAuth()
   const { tasks, loading, error, statuses, defaultStatusId } = useTasks()
   const members = useDeptMembers(dept?.id)
-  const { filters, setFilters, filtered: baseFiltered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
+  const { filters, setFilters, filtered: baseFiltered, clearFilters, hasActiveFilters } = useTaskFilters(tasks, {
+    defaultDateClosedRangeDays: STALE_COMPLETED_TASK_DAYS.SPACE,
+    persistKey: `blw_date_closed_filter_${dept?.id}`,
+  })
   const [meMode, setMeMode] = useState(false)
   const [meModeOptions, setMeModeOptions] = useState({ comments: false, subtasks: false, checklists: false })
 
@@ -234,6 +238,7 @@ function DeptBoardView({ dept, onTaskClick, onAddTask }) {
           members={members}
           statuses={scopedStatuses}
           tasks={tasks}
+          showDateClosedFilter
         />
       </div>
       <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -252,7 +257,10 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
   const { profile } = useAuth()
   const { tasks, loading, error, statuses, defaultStatusId, moveTask } = useTasks()
   const members = useDeptMembers(dept?.id)
-  const { filters, setFilters, filtered: baseFiltered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
+  const { filters, setFilters, filtered: baseFiltered, clearFilters, hasActiveFilters } = useTaskFilters(tasks, {
+    defaultDateClosedRangeDays: STALE_COMPLETED_TASK_DAYS.SPACE,
+    persistKey: `blw_date_closed_filter_${dept?.id}`,
+  })
   const [meMode, setMeMode] = useState(false)
   const [meModeOptions, setMeModeOptions] = useState({ comments: false, subtasks: false, checklists: false })
 
@@ -294,6 +302,7 @@ function DeptListView({ dept, onTaskClick, onAddTask }) {
           members={members}
           statuses={statuses}
           tasks={tasks}
+          showDateClosedFilter
         />
       </div>
 

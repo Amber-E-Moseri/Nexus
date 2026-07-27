@@ -106,6 +106,19 @@ export function isTaskActionable(task) {
   return !isTaskCompleted(task) && !isTaskCancelled(task)
 }
 
+export const STALE_COMPLETED_TASK_DAYS = {
+  SPACE: 7,
+  PERSONAL: 14,
+}
+
+export function isStaleCompletedTask(task, thresholdDays) {
+  if (!isTaskCompleted(task)) return false
+  if (!task?.completed_at) return false
+  const ageMs = Date.now() - new Date(task.completed_at).getTime()
+  if (Number.isNaN(ageMs)) return false
+  return ageMs > thresholdDays * 24 * 60 * 60 * 1000
+}
+
 export function normalizeTaskRow(task) {
   if (!task) return task
 

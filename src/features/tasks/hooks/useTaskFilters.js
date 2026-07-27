@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { isTaskCompleted } from '../../../lib/taskStatuses'
+import { useEffect, useMemo, useState } from 'react'
+import { isStaleCompletedTask, isTaskCompleted } from '../../../lib/taskStatuses'
 
 export const EMPTY_FILTERS = {
   status: [],
@@ -12,6 +12,13 @@ export const EMPTY_FILTERS = {
   hasComments: false,
   hasDependencies: false,
   showDone: true,
+  // "Date closed" filter — independent of showDone. rangeDays: null means
+  // "Any time" (inert, never checked). A caller opts in by seeding a
+  // non-null default via useTaskFilters' `defaultDateClosedRangeDays`
+  // option; callers that never do keep this at null forever, so the check
+  // in applyTaskFilters below is a no-op for them.
+  dateClosedOperator: 'is', // 'is' | 'is_not'
+  dateClosedRangeDays: null, // null | 7 | 14 | 30
 }
 
 function startOfDay(date) {
@@ -33,6 +40,11 @@ export function applyTaskFilters(tasks = [], filters = EMPTY_FILTERS) {
     if (filters.hasComments && (task.comments?.[0]?.count ?? 0) < 1) return false
     if (filters.hasDependencies && (task.dependencies?.[0]?.count ?? 0) < 1) return false
     if (!filters.showDone && isTaskCompleted(task)) return false
+    if (filters.dateClosedRangeDays && isTaskCompleted(task)) {
+      const isOutsideRange = isStaleCompletedTask(task, filters.dateClosedRangeDays)
+      const matches = filters.dateClosedOperator === 'is_not' ? isOutsideRange : !isOutsideRange
+      if (!matches) return false
+    }
 
     if (filters.dueDateRange) {
       const today = startOfDay(new Date())
@@ -68,13 +80,50 @@ export function applyTaskFilters(tasks = [], filters = EMPTY_FILTERS) {
   })
 }
 
-export function useTaskFilters(tasks = []) {
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
+function readPersistedDateClosedFilter(persistKey, defaultDateClosedRangeDays) {
+  const base = { operator: 'is', rangeDays: defaultDateClosedRangeDays }
+  if (!persistKey) return base
+  try {
+    const stored = localStorage.getItem(persistKey)
+    if (!stored) return base
+    const parsed = JSON.parse(stored)
+    return {
+      operator: parsed.operator === 'is_not' ? 'is_not' : 'is',
+      rangeDays: parsed.rangeDays === null ? null : Number(parsed.rangeDays) || defaultDateClosedRangeDays,
+    }
+  } catch {
+    return base
+  }
+}
+
+export function useTaskFilters(tasks = [], options = {}) {
+  const { defaultDateClosedRangeDays = null, persistKey } = options
+
+  const [filters, setFilters] = useState(() => {
+    const { operator, rangeDays } = readPersistedDateClosedFilter(persistKey, defaultDateClosedRangeDays)
+    return { ...EMPTY_FILTERS, dateClosedOperator: operator, dateClosedRangeDays: rangeDays }
+  })
+
+  useEffect(() => {
+    if (!persistKey) return
+    try {
+      localStorage.setItem(persistKey, JSON.stringify({
+        operator: filters.dateClosedOperator,
+        rangeDays: filters.dateClosedRangeDays,
+      }))
+    } catch {
+      // Ignore write failures (e.g. private browsing) — persistence is a nicety, not a requirement.
+    }
+  }, [persistKey, filters.dateClosedOperator, filters.dateClosedRangeDays])
 
   const filtered = useMemo(() => applyTaskFilters(tasks, filters), [tasks, filters])
 
   function clearFilters() {
-    setFilters(EMPTY_FILTERS)
+    setFilters((prev) => ({
+      ...EMPTY_FILTERS,
+      dateClosedOperator: prev.dateClosedOperator,
+      dateClosedRangeDays: prev.dateClosedRangeDays,
+    }))
   }
 
   function hasActiveFilters() {
@@ -86,6 +135,8 @@ export function useTaskFilters(tasks = []) {
       (filters.dateRange?.startDate !== null || filters.dateRange?.endDate !== null) ||
       filters.taskType.length > 0 ||
       filters.source.length > 0 ||
+      filters.dateClosedRangeDays !== defaultDateClosedRangeDays ||
+      (filters.dateClosedRangeDays !== null && filters.dateClosedOperator !== 'is') ||
       filters.hasComments ||
       filters.hasDependencies ||
       !filters.showDone

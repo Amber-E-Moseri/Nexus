@@ -29,7 +29,7 @@ export default function Shell() {
               />
               {/* Drawer */}
               <div className="fixed left-0 top-0 z-50 h-screen w-[222px] md:hidden">
-                <Sidebar />
+                <Sidebar isMobileDrawer />
               </div>
             </>
           )}

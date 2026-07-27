@@ -1,9 +1,12 @@
 import { formatDistanceToNow, parseISO } from 'date-fns'
 
 export const ACTIVITY_ACTION_LABELS = {
-  task_created: 'created task',
-  task_status_changed: 'updated task status',
-  task_assigned: 'assigned task',
+  task_created: 'created this task',
+  task_status_changed: 'updated the status',
+  task_assigned: 'changed the assignee',
+  task_title_changed: 'renamed this task',
+  task_due_date_changed: 'changed the due date',
+  task_priority_changed: 'changed the priority',
   meeting_created: 'created meeting',
   invitation_created: 'sent invitation',
   invitation_resent: 'resent invitation',

@@ -12,11 +12,14 @@ import MeetingDocsTab from '../../features/meetings/components/MeetingDocsTab'
 import MeetingSummaryEditor from '../../features/meetings/components/MeetingSummaryEditor'
 import GenerateMeetingDocButton from '../../features/meetings/components/GenerateMeetingDocButton'
 import MeetingShareModal from '../../features/meetings/components/MeetingShareModal'
+import TaskModal from '../../features/tasks/components/TaskModal'
+import { getTaskById } from '../../features/tasks/lib/tasks'
 import { createTasksFromActionItems, setNotesSharedWithAttendee, editRecurringMeeting } from '../../features/meetings/lib/meetings'
 import { resolveAssignment, getOrgDepartments, getOrgUsers } from '../../features/meetings/lib/ownerMatching'
 import { getOpenItemsByMeeting, createOpenItems, updateOpenItem, updateOpenItemStatus, deleteOpenItem, convertOpenItemToTask } from '../../features/meetings/lib/openItems'
 import { getCategoryStatusId, STATUS_CATEGORIES } from '../../lib/taskStatuses'
 import { useExtractionStatus } from '../../features/meetings/hooks/useExtractionStatus'
+import { useExtractionFeedback } from '../../features/meetings/hooks/useExtractionFeedback'
 import { autoSelectOpenItems } from '../../features/meetings/lib/applyExtraction'
 import { syncFlockInteractionForMeeting } from '../../features/meetings/lib/flockLink'
 import FlockContactPicker from '../../features/meetings/components/FlockContactPicker'
@@ -51,7 +54,7 @@ const TABS = [
   { id: 'minutes', icon: '📝', label: 'Minutes',    badge: null },
   { id: 'actions', icon: '🎯', label: 'Actions',    badge: 'actions' },
   { id: 'audio',   icon: '🎙️', label: 'Audio',      badge: null },
-  { id: 'ai',      icon: '⚡', label: 'AI Extract', badge: null },
+  { id: 'ai',      icon: '⚡', label: 'AI Extract', badge: 'ai' },
   { id: 'docs',    icon: '📎', label: 'Docs',       badge: 'docs' },
 ]
 
@@ -87,6 +90,7 @@ function MeetingDetailViewInner() {
   const [decisionsText, setDecisionsText]       = useState('')
   const [minutesSaveStatus, setMinutesSaveStatus] = useState('idle') // idle | saving | saved | error
   const [actionItems, setActionItems]           = useState([])
+  const [editingActionItem, setEditingActionItem] = useState(null)
   const [showAddAction, setShowAddAction]       = useState(false)
   const [docsBadge, setDocsBadge]               = useState(0)
   const [aiExtracting, setAiExtracting]         = useState(false)
@@ -108,6 +112,7 @@ function MeetingDetailViewInner() {
   const [exportingPdf, setExportingPdf]           = useState(false)
   const [context, setContext]                     = useState('')      // WIN 2: meeting context
   const [contextChanged, setContextChanged]       = useState(false)
+  const [contextExpanded, setContextExpanded]     = useState(true)
   const [editingTitle, setEditingTitle]           = useState(false)
   const [titleDraft, setTitleDraft]               = useState('')
   const [savingTitle, setSavingTitle]             = useState(false)
@@ -197,10 +202,20 @@ function MeetingDetailViewInner() {
   // extraction.result is the source of truth (survives navigation/refresh —
   // WS1/WS3). Always sync the review-UI state so a completed extraction is
   // visible whether it just finished or the user is returning to it later.
-  useEffect(() => {
-    setAiExtracting(extraction.status === 'processing')
-    if (extraction.status === 'failed' && extraction.error) setAiError(extraction.error)
-  }, [extraction.status, extraction.error])
+  // aiExtracting/aiError plus the completion toast + tab badge are all
+  // driven by useExtractionFeedback — see that file for the full reasoning
+  // on transition detection, StrictMode safety, and meetingId-switch
+  // correctness.
+  const { unseen: aiResultUnseen } = useExtractionFeedback({
+    meetingId,
+    activeTab,
+    status: extraction.status,
+    error: extraction.error,
+    completedAt: extraction.completedAt,
+    showToast,
+    setAiExtracting,
+    setAiError,
+  })
 
   useEffect(() => {
     if (!extraction.result) return
@@ -501,6 +516,20 @@ function MeetingDetailViewInner() {
       }
     } catch (e) {
       console.warn('Failed to fetch action items:', e)
+    }
+  }
+
+  // fetchActionItems' select is intentionally light (list display only) —
+  // pull the full row via getTaskById so TaskModal gets real priority,
+  // description, assignees, subtasks, etc. instead of TaskModal's own
+  // field-by-field defaults papering over data that's just missing from
+  // the list query.
+  async function openActionItem(taskId) {
+    try {
+      const full = await getTaskById(taskId)
+      setEditingActionItem(full)
+    } catch (e) {
+      showToast(`Couldn't load task: ${e.message}`, { tone: 'error' })
     }
   }
 
@@ -1016,6 +1045,7 @@ function MeetingDetailViewInner() {
       <style>{`
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
         @keyframes fadein { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+        @keyframes spin { to { transform: rotate(360deg) } }
       `}</style>
 
       {/* ── UNIFIED HEADER ── */}
@@ -1423,6 +1453,7 @@ function MeetingDetailViewInner() {
               const active = activeTab === t.id
               const badge  = t.badge === 'actions' && actionBadge > 0 ? actionBadge
                            : t.badge === 'docs' && docsBadge > 0 ? docsBadge
+                           : t.badge === 'ai' && aiResultUnseen ? '●'
                            : null
               return (
                 <button
@@ -1469,20 +1500,35 @@ function MeetingDetailViewInner() {
                 {/* Meeting Context */}
                 {canManage && (
                   <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'14px 16px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
-                    <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:4 }}>Meeting Context</div>
-                    <div style={{ fontSize:11, color: FS.xmuted, marginBottom:8 }}>e.g. "Q3 planning", "API redesign" — helps AI extract better action items</div>
-                    <textarea
-                      value={context}
-                      onChange={(e) => { setContext(e.target.value); setContextChanged(true) }}
-                      onBlur={async () => {
-                        if (!contextChanged) return
-                        const { error } = await supabase.from('meetings').update({ context }).eq('id', meetingId)
-                        if (!error) setContextChanged(false)
-                      }}
-                      placeholder="Add context to help AI extract better action items…"
-                      rows={2}
-                      style={{ width:'100%', padding:'10px 12px', border:`1px solid ${FS.border}`, borderRadius:8, fontSize:13, color: FS.text, fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box', background:'#fff' }}
-                    />
+                    <div
+                      onClick={() => setContextExpanded(v => !v)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter') setContextExpanded(v => !v) }}
+                      style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom: contextExpanded ? 4 : 0 }}
+                    >
+                      <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted }}>
+                        Meeting Context{!contextExpanded && context ? ` — ${context}` : ''}
+                      </div>
+                      <span style={{ fontSize:11, color: FS.muted, transform: contextExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition:'transform .15s', flexShrink:0 }}>▾</span>
+                    </div>
+                    {contextExpanded && (
+                      <>
+                        <div style={{ fontSize:11, color: FS.xmuted, marginBottom:8 }}>e.g. "Q3 planning", "API redesign" — helps AI extract better action items</div>
+                        <textarea
+                          value={context}
+                          onChange={(e) => { setContext(e.target.value); setContextChanged(true) }}
+                          onBlur={async () => {
+                            if (!contextChanged) return
+                            const { error } = await supabase.from('meetings').update({ context }).eq('id', meetingId)
+                            if (!error) setContextChanged(false)
+                          }}
+                          placeholder="Add context to help AI extract better action items…"
+                          rows={2}
+                          style={{ width:'100%', padding:'10px 12px', border:`1px solid ${FS.border}`, borderRadius:8, fontSize:13, color: FS.text, fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box', background:'#fff' }}
+                        />
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -1644,10 +1690,18 @@ function MeetingDetailViewInner() {
                       const isDone = task.status === 'done' || task.status === 'completed'
                       const isInProgress = task.status === 'in_progress'
                       return (
-                        <div key={task.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 14px', borderRadius:10, border:`1px solid ${FS.border}`, background: FS.surface, boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
+                        <div
+                          key={task.id}
+                          onClick={() => openActionItem(task.id)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => { if (e.key === 'Enter') openActionItem(task.id) }}
+                          style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 14px', borderRadius:10, border:`1px solid ${FS.border}`, background: FS.surface, boxShadow:'0 1px 3px rgba(0,0,0,.04)', cursor:'pointer' }}
+                        >
                           <input
                             type="checkbox"
                             checked={isDone}
+                            onClick={(e) => e.stopPropagation()}
                             onChange={async () => {
                               const nextCategory = isDone ? STATUS_CATEGORIES.OPEN : STATUS_CATEGORIES.COMPLETED
                               const statusId = await getCategoryStatusId({ departmentId: task.department_id, category: nextCategory })
@@ -2105,6 +2159,14 @@ function MeetingDetailViewInner() {
                   >
                     {aiExtracting ? '⏳ Extracting…' : '⚡ Run AI extraction'}
                   </button>
+                  {aiExtracting && (
+                    <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:'#F0EBF8', borderRadius:8, marginTop:12 }}>
+                      <div style={{ width:20, height:20, border:'3px solid #E0E0E0', borderTopColor: FS.purple, borderRadius:'50%', animation:'spin 0.8s linear infinite', flexShrink:0 }} />
+                      <p style={{ margin:0, fontSize:12.5, color: FS.purple, fontWeight:600 }}>
+                        Claude is reading the transcript — this can take a minute or two…
+                      </p>
+                    </div>
+                  )}
                   {meeting?.summary && (
                     <div style={{ fontSize:11, color: FS.xmuted, textAlign:'center', marginTop:8 }}>
                       Transcript found · Powered by Claude
@@ -2336,6 +2398,18 @@ function MeetingDetailViewInner() {
           </div>
         </div>
       </div>
+
+      {editingActionItem && (
+        <TaskModal
+          mode="edit"
+          task={editingActionItem}
+          departmentId={editingActionItem.department_id}
+          isReadOnly={!canManage}
+          onClose={() => setEditingActionItem(null)}
+          onSaved={() => { setEditingActionItem(null); fetchActionItems() }}
+          onDeleted={() => { setEditingActionItem(null); fetchActionItems() }}
+        />
+      )}
 
       {shareModalOpen && (
         <MeetingShareModal

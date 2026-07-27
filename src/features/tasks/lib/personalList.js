@@ -30,6 +30,7 @@ export async function getPersonalTasks(userId) {
     .or(`created_by.eq.${userId},assignee_id.eq.${userId}`)
     .is('parent_task_id', null)
     .is('deleted_at', null)
+    .is('archived_at', null)
     .order('due_date', { ascending: true })
     .order('created_at', { ascending: false })
 
@@ -38,8 +39,8 @@ export async function getPersonalTasks(userId) {
 }
 
 // Team tasks pinned into the Personal List. Pins whose task the user can no
-// longer see (RLS) or that were soft-deleted come back with task = null /
-// deleted_at set and are dropped.
+// longer see (RLS) or that were soft-deleted/archived come back with
+// task = null / deleted_at or archived_at set and are dropped.
 export async function getPinnedTasks(userId) {
   const { data, error } = await supabase
     .from('personal_list_tasks')
@@ -51,7 +52,7 @@ export async function getPinnedTasks(userId) {
 
   const tasks = (data ?? [])
     .map((pin) => pin.task)
-    .filter((task) => task && !task.deleted_at)
+    .filter((task) => task && !task.deleted_at && !task.archived_at)
   return normalizeTaskRows(tasks)
 }
 
@@ -87,6 +88,7 @@ export async function searchPinnableTasks(term) {
     .eq('is_personal', false)
     .is('parent_task_id', null)
     .is('deleted_at', null)
+    .is('archived_at', null)
     .order('created_at', { ascending: false })
     .limit(10)
 

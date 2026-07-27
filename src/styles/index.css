@@ -428,3 +428,15 @@ code, kbd { font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospa
 @media (max-width: 380px) {
   .dash-stat-grid { gap: 8px !important; }
 }
+
+/* ── Retractable sidebar — icon rail. Reuses .sidebar-item so every nav
+      entry (including href-based integration links) collapses uniformly
+      without per-item logic ─────────────────────────────────────────── */
+.sidebar-nav--collapsed .sidebar-item {
+  justify-content: center;
+  gap: 0;
+}
+.sidebar-nav--collapsed .sidebar-item__label,
+.sidebar-nav--collapsed .sidebar-item__badge {
+  display: none;
+}

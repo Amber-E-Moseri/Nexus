@@ -292,7 +292,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const [myTasksExpanded, setMyTasksExpanded] = useState(false)
   const [meetingsExpanded, setMeetingsExpanded] = useState(false)
   const [communicationsExpanded, setCommunicationsExpanded] = useState(false)
-  const [platformExpanded, setPlatformExpanded] = useState(null) // null = no manual override yet
+  const [platformExpanded, setPlatformExpanded] = useState(false)
   const [editingSpace, setEditingSpace] = useState(null)
   const [hoveredSpaceId, setHoveredSpaceId] = useState(null)
   const [inlineRenameId, setInlineRenameId] = useState(null)
@@ -347,7 +347,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
     (INSTAGRAM_GRADING_ENABLED && (['super_admin', 'regional_secretary'].includes(role) || hasSpaceRole(profile, null, 'media'))) ||
     hasSpaceRole(profile, null, 'ors') ||
     FLOCK_CRM_CONFIG.checkAccess(role)
-  const isPlatformExpanded = platformExpanded === null ? hasAnyPlatformAccess : platformExpanded
+  const isPlatformExpanded = platformExpanded
 
   async function loadSpaces() {
     if (!profile?.id || !role) return
@@ -1142,7 +1142,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
           expanded={isPlatformExpanded}
           onToggle={() => setPlatformExpanded(!isPlatformExpanded)}
         >
-          Platform
+          Tools
         </SidebarSectionLabel>
         )}
         {(collapsed || isPlatformExpanded) ? (

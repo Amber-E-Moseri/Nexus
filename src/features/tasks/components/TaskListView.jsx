@@ -64,6 +64,7 @@ export default function TaskListView({
   defaultDepartmentId = '',
   listId = null,
   onCreateTask,
+  onAddTaskClick,
   onTaskReorder,
   onTaskStatusChange,
   people = {},
@@ -362,7 +363,7 @@ export default function TaskListView({
               ) : (
                 <button
                   type="button"
-                  onClick={() => setComposerStatusId(status.id)}
+                  onClick={() => onAddTaskClick ? onAddTaskClick() : setComposerStatusId(status.id)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

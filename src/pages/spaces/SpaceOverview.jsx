@@ -28,6 +28,7 @@ import TaskModal from '../../features/tasks/components/TaskModal'
 import { TasksProvider, useTasks } from '../../features/tasks/TasksContext'
 import { useTaskFilters } from '../../features/tasks/hooks/useTaskFilters'
 import { mergeTaskFieldSettings, normalizeTaskFieldSettings, TASK_FIELD_OPTIONS } from '../../lib/taskFieldSettings'
+import { STALE_COMPLETED_TASK_DAYS } from '../../lib/taskStatuses'
 import FileList from '../../components/files/FileList'
 import { supabase } from '../../lib/supabase'
 import SpaceSopModal, { sopIcon } from '../../components/layout/SpaceSopModal'
@@ -1342,7 +1343,10 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
   const [modal, setModal] = useState(null)
   const [boardFiltersOpen, setBoardFiltersOpen] = useState(false)
   const [calFeedOpen, setCalFeedOpen] = useState(false)
-  const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
+  const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks, {
+    defaultDateClosedRangeDays: STALE_COMPLETED_TASK_DAYS.SPACE,
+    persistKey: `blw_date_closed_filter_${spaceId}`,
+  })
 
   const selectedList = useMemo(() => lists.find((list) => list.id === selectedListId) ?? null, [lists, selectedListId])
   const selectedFolder = useMemo(
@@ -1372,6 +1376,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
     + (filters.hasDependencies ? 1 : 0)
     + (filters.showDone ? 0 : 1)
     + (filters.assigneeId ? 1 : 0)
+    + (filters.dateClosedRangeDays !== STALE_COMPLETED_TASK_DAYS.SPACE || filters.dateClosedOperator !== 'is' ? 1 : 0)
   ), [filters])
   const visibleStatuses = statuses
   const departmentOptions = useMemo(() => [{ id: spaceId, name: spaceName }], [spaceId, spaceName])
@@ -1487,7 +1492,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
 
               {boardFiltersOpen ? (
                 <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[640px] max-w-[80vw] rounded-[16px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-lg)]">
-                  <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={members} statuses={visibleStatuses} tasks={visibleTasks} forceExpanded />
+                  <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={members} statuses={visibleStatuses} tasks={visibleTasks} forceExpanded showDateClosedFilter />
                 </div>
               ) : null}
             </div>

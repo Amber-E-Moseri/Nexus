@@ -128,7 +128,7 @@ function TaskActivityLog({ taskId }) {
   )
 }
 
-function TaskModalTabs({ taskId, departmentId, sprintId }) {
+function TaskModalTabs({ taskId, departmentId, sprintId, onMentionAssigned }) {
   const [activeTab, setActiveTab] = useState('comments')
 
   const tabs = [
@@ -180,9 +180,7 @@ function TaskModalTabs({ taskId, departmentId, sprintId }) {
         <div role="tabpanel" id="tabpanel-comments" aria-labelledby="tab-comments" tabIndex={0}>
           <TaskComments
             taskId={taskId}
-            onMentionAssigned={(userId) => {
-              setAssigneeIds((prev) => prev.includes(userId) ? prev : [...prev, userId])
-            }}
+            onMentionAssigned={onMentionAssigned}
           />
         </div>
       ) : null}
@@ -215,6 +213,7 @@ export default function TaskModal({
   sprintId,
   sprintTeams,
   listId,
+  parentTaskId,
   isPersonal = false,
   isReadOnly = false,
   onClose,
@@ -468,6 +467,7 @@ export default function TaskModal({
         sprint_id: effectiveSprintId,
         list_id: personal || effectiveSprintId ? null : listId ?? task?.list_id ?? null,
         task_type: personal ? 'personal' : effectiveSprintId ? 'sprint' : 'space',
+        ...(parentTaskId ? { parent_task_id: parentTaskId } : {}),
       }
 
       console.log('[TaskModal] payload before save:', { mode, dueDate, dueTime, payload })
@@ -610,7 +610,7 @@ export default function TaskModal({
             }}
           >
             <Dialog.Title style={{ fontFamily: FONT_HEADING, fontSize: 15, fontWeight: 600, color: 'var(--ink-1)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-              {mode === 'create' ? 'New task' : 'Edit task'}
+              {mode === 'create' ? (parentTaskId ? 'New subtask' : 'New task') : 'Edit task'}
               {task?.archived_at ? (
                 <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', background: 'var(--surface-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px' }}>
                   Archived
@@ -900,7 +900,14 @@ export default function TaskModal({
             ) : null}
 
             {mode === 'edit' && task?.id ? (
-              <TaskModalTabs taskId={task.id} departmentId={departmentId} sprintId={sprintId ?? task?.sprint_id} />
+              <TaskModalTabs
+                taskId={task.id}
+                departmentId={departmentId}
+                sprintId={sprintId ?? task?.sprint_id}
+                onMentionAssigned={(userId) => {
+                  setAssigneeIds((prev) => prev.includes(userId) ? prev : [...prev, userId])
+                }}
+              />
             ) : null}
           </div>
 

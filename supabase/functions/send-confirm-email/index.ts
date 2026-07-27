@@ -4,6 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 // function when double_opt_in_enabled is true.
 
 const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN')
+const FROM_EMAIL = Deno.env.get('FROM_EMAIL') ?? 'BLW CAN NEXUS <noreply@lwcanada.org>'
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': ALLOWED_ORIGIN || '*',
@@ -87,7 +88,7 @@ async function sendViaResend(to: string, html: string): Promise<{ success: boole
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'BLW CAN NEXUS <noreply@blwcannexus.ca>',
+        from: FROM_EMAIL,
         to,
         subject: 'Confirm your subscription',
         html,

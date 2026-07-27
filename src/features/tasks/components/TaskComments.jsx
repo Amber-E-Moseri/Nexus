@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
+import { useToast } from '../../../context/ToastContext'
 import { formatRelativeDate } from '../../../lib/dateUtils'
 import { recordActivity } from '../../../lib/activityFeed'
 import { createComment, deleteComment, getTaskComments } from '../lib/tasks'
@@ -77,6 +78,7 @@ function getCaretCoordinates(textarea, caretPosition) {
 
 export default function TaskComments({ taskId, onMentionAssigned }) {
   const { profile } = useAuth()
+  const { showToast } = useToast()
   const [comments, setComments] = useState([])
   const [task, setTask] = useState(null)
   const [members, setMembers] = useState([])
@@ -197,7 +199,7 @@ export default function TaskComments({ taskId, onMentionAssigned }) {
     if (!body.trim()) return
     setSaving(true)
     try {
-      const comment = await createComment(taskId, body, profile.id, profile.id)
+      const comment = await createComment(taskId, body, profile.id, profile.id, profile.name ?? null)
       const assignedUserId = mentions[0]?.id ?? null
       const assignedAt = assignedUserId ? new Date().toISOString() : null
 
@@ -258,9 +260,9 @@ export default function TaskComments({ taskId, onMentionAssigned }) {
           .then(({ data, error }) => {
             if (error) {
               console.error('[assign_via_mention] error for', mentioned.name, ':', error)
+              showToast(`Could not notify ${mentioned.name}: ${error.message}`, { tone: 'error' })
               return
             }
-            console.log('[assign_via_mention] success for', mentioned.name, ':', data)
             const result = Array.isArray(data) ? data[0] : data
             if (result?.notify_sent) {
               sendTaskPushNotification(mentioned.id, {
@@ -270,6 +272,8 @@ export default function TaskComments({ taskId, onMentionAssigned }) {
                 url: `/tasks/${taskId}`,
                 type: 'mention',
               }).catch(() => {})
+            } else if (result && !result.notify_sent) {
+              console.log('[assign_via_mention] assigned but no notification sent for', mentioned.name, '(self-mention or opted out)')
             }
           })
       }

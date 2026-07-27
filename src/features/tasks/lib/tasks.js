@@ -809,7 +809,7 @@ export async function getTaskComments(taskId) {
   return data ?? []
 }
 
-export async function createComment(taskId, body, authorId, actorId = null) {
+export async function createComment(taskId, body, authorId, actorId = null, authorName = null) {
   const { data, error } = await supabase
     .from('task_comments')
     .insert({ task_id: taskId, body: body.trim(), author_id: authorId })
@@ -832,6 +832,22 @@ export async function createComment(taskId, body, authorId, actorId = null) {
     task_title: taskInfo?.title ?? null,
     body_preview: body.trim().slice(0, 100),
     assignee_id: taskInfo?.assignee_id ?? null,
+  })
+
+  // Notify all watchers and assignees (excluding the author).
+  console.log('[notify_comment_posted] calling — task:', taskId, 'author:', authorId)
+  supabase.rpc('notify_comment_posted', {
+    p_task_id: taskId,
+    p_comment_id: data.id,
+    p_author_id: authorId,
+    p_author_name: authorName ?? 'Someone',
+    p_body_preview: body.trim().slice(0, 150),
+  }).then(({ data: count, error }) => {
+    if (error) {
+      console.error('[notify_comment_posted] FAILED:', error)
+    } else {
+      console.log('[notify_comment_posted] sent', count, 'notifications — task:', taskId)
+    }
   })
 
   return data

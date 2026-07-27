@@ -112,6 +112,7 @@ export const NOTIFICATION_TYPES = {
   calendar_sync_failure: { label: 'Calendar sync failed', icon: '⚠️', description: 'When the Google Calendar sync fails for a space you manage' },
   support_ticket_submitted: { label: 'New support ticket', icon: '🎫', description: 'When a team member submits a support request' },
   support_ticket_reply: { label: 'Reply on your support ticket', icon: '💬', description: 'When admin replies to your support request' },
+  task_completed: { label: 'Task completed', icon: '✅', description: 'When a task you are watching is marked complete' },
 }
 
 export async function sendBrowserPushNotification(title, options = {}) {
@@ -261,6 +262,8 @@ export function formatNotificationMessage(notification) {
       return `${payload.submitter_name ?? 'Someone'} submitted a ${payload.category?.replace('_', ' ') ?? 'support'} request: "${payload.title ?? 'Untitled'}"`
     case 'support_ticket_reply':
       return `Admin replied to your request: "${payload.title ?? 'Untitled'}"`
+    case 'task_completed':
+      return `"${payload.task_title ?? 'A task'}" you were watching has been completed`
     case 'system':
       return payload.message ?? def.label
     default:

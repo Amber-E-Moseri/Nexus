@@ -8,6 +8,8 @@ const CACHE_KEYS = {
   CAMPAIGN_DRAFT: 'comm_draft_campaign_id',
   MY_TASKS_VIEW: 'blw_mytasks_view',
   MY_TASKS_COLLAPSED: 'blw_mytasks_collapsed',
+  SIDEBAR_COLLAPSED: 'blw_sidebar_collapsed',
+  AI_EXTRACT_SEEN_AT: (meetingId) => `ai-extract-seen-at-${meetingId}`,
 }
 
 export { CACHE_KEYS }
