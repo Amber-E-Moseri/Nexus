@@ -6,6 +6,7 @@ const allowedOrigins = new Set(
     configuredOrigin,
     'http://localhost:5173',
     'http://localhost:5174',
+    'https://nexus.lwcanada.org',
     'https://blwcannexus.vercel.app',
     'https://app.blwcannexus.ca',
   ].filter(Boolean),
@@ -14,7 +15,7 @@ const allowedOrigins = new Set(
 function getCorsHeaders(origin: string | null) {
   const allowOrigin = origin && allowedOrigins.has(origin)
     ? origin
-    : configuredOrigin || 'https://blwcannexus.vercel.app'
+    : configuredOrigin || 'https://nexus.lwcanada.org'
 
   return {
     'Access-Control-Allow-Origin': allowOrigin,

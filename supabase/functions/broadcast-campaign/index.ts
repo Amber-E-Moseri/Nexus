@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
 const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN')
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') ?? 'noreply@blwcannexus.ca'
-const FRONTEND_URL = Deno.env.get('FRONTEND_URL') ?? 'https://app.blwcannexus.ca'
+const FRONTEND_URL = Deno.env.get('FRONTEND_URL') ?? 'https://nexus.lwcanada.org'
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 
 const corsHeaders = ALLOWED_ORIGIN

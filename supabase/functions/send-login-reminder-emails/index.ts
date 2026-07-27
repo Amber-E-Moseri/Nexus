@@ -9,7 +9,7 @@ import { Resend } from "https://esm.sh/resend@2.0.0";
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const resendKey = Deno.env.get("RESEND_API_KEY")!;
-const FRONTEND_URL = Deno.env.get("FRONTEND_URL") || "https://app.blwcannexus.ca";
+const FRONTEND_URL = Deno.env.get("FRONTEND_URL") || "https://nexus.lwcanada.org";
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 const resend = new Resend(resendKey);

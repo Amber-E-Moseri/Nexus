@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
 const allowedOrigins = [
   Deno.env.get('ALLOWED_ORIGIN') ?? '',
+  'https://nexus.lwcanada.org',
   'https://blwcannexus.vercel.app',
   'http://localhost:5173',
   'http://localhost:5174',

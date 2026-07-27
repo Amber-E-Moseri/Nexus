@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
       }
 
       // Send confirmation email (non-blocking; don't fail if email send fails).
-      const frontendUrl = ALLOWED_ORIGIN || 'https://app.blwcannexus.ca'
+      const frontendUrl = ALLOWED_ORIGIN || 'https://nexus.lwcanada.org'
       const confirmUrl = `${frontendUrl}/confirm-subscription/${confirmToken}`
       fetch(new URL('./send-confirm-email', `${Deno.env.get('SUPABASE_URL') || ''}/functions/v1/`).toString(), {
         method: 'POST',
