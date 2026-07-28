@@ -514,6 +514,8 @@ export default function PersonalListPage() {
 
   const selectedSublistTasks = useMemo(() => {
     if (!selectedSublist) return []
+    // Default sublist ("All Tasks") shows every personal task regardless of sublist assignment
+    if (selectedSublist.is_default) return personalTasks
     return personalTasks.filter((task) => task.personal_sublist_id === selectedSublist.id)
   }, [personalTasks, selectedSublist])
 
