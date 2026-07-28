@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
-import { hasSpaceRole } from '../../../lib/permissions'
+import { canAssignOrgWide as checkCanAssignOrgWide } from '../../../lib/permissions'
 import { getAllOrgMembers, getDeptMembers } from '../lib/tasks'
 import {
   PRIORITY_OPTIONS, PRIORITY_COLORS, FlagIcon,
@@ -52,8 +52,7 @@ export default function InlineTaskComposer({
   // department for direct assignment (matches TaskModal.jsx's canAssignOrgWide) —
   // others still show up in a separate "Others" section for search/mention-style
   // visibility, not as directly assignable.
-  const canAssignOrgWide = role === 'super_admin' || role === 'regional_secretary' ||
-    hasSpaceRole(profile, null, 'ors') || hasSpaceRole(profile, null, 'programs')
+  const canAssignOrgWide = checkCanAssignOrgWide(profile, role)
 
   useEffect(() => {
     if (!assigneeOpen) return

@@ -2,7 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { useDeptMembers } from '../../../hooks/useDeptMembers'
-import { hasSpaceRole } from '../../../lib/permissions'
+import { canAssignOrgWide as checkCanAssignOrgWide } from '../../../lib/permissions'
 import { PRIORITIES } from '../../../lib/constants'
 import { getMySpaces, SPACE_TYPE_ICONS } from '../../spaces'
 import { getSprintMembers, SprintPicker } from '../../sprints'
@@ -15,7 +15,7 @@ import {
 } from '../../../lib/activityLog'
 import { normalizeTaskFieldSettings } from '../../../lib/taskFieldSettings'
 import { FONT_BODY, FONT_HEADING } from '../../../lib/fonts'
-import { archiveTask, createTask, deleteTask, getAllOrgMembers, getSubtasks, getTaskBlockers, unarchiveTask, updateTask } from '../lib/tasks'
+import { createTask, deleteTask, getAllOrgMembers, getSubtasks, getTaskBlockers, updateTask } from '../lib/tasks'
 import {
   getTaskStatusId,
   listTaskStatuses,
@@ -261,8 +261,7 @@ export default function TaskModal({
   // even after the user picks a space.
   const deptMembers = useDeptMembers(selectedSpaceId || departmentId)
   // Org-wide roles can assign to anyone, regardless of the selected space.
-  const canAssignOrgWide = role === 'super_admin' || role === 'regional_secretary' ||
-    hasSpaceRole(profile, null, 'ors') || hasSpaceRole(profile, null, 'programs')
+  const canAssignOrgWide = checkCanAssignOrgWide(profile, role)
   // UX-only guard (RLS is the real gate — 20270724000103_pastors_space_privacy.sql):
   // avoid a confusing silent-reject by not even offering other pastors as
   // assignees within the Pastors space. Deliberately NOT reusing
@@ -552,22 +551,6 @@ export default function TaskModal({
     }
   }
 
-  async function handleArchiveToggle() {
-    setSaving(true)
-    try {
-      if (task.archived_at) {
-        await unarchiveTask(task.id)
-      } else {
-        await archiveTask(task.id)
-      }
-      onDeleted?.(task.id)
-      onClose()
-    } catch (err) {
-      setError(err.message)
-      setSaving(false)
-    }
-  }
-
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
       <Dialog.Portal>
@@ -611,11 +594,6 @@ export default function TaskModal({
           >
             <Dialog.Title style={{ fontFamily: FONT_HEADING, fontSize: 15, fontWeight: 600, color: 'var(--ink-1)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
               {mode === 'create' ? (parentTaskId ? 'New subtask' : 'New task') : 'Edit task'}
-              {task?.archived_at ? (
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', background: 'var(--surface-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px' }}>
-                  Archived
-                </span>
-              ) : null}
             </Dialog.Title>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {!isReadOnly && (
@@ -725,6 +703,26 @@ export default function TaskModal({
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="What needs to get done?"
                 style={{ ...inputStyle, fontSize: 15, padding: '10px 12px', opacity: isReadOnly ? 0.6 : 1 }}
+                onFocus={(e) => { if (!isReadOnly) e.target.style.borderColor = 'var(--accent)' }}
+                onBlur={(e) => { if (!isReadOnly) e.target.style.borderColor = 'var(--border)' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Description</label>
+              <textarea
+                disabled={isReadOnly}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Add details, context, or acceptance criteria…"
+                rows={3}
+                style={{
+                  ...inputStyle,
+                  resize: 'vertical',
+                  minHeight: 72,
+                  lineHeight: 1.5,
+                  opacity: isReadOnly ? 0.6 : 1,
+                }}
                 onFocus={(e) => { if (!isReadOnly) e.target.style.borderColor = 'var(--accent)' }}
                 onBlur={(e) => { if (!isReadOnly) e.target.style.borderColor = 'var(--border)' }}
               />
@@ -940,26 +938,6 @@ export default function TaskModal({
                   }}
                 >
                   {confirmDelete ? 'Confirm delete' : 'Delete'}
-                </button>
-              ) : null}
-              {mode === 'edit' && !isReadOnly && task?.id ? (
-                <button
-                  type="button"
-                  onClick={handleArchiveToggle}
-                  disabled={saving}
-                  title={task.archived_at ? 'Bring this task back into its board' : 'Hide this task without deleting it — still accessible from Archive'}
-                  style={{
-                    fontSize: 13,
-                    padding: '7px 14px',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    background: 'transparent',
-                    color: 'var(--text-tertiary)',
-                    border: '1px solid var(--border)',
-                    fontWeight: 400,
-                  }}
-                >
-                  {task.archived_at ? 'Unarchive' : 'Archive'}
                 </button>
               ) : null}
             </div>

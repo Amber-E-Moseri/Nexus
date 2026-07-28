@@ -77,6 +77,23 @@ export function hasFeatureRole(user, spaceId, featureRole) {
 }
 
 /**
+ * Whether this user can assign tasks to anyone in the org (not just their own
+ * department). Mirrors the authorization check in set_task_assignees RPC and
+ * the task_assignees_write RLS policy — keep these three in sync.
+ *
+ * @param {Object|null} profile - profile object carrying space_roles
+ * @param {string} role - base role string from useAuth()
+ */
+export function canAssignOrgWide(profile, role) {
+  return (
+    role === 'super_admin' ||
+    role === 'regional_secretary' ||
+    hasSpaceRole(profile, null, 'ors') ||
+    hasSpaceRole(profile, null, 'programs')
+  )
+}
+
+/**
  * Check if user holds an ad-hoc grant (user_grants table; attached in
  * AuthContext as profile.grants, a flat array of grant_type strings). Used to
  * give a specific user a capability beyond their base role — e.g. a pastor

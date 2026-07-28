@@ -5,7 +5,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { formatDueDate } from '../../../lib/dateUtils'
 import { PRIORITY_STYLES } from '../../../lib/priorities'
 import { isTaskCompleted, getTaskStatusLabel, STATUS_CATEGORIES, getCategoryStatusId } from '../../../lib/taskStatuses'
-import { hasSpaceRole } from '../../../lib/permissions'
+import { canAssignOrgWide as checkCanAssignOrgWide } from '../../../lib/permissions'
 import { getAllOrgMembers, getDeptMembers } from '../lib/tasks'
 import { useTasks } from '../TasksContext'
 import { useAuth } from '../../../hooks/useAuth'
@@ -48,8 +48,7 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
   // department for direct assignment (matches TaskModal.jsx's canAssignOrgWide) —
   // others still show up in a separate "Others" section for search/mention-style
   // visibility, not as directly assignable.
-  const canAssignOrgWide = role === 'super_admin' || role === 'regional_secretary' ||
-    hasSpaceRole(profile, null, 'ors') || hasSpaceRole(profile, null, 'programs')
+  const canAssignOrgWide = checkCanAssignOrgWide(profile, role)
 
   useEffect(() => { setLocalTask(task) }, [task])
   useEffect(() => { if (addingSubtask) subtaskInputRef.current?.focus() }, [addingSubtask])

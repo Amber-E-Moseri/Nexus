@@ -376,30 +376,28 @@ export async function createTask(taskData) {
 
   applyCompletionMetadata(payload, taskData.statusCategory)
 
-  const { data, error } = await supabase
+  const { data: inserted, error } = await supabase
     .from('tasks')
     .insert(payload)
-    .select(TASK_FULL_SELECT)
+    .select('id')
     .single()
 
   if (error) throw error
 
-  // Sync junction table for multi-assignee. assigneeIds may be passed alongside
-  // assignee_id; if absent, fall back to the single assignee_id. Errors here
-  // must throw, not be swallowed — see syncTaskAssignees.
+  // Sync junction table for multi-assignee. Do this before the full SELECT so
+  // we only ever do one round-trip to read the completed task (instead of
+  // unconditionally reading twice when assignees are present).
   const assigneeIds = taskData.assigneeIds ?? (payload.assignee_id ? [payload.assignee_id] : [])
   if (assigneeIds.length > 0) {
-    await syncTaskAssignees(data.id, assigneeIds)
-    // The insert's own .select() ran before assignees existed, so its
-    // `assignees` embed is empty — re-read to return the real state.
-    const { data: freshData, error: freshError } = await supabase
-      .from('tasks')
-      .select(TASK_FULL_SELECT)
-      .eq('id', data.id)
-      .single()
-    if (freshError) throw freshError
-    Object.assign(data, freshData)
+    await syncTaskAssignees(inserted.id, assigneeIds)
   }
+
+  const { data, error: readError } = await supabase
+    .from('tasks')
+    .select(TASK_FULL_SELECT)
+    .eq('id', inserted.id)
+    .single()
+  if (readError) throw readError
 
   recordActivity('task_created', {
     entity_type: 'task',
@@ -410,11 +408,15 @@ export async function createTask(taskData) {
   })
 
   if (subtasksToCreate.length > 0) {
+    const subtaskStatusId = await getCategoryStatusId({
+      departmentId: data.department_id ?? null,
+      category: STATUS_CATEGORIES.OPEN,
+    })
     const subtaskPayloads = subtasksToCreate.map(title => ({
       title: title.trim(),
       parent_task_id: data.id,
       department_id: data.department_id,
-      status: 'open',
+      status_id: subtaskStatusId,
       created_by: user.id,
     }))
 
@@ -610,52 +612,6 @@ export async function getTrashTasks() {
   // get_trash_tasks() returns raw `tasks` rows (setof public.tasks, no
   // joins) — enrich with department/creator names in a couple of batched
   // follow-up queries so the Trash page doesn't have to show bare UUIDs.
-  const departmentIds = [...new Set(rows.map((t) => t.department_id).filter(Boolean))]
-  const userIds = [...new Set(rows.flatMap((t) => [t.created_by, t.assignee_id]).filter(Boolean))]
-
-  const [{ data: departments }, { data: users }] = await Promise.all([
-    departmentIds.length
-      ? supabase.from('departments').select('id, name, color').in('id', departmentIds)
-      : Promise.resolve({ data: [] }),
-    userIds.length
-      ? supabase.from('users').select('id, name, avatar_url').in('id', userIds)
-      : Promise.resolve({ data: [] }),
-  ])
-
-  const deptById = new Map((departments ?? []).map((d) => [d.id, d]))
-  const userById = new Map((users ?? []).map((u) => [u.id, u]))
-
-  return rows.map((t) => ({
-    ...t,
-    department: t.department_id ? deptById.get(t.department_id) ?? null : null,
-    creator: t.created_by ? userById.get(t.created_by) ?? null : null,
-    assignee: t.assignee_id ? userById.get(t.assignee_id) ?? null : null,
-  }))
-}
-
-// --- Archive -------------------------------------------------------------
-// Weekly (space tasks) / biweekly (personal tasks) auto-archive of
-// completed tasks, plus manual archive/unarchive. Mirrors the Trash
-// functions above: archived_at is RLS-hidden from normal reads (see
-// 20270729000002_task_archive_rls.sql), so access goes through
-// SECURITY DEFINER RPCs.
-
-export async function archiveTask(taskId) {
-  const { error } = await supabase.rpc('archive_task', { p_task_id: taskId })
-  if (error) throw error
-}
-
-export async function unarchiveTask(taskId) {
-  const { error } = await supabase.rpc('unarchive_task', { p_task_id: taskId })
-  if (error) throw error
-}
-
-export async function getArchivedTasks() {
-  const { data, error } = await supabase.rpc('get_archived_tasks')
-  if (error) throw error
-  const rows = data ?? []
-  if (rows.length === 0) return rows
-
   const departmentIds = [...new Set(rows.map((t) => t.department_id).filter(Boolean))]
   const userIds = [...new Set(rows.flatMap((t) => [t.created_by, t.assignee_id]).filter(Boolean))]
 
