@@ -87,9 +87,10 @@ export default function PlannerGrid({
   onBlockClick,
   onBlockContextMenu,
   onBlockResize,
-  pendingTask,   // mobile: task selected for tap-to-schedule
-  onSlotTap,    // mobile: (slotId: string) => void
-  onCancelPending, // mobile: () => void
+  pendingTask,
+  onSlotTap,
+  onCancelPending,
+  isMobile,
 }) {
   const days = overrideDays ?? Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const todayISO = toISODate(new Date())
@@ -107,7 +108,7 @@ export default function PlannerGrid({
   }
 
   return (
-    <div style={{ flex: 1, minWidth: 0, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ flex: 1, minWidth: 0, minHeight: 0, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       {pendingTask && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent-light)', borderBottom: `1px solid var(--accent)`, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, color: TEXT }}>
           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -164,7 +165,9 @@ export default function PlannerGrid({
         {timeBlocks.length === 0 && (
           <div style={{ position: 'absolute', top: 18, left: 0, right: 0, textAlign: 'center', pointerEvents: 'none', zIndex: 2 }}>
             <span style={{ background: SLOT_HOVER, color: PRIMARY, fontSize: 12, fontWeight: 600, borderRadius: 999, padding: '6px 14px' }}>
-              No time blocks yet. Drag a task from the sidebar to get started.
+              {isMobile
+                ? 'Tap "Tap to schedule" to pick a task, then tap a time slot.'
+                : 'No time blocks yet. Drag a task from the sidebar to get started.'}
             </span>
           </div>
         )}
@@ -214,6 +217,7 @@ export default function PlannerGrid({
                       onClick={onBlockClick}
                       onContextMenu={onBlockContextMenu}
                       onResize={onBlockResize}
+                      isMobile={isMobile}
                       style={{
                         // Blocks outside visible hours (e.g. pushed past midnight
                         // by a parent move) pin to the grid edge instead of

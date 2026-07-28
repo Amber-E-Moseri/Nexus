@@ -492,7 +492,7 @@ export default function PlannerTimeBlocking() {
         onDragCancel={() => setActiveDrag(null)}
         onDragEnd={handleDragEnd}
       >
-        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 14, flex: 1, minHeight: 0, height: isMobile ? 'calc(100vh - 220px)' : 'calc(100vh - 180px)' }}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 14, flex: 1, minHeight: 0, height: isMobile ? 'calc(100vh - 150px)' : 'calc(100vh - 180px)' }}>
           {(!isMobile || sidebarOpen) && (
             <PlannerSidebar
               groups={groups}
@@ -513,20 +513,23 @@ export default function PlannerTimeBlocking() {
               onTapSchedule={handleTapSchedule}
             />
           )}
-          <PlannerGrid
-            weekStart={weekStart}
-            overrideDays={isMobile ? [mobileDate] : undefined}
-            timeBlocks={timeBlocks}
-            taskById={taskById}
-            severityByBlockId={severityByBlockId}
-            linkedBlockIds={linkedBlockIds}
-            onBlockClick={handleBlockClick}
-            onBlockContextMenu={handleBlockContextMenu}
-            onBlockResize={handleBlockResize}
-            pendingTask={isMobile ? pendingTask : null}
-            onSlotTap={isMobile ? handleSlotTap : undefined}
-            onCancelPending={() => setPendingTask(null)}
-          />
+          {(!isMobile || !sidebarOpen) && (
+            <PlannerGrid
+              weekStart={weekStart}
+              overrideDays={isMobile ? [mobileDate] : undefined}
+              timeBlocks={timeBlocks}
+              taskById={taskById}
+              severityByBlockId={severityByBlockId}
+              linkedBlockIds={linkedBlockIds}
+              onBlockClick={handleBlockClick}
+              onBlockContextMenu={handleBlockContextMenu}
+              onBlockResize={handleBlockResize}
+              pendingTask={isMobile ? pendingTask : null}
+              onSlotTap={isMobile ? handleSlotTap : undefined}
+              onCancelPending={() => setPendingTask(null)}
+              isMobile={isMobile}
+            />
+          )}
         </div>
 
         <DragOverlay dropAnimation={null}>

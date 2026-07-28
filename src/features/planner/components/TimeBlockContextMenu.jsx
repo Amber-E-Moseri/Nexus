@@ -39,10 +39,10 @@ export default function TimeBlockContextMenu({
     const onKey = (e) => {
       if (e.key === 'Escape') onClose()
     }
-    window.addEventListener('mousedown', onDown)
+    window.addEventListener('pointerdown', onDown)
     window.addEventListener('keydown', onKey)
     return () => {
-      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('pointerdown', onDown)
       window.removeEventListener('keydown', onKey)
     }
   }, [onClose])

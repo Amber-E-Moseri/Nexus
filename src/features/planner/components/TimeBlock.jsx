@@ -14,7 +14,7 @@ import {
 
 // One scheduled block in the grid. Draggable (reschedule), resizable from the
 // bottom edge (duration), right-clickable (context menu), clickable (task modal).
-export default function TimeBlock({ block, task, severity, linked, style, onClick, onContextMenu, onResize }) {
+export default function TimeBlock({ block, task, severity, linked, style, onClick, onContextMenu, onResize, isMobile }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `block:${block.id}`,
     data: { type: 'block', block },
@@ -91,13 +91,28 @@ export default function TimeBlock({ block, task, severity, linked, style, onClic
       onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; e.currentTarget.style.boxShadow = '0 2px 8px rgba(28,22,16,.16)' }}
       onMouseLeave={(e) => { e.currentTarget.style.opacity = 0.92; e.currentTarget.style.boxShadow = 'none' }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, paddingRight: isMobile ? 18 : 0 }}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: PRIORITY_DOT[task?.priority] ?? PRIORITY_DOT.medium, flexShrink: 0 }} />
         <span style={{ fontSize: 11.5, fontWeight: 700, color: TEXT, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {task?.title ?? '…'}
         </span>
         {linked && <span title="Linked to parent block" style={{ fontSize: 9, flexShrink: 0 }}>🔗</span>}
       </div>
+      {isMobile && (
+        <button
+          type="button"
+          aria-label="Block options"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            const rect = e.currentTarget.getBoundingClientRect()
+            onContextMenu({ clientX: rect.left, clientY: rect.bottom, preventDefault: () => {}, stopPropagation: () => {} }, block)
+          }}
+          style={{ position: 'absolute', top: 2, right: 2, width: 20, height: 20, border: 'none', background: 'rgba(0,0,0,0.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: MUTED, borderRadius: 4, padding: 0, lineHeight: 1 }}
+        >
+          ⋮
+        </button>
+      )}
       {previewDuration >= 30 && (
         <div style={{ fontSize: 10, color: MUTED, marginTop: 1 }}>
           {formatTimeRange(block.scheduled_start_time, resizeDelta === null ? block.scheduled_end_time : endPreview)}

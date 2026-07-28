@@ -62,7 +62,7 @@ export default function PlannerSidebar({
 }) {
   const [winsOpen, setWinsOpen] = useState(true)
   return (
-    <div style={{ width: isMobile ? '100%' : 280, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden', maxHeight: isMobile ? 340 : 'none', overflowY: isMobile ? 'auto' : 'visible' }}>
+    <div style={{ width: isMobile ? '100%' : 280, flex: isMobile ? 1 : undefined, flexShrink: isMobile ? undefined : 0, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
       {/* Ownership filter: whose tasks show in the backlog + KPIs below */}
       <div style={{ display: 'flex', gap: 4, padding: 3, background: SLOT_HOVER, borderRadius: 8 }}>
         {OWNERSHIP_FILTERS.map(({ value, label }) => (
