@@ -177,15 +177,13 @@ Determine content_type: "meeting" | "raw_note" | "list_data" | "other"
   recordings, etc.)
 
 === STEP 2 — Extract Based on Classification ===
-- If content_type IS "meeting" with confidence >= 0.6:
+- If content_type is "meeting" OR "raw_note", with confidence >= 0.6:
     → Populate all fields including summary, decisions, action_items, key_topics,
-      detailed_notes, open_items, and scripture_references.
-- If content_type is "raw_note":
-    → Still populate summary and key_topics — reflection/teaching content has real
-      substance worth surfacing even without meeting structure.
-    → Leave decisions, action_items, detailed_notes, open_items,
-      scripture_references as empty/null — there is no formal meeting structure to
-      extract those from.
+      detailed_notes, open_items, and scripture_references. This platform's
+      "Meetings" module only ever records actual meetings and staff addresses —
+      recorded content classified as raw_note is still real, substantive meeting
+      content (a leader's guidance, teaching, or address to those present), not a
+      private journal — extract it in full, same as "meeting".
 - If content_type is "list_data" or "other", OR confidence < 0.6:
     → Only return cleaned_transcript, chapters, and content_type fields.
     → Leave summary, decisions, action_items, key_topics, detailed_notes,
@@ -193,7 +191,7 @@ Determine content_type: "meeting" | "raw_note" | "list_data" | "other"
     → This prevents forced meeting structure for content with no real substance
       to summarize.
 
-=== DETAILED NOTES RULES (only apply if content_type = meeting, confidence >= 0.6) ===
+=== DETAILED NOTES RULES (only apply if content_type = meeting or raw_note, confidence >= 0.6) ===
 - "detailed_notes" is the full-detail record layer — NOT a second summary.
   * "summary" is a contextual synthesis, not a one-line blurb — aim for 4-6
     sentences in prose covering: why the meeting happened, the main topics
@@ -209,7 +207,7 @@ Determine content_type: "meeting" | "raw_note" | "list_data" | "other"
 - Reference any scripture inline in the detailed_notes prose at the point it comes
   up (e.g. "opened with **John 3:16**"), AND list it in scripture_references.
 
-=== SCRIPTURE RULES (only apply if content_type = meeting, confidence >= 0.6) ===
+=== SCRIPTURE RULES (only apply if content_type = meeting or raw_note, confidence >= 0.6) ===
 - Populate "verse_text" ONLY when you are certain of the exact wording. If there
   is ANY doubt, set verse_text to null and confidence to "unconfirmed".
 - NEVER reconstruct or paraphrase scripture from memory to fill verse_text. An
@@ -218,7 +216,7 @@ Determine content_type: "meeting" | "raw_note" | "list_data" | "other"
 - "citation" is always required (Book Chapter:Verse). "confidence" is "confirmed"
   only when verse_text is exact; otherwise "unconfirmed".
 
-=== SPACE SUGGESTION RULES (only apply if content_type = meeting) ===
+=== SPACE SUGGESTION RULES (only apply if content_type = meeting or raw_note) ===
 - Only suggest spaces from the meeting's linked_spaces: ${linkedSpacesJson}
 - Base suggested_space on TASK CONTENT ONLY:
   * "coordinate media team" → Media
@@ -246,10 +244,10 @@ Return ONLY valid JSON (no markdown, no extra text):
       "action": "string — brief explanation"
     }
   ],
-  "cleaned_transcript": "string with filler removed, or null if content_type != meeting",
+  "cleaned_transcript": "string with filler removed, or null if content_type is list_data/other or confidence < 0.6",
   "chapters": [{ "title": "string", "start_marker": "string" }],
   "summary": "string (4-6 sentence contextual synthesis) or null",
-  "detailed_notes": "markdown string (chronological, topic-headed, near-verbatim) or null if content_type != meeting",
+  "detailed_notes": "markdown string (chronological, topic-headed, near-verbatim) or null if content_type is list_data/other or confidence < 0.6",
   "scripture_references": [
     {
       "verse_text": "string or null — full verse text ONLY when certain of exact wording",
@@ -290,7 +288,7 @@ Return ONLY valid JSON (no markdown, no extra text):
   }
 }
 
-=== FLEXIBLE ENTITY DETECTION (only apply if content_type = meeting, confidence >= 0.6) ===
+=== FLEXIBLE ENTITY DETECTION (only apply if content_type = meeting or raw_note, confidence >= 0.6) ===
 In addition to the standard fields above, scan the transcript for these entity types.
 For each type, ONLY include it in "detected_entities" if you find actual instances.
 Do NOT include a type with detected:false — omit absent types entirely.
@@ -341,7 +339,7 @@ Entity types to scan for:
 For each detected type include: detected (true), count, confidence (0.0-1.0), items array,
 and ambiguities array. Only include entity types genuinely present — do NOT force-detect.
 
-=== OPEN ITEMS EXTRACTION RULES (only apply if content_type = meeting, confidence >= 0.6) ===
+=== OPEN ITEMS EXTRACTION RULES (only apply if content_type = meeting or raw_note, confidence >= 0.6) ===
 Open items are discussion points, questions, or considerations that are NOT action items.
 
 ACTION ITEM: Someone commits to DO something → goes in action_items
@@ -475,12 +473,21 @@ function mergeDetectedEntities(parts: any[]): any {
   return merged;
 }
 
+// This platform's Meetings module only ever records actual meetings/staff
+// addresses, so "raw_note" (single-voice guidance/teaching with no formal
+// meeting structure) still gets full extraction, same as "meeting" — only
+// list_data/other/low-confidence content is genuinely gated. See STEP 2 of
+// buildSystemPrompt for the extraction-side half of this rule.
+function isExtractableType(contentType: string | null | undefined): boolean {
+  return contentType === "meeting" || contentType === "raw_note";
+}
+
 // Merge per-chunk extraction results into one meeting-level result. `summary`
 // is left off (callers should combine `summaries` via synthesizeSummary) since
 // naively concatenating short summaries reads poorly.
 function mergeExtractions(parts: any[]): any {
   const nonNull = (v: any) => v !== null && v !== undefined && v !== "";
-  const meetingParts = parts.filter((p) => p.content_type === "meeting" && (p.confidence ?? 0) >= 0.6);
+  const meetingParts = parts.filter((p) => isExtractableType(p.content_type) && (p.confidence ?? 0) >= 0.6);
   const isMeeting = meetingParts.length > 0;
 
   return {
@@ -525,7 +532,7 @@ async function synthesizeSummary(summaries: string[], anthropicKey: string): Pro
 }
 
 function applyContentGate(extracted: any) {
-  if (extracted.content_type !== "meeting" || (extracted.confidence ?? 0) < 0.6) {
+  if (!isExtractableType(extracted.content_type) || (extracted.confidence ?? 0) < 0.6) {
     extracted.detailed_notes = null;
     extracted.scripture_references = [];
     extracted.open_items = [];
@@ -824,7 +831,7 @@ serve(async (req) => {
     );
     const cached = await getCachedExtraction(transcriptHash);
     if (cached) {
-      const outputMode = cached.content_type === "meeting" && cached.confidence >= 0.6 ? "organized" : "full_transcript";
+      const outputMode = isExtractableType(cached.content_type) && cached.confidence >= 0.6 ? "organized" : "full_transcript";
       if (canPersist) {
         await persistExtraction(supabase, meetingId, {
           extraction_result: cached, extraction_status: "complete",
@@ -859,7 +866,7 @@ serve(async (req) => {
       });
     }
 
-    const outputMode = extracted.content_type === "meeting" && extracted.confidence >= 0.6 ? "organized" : "full_transcript";
+    const outputMode = isExtractableType(extracted.content_type) && extracted.confidence >= 0.6 ? "organized" : "full_transcript";
 
     return new Response(JSON.stringify({ success: true, extracted, transcript, output_mode: outputMode, cached: false, truncated }), {
       status: 200,
