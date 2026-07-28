@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link2, Lock, Pin, PinOff, Plus, Search, SlidersHorizontal, X } from 'lucide-react'
+import { ChevronDown, Link2, Lock, Pin, PinOff, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../context/ToastContext'
-import { usePersonalList } from '../../features/tasks/hooks/usePersonalList'
+import { usePersonalSublist } from '../../features/tasks/hooks/usePersonalSublist'
 import {
   addTaskToPersonalList,
   removeTaskFromPersonalList,
@@ -199,6 +199,124 @@ function AddExistingTaskModal({ pinnedIds, onPin, onClose }) {
   )
 }
 
+function CreateSublistModal({ onCreate, onClose }) {
+  const [name, setName] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!name.trim()) return
+
+    setIsCreating(true)
+    try {
+      await onCreate(name)
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(28,22,16,0.4)',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        paddingTop: '14vh',
+        zIndex: 70,
+      }}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <div
+        style={{
+          width: 400,
+          maxWidth: '92vw',
+          background: '#FFFFFF',
+          borderRadius: 16,
+          border: '1px solid var(--border-1)',
+          boxShadow: '0 16px 48px rgba(28,22,16,0.22)',
+          overflow: 'hidden',
+          fontFamily: FONT_BODY,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px' }}>
+          <div style={{ fontFamily: FONT_HEADING, fontWeight: 700, fontSize: 15, color: 'var(--ink-1)' }}>
+            Create sublist
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink-3)', display: 'flex', padding: 4 }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ padding: '12px 16px 16px' }}>
+          <input
+            ref={inputRef}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., This Week, Someday, Waiting On"
+            style={{
+              width: '100%',
+              border: '1px solid var(--border-1)',
+              borderRadius: 10,
+              padding: '10px 12px',
+              fontSize: 13,
+              outline: 'none',
+              fontFamily: 'inherit',
+              marginBottom: 12,
+            }}
+          />
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: '8px 14px',
+                border: '1px solid var(--border-1)',
+                borderRadius: 8,
+                background: 'var(--surface-card)',
+                color: 'var(--ink-1)',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!name.trim() || isCreating}
+              style={{
+                padding: '8px 14px',
+                border: 'none',
+                borderRadius: 8,
+                background: name.trim() && !isCreating ? 'var(--purple-700, #4C2A92)' : 'var(--ink-3)',
+                color: '#FFFFFF',
+                cursor: name.trim() && !isCreating ? 'pointer' : 'default',
+                fontFamily: 'inherit',
+                opacity: name.trim() && !isCreating ? 1 : 0.5,
+              }}
+            >
+              {isCreating ? 'Creating…' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function PinnedTaskRow({ task, onOpen, onUnpin }) {
   return (
     <div
@@ -292,12 +410,27 @@ function PinnedTaskRow({ task, onOpen, onUnpin }) {
 export default function PersonalListPage() {
   const { profile } = useAuth()
   const { showToast } = useToast()
-  const { personalTasks, pinnedTasks, isLoading, refetch, moveTask } = usePersonalList(profile?.id ?? '')
+  const {
+    sublists,
+    personalTasks,
+    pinnedTasks,
+    isLoading,
+    refetch,
+    createSublist,
+    deleteSublist,
+    moveTask,
+  } = usePersonalSublist(profile?.id ?? '')
+
   const [statuses, setStatuses] = useState([])
   const [modal, setModal] = useState(null)
   const [viewMode, setViewMode] = useState(loadViewMode)
   const [showAddExisting, setShowAddExisting] = useState(false)
   const [showFilterPanel, setShowFilterPanel] = useState(false)
+  const [showCreateSublist, setShowCreateSublist] = useState(false)
+  const [selectedSublistId, setSelectedSublistId] = useState(() => {
+    const stored = localStorage.getItem('blw_personal_list_selected_sublist')
+    return stored || null
+  })
   const filterRef = useRef(null)
   const [dateClosedFilter, setDateClosedFilter] = useState(() => {
     const fallback = { operator: 'is', rangeDays: STALE_COMPLETED_TASK_DAYS.PERSONAL }
@@ -321,6 +454,27 @@ export default function PersonalListPage() {
       // Ignore write failures (e.g. private browsing) — persistence is a nicety, not a requirement.
     }
   }, [dateClosedFilter])
+
+  // Update selected sublist when sublists change
+  useEffect(() => {
+    if (sublists.length > 0 && !selectedSublistId) {
+      // Auto-select default or first sublist
+      const defaultSublist = sublists.find((s) => s.is_default)
+      const firstSublist = defaultSublist || sublists[0]
+      setSelectedSublistId(firstSublist.id)
+    }
+  }, [sublists, selectedSublistId])
+
+  // Persist selected sublist
+  useEffect(() => {
+    if (selectedSublistId) {
+      try {
+        localStorage.setItem('blw_personal_list_selected_sublist', selectedSublistId)
+      } catch {
+        // Ignore write failures
+      }
+    }
+  }, [selectedSublistId])
 
   useEffect(() => {
     if (!showFilterPanel) return
@@ -352,6 +506,26 @@ export default function PersonalListPage() {
 
   const pinnedIds = useMemo(() => new Set(pinnedTasks.map((task) => task.id)), [pinnedTasks])
 
+  // Get tasks for selected sublist
+  const selectedSublist = useMemo(
+    () => sublists.find((s) => s.id === selectedSublistId),
+    [sublists, selectedSublistId],
+  )
+
+  const selectedSublistTasks = useMemo(() => {
+    if (!selectedSublist) return []
+    return personalTasks.filter((task) => task.personal_sublist_id === selectedSublist.id)
+  }, [personalTasks, selectedSublist])
+
+  const visibleSelectedTasks = useMemo(() => {
+    if (dateClosedFilter.rangeDays === null) return selectedSublistTasks
+    return selectedSublistTasks.filter((t) => {
+      if (!isTaskCompleted(t)) return true
+      const isOutsideRange = isStaleCompletedTask(t, dateClosedFilter.rangeDays)
+      return dateClosedFilter.operator === 'is_not' ? isOutsideRange : !isOutsideRange
+    })
+  }, [selectedSublistTasks, dateClosedFilter])
+
   function setView(mode) {
     setViewMode(mode)
     localStorage.setItem('blw_personal_list_view', mode)
@@ -378,8 +552,52 @@ export default function PersonalListPage() {
 
   async function handleCreateTask(draft) {
     const { departmentId: _d, listId: _l, ...rest } = draft
-    await createTask({ ...rest, is_personal: true, department_id: null, list_id: null })
+    const taskPayload = { ...rest, is_personal: true, department_id: null, list_id: null }
+
+    // If user created task from within a sublist view, assign it to that sublist
+    if (selectedSublistId) {
+      taskPayload.personal_sublist_id = selectedSublistId
+    }
+
+    await createTask(taskPayload)
     refetch()
+  }
+
+  async function handleCreateSublist(name) {
+    try {
+      const newSublist = await createSublist(name)
+      setSelectedSublistId(newSublist.id)
+      setShowCreateSublist(false)
+      showToast(`Created sublist "${name}"`)
+    } catch (err) {
+      showToast(err.message, { tone: 'error' })
+    }
+  }
+
+  async function handleDeleteSublist(sublistId) {
+    const sublist = sublists.find((s) => s.id === sublistId)
+    if (!sublist) return
+
+    if (sublist.is_default) {
+      showToast('Cannot delete the default sublist', { tone: 'error' })
+      return
+    }
+
+    if (!window.confirm(`Delete sublist "${sublist.name}"? Tasks will move to "All Tasks".`)) {
+      return
+    }
+
+    try {
+      await deleteSublist(sublistId)
+      // Reset to first sublist if we deleted the selected one
+      if (selectedSublistId === sublistId) {
+        const firstRemaining = sublists.find((s) => s.id !== sublistId)
+        setSelectedSublistId(firstRemaining?.id || null)
+      }
+      showToast('Sublist deleted')
+    } catch (err) {
+      showToast(err.message, { tone: 'error' })
+    }
   }
 
   async function handleUnpin(task) {
@@ -533,13 +751,111 @@ export default function PersonalListPage() {
           </div>
         ) : (
           <>
+            {/* Sublist Selector */}
+            {sublists.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                {sublists.map((sublist) => (
+                  <div
+                    key={sublist.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '8px 12px',
+                      borderRadius: 10,
+                      border: `2px solid ${selectedSublistId === sublist.id ? 'var(--purple-700)' : 'var(--border-1)'}`,
+                      background:
+                        selectedSublistId === sublist.id ? 'var(--purple-50, #f3eeff)' : 'var(--surface-card)',
+                      cursor: 'pointer',
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedSublistId(sublist.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedSublistId(sublist.id)
+                      }
+                    }}
+                  >
+                    <span
+                      style={{
+                        flex: 1,
+                        fontSize: 13,
+                        fontWeight: selectedSublistId === sublist.id ? 600 : 500,
+                        color: selectedSublistId === sublist.id ? 'var(--purple-700)' : 'var(--ink-1)',
+                      }}
+                    >
+                      {sublist.name}
+                    </span>
+                    {!sublist.is_default && selectedSublistId === sublist.id && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteSublist(sublist.id)
+                        }}
+                        aria-label="Delete sublist"
+                        style={{
+                          border: 'none',
+                          background: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--ink-3)',
+                          display: 'flex',
+                          padding: 2,
+                          borderRadius: 4,
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = 'var(--accent-red, #C0392B)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = 'var(--ink-3)'
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setShowCreateSublist(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    border: '1px dashed var(--border-1)',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    color: 'var(--ink-3)',
+                    fontFamily: 'inherit',
+                    fontSize: 13,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--surface-sub)'
+                    e.currentTarget.style.color = 'var(--ink-1)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent'
+                    e.currentTarget.style.color = 'var(--ink-3)'
+                  }}
+                >
+                  <Plus size={14} />
+                  Add sublist
+                </button>
+              </div>
+            )}
+
+            {/* Task View */}
             {viewMode === 'board' ? (
               <div className="min-h-[420px]">
                 <TasksProvider>
                   <KanbanBoard
-                    filteredTasks={visiblePersonalTasks}
+                    filteredTasks={visibleSelectedTasks}
                     departmentId={null}
-                    spaceName="Personal List"
+                    spaceName={selectedSublist?.name || 'Personal List'}
                     departments={[]}
                     statusesOverride={statuses}
                     onTaskClick={(task) => setModal({ mode: 'edit', task })}
@@ -551,7 +867,7 @@ export default function PersonalListPage() {
             ) : (
               <div className="min-h-[420px] rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--card-shadow)]">
                 <TaskListView
-                  tasks={visiblePersonalTasks}
+                  tasks={visibleSelectedTasks}
                   statuses={statuses}
                   departments={[]}
                   canAddTask
@@ -595,6 +911,13 @@ export default function PersonalListPage() {
           pinnedIds={pinnedIds}
           onPin={handlePin}
           onClose={() => setShowAddExisting(false)}
+        />
+      ) : null}
+
+      {showCreateSublist ? (
+        <CreateSublistModal
+          onCreate={handleCreateSublist}
+          onClose={() => setShowCreateSublist(false)}
         />
       ) : null}
 

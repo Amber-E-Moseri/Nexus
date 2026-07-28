@@ -9,14 +9,15 @@ import { normalizeTaskRows } from '../../../lib/taskStatuses'
 const TASK_SELECT = `
   id, title, description, priority, status, status_id, due_date, created_at,
   department_id, assignee_id, created_by, task_type, sprint_id, list_id,
-  source, meeting_id, parent_task_id, completed_at, is_personal,
+  source, meeting_id, parent_task_id, completed_at, is_personal, personal_sublist_id,
   subtask_count:tasks!parent_task_id(count),
   status_definition:task_status_definitions!status_id(
     id, name, color, category, legacy_key, department_id
   ),
   assignee:users!assignee_id(id, name, avatar_url),
   creator:users!created_by(id, name),
-  space:departments(id, name, color)
+  space:departments(id, name, color),
+  personal_sublist:personal_lists!personal_sublist_id(id, name, is_default)
 `
 
 // Private tasks the user owns (created or assigned). Unlike getPersonalTasks
@@ -30,7 +31,6 @@ export async function getPersonalTasks(userId) {
     .or(`created_by.eq.${userId},assignee_id.eq.${userId}`)
     .is('parent_task_id', null)
     .is('deleted_at', null)
-    .is('archived_at', null)
     .order('due_date', { ascending: true })
     .order('created_at', { ascending: false })
 
@@ -39,8 +39,8 @@ export async function getPersonalTasks(userId) {
 }
 
 // Team tasks pinned into the Personal List. Pins whose task the user can no
-// longer see (RLS) or that were soft-deleted/archived come back with
-// task = null / deleted_at or archived_at set and are dropped.
+// longer see (RLS) or that were soft-deleted come back with task = null /
+// deleted_at set and are dropped.
 export async function getPinnedTasks(userId) {
   const { data, error } = await supabase
     .from('personal_list_tasks')
@@ -52,7 +52,7 @@ export async function getPinnedTasks(userId) {
 
   const tasks = (data ?? [])
     .map((pin) => pin.task)
-    .filter((task) => task && !task.deleted_at && !task.archived_at)
+    .filter((task) => task && !task.deleted_at)
   return normalizeTaskRows(tasks)
 }
 
@@ -88,7 +88,6 @@ export async function searchPinnableTasks(term) {
     .eq('is_personal', false)
     .is('parent_task_id', null)
     .is('deleted_at', null)
-    .is('archived_at', null)
     .order('created_at', { ascending: false })
     .limit(10)
 
