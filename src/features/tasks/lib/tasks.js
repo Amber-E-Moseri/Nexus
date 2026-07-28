@@ -535,6 +535,38 @@ export async function updateTask(taskId, updates, actorId = null) {
     }
   }
 
+  // Item 8: notify assignees of blocked tasks when this task is marked completed.
+  if (isNowCompleted && !wasAlreadyCompleted && actorId) {
+    const { createNotification } = await import('../../notifications/lib/notifications')
+    // Find all tasks that depend on (are blocked by) this task
+    const { data: blockedTasks } = await supabase
+      .from('task_dependencies')
+      .select(`
+        id,
+        task:tasks!task_id(id, title, status_definition:task_status_definitions!status_id(category))
+      `)
+      .eq('depends_on_id', taskId)
+
+    // For each blocked task, notify its assignees
+    for (const dep of blockedTasks ?? []) {
+      if (!dep.task) continue
+      const { data: assignees } = await supabase
+        .from('task_assignees')
+        .select('user_id')
+        .eq('task_id', dep.task.id)
+      for (const row of assignees ?? []) {
+        if (row.user_id !== actorId) {
+          createNotification(row.user_id, 'dependency_cleared', {
+            taskId: dep.task.id,
+            blockerTaskId: taskId,
+            blockedTaskTitle: dep.task.title,
+            blockerTaskTitle: data?.title ?? existingTask.title,
+          }).catch(() => {})
+        }
+      }
+    }
+  }
+
   if (actorId) {
     const nextAssigneeId = nextAssigneeIds !== null ? nextAssigneeIds[0] ?? null : normalized.assignee_id ?? null
     if (nextAssigneeId && nextAssigneeId !== existingTask.assignee_id) {

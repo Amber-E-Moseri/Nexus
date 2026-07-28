@@ -107,6 +107,7 @@ export const NOTIFICATION_TYPES = {
   campus_edit_rejected: { label: 'Map edit rejected', icon: '❌', description: 'When your campus map edit is rejected' },
   meeting_scheduled: { label: 'Meeting scheduled', icon: '📅', description: 'When a meeting is scheduled and you are added as an attendee' },
   subtask_completed: { label: 'Subtask completed', icon: '✅', description: 'When a subtask on your task is marked complete' },
+  dependency_cleared: { label: 'Blocker task completed', icon: '🚀', description: 'When a task blocking your task is marked complete' },
   meeting_reminder: { label: 'Meeting reminder', icon: '🔔', description: 'Reminder 1 hour before a meeting' },
   system: { label: 'System notification', icon: '🔔', description: 'Important system-wide announcements' },
   calendar_sync_failure: { label: 'Calendar sync failed', icon: '⚠️', description: 'When the Google Calendar sync fails for a space you manage' },
@@ -237,6 +238,8 @@ export function formatNotificationMessage(notification) {
       return `You have been added to "${payload.title ?? 'a meeting'}" on ${payload.date ?? ''}`
     case 'subtask_completed':
       return `✅ "${payload.title ?? 'A subtask'}" was completed on "${payload.parentTitle ?? 'your task'}"`
+    case 'dependency_cleared':
+      return `🚀 "${payload.blockerTaskTitle ?? 'A task'}" (blocker for "${payload.blockedTaskTitle ?? 'your task'}") is now complete`
     case 'mention':
       if (payload.is_new_assignment) {
         return `${payload.actor_name ?? 'Someone'} assigned you to "${payload.task_title ?? 'a task'}"\n\n"${payload.comment_preview ?? ''}"`
