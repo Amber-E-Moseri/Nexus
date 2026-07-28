@@ -425,7 +425,7 @@ export async function getSpaceTasks(departmentId) {
     .from('tasks')
     .select(`
       id, title, status, status_id, priority, due_date, assignee_id, department_id, list_id, created_at, sprint_id,
-      status_definition:task_status_definitions!status_id(id, name, color, category, department_id, sort_order, is_default, active, legacy_key, org_status:task_status_definitions!org_status_id(legacy_key))
+      status_definition:task_status_definitions!status_id(id, name, color, category, department_id, sort_order, is_default, active, legacy_key, org_status_id)
     `)
     .or(filters.join(','))
     .is('parent_task_id', null)

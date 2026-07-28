@@ -63,15 +63,13 @@ const LEGACY_KEY_TO_STATUS_GROUP = {
 }
 
 function getTaskStatusGroup(task) {
-  // Prefer the org parent's legacy_key (for dept-specific statuses mapped to an org status).
-  // Fall back to the status definition's own legacy_key (for org statuses, org_status_id is null).
-  const legacyKey =
-    task.status_definition?.org_status?.legacy_key ??
-    task.status_definition?.legacy_key ??
-    task.status // final fallback for tasks that somehow have no status_id
+  // Use status_definition's legacy_key directly. For org statuses, this is the
+  // canonical key. For dept-specific statuses, this is the legacy_key that maps
+  // to an org status (e.g. dept "In Review" → org "review" key).
+  const legacyKey = task.status_definition?.legacy_key ?? task.status
   const group = LEGACY_KEY_TO_STATUS_GROUP[legacyKey]
   if (group) return group
-  // Last resort: map from status_category (covers legacy tasks without status_id)
+  // Last resort: map from status_category (covers edge cases and legacy tasks)
   if (task.status_category === 'open') return 'to_do'
   if (task.status_category === 'completed') return 'completed'
   if (task.status_category === 'cancelled') return 'cancelled'
