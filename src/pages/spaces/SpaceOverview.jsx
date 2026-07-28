@@ -43,12 +43,39 @@ import { MeetingsProvider } from '../../features/meetings/MeetingsContext'
 const TABS = ['Overview', 'Board', 'List', 'Calendar', 'Meetings', 'Open Items', 'Idea Bank', 'Automations', 'Members']
 
 const STATUS_ACCENT = {
-  open: '#C9BEAD',
+  to_do: '#C9BEAD',
   in_progress: '#6B4FD3',
   review: '#E6A319',
-  blocked: '#F26A4B',
-  completed: '#3A9B5C',
   cancelled: '#8F8A80',
+  completed: '#3A9B5C',
+}
+
+// Maps an org status legacy_key to the canonical group shown in the at-a-glance widget.
+// 'done' is the legacy_key for the Completed org status; 'backlog'/'blocked' are retired.
+const LEGACY_KEY_TO_STATUS_GROUP = {
+  to_do: 'to_do',
+  backlog: 'to_do',
+  in_progress: 'in_progress',
+  review: 'review',
+  done: 'completed',
+  blocked: 'in_progress',
+  cancelled: 'cancelled',
+}
+
+function getTaskStatusGroup(task) {
+  // Prefer the org parent's legacy_key (for dept-specific statuses mapped to an org status).
+  // Fall back to the status definition's own legacy_key (for org statuses, org_status_id is null).
+  const legacyKey =
+    task.status_definition?.org_status?.legacy_key ??
+    task.status_definition?.legacy_key ??
+    task.status // final fallback for tasks that somehow have no status_id
+  const group = LEGACY_KEY_TO_STATUS_GROUP[legacyKey]
+  if (group) return group
+  // Last resort: map from status_category (covers legacy tasks without status_id)
+  if (task.status_category === 'open') return 'to_do'
+  if (task.status_category === 'completed') return 'completed'
+  if (task.status_category === 'cancelled') return 'cancelled'
+  return 'in_progress'
 }
 
 function getInitials(value) {
@@ -455,10 +482,12 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
   const activeSprints = mediaSpace ? 0 : sprints.filter((sprint) => sprint.status === 'active').length
   const effectiveListsCount = mediaSpace ? 0 : listsCount
 
-  // Task status breakdown
+  // Task status breakdown — grouped by org-status legacy_key, not status_category.
+  // Review has category='in_progress' in the DB, so grouping by category would merge
+  // In Progress and In Review into one bucket. getTaskStatusGroup() resolves the org parent.
   const tasksByStatus = mediaSpace ? {} : tasks.reduce((acc, task) => {
     if (task.parent_task_id) return acc
-    const key = task.status_category || 'open'
+    const key = getTaskStatusGroup(task)
     acc[key] = (acc[key] ?? 0) + 1
     return acc
   }, {})
@@ -469,10 +498,10 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
   const visibleMeetings = mediaSpace ? [] : meetings.slice(0, 3)
 
   const statusSummary = [
-    { key: 'open', label: 'Not Started', count: tasksByStatus['open'] ?? 0 },
+    { key: 'to_do', label: 'Not Started', count: tasksByStatus['to_do'] ?? 0 },
     { key: 'in_progress', label: 'In Progress', count: tasksByStatus['in_progress'] ?? 0 },
     { key: 'review', label: 'In Review', count: tasksByStatus['review'] ?? 0 },
-    { key: 'blocked', label: 'Blocked', count: tasksByStatus['blocked'] ?? 0 },
+    { key: 'cancelled', label: 'Cancelled', count: tasksByStatus['cancelled'] ?? 0 },
     { key: 'completed', label: 'Completed', count: tasksByStatus['completed'] ?? 0 },
   ]
 
@@ -1876,7 +1905,7 @@ export default function SpaceOverview() {
           event_type:
             task.status_category === 'completed'
               ? 'training'
-              : task.status_category === 'review'
+              : getTaskStatusGroup(task) === 'review'
                 ? 'prayer'
                 : 'event',
         })),
