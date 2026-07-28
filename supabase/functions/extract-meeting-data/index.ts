@@ -163,10 +163,14 @@ during extraction:
 
 === STEP 1 — Classify Content Type ===
 Determine content_type: "meeting" | "raw_note" | "list_data" | "other"
-- "meeting" = multiple speakers in dialogue, OR single speaker narrating meeting-like
-  content (updates, plans, assignments, decisions)
-- "raw_note" = single-voice notes/journaling, no discussion structure, internal
-  reflection
+- "meeting" = multiple speakers in dialogue, OR a single speaker addressing/leading
+  a group of attendees who are present (updates, plans, assignments, decisions,
+  guidance, teaching, or direction given to the people in the room) — this includes
+  a leader speaking to staff/leaders during a real meeting even when only one voice
+  is transcribed. Direct address ("you", "some of you", "our leaders", answering a
+  question someone asked) is a strong signal this is a meeting, not a private note.
+- "raw_note" = single-voice PERSONAL dictation or journaling with no audience present
+  — the speaker is recording a note to themselves, not addressing people in a room.
 - "list_data" = structured data read aloud (e.g. birthday lists, roster reads,
   inventory reads) — NOT a meeting even if names and dates appear together
 - "other" = anything else (scripture reading, song lyrics, random audio, stray
@@ -175,12 +179,13 @@ Determine content_type: "meeting" | "raw_note" | "list_data" | "other"
 === STEP 2 — Extract Based on Classification ===
 - If content_type IS "meeting" with confidence >= 0.6:
     → Populate all fields including summary, decisions, action_items, key_topics,
-      detailed_notes, and scripture_references.
+      detailed_notes, open_items, and scripture_references.
 - If content_type is "raw_note":
-    → Still populate summary and key_topics — single-voice reflection/teaching
-      content has real substance worth surfacing even without meeting structure.
-    → Leave decisions, action_items, detailed_notes, scripture_references as
-      empty/null — there is no formal meeting structure to extract those from.
+    → Still populate summary and key_topics — reflection/teaching content has real
+      substance worth surfacing even without meeting structure.
+    → Leave decisions, action_items, detailed_notes, open_items,
+      scripture_references as empty/null — there is no formal meeting structure to
+      extract those from.
 - If content_type is "list_data" or "other", OR confidence < 0.6:
     → Only return cleaned_transcript, chapters, and content_type fields.
     → Leave summary, decisions, action_items, key_topics, detailed_notes,
