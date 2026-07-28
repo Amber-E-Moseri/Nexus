@@ -244,7 +244,7 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
                   value={filters.dateClosedRangeDays ?? 'any'}
                   onChange={(event) => setFilters((prev) => ({
                     ...prev,
-                    dateClosedRangeDays: event.target.value === 'any' ? null : Number(event.target.value),
+                    dateClosedRangeDays: event.target.value === 'any' ? null : (event.target.value === 'custom' ? 'custom' : Number(event.target.value)),
                   }))}
                   style={{
                     flex: 1,
@@ -260,8 +260,54 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
                   <option value="7">Last 7 days</option>
                   <option value="14">Last 14 days</option>
                   <option value="30">Last 30 days</option>
+                  <option value="custom">Custom range</option>
                 </select>
               </div>
+
+              {filters.dateClosedRangeDays === 'custom' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>From</label>
+                    <input
+                      type="date"
+                      value={filters.dateClosedCustom?.startDate ?? ''}
+                      onChange={(e) => setFilters((prev) => ({
+                        ...prev,
+                        dateClosedCustom: { ...prev.dateClosedCustom, startDate: e.target.value || null }
+                      }))}
+                      style={{
+                        width: '100%',
+                        fontSize: 12,
+                        padding: '6px 8px',
+                        border: '1px solid var(--border)',
+                        borderRadius: 6,
+                        background: filters.dateClosedCustom?.startDate ? 'var(--accent-light)' : 'white',
+                        color: filters.dateClosedCustom?.startDate ? 'var(--accent)' : 'var(--text-primary)',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>To</label>
+                    <input
+                      type="date"
+                      value={filters.dateClosedCustom?.endDate ?? ''}
+                      onChange={(e) => setFilters((prev) => ({
+                        ...prev,
+                        dateClosedCustom: { ...prev.dateClosedCustom, endDate: e.target.value || null }
+                      }))}
+                      style={{
+                        width: '100%',
+                        fontSize: 12,
+                        padding: '6px 8px',
+                        border: '1px solid var(--border)',
+                        borderRadius: 6,
+                        background: filters.dateClosedCustom?.endDate ? 'var(--accent-light)' : 'white',
+                        color: filters.dateClosedCustom?.endDate ? 'var(--accent)' : 'var(--text-primary)',
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           ) : null}
 

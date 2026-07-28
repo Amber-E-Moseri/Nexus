@@ -18,7 +18,8 @@ export const EMPTY_FILTERS = {
   // option; callers that never do keep this at null forever, so the check
   // in applyTaskFilters below is a no-op for them.
   dateClosedOperator: 'is', // 'is' | 'is_not'
-  dateClosedRangeDays: null, // null | 7 | 14 | 30
+  dateClosedRangeDays: null, // null | 7 | 14 | 30 | 'custom'
+  dateClosedCustom: { startDate: null, endDate: null }, // for 'custom' range
 }
 
 function startOfDay(date) {
@@ -40,10 +41,32 @@ export function applyTaskFilters(tasks = [], filters = EMPTY_FILTERS) {
     if (filters.hasComments && (task.comments?.[0]?.count ?? 0) < 1) return false
     if (filters.hasDependencies && (task.dependencies?.[0]?.count ?? 0) < 1) return false
     if (!filters.showDone && isTaskCompleted(task)) return false
-    if (filters.dateClosedRangeDays && isTaskCompleted(task)) {
-      const isOutsideRange = isStaleCompletedTask(task, filters.dateClosedRangeDays)
-      const matches = filters.dateClosedOperator === 'is_not' ? isOutsideRange : !isOutsideRange
-      if (!matches) return false
+    if (isTaskCompleted(task)) {
+      if (filters.dateClosedRangeDays === 'custom') {
+        // Custom date range for date closed
+        if (filters.dateClosedCustom?.startDate || filters.dateClosedCustom?.endDate) {
+          const completed = task.completed_at ? startOfDay(new Date(task.completed_at)) : null
+          if (!completed) return filters.dateClosedOperator === 'is'
+
+          let isInRange = true
+          if (filters.dateClosedCustom.startDate) {
+            const start = startOfDay(new Date(filters.dateClosedCustom.startDate))
+            isInRange = isInRange && completed >= start
+          }
+          if (filters.dateClosedCustom.endDate) {
+            const end = startOfDay(new Date(filters.dateClosedCustom.endDate))
+            isInRange = isInRange && completed <= end
+          }
+
+          const matches = filters.dateClosedOperator === 'is_not' ? !isInRange : isInRange
+          if (!matches) return false
+        }
+      } else if (filters.dateClosedRangeDays) {
+        // Preset range (7, 14, 30 days)
+        const isOutsideRange = isStaleCompletedTask(task, filters.dateClosedRangeDays)
+        const matches = filters.dateClosedOperator === 'is_not' ? isOutsideRange : !isOutsideRange
+        if (!matches) return false
+      }
     }
 
     if (filters.dueDateRange) {
@@ -81,15 +104,17 @@ export function applyTaskFilters(tasks = [], filters = EMPTY_FILTERS) {
 }
 
 function readPersistedDateClosedFilter(persistKey, defaultDateClosedRangeDays) {
-  const base = { operator: 'is', rangeDays: defaultDateClosedRangeDays }
+  const base = { operator: 'is', rangeDays: defaultDateClosedRangeDays, custom: { startDate: null, endDate: null } }
   if (!persistKey) return base
   try {
     const stored = localStorage.getItem(persistKey)
     if (!stored) return base
     const parsed = JSON.parse(stored)
+    const rangeDays = parsed.rangeDays === null ? null : (parsed.rangeDays === 'custom' ? 'custom' : Number(parsed.rangeDays)) || defaultDateClosedRangeDays
     return {
       operator: parsed.operator === 'is_not' ? 'is_not' : 'is',
-      rangeDays: parsed.rangeDays === null ? null : Number(parsed.rangeDays) || defaultDateClosedRangeDays,
+      rangeDays,
+      custom: rangeDays === 'custom' ? (parsed.custom || { startDate: null, endDate: null }) : { startDate: null, endDate: null },
     }
   } catch {
     return base
@@ -100,8 +125,8 @@ export function useTaskFilters(tasks = [], options = {}) {
   const { defaultDateClosedRangeDays = null, persistKey } = options
 
   const [filters, setFilters] = useState(() => {
-    const { operator, rangeDays } = readPersistedDateClosedFilter(persistKey, defaultDateClosedRangeDays)
-    return { ...EMPTY_FILTERS, dateClosedOperator: operator, dateClosedRangeDays: rangeDays }
+    const { operator, rangeDays, custom } = readPersistedDateClosedFilter(persistKey, defaultDateClosedRangeDays)
+    return { ...EMPTY_FILTERS, dateClosedOperator: operator, dateClosedRangeDays: rangeDays, dateClosedCustom: custom }
   })
 
   useEffect(() => {
@@ -110,11 +135,12 @@ export function useTaskFilters(tasks = [], options = {}) {
       localStorage.setItem(persistKey, JSON.stringify({
         operator: filters.dateClosedOperator,
         rangeDays: filters.dateClosedRangeDays,
+        custom: filters.dateClosedCustom,
       }))
     } catch {
       // Ignore write failures (e.g. private browsing) — persistence is a nicety, not a requirement.
     }
-  }, [persistKey, filters.dateClosedOperator, filters.dateClosedRangeDays])
+  }, [persistKey, filters.dateClosedOperator, filters.dateClosedRangeDays, filters.dateClosedCustom])
 
   const filtered = useMemo(() => applyTaskFilters(tasks, filters), [tasks, filters])
 
@@ -123,6 +149,7 @@ export function useTaskFilters(tasks = [], options = {}) {
       ...EMPTY_FILTERS,
       dateClosedOperator: prev.dateClosedOperator,
       dateClosedRangeDays: prev.dateClosedRangeDays,
+      dateClosedCustom: prev.dateClosedCustom,
     }))
   }
 
@@ -137,6 +164,7 @@ export function useTaskFilters(tasks = [], options = {}) {
       filters.source.length > 0 ||
       filters.dateClosedRangeDays !== defaultDateClosedRangeDays ||
       (filters.dateClosedRangeDays !== null && filters.dateClosedOperator !== 'is') ||
+      (filters.dateClosedRangeDays === 'custom' && (filters.dateClosedCustom?.startDate !== null || filters.dateClosedCustom?.endDate !== null)) ||
       filters.hasComments ||
       filters.hasDependencies ||
       !filters.showDone
