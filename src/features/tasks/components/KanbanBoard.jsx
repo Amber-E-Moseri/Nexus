@@ -5,7 +5,8 @@ import { supabase } from '../../../lib/supabase'
 import { dedupeTaskStatuses } from '../../../lib/taskStatuses'
 import { useDndSensors } from '../../../dnd'
 import { useTasks } from '../TasksContext'
-import { getChecklistCounts } from '../lib/checklists'
+import { getChecklistCounts, } from '../lib/checklists'
+import { getBatchSubtasks } from '../lib/tasks'
 import KanbanColumn from './KanbanColumn'
 import TaskCard from './TaskCard'
 import PlainKanbanBoard from './PlainKanbanBoard'
@@ -58,7 +59,33 @@ export default function KanbanBoard({
   // cross-department hook), so drag lookups must use it, not contextTasks —
   // contextTasks is empty whenever TasksProvider is mounted without a
   // departmentId/sprintId scope.
-  const tasks = filteredTasks ?? contextTasks
+  // Subtasks are excluded from board view — they belong nested inside their
+  // parent in list/modal views only.
+  const tasks = (filteredTasks ?? contextTasks).filter((t) => !t.parent_task_id)
+
+  // Batch-load all subtasks for this board in one query so every card that
+  // has children gets them without firing N individual requests.
+  const [subtaskMap, setSubtaskMap] = useState({})
+  useEffect(() => {
+    if (!showSubtasks) return
+    const parentIds = tasks
+      .filter((t) => {
+        const c = Array.isArray(t.subtask_count)
+          ? Number(t.subtask_count[0]?.count ?? 0)
+          : Number(t.subtask_count ?? 0)
+        return c > 0
+      })
+      .map((t) => t.id)
+    if (!parentIds.length) return
+    getBatchSubtasks(parentIds)
+      .then(setSubtaskMap)
+      .catch(() => {})
+  }, [tasks, showSubtasks]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const tasksWithSubtasks = useMemo(
+    () => tasks.map((t) => (subtaskMap[t.id] ? { ...t, subtasks: subtaskMap[t.id] } : t)),
+    [tasks, subtaskMap]
+  )
 
   // Controlled boards (onTaskStatusChange provided) persist through the
   // caller instead of TasksContext's own moveTask.
@@ -119,7 +146,7 @@ export default function KanbanBoard({
     const map = {}
     const matchedIds = new Set()
     boardStatuses.forEach((status) => {
-      const col = tasks.filter((task) => taskMatchesStatus(task, status))
+      const col = tasksWithSubtasks.filter((task) => taskMatchesStatus(task, status))
       col.forEach((t) => matchedIds.add(t.id))
       col.sort((a, b) => {
         if (!a.due_date && !b.due_date) return 0
@@ -129,12 +156,12 @@ export default function KanbanBoard({
       })
       map[status.id] = col
     })
-    const ungrouped = tasks.filter((t) => !matchedIds.has(t.id))
+    const ungrouped = tasksWithSubtasks.filter((t) => !matchedIds.has(t.id))
     if (ungrouped.length > 0) {
       map[OTHER_STATUS.id] = ungrouped
     }
     return map
-  }, [tasks, boardStatuses, OTHER_STATUS])
+  }, [tasksWithSubtasks, boardStatuses, OTHER_STATUS])
 
   const [checklistCounts, setChecklistCounts] = useState({})
 
@@ -252,7 +279,7 @@ export default function KanbanBoard({
   if (readOnly && !canCreateTask) {
     return (
       <PlainKanbanBoard
-        filteredTasks={tasks}
+        filteredTasks={tasksWithSubtasks}
         onTaskClick={onTaskClick}
         statuses={boardStatuses}
         showSubtasks={showSubtasks}

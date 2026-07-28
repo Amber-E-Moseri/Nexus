@@ -30,7 +30,7 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
   const { profile, role } = useAuth()
   const { showToast } = useToast()
 
-  const [subtasksExpanded, setSubtasksExpanded] = useState(false)
+  const [subtasksExpanded, setSubtasksExpanded] = useState(true)
   const [dueDateOpen, setDueDateOpen] = useState(false)
   const [priorityOpen, setPriorityOpen] = useState(false)
   const [assigneeOpen, setAssigneeOpen] = useState(false)
@@ -140,7 +140,11 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
 
   const due = formatDueDate(localTask.due_date)
   const priorityColor = PRIORITY_COLORS[localTask.priority] ?? '#B0A898'
+  const rawSubtaskCount = Array.isArray(localTask.subtask_count)
+    ? Number(localTask.subtask_count[0]?.count ?? 0)
+    : Number(localTask.subtask_count ?? 0)
   const subtasks = localTask.subtasks ?? []
+  const subtaskCount = subtasks.length > 0 ? subtasks.length : rawSubtaskCount
   const parentTitle = localTask.parent?.title ?? localTask.parent_task?.title ?? null
   const assignees = (
     Array.isArray(localTask.assignees) && localTask.assignees.length > 0
@@ -312,15 +316,15 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
           <Paperclip size={12} style={{ color: '#C8BFAF', flexShrink: 0 }} />
 
           {/* Subtask toggle */}
-          {showSubtasks && subtasks.length > 0 ? (
+          {showSubtasks && subtaskCount > 0 ? (
             <button
               onClick={(e) => { e.stopPropagation(); setSubtasksExpanded((v) => !v) }}
               onPointerDown={(e) => e.stopPropagation()}
-              title={`${subtasksDone} of ${subtasks.length} subtasks`}
-              style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--text-tertiary)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}
+              title={`${subtasksDone} of ${subtaskCount} subtasks`}
+              style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--text-tertiary)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}
             >
               <span style={{ fontSize: 8, display: 'inline-block', transition: 'transform 0.15s', transform: subtasksExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
-              {subtasksDone}/{subtasks.length}
+              {subtaskCount} {subtaskCount === 1 ? 'subtask' : 'subtasks'}
             </button>
           ) : null}
         </div>
@@ -328,8 +332,8 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
 
       {/* Bottom clipping wrapper */}
       <div style={{ borderRadius: '0 0 14px 14px', overflow: 'hidden' }}>
-        {showSubtasks && subtasks.length > 0 ? (
-          <div title={`${subtasksDone} of ${subtasks.length} subtasks completed`} style={{ height: 4, background: '#EDE8DF' }}>
+        {showSubtasks && subtaskCount > 0 && subtasks.length > 0 ? (
+          <div title={`${subtasksDone} of ${subtasks.length} subtasks completed`} style={{ height: 3, background: '#EDE8DF' }}>
             <div style={{ height: '100%', width: `${subtaskPct}%`, background: subtaskBarColor, transition: 'width 0.3s ease' }} />
           </div>
         ) : null}
@@ -372,21 +376,57 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
         ) : null}
 
         {showSubtasks && subtasksExpanded && subtasks.length > 0 ? (
-          <div style={{ borderTop: '1px solid #F0EBE3', padding: '6px 14px 8px' }}>
-            {subtasks.map((sub) => {
-              const done = isTaskCompleted(sub)
-              return (
-                <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 0', borderBottom: '1px solid #F5F0E8', fontSize: 12 }}>
-                  <span style={{ fontSize: 11, color: done ? '#2D8653' : '#B0A898', flexShrink: 0 }}>{done ? '✓' : '○'}</span>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: done ? 'var(--text-tertiary)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.65 : 1 }}>
-                    {sub.title}
-                  </span>
-                  {sub.due_date ? (
-                    <span style={{ fontSize: 10, color: 'var(--text-tertiary)', flexShrink: 0 }}>{formatDueDate(sub.due_date).label}</span>
-                  ) : null}
-                </div>
-              )
-            })}
+          <div style={{ borderTop: '1px solid #EDE8DF', background: '#F7F4F0', padding: '8px 10px 10px 12px' }}>
+            {/* Vertical connector line + indented subtask cards */}
+            <div style={{ borderLeft: '2px solid #D5CCBE', marginLeft: 6, paddingLeft: 10 }}>
+              {subtasks.map((sub, i) => {
+                const done = isTaskCompleted(sub)
+                const subDue = sub.due_date ? formatDueDate(sub.due_date) : null
+                const subAssignee = sub.assignee ?? null
+                const subPriorityColor = PRIORITY_COLORS[sub.priority] ?? '#B0A898'
+                const subDueColor = subDue?.status === 'overdue' ? 'var(--coral-dark)'
+                  : subDue?.status === 'today' ? 'var(--accent)'
+                  : subDue?.status === 'soon' ? 'var(--amber)'
+                  : 'var(--text-tertiary)'
+                return (
+                  <div
+                    key={sub.id}
+                    style={{
+                      background: '#FFFFFF',
+                      border: '1px solid #E8E0D2',
+                      borderRadius: 9,
+                      padding: '7px 10px',
+                      marginBottom: i < subtasks.length - 1 ? 5 : 0,
+                      boxShadow: '0 1px 3px rgba(28,22,16,0.04)',
+                    }}
+                  >
+                    <p style={{
+                      fontSize: 12, fontWeight: 500, lineHeight: 1.35, margin: '0 0 5px',
+                      color: done ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                      textDecoration: done ? 'line-through' : 'none',
+                      opacity: done ? 0.6 : 1,
+                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                    }}>
+                      {sub.title}
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <Avatar name={subAssignee?.name ?? ''} size={16} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: sub.due_date ? subDueColor : '#C8BFAF', flex: 1, minWidth: 0 }}>
+                        <svg width="9" height="9" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                          <rect x="1" y="3" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+                          <path d="M5 1v4M11 1v4M1 7h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {subDue ? subDue.label : '—'}
+                        </span>
+                      </div>
+                      <FlagIcon color={subPriorityColor} />
+                      <Paperclip size={9} style={{ color: '#C8BFAF', flexShrink: 0 }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         ) : null}
       </div>

@@ -352,6 +352,27 @@ export async function getSubtasks(parentTaskId) {
   return normalizeTaskResultList(data)
 }
 
+// Fetch subtasks for multiple parent tasks in one query, returning a map of
+// parentId → subtask[]. Used by board views to avoid N+1 per-card queries.
+export async function getBatchSubtasks(parentIds) {
+  if (!parentIds.length) return {}
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(SUBTASK_SELECT)
+    .in('parent_task_id', parentIds)
+    .is('deleted_at', null)
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  const map = {}
+  for (const sub of normalizeTaskResultList(data ?? [])) {
+    if (!map[sub.parent_task_id]) map[sub.parent_task_id] = []
+    map[sub.parent_task_id].push(sub)
+  }
+  return map
+}
+
 export async function createTask(taskData) {
   const payload = buildTaskPayload(taskData)
   const subtasksToCreate = payload.subtasks || []

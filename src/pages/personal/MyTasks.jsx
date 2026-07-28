@@ -355,7 +355,7 @@ export default function MyTasks() {
                 onCreateTask={() => setModal({ mode: 'create' })}
                 onTaskStatusChange={handleTaskStatusChange}
                 canCreateTask={effectiveTab === 'mine'}
-                showSubtasks={effectiveTab !== 'delegated'}
+                showSubtasks
               />
             </TasksProvider>
           </div>
@@ -372,7 +372,7 @@ export default function MyTasks() {
               people={memberMap}
               priorities={{}}
               teamMembers={Object.values(memberMap)}
-              showSubtaskCount={effectiveTab !== 'delegated'}
+              showSubtaskCount
             />
           </div>
         )}
