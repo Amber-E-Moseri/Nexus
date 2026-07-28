@@ -18,6 +18,7 @@ import { supabase } from '../../../lib/supabase'
 import { createSubtask, deleteTask, reorderSubtasks, updateSubtask } from '../lib/tasks'
 import AssigneeSelector from './AssigneeSelector'
 import SubtaskProgress from './SubtaskProgress'
+import TaskComments from './TaskComments'
 
 function compareSubtasks(a, b) {
   const aOrder = a.sort_order ?? Number.MAX_SAFE_INTEGER
@@ -326,6 +327,18 @@ function SubtaskRow({
               onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
               placeholder="Add details…"
               style={{ ...editInputStyle, resize: 'vertical' }}
+            />
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 6 }}>
+            <label style={fieldLabelStyle()}>Comments</label>
+            <TaskComments
+              taskId={subtask.task_id}
+              subtaskId={subtask.id}
+              onMentionAssigned={(userId) => {
+                if (userId === draft.assigneeId) return
+                setDraft((d) => ({ ...d, assigneeId: userId }))
+              }}
             />
           </div>
 

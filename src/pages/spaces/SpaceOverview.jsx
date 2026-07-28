@@ -478,24 +478,23 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
     try { localStorage.setItem(WIDGET_KEY, JSON.stringify(widgetConfig)) } catch {}
   }, [widgetConfig])
 
-  const mediaSpace = isMediaDepartment(space)
-  const activeSprints = mediaSpace ? 0 : sprints.filter((sprint) => sprint.status === 'active').length
-  const effectiveListsCount = mediaSpace ? 0 : listsCount
+  const activeSprints = sprints.filter((sprint) => sprint.status === 'active').length
+  const effectiveListsCount = listsCount
 
   // Task status breakdown — grouped by org-status legacy_key, not status_category.
   // Review has category='in_progress' in the DB, so grouping by category would merge
   // In Progress and In Review into one bucket. getTaskStatusGroup() resolves the org parent.
-  const tasksByStatus = mediaSpace ? {} : tasks.reduce((acc, task) => {
+  const tasksByStatus = tasks.reduce((acc, task) => {
     if (task.parent_task_id) return acc
     const key = getTaskStatusGroup(task)
     acc[key] = (acc[key] ?? 0) + 1
     return acc
   }, {})
 
-  const recentActivity = (mediaSpace ? [] : [...tasks])
+  const recentActivity = [...tasks]
     .sort((left, right) => new Date(right.updated_at ?? right.created_at ?? 0) - new Date(left.updated_at ?? left.created_at ?? 0))
     .slice(0, 4)
-  const visibleMeetings = mediaSpace ? [] : meetings.slice(0, 3)
+  const visibleMeetings = meetings.slice(0, 3)
 
   const statusSummary = [
     { key: 'to_do', label: 'To Do', count: tasksByStatus['to_do'] ?? 0 },

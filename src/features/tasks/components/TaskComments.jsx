@@ -76,7 +76,7 @@ function getCaretCoordinates(textarea, caretPosition) {
   return coordinates
 }
 
-export default function TaskComments({ taskId, onMentionAssigned }) {
+export default function TaskComments({ taskId, subtaskId, onMentionAssigned }) {
   const { profile } = useAuth()
   const { showToast } = useToast()
   const [comments, setComments] = useState([])
@@ -93,6 +93,7 @@ export default function TaskComments({ taskId, onMentionAssigned }) {
   const [pickerPosition, setPickerPosition] = useState({ left: 0, top: 0 })
   const [activeMentionRange, setActiveMentionRange] = useState(null)
   const inputRef = useRef(null)
+  const isSubtask = Boolean(subtaskId)
 
   useEffect(() => {
     let active = true
@@ -241,7 +242,7 @@ export default function TaskComments({ taskId, onMentionAssigned }) {
         })
       }
 
-      // @mention: assign to task + send rich notification with context per mentioned user.
+      // @mention: assign to task/subtask + send rich notification with context per mentioned user.
       // Errors are logged, not thrown — a failed mention shouldn't roll back the
       // comment that already posted successfully. The RPC returns false (no push) when
       // the mentioned user muted in-app mention notifications or mentioned themselves.
@@ -250,30 +251,43 @@ export default function TaskComments({ taskId, onMentionAssigned }) {
         // "Save changes" click doesn't wipe the assignment before the RPC resolves.
         onMentionAssigned?.(mentioned.id)
 
+        const rpcName = isSubtask ? 'assign_subtask_via_mention' : 'assign_via_mention'
+        const rpcParams = isSubtask
+          ? {
+              p_subtask_id: subtaskId,
+              p_user_id: mentioned.id,
+              p_comment_body: body,
+              p_commenter_name: profile.name ?? 'Someone',
+            }
+          : {
+              p_task_id: taskId,
+              p_user_id: mentioned.id,
+              p_comment_body: body,
+              p_commenter_name: profile.name ?? 'Someone',
+            }
+
         void supabase
-          .rpc('assign_via_mention', {
-            p_task_id: taskId,
-            p_user_id: mentioned.id,
-            p_comment_body: body,
-            p_commenter_name: profile.name ?? 'Someone',
-          })
+          .rpc(rpcName, rpcParams)
           .then(({ data, error }) => {
             if (error) {
-              console.error('[assign_via_mention] error for', mentioned.name, ':', error)
+              console.error(`[${rpcName}] error for`, mentioned.name, ':', error)
               showToast(`Could not notify ${mentioned.name}: ${error.message}`, { tone: 'error' })
               return
             }
             const result = Array.isArray(data) ? data[0] : data
             if (result?.notify_sent) {
+              const title = isSubtask
+                ? `${profile.name ?? 'Someone'} assigned you a subtask`
+                : `${profile.name ?? 'Someone'} assigned you a task`
               sendTaskPushNotification(mentioned.id, {
                 taskId,
-                title: `${profile.name ?? 'Someone'} assigned you a task`,
-                message: task?.title ?? 'New task assignment',
+                title,
+                message: task?.title ?? 'New assignment',
                 url: `/tasks/${taskId}`,
                 type: 'mention',
               }).catch(() => {})
             } else if (result && !result.notify_sent) {
-              console.log('[assign_via_mention] assigned but no notification sent for', mentioned.name, '(self-mention or opted out)')
+              console.log(`[${rpcName}] assigned but no notification sent for`, mentioned.name, '(self-mention or opted out)')
             }
           })
       }

@@ -73,6 +73,8 @@ export interface PersonalReminder {
   remind_at: string | null
   done: boolean
   created_at: string
+  task_id: string | null
+  task_title?: string | null
 }
 
 export async function getDashboardPresets(role: string): Promise<DashboardPreset> {
@@ -140,30 +142,38 @@ export async function getTeamAvailability(deptId: string): Promise<TeamAvailabil
 export async function getPersonalReminders(userId: string): Promise<PersonalReminder[]> {
   const { data, error } = await supabase
     .from('personal_reminders')
-    .select('*')
+    .select('id, note, remind_at, task_id')
     .eq('user_id', userId)
-    .eq('done', false)
     .order('remind_at', { ascending: true, nullsFirst: false })
 
   if (error) throw error
-  return data ?? []
+
+  const reminders = (data ?? []) as PersonalReminder[]
+  const withTaskIds = reminders.filter(r => r.task_id)
+  if (withTaskIds.length > 0) {
+    const taskIds = [...new Set(withTaskIds.map(r => r.task_id as string))]
+    const { data: tasks } = await supabase.from('tasks').select('id, title').in('id', taskIds)
+    const taskMap = new Map((tasks ?? []).map(t => [t.id, t.title]))
+    return reminders.map(r => ({ ...r, task_title: r.task_id ? taskMap.get(r.task_id) ?? null : null }))
+  }
+
+  return reminders.map(r => ({ ...r, task_title: null }))
 }
 
-export async function createPersonalReminder(userId: string, note: string, remindAt: string | null): Promise<PersonalReminder> {
+export async function createPersonalReminder(userId: string, note: string, remindAt: string | null, taskId?: string | null): Promise<PersonalReminder> {
   const { data, error } = await supabase
     .from('personal_reminders')
-    .insert({ user_id: userId, note, remind_at: remindAt })
-    .select('*')
-    .single()
+    .insert({ user_id: userId, note, remind_at: remindAt, task_id: taskId ?? null })
+    .select()
 
   if (error) throw error
-  return data
+  return data?.[0]
 }
 
 export async function completePersonalReminder(reminderId: string): Promise<void> {
   const { error } = await supabase
     .from('personal_reminders')
-    .update({ done: true })
+    .delete()
     .eq('id', reminderId)
 
   if (error) throw error

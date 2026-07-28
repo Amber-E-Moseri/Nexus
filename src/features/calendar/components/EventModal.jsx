@@ -5,6 +5,9 @@ import { createEventDirectly, deleteCalendarEvent, updateCalendarEvent, getEvent
 import { listDepartments } from '../../../lib/people/api'
 import { getMySprints } from '../../sprints'
 import { EVENT_COLORS } from './CalendarEventCard'
+import DeliverableTaskBuilder from './DeliverableTaskBuilder'
+import DeliverablesSection from './DeliverablesSection'
+import { supabase } from '../../../lib/supabase'
 
 const inputStyle = {
   width: '100%',
@@ -71,6 +74,9 @@ export default function EventModal({
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState('')
+  const [showBuilder, setShowBuilder] = useState(false)
+  const [isProgramsMember, setIsProgramsMember] = useState(false)
+  const [deliverableRefreshKey, setDeliverableRefreshKey] = useState(0)
   const titleRef = useRef(null)
 
   const canEdit = canEditOverride ?? ['super_admin', 'dept_lead'].includes(role)
@@ -84,6 +90,30 @@ export default function EventModal({
     getMySprints().then(setSprints).catch(() => setSprints([]))
     getEventTypes().then(setEventTypes).catch(() => setEventTypes([]))
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!profile?.department_id) {
+      if (!cancelled) setIsProgramsMember(false)
+      return
+    }
+
+    supabase
+      .from('departments')
+      .select('name')
+      .eq('id', profile.department_id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) {
+          setIsProgramsMember(Boolean(data?.name && data.name.toLowerCase() === 'programs'))
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setIsProgramsMember(false)
+      })
+
+    return () => { cancelled = true }
+  }, [profile?.department_id])
 
   const startDateValue = useMemo(() => {
     if (!date) return null
@@ -243,7 +273,7 @@ export default function EventModal({
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
               <div>
                 <label style={labelStyle}>Link to Space</label>
                 <select value={spaceId} onChange={(e) => setSpaceId(e.target.value)} style={inputStyle}>
@@ -263,6 +293,45 @@ export default function EventModal({
                 </select>
               </div>
             </div>
+
+            {event && (isProgramsMember || ['super_admin', 'regional_secretary'].includes(role)) && (
+              <section style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>Tasks</h3>
+                    <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      Deliverable tasks created from this event.
+                    </p>
+                  </div>
+                  {!showBuilder && (
+                    <button
+                      type="button"
+                      onClick={() => setShowBuilder(true)}
+                      style={{
+                        padding: '7px 14px', border: '1px solid var(--border)',
+                        borderRadius: '8px', background: 'var(--surface-tertiary)',
+                        fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)',
+                        cursor: 'pointer', flexShrink: 0,
+                      }}
+                    >
+                      + Create Tasks
+                    </button>
+                  )}
+                </div>
+
+                {showBuilder && (
+                  <DeliverableTaskBuilder
+                    event={event}
+                    onSaved={() => {
+                      setShowBuilder(false)
+                      setDeliverableRefreshKey(k => k + 1)
+                    }}
+                  />
+                )}
+
+                <DeliverablesSection eventId={event.id} refreshKey={deliverableRefreshKey} />
+              </section>
+            )}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface-secondary)' }}>
