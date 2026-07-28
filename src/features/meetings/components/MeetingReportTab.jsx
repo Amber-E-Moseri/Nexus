@@ -1486,6 +1486,10 @@ export default function MeetingReportTab() {
     )
 
     if (!restoredFromSession) {
+      if (!profile?.id) {
+        setSaveError('Your session isn\'t fully loaded yet — please refresh the page and try again.')
+        return
+      }
       setSaving(true)
       try {
         const { data, error } = await supabase
@@ -1603,6 +1607,11 @@ export default function MeetingReportTab() {
         }
       } else {
         // Report was never saved to DB — insert it now so edits persist
+        if (!profile?.id) {
+          setSaveError('Your session isn\'t fully loaded yet — please refresh the page and try again.')
+          setEditUpdating(false)
+          return
+        }
         const { data: insertedRow, error: insertError } = await supabase
           .from('meeting_attendance_reports')
           .insert({
