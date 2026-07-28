@@ -102,6 +102,7 @@ function MeetingDetailViewInner() {
   const [editableAiItems, setEditableAiItems]   = useState([])
   const [editableOpenItems, setEditableOpenItems] = useState([])
   const [editableSummary, setEditableSummary]   = useState('')
+  const [editableDetailedNotes, setEditableDetailedNotes] = useState('')
   const [editableDecisions, setEditableDecisions] = useState([])
   const [orgUsers, setOrgUsers]                 = useState([])
   const [orgDepartments, setOrgDepartments]     = useState([])
@@ -222,6 +223,7 @@ function MeetingDetailViewInner() {
     const extracted = extraction.result
     setAiResult(extracted)
     setEditableSummary(extracted.summary || '')
+    setEditableDetailedNotes(extracted.detailed_notes || '')
     setEditableDecisions(
       Array.isArray(extracted.decisions)
         ? extracted.decisions.map((d) => (typeof d === 'string' ? { decision: d, context: '' } : { decision: d.decision || '', context: d.context || '' }))
@@ -378,10 +380,11 @@ function MeetingDetailViewInner() {
       editableAiItems,
       editableOpenItems,
       editableSummary,
+      editableDetailedNotes,
       editableDecisions,
       timestamp: Date.now(),
     }))
-  }, [aiResult, editableAiItems, editableOpenItems, editableSummary, editableDecisions, meetingId])
+  }, [aiResult, editableAiItems, editableOpenItems, editableSummary, editableDetailedNotes, editableDecisions, meetingId])
 
   // ── load draft from cache on mount ─────────────────────────────────────────
   useEffect(() => {
@@ -407,6 +410,7 @@ function MeetingDetailViewInner() {
           if (parsed.editableAiItems?.length) setEditableAiItems(parsed.editableAiItems)
           if (parsed.editableOpenItems?.length) setEditableOpenItems(parsed.editableOpenItems)
           if (parsed.editableSummary) setEditableSummary(parsed.editableSummary)
+          if (parsed.editableDetailedNotes) setEditableDetailedNotes(parsed.editableDetailedNotes)
           if (parsed.editableDecisions?.length) setEditableDecisions(parsed.editableDecisions)
           if (parsed.aiResult.action_items?.length) {
             setSelectedAiActionItems(new Set(parsed.aiResult.action_items.map((_, i) => i)))
@@ -2191,6 +2195,23 @@ function MeetingDetailViewInner() {
                           rows={5}
                           style={{ width:'100%', fontSize:13, color: FS.text, lineHeight:1.7, fontFamily:'inherit', border:`1px solid ${FS.borderL}`, borderRadius:6, padding:'8px 10px', resize:'vertical', background:'#fff' }}
                         />
+                      </div>
+                    )}
+                    {aiResult.detailed_notes && (
+                      <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
+                        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>Detailed notes — edit before saving</div>
+                        <textarea
+                          value={editableDetailedNotes}
+                          onChange={(e) => setEditableDetailedNotes(e.target.value)}
+                          rows={14}
+                          style={{ width:'100%', fontSize:13, color: FS.text, lineHeight:1.7, fontFamily:'inherit', border:`1px solid ${FS.borderL}`, borderRadius:6, padding:'8px 10px', resize:'vertical', background:'#fff' }}
+                        />
+                        <button
+                          onClick={() => { setMinutesText(editableDetailedNotes); setActiveTab('minutes') }}
+                          style={{ marginTop:8, padding:'7px 14px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
+                        >
+                          → Copy to Minutes
+                        </button>
                       </div>
                     )}
                     {editableDecisions.length > 0 && (
