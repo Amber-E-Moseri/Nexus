@@ -40,6 +40,7 @@ export default function AudioTranscriptionPanel({
   const [dragOver, setDragOver] = useState(false)
   const [audioFile, setAudioFile] = useState(null)
   const [audioPreview, setAudioPreview] = useState(null)
+  const [audioQueue, setAudioQueue] = useState([]) // queued files to transcribe in sequence
   const [isRecordingNow, setIsRecordingNow] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [pastedText, setPastedText] = useState('')
@@ -50,6 +51,10 @@ export default function AudioTranscriptionPanel({
   const [error, setError] = useState('')
   const [transcript, setTranscript] = useState('')
   const [extractedData, setExtractedData] = useState(null)
+
+  // Multi-audio support
+  const [transcriptions, setTranscriptions] = useState([]) // Array of {id, input_type, input_file_name, summary, sequence_number, created_at}
+  const [showAddMore, setShowAddMore] = useState(false)
 
   // confirm-before-merge state
   const [selectedActionItems, setSelectedActionItems] = useState(new Set())
@@ -151,9 +156,31 @@ export default function AudioTranscriptionPanel({
   }, [stopImmediately])
 
   // Notify parent when recording state changes
+  // Notify parent when recording state changes
   useEffect(() => {
     onRecordingChange?.(isRecordingNow)
   }, [isRecordingNow, onRecordingChange])
+
+  // Load existing transcriptions for this meeting on mount
+  useEffect(() => {
+    fetchTranscriptions()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meetingId])
+
+  async function fetchTranscriptions() {
+    try {
+      const { data, error } = await supabase
+        .from('meeting_transcriptions')
+        .select('id, input_type, input_file_name, summary, sequence_number, created_at')
+        .eq('meeting_id', meetingId)
+        .order('sequence_number', { ascending: true })
+      if (!error && data) {
+        setTranscriptions(data)
+      }
+    } catch (err) {
+      console.warn('Failed to load transcriptions:', err)
+    }
+  }
 
   const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
@@ -192,8 +219,12 @@ export default function AudioTranscriptionPanel({
   // ── File upload ───────────────────────────────────────────────────────────────
 
   const handleFileSelect = (e) => {
-    const file = e.target.files?.[0]
-    if (file) acceptFile(file)
+    const files = Array.from(e.target.files || [])
+    if (files.length === 1) {
+      acceptFile(files[0])
+    } else if (files.length > 1) {
+      acceptFiles(files)
+    }
   }
 
   const acceptFile = (file) => {
@@ -206,15 +237,41 @@ export default function AudioTranscriptionPanel({
       setError('File too large. Maximum 300 MB.')
       return
     }
-    setAudioFile(file)
-    setAudioPreview(URL.createObjectURL(file))
+    if (audioFile) {
+      // already have one — add to queue instead of replacing
+      setAudioQueue(prev => {
+        const existing = prev.some(f => f.name === file.name && f.size === file.size)
+        if (existing) return prev
+        return [...prev, file]
+      })
+    } else {
+      setAudioFile(file)
+      setAudioPreview(URL.createObjectURL(file))
+    }
+  }
+
+  const acceptFiles = (files) => {
+    setError('')
+    const valid = []
+    for (const file of files) {
+      if (!isAudioType(file.type)) { setError(`Skipped ${file.name}: unsupported type.`); continue }
+      if (file.size > MAX_SIZE) { setError(`Skipped ${file.name}: too large.`); continue }
+      valid.push(file)
+    }
+    if (!valid.length) return
+    setAudioFile(valid[0])
+    setAudioPreview(URL.createObjectURL(valid[0]))
+    if (valid.length > 1) setAudioQueue(valid.slice(1))
   }
 
   const handleDrop = (e) => {
     e.preventDefault()
     setDragOver(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) { setMode('upload'); acceptFile(file) }
+    const files = Array.from(e.dataTransfer.files || [])
+    if (!files.length) return
+    setMode('upload')
+    if (files.length === 1) acceptFile(files[0])
+    else acceptFiles(files)
   }
 
   // ── Streaming extraction (WIN 3) ──────────────────────────────────────────────
@@ -292,12 +349,16 @@ export default function AudioTranscriptionPanel({
 
     try {
       const session = (await supabase.auth.getSession()).data.session
+      if (!session?.access_token) {
+        throw new Error('Session expired. Please log in again.')
+      }
+
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
       const response = await fetch(`${supabaseUrl}/functions/v1/extract-meeting-data`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           transcript: transcriptText,
@@ -488,6 +549,7 @@ export default function AudioTranscriptionPanel({
       setChunkStatus('Saving transcript…')
       setProgress(85)
 
+      const sequenceNumber = transcriptions.length
       const { data: record, error: recErr } = await supabase
         .from('meeting_transcriptions')
         .insert([{
@@ -499,18 +561,49 @@ export default function AudioTranscriptionPanel({
           tokens_used: 0,
           created_by: profile?.id,
           processed_at: new Date().toISOString(),
+          sequence_number: sequenceNumber,
         }])
         .select()
         .single()
       if (recErr) console.warn('Transcription record save failed:', recErr)
-      await supabase.from('meetings').update({ summary: transcript }).eq('id', meetingId)
+
+      // Update transcriptions list with new record
+      if (record) {
+        setTranscriptions(prev => [...prev, record])
+      }
+
+      // Concatenate all transcripts (including this new one) and save to meeting
+      const allTranscriptions = [...transcriptions, { ...record, summary: transcript }]
+      const concatenatedTranscript = allTranscriptions
+        .map((t, idx) => `[Segment ${idx + 1}${t.input_file_name ? ` - ${t.input_file_name}` : ''}]\n${t.summary}`)
+        .join('\n\n---\n\n')
+      await supabase.from('meetings').update({ summary: concatenatedTranscript }).eq('id', meetingId)
 
       setProgress(100)
       setChunkStatus('')
-      onTranscriptionComplete?.({ transcript, record, extracted: null })
+
+      // If more files are queued, load the next one and transcribe it automatically
+      if (audioQueue.length > 0) {
+        const [nextFile, ...remaining] = audioQueue
+        setAudioFile(nextFile)
+        setAudioPreview(URL.createObjectURL(nextFile))
+        setAudioQueue(remaining)
+        // Persist what we have so far so the user sees progress
+        setTranscript(concatenatedTranscript)
+        setTranscribing(false)
+        // Kick off the next transcription after a brief paint cycle
+        setTimeout(() => handleTranscribe(), 100)
+        return
+      }
+
+      // All files done — show the combined transcript and extract from everything
+      setTranscript(concatenatedTranscript)
+      setShowAddMore(false)
+
+      onTranscriptionComplete?.({ transcript: concatenatedTranscript, record, extracted: null })
 
       // WIN 3: stream extraction asynchronously after transcription is saved
-      streamExtractMeetingData(transcript)
+      streamExtractMeetingData(concatenatedTranscript)
     } catch (err) {
       setError(err.message || 'Transcription failed.')
     } finally {
@@ -519,6 +612,7 @@ export default function AudioTranscriptionPanel({
   }
 
   const saveTranscriptText = async (transcriptText) => {
+    const sequenceNumber = transcriptions.length
     const { data: record, error: recErr } = await supabase
       .from('meeting_transcriptions')
       .insert([{
@@ -530,12 +624,24 @@ export default function AudioTranscriptionPanel({
         tokens_used: 0,
         created_by: profile?.id,
         processed_at: new Date().toISOString(),
+        sequence_number: sequenceNumber,
       }])
       .select()
       .single()
     if (recErr) console.warn('Transcription record save failed:', recErr)
-    await supabase.from('meetings').update({ summary: transcriptText }).eq('id', meetingId)
-    return record
+
+    // Update transcriptions list with new record
+    if (record) {
+      setTranscriptions(prev => [...prev, record])
+    }
+
+    // Concatenate all transcripts and save to meeting
+    const allTranscriptions = [...transcriptions, { ...record, summary: transcriptText }]
+    const concatenatedTranscript = allTranscriptions
+      .map((t, idx) => `[Segment ${idx + 1}${t.input_file_name ? ` - ${t.input_file_name}` : ''}]\n${t.summary}`)
+      .join('\n\n---\n\n')
+    await supabase.from('meetings').update({ summary: concatenatedTranscript }).eq('id', meetingId)
+    return { record, concatenatedTranscript }
   }
 
   const handleSaveTranscript = async () => {
@@ -549,10 +655,11 @@ export default function AudioTranscriptionPanel({
     try {
       const transcriptText = pastedText.trim()
       setProgress(50)
-      const record = await saveTranscriptText(transcriptText)
+      const { record, concatenatedTranscript } = await saveTranscriptText(transcriptText)
       setProgress(100)
-      setTranscript(transcriptText)
-      onTranscriptionComplete?.({ transcript: transcriptText, record, extracted: null })
+      setTranscript(concatenatedTranscript)
+      setShowAddMore(false)
+      onTranscriptionComplete?.({ transcript: concatenatedTranscript, record, extracted: null })
     } catch (err) {
       setError(err.message || 'Save failed.')
     } finally {
@@ -572,17 +679,18 @@ export default function AudioTranscriptionPanel({
     try {
       const transcriptText = pastedText.trim()
       setProgress(30)
-      setTranscript(transcriptText)
 
       // Save first so AI Extract always has the text
       setProgress(60)
-      const record = await saveTranscriptText(transcriptText)
+      const { record, concatenatedTranscript } = await saveTranscriptText(transcriptText)
 
       setProgress(100)
-      onTranscriptionComplete?.({ transcript: transcriptText, record, extracted: null })
+      setTranscript(concatenatedTranscript)
+      setShowAddMore(false)
+      onTranscriptionComplete?.({ transcript: concatenatedTranscript, record, extracted: null })
 
-      // WIN 3: stream extraction asynchronously
-      streamExtractMeetingData(transcriptText)
+      // WIN 3: stream extraction asynchronously using full concatenated transcript
+      streamExtractMeetingData(concatenatedTranscript)
     } catch (err) {
       setError(err.message || 'Extraction failed.')
     } finally {
@@ -672,10 +780,26 @@ export default function AudioTranscriptionPanel({
   }
 
   const reset = () => {
-    if (!recordOnly && canRecord) onCollapse?.()
-    setMode(recordOnly ? 'record' : canRecord ? null : 'upload')
+    if (!showAddMore) {
+      if (!recordOnly && canRecord) onCollapse?.()
+      setMode(recordOnly ? 'record' : canRecord ? null : 'upload')
+    } else {
+      // In "add more" mode, stay in the same mode for next recording
+      setAudioFile(null)
+      setAudioPreview(null)
+      setPastedText('')
+      setTranscript('')
+      setRecordingTime(0)
+      setProgress(0)
+      setChunkStatus('')
+      setError('')
+      setMergeSuccess(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
     setAudioFile(null)
     setAudioPreview(null)
+    setAudioQueue([])
     setPastedText('')
     setTranscript('')
     setExtractedData(null)
@@ -688,6 +812,7 @@ export default function AudioTranscriptionPanel({
     setActionAssignments([])
     setSelectedOpenItems(new Set())
     setOpenItemsMergeSuccess(false)
+    setShowAddMore(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -794,16 +919,35 @@ export default function AudioTranscriptionPanel({
   if (mode === 'record') {
     return (
       <div style={s.container}>
-        {!recordOnly && <button style={s.backBtn} onClick={reset}>← Back</button>}
+        {!recordOnly && !showAddMore && <button style={s.backBtn} onClick={reset}>← Back</button>}
+
+        {/* Show existing transcriptions */}
+        {transcriptions.length > 0 && (
+          <div style={s.card}>
+            <h3 style={s.title}>📚 Uploaded Audio Segments ({transcriptions.length})</h3>
+            {transcriptions.map((t, idx) => (
+              <div key={t.id} style={{ marginBottom: 12, padding: 10, background: '#fff', borderRadius: 6, border: '1px solid #E9E4D8' }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: '#2D2A22', marginBottom: 4 }}>
+                  Segment {idx + 1} {t.input_file_name && `• ${t.input_file_name}`}
+                </div>
+                <div style={{ fontSize: 12, color: '#7A6F5E', marginBottom: 6 }}>
+                  {new Date(t.created_at).toLocaleString()} • {t.input_type}
+                </div>
+                <div style={{ ...s.transcriptBox, maxHeight: 120, fontSize: 12 }}>{t.summary.slice(0, 200)}{t.summary.length > 200 ? '...' : ''}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div style={s.card}>
-          <h3 style={s.title}>Record live audio</h3>
+          <h3 style={s.title}>{showAddMore ? '🎙️ Record next segment' : 'Record live audio'}</h3>
           {isRecordingNow && (
             <div style={s.recIndicator}>
               <div style={s.dot} /> Recording in progress
             </div>
           )}
           {!isRecordingNow && !audioPreview && (
-            <p style={s.sub}>Click start to record from your microphone.</p>
+            <p style={s.sub}>{showAddMore ? 'Add another audio segment to your meeting.' : 'Click start to record from your microphone.'}</p>
           )}
           {!isRecordingNow && audioPreview && (
             <p style={s.sub}>Preview your recording before transcribing.</p>
@@ -834,7 +978,36 @@ export default function AudioTranscriptionPanel({
             </>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
+
+        {transcript && !showAddMore && (
+          <div style={s.card}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <h3 style={{ ...s.title, marginBottom: 0 }}>Transcription complete</h3>
+            </div>
+            <div style={s.btnGroup}>
+              <button
+                style={{ ...s.btn, ...s.btnPrimary }}
+                onClick={() => setShowAddMore(true)}
+              >
+                ➕ Add more audio
+              </button>
+              <button
+                style={{ ...s.btn, ...s.btnSecondary }}
+                onClick={() => setShowAddMore(false)}
+              >
+                ✓ Done adding
+              </button>
+            </div>
+          </div>
+        )}
+
+        {transcript && showAddMore && (
+          <div style={s.card}>
+            <p style={s.sub}>Record your next segment above, or click "Done adding" when finished.</p>
+          </div>
+        )}
+
+        {transcript && !showAddMore && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} } @keyframes spin { to{transform:rotate(360deg)} }`}</style>
       </div>
     )
@@ -845,11 +1018,30 @@ export default function AudioTranscriptionPanel({
   if (mode === 'upload') {
     return (
       <div style={s.container}>
-        {canRecord && <button style={s.backBtn} onClick={reset}>← Back</button>}
+        {canRecord && !showAddMore && <button style={s.backBtn} onClick={reset}>← Back</button>}
+
+        {/* Show existing transcriptions */}
+        {transcriptions.length > 0 && (
+          <div style={s.card}>
+            <h3 style={s.title}>📚 Uploaded Audio Segments ({transcriptions.length})</h3>
+            {transcriptions.map((t, idx) => (
+              <div key={t.id} style={{ marginBottom: 12, padding: 10, background: '#fff', borderRadius: 6, border: '1px solid #E9E4D8' }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: '#2D2A22', marginBottom: 4 }}>
+                  Segment {idx + 1} {t.input_file_name && `• ${t.input_file_name}`}
+                </div>
+                <div style={{ fontSize: 12, color: '#7A6F5E', marginBottom: 6 }}>
+                  {new Date(t.created_at).toLocaleString()} • {t.input_type}
+                </div>
+                <div style={{ ...s.transcriptBox, maxHeight: 120, fontSize: 12 }}>{t.summary.slice(0, 200)}{t.summary.length > 200 ? '...' : ''}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div style={s.card}>
-          <h3 style={s.title}>Upload audio file</h3>
-          <p style={s.sub}>MP3, WAV, M4A, WebM — max 300 MB</p>
-          <input type="file" ref={fileInputRef} accept="audio/*" onChange={handleFileSelect} disabled={transcribing} style={{ display: 'none' }} id="audio-file-input" />
+          <h3 style={s.title}>{showAddMore ? '📁 Upload next audio' : 'Upload audio file'}</h3>
+          <p style={s.sub}>MP3, WAV, M4A, WebM — max 300 MB · select multiple files at once</p>
+          <input type="file" multiple ref={fileInputRef} accept="audio/*" onChange={handleFileSelect} disabled={transcribing} style={{ display: 'none' }} id="audio-file-input" />
           <label
             htmlFor="audio-file-input"
             style={{
@@ -864,32 +1056,86 @@ export default function AudioTranscriptionPanel({
             onMouseLeave={(e) => { if (!dragOver && !audioFile) { e.currentTarget.style.borderColor = '#E9E4D8'; e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#7A6F5E' } }}
           >
             {audioFile
-              ? `✅ ${audioFile instanceof File ? audioFile.name : 'recording.webm'}`
-              : dragOver ? '📂 Drop to upload' : '🎵 Click to choose or drag & drop audio file'}
+              ? `✅ ${audioFile instanceof File ? audioFile.name : 'recording.webm'}${audioQueue.length > 0 ? ` + ${audioQueue.length} more` : ''}`
+              : dragOver ? '📂 Drop to upload' : '🎵 Click to choose or drag & drop · select multiple files at once'}
           </label>
+
+          {/* Current file */}
           {audioFile && (
             <div style={s.fileInfo}>
-              <span>{audioFile instanceof File ? audioFile.name : 'recording.webm'}</span>
+              <span style={{ fontWeight: 600 }}>
+                {transcribing ? '▶ ' : ''}
+                {audioFile instanceof File ? audioFile.name : 'recording.webm'}
+              </span>
               <span style={{ color: '#7A6F5E' }}>{((audioFile.size ?? 0) / 1024 / 1024).toFixed(1)} MB</span>
             </div>
           )}
-          {audioPreview && <audio src={audioPreview} controls style={{ width: '100%', marginTop: 12 }} />}
+
+          {/* Queue of additional files */}
+          {audioQueue.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              {audioQueue.map((f, idx) => (
+                <div key={idx} style={{ ...s.fileInfo, marginTop: 4, opacity: 0.6 }}>
+                  <span>⏳ {f.name}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#7A6F5E' }}>{(f.size / 1024 / 1024).toFixed(1)} MB</span>
+                    <button
+                      type="button"
+                      onClick={() => setAudioQueue(prev => prev.filter((_, i) => i !== idx))}
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#C73B2B', fontSize: 14, padding: '0 2px' }}
+                    >×</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {audioPreview && !transcribing && <audio src={audioPreview} controls style={{ width: '100%', marginTop: 12 }} />}
           {transcribing && (
             <>
               <div style={{ ...s.progressWrap, marginTop: 14 }}>
                 <div style={{ ...s.progressFill, width: `${progress}%` }} />
               </div>
-              <p style={{ ...s.sub, marginTop: 4 }}>{progress}% — {chunkStatus || (progress < 40 ? 'Uploading...' : progress < 70 ? 'Transcribing...' : 'Extracting data...')}</p>
+              <p style={{ ...s.sub, marginTop: 4 }}>
+                {audioQueue.length > 0
+                  ? `${progress}% — ${chunkStatus || 'Processing…'} (${audioQueue.length} file${audioQueue.length !== 1 ? 's' : ''} remaining)`
+                  : `${progress}% — ${chunkStatus || (progress < 40 ? 'Uploading...' : progress < 70 ? 'Transcribing...' : 'Extracting data...')}`}
+              </p>
             </>
           )}
           {audioFile && !transcribing && !transcript && (
             <div style={s.btnGroup}>
-              <button style={{ ...s.btn, ...s.btnPrimary }} onClick={handleTranscribe}>✨ Transcribe</button>
+              <button style={{ ...s.btn, ...s.btnPrimary }} onClick={handleTranscribe}>
+                {audioQueue.length > 0 ? `✨ Transcribe all (${audioQueue.length + 1})` : '✨ Transcribe'}
+              </button>
               <button style={{ ...s.btn, ...s.btnSecondary }} onClick={reset}>Clear</button>
             </div>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
+
+        {transcript && !showAddMore && (
+          <div style={s.card}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <h3 style={{ ...s.title, marginBottom: 0 }}>Transcription complete</h3>
+            </div>
+            <div style={s.btnGroup}>
+              <button
+                style={{ ...s.btn, ...s.btnPrimary }}
+                onClick={() => setShowAddMore(true)}
+              >
+                ➕ Add more audio
+              </button>
+            </div>
+          </div>
+        )}
+
+        {transcript && showAddMore && (
+          <div style={s.card}>
+            <p style={s.sub}>Upload your next audio file above. It will be queued and transcribed after the current file.</p>
+          </div>
+        )}
+
+        {transcript && !showAddMore && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
       </div>
     )
   }
@@ -899,9 +1145,28 @@ export default function AudioTranscriptionPanel({
   if (mode === 'paste') {
     return (
       <div style={s.container}>
-        {!pasteOnly && <button style={s.backBtn} onClick={reset}>← Back</button>}
+        {!pasteOnly && !showAddMore && <button style={s.backBtn} onClick={reset}>← Back</button>}
+
+        {/* Show existing transcriptions */}
+        {transcriptions.length > 0 && (
+          <div style={s.card}>
+            <h3 style={s.title}>📚 Pasted Transcripts ({transcriptions.length})</h3>
+            {transcriptions.map((t, idx) => (
+              <div key={t.id} style={{ marginBottom: 12, padding: 10, background: '#fff', borderRadius: 6, border: '1px solid #E9E4D8' }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: '#2D2A22', marginBottom: 4 }}>
+                  Segment {idx + 1}
+                </div>
+                <div style={{ fontSize: 12, color: '#7A6F5E', marginBottom: 6 }}>
+                  {new Date(t.created_at).toLocaleString()} • pasted text
+                </div>
+                <div style={{ ...s.transcriptBox, maxHeight: 120, fontSize: 12 }}>{t.summary.slice(0, 200)}{t.summary.length > 200 ? '...' : ''}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div style={s.card}>
-          <h3 style={s.title}>Paste transcript</h3>
+          <h3 style={s.title}>{showAddMore ? '📋 Paste next transcript' : 'Paste transcript'}</h3>
           <p style={s.sub}>Copy & paste from Zoom, Teams, Google Meet, or other sources</p>
           <textarea
             value={pastedText}
@@ -947,7 +1212,36 @@ export default function AudioTranscriptionPanel({
             </div>
           )}
         </div>
-        {transcript && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
+
+        {transcript && !showAddMore && (
+          <div style={s.card}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <h3 style={{ ...s.title, marginBottom: 0 }}>Transcript saved</h3>
+            </div>
+            <div style={s.btnGroup}>
+              <button
+                style={{ ...s.btn, ...s.btnPrimary }}
+                onClick={() => setShowAddMore(true)}
+              >
+                ➕ Add more transcript
+              </button>
+              <button
+                style={{ ...s.btn, ...s.btnSecondary }}
+                onClick={() => setShowAddMore(false)}
+              >
+                ✓ Done adding
+              </button>
+            </div>
+          </div>
+        )}
+
+        {transcript && showAddMore && (
+          <div style={s.card}>
+            <p style={s.sub}>Paste your next transcript above, or click "Done adding" when finished.</p>
+          </div>
+        )}
+
+        {transcript && !showAddMore && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
       </div>
     )
   }

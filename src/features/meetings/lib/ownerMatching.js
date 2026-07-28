@@ -7,18 +7,37 @@ import { getAllDepartments, getAllUsers } from '../../automations/lib/automation
 
 const normalizeName = (s) => (s || '').trim().toLowerCase()
 
-// Org directory (departments + users) rarely changes within a session and is
-// needed by every extraction surface (record/upload/paste render 3 panel copies
-// on the same page) — memoize the fetch at module scope instead of per-instance.
-let _orgDeptsPromise = null
-let _orgUsersPromise = null
+// Cache org directory with 10-minute TTL. Memoization alone didn't expire,
+// causing stale data across long sessions. This reduces database queries
+// significantly by not refetching on every extraction.
+const CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutes
+let _cachedDepts = null
+let _cachedUsers = null
+let _deptsFetchTime = 0
+let _usersFetchTime = 0
+
 export function getOrgDepartments() {
-  if (!_orgDeptsPromise) _orgDeptsPromise = getAllDepartments()
-  return _orgDeptsPromise
+  const now = Date.now()
+  if (_cachedDepts && now - _deptsFetchTime < CACHE_TTL_MS) {
+    return Promise.resolve(_cachedDepts)
+  }
+  return getAllDepartments().then((data) => {
+    _cachedDepts = data
+    _deptsFetchTime = now
+    return data
+  })
 }
+
 export function getOrgUsers() {
-  if (!_orgUsersPromise) _orgUsersPromise = getAllUsers()
-  return _orgUsersPromise
+  const now = Date.now()
+  if (_cachedUsers && now - _usersFetchTime < CACHE_TTL_MS) {
+    return Promise.resolve(_cachedUsers)
+  }
+  return getAllUsers().then((data) => {
+    _cachedUsers = data
+    _usersFetchTime = now
+    return data
+  })
 }
 
 // Match an AI-extracted owner name to a real user. Only returns a match when

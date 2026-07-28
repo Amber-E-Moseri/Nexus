@@ -34,6 +34,8 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
   const [newTeamName, setNewTeamName] = useState('')
   const [editingTeamId, setEditingTeamId] = useState(null)
   const [editingName, setEditingName] = useState('')
+  const [editingDescId, setEditingDescId] = useState(null)
+  const [editingDesc, setEditingDesc] = useState('')
   const [openDropdown, setOpenDropdown] = useState(null)
   const [orgUsers, setOrgUsers] = useState([])
 
@@ -93,6 +95,19 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
     try {
       await updateSprintTeam(teamId, { name: newName.trim() })
       setEditingTeamId(null)
+      await onChanged?.()
+    } catch (err) {
+      alert(`Failed to update team: ${err?.message || String(err)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleEditTeamDesc(teamId, newDesc) {
+    setSaving(true)
+    try {
+      await updateSprintTeam(teamId, { description: newDesc.trim() || null })
+      setEditingDescId(null)
       await onChanged?.()
     } catch (err) {
       alert(`Failed to update team: ${err?.message || String(err)}`)
@@ -246,6 +261,65 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                 </button>
               )}
             </div>
+
+            {/* Goal / description */}
+            {editingDescId === team.id ? (
+              <textarea
+                value={editingDesc}
+                onChange={(e) => setEditingDesc(e.target.value)}
+                onBlur={() => handleEditTeamDesc(team.id, editingDesc)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditTeamDesc(team.id, editingDesc) }
+                  if (e.key === 'Escape') setEditingDescId(null)
+                }}
+                autoFocus
+                placeholder="Describe this team's goal or focus area…"
+                rows={2}
+                style={{
+                  width: '100%',
+                  fontSize: 12,
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  padding: '6px 8px',
+                  fontFamily: 'inherit',
+                  lineHeight: 1.5,
+                  resize: 'none',
+                  background: '#fff',
+                  marginBottom: 10,
+                  boxSizing: 'border-box',
+                }}
+              />
+            ) : team.description ? (
+              <p
+                onClick={() => canEdit && !isArchived && (setEditingDescId(team.id), setEditingDesc(team.description || ''))}
+                style={{
+                  fontSize: 12,
+                  color: 'var(--text-secondary)',
+                  margin: '0 0 10px',
+                  lineHeight: 1.5,
+                  cursor: canEdit && !isArchived ? 'text' : 'default',
+                }}
+              >
+                {team.description}
+              </p>
+            ) : canEdit && !isArchived ? (
+              <button
+                type="button"
+                onClick={() => { setEditingDescId(team.id); setEditingDesc('') }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: '0 0 10px',
+                  fontSize: 12,
+                  color: 'var(--text-tertiary)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                + Add goal or description
+              </button>
+            ) : null}
 
             {/* Members */}
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>

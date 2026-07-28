@@ -107,6 +107,19 @@ export async function getAllUsers() {
   const { data, error } = await supabase
     .from('users')
     .select('id, name, department_id, status')
+    .eq('status', 'active')
+    .order('name')
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getUsersByDepartment(departmentId) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, name, department_id, status')
+    .eq('department_id', departmentId)
+    .eq('status', 'active')
     .order('name')
 
   if (error) throw error
