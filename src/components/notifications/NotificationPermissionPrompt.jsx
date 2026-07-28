@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { pushSupported, requestPushPermission } from '../../lib/webPush'
 import { Bell, X } from 'lucide-react'
 
 export default function NotificationPermissionPrompt() {
@@ -37,11 +38,22 @@ export default function NotificationPermissionPrompt() {
   const requestPermission = async () => {
     setLoading(true)
     try {
-      const permission = await Notification.requestPermission()
-      if (permission === 'granted') {
+      if (pushSupported()) {
+        // In prod (SW registered): request browser permission + subscribe to Web Push in one shot.
+        // requestPushPermission() handles permission dialog, SW subscription, and DB write.
+        // Push subscription failing (network, VAPID mismatch) is non-fatal — permission may
+        // still be granted, so we fall through to the Notification.permission check below.
+        await requestPushPermission()
+      } else {
+        // Dev mode or browser without PushManager: request browser permission only.
+        await Notification.requestPermission()
+      }
+
+      if (Notification.permission === 'granted') {
         setShow(false)
+        // eslint-disable-next-line no-new
         new Notification('Notifications enabled', {
-          body: 'You will now receive browser notifications from BLW CAN NEXUS',
+          body: 'You will now receive alerts for task assignments, @mentions, and comments.',
           icon: '/logo.png',
         })
       } else {

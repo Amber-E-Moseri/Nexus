@@ -498,7 +498,7 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
   const visibleMeetings = mediaSpace ? [] : meetings.slice(0, 3)
 
   const statusSummary = [
-    { key: 'to_do', label: 'Not Started', count: tasksByStatus['to_do'] ?? 0 },
+    { key: 'to_do', label: 'To Do', count: tasksByStatus['to_do'] ?? 0 },
     { key: 'in_progress', label: 'In Progress', count: tasksByStatus['in_progress'] ?? 0 },
     { key: 'review', label: 'In Review', count: tasksByStatus['review'] ?? 0 },
     { key: 'cancelled', label: 'Cancelled', count: tasksByStatus['cancelled'] ?? 0 },
