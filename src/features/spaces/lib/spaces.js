@@ -429,6 +429,8 @@ export async function getSpaceTasks(departmentId) {
     `)
     .or(filters.join(','))
     .is('parent_task_id', null)
+    .is('deleted_at', null)
+    .eq('is_personal', false)
 
   if (error) throw error
   return (data ?? []).map(normalizeTaskRow)

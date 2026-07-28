@@ -1876,11 +1876,9 @@ export default function SpaceOverview() {
           event_type:
             task.status_category === 'completed'
               ? 'training'
-              : task.status_category === 'blocked'
-                ? 'deadline'
-                : task.status_category === 'review'
-                  ? 'prayer'
-                  : 'event',
+              : task.status_category === 'review'
+                ? 'prayer'
+                : 'event',
         })),
     [spaceTasks],
   )
@@ -1903,7 +1901,6 @@ export default function SpaceOverview() {
                   ['To Do', 'open'],
                   ['In Progress', 'in_progress'],
                   ['Review', 'review'],
-                  ['Blocked', 'blocked'],
                   ['Completed', 'completed'],
                 ].map(([label, tone]) => (
                   <div key={label} className="flex items-center gap-1.5">

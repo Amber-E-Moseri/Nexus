@@ -19,8 +19,22 @@ function sameDay(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
+// Date-only strings (e.g. "2026-07-28" from task due_date) are parsed by JS
+// as UTC midnight, which is the PREVIOUS day in UTC-offset timezones (Canada).
+// Datetime strings from ministry calendar events already carry timezone info
+// and parse correctly. This helper forces date-only strings to local time so
+// chips land on the correct grid cell.
+function parseEventDate(dateStr) {
+  if (!dateStr) return new Date(NaN)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    return new Date(y, m - 1, d)
+  }
+  return new Date(dateStr)
+}
+
 function eventsForDay(events, day) {
-  return events.filter((event) => sameDay(new Date(event.start_date), day))
+  return events.filter((event) => sameDay(parseEventDate(event.start_date), day))
 }
 
 export default function CalendarGrid({
