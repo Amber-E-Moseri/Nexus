@@ -4,7 +4,9 @@ import { supabase } from '../../lib/supabase'
 import { FONT_HEADING } from '../../lib/fonts'
 import { getEmailTemplates, createEmailTemplate } from '../../features/communications'
 import TemplateEditor from '../../features/communications/components/TemplateEditor'
-import { Search, Palette, Eye, Copy, Edit3, Trash2 } from 'lucide-react'
+import { Search, Palette, Eye, Copy, Edit3, Trash2, Plus } from 'lucide-react'
+
+const BLANK_TEMPLATE = { id: null, name: '', category: 'announcements', html_content: '', subject: '', is_system: false }
 
 const PRIMARY = 'var(--purple-700)'
 const BORDER = 'var(--border-1)'
@@ -129,9 +131,32 @@ export default function EmailTemplatesPage() {
           <span style={{ color: '#D8D3C9' }}>/</span>
           <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>Email Templates</span>
         </div>
-        <div>
-          <h1 style={{ fontFamily: FONT_HEADING, margin: 0, fontSize: 20, fontWeight: 800, color: TEXT }}>Email Templates</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: MUTED }}>Browse, customize, and save email templates for campaigns.</p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <h1 style={{ fontFamily: FONT_HEADING, margin: 0, fontSize: 20, fontWeight: 800, color: TEXT }}>Email Templates</h1>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: MUTED }}>Browse, customize, and save email templates for campaigns.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEditing(BLANK_TEMPLATE)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              border: 'none',
+              background: PRIMARY,
+              color: '#FFFFFF',
+              borderRadius: 8,
+              padding: '8px 14px',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            <Plus size={15} /> New Template
+          </button>
         </div>
       </div>
 
@@ -240,7 +265,6 @@ export default function EmailTemplatesPage() {
                       e.currentTarget.style.background = '#FFFFFF'
                     }}
                   >
-                    {!isMobile && <Eye size={14} />}
                     <Eye size={isMobile ? 12 : 14} />
                   </button>
                   <button

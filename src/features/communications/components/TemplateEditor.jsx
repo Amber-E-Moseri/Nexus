@@ -88,6 +88,27 @@ export default function TemplateEditor({ template, onClose, onSaved }) {
     }
   }
 
+  async function handleUpdateTemplate() {
+    setSaving(true)
+    setError(null)
+    try {
+      await updateEmailTemplate(supabase, template.id, {
+        html_content: bodyContent,
+        subject: subjectLine,
+        variables: { headerBg, accentColor, footerText },
+      })
+      setSaved(true)
+      setTimeout(() => {
+        onSaved?.()
+        onClose()
+      }, 800)
+    } catch (err) {
+      setError(err.message ?? 'Failed to update template')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function handleUseInCampaign() {
     const customTemplate = {
       id: template.id,
@@ -307,7 +328,46 @@ export default function TemplateEditor({ template, onClose, onSaved }) {
 
             {/* Actions */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {!showSaveAs && template.is_system ? (
+              {template.id && !template.is_system ? (
+                // Editing an existing custom template
+                <>
+                  <button
+                    type="button"
+                    onClick={handleUpdateTemplate}
+                    disabled={saving}
+                    style={{ border: 'none', background: PRIMARY, color: SURFACE, borderRadius: 6, padding: '10px 12px', fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}
+                  >
+                    {saving ? 'Saving...' : 'Update Template'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleUseInCampaign}
+                    style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: PRIMARY, borderRadius: 6, padding: '10px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Use in Campaign
+                  </button>
+                </>
+              ) : !template.id ? (
+                // Creating a new template — always show the name + save form
+                <>
+                  <input
+                    type="text"
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                    placeholder="Template name"
+                    style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: '8px 10px', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveAsCustom}
+                    disabled={saving}
+                    style={{ border: 'none', background: PRIMARY, color: SURFACE, borderRadius: 6, padding: '10px 12px', fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}
+                  >
+                    {saving ? 'Saving...' : 'Save Template'}
+                  </button>
+                </>
+              ) : !showSaveAs ? (
+                // System template — offer to save as a custom copy
                 <>
                   <button
                     type="button"
@@ -324,7 +384,8 @@ export default function TemplateEditor({ template, onClose, onSaved }) {
                     Use in Campaign
                   </button>
                 </>
-              ) : showSaveAs ? (
+              ) : (
+                // System template — name input for save-as-custom
                 <>
                   <input
                     type="text"
@@ -349,7 +410,7 @@ export default function TemplateEditor({ template, onClose, onSaved }) {
                     Cancel
                   </button>
                 </>
-              ) : null}
+              )}
             </div>
           </div>
 
