@@ -13,45 +13,117 @@ export function sanitizeMeetingDate(raw) {
 
 // BLW-16: paged instead of a silent .limit(50) cap — returns the total count
 // so callers can offer "load more" until every meeting is reachable.
+// Cross-dept meetings: when departmentId !== 'all', fetches both primary-dept
+// meetings and cross-dept shared meetings separately, merges them, dedupes,
+// sorts by date, then paginates the merged result. This avoids string-based
+// .or() filter building (URL-length fragility) and ensures pagination is
+// applied to the final merged array, not individual sources.
 export async function getDeptMeetings(departmentId, { limit = MEETINGS_PAGE_SIZE, offset = 0 } = {}) {
   if (!departmentId) return { meetings: [], totalCount: 0 }
 
-  let query = supabase
-    .from('meetings')
-    .select(`
-      id,
-      title,
-      department_id,
-      date,
-      meeting_type,
-      status,
-      agenda,
-      minutes,
-      transcript,
-      summary,
-      zoom_join_url,
-      drive_url,
-      visibility,
-      allowed_viewers,
-      created_by,
-      created_at,
-      recurrence_id,
-      recurrence_rule,
-      creator:users!created_by(id, name),
-      attendance:meeting_attendance(user_id, status, attendee:users(id, name)),
-      agendas(id, title, start_time, end_time, location, moderator_name, theme, created_by, agenda_items(id, segment, notes, duration_minutes, sort_order, is_pinned))
-    `, { count: 'exact' })
+  const selectString = `
+    id,
+    title,
+    department_id,
+    date,
+    meeting_type,
+    status,
+    agenda,
+    minutes,
+    transcript,
+    summary,
+    zoom_join_url,
+    drive_url,
+    visibility,
+    allowed_viewers,
+    created_by,
+    created_at,
+    recurrence_id,
+    recurrence_rule,
+    meeting_spaces(department_id),
+    creator:users!created_by(id, name),
+    attendance:meeting_attendance(user_id, status, attendee:users(id, name)),
+    agendas(id, title, start_time, end_time, location, moderator_name, theme, created_by, agenda_items(id, segment, notes, duration_minutes, sort_order, is_pinned))
+  `
 
-  if (departmentId !== 'all') {
-    query = query.eq('department_id', departmentId)
+  if (departmentId === 'all') {
+    // 'all' case: no department filtering, return all meetings
+    const { data, count, error } = await supabase
+      .from('meetings')
+      .select(selectString, { count: 'exact' })
+      .order('date', { ascending: false })
+      .range(offset, offset + limit - 1)
+
+    if (error) throw error
+    return { meetings: data ?? [], totalCount: count ?? 0 }
   }
 
-  const { data, count, error } = await query
-    .order('date', { ascending: false })
-    .range(offset, offset + limit - 1)
+  // departmentId !== 'all': fetch primary + shared, merge, paginate
+  // Stopgap for a sub-200-person org. True fix needs keyset pagination
+  // across two sources (union-view or RPC). Add to post-launch backlog.
+  const maxFetch = 1000
 
-  if (error) throw error
-  return { meetings: data ?? [], totalCount: count ?? 0 }
+  const primaryQuery = supabase
+    .from('meetings')
+    .select(selectString)
+    .eq('department_id', departmentId)
+    .order('date', { ascending: false })
+    .limit(maxFetch)
+
+  const sharedRowsQuery = supabase
+    .from('meeting_spaces')
+    .select('meeting_id')
+    .eq('department_id', departmentId)
+    .order('created_at', { ascending: false })
+    .limit(maxFetch)
+
+  // Execute primary and shared queries in parallel
+  const [primaryRes, sharedRowsRes] = await Promise.all([
+    primaryQuery,
+    sharedRowsQuery,
+  ])
+
+  if (primaryRes.error) throw primaryRes.error
+  if (sharedRowsRes.error) throw sharedRowsRes.error
+
+  const sharedIds = (sharedRowsRes.data ?? []).map((r) => r.meeting_id)
+
+  // Fetch shared meetings if any exist
+  let sharedRes = { data: [] }
+  if (sharedIds.length > 0) {
+    sharedRes = await supabase
+      .from('meetings')
+      .select(selectString)
+      .in('id', sharedIds)
+      .order('date', { ascending: false })
+      .limit(maxFetch)
+
+    if (sharedRes.error) throw sharedRes.error
+  }
+
+  // Count query for totalCount (includes both sources)
+  const countRes = sharedIds.length === 0
+    ? await supabase
+        .from('meetings')
+        .select('id', { count: 'exact', head: true })
+        .eq('department_id', departmentId)
+    : await supabase
+        .from('meetings')
+        .select('id', { count: 'exact', head: true })
+        .or(`department_id.eq.${departmentId},id.in.(${sharedIds.join(',')})`)
+
+  if (countRes.error) throw countRes.error
+
+  // Merge, dedupe by ID, sort by date
+  const allMeetings = [...(primaryRes.data ?? []), ...(sharedRes.data ?? [])]
+  const uniqueMeetings = Array.from(
+    new Map(allMeetings.map((m) => [m.id, m])).values(),
+  ).sort((a, b) => new Date(b.date) - new Date(a.date))
+
+  // Apply pagination to merged result
+  const paginatedMeetings = uniqueMeetings.slice(offset, offset + limit)
+
+  return { meetings: paginatedMeetings, totalCount: countRes.count ?? 0 }
 }
 
 export async function createMeeting(meetingData) {
@@ -340,6 +412,57 @@ export async function deleteMeeting(meetingId) {
   return { success: true, deletedMeetingId: meetingId }
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Cross-Department Meetings: meeting_spaces helpers
+// ─────────────────────────────────────────────────────────────────
+
+export async function getMeetingSpaces(meetingId) {
+  if (!meetingId) return []
+
+  const { data, error } = await supabase
+    .from('meeting_spaces')
+    .select(`
+      meeting_id,
+      department_id,
+      added_at,
+      dept:departments(id, name, color)
+    `)
+    .eq('meeting_id', meetingId)
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function addMeetingSpace(meetingId, departmentId, userId) {
+  if (!meetingId || !departmentId) throw new Error('Meeting ID and department ID are required')
+
+  const { data, error } = await supabase
+    .from('meeting_spaces')
+    .insert({
+      meeting_id: meetingId,
+      department_id: departmentId,
+      added_by: userId,
+    })
+    .select()
+
+  // PGRST409 (unique constraint) means this space was already added — that's fine,
+  // treat it as idempotent and return silently
+  if (error && error.code !== 'PGRST409') throw error
+  return data?.[0] ?? null
+}
+
+export async function removeMeetingSpace(meetingId, departmentId) {
+  if (!meetingId || !departmentId) throw new Error('Meeting ID and department ID are required')
+
+  const { error } = await supabase
+    .from('meeting_spaces')
+    .delete()
+    .eq('meeting_id', meetingId)
+    .eq('department_id', departmentId)
+
+  if (error) throw error
+}
+
 export async function createTasksFromActionItems(meetingId, departmentId, actionItems, createdBy) {
   if (!actionItems.length) return []
 
@@ -427,38 +550,84 @@ export async function searchMeetings(query, departmentId) {
   if (!query || !query.trim()) return []
   const q = `%${query.trim()}%`
 
-  let req = supabase
-    .from('meetings')
-    .select(`
-      id,
-      title,
-      department_id,
-      date,
-      meeting_type,
-      status,
-      minutes,
-      meeting_notes,
-      decisions,
-      summary,
-      created_by,
-      created_at,
-      recurrence_id,
-      recurrence_rule,
-      attendance:meeting_attendance(user_id, status, attendee:users(id, name))
-    `)
-    .or(
-      `title.ilike.${q},minutes.ilike.${q},meeting_notes.ilike.${q},decisions.ilike.${q},summary.ilike.${q}`
-    )
-    .order('date', { ascending: false })
-    .limit(50)
+  const selectString = `
+    id,
+    title,
+    department_id,
+    date,
+    meeting_type,
+    status,
+    minutes,
+    meeting_notes,
+    decisions,
+    summary,
+    created_by,
+    created_at,
+    recurrence_id,
+    recurrence_rule,
+    meeting_spaces(department_id),
+    attendance:meeting_attendance(user_id, status, attendee:users(id, name))
+  `
 
-  if (departmentId && departmentId !== 'all') {
-    req = req.eq('department_id', departmentId)
+  const contentFilter = `title.ilike.${q},minutes.ilike.${q},meeting_notes.ilike.${q},decisions.ilike.${q},summary.ilike.${q}`
+
+  if (!departmentId || departmentId === 'all') {
+    // No filtering: search all meetings
+    const { data, error } = await supabase
+      .from('meetings')
+      .select(selectString)
+      .or(contentFilter)
+      .order('date', { ascending: false })
+      .limit(50)
+
+    if (error) throw error
+    return data ?? []
   }
 
-  const { data, error } = await req
-  if (error) throw error
-  return data ?? []
+  // departmentId is set and not 'all': search primary + shared, merge
+  const maxFetch = 150
+
+  const primaryRes = await supabase
+    .from('meetings')
+    .select(selectString)
+    .eq('department_id', departmentId)
+    .or(contentFilter)
+    .order('date', { ascending: false })
+    .limit(maxFetch)
+
+  const sharedRowsRes = await supabase
+    .from('meeting_spaces')
+    .select('meeting_id')
+    .eq('department_id', departmentId)
+    .order('created_at', { ascending: false })
+    .limit(maxFetch)
+
+  if (primaryRes.error) throw primaryRes.error
+  if (sharedRowsRes.error) throw sharedRowsRes.error
+
+  const sharedIds = (sharedRowsRes.data ?? []).map((r) => r.meeting_id)
+
+  // Fetch shared meetings and filter by content search
+  let sharedRes = { data: [] }
+  if (sharedIds.length > 0) {
+    sharedRes = await supabase
+      .from('meetings')
+      .select(selectString)
+      .in('id', sharedIds)
+      .or(contentFilter)
+      .order('date', { ascending: false })
+      .limit(maxFetch)
+
+    if (sharedRes.error) throw sharedRes.error
+  }
+
+  // Merge, dedupe by ID, sort by date, limit to 50
+  const allMeetings = [...(primaryRes.data ?? []), ...(sharedRes.data ?? [])]
+  const uniqueMeetings = Array.from(
+    new Map(allMeetings.map((m) => [m.id, m])).values(),
+  ).sort((a, b) => new Date(b.date) - new Date(a.date))
+
+  return uniqueMeetings.slice(0, 50)
 }
 
 export async function getMeetingTasks(meetingId) {
@@ -483,6 +652,106 @@ export async function getMeetingTasks(meetingId) {
 
   if (error) throw error
   return normalizeTaskRows(data)
+}
+
+// ── Minutes Hub data functions ──────────────────────────────────────────────
+
+// Fetch published meetings with notes for the timeline and calendar views.
+// Scoped to departmentId (+ cross-dept shares) using the same pattern as
+// getDeptMeetings. Returns lightweight rows — notes_blocks not included so
+// the network payload stays small; callers derive snippet from notes_text.
+export async function getMeetingsWithMinutes(departmentId, { page = 0, pageSize = 20, month, year } = {}) {
+  if (!departmentId) return { meetings: [], totalCount: 0 }
+
+  const selectString = `
+    id,
+    title,
+    department_id,
+    date,
+    meeting_type,
+    visibility,
+    notes_text,
+    created_by,
+    department:departments!department_id(id, name),
+    attendance:meeting_attendance(user_id, attendee:users(id, name))
+  `
+
+  const baseFilter = (q) => {
+    q = q.eq('visibility', 'published')
+    q = q.not('notes_text', 'is', null)
+    q = q.neq('notes_text', '')
+    if (month != null && year != null) {
+      const from = new Date(year, month, 1).toISOString()
+      const to   = new Date(year, month + 1, 1).toISOString()
+      q = q.gte('date', from).lt('date', to)
+    }
+    return q
+  }
+
+  const offset = page * pageSize
+
+  if (departmentId === 'all') {
+    const { data, count, error } = await baseFilter(
+      supabase.from('meetings').select(selectString, { count: 'exact' })
+    )
+      .order('date', { ascending: false })
+      .range(offset, offset + pageSize - 1)
+
+    if (error) throw error
+    return { meetings: data ?? [], totalCount: count ?? 0 }
+  }
+
+  const maxFetch = 1000
+
+  const [primaryRes, sharedRowsRes] = await Promise.all([
+    baseFilter(supabase.from('meetings').select(selectString))
+      .eq('department_id', departmentId)
+      .order('date', { ascending: false })
+      .limit(maxFetch),
+    supabase.from('meeting_spaces')
+      .select('meeting_id')
+      .eq('department_id', departmentId)
+      .limit(maxFetch),
+  ])
+
+  if (primaryRes.error) throw primaryRes.error
+  if (sharedRowsRes.error) throw sharedRowsRes.error
+
+  const sharedIds = (sharedRowsRes.data ?? []).map((r) => r.meeting_id)
+  let sharedData = []
+  if (sharedIds.length > 0) {
+    const sharedRes = await baseFilter(supabase.from('meetings').select(selectString))
+      .in('id', sharedIds)
+      .order('date', { ascending: false })
+      .limit(maxFetch)
+    if (sharedRes.error) throw sharedRes.error
+    sharedData = sharedRes.data ?? []
+  }
+
+  const all = [...(primaryRes.data ?? []), ...sharedData]
+  const unique = Array.from(new Map(all.map((m) => [m.id, m])).values())
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+
+  return {
+    meetings: unique.slice(offset, offset + pageSize).map(m => ({
+      ...m,
+      department_name: m.department?.name,
+    })),
+    totalCount: unique.length,
+  }
+}
+
+// Full-text search across meeting minutes using the search_meeting_notes RPC.
+// RPC enforces dept scoping server-side — p_dept_id is only honored to
+// narrow scope for admins; regular users are pinned to their own dept.
+export async function searchMinutesBlocks(query, departmentId) {
+  if (!query || !query.trim()) return []
+  const { data, error } = await supabase.rpc('search_meeting_notes', {
+    p_query: query.trim(),
+    p_dept_id: departmentId === 'all' ? null : (departmentId ?? null),
+  })
+  if (error) throw error
+  return data ?? []
 }
 
 export async function recalculateAttendanceTrends(meetingId) {

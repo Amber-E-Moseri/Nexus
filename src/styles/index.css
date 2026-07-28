@@ -440,3 +440,29 @@ code, kbd { font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospa
 .sidebar-nav--collapsed .sidebar-item__badge {
   display: none;
 }
+
+/* ── RichMinutesEditor: Tiptap / ProseMirror content styles ────────────────
+   Scoped to .rich-editor-content to avoid colliding with global prose styles.
+   Tiptap ships unstyled — this maps its elements to the existing design tokens. */
+.rich-editor-content {
+  padding: 12px 14px;
+  min-height: 140px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary, #1C1610);
+  font-family: inherit;
+  outline: none;
+}
+.rich-editor-content p { margin: 0 0 6px; }
+.rich-editor-content p:last-child { margin-bottom: 0; }
+.rich-editor-content h2 { font-size: 15px; font-weight: 700; margin: 14px 0 6px; color: var(--text-primary, #1C1610); }
+.rich-editor-content h3 { font-size: 13px; font-weight: 700; margin: 10px 0 4px; color: var(--text-primary, #1C1610); }
+.rich-editor-content ul, .rich-editor-content ol { padding-left: 20px; margin: 6px 0; }
+.rich-editor-content li { margin: 2px 0; }
+.rich-editor-content blockquote { border-left: 3px solid var(--border, #E9E4D8); padding-left: 12px; margin: 8px 0; color: var(--text-secondary, #7A6F5E); }
+.rich-editor-content pre { background: var(--surface-secondary, #F9F7F3); border: 1px solid var(--border, #E9E4D8); border-radius: 6px; padding: 10px 12px; font-size: 12px; overflow-x: auto; }
+.rich-editor-content code { background: var(--surface-secondary, #F9F7F3); padding: 1px 4px; border-radius: 3px; font-size: 11.5px; font-family: 'DM Mono', ui-monospace, monospace; }
+.rich-editor-content pre code { background: none; padding: 0; }
+.rich-editor-content hr { border: none; border-top: 1px solid var(--border, #E9E4D8); margin: 12px 0; }
+.rich-editor-content a { color: var(--color-primary, #4C2A92); text-decoration: underline; }
+.rich-editor-content .ProseMirror-selectednode { outline: 2px solid var(--color-primary, #4C2A92); }

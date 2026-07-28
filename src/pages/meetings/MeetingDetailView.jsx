@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
@@ -14,7 +14,7 @@ import GenerateMeetingDocButton from '../../features/meetings/components/Generat
 import MeetingShareModal from '../../features/meetings/components/MeetingShareModal'
 import TaskModal from '../../features/tasks/components/TaskModal'
 import { getTaskById } from '../../features/tasks/lib/tasks'
-import { createTasksFromActionItems, setNotesSharedWithAttendee, editRecurringMeeting } from '../../features/meetings/lib/meetings'
+import { createTasksFromActionItems, setNotesSharedWithAttendee, editRecurringMeeting, getMeetingSpaces, addMeetingSpace, removeMeetingSpace } from '../../features/meetings/lib/meetings'
 import { resolveAssignment, getOrgDepartments, getOrgUsers } from '../../features/meetings/lib/ownerMatching'
 import { getOpenItemsByMeeting, createOpenItems, updateOpenItem, updateOpenItemStatus, deleteOpenItem, convertOpenItemToTask } from '../../features/meetings/lib/openItems'
 import { getCategoryStatusId, STATUS_CATEGORIES } from '../../lib/taskStatuses'
@@ -25,6 +25,8 @@ import { syncFlockInteractionForMeeting } from '../../features/meetings/lib/floc
 import FlockContactPicker from '../../features/meetings/components/FlockContactPicker'
 import MeetingAgendaEditor from '../../features/meetings/components/MeetingAgendaEditor'
 import { saveAgendaItemsForMeeting } from '../../features/meetings/lib/agendaSync'
+import RichMinutesEditor from '../../features/meetings/components/RichMinutesEditor'
+import { textToBlocks } from '../../features/meetings/lib/minutesBlocks'
 
 // exact colors from the HTML reference
 const FS = {
@@ -71,9 +73,11 @@ function toLocalDateTimeInput(value) {
 function MeetingDetailViewInner() {
   const { meetingId } = useParams()
   const navigate      = useNavigate()
+  const [searchParams] = useSearchParams()
   const { role, profile } = useAuth()
   const { showToast } = useToast()
   const extraction = useExtractionStatus(meetingId)
+  const editorRef  = useRef(null) // exposes replaceContent(doc) from RichMinutesEditor
 
   const [meeting, setMeeting]   = useState(null)
   const [agenda, setAgenda]     = useState([])
@@ -84,11 +88,9 @@ function MeetingDetailViewInner() {
   const [elapsed, setElapsed]                   = useState(0)
   const [recording, setRecording]               = useState(false)
   const [currentIdx, setCurrentIdx]             = useState(0)
-  const [activeTab, setActiveTab]               = useState('minutes')
+  const [activeTab, setActiveTab]               = useState(() => searchParams.get('tab') || 'minutes')
   const [actionBadge, setActionBadge]           = useState(0)
-  const [minutesText, setMinutesText]           = useState('')
   const [decisionsText, setDecisionsText]       = useState('')
-  const [minutesSaveStatus, setMinutesSaveStatus] = useState('idle') // idle | saving | saved | error
   const [actionItems, setActionItems]           = useState([])
   const [editingActionItem, setEditingActionItem] = useState(null)
   const [showAddAction, setShowAddAction]       = useState(false)
@@ -151,11 +153,14 @@ function MeetingDetailViewInner() {
   const [savingAttendees, setSavingAttendees]           = useState(false)
   const [attendeesError, setAttendeesError]             = useState(null)
 
+  // cross-department meetings
+  const [sharedSpaces, setSharedSpaces]                 = useState([])
+  const [addingSpace, setAddingSpace]                   = useState(false)
+  const [removingSpaceId, setRemovingSpaceId]           = useState(null)
+
   const timerRef       = useRef(null)
   const startRef       = useRef(null)
   const totalSecs      = 90 * 60 // estimate 90 min for progress bar
-  const cacheTimeoutRef = useRef(null)
-  const minutesDbTimeoutRef = useRef(null)
 
   const isMobile  = useMediaQuery('(max-width: 640px)')
   // ORS identity is a space_roles grant (Phase 3) — role === 'ors' no longer exists.
@@ -307,7 +312,11 @@ function MeetingDetailViewInner() {
       extracted.detailed_notes || extracted.summary,
       extracted.next_steps?.length ? `Next steps:\n• ${extracted.next_steps.join('\n• ')}` : null,
     ].filter(Boolean)
-    if (discussionParts.length && !minutesText) setMinutesText(discussionParts.join('\n\n'))
+    // Inject into editor only when no human edit exists yet (notes_blocks is null).
+    // RichMinutesEditor's replaceContent triggers its own autosave.
+    if (discussionParts.length && !meeting?.notes_blocks) {
+      editorRef.current?.replaceContent(textToBlocks(discussionParts.join('\n\n')))
+    }
     if (extracted.decisions?.length && !decisionsText) {
       const decisionStrings = extracted.decisions
         .map((d) => (typeof d === 'string' ? d : d?.decision ?? null))
@@ -316,60 +325,17 @@ function MeetingDetailViewInner() {
     }
   }, [extraction.status, extraction.result, extraction.completedAt, loading])
 
-  // ── auto-cache to localStorage (debounced, crash-safety net only) ──────────
-  useEffect(() => {
-    if (!meetingId) return
-    const cacheKey = `meeting_draft_${meetingId}`
-    clearTimeout(cacheTimeoutRef.current)
-    cacheTimeoutRef.current = setTimeout(() => {
-      localStorage.setItem(cacheKey, JSON.stringify({
-        minutesText,
-        decisionsText,
-        timestamp: Date.now(),
-      }))
-    }, 500)
-    return () => clearTimeout(cacheTimeoutRef.current)
-  }, [minutesText, decisionsText, meetingId])
-
-  // ── autosave minutes/decisions to the database (debounced) ─────────────────
-  // Replaces the old manual "Publish minutes" button. Gated on
-  // canEditVisibility so it never attempts a write the RLS trigger
-  // (enforce_meetings_summary_only_update) would reject for non-editors —
-  // matches the same predicate the UI already uses to show/hide edit
-  // affordances. Skipped while `loading` so it can't fire on initial mount
-  // before fetchMeeting() has populated minutesText/etc from the DB.
-  // next_steps is no longer written here — folded into minutes (Discussion)
-  // instead of its own field; the column is left alone (read-only, legacy
-  // fallback for exports) rather than actively cleared.
+  // ── autosave decisions to the database (debounced) ─────────────────────────
+  // minutesText / Discussion is now owned by RichMinutesEditor which handles
+  // its own autosave to notes_blocks. This effect only persists decisionsText.
   useEffect(() => {
     if (!meetingId || loading || !canEditVisibility) return
-    clearTimeout(minutesDbTimeoutRef.current)
-    minutesDbTimeoutRef.current = setTimeout(async () => {
-      setMinutesSaveStatus('saving')
-      const { error } = await supabase.from('meetings').update({
-        minutes: minutesText,
-        decisions: decisionsText,
-      }).eq('id', meetingId)
-      if (error) {
-        setMinutesSaveStatus('error')
-        setTimeout(() => setMinutesSaveStatus('idle'), 5000)
-      } else {
-        localStorage.removeItem(`meeting_draft_${meetingId}`)
-        setMinutesSaveStatus('saved')
-        setTimeout(() => setMinutesSaveStatus('idle'), 3000)
-        // Keep the local `meeting` object in sync with what was just saved —
-        // without this, anything reading meeting.minutes/meeting.decisions
-        // directly (rather than the minutesText/decisionsText state used by
-        // the textareas) sees stale, pre-edit content. Concretely:
-        // endMeeting() spreads `meeting` into the payload it hands to
-        // syncFlockInteractionForMeeting, so the Flock CRM interaction's
-        // logged summary was silently built from whatever was loaded at
-        // page-open, never the notes actually typed during the meeting.
-        setMeeting((m) => (m ? { ...m, minutes: minutesText, decisions: decisionsText } : m))
-      }
+    const t = setTimeout(async () => {
+      await supabase.from('meetings').update({ decisions: decisionsText }).eq('id', meetingId)
+      setMeeting((m) => (m ? { ...m, decisions: decisionsText } : m))
     }, 2500)
-    return () => clearTimeout(minutesDbTimeoutRef.current)
-  }, [minutesText, decisionsText, meetingId, canEditVisibility, loading])
+    return () => clearTimeout(t)
+  }, [decisionsText, meetingId, canEditVisibility, loading])
 
   // ── cache AI extraction results ───────────────────────────────────────────
   useEffect(() => {
@@ -389,15 +355,9 @@ function MeetingDetailViewInner() {
   // ── load draft from cache on mount ─────────────────────────────────────────
   useEffect(() => {
     if (!meetingId || !loading) return
-    const cacheKey = `meeting_draft_${meetingId}`
-    const cached = localStorage.getItem(cacheKey)
-    if (cached) {
-      try {
-        const { minutesText: cM, decisionsText: cD } = JSON.parse(cached)
-        if (!minutesText && cM) setMinutesText(cM)
-        if (!decisionsText && cD) setDecisionsText(cD)
-      } catch {}
-    }
+    // minutesText localStorage cache removed — RichMinutesEditor autosaves to DB
+    // and loads from notes_blocks on mount. decisionsText cache also dropped since
+    // the decisions debounce-save is reliable enough without a crash-safety net.
     // Restore AI extraction results
     const aiCacheKey = `meeting_ai_${meetingId}`
     const aiCached = localStorage.getItem(aiCacheKey)
@@ -436,6 +396,7 @@ function MeetingDetailViewInner() {
         .from('meetings')
         .select(`
           id, title, department_id, date, meeting_type, agenda, minutes,
+          notes_blocks,
           decisions, next_steps, summary, polished_transcript, context, meeting_notes, doc_drive_url, doc_title,
           zoom_join_url, drive_url, status, started_at, visibility, allowed_viewers,
           notes_shared_with, recurrence_id, series_instance_num,
@@ -467,6 +428,12 @@ function MeetingDetailViewInner() {
       setMeeting(data)
       setTitleDraft(data.title ?? '')
 
+      // fetch shared spaces (cross-dept meetings)
+      try {
+        const spaces = await getMeetingSpaces(meetingId)
+        setSharedSpaces(spaces ?? [])
+      } catch { /* best-effort load */ }
+
       // fetch meeting_minutes record for AI notes privacy toggle
       const { data: mm } = await supabase
         .from('meeting_minutes')
@@ -481,9 +448,9 @@ function MeetingDetailViewInner() {
       // this fold re-runs on every load — guard against re-appending
       // (and growing without bound) once the merged text has already been
       // saved back into `minutes` by checking it isn't already present.
-      const alreadyFolded = data.next_steps && data.minutes?.includes(data.next_steps)
-      const discussionParts = [data.minutes, data.next_steps && !alreadyFolded ? `Next steps:\n${data.next_steps}` : null].filter(Boolean)
-      if (discussionParts.length) setMinutesText(discussionParts.join('\n\n'))
+      // minutesText removed — RichMinutesEditor loads from notes_blocks / minutes directly.
+      // next_steps fold for legacy meetings: if notes_blocks is absent but minutes+next_steps
+      // exist, the editor receives them as fallbackText on mount; no state mutation needed.
       if (data.decisions) setDecisionsText(data.decisions)
       if (data.context) setContext(data.context)
 
@@ -609,15 +576,15 @@ function MeetingDetailViewInner() {
         .split('\n')
         .map((line) => line.replace(/^[•\-*]\s*/, '').trim())
         .filter(Boolean)
+      // notes_text is the trigger-maintained plaintext mirror of notes_blocks.
+      // Fall back to minutes for legacy rows that haven't been edited via the
+      // rich editor yet (notes_blocks null).
+      const notesPlainText = meeting?.notes_text || meeting?.minutes || ''
       const blob = await generateMinutesPDF({
-        summary: meeting?.meeting_notes || minutesText || '',
+        summary: meeting?.meeting_notes || notesPlainText,
         decisions: splitLines(decisionsText),
-        // next_steps is folded into Discussion (minutesText) now rather
-        // than its own field — meeting?.next_steps is only ever populated
-        // for meetings that had it saved before the fold, as a legacy
-        // fallback.
         nextSteps: splitLines(meeting?.next_steps || ''),
-        detailedNotes: minutesText || '',
+        detailedNotes: notesPlainText,
         actionItems: actionItems.map((t) => ({
           action: t.title,
           owner: t.assignee?.name || 'Unassigned',
@@ -1189,6 +1156,60 @@ function MeetingDetailViewInner() {
             {isPost ? `Duration: ${fmt(elapsed)} · ` : ''}{dateLabel}
             {meeting.recurrence_id && meeting.series_instance_num ? ` · 🔁 Meeting #${meeting.series_instance_num} in series` : ''}
           </div>
+
+          {/* Shared with departments */}
+          {sharedSpaces.length > 0 && (
+            <div style={{ marginTop:8, fontSize:11, color: isLive ? 'rgba(255,255,255,.55)' : FS.muted }}>
+              Shared with:
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:4 }}>
+                {sharedSpaces.map((space) => (
+                  <div
+                    key={space.department_id}
+                    style={{
+                      display:'inline-flex',
+                      alignItems:'center',
+                      gap:6,
+                      padding:'4px 8px',
+                      borderRadius:6,
+                      background: isLive ? 'rgba(255,255,255,.1)' : (space.dept?.color || '#ccc') + '22',
+                      color: isLive ? '#fff' : (space.dept?.color || '#999'),
+                      fontSize:10,
+                      fontWeight:600,
+                    }}
+                  >
+                    {space.dept?.name || 'Unknown'}
+                    {canManage && !isLive && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRemovingSpaceId(space.department_id)
+                          removeMeetingSpace(meetingId, space.department_id)
+                            .then(() => {
+                              setSharedSpaces((prev) => prev.filter((s) => s.department_id !== space.department_id))
+                              setRemovingSpaceId(null)
+                            })
+                            .catch(() => setRemovingSpaceId(null))
+                        }}
+                        disabled={removingSpaceId === space.department_id}
+                        style={{
+                          padding:0,
+                          border:'none',
+                          background:'none',
+                          color:'inherit',
+                          cursor:'pointer',
+                          fontSize:12,
+                          fontWeight:700,
+                          opacity: removingSpaceId === space.department_id ? 0.5 : 1,
+                        }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right controls */}
@@ -1214,25 +1235,23 @@ function MeetingDetailViewInner() {
             </>
           )}
 
+          {/* View in hub */}
+          <Link
+            to="/meetings/minutes"
+            style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', textDecoration:'none', display:'inline-flex', alignItems:'center' }}
+          >
+            📋 Minutes Hub
+          </Link>
+
           {/* Post: export buttons */}
           {isPost && canManage && (
-            <>
-              <button
-                onClick={exportPdf}
-                disabled={exportingPdf}
-                style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor: exportingPdf ? 'wait' : 'pointer', opacity: exportingPdf ? 0.7 : 1 }}
-              >
-                {exportingPdf ? '⏳ Exporting…' : '📤 Export PDF'}
-              </button>
-              {canEditVisibility && (
-                <span style={{ fontSize:10, color: FS.muted, opacity: minutesSaveStatus === 'saved' ? 1 : 0.7 }}>
-                  {minutesSaveStatus === 'saving' ? '⏳ Saving…'
-                    : minutesSaveStatus === 'saved' ? '✓ Saved'
-                    : minutesSaveStatus === 'error' ? '⚠ Save failed — retrying'
-                    : 'Auto-saves as you type'}
-                </span>
-              )}
-            </>
+            <button
+              onClick={exportPdf}
+              disabled={exportingPdf}
+              style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor: exportingPdf ? 'wait' : 'pointer', opacity: exportingPdf ? 0.7 : 1 }}
+            >
+              {exportingPdf ? '⏳ Exporting…' : '📤 Export PDF'}
+            </button>
           )}
 
           {canManage && isPrep && (
@@ -1587,28 +1606,22 @@ function MeetingDetailViewInner() {
 
                 {canSeeNotes ? (
                   <>
-                    {/* 📝 Discussion */}
-                    {/* flexShrink:0 is load-bearing: overflow:'hidden' resets a flex
-                        item's automatic min-height to 0 per spec, so without this the
-                        scrolling flex-column tab body could compress this card (and its
-                        textarea) to zero height instead of scrolling past it. */}
-                    <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, boxShadow:'0 1px 3px rgba(0,0,0,.06)', overflow:'hidden', flexShrink:0 }}>
-                      <div style={{ padding:'11px 14px', borderBottom:`1px solid ${FS.borderL}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                        <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted }}>📝 Discussion</div>
-                        <span style={{ fontSize:10, color: minutesSaveStatus === 'error' ? FS.coral : canEditVisibility ? FS.sage : FS.muted, fontWeight:600 }}>
-                          {minutesSaveStatus === 'saving' ? '⏳ Saving…'
-                            : minutesSaveStatus === 'saved' ? '✓ Saved'
-                            : minutesSaveStatus === 'error' ? '⚠ Save failed'
-                            : canEditVisibility ? '✓ Auto-saving' : '🔒 Read-only — only the creator or a manager can edit'}
-                        </span>
-                      </div>
-                      <textarea
-                        value={minutesText}
-                        onChange={e => setMinutesText(e.target.value)}
-                        placeholder="Capture what's being discussed, including any next steps…"
-                        rows={6}
-                        disabled={!canEditVisibility}
-                        style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background: canEditVisibility ? 'transparent' : FS.surface, fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
+                    {/* 📝 Discussion — rich block editor (Tiptap / ProseMirror) */}
+                    <div style={{ flexShrink:0 }}>
+                      <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:6 }}>📝 Discussion</div>
+                      <RichMinutesEditor
+                        ref={editorRef}
+                        meetingId={meetingId}
+                        initialBlocks={meeting?.notes_blocks ?? null}
+                        fallbackText={(() => {
+                          // For legacy rows: fold next_steps into the fallback text
+                          // (mirrors what fetchMeeting used to do into minutesText state)
+                          const alreadyFolded = meeting?.next_steps && meeting?.minutes?.includes(meeting?.next_steps)
+                          const parts = [meeting?.minutes, meeting?.next_steps && !alreadyFolded ? `Next steps:\n${meeting?.next_steps}` : null].filter(Boolean)
+                          return parts.join('\n\n') || null
+                        })()}
+                        canEdit={canEditVisibility}
+                        onSave={doc => setMeeting(m => m ? { ...m, notes_blocks: doc } : m)}
                       />
                     </div>
 
@@ -1625,13 +1638,6 @@ function MeetingDetailViewInner() {
                         disabled={!canEditVisibility}
                         style={{ width:'100%', padding:'12px 14px', border:'none', fontSize:13, color: FS.text, background: canEditVisibility ? 'transparent' : FS.surface, fontFamily:'inherit', resize:'vertical', outline:'none', lineHeight:1.6, boxSizing:'border-box' }}
                       />
-                    </div>
-
-                    <div style={{ fontSize:11, color: FS.muted, textAlign:'right' }}>
-                      {minutesSaveStatus === 'saving' ? '⏳ Saving…'
-                        : minutesSaveStatus === 'saved' ? '✓ Saved'
-                        : minutesSaveStatus === 'error' ? '⚠ Save failed — retrying'
-                        : 'Auto-saves as you type'}
                     </div>
                   </>
                 ) : (
@@ -1674,6 +1680,7 @@ function MeetingDetailViewInner() {
                     <ActionItemBridge
                       meetingId={meetingId}
                       departmentId={meeting.department_id}
+                      additionalSpaces={sharedSpaces.map(s => ({ id: s.department_id, name: s.dept.name }))}
                       onSaved={tasks => { fetchActionItems(); setShowAddAction(false) }}
                       onCancel={() => setShowAddAction(false)}
                     />
@@ -2207,7 +2214,7 @@ function MeetingDetailViewInner() {
                           style={{ width:'100%', fontSize:13, color: FS.text, lineHeight:1.7, fontFamily:'inherit', border:`1px solid ${FS.borderL}`, borderRadius:6, padding:'8px 10px', resize:'vertical', background:'#fff' }}
                         />
                         <button
-                          onClick={() => { setMinutesText(editableDetailedNotes); setActiveTab('minutes') }}
+                          onClick={() => { editorRef.current?.replaceContent(textToBlocks(editableDetailedNotes)); setActiveTab('minutes') }}
                           style={{ marginTop:8, padding:'7px 14px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
                         >
                           → Copy to Minutes
@@ -2238,7 +2245,11 @@ function MeetingDetailViewInner() {
                             </button>
                           </div>
                         ))}
-                        <button onClick={() => { setDecisionsText(editableDecisions.map(d => d.decision).join('\n• ')); setActiveTab('minutes') }} style={{ marginTop:4, padding:'7px 14px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                        <button onClick={() => {
+                          const text = editableDecisions.map(d => d.decision).join('\n• ')
+                          editorRef.current?.replaceContent(textToBlocks(text))
+                          setActiveTab('minutes')
+                        }} style={{ marginTop:4, padding:'7px 14px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}>
                           → Copy to Minutes
                         </button>
                       </div>

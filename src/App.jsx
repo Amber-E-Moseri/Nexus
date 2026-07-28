@@ -54,6 +54,7 @@ const MeetingWizardPage = lazy(() => import('./pages/meetings/MeetingWizardPage'
 const ExpectedAttendeesPage = lazy(() => import('./pages/meetings/ExpectedAttendeesPage'))
 const AbsenceEmailLogPage = lazy(() => import('./pages/meetings/AbsenceEmailLogPage'))
 const AttendanceTrendsDashboard = lazy(() => import('./pages/AttendanceTrendsDashboard'))
+const MinutesHubPage = lazy(() => import('./features/meetings/pages/MinutesHubPage'))
 const MyTasks = lazyRoute('/my-tasks', () => import('./pages/personal/MyTasks'))
 const PersonalList = lazyRoute('/personal-list', () => import('./pages/personal/PersonalListPage'))
 const TrashPage = lazyRoute('/trash', () => import('./pages/tasks/TrashPage'))
@@ -257,6 +258,16 @@ export default function App() {
               // a member's meeting access is unchanged.
               <ProtectedRoute blockRoles={['group_member', 'member']}>
                 <MeetingsModule />
+              </ProtectedRoute>
+            }
+          />
+          {/* /meetings/minutes must be before /meetings/:meetingId so the static
+              segment wins over the dynamic one in React Router v6 matching. */}
+          <Route
+            path="/meetings/minutes"
+            element={
+              <ProtectedRoute blockRoles={['group_member', 'member']}>
+                <MinutesHubPage />
               </ProtectedRoute>
             }
           />
