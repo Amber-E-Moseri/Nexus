@@ -173,14 +173,20 @@ Determine content_type: "meeting" | "raw_note" | "list_data" | "other"
   recordings, etc.)
 
 === STEP 2 — Extract Based on Classification ===
-- If content_type is NOT "meeting", OR confidence < 0.6:
-    → Only return cleaned_transcript, chapters, and content_type fields.
-    → Leave summary, decisions, action_items, key_topics, detailed_notes,
-      scripture_references as empty/null.
-    → This prevents forced meeting structure for non-meeting content.
 - If content_type IS "meeting" with confidence >= 0.6:
     → Populate all fields including summary, decisions, action_items, key_topics,
       detailed_notes, and scripture_references.
+- If content_type is "raw_note":
+    → Still populate summary and key_topics — single-voice reflection/teaching
+      content has real substance worth surfacing even without meeting structure.
+    → Leave decisions, action_items, detailed_notes, scripture_references as
+      empty/null — there is no formal meeting structure to extract those from.
+- If content_type is "list_data" or "other", OR confidence < 0.6:
+    → Only return cleaned_transcript, chapters, and content_type fields.
+    → Leave summary, decisions, action_items, key_topics, detailed_notes,
+      scripture_references as empty/null.
+    → This prevents forced meeting structure for content with no real substance
+      to summarize.
 
 === DETAILED NOTES RULES (only apply if content_type = meeting, confidence >= 0.6) ===
 - "detailed_notes" is the full-detail record layer — NOT a second summary.
