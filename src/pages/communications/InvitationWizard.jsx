@@ -7,7 +7,8 @@ import Step2EventDetails from '../../components/invitations/Step2EventDetails'
 import Step3Recipients from '../../components/invitations/Step3Recipients'
 import Step4PreviewSend from '../../components/invitations/Step4PreviewSend'
 
-/* Design system colors via CSS variables */
+const PRIMARY = 'var(--accent)'
+const BORDER = 'var(--border-1)'
 
 function StepIndicator({ currentStep, totalSteps }) {
   return (
