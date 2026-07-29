@@ -705,6 +705,20 @@ export default function SprintOverview() {
         </div>
       )}
 
+      {/* Files Tab */}
+      {activeTab === 'Files' && (
+        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Reference Docs</h2>
+          <FileList
+            entityType="sprint"
+            entityId={detail.sprint.id}
+            showUpload={Boolean((isMember || canManage) && !isArchived)}
+            sprintMembers={detail.members}
+            sprintTeams={detail.teams}
+          />
+        </div>
+      )}
+
       {showInviteExternalModal && (
         <InviteExternalModal
           sprintId={detail.sprint.id}
