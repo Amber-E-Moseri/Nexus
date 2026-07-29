@@ -29,7 +29,7 @@ function avatarColor(userId) {
   return AVATAR_COLORS[hash % AVATAR_COLORS.length]
 }
 
-export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isArchived, onCreateTeam }) {
+export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isArchived, onCreateTeam, onTeamChanged }) {
   const [saving, setSaving] = useState(false)
   const [newTeamName, setNewTeamName] = useState('')
   const [editingTeamId, setEditingTeamId] = useState(null)
@@ -64,6 +64,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
     setSaving(true)
     try {
       await updateSprintMemberTeams(sprintId, member.user_id, (member.sprint_team_ids ?? []).filter((id) => id !== teamId))
+      await onTeamChanged?.()
     } catch (err) {
       alert(`Failed to remove member: ${err?.message || String(err)}`)
     } finally {
@@ -81,6 +82,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
         await updateSprintMemberTeams(sprintId, member.user_id, [...(member.sprint_team_ids ?? []), teamId])
       }
       setOpenDropdown(null)
+      await onTeamChanged?.()
     } catch (err) {
       alert(`Failed to add member: ${err?.message || String(err)}`)
     } finally {
@@ -94,6 +96,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
     try {
       await updateSprintTeam(teamId, { name: newName.trim() })
       setEditingTeamId(null)
+      await onTeamChanged?.()
     } catch (err) {
       alert(`Failed to update team: ${err?.message || String(err)}`)
     } finally {
@@ -106,6 +109,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
     try {
       await updateSprintTeam(teamId, { description: newDesc.trim() || null })
       setEditingDescId(null)
+      await onTeamChanged?.()
     } catch (err) {
       alert(`Failed to update team: ${err?.message || String(err)}`)
     } finally {
@@ -118,6 +122,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
     setSaving(true)
     try {
       await deleteSprintTeam(teamId)
+      await onTeamChanged?.()
     } catch (err) {
       alert(`Failed to delete team: ${err?.message || String(err)}`)
     } finally {

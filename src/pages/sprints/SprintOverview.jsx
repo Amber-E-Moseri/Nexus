@@ -689,6 +689,29 @@ export default function SprintOverview() {
             members={detail.members}
             canEdit={Boolean(canManage)}
             isArchived={Boolean(isArchived)}
+            onTeamChanged={async () => {
+              // Lightweight refresh: just teams and members, not full sprint detail
+              try {
+                const { data: teamsRes } = await supabase.from('sprint_teams').select('id, name, description, lead_user_id').eq('sprint_id', sprintId).order('created_at')
+                const { data: membersRes } = await supabase.from('sprint_members').select(`${SPRINT_MEMBER_WITH_TEMP_SELECT}, user:user_id(id, name, email, status, is_temporary)`).eq('sprint_id', sprintId).order('joined_at')
+
+                if (teamsRes && membersRes) {
+                  const sprintTeamIds = teamsRes.map((t) => t.id)
+                  let teamMembershipsMap = {}
+                  if (sprintTeamIds.length > 0) {
+                    const { data: teamMemberships } = await supabase.from('sprint_team_members').select('team_id, user_id').in('team_id', sprintTeamIds)
+                    for (const row of teamMemberships ?? []) {
+                      if (!teamMembershipsMap[row.user_id]) teamMembershipsMap[row.user_id] = []
+                      teamMembershipsMap[row.user_id].push(row.team_id)
+                    }
+                  }
+                  const membersWithTeams = (membersRes ?? []).map((member) => ({ ...member, sprint_team_ids: teamMembershipsMap[member.user_id] ?? [] }))
+                  setDetail((prev) => prev ? { ...prev, teams: teamsRes, members: membersWithTeams } : null)
+                }
+              } catch (err) {
+                console.error('Failed to refresh teams/members:', err)
+              }
+            }}
             onCreateTeam={async (name) => {
               setSavingTeam(true)
               try {
