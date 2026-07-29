@@ -1,9 +1,18 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const registrationApiKey = Deno.env.get('REGISTRATION_SYNC_API_KEY')!
+const supabaseUrl = Deno.env.get('SUPABASE_URL')
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+const registrationApiKey = Deno.env.get('REGISTRATION_SYNC_API_KEY')
+
+console.log('Environment check:')
+console.log('SUPABASE_URL:', supabaseUrl ? 'set' : 'MISSING')
+console.log('SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey ? 'set' : 'MISSING')
+console.log('REGISTRATION_SYNC_API_KEY:', registrationApiKey ? 'set' : 'MISSING')
+
+if (!supabaseUrl || !supabaseServiceKey || !registrationApiKey) {
+  throw new Error('Missing required environment variables')
+}
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
@@ -64,35 +73,39 @@ serve(async (request) => {
         continue
       }
 
-      const { data: existing } = await supabase
+      const { data: existing, error: checkError } = await supabase
         .from('registrations')
         .select('id')
         .eq('email', email.toLowerCase())
         .single()
 
+      if (checkError) {
+        console.log(`Email ${email} not found (expected for new record):`, checkError.code)
+      }
+
       const registrationData = {
         email: email.toLowerCase(),
-        fullName: fullName || `${firstName || ''} ${lastName || ''}`.trim(),
-        firstName: firstName || '',
-        lastName: lastName || '',
+        full_name: fullName || `${firstName || ''} ${lastName || ''}`.trim(),
+        first_name: firstName || '',
+        last_name: lastName || '',
         gender: gender || '',
         subgroup: subgroup || '',
         fellowship: fellowship || '',
         phone: phone || '',
         designation: designation || '',
-        shirtSize: shirtSize || '',
-        foundationStatus: foundationStatus || '',
+        shirt_size: shirtSize || '',
+        foundation_status: foundationStatus || '',
         baptism: baptism || '',
         allergies: allergies || '',
         team: team || '',
         leadership: leadership || '',
-        arrivalDate: arrivalDate || null,
-        arrivalTime: arrivalTime || '',
-        arrivalFlight: arrivalFlight || '',
-        departureDate: departureDate || null,
-        departureTime: departureTime || '',
-        departureFlight: departureFlight || '',
-        submittedAt: submittedAt || new Date().toISOString(),
+        arrival_date: arrivalDate || null,
+        arrival_time: arrivalTime || '',
+        arrival_flight: arrivalFlight || '',
+        departure_date: departureDate || null,
+        departure_time: departureTime || '',
+        departure_flight: departureFlight || '',
+        submitted_at: submittedAt || new Date().toISOString(),
       }
 
       if (existing) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Upload, Users, Plane, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, Settings, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 // ---------- brand tokens ----------
 const C = {
@@ -147,12 +148,12 @@ function isExempt(fellowship, exemptList) {
 // ---------- storage helpers ----------
 async function loadKey(key, fallback) {
   try {
-    const r = await window.storage.get(key, true);
-    return r ? JSON.parse(r.value) : fallback;
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : fallback;
   } catch { return fallback; }
 }
 async function saveKey(key, value) {
-  try { await window.storage.set(key, JSON.stringify(value), true); } catch (e) { console.error('save failed', key, e); }
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { console.error('save failed', key, e); }
 }
 
 // ---------- UI atoms ----------
@@ -229,7 +230,46 @@ export default function App() {
         loadKey('confirmations', {}), loadKey('targets', {}), loadKey('exempt-fellowships', DEFAULT_EXEMPT),
         loadKey('last-import', { roster: null, registrations: null, flights: null }),
       ]);
-      setRoster(r); setRegistrations(reg); setFlights(fl); setConfirmations(conf); setTargets(tg); setExempt(ex); setLastImport(li);
+
+      // Fetch registrations from Supabase if not already loaded from localStorage
+      let finalReg = reg;
+      if (!reg || reg.length === 0) {
+        try {
+          const { data: dbRegs } = await supabase
+            .from('registrations')
+            .select('*')
+            .order('submitted_at', { ascending: false });
+          // Rename snake_case columns to camelCase for compatibility
+          finalReg = (dbRegs || []).map(r => ({
+            email: r.email,
+            fullName: r.full_name,
+            firstName: r.first_name,
+            lastName: r.last_name,
+            gender: r.gender,
+            subgroup: r.subgroup,
+            fellowship: r.fellowship,
+            phone: r.phone,
+            designation: r.designation,
+            shirtSize: r.shirt_size,
+            foundationStatus: r.foundation_status,
+            baptism: r.baptism,
+            allergies: r.allergies,
+            team: r.team,
+            leadership: r.leadership,
+            arrivalDate: r.arrival_date,
+            arrivalTime: r.arrival_time,
+            arrivalFlight: r.arrival_flight,
+            departureDate: r.departure_date,
+            departureTime: r.departure_time,
+            departureFlight: r.departure_flight,
+            submittedAt: r.submitted_at,
+          }));
+        } catch (e) {
+          console.error('Failed to fetch registrations from Supabase:', e);
+        }
+      }
+
+      setRoster(r); setRegistrations(finalReg); setFlights(fl); setConfirmations(conf); setTargets(tg); setExempt(ex); setLastImport(li);
 
       // Load room assignments
       try {
@@ -474,6 +514,7 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
       )}
 
       <Card style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto', minWidth: 0 }}>
         <table>
           <thead>
             <tr>
@@ -526,6 +567,7 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
             {subgroups.length === 0 && <tr><td colSpan={8} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>Import registrations to see subgroup breakdown.</td></tr>}
           </tbody>
         </table>
+        </div>
       </Card>
 
       <div style={{ marginTop: 16, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>

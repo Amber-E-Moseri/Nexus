@@ -281,13 +281,26 @@ function pushToNexus(rows) {
     }
 
     const response = UrlFetchApp.fetch(NEXUS_API_URL, options)
-    const result = JSON.parse(response.getContentText())
+    const responseText = response.getContentText()
+    const responseCode = response.getResponseCode()
 
-    if (response.getResponseCode() === 200) {
+    console.log(`Response code: ${responseCode}`)
+    console.log(`Response text: ${responseText}`)
+
+    let result
+    try {
+      result = JSON.parse(responseText)
+    } catch (parseError) {
+      console.error(`Failed to parse JSON: ${parseError.message}`)
+      console.error(`Raw response: ${responseText}`)
+      return null
+    }
+
+    if (responseCode === 200) {
       console.log(`✅ Synced ${result.inserted} new + ${result.updated} updated registrations to Nexus`)
       return result
     } else {
-      console.error(`❌ Nexus sync failed: ${response.getResponseCode()} - ${result.error}`)
+      console.error(`❌ Nexus sync failed: ${responseCode} - ${result.error}`)
       return null
     }
   } catch (error) {
