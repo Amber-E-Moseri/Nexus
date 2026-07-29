@@ -67,6 +67,16 @@ export function hasSpaceRole(user, spaceId, spaceRole) {
 }
 
 /**
+ * Check if user is a member of the Programs department.
+ * Attached to profile in AuthContext as is_programs_member.
+ *
+ * @param {Object} user - profile object carrying is_programs_member
+ */
+export function isProgramsMember(user) {
+  return user?.is_programs_member === true
+}
+
+/**
  * Back-compat alias — call sites written against the dead feature_roles JSONB
  * (which was empty for every live user) keep working, now backed by the real
  * space_roles rows. Role names are matched case-insensitively so legacy 'ORS'

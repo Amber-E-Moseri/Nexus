@@ -41,7 +41,7 @@ import { useInboxCount } from '../../context/InboxCountContext'
 import { useAuth } from '../../hooks/useAuth'
 import { archiveSpace, getSpacesByType, restoreSpace, updateSpace } from '../../features/spaces'
 import { supabase } from '../../lib/supabase'
-import { FLOCK_CRM_CONFIG, hasSpaceRole, hasGrant } from '../../lib/permissions.js'
+import { FLOCK_CRM_CONFIG, hasSpaceRole, hasGrant, isProgramsMember } from '../../lib/permissions.js'
 import { INSTAGRAM_GRADING_ENABLED } from '../../config/features.js'
 import SidebarSpaceTree from './SidebarSpaceTree'
 import SpaceModal from '../../features/spaces/components/SpaceModal'
@@ -329,13 +329,14 @@ export default function Sidebar({ isMobileDrawer = false }) {
   // been added to a specific sprint (RLS scopes displayedSprints to theirs).
   const isGroupMember = role === 'group_member'
   // Communications is open to super_admin + regional_secretary (org-wide roles)
-  // and to anyone holding an ors / dept_lead / programs space role. Mirrors the
-  // route guard on /communications in App.jsx.
+  // and to anyone holding an ors / dept_lead / programs space role, or members
+  // of the Programs department. Mirrors the route guard on /communications in App.jsx.
   const canAccessCommunications =
     ['super_admin', 'regional_secretary', 'dept_lead'].includes(role) ||
     hasSpaceRole(profile, null, 'ors') ||
     hasSpaceRole(profile, null, 'dept_lead') ||
     hasSpaceRole(profile, null, 'programs') ||
+    isProgramsMember(profile) ||
     hasGrant(profile, 'regional_secretary_access')
   // Display-only aggregate — decides only whether "Platform" starts expanded
   // or collapsed. Does not gate any individual item inside it; each item
@@ -1657,7 +1658,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {profile?.name ?? 'User'}
+                  {(profile?.name ?? 'User').replace(/_/g, ' ')}
                 </div>
                 <div
                   style={{
