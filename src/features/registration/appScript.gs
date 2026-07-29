@@ -38,6 +38,7 @@ function onOpen() {
   ui.createMenu('Nexus Sync')
     .addItem('🔍 Detect Duplicates', 'detectDuplicates')
     .addItem('🗑️ Clean Duplicates (Keep Latest)', 'cleanDuplicates')
+    .addItem('📤 Sync to Nexus (All)', 'syncAllToNexus')
     .addItem('📥 Export Clean Data', 'exportCleanData')
     .addItem('📊 View Duplicate Report', 'showDuplicateReport')
     .addSeparator()
@@ -328,6 +329,30 @@ function cleanDuplicates() {
     let message = `✅ Cleaned ${rowsToDelete.length} duplicate registrations!\n\n${duplicateGroups.length} groups deduplicated. Latest submission kept for each.`
     if (syncResult) {
       message += `\n\n📤 Synced to Nexus: ${syncResult.inserted} new + ${syncResult.updated} updated`
+    }
+
+    SpreadsheetApp.getUi().alert(message)
+  } catch (error) {
+    SpreadsheetApp.getUi().alert(`Error: ${error.message}`)
+  }
+}
+
+function syncAllToNexus() {
+  try {
+    const rows = parseSheetData()
+
+    if (rows.length === 0) {
+      SpreadsheetApp.getUi().alert('No registrations to sync.')
+      return
+    }
+
+    const syncResult = pushToNexus(rows)
+
+    let message = `✅ Syncing ${rows.length} registrations to Nexus...`
+    if (syncResult) {
+      message = `✅ Synced ${rows.length} registrations to Nexus!\n\n📤 Result: ${syncResult.inserted} new + ${syncResult.updated} updated`
+    } else {
+      message = `❌ Sync failed. Check API URL and Key in Settings.`
     }
 
     SpreadsheetApp.getUi().alert(message)
