@@ -23,7 +23,7 @@ const C = {
 
 const FONT_LINK = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap';
 
-const DEFAULT_EXEMPT = ['Manitoba', 'Winnipeg', 'CMU'];
+const DEFAULT_EXEMPT = ['BLW University of Manitoba', 'BLW University of Winnipeg'];
 
 // ---------- header normalization ----------
 const ALIASES = {
