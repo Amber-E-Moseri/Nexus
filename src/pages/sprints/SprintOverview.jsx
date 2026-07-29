@@ -737,7 +737,19 @@ export default function SprintOverview() {
       {activeTab === 'Calendar' && (
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
           <CalendarView
-            events={calendarEvents}
+            events={[
+              ...calendarEvents,
+              ...tasks
+                .filter((t) => t.due_date && !isTaskCompleted(t))
+                .map((t) => ({
+                  id: `task-${t.id}`,
+                  title: `☑ ${t.title}`,
+                  start_date: t.due_date,
+                  all_day: true,
+                  color: '#0891b2',
+                  _isTask: true,
+                })),
+            ]}
             loading={calendarLoading}
             year={calendarYear}
             month={calendarMonth}
@@ -750,7 +762,7 @@ export default function SprintOverview() {
               else setCalendarMonth((m) => m + 1)
             }}
             onToday={() => { setCalendarYear(new Date().getFullYear()); setCalendarMonth(new Date().getMonth()) }}
-            onEventClick={(ev) => { setSelectedCalendarEvent(ev); setShowEventModal(true) }}
+            onEventClick={(ev) => { if (ev._isTask) { setActiveTab('Tasks') } else { setSelectedCalendarEvent(ev); setShowEventModal(true) } }}
             onDayClick={(date) => { setCalendarDefaultDate(date); setShowEventModal(true) }}
             onAddEvent={() => setShowEventModal(true)}
             readOnly={!canManage || isArchived}
