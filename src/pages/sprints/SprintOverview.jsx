@@ -150,7 +150,7 @@ export default function SprintOverview() {
   const { sprintId } = useParams()
   const { role, profile } = useAuth()
   const location = useLocation()
-  const [activeTab, setActiveTab] = useState('Overview')
+  const [activeTab, setActiveTab] = useState('Tasks')
   const [detail, setDetail] = useState(null)
   const [tasks, setTasks] = useState([])
   const [calendarEvents, setCalendarEvents] = useState([])

@@ -14,7 +14,6 @@ export default function AssignedToMeToggle({ active, onClick }) {
       }}
     >
       <User size={14} />
-      <span>Assigned to me</span>
     </button>
   )
 }
