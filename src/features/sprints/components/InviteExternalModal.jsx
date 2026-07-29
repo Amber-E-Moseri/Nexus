@@ -14,11 +14,12 @@ const TOKENS = {
   errorBg: '#FFE5E5',
 }
 
-export default function InviteExternalModal({ sprintId, sprintEndDate, sprintName, canInvite: canInviteProp = null, canAssignPrivilegedRoles: canAssignPrivilegedRolesProp = null, onClose, onSuccess }) {
+export default function InviteExternalModal({ sprintId, sprintEndDate, sprintName, teams = [], canInvite: canInviteProp = null, canAssignPrivilegedRoles: canAssignPrivilegedRolesProp = null, onClose, onSuccess }) {
   const { showToast } = useToast()
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [role, setRole] = useState('contributor')
+  const [selectedTeamIds, setSelectedTeamIds] = useState([])
   const [expiryMode, setExpiryMode] = useState('on_archive')
   const [endDate, setEndDate] = useState(sprintEndDate ?? '')
   const [loading, setLoading] = useState(false)
@@ -88,12 +89,14 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
         sprintName,
         role,
         membershipEndDate: expiryMode === 'on_archive' ? null : endDate || null,
+        teamIds: selectedTeamIds,
       })
 
       showToast(`Invitation sent to ${email.trim()}. They'll receive a set-password email shortly.`, { tone: 'success' })
       setEmail('')
       setName('')
       setRole('contributor')
+      setSelectedTeamIds([])
       setExpiryMode('on_archive')
       setEndDate(sprintEndDate ?? '')
       onSuccess?.()
@@ -199,6 +202,36 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
             {canAssignPrivilegedRoles && <option value="manager">Manager</option>}
           </select>
         </div>
+
+        {teams.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: TOKENS.textPrimary }}>
+              Team(s) <span style={{ fontWeight: 400, color: TOKENS.textTertiary }}>(optional)</span>
+            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto', border: `1px solid ${TOKENS.border}`, borderRadius: 8, padding: '8px 10px' }}>
+              {teams.map((team) => (
+                <label key={team.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: TOKENS.textPrimary }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedTeamIds.includes(team.id)}
+                    onChange={(e) => {
+                      setSelectedTeamIds((prev) =>
+                        e.target.checked ? [...prev, team.id] : prev.filter((id) => id !== team.id)
+                      )
+                    }}
+                    style={{ accentColor: TOKENS.primary, width: 14, height: 14 }}
+                  />
+                  {team.name}
+                </label>
+              ))}
+            </div>
+            {selectedTeamIds.length > 0 && (
+              <div style={{ marginTop: 4, fontSize: 11, color: TOKENS.textTertiary }}>
+                {selectedTeamIds.length} team{selectedTeamIds.length !== 1 ? 's' : ''} selected
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ marginBottom: '16px' }}>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: TOKENS.textPrimary }}>

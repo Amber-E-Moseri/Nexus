@@ -246,6 +246,8 @@ export default function TaskModal({
   const [spaces, setSpaces] = useState([])
   const [selectedSpaceId, setSelectedSpaceId] = useState(departmentId ?? '')
   const [selectedSprintId, setSelectedSprintId] = useState(sprintId ?? task?.sprint_id ?? '')
+  const [selectedSprintTeamId, setSelectedSprintTeamId] = useState(null)
+  const sprintTeamAutoSelected = useRef(false)
 
   function resolveDeptFromTeams(userId) {
     if (!userId || !sprintTeams?.length) return null
@@ -301,6 +303,16 @@ export default function TaskModal({
         })
     }
   }, [sprintId])
+
+  // Auto-select the current user's sprint team so external members (who have
+  // no department) get a meaningful department context without manual picking.
+  // Runs once; the ref prevents re-triggering after the user changes selection.
+  useEffect(() => {
+    if (sprintTeamAutoSelected.current || !sprintId || !sprintTeams?.length || !profile?.id) return
+    sprintTeamAutoSelected.current = true
+    const myTeam = sprintTeams.find((t) => t.sprint_team_members?.some((m) => m.user_id === profile.id))
+    if (myTeam) setSelectedSprintTeamId(myTeam.id)
+  }, [sprintId, sprintTeams, profile?.id])
 
   useEffect(() => {
     if (!sprintId) {
@@ -432,7 +444,7 @@ export default function TaskModal({
       return
     }
 
-    if (!personal && !departmentId && !selectedSpaceId) {
+    if (!personal && !departmentId && !selectedSpaceId && !sprintId) {
       setError('Please select a space.')
       return
     }
@@ -462,7 +474,7 @@ export default function TaskModal({
         due_time: (dueDate && dueTime) ? dueTime : null,
         is_personal: personal,
         source: 'manual',
-        department_id: personal ? departmentId ?? null : (selectedSpaceId || departmentId || resolveDeptFromTeams(assigneeIds[0])) ?? null,
+        department_id: personal ? departmentId ?? null : (selectedSpaceId || (sprintTeams?.find((t) => t.id === selectedSprintTeamId)?.department_id) || departmentId || resolveDeptFromTeams(assigneeIds[0])) ?? null,
         sprint_id: effectiveSprintId,
         list_id: personal || effectiveSprintId ? null : listId ?? task?.list_id ?? null,
         task_type: personal ? 'personal' : effectiveSprintId ? 'sprint' : 'space',
@@ -674,7 +686,7 @@ export default function TaskModal({
               </div>
             )}
 
-            {!personal && !departmentId && (
+            {!personal && !departmentId && !sprintId && (
               <div style={{ marginBottom: 18 }}>
                 <label style={labelStyle}>Space *</label>
                 <select
@@ -687,6 +699,25 @@ export default function TaskModal({
                   {spaces.map((space) => (
                     <option key={space.id} value={space.id}>
                       {space.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {!personal && sprintId && !departmentId && sprintTeams?.length > 0 && (
+              <div style={{ marginBottom: 18 }}>
+                <label style={labelStyle}>Team</label>
+                <select
+                  disabled={isReadOnly}
+                  value={selectedSprintTeamId ?? ''}
+                  onChange={(e) => setSelectedSprintTeamId(e.target.value || null)}
+                  style={inputStyle}
+                >
+                  <option value="">No team (sprint-wide)</option>
+                  {sprintTeams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
                     </option>
                   ))}
                 </select>

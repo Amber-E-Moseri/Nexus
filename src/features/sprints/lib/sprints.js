@@ -21,6 +21,8 @@ const TEMP_MEMBER_SELECT = 'sprint_id, user_id, role, membership_end_date, is_te
 const SPRINT_REVIEW_SELECT = 'id, sprint_id, completed_at, completed_by, lessons_learned, goals_achieved, outstanding_items, wins_testimonies, recommendations, final_decisions, created_at'
 const VALID_SPRINT_STATUSES = ['planning', 'active', 'completed', 'review', 'archived']
 
+export { SPRINT_MEMBER_WITH_TEMP_SELECT }
+
 function sortByCreatedAtDesc(items = []) {
   return [...items].sort((a, b) => new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0))
 }
@@ -764,10 +766,11 @@ export async function inviteExternalToSprint(payload) {
     sprintName,
     role = 'contributor',
     membershipEndDate,
+    teamIds,
   } = payload
 
   const { data, error } = await supabase.functions.invoke('send-sprint-invite', {
-    body: { email, name, sprintId, sprintName, role, membershipEndDate },
+    body: { email, name, sprintId, sprintName, role, membershipEndDate, teamIds: teamIds ?? [] },
   })
 
   if (error) {

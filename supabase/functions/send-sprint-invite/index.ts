@@ -119,6 +119,7 @@ Deno.serve(async (req) => {
     sprintName: string
     role: string
     membershipEndDate?: string | null
+    teamIds?: string[]
   } | null
 
   if (!body?.email || !body?.sprintId || !body?.sprintName) {
@@ -126,6 +127,7 @@ Deno.serve(async (req) => {
   }
 
   const { email, name, sprintId, sprintName, membershipEndDate } = body
+  const teamIds = Array.isArray(body.teamIds) ? body.teamIds : []
   const cleanEmail = email.trim().toLowerCase()
   const cleanName = name?.trim() || cleanEmail.split('@')[0]
   const requestedRole = body.role || 'contributor'
@@ -200,6 +202,7 @@ Deno.serve(async (req) => {
         name: cleanName,
         role: requestedRole,
         membership_end_date: membershipEndDate ?? null,
+        team_ids: teamIds,
       },
     })
 

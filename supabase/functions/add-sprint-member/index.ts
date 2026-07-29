@@ -82,10 +82,12 @@ Deno.serve(async (req) => {
     role?: string
     membership_end_date?: string | null
     name?: string
+    team_ids?: string[]
   }
   const sprintRole = metadata.role || 'contributor'
   const membershipEndDate = metadata.membership_end_date ?? null
   const profileName = metadata.name || body.name || tokenEmail.split('@')[0]
+  const teamIds = Array.isArray(metadata.team_ids) ? metadata.team_ids : []
 
   if (!isValidSprintRole(sprintRole)) {
     return jsonResponse(400, { error: `Invalid sprint role in invite token: ${sprintRole}` })
@@ -134,6 +136,9 @@ Deno.serve(async (req) => {
       console.warn(`Email conflict: reusing existing users row ${existingByEmail.id} instead of new auth user ${body.user_id}`)
       effectiveUserId = existingByEmail.id
     } else {
+      // External sprint members don't need a department assignment.
+      // Multi-dept sprints are decoupled from spaces; task and sprint RLS
+      // gates them via is_sprint_member() instead of current_user_department().
       const { error: profileError } = await adminClient
         .from('users')
         .insert({
@@ -142,6 +147,7 @@ Deno.serve(async (req) => {
           name: profileName,
           status: 'active',
           is_temporary: true,
+          department_id: null,
         })
 
       if (profileError) {
@@ -166,6 +172,22 @@ Deno.serve(async (req) => {
   if (insertError) {
     console.error('Failed to add to sprint:', insertError)
     return jsonResponse(400, { error: `Failed to add to sprint: ${insertError.message}` })
+  }
+
+  // Add to any sprint teams specified at invite time
+  if (teamIds.length > 0) {
+    const teamRows = teamIds.map((teamId) => ({
+      sprint_id: inviteToken.sprint_id,
+      team_id: teamId,
+      user_id: effectiveUserId,
+    }))
+    const { error: teamError } = await adminClient
+      .from('sprint_team_members')
+      .upsert(teamRows, { onConflict: 'team_id,user_id', ignoreDuplicates: true })
+    if (teamError) {
+      console.error('Failed to add to sprint teams:', teamError)
+      // Non-fatal: sprint membership succeeded; log and continue
+    }
   }
 
   const { error: auditError } = await adminClient

@@ -3,7 +3,7 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import Badge from '../../components/ui/Badge'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent } from '../../features/calendar'
-import { advanceSprintStatus, archiveSprintWithAutoDeactivation, calculateSprintTaskStats, createSprintTeam, duplicateSprint, getSprintDetail, getSprintTasks, getTemporarySprintMembers, hasSprintAccess, restoreSprint, shouldAutoStartSprint, updateSprint } from '../../features/sprints'
+import { advanceSprintStatus, archiveSprintWithAutoDeactivation, calculateSprintTaskStats, createSprintTeam, duplicateSprint, getSprintDetail, getSprintTasks, getTemporarySprintMembers, hasSprintAccess, restoreSprint, shouldAutoStartSprint, updateSprint, SPRINT_MEMBER_WITH_TEMP_SELECT } from '../../features/sprints'
 import { supabase } from '../../lib/supabase'
 import { requestSprintAccess, getMySprintAccessRequests } from '../../lib/people/api'
 import { isTaskCompleted } from '../../lib/taskStatuses'
@@ -19,10 +19,11 @@ import InviteExternalModal from '../../features/sprints/components/InviteExterna
 import SprintReview from './SprintReview'
 import FileList from '../../components/files/FileList'
 import SprintGoalsPanel from '../../features/sprints/components/SprintGoalsPanel'
+import SprintMeetingsPanel from '../../features/sprints/components/SprintMeetingsPanel'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 import { hasSpaceRole } from '../../lib/permissions'
 
-const TABS = ['Overview', 'Tasks', 'Calendar', 'Teams', 'Members', 'Files', 'Review']
+const TABS = ['Overview', 'Tasks', 'Calendar', 'Meetings', 'Teams', 'Members', 'Files', 'Review']
 const CALENDAR_EVENT_SELECT = 'id, title, description, event_type, start_date, end_date, all_day, location, zoom_join_url, sprint_id, space_id, created_by, created_at, status, department_id, approved_by, approved_at, rejection_note, is_org_wide'
 
 function ArchivedSprintBanner({ sprint, onRestore, userRole }) {
@@ -158,7 +159,6 @@ export default function SprintOverview() {
   const [savingOverview, setSavingOverview] = useState(false)
   const [goalDraft, setGoalDraft] = useState('')
   const [descriptionDraft, setDescriptionDraft] = useState('')
-  const [recentActivity, setRecentActivity] = useState(null)
   const [calendarLoading, setCalendarLoading] = useState(true)
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth())
@@ -199,7 +199,7 @@ export default function SprintOverview() {
     return grouped
   }, [tasks])
 
-  const canManage = role === 'super_admin' || hasSpaceRole(profile, null, 'dept_lead') || detail?.members?.some(
+  const canManage = role === 'super_admin' || hasSpaceRole(profile, null, 'dept_lead') || hasSpaceRole(profile, null, 'programs') || detail?.members?.some(
     (member) => member.user?.id === profile?.id && ['owner', 'manager'].includes(member.role),
   )
   const isMember = detail?.members?.some((m) => m.user?.id === profile?.id)
@@ -297,24 +297,6 @@ export default function SprintOverview() {
       })
       .catch(() => setCalendarEvents([]))
       .finally(() => setCalendarLoading(false))
-  }, [canViewSprint, sprintId])
-
-  useEffect(() => {
-    if (!canViewSprint) {
-      setRecentActivity([])
-      return
-    }
-
-    setRecentActivity(null)
-    supabase
-      .from('activity_log')
-      .select('id, action, created_at')
-      .eq('entity_type', 'sprint')
-      .eq('entity_id', sprintId)
-      .order('created_at', { ascending: false })
-      .limit(5)
-      .then(({ data, error }) => setRecentActivity(error ? [] : (data ?? [])))
-      .catch(() => setRecentActivity([]))
   }, [canViewSprint, sprintId])
 
   if (loading) {
@@ -631,6 +613,31 @@ export default function SprintOverview() {
         </div>
       )}
 
+      {/* Tab Navigation */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+        {visibleTabs.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: '8px 16px',
+              fontSize: 13,
+              fontWeight: activeTab === tab ? 600 : 400,
+              color: activeTab === tab ? 'var(--accent)' : 'var(--text-secondary)',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
+              cursor: 'pointer',
+              marginBottom: -1,
+              borderRadius: 0,
+            }}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
       {/* Sprint Goals */}
       {activeTab === 'Overview' && (
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
@@ -657,7 +664,7 @@ export default function SprintOverview() {
       ) : null}
 
       {/* Teams Section */}
-      {(detail.teams.length > 0 || canManage) && (
+      {(activeTab === 'Overview' || activeTab === 'Teams') && (detail.teams.length > 0 || canManage) && (
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
           <div className="mb-1 flex items-center justify-between gap-3">
             <div>
@@ -722,6 +729,57 @@ export default function SprintOverview() {
                 setSavingTeam(false)
               }
             }}
+          />
+        </div>
+      )}
+
+      {/* Calendar Tab */}
+      {activeTab === 'Calendar' && (
+        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+          <CalendarView
+            events={calendarEvents}
+            loading={calendarLoading}
+            year={calendarYear}
+            month={calendarMonth}
+            onPrevMonth={() => {
+              if (calendarMonth === 0) { setCalendarYear((y) => y - 1); setCalendarMonth(11) }
+              else setCalendarMonth((m) => m - 1)
+            }}
+            onNextMonth={() => {
+              if (calendarMonth === 11) { setCalendarYear((y) => y + 1); setCalendarMonth(0) }
+              else setCalendarMonth((m) => m + 1)
+            }}
+            onToday={() => { setCalendarYear(new Date().getFullYear()); setCalendarMonth(new Date().getMonth()) }}
+            onEventClick={(ev) => { setSelectedCalendarEvent(ev); setShowEventModal(true) }}
+            onDayClick={(date) => { setCalendarDefaultDate(date); setShowEventModal(true) }}
+            onAddEvent={() => setShowEventModal(true)}
+            readOnly={!canManage || isArchived}
+          />
+        </div>
+      )}
+
+      {/* Members Tab */}
+      {activeTab === 'Members' && (
+        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+          <SprintMemberPanel
+            sprintId={detail.sprint.id}
+            sprintName={detail.sprint.name}
+            sprintEndDate={detail.sprint.end_date}
+            members={detail.members ?? []}
+            teams={detail.teams ?? []}
+            canEdit={Boolean(canManage)}
+            isArchived={Boolean(isArchived)}
+            onChanged={loadDetail}
+          />
+        </div>
+      )}
+
+      {/* Meetings — shown on Overview and its own tab */}
+      {(activeTab === 'Overview' || activeTab === 'Meetings') && (
+        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+          <SprintMeetingsPanel
+            sprintId={detail.sprint.id}
+            canEdit={Boolean((canManage || isMember) && !isArchived)}
           />
         </div>
       )}

@@ -37,7 +37,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
     }))
   }, [statuses])
   const [view, setView] = useState('kanban')
-  const [teamView, setTeamView] = useState('all')
+  const [teamView, setTeamView] = useState('my')
   const [modal, setModal] = useState(null)
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
   const assignedToMe = Boolean(profile?.id) && filters.assigneeId === profile.id

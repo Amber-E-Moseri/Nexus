@@ -739,6 +739,7 @@ export default function SprintMemberPanel({
           sprintId={sprintId}
           sprintEndDate={sprintEndDate}
           sprintName={sprintName}
+          teams={teams}
           canInvite={Boolean((canEdit || isMember) && !isArchived)}
           canAssignPrivilegedRoles={Boolean(
             profile?.role === 'super_admin' ||

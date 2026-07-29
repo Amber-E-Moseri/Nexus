@@ -70,14 +70,17 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
 
     setLoading(true)
     try {
+      // Destructure start_time / end_time out — they're UI-only fields used to
+      // build the ISO datetime strings below and must not be sent to the DB.
+      const { start_time, end_time, ...restFormData } = formData
       const eventData = {
-        ...formData,
+        ...restFormData,
         start_date: formData.all_day
           ? new Date(formData.start_date).toISOString()
-          : new Date(`${formData.start_date}T${formData.start_time}`).toISOString(),
+          : new Date(`${formData.start_date}T${start_time}`).toISOString(),
         end_date: formData.all_day
           ? new Date(formData.end_date).toISOString()
-          : new Date(`${formData.end_date}T${formData.end_time}`).toISOString(),
+          : new Date(`${formData.end_date}T${end_time}`).toISOString(),
         recurrence_rule: buildRRule(),
       }
 
@@ -89,7 +92,7 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
       onSubmitted?.()
       onClose()
     } catch (err) {
-      console.error('Failed to submit event:', err)
+      console.error('Failed to submit event:', err?.message ?? err, err?.details, err?.hint, err?.code)
       showToast('Failed to submit event', { tone: 'error' })
     } finally {
       setLoading(false)
