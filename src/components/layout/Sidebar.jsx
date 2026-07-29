@@ -315,6 +315,39 @@ export default function Sidebar({ isMobileDrawer = false }) {
   })
   const [collapsedPref, setCollapsedPref] = useState(() => getItemSafe(CACHE_KEYS.SIDEBAR_COLLAPSED) === true)
   const collapsed = !isMobileDrawer && collapsedPref
+
+  const [hasRegistrationAccess, setHasRegistrationAccess] = useState(false)
+  useEffect(() => {
+    if (!profile?.id) return
+    if (['pastor', 'super_admin', 'regional_secretary'].includes(role)) {
+      setHasRegistrationAccess(true)
+      return
+    }
+    const REGISTRATION_TEAMS = [
+      'Foundation School Graduation and Baptism',
+      'Secretariat and Planning',
+      'Registration',
+      'Secretariat Programs',
+      'Finance',
+      'Transportation',
+      'Delegates Compliance',
+      'Accommodation and Room Coordination',
+      'Hospitality — Delegates',
+    ]
+    ;(async () => {
+      const { data: sprint } = await supabase
+        .from('sprints').select('id').ilike('name', '%This Is It 2.0%').limit(1).maybeSingle()
+      if (!sprint?.id) return
+      const { data: teams } = await supabase
+        .from('sprint_teams').select('id, name').eq('sprint_id', sprint.id)
+      if (!teams?.length) return
+      const allowed = teams.filter(t => REGISTRATION_TEAMS.some(a => t.name.toLowerCase().includes(a.toLowerCase()))).map(t => t.id)
+      if (!allowed.length) return
+      const { data: membership } = await supabase
+        .from('sprint_team_members').select('team_id').in('team_id', allowed).eq('user_id', profile.id).limit(1)
+      if (membership?.length) setHasRegistrationAccess(true)
+    })()
+  }, [profile?.id, role])
   const sidebarRef = useRef(null)
 
   // ors/programs/media/dept_lead authority comes from space_roles rows
@@ -729,13 +762,14 @@ export default function Sidebar({ isMobileDrawer = false }) {
             to="/flock"
           />
         ) : null}
-        {/* Registration - visible to all; page enforces sprint-team access */}
-        <SidebarItem
-          active={isPathActive(location.pathname, '/registration')}
-          icon={CheckCircle2}
-          label="This Is It Registration"
-          to="/registration"
-        />
+        {hasRegistrationAccess && (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/registration')}
+            icon={CheckCircle2}
+            label="This Is It Registration"
+            to="/registration"
+          />
+        )}
         {!collapsed && <SidebarSectionLabel onAdd={canCreateSpace ? () => setShowSpaceModal(true) : undefined}>Spaces</SidebarSectionLabel>}
         {displaySpaces.map((space) => (
           <div
