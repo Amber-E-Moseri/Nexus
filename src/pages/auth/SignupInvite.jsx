@@ -153,14 +153,22 @@ export default function SignupInvite() {
         return
       }
 
-      console.log('[5] Marking token as used')
+      console.log('[5] Signing in')
 
-      // Mark invite as used
-      await supabase
-        .from('sprint_invite_tokens')
-        .update({ user_id: userId, used_at: new Date().toISOString() })
-        .eq('token', inviteToken)
-        .catch(() => null)
+      // Sign the user in — create-invite-user uses the admin API which doesn't
+      // establish a browser session, so we must sign in explicitly with the
+      // password the user just set.
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: inviteEmail,
+        password,
+      })
+
+      if (signInError) {
+        console.error('Sign-in after signup failed:', signInError)
+        setError(`Account created! Sign-in failed: ${signInError.message}. Please log in manually.`)
+        setLoading(false)
+        return
+      }
 
       console.log('[6] Redirecting to sprint')
 

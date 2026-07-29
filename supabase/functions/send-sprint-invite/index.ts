@@ -173,8 +173,10 @@ Deno.serve(async (req) => {
   const isSuperAdmin = callerRole === 'super_admin'
   const isDeptLead = callerRole === 'dept_lead'
   const isSprintOwner = sprint.created_by === callerId || callerMember?.role === 'owner'
-  const isSprintManager = callerMember?.role === 'manager'
-  const canInvite = isSuperAdmin || isDeptLead || isSprintOwner || isSprintManager
+  // Any sprint member may invite externals (matches the relaxed gate in the DB-level
+  // invite_external_sprint_member RPC from the permissions revamp migration).
+  const isSprintMember = callerMember !== null
+  const canInvite = isSuperAdmin || isDeptLead || isSprintOwner || isSprintMember
 
   if (!canInvite) {
     return jsonResponse(403, { error: 'You do not have permission to invite members to this sprint' })

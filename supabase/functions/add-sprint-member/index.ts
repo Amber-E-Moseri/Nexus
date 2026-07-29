@@ -159,15 +159,16 @@ Deno.serve(async (req) => {
 
   // Add user to sprint. Fall back to 'contributor' — a valid sprint_members
   // role — never 'member', which sprint_members_role_check rejects (23514).
+  // ON CONFLICT: if user is already a member (e.g. re-invite), update their role/end-date.
   const { error: insertError } = await adminClient
     .from('sprint_members')
-    .insert({
+    .upsert({
       user_id: effectiveUserId,
       sprint_id: inviteToken.sprint_id,
       role: sprintRole,
       membership_end_date: membershipEndDate,
       is_temporary: true,
-    })
+    }, { onConflict: 'sprint_id,user_id', ignoreDuplicates: false })
 
   if (insertError) {
     console.error('Failed to add to sprint:', insertError)

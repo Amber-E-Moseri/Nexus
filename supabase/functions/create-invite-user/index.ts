@@ -73,13 +73,26 @@ Deno.serve(async (req) => {
     password: body.password,
     email_confirm: true,
     user_metadata: { name: body.name },
-  }, {
-    skipConfirmationEmail: true,
   })
 
-  if (createError || !user?.id) {
+  if (createError) {
+    // If the email already exists (re-invite after previous attempt), update the password
+    // and return the existing user's ID so the signup flow can continue.
+    const msg = createError.message ?? ''
+    if (/already registered|already been registered|already exists/i.test(msg)) {
+      const { data: list } = await adminClient.auth.admin.listUsers({ perPage: 1000 })
+      const existing = list?.users?.find((u) => u.email?.toLowerCase() === body.email.trim().toLowerCase())
+      if (existing?.id) {
+        await adminClient.auth.admin.updateUserById(existing.id, { password: body.password })
+        return jsonResponse(200, { user_id: existing.id }, origin)
+      }
+    }
     console.error('Failed to create user:', createError)
-    return jsonResponse(502, { error: `Failed to create user: ${createError?.message || 'Unknown error'}` }, origin)
+    return jsonResponse(502, { error: `Failed to create user: ${msg || 'Unknown error'}` }, origin)
+  }
+
+  if (!user?.id) {
+    return jsonResponse(502, { error: 'Failed to create user: no user returned' }, origin)
   }
 
   return jsonResponse(200, { user_id: user.id }, origin)
