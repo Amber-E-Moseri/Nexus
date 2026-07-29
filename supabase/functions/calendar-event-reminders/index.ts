@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
   const todayKey = toDateKey(new Date())
   const results: Array<Record<string, unknown>> = []
   let notificationsCreated = 0
-  let pushSent = 0
+  // pushSent removed — push is dispatched by DB trigger on notifications INSERT
 
   // Cache dept→user-id lists to avoid N+1 queries when multiple events share a department
   const deptUsersCache = new Map<string, string[]>()
@@ -264,35 +264,7 @@ Deno.serve(async (req) => {
 
       notificationsCreated += insertedNotifications?.length ?? enabledRecipients.length
 
-      const pushUrl = sprintPrompt
-        ? `/sprints?new=1&event_id=${encodeURIComponent(event.id)}&name=${encodeURIComponent(event.title)}&dept=${encodeURIComponent(event.department_id ?? '')}`
-        : '/calendar'
-
-      const pushTitle = sprintPrompt ? 'Upcoming Event Sprint Prompt' : 'Upcoming Calendar Event'
-      const pushMessage = sprintPrompt
-        ? `"${event.title}" is in ${config.days_before} days - time to start a sprint?`
-        : `"${event.title}" is in ${config.days_before} days`
-
-      const pushResults = await Promise.allSettled(
-        enabledRecipients.map((userId) =>
-          fetch(`${supabaseUrl}/functions/v1/send-task-push-notification`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${serviceRoleKey}`,
-            },
-            body: JSON.stringify({
-              userId,
-              title: pushTitle,
-              message: pushMessage,
-              url: pushUrl,
-              type: notificationType,
-            }),
-          })
-        ),
-      )
-
-      pushSent += pushResults.filter((result) => result.status === 'fulfilled').length
+      // Push dispatch handled by dispatch_push_on_notification_insert DB trigger
       results.push({
         event_id: event.id,
         days_before: config.days_before,
@@ -304,7 +276,6 @@ Deno.serve(async (req) => {
 
   return jsonResponse(200, {
     notified: notificationsCreated,
-    push_sent: pushSent,
     results,
   })
 })

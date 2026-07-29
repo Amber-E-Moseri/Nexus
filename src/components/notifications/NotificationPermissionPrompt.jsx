@@ -15,22 +15,23 @@ export default function NotificationPermissionPrompt() {
     const permission = Notification.permission
     if (permission === 'granted') return
 
-    const dismissed = localStorage.getItem('notification-permission-dismissed')
+    const dismissedAt = localStorage.getItem('notification-permission-dismissed-at')
+    // Re-prompt after 7 days so users who clicked "Not now" get another chance
+    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000
+    const dismissed = dismissedAt && (Date.now() - parseInt(dismissedAt, 10)) < SEVEN_DAYS
 
     if (permission === 'denied') {
-      // Only show the "blocked — fix in browser settings" banner if not already dismissed
       if (!dismissed) setDenied(true)
       return
     }
 
-    // permission === 'default': show the enable prompt unless dismissed this session
     if (!dismissed) {
       setTimeout(() => setShow(true), 1500)
     }
   }, [user])
 
   const dismiss = () => {
-    localStorage.setItem('notification-permission-dismissed', 'true')
+    localStorage.setItem('notification-permission-dismissed-at', Date.now().toString())
     setShow(false)
     setDenied(false)
   }
