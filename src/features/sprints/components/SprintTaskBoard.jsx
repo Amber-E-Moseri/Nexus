@@ -75,6 +75,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
     return filtered.filter((task) => {
       return (
         task.assignee_id === profile?.id ||
+        task.created_by === profile?.id ||
         myTeamIds.some((teamId) =>
           teamsWithMembers.find((t) => t.id === teamId)?.sprint_team_members?.some((m) => m.user_id === task.assignee_id),
         )
@@ -106,13 +107,21 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
     if (!filtered || !teamsWithMembers) return {}
 
     const grouped = {}
+    const assignedTaskIds = new Set()
 
     teamsWithMembers.forEach((team) => {
-      grouped[team.id] = {
-        team,
-        tasks: filtered.filter((task) => team.sprint_team_members?.some((m) => m.user_id === task.assignee_id)),
-      }
+      const teamTasks = filtered.filter((task) => team.sprint_team_members?.some((m) => m.user_id === task.assignee_id))
+      grouped[team.id] = { team, tasks: teamTasks }
+      teamTasks.forEach((t) => assignedTaskIds.add(t.id))
     })
+
+    const unassigned = filtered.filter((t) => !assignedTaskIds.has(t.id))
+    if (unassigned.length > 0) {
+      grouped['__unassigned__'] = {
+        team: { id: '__unassigned__', name: 'Unassigned' },
+        tasks: unassigned,
+      }
+    }
 
     return grouped
   }, [filtered, teamsWithMembers])
