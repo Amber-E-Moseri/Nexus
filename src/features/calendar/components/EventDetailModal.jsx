@@ -5,6 +5,7 @@ import { useAuth } from '../../../hooks/useAuth'
 import { useToast } from '../../../context/ToastContext'
 import { supabase } from '../../../lib/supabase'
 import DeliverablesSection from './DeliverablesSection'
+import DeliverableTaskBuilder from './DeliverableTaskBuilder'
 
 export default function EventDetailModal({ event, onClose, onApproved, canApprove = false }) {
   const { profile } = useAuth()
@@ -13,6 +14,8 @@ export default function EventDetailModal({ event, onClose, onApproved, canApprov
   const [showRejectForm, setShowRejectForm] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('')
   const [isProgramsMember, setIsProgramsMember] = useState(false)
+  const [showBuilder, setShowBuilder] = useState(false)
+  const [deliverableRefreshKey, setDeliverableRefreshKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -225,10 +228,45 @@ export default function EventDetailModal({ event, onClose, onApproved, canApprov
           )}
         </div>
 
-        {/* Dual-gate: Programs-only UI convenience here, RLS is the real security gate. */}
-        {isProgramsMember ? (
-          <DeliverablesSection eventId={event.id} departmentId={event.department_id ?? null} />
-        ) : null}
+        {/* UI gate: Programs members + super_admin + regional_secretary. RLS is the real write gate. */}
+        {(isProgramsMember || ['super_admin', 'regional_secretary'].includes(profile?.role)) && (
+          <section style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>Tasks</h3>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  Deliverable tasks created from this event.
+                </p>
+              </div>
+              {!showBuilder && (
+                <button
+                  type="button"
+                  onClick={() => setShowBuilder(true)}
+                  style={{
+                    padding: '7px 14px', border: '1px solid var(--border)',
+                    borderRadius: '8px', background: 'var(--surface-tertiary)',
+                    fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)',
+                    cursor: 'pointer', flexShrink: 0,
+                  }}
+                >
+                  + Create Tasks
+                </button>
+              )}
+            </div>
+
+            {showBuilder && (
+              <DeliverableTaskBuilder
+                event={event}
+                onSaved={() => {
+                  setShowBuilder(false)
+                  setDeliverableRefreshKey(k => k + 1)
+                }}
+              />
+            )}
+
+            <DeliverablesSection eventId={event.id} refreshKey={deliverableRefreshKey} />
+          </section>
+        )}
 
         {/* Approval Form */}
         {isPending && canApprove && (

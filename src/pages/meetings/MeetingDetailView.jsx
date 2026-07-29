@@ -561,7 +561,7 @@ function MeetingDetailViewInner() {
     // the always-current source of truth for what's on screen — the DB
     // autosave is debounced 2.5s, so ending the meeting right after typing
     // could otherwise race it and hand Flock stale/empty notes.
-    const updated = { ...meeting, status: 'completed', ended_at, minutes: minutesText, decisions: decisionsText }
+    const updated = { ...meeting, status: 'completed', ended_at, minutes: meeting?.notes_text ?? meeting?.minutes ?? '', decisions: decisionsText }
     setMeeting(updated)
     if (updated.meeting_type === '1_on_1_meeting') {
       syncFlockInteractionForMeeting(updated, profile?.id).catch(() => {})
@@ -2132,7 +2132,7 @@ function MeetingDetailViewInner() {
                       agenda={agenda}
                       openItems={openItems}
                       decisionsText={decisionsText}
-                      minutesText={minutesText}
+                      minutesText={meeting?.notes_text ?? meeting?.minutes ?? ''}
                       onSuccess={(result) => setMeeting(m => ({ ...m, doc_drive_url: result.docUrl, doc_title: result.docTitle }))}
                     />
                   </div>
@@ -2409,7 +2409,7 @@ function MeetingDetailViewInner() {
                           agenda={agenda}
                           openItems={openItems}
                           decisionsText={decisionsText}
-                          minutesText={minutesText}
+                          minutesText={meeting?.notes_text ?? meeting?.minutes ?? ''}
                           onSuccess={(result) => setMeeting(m => ({ ...m, doc_drive_url: result.docUrl, doc_title: result.docTitle }))}
                         />
                       </div>

@@ -108,7 +108,7 @@ export function isTaskActionable(task) {
 
 export const STALE_COMPLETED_TASK_DAYS = {
   SPACE: 7,
-  PERSONAL: 14,
+  PERSONAL: 7,
 }
 
 export function isStaleCompletedTask(task, thresholdDays) {

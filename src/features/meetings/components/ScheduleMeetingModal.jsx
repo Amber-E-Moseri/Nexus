@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
 import { createNotification } from '../../notifications/lib/notifications'
-import { createRecurringMeeting } from '../lib/meetings'
+import { createRecurringMeeting, addMeetingSpace } from '../lib/meetings'
 import { DAYS_OF_WEEK, MAX_OCCURRENCES, buildRecurrenceRule } from '../lib/recurrence'
 import MeetingAgendaEditor from './MeetingAgendaEditor'
 import FlockContactPicker from './FlockContactPicker'
@@ -51,6 +51,8 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [recurring, setRecurring] = useState(false)
+  const [allDepartments, setAllDepartments] = useState([])
+  const [additionalDeptIds, setAdditionalDeptIds] = useState([])
   const [recurrenceData, setRecurrenceData] = useState({
     frequency: 'none',
     daysOfWeek: new Set(),
@@ -63,6 +65,10 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
   useEffect(() => {
     supabase.from('users').select('id, name').eq('status', 'active').order('name')
       .then(({ data }) => setOrgMembers(data ?? []))
+      .catch(() => {})
+
+    supabase.from('departments').select('id, name').eq('space_type', 'department').order('name')
+      .then(({ data }) => setAllDepartments(data ?? []))
       .catch(() => {})
   }, [])
 
@@ -121,6 +127,13 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
           }
         }
 
+        // Add cross-dept shares if any selected
+        if (additionalDeptIds.length > 0) {
+          for (const deptId of additionalDeptIds) {
+            await addMeetingSpace(meeting.id, deptId, profile?.id).catch(() => {})
+          }
+        }
+
         if (agendaItems.length > 0) {
           await saveAgendaItemsForMeeting(meeting, agendaItems, profile?.id).catch(() => {})
         }
@@ -150,6 +163,13 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
                 date: meeting.date,
               }).catch(() => {})
             }
+          }
+        }
+
+        // Add cross-dept shares if any selected
+        if (additionalDeptIds.length > 0) {
+          for (const deptId of additionalDeptIds) {
+            await addMeetingSpace(meeting.id, deptId, profile?.id).catch(() => {})
           }
         }
 
@@ -374,6 +394,31 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
             />
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Publish to department (default: private, only invited attendees see it)</span>
           </label>
+
+          {allDepartments.length > 1 && (
+            <div style={{ padding: 12, background: 'var(--surface-tertiary)', borderRadius: 8 }}>
+              <span style={labelStyle}>Share meeting with additional departments</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, marginTop: 8 }}>
+                {allDepartments
+                  .filter((d) => d.id !== profile?.department_id)
+                  .map((dept) => (
+                    <label key={dept.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={additionalDeptIds.includes(dept.id)}
+                        onChange={(e) =>
+                          setAdditionalDeptIds((prev) =>
+                            e.target.checked ? [...prev, dept.id] : prev.filter((id) => id !== dept.id),
+                          )
+                        }
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span style={{ color: 'var(--text-primary)' }}>{dept.name}</span>
+                    </label>
+                  ))}
+              </div>
+            </div>
+          )}
 
           {meetingType === '1_on_1_meeting' && (
             <label>

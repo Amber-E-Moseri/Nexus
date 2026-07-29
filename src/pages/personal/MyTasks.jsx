@@ -165,6 +165,22 @@ export default function MyTasks() {
     : filters
   const visibleTasks = applyTaskFilters(tabTasks, expandedFilters)
 
+  // Tab counts always reflect the active filters so they stay in sync with
+  // what's visible — both when the user adjusts filters and when the cron/
+  // realtime subscription updates the underlying task lists.
+  const myTasksCount = useMemo(
+    () => applyTaskFilters(countableTasks, expandedFilters).length,
+    [countableTasks, expandedFilters],
+  )
+  const delegatedCount = useMemo(
+    () => applyTaskFilters(countableDelegatedTasks, expandedFilters).length,
+    [countableDelegatedTasks, expandedFilters],
+  )
+  const watchingCount = useMemo(
+    () => applyTaskFilters(watchedTasks, expandedFilters).length,
+    [watchedTasks, expandedFilters],
+  )
+
   async function loadMetadata() {
     if (!profile?.id) return
     try {
@@ -294,9 +310,9 @@ export default function MyTasks() {
         {quickView ? <span /> : (
         <div className="flex items-center gap-1 p-[3px]" style={{ background: 'var(--surface-sub)', border: '1px solid var(--border-1)', borderRadius: 10, width: 'fit-content' }}>
           {[
-            { id: 'mine', label: 'My Tasks', count: countableTasks.length },
-            { id: 'delegated', label: 'Delegated', count: countableDelegatedTasks.length },
-            { id: 'watching', label: 'Watching', count: watchedTasks.length },
+            { id: 'mine', label: 'My Tasks', count: myTasksCount },
+            { id: 'delegated', label: 'Delegated', count: delegatedCount },
+            { id: 'watching', label: 'Watching', count: watchingCount },
           ].map((tab) => (
             <button
               key={tab.id}

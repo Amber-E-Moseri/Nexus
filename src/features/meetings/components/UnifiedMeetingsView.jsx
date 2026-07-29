@@ -247,7 +247,10 @@ export default function UnifiedMeetingsView({
   // Filter meetings by department and type
   const filteredByDept = useMemo(() => {
     if (selectedDeptId === 'all') return meetings
-    return meetings.filter((m) => m.department_id === selectedDeptId)
+    return meetings.filter((m) =>
+      m.department_id === selectedDeptId ||
+      (m.meeting_spaces ?? []).some((ms) => ms.department_id === selectedDeptId)
+    )
   }, [meetings, selectedDeptId])
 
   const grouped = useMemo(() => groupMeetingsByCategory(filteredByDept), [filteredByDept])

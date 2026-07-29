@@ -31,7 +31,6 @@ export function useMyTaskCounts(userId: string | null | undefined): MyTaskCounts
       .select(COUNT_SELECT)
       .eq('assignee_id', userId)
       .is('deleted_at', null)
-      .is('archived_at', null)
 
     // Badges are best-effort; leave the previous counts rather than toasting
     if (error) return

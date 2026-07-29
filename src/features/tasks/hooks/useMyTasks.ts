@@ -132,7 +132,7 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
       const assignedTaskIds = (assignedTasks ?? []).map((a) => a.task_id)
 
       // Build base query: created_by OR assigned_to OR multi-assigned
-      let query = supabase.from('tasks').select(TASK_SELECT).is('deleted_at', null).is('archived_at', null)
+      let query = supabase.from('tasks').select(TASK_SELECT).is('deleted_at', null)
 
       // Filter by user. Quick-view scopes are assignee-only; the default view
       // also includes tasks the user created (for the Delegated tab).
@@ -397,7 +397,6 @@ export function useWatchedTasks(userId: string): UseWatchedTasksReturn {
         .select(TASK_SELECT)
         .in('id', taskIds)
         .is('deleted_at', null)
-        .is('archived_at', null)
 
       if (tasksError) throw tasksError
 

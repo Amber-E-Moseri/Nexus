@@ -3,7 +3,7 @@ import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
 import { createTasksFromActionItems } from '../lib/meetings'
 
-const emptyItem = { title: '', assigneeId: '', dueDate: '', priority: 'medium', description: '' }
+const emptyItem = { title: '', assigneeId: '', dueDate: '', priority: 'medium', description: '', departmentId: '' }
 
 function useMeetingAttendees(meetingId, departmentId) {
   const [members, setMembers] = useState([])
@@ -42,12 +42,16 @@ function useMeetingAttendees(meetingId, departmentId) {
   return members
 }
 
-export default function ActionItemBridge({ meetingId, departmentId, onSaved, onCancel }) {
+export default function ActionItemBridge({ meetingId, departmentId, additionalSpaces = [], onSaved, onCancel }) {
   const { profile } = useAuth()
   const [items, setItems] = useState([emptyItem])
   const members = useMeetingAttendees(meetingId, departmentId)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+
+  // Build space options: primary dept + additional shared depts
+  const spaceOptions = [{ id: '', name: "Assignee's dept" }, { id: departmentId, name: 'Primary dept' }, ...additionalSpaces]
+  const uniqueSpaces = Array.from(new Map(spaceOptions.map((s) => [s.id, s])).values())
 
   function addRow() {
     setItems((previous) => [...previous, emptyItem])
@@ -71,6 +75,7 @@ export default function ActionItemBridge({ meetingId, departmentId, onSaved, onC
         dueDate: item.dueDate || null,
         priority: item.priority || 'medium',
         description: item.description.trim() || null,
+        departmentId: item.departmentId || null,
       }))
       .filter((item) => item.title)
 
@@ -125,7 +130,7 @@ export default function ActionItemBridge({ meetingId, departmentId, onSaved, onC
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {items.map((item, index) => (
           <div key={index} style={{ borderRadius: 12, background: 'white', padding: 12 }}>
-            <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) 132px 108px auto' }}>
+            <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) 132px 108px 120px auto' }}>
               <input
                 value={item.title}
                 onChange={(event) => updateRow(index, 'title', event.target.value)}
@@ -193,6 +198,30 @@ export default function ActionItemBridge({ meetingId, departmentId, onSaved, onC
                 <option value="medium">Medium</option>
                 <option value="low">Low</option>
               </select>
+              {uniqueSpaces.length > 1 ? (
+                <select
+                  value={item.departmentId}
+                  onChange={(event) => updateRow(index, 'departmentId', event.target.value)}
+                  aria-label="Space"
+                  style={{
+                    minWidth: 0,
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    background: 'white',
+                    padding: '8px 10px',
+                    fontSize: 12,
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {uniqueSpaces.map((space) => (
+                    <option key={space.id || 'default'} value={space.id}>
+                      {space.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div />
+              )}
               {items.length > 1 ? (
                 <button
                   type="button"

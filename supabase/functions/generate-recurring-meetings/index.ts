@@ -262,6 +262,22 @@ Deno.serve(async (req) => {
         )
       }
 
+      // Carry forward cross-dept meeting shares from the series template (series_instance_num = 1)
+      const { data: templateSpaces } = await supabase
+        .from('meeting_spaces')
+        .select('department_id')
+        .eq('meeting_id', parent.id)
+
+      if (templateSpaces && templateSpaces.length > 0) {
+        await supabase.from('meeting_spaces').insert(
+          templateSpaces.map((space: { department_id: string }) => ({
+            meeting_id: newMeeting.id,
+            department_id: space.department_id,
+            added_by: null, // edge function doesn't have a user row, so leave null
+          })),
+        )
+      }
+
       await supabase.from('meetings').update({ next_occurrence_scheduled: null }).eq('id', meeting.id)
       generated += 1
     } catch (err) {

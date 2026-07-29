@@ -67,6 +67,36 @@ export function NotificationsProvider({ children }) {
           } catch (_) {}
         },
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          // Re-fetch the authoritative count any time a notification is updated
+          // (e.g. marked read/unread from the Inbox page directly).
+          getUnreadCount(user.id)
+            .then((count) => setUnreadCount(count))
+            .catch(() => {})
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          getUnreadCount(user.id)
+            .then((count) => setUnreadCount(count))
+            .catch(() => {})
+        },
+      )
       .subscribe()
 
     return () => {

@@ -121,14 +121,16 @@ create policy "meetings_select" on public.meetings
     )
     or (
       visibility = 'published'
-      and (select public.current_user_role()) is distinct from 'group_member'
+      -- group_space_members are covered by the gsm EXISTS clause above;
+      -- no role exclusion needed here for real authenticated users
       and (department_id = (select public.current_user_department()) or department_id is null)
     )
     -- NEW: cross-dept share clause
     -- published meeting explicitly shared with viewer's department
     or (
       visibility = 'published'
-      and (select public.current_user_role()) is distinct from 'group_member'
+      -- group_space_members are covered by the gsm EXISTS clause above;
+      -- no role exclusion needed here for real authenticated users
       and exists (
         select 1 from public.meeting_spaces ms
         where ms.meeting_id = meetings.id
@@ -175,7 +177,8 @@ create policy "open_items_select" on public.meeting_open_items
           )
           or (
             m.visibility = 'published'
-            and (select public.current_user_role()) is distinct from 'group_member'
+            -- group_space_members are covered by the gsm EXISTS clause above;
+            -- no role exclusion needed here for real authenticated users
             and (m.department_id = (select public.current_user_department()) or m.department_id is null)
           )
           or (
@@ -184,13 +187,20 @@ create policy "open_items_select" on public.meeting_open_items
                  or (select auth.uid()) = any(m.notes_shared_with))
           )
           -- NEW: cross-dept share clause
+          -- Members of a shared department can see open items created for
+          -- their own department or org-wide, but not items created for other depts.
           or (
             m.visibility = 'published'
-            and (select public.current_user_role()) is distinct from 'group_member'
+            -- group_space_members are covered by the gsm EXISTS clause above;
+            -- no role exclusion needed here for real authenticated users
             and exists (
               select 1 from public.meeting_spaces ms
               where ms.meeting_id = m.id
                 and ms.department_id = (select public.current_user_department())
+            )
+            and (
+              meeting_open_items.space_id is null
+              or meeting_open_items.space_id = (select public.current_user_department())
             )
           )
         )

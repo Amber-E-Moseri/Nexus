@@ -146,8 +146,9 @@ export default function SignupInvite() {
       console.log('[4] Sprint add result:', rpcResult, rpcError)
 
       if (rpcError || !rpcResult?.success) {
-        console.error('Failed to add to sprint:', rpcError || rpcResult?.error)
-        setError('Account created but failed to add to sprint')
+        const detail = rpcResult?.error || rpcError?.message || 'Unknown error'
+        console.error('Failed to add to sprint:', detail)
+        setError(`Account created but failed to add to sprint: ${detail}`)
         setLoading(false)
         return
       }

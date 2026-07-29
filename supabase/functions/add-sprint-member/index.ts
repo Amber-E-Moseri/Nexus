@@ -110,20 +110,44 @@ Deno.serve(async (req) => {
     return jsonResponse(500, { error: `Failed to look up user profile: ${lookupError.message}` })
   }
 
-  if (!existing) {
-    const { error: profileError } = await adminClient
-      .from('users')
-      .insert({
-        id: body.user_id,
-        email: tokenEmail,
-        name: profileName,
-        status: 'active',
-        is_temporary: true,
-      })
+  // effectiveUserId is the users row we'll put in sprint_members.
+  // It's usually body.user_id but can differ when an existing users row was
+  // found by email (e.g. a placeholder row from a prior invite attempt that
+  // left a different auth user behind).
+  let effectiveUserId = body.user_id
 
-    if (profileError) {
-      console.error('Failed to provision user profile:', profileError)
-      return jsonResponse(500, { error: `Failed to provision user profile: ${profileError.message}` })
+  if (!existing) {
+    // Check if the email already has a users row under a different auth UUID.
+    // This happens when a previous invite attempt created a placeholder row
+    // (via invite_external_sprint_member or a partial prior signup) and that
+    // auth user was later deleted while the cascade somehow didn't clean up,
+    // or when a new auth user was created before the old row was removed.
+    const { data: existingByEmail } = await adminClient
+      .from('users')
+      .select('id')
+      .eq('email', tokenEmail)
+      .maybeSingle()
+
+    if (existingByEmail) {
+      // Reuse the existing row. The new auth user (body.user_id) becomes an
+      // orphaned account — acceptable; it has no profile or sprint access.
+      console.warn(`Email conflict: reusing existing users row ${existingByEmail.id} instead of new auth user ${body.user_id}`)
+      effectiveUserId = existingByEmail.id
+    } else {
+      const { error: profileError } = await adminClient
+        .from('users')
+        .insert({
+          id: body.user_id,
+          email: tokenEmail,
+          name: profileName,
+          status: 'active',
+          is_temporary: true,
+        })
+
+      if (profileError) {
+        console.error('Failed to provision user profile:', profileError)
+        return jsonResponse(500, { error: `Failed to provision user profile: ${profileError.message}` })
+      }
     }
   }
 
@@ -132,7 +156,7 @@ Deno.serve(async (req) => {
   const { error: insertError } = await adminClient
     .from('sprint_members')
     .insert({
-      user_id: body.user_id,
+      user_id: effectiveUserId,
       sprint_id: inviteToken.sprint_id,
       role: sprintRole,
       membership_end_date: membershipEndDate,
@@ -147,7 +171,7 @@ Deno.serve(async (req) => {
   const { error: auditError } = await adminClient
     .from('activity_log')
     .insert({
-      user_id: body.user_id,
+      user_id: effectiveUserId,
       action: 'sprint_external_invite_accepted',
       entity_type: 'sprint',
       entity_id: inviteToken.sprint_id,

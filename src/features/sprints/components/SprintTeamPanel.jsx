@@ -326,6 +326,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
               {teamMembers.map((member) => (
                 <div
                   key={member.user_id}
+                  title={member.user?.name}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -352,7 +353,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                     {getInitials(member.user?.name)}
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
-                    {formatMemberName(member.user?.name)}
+                    {member.user?.name || '?'}
                   </span>
                   {canEdit && !isArchived && (
                     <button
