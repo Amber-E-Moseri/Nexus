@@ -38,12 +38,85 @@ function onOpen() {
   ui.createMenu('Nexus Sync')
     .addItem('🔍 Detect Duplicates', 'detectDuplicates')
     .addItem('🗑️ Clean Duplicates (Keep Latest)', 'cleanDuplicates')
-    .addItem('📤 Sync to Nexus (All)', 'syncAllToNexus')
+    .addItem('📤 Sync Registrations to Nexus', 'syncAllToNexus')
+    .addItem('👥 Sync Roster (Expected) to Nexus', 'syncRosterToNexus')
     .addItem('📥 Export Clean Data', 'exportCleanData')
     .addItem('📊 View Duplicate Report', 'showDuplicateReport')
     .addSeparator()
     .addItem('⚙️ Settings', 'showSettings')
     .addToUi()
+}
+
+// ========== ROSTER SYNC ==========
+function syncRosterToNexus() {
+  const ROSTER_SHEET_NAME = 'Expected'
+  const props = PropertiesService.getScriptProperties()
+  const apiUrl = props.getProperty('NEXUS_API_URL') || ''
+  const apiKey = props.getProperty('NEXUS_API_KEY') || ''
+
+  if (!apiUrl || !apiKey) {
+    SpreadsheetApp.getUi().alert('❌ API URL or Key not set. Go to Nexus Sync → ⚙️ Settings.')
+    return
+  }
+
+  const rosterUrl = apiUrl.replace('registrations-sync', 'roster-sync')
+
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ROSTER_SHEET_NAME)
+    if (!sheet) {
+      SpreadsheetApp.getUi().alert(`❌ Sheet "${ROSTER_SHEET_NAME}" not found.`)
+      return
+    }
+
+    const data = sheet.getDataRange().getValues()
+    if (data.length < 2) {
+      SpreadsheetApp.getUi().alert('No roster data found.')
+      return
+    }
+
+    const headers = data[0].map(h => h.toString().trim().toLowerCase())
+    const firstNameIdx = headers.findIndex(h => h.includes('first'))
+    const lastNameIdx = headers.findIndex(h => h.includes('last'))
+    const emailIdx = headers.findIndex(h => h.includes('email'))
+    const subgroupIdx = headers.findIndex(h => h.includes('subgroup') || h.includes('unit'))
+
+    const members = []
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i]
+      const email = emailIdx >= 0 ? row[emailIdx].toString().trim() : ''
+      if (!email) continue
+      members.push({
+        firstName: firstNameIdx >= 0 ? row[firstNameIdx].toString().trim() : '',
+        lastName: lastNameIdx >= 0 ? row[lastNameIdx].toString().trim() : '',
+        email,
+        subgroup: subgroupIdx >= 0 ? row[subgroupIdx].toString().trim() : '',
+      })
+    }
+
+    if (members.length === 0) {
+      SpreadsheetApp.getUi().alert('No members with email addresses found.')
+      return
+    }
+
+    const response = UrlFetchApp.fetch(rosterUrl, {
+      method: 'post',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      payload: JSON.stringify({ members }),
+      muteHttpExceptions: true,
+    })
+
+    const result = JSON.parse(response.getContentText())
+    if (response.getResponseCode() === 200) {
+      SpreadsheetApp.getUi().alert(`✅ Roster synced!\n\n${result.inserted} new + ${result.updated} updated (${result.total} total)`)
+    } else {
+      SpreadsheetApp.getUi().alert(`❌ Sync failed: ${result.error}`)
+    }
+  } catch (e) {
+    SpreadsheetApp.getUi().alert(`❌ Error: ${e.message}`)
+  }
 }
 
 // ========== DUPLICATE DETECTION ==========

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Upload, Users, Plane, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, Settings, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus } from 'lucide-react';
+import { Upload, Users, Plane, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, Settings, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 // ---------- brand tokens ----------
@@ -231,6 +231,27 @@ export default function App() {
         loadKey('last-import', { roster: null, registrations: null, flights: null }),
       ]);
 
+      // Fetch roster from Supabase
+      let finalRoster = r;
+      if (!r || r.length === 0) {
+        try {
+          const { data: dbRoster } = await supabase
+            .from('roster')
+            .select('*')
+            .order('last_name', { ascending: true });
+          finalRoster = (dbRoster || []).map(m => ({
+            email: m.email,
+            fullName: m.full_name,
+            firstName: m.first_name,
+            lastName: m.last_name,
+            subgroup: m.subgroup,
+            leadership: m.leadership || '',
+          }));
+        } catch (e) {
+          console.error('Failed to fetch roster from Supabase:', e);
+        }
+      }
+
       // Fetch registrations from Supabase if not already loaded from localStorage
       let finalReg = reg;
       if (!reg || reg.length === 0) {
@@ -269,7 +290,7 @@ export default function App() {
         }
       }
 
-      setRoster(r); setRegistrations(finalReg); setFlights(fl); setConfirmations(conf); setTargets(tg); setExempt(ex); setLastImport(li);
+      setRoster(finalRoster); setRegistrations(finalReg); setFlights(fl); setConfirmations(conf); setTargets(tg); setExempt(ex); setLastImport(li);
 
       // Load room assignments
       try {
@@ -372,14 +393,29 @@ export default function App() {
     saveKey('room-assignments', { rooms: roomsToSave, numRooms: numR, peoplePerRoom: perRoom });
   }
 
-  function handleAddRoom(newRoomName) {
+  function handleAddRoom(newRoomName, capacity) {
     const newRoom = {
       id: `room-${Date.now()}`,
       name: newRoomName || `Room ${rooms.length + 1}`,
-      capacity: peoplePerRoom,
+      capacity: Math.max(1, Number(capacity) || peoplePerRoom),
       people: [],
     };
     const updated = [...rooms, newRoom];
+    setRooms(updated);
+    saveRoomData(updated, numRooms, peoplePerRoom);
+  }
+
+  function handleUpdateRoomCapacity(roomId, newCapacity) {
+    const cap = Math.max(1, Number(newCapacity) || 1);
+    const updated = rooms.map(r => r.id === roomId ? { ...r, capacity: cap } : r);
+    setRooms(updated);
+    saveRoomData(updated, numRooms, peoplePerRoom);
+  }
+
+  function handleSetRoomHead(roomId, personEmail) {
+    const updated = rooms.map(r =>
+      r.id === roomId ? { ...r, roomHead: r.roomHead === personEmail ? null : personEmail } : r
+    );
     setRooms(updated);
     saveRoomData(updated, numRooms, peoplePerRoom);
   }
@@ -481,7 +517,7 @@ export default function App() {
         {tab === 'transport' && <TransportTab {...{ merged, exempt }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups }} />}
-        {tab === 'rooms' && <RoomAssignmentTab {...{ merged, rooms, handleAddRoom, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, peoplePerRoom }} />}
+        {tab === 'rooms' && <RoomAssignmentTab {...{ merged, rooms, handleAddRoom, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, peoplePerRoom }} />}
         {tab === 'import' && <ImportTab {...{ handleImport, roster, registrations, flights, exempt, updateExempt, lastImport }} />}
       </div>
     </div>
@@ -865,7 +901,8 @@ function ImportTab({ handleImport, roster, registrations, flights, exempt, updat
 function DelegateComplianceTab({ merged, subgroupFilter, setSubgroupFilter, subgroups }) {
   const filtered = useMemo(() => merged.filter(r => {
     if (subgroupFilter !== 'All' && r.subgroup !== subgroupFilter) return false;
-    return r.allergies && r.allergies.trim() !== ''
+    const val = r.allergies?.trim().toLowerCase()
+    return val && val !== '' && !['no', 'none', 'n/a', 'na', 'nil', 'nope', 'nope!'].includes(val)
   }), [merged, subgroupFilter]);
 
   return (
@@ -933,19 +970,18 @@ function ImportBlock({ title, hint, count, last, onImport }) {
 }
 
 // ============ ROOM ASSIGNMENTS ============
-function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, peoplePerRoom }) {
+function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, peoplePerRoom }) {
   const [newRoomName, setNewRoomName] = useState('');
+  const [newRoomCapacity, setNewRoomCapacity] = useState(peoplePerRoom);
   const [draggedPerson, setDraggedPerson] = useState(null);
 
-  // Group unassigned registrants by gender
   const assignedEmails = new Set(rooms.flatMap(r => r.people.map(p => p.email)));
   const unassigned = merged.filter(m => !assignedEmails.has(m.email));
-  const byGender = { male: [], female: [], other: [] };
+  const byGender = { male: [], female: [] };
   unassigned.forEach(p => {
     const g = (p.gender || '').toLowerCase();
-    if (g.includes('male') || g === 'm') byGender.male.push(p);
-    else if (g.includes('female') || g === 'f') byGender.female.push(p);
-    else byGender.other.push(p);
+    if (g.includes('female') || g === 'f') byGender.female.push(p);
+    else byGender.male.push(p);
   });
 
   return (
@@ -954,25 +990,17 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleDeleteRoom, han
       <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 16 }}>Drag registrants to assign them to rooms.</div>
 
       {/* Unassigned registrants by gender */}
-      <div style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-        {['male', 'female', 'other'].map(gender => (
-          <Card key={gender} style={{ background: gender === 'male' ? '#E8F0FF' : gender === 'female' ? '#FFE8F0' : '#F0F0F0' }}>
+      <div style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {['male', 'female'].map(gender => (
+          <Card key={gender} style={{ background: gender === 'male' ? '#E8F0FF' : '#FFE8F0' }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, textTransform: 'capitalize' }}>{gender} ({byGender[gender].length})</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {byGender[gender].map(person => (
                 <div
                   key={person.email}
                   draggable
-                  onDragStart={e => setDraggedPerson(person)}
-                  style={{
-                    padding: '8px 10px',
-                    background: '#fff',
-                    border: '1px solid #ddd',
-                    borderRadius: 5,
-                    fontSize: 12,
-                    cursor: 'grab',
-                    userSelect: 'none',
-                  }}
+                  onDragStart={() => setDraggedPerson(person)}
+                  style={{ padding: '8px 10px', background: '#fff', border: '1px solid #ddd', borderRadius: 5, fontSize: 12, cursor: 'grab', userSelect: 'none' }}
                 >
                   {person.fullName} ({person.subgroup})
                 </div>
@@ -985,7 +1013,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleDeleteRoom, han
       {/* Room cards */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Rooms ({rooms.length})</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 12, marginBottom: 16 }}>
           {rooms.map(room => (
             <Card
               key={room.id}
@@ -1002,22 +1030,22 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleDeleteRoom, han
                 border: `2px solid ${room.people.length >= room.capacity ? C.red : C.line}`,
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{room.name}</div>
-                  <div style={{ fontSize: 11.5, color: C.mute }}>{room.people.length}/{room.capacity}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
+                    <span style={{ fontSize: 11.5, color: C.mute }}>{room.people.length} /</span>
+                    <input
+                      type="number"
+                      min={room.people.length || 1}
+                      value={room.capacity}
+                      onChange={e => handleUpdateRoomCapacity(room.id, e.target.value)}
+                      style={{ width: 44, fontSize: 12, padding: '2px 5px', borderRadius: 5, border: `1px solid ${C.line}` }}
+                      title="Capacity"
+                    />
+                  </div>
                 </div>
-                <button
-                  onClick={() => handleDeleteRoom(room.id)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: C.mute,
-                    padding: 4,
-                  }}
-                  title="Delete room"
-                >
+                <button onClick={() => handleDeleteRoom(room.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, padding: 4 }} title="Delete room">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -1025,37 +1053,25 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleDeleteRoom, han
                 <div style={{ fontSize: 11, color: C.red, marginBottom: 8, fontWeight: 600 }}>Room is full</div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {room.people.map(person => (
-                  <div
-                    key={person.email}
-                    style={{
-                      padding: '6px 8px',
-                      background: '#fff',
-                      border: '1px solid #ddd',
-                      borderRadius: 4,
-                      fontSize: 11.5,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <span>{person.fullName}</span>
-                    <button
-                      onClick={() => handleRemovePersonFromRoom(person, room.id)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        color: C.mute,
-                        padding: 0,
-                        fontSize: 11,
-                      }}
-                      title="Remove from room"
+                {room.people.map(person => {
+                  const isHead = room.roomHead === person.email;
+                  return (
+                    <div
+                      key={person.email}
+                      style={{ padding: '6px 8px', background: isHead ? '#FFF8E1' : '#fff', border: `1px solid ${isHead ? '#F5C842' : '#ddd'}`, borderRadius: 4, fontSize: 11.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}
                     >
-                      ✕
-                    </button>
-                  </div>
-                ))}
+                      <span style={{ flex: 1, fontWeight: isHead ? 600 : 400 }}>{person.fullName}</span>
+                      <button
+                        onClick={() => handleSetRoomHead(room.id, person.email)}
+                        title={isHead ? 'Remove as room head' : 'Set as room head'}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: isHead ? '#B8920A' : C.mute, padding: 0, display: 'flex', alignItems: 'center' }}
+                      >
+                        <Crown size={12} fill={isHead ? '#F5C842' : 'none'} />
+                      </button>
+                      <button onClick={() => handleRemovePersonFromRoom(person, room.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, padding: 0, fontSize: 11 }} title="Remove from room">✕</button>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
           ))}
@@ -1064,20 +1080,28 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleDeleteRoom, han
 
       {/* Add room */}
       <Card>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             type="text"
             value={newRoomName}
             onChange={e => setNewRoomName(e.target.value)}
             placeholder="Room name (optional)"
+            style={{ flex: 1, minWidth: 140 }}
             onKeyDown={e => {
-              if (e.key === 'Enter') {
-                handleAddRoom(newRoomName);
-                setNewRoomName('');
-              }
+              if (e.key === 'Enter') { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); }
             }}
           />
-          <Btn small onClick={() => { handleAddRoom(newRoomName); setNewRoomName(''); }} disabled={rooms.length >= 50}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: C.mute, whiteSpace: 'nowrap' }}>
+            Capacity:
+            <input
+              type="number"
+              min={1}
+              value={newRoomCapacity}
+              onChange={e => setNewRoomCapacity(e.target.value)}
+              style={{ width: 52, fontSize: 13, padding: '5px 7px' }}
+            />
+          </div>
+          <Btn small onClick={() => { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); }} disabled={rooms.length >= 50}>
             <Plus size={13} /> Add Room
           </Btn>
         </div>
