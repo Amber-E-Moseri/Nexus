@@ -32,6 +32,8 @@ import TeamVelocityWidget from '../features/dashboard/components/TeamVelocityWid
 import FlockCallsDueWidget from '../features/dashboard/components/FlockCallsDueWidget'
 import WeeklyWinsWidget from '../features/dashboard/components/WeeklyWinsWidget'
 import PersonalRemindersWidget from '../features/dashboard/components/PersonalRemindersWidget'
+import MyAssignedTasksWidget from '../features/dashboard/components/MyAssignedTasksWidget'
+import MySprintTasksWidget from '../features/dashboard/components/MySprintTasksWidget'
 import ChartWidget from '../features/dashboard/components/ChartWidget'
 import CalculationWidget from '../features/dashboard/components/CalculationWidget'
 import GoalsWidget from '../features/dashboard/components/GoalsWidget'
@@ -612,6 +614,8 @@ const WIDGET_META = {
   goals:                  { title: 'Goals & OKRs',              Component: GoalsWidget },
   weekly_wins:            { title: 'Wins This Week',            Component: WeeklyWinsWidget },
   embed:                  { title: 'Embed Content',            Component: EmbedWidget },
+  my_assigned_tasks:      { title: 'Assigned to Me',           Component: MyAssignedTasksWidget },
+  my_sprint_tasks:        { title: 'My Sprint Tasks',          Component: MySprintTasksWidget },
 }
 
 const ALL_WIDGET_KEYS = Object.keys(WIDGET_META)

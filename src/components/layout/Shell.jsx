@@ -36,7 +36,7 @@ export default function Shell() {
 
           <div className="flex flex-1 flex-col overflow-hidden bg-[var(--bg-app)]">
             <TopBar onOpenMobileMenu={() => setMobileDrawerOpen(!mobileDrawerOpen)} />
-            <main className="flex-1 overflow-y-auto bg-[var(--bg-app)] pt-[22px] px-[26px] pb-[60px]">
+            <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[var(--bg-app)] pt-[22px] px-[26px] pb-[60px]">
               <NotificationPermissionPrompt />
               <Suspense fallback={<PageSpinner />}>
                 <Outlet />
