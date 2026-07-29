@@ -1,0 +1,168 @@
+diff --git a/src/pages/meetings/MeetingDetailView.jsx b/src/pages/meetings/MeetingDetailView.jsx
+index 722cf4b..0b788ed 100644
+--- a/src/pages/meetings/MeetingDetailView.jsx
++++ b/src/pages/meetings/MeetingDetailView.jsx
+@@ -14,7 +14,7 @@ import GenerateMeetingDocButton from '../../features/meetings/components/Generat
+ import MeetingShareModal from '../../features/meetings/components/MeetingShareModal'
+ import TaskModal from '../../features/tasks/components/TaskModal'
+ import { getTaskById } from '../../features/tasks/lib/tasks'
+-import { createTasksFromActionItems, setNotesSharedWithAttendee, editRecurringMeeting } from '../../features/meetings/lib/meetings'
++import { createTasksFromActionItems, setNotesSharedWithAttendee, editRecurringMeeting, getMeetingSpaces, addMeetingSpace, removeMeetingSpace } from '../../features/meetings/lib/meetings'
+ import { resolveAssignment, getOrgDepartments, getOrgUsers } from '../../features/meetings/lib/ownerMatching'
+ import { getOpenItemsByMeeting, createOpenItems, updateOpenItem, updateOpenItemStatus, deleteOpenItem, convertOpenItemToTask } from '../../features/meetings/lib/openItems'
+ import { getCategoryStatusId, STATUS_CATEGORIES } from '../../lib/taskStatuses'
+@@ -102,6 +102,7 @@ function MeetingDetailViewInner() {
+   const [editableAiItems, setEditableAiItems]   = useState([])
+   const [editableOpenItems, setEditableOpenItems] = useState([])
+   const [editableSummary, setEditableSummary]   = useState('')
++  const [editableDetailedNotes, setEditableDetailedNotes] = useState('')
+   const [editableDecisions, setEditableDecisions] = useState([])
+   const [orgUsers, setOrgUsers]                 = useState([])
+   const [orgDepartments, setOrgDepartments]     = useState([])
+@@ -150,6 +151,11 @@ function MeetingDetailViewInner() {
+   const [savingAttendees, setSavingAttendees]           = useState(false)
+   const [attendeesError, setAttendeesError]             = useState(null)
+ 
++  // cross-department meetings
++  const [sharedSpaces, setSharedSpaces]                 = useState([])
++  const [addingSpace, setAddingSpace]                   = useState(false)
++  const [removingSpaceId, setRemovingSpaceId]           = useState(null)
++
+   const timerRef       = useRef(null)
+   const startRef       = useRef(null)
+   const totalSecs      = 90 * 60 // estimate 90 min for progress bar
+@@ -222,6 +228,7 @@ function MeetingDetailViewInner() {
+     const extracted = extraction.result
+     setAiResult(extracted)
+     setEditableSummary(extracted.summary || '')
++    setEditableDetailedNotes(extracted.detailed_notes || '')
+     setEditableDecisions(
+       Array.isArray(extracted.decisions)
+         ? extracted.decisions.map((d) => (typeof d === 'string' ? { decision: d, context: '' } : { decision: d.decision || '', context: d.context || '' }))
+@@ -378,10 +385,11 @@ function MeetingDetailViewInner() {
+       editableAiItems,
+       editableOpenItems,
+       editableSummary,
++      editableDetailedNotes,
+       editableDecisions,
+       timestamp: Date.now(),
+     }))
+-  }, [aiResult, editableAiItems, editableOpenItems, editableSummary, editableDecisions, meetingId])
++  }, [aiResult, editableAiItems, editableOpenItems, editableSummary, editableDetailedNotes, editableDecisions, meetingId])
+ 
+   // ── load draft from cache on mount ─────────────────────────────────────────
+   useEffect(() => {
+@@ -407,6 +415,7 @@ function MeetingDetailViewInner() {
+           if (parsed.editableAiItems?.length) setEditableAiItems(parsed.editableAiItems)
+           if (parsed.editableOpenItems?.length) setEditableOpenItems(parsed.editableOpenItems)
+           if (parsed.editableSummary) setEditableSummary(parsed.editableSummary)
++          if (parsed.editableDetailedNotes) setEditableDetailedNotes(parsed.editableDetailedNotes)
+           if (parsed.editableDecisions?.length) setEditableDecisions(parsed.editableDecisions)
+           if (parsed.aiResult.action_items?.length) {
+             setSelectedAiActionItems(new Set(parsed.aiResult.action_items.map((_, i) => i)))
+@@ -463,6 +472,12 @@ function MeetingDetailViewInner() {
+       setMeeting(data)
+       setTitleDraft(data.title ?? '')
+ 
++      // fetch shared spaces (cross-dept meetings)
++      try {
++        const spaces = await getMeetingSpaces(meetingId)
++        setSharedSpaces(spaces ?? [])
++      } catch { /* best-effort load */ }
++
+       // fetch meeting_minutes record for AI notes privacy toggle
+       const { data: mm } = await supabase
+         .from('meeting_minutes')
+@@ -1185,6 +1200,60 @@ function MeetingDetailViewInner() {
+             {isPost ? `Duration: ${fmt(elapsed)} · ` : ''}{dateLabel}
+             {meeting.recurrence_id && meeting.series_instance_num ? ` · 🔁 Meeting #${meeting.series_instance_num} in series` : ''}
+           </div>
++
++          {/* Shared with departments */}
++          {sharedSpaces.length > 0 && (
++            <div style={{ marginTop:8, fontSize:11, color: isLive ? 'rgba(255,255,255,.55)' : FS.muted }}>
++              Shared with:
++              <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:4 }}>
++                {sharedSpaces.map((space) => (
++                  <div
++                    key={space.department_id}
++                    style={{
++                      display:'inline-flex',
++                      alignItems:'center',
++                      gap:6,
++                      padding:'4px 8px',
++                      borderRadius:6,
++                      background: isLive ? 'rgba(255,255,255,.1)' : (space.dept?.color || '#ccc') + '22',
++                      color: isLive ? '#fff' : (space.dept?.color || '#999'),
++                      fontSize:10,
++                      fontWeight:600,
++                    }}
++                  >
++                    {space.dept?.name || 'Unknown'}
++                    {canManage && !isLive && (
++                      <button
++                        type="button"
++                        onClick={() => {
++                          setRemovingSpaceId(space.department_id)
++                          removeMeetingSpace(meetingId, space.department_id)
++                            .then(() => {
++                              setSharedSpaces((prev) => prev.filter((s) => s.department_id !== space.department_id))
++                              setRemovingSpaceId(null)
++                            })
++                            .catch(() => setRemovingSpaceId(null))
++                        }}
++                        disabled={removingSpaceId === space.department_id}
++                        style={{
++                          padding:0,
++                          border:'none',
++                          background:'none',
++                          color:'inherit',
++                          cursor:'pointer',
++                          fontSize:12,
++                          fontWeight:700,
++                          opacity: removingSpaceId === space.department_id ? 0.5 : 1,
++                        }}
++                      >
++                        ×
++                      </button>
++                    )}
++                  </div>
++                ))}
++              </div>
++            </div>
++          )}
+         </div>
+ 
+         {/* Right controls */}
+@@ -1670,6 +1739,7 @@ function MeetingDetailViewInner() {
+                     <ActionItemBridge
+                       meetingId={meetingId}
+                       departmentId={meeting.department_id}
++                      additionalSpaces={sharedSpaces.map(s => ({ id: s.department_id, name: s.dept.name }))}
+                       onSaved={tasks => { fetchActionItems(); setShowAddAction(false) }}
+                       onCancel={() => setShowAddAction(false)}
+                     />
+@@ -2193,6 +2263,23 @@ function MeetingDetailViewInner() {
+                         />
+                       </div>
+                     )}
++                    {aiResult.detailed_notes && (
++                      <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
++                        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>Detailed notes — edit before saving</div>
++                        <textarea
++                          value={editableDetailedNotes}
++                          onChange={(e) => setEditableDetailedNotes(e.target.value)}
++                          rows={14}
++                          style={{ width:'100%', fontSize:13, color: FS.text, lineHeight:1.7, fontFamily:'inherit', border:`1px solid ${FS.borderL}`, borderRadius:6, padding:'8px 10px', resize:'vertical', background:'#fff' }}
++                        />
++                        <button
++                          onClick={() => { setMinutesText(editableDetailedNotes); setActiveTab('minutes') }}
++                          style={{ marginTop:8, padding:'7px 14px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
++                        >
++                          → Copy to Minutes
++                        </button>
++                      </div>
++                    )}
+                     {editableDecisions.length > 0 && (
+                       <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
+                         <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>Decisions extracted — edit before saving</div>
