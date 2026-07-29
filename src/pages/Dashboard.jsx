@@ -384,7 +384,7 @@ function HeroStatCard({ label, value, sub, bg, blobColor, onClick }) {
 
 function MyTasksSummaryWidget({ userId, data }) {
   const navigate = useNavigate()
-  const [counts, setCounts] = useState({ today: null, overdue: null, thisWeek: null })
+  const [counts, setCounts] = useState({ today: null, overdue: null, thisWeek: null, sprintOpen: null })
 
   useEffect(() => {
     if (!userId) return
@@ -396,6 +396,7 @@ function MyTasksSummaryWidget({ userId, data }) {
         today: data.today ?? 0,
         overdue: data.overdue ?? 0,
         thisWeek: data.this_week ?? 0,
+        sprintOpen: data.sprint_open ?? null,
       })
       return
     }
@@ -408,9 +409,11 @@ function MyTasksSummaryWidget({ userId, data }) {
         let todayCount = 0
         let overdueCount = 0
         let thisWeekCount = 0
+        let sprintOpenCount = 0
 
         for (const task of tasks) {
           if (isTaskCompleted(task)) continue
+          if (task.task_type === 'sprint') sprintOpenCount++
           const due = task.due_date ? startOfDay(parseISO(`${task.due_date}T00:00:00`)) : null
           if (!due) continue
           if (isEqual(due, today)) todayCount++
@@ -418,7 +421,7 @@ function MyTasksSummaryWidget({ userId, data }) {
           else if (!isBefore(weekEnd, due)) thisWeekCount++
         }
 
-        setCounts({ today: todayCount, overdue: overdueCount, thisWeek: thisWeekCount })
+        setCounts({ today: todayCount, overdue: overdueCount, thisWeek: thisWeekCount, sprintOpen: sprintOpenCount })
       })
       .catch(() => {})
 
@@ -426,18 +429,19 @@ function MyTasksSummaryWidget({ userId, data }) {
   }, [userId, data])
 
   const stats = [
-    { label: 'Today', value: counts.today, color: 'var(--purple-700)' },
-    { label: 'Overdue', value: counts.overdue, color: 'var(--accent-red)' },
-    { label: 'This Week', value: counts.thisWeek, color: 'var(--accent-green)' },
+    { label: 'Today', value: counts.today, color: 'var(--purple-700)', path: '/my-tasks' },
+    { label: 'Overdue', value: counts.overdue, color: 'var(--accent-red)', path: '/my-tasks' },
+    { label: 'This Week', value: counts.thisWeek, color: 'var(--accent-green)', path: '/my-tasks' },
+    ...(counts.sprintOpen !== null ? [{ label: 'In Sprint', value: counts.sprintOpen, color: 'var(--accent)', path: '/sprints' }] : []),
   ]
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${stats.length}, 1fr)`, gap: 10 }}>
       {stats.map((stat) => (
         <button
           key={stat.label}
           type="button"
-          onClick={() => navigate('/my-tasks')}
+          onClick={() => navigate(stat.path)}
           style={{
             background: 'var(--surface-sub)',
             border: '1px solid var(--border-1)',
