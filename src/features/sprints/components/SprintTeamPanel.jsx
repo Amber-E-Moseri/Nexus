@@ -37,6 +37,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
   const [editingDescId, setEditingDescId] = useState(null)
   const [editingDesc, setEditingDesc] = useState('')
   const [openDropdown, setOpenDropdown] = useState(null)
+  const [memberSearch, setMemberSearch] = useState('')
   const [orgUsers, setOrgUsers] = useState([])
 
   useEffect(() => {
@@ -372,7 +373,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                 <div style={{ position: 'relative' }}>
                   <button
                     type="button"
-                    onClick={() => setOpenDropdown(openDropdown === team.id ? null : team.id)}
+                    onClick={() => { setOpenDropdown(openDropdown === team.id ? null : team.id); setMemberSearch('') }}
                     disabled={saving || availableMembers.length === 0}
                     style={{
                       background: 'none',
@@ -399,69 +400,83 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                       borderRadius: 10,
                       boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
                       zIndex: 20,
-                      minWidth: 200,
+                      minWidth: 220,
                       overflow: 'hidden',
-                      maxHeight: 260,
-                      overflowY: 'auto',
                     }}>
-                      {sprintMembersNotInTeam.length > 0 && nonSprintUsers.length > 0 && (
-                        <div style={{ padding: '6px 12px 2px', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                          Sprint members
-                        </div>
-                      )}
-                      {sprintMembersNotInTeam.map((member) => (
-                        <button
-                          key={member.user_id}
-                          type="button"
-                          onClick={() => handleAddMember(team.id, member)}
-                          disabled={saving}
+                      {/* Search input */}
+                      <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>
+                        <input
+                          autoFocus
+                          type="text"
+                          placeholder="Search…"
+                          value={memberSearch}
+                          onChange={(e) => setMemberSearch(e.target.value)}
                           style={{
-                            display: 'block',
                             width: '100%',
-                            textAlign: 'left',
-                            padding: '8px 12px',
-                            fontSize: 13,
+                            border: '1px solid var(--border)',
+                            borderRadius: 6,
+                            padding: '5px 8px',
+                            fontSize: 12,
                             color: 'var(--text-primary)',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
+                            background: 'var(--surface-secondary, #F9F7F1)',
+                            boxSizing: 'border-box',
+                            outline: 'none',
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-secondary)'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
-                        >
-                          {member.user?.name}
-                        </button>
-                      ))}
-                      {nonSprintUsers.length > 0 && (
-                        <>
-                          <div style={{ padding: '6px 12px 2px', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', borderTop: sprintMembersNotInTeam.length > 0 ? '1px solid var(--border)' : 'none', marginTop: sprintMembersNotInTeam.length > 0 ? 4 : 0 }}>
-                            Add to sprint
-                          </div>
-                          {nonSprintUsers.map((member) => (
-                            <button
-                              key={member.user_id}
-                              type="button"
-                              onClick={() => handleAddMember(team.id, member)}
-                              disabled={saving}
-                              style={{
-                                display: 'block',
-                                width: '100%',
-                                textAlign: 'left',
-                                padding: '8px 12px',
-                                fontSize: 13,
-                                color: 'var(--text-primary)',
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-secondary)'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
-                            >
-                              {member.user?.name}
-                            </button>
-                          ))}
-                        </>
-                      )}
+                        />
+                      </div>
+                      {/* Filtered lists */}
+                      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                        {(() => {
+                          const q = memberSearch.toLowerCase()
+                          const filteredSprint = sprintMembersNotInTeam.filter((m) => (m.user?.name || '').toLowerCase().includes(q))
+                          const filteredNonSprint = nonSprintUsers.filter((m) => (m.user?.name || '').toLowerCase().includes(q))
+                          return (
+                            <>
+                              {filteredSprint.length > 0 && filteredNonSprint.length > 0 && (
+                                <div style={{ padding: '6px 12px 2px', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                  Sprint members
+                                </div>
+                              )}
+                              {filteredSprint.map((member) => (
+                                <button
+                                  key={member.user_id}
+                                  type="button"
+                                  onClick={() => handleAddMember(team.id, member)}
+                                  disabled={saving}
+                                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 13, color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'pointer' }}
+                                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-secondary)'}
+                                  onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                                >
+                                  {member.user?.name}
+                                </button>
+                              ))}
+                              {filteredNonSprint.length > 0 && (
+                                <>
+                                  <div style={{ padding: '6px 12px 2px', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', borderTop: filteredSprint.length > 0 ? '1px solid var(--border)' : 'none', marginTop: filteredSprint.length > 0 ? 4 : 0 }}>
+                                    Add to sprint
+                                  </div>
+                                  {filteredNonSprint.map((member) => (
+                                    <button
+                                      key={member.user_id}
+                                      type="button"
+                                      onClick={() => handleAddMember(team.id, member)}
+                                      disabled={saving}
+                                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 13, color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'pointer' }}
+                                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-secondary)'}
+                                      onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                                    >
+                                      {member.user?.name}
+                                    </button>
+                                  ))}
+                                </>
+                              )}
+                              {filteredSprint.length === 0 && filteredNonSprint.length === 0 && (
+                                <div style={{ padding: '12px', fontSize: 13, color: 'var(--text-tertiary)', textAlign: 'center' }}>No matches</div>
+                              )}
+                            </>
+                          )
+                        })()}
+                      </div>
                     </div>
                   )}
                 </div>
