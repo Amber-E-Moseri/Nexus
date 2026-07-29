@@ -39,6 +39,60 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
   const [openDropdown, setOpenDropdown] = useState(null)
   const [memberSearch, setMemberSearch] = useState('')
   const [orgUsers, setOrgUsers] = useState([])
+  const [expandedDescIds, setExpandedDescIds] = useState(new Set())
+
+  function toggleDesc(teamId) {
+    setExpandedDescIds((prev) => {
+      const next = new Set(prev)
+      next.has(teamId) ? next.delete(teamId) : next.add(teamId)
+      return next
+    })
+  }
+
+  function renderDescription(team) {
+    const raw = team.description || ''
+    const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean)
+    const isExpanded = expandedDescIds.has(team.id)
+    const PREVIEW_LINES = 3
+    const needsTruncation = lines.length > PREVIEW_LINES
+    const visibleLines = isExpanded || !needsTruncation ? lines : lines.slice(0, PREVIEW_LINES)
+    const isList = lines.length > 1
+
+    const baseStyle = {
+      fontSize: 12,
+      color: 'var(--text-secondary)',
+      margin: '0 0 4px',
+      lineHeight: 1.55,
+      cursor: canEdit && !isArchived ? 'text' : 'default',
+    }
+
+    return (
+      <div style={{ marginBottom: 10 }}>
+        {isList ? (
+          <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}
+            onClick={() => canEdit && !isArchived && (setEditingDescId(team.id), setEditingDesc(team.description || ''))}>
+            {visibleLines.map((line, i) => (
+              <li key={i} style={baseStyle}>{line}</li>
+            ))}
+          </ul>
+        ) : (
+          <p style={baseStyle}
+            onClick={() => canEdit && !isArchived && (setEditingDescId(team.id), setEditingDesc(team.description || ''))}>
+            {visibleLines[0]}
+          </p>
+        )}
+        {needsTruncation && (
+          <button
+            type="button"
+            onClick={() => toggleDesc(team.id)}
+            style={{ background: 'none', border: 'none', padding: '2px 0 0', fontSize: 11, color: 'var(--accent, #4C2A92)', cursor: 'pointer', fontWeight: 600 }}
+          >
+            {isExpanded ? '▲ Show less' : `▼ Show ${lines.length - PREVIEW_LINES} more`}
+          </button>
+        )}
+      </div>
+    )
+  }
 
   useEffect(() => {
     if (!canEdit || isArchived) return
@@ -292,18 +346,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                 }}
               />
             ) : team.description ? (
-              <p
-                onClick={() => canEdit && !isArchived && (setEditingDescId(team.id), setEditingDesc(team.description || ''))}
-                style={{
-                  fontSize: 12,
-                  color: 'var(--text-secondary)',
-                  margin: '0 0 10px',
-                  lineHeight: 1.5,
-                  cursor: canEdit && !isArchived ? 'text' : 'default',
-                }}
-              >
-                {team.description}
-              </p>
+              renderDescription(team)
             ) : canEdit && !isArchived ? (
               <button
                 type="button"

@@ -11,7 +11,7 @@ const PRIORITY_COLORS = {
   'high': '#E85D75',
   'medium': '#F5A623',
   'low': '#7ED321',
-  'urgent': '#D0021B',
+  'urgent': '#7C3AED',
 }
 
 function startOfGrid(year, month) {

@@ -22,13 +22,13 @@ export function shortMonth(d) {
 }
 
 export const PRIORITY_COLORS = {
-  urgent: '#EF4444',
+  urgent: '#7C3AED',
   high:   '#F59E0B',
   medium: '#3B82F6',
   low:    '#9CA3AF',
 }
 export const PRIORITY_OPTIONS = [
-  { value: 'urgent', label: 'Urgent', color: '#EF4444' },
+  { value: 'urgent', label: 'Urgent', color: '#7C3AED' },
   { value: 'high',   label: 'High',   color: '#F59E0B' },
   { value: 'medium', label: 'Normal', color: '#3B82F6' },
   { value: 'low',    label: 'Low',    color: '#9CA3AF' },

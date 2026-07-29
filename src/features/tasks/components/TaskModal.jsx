@@ -444,7 +444,7 @@ export default function TaskModal({
       return
     }
 
-    if (!personal && !departmentId && !selectedSpaceId && !sprintId) {
+    if (!personal && !departmentId && !selectedSpaceId && !sprintId && !selectedSprintId) {
       setError('Please select a space.')
       return
     }
@@ -686,7 +686,7 @@ export default function TaskModal({
               </div>
             )}
 
-            {!personal && !departmentId && !sprintId && (
+            {!personal && !departmentId && !sprintId && !selectedSprintId && (
               <div style={{ marginBottom: 18 }}>
                 <label style={labelStyle}>Space *</label>
                 <select
