@@ -418,8 +418,8 @@ export default function SprintOverview() {
     const action = getNextAction(detail.sprint)
     if (!action) return
     try {
-      await advanceSprintStatus(detail.sprint.id, action.next)
-      await loadDetail()
+      const updated = await advanceSprintStatus(detail.sprint.id, action.next)
+      setDetail((prev) => prev ? { ...prev, sprint: updated } : null)
       if (action.next === 'review') {
         setActiveTab('Review')
       }
@@ -441,21 +441,47 @@ export default function SprintOverview() {
     if (!window.confirm(confirmMessage)) return
     try {
       await archiveSprintWithAutoDeactivation(detail.sprint.id)
-      await loadDetail()
+      setDetail((prev) => prev ? {
+        ...prev,
+        sprint: { ...prev.sprint, status: 'archived', is_archived: true, archived_at: new Date().toISOString() }
+      } : null)
     } catch (err) {
       console.error('Failed to archive sprint:', err)
       alert(`Failed to archive sprint: ${err?.message || String(err)}`)
     }
   }
 
+  async function reloadTeamsAndMembers() {
+    try {
+      const { data: teamsRes } = await supabase.from('sprint_teams').select('id, name, description, lead_user_id').eq('sprint_id', sprintId).order('created_at')
+      const { data: membersRes } = await supabase.from('sprint_members').select(`${SPRINT_MEMBER_WITH_TEMP_SELECT}, user:user_id(id, name, email, status, is_temporary)`).eq('sprint_id', sprintId).order('joined_at')
+
+      if (teamsRes && membersRes) {
+        const sprintTeamIds = teamsRes.map((t) => t.id)
+        let teamMembershipsMap = {}
+        if (sprintTeamIds.length > 0) {
+          const { data: teamMemberships } = await supabase.from('sprint_team_members').select('team_id, user_id').in('team_id', sprintTeamIds)
+          for (const row of teamMemberships ?? []) {
+            if (!teamMembershipsMap[row.user_id]) teamMembershipsMap[row.user_id] = []
+            teamMembershipsMap[row.user_id].push(row.team_id)
+          }
+        }
+        const membersWithTeams = (membersRes ?? []).map((member) => ({ ...member, sprint_team_ids: teamMembershipsMap[member.user_id] ?? [] }))
+        setDetail((prev) => prev ? { ...prev, teams: teamsRes, members: membersWithTeams } : null)
+      }
+    } catch (err) {
+      console.error('Failed to refresh teams/members:', err)
+    }
+  }
+
   async function handleOverviewSave() {
     setSavingOverview(true)
     try {
-      await updateSprint(detail.sprint.id, {
+      const updated = await updateSprint(detail.sprint.id, {
         goal: goalDraft.trim() || null,
         description: descriptionDraft.trim() || null,
       })
-      await loadDetail()
+      setDetail((prev) => prev ? { ...prev, sprint: updated } : null)
     } finally {
       setSavingOverview(false)
     }
@@ -471,7 +497,7 @@ export default function SprintOverview() {
       if (result.error) {
         alert(result.error)
       } else {
-        await loadDetail()
+        setDetail((prev) => prev ? { ...prev, sprint: result.data } : null)
       }
     } catch (err) {
       alert('Failed to restore sprint')
@@ -659,7 +685,9 @@ export default function SprintOverview() {
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">Sprint Review</h2>
             <span className="text-xs text-[var(--text-tertiary)]">{reviewCompleted ? 'Completed' : '0 of 6 sections completed'}</span>
           </div>
-          <SprintReview sprint={detail.sprint} canManage={Boolean(canManage)} onSaved={loadDetail} />
+          <SprintReview sprint={detail.sprint} canManage={Boolean(canManage)} onSaved={(review) => {
+            if (review) setDetail((prev) => prev ? { ...prev, review } : null)
+          }} />
         </div>
       ) : null}
 
@@ -696,29 +724,7 @@ export default function SprintOverview() {
             members={detail.members}
             canEdit={Boolean(canManage)}
             isArchived={Boolean(isArchived)}
-            onTeamChanged={async () => {
-              // Lightweight refresh: just teams and members, not full sprint detail
-              try {
-                const { data: teamsRes } = await supabase.from('sprint_teams').select('id, name, description, lead_user_id').eq('sprint_id', sprintId).order('created_at')
-                const { data: membersRes } = await supabase.from('sprint_members').select(`${SPRINT_MEMBER_WITH_TEMP_SELECT}, user:user_id(id, name, email, status, is_temporary)`).eq('sprint_id', sprintId).order('joined_at')
-
-                if (teamsRes && membersRes) {
-                  const sprintTeamIds = teamsRes.map((t) => t.id)
-                  let teamMembershipsMap = {}
-                  if (sprintTeamIds.length > 0) {
-                    const { data: teamMemberships } = await supabase.from('sprint_team_members').select('team_id, user_id').in('team_id', sprintTeamIds)
-                    for (const row of teamMemberships ?? []) {
-                      if (!teamMembershipsMap[row.user_id]) teamMembershipsMap[row.user_id] = []
-                      teamMembershipsMap[row.user_id].push(row.team_id)
-                    }
-                  }
-                  const membersWithTeams = (membersRes ?? []).map((member) => ({ ...member, sprint_team_ids: teamMembershipsMap[member.user_id] ?? [] }))
-                  setDetail((prev) => prev ? { ...prev, teams: teamsRes, members: membersWithTeams } : null)
-                }
-              } catch (err) {
-                console.error('Failed to refresh teams/members:', err)
-              }
-            }}
+            onTeamChanged={reloadTeamsAndMembers}
             onCreateTeam={async (name) => {
               setSavingTeam(true)
               try {
@@ -781,7 +787,7 @@ export default function SprintOverview() {
             teams={detail.teams ?? []}
             canEdit={Boolean(canManage)}
             isArchived={Boolean(isArchived)}
-            onChanged={loadDetail}
+            onChanged={reloadTeamsAndMembers}
           />
         </div>
       )}
@@ -818,7 +824,7 @@ export default function SprintOverview() {
           canInvite={Boolean((canManage || isMember) && !isArchived)}
           canAssignPrivilegedRoles={Boolean(canAssignPrivilegedSprintRoles)}
           onClose={() => setShowInviteExternalModal(false)}
-          onSuccess={() => { setShowInviteExternalModal(false); loadDetail() }}
+          onSuccess={() => { setShowInviteExternalModal(false); void reloadTeamsAndMembers() }}
         />
       )}
 
@@ -854,7 +860,7 @@ export default function SprintOverview() {
           onClose={() => setShowCreateTeamModal(false)}
           onSuccess={async () => {
             setShowCreateTeamModal(false)
-            await loadDetail()
+            await reloadTeamsAndMembers()
           }}
         />
       )}
@@ -863,9 +869,9 @@ export default function SprintOverview() {
         <SprintModal
           mode="edit"
           sprint={detail.sprint}
-          onSaved={async () => {
+          onSaved={(saved) => {
             setShowEditSprintModal(false)
-            await loadDetail()
+            if (saved) setDetail((prev) => prev ? { ...prev, sprint: saved } : null)
           }}
           onClose={() => setShowEditSprintModal(false)}
         />

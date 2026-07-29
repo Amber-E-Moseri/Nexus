@@ -5,6 +5,7 @@ import {
   CalendarClock,
   CalendarDays,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -305,8 +306,8 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const [spaceActionsOpenId, setSpaceActionsOpenId] = useState(null)
   const [openSpaceMenuId, setOpenSpaceMenuId] = useState(null)
   const [toolsExpanded, setToolsExpanded] = useState(false)
-  const [adminExpanded, setAdminExpanded] = useState(false)
-  const [helpExpanded, setHelpExpanded] = useState(false)
+  const [adminExpanded, setAdminExpanded] = useState(true)
+  const [helpExpanded, setHelpExpanded] = useState(true)
   const [regionalUpdatesExpanded, setRegionalUpdatesExpanded] = useState(false)
   const [hiddenSpaceIds, setHiddenSpaceIds] = useState(() => {
     // Defer to profile load, will initialize after
@@ -728,6 +729,13 @@ export default function Sidebar({ isMobileDrawer = false }) {
             to="/flock"
           />
         ) : null}
+        {/* Registration - visible to all; page enforces sprint-team access */}
+        <SidebarItem
+          active={isPathActive(location.pathname, '/registration')}
+          icon={CheckCircle2}
+          label="This Is It Registration"
+          to="/registration"
+        />
         {!collapsed && <SidebarSectionLabel onAdd={canCreateSpace ? () => setShowSpaceModal(true) : undefined}>Spaces</SidebarSectionLabel>}
         {displaySpaces.map((space) => (
           <div

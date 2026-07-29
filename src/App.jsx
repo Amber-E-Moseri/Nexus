@@ -100,6 +100,7 @@ const InvitationWizard = lazy(() => import('./pages/communications/InvitationWiz
 const InvitationDetailPage = lazy(() => import('./pages/communications/InvitationDetailPage'))
 const InvitationsListPage = lazy(() => import('./pages/communications/InvitationsListPage'))
 const InstagramGradingPage = lazyRoute('/instagram', () => import('./features/instagram/pages/InstagramGradingPage'))
+const RegistrationPage = lazyRoute('/registration', () => import('./pages/events/RegistrationPage'))
 const HelpPage = lazyRoute('/help', () => import('./pages/HelpPage'))
 const SupportPage = lazyRoute('/support', () => import('./pages/SupportPage'))
 const SupportTicketsAdminPage = lazyRoute('/admin/tickets', () => import('./pages/SupportTicketsAdminPage'))
@@ -424,6 +425,7 @@ export default function App() {
               )
             }
           />
+          <Route path="/registration" element={<RegistrationPage />} />
         </Route>
         {/* Map rendered fullscreen — no sidebar shell */}
         <Route path="/map" element={<CanMapPage />} />

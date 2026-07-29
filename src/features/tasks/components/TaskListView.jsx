@@ -1,6 +1,7 @@
 import { DndContext, DragOverlay, closestCorners, useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useWindowWidth } from '../../../hooks/useWindowWidth'
 import { getChecklistCounts } from '../lib/checklists'
 import { formatDueDate } from '../../../lib/dateUtils'
 import { isTaskCompleted, getTaskStatusCategory, STATUS_CATEGORIES, dedupeTaskStatuses } from '../../../lib/taskStatuses'
@@ -82,6 +83,7 @@ export default function TaskListView({
   const [lazySubtasks, setLazySubtasks] = useState({})
   const [expandedTasks, setExpandedTasks] = useState(new Set())
   const sensors = useDndSensors()
+  const isMobile = useWindowWidth() < 640
 
   const toggleSubtasks = useCallback(async (taskId) => {
     setExpandedTasks((prev) => {
@@ -309,6 +311,7 @@ export default function TaskListView({
                             statuses={statuses}
                             priorities={priorities}
                             onClick={() => onTaskClick(task)}
+                            isMobile={isMobile}
                             showSubtaskCount={showSubtaskCount}
                             checklistCount={checklistCounts[task.id] ?? null}
                             showChecklistCount={showChecklistCount}
@@ -326,6 +329,7 @@ export default function TaskListView({
                             statuses={statuses}
                             priorities={priorities}
                             onClick={() => onTaskClick(child)}
+                            isMobile={isMobile}
                             showSubtaskCount={false}
                             checklistCount={checklistCounts[child.id] ?? null}
                             showChecklistCount={showChecklistCount}
@@ -422,7 +426,7 @@ export default function TaskListView({
       </div>
 
       <DragOverlay dropAnimation={{ duration: 150, easing: 'ease' }}>
-        {activeTask ? <TaskRowGhost task={activeTask} /> : null}
+        {activeTask ? <TaskRowGhost task={activeTask} isMobile={isMobile} /> : null}
       </DragOverlay>
     </DndContext>
   )

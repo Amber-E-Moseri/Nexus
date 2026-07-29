@@ -1037,7 +1037,7 @@ export default function Dashboard() {
         <section className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 style={{ fontFamily: FONT_HEADING, fontSize: 26, fontWeight: 700, color: 'var(--ink-1)', margin: 0, letterSpacing: '-0.02em' }}>
-              {greetingForHour()}, {profile?.name?.split(' ')[0] ?? 'there'} 👋
+              {greetingForHour()}, {profile?.name?.replace(/_/g, ' ').split(' ')[0] ?? 'there'} 👋
             </h1>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

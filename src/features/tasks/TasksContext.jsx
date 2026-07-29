@@ -275,10 +275,17 @@ export function TasksProvider({ departmentId, sprintId, initialTasks, children }
   )
 
   const editTask = useCallback(async (taskId, updates) => {
-    const updated = await updateTask(taskId, updates)
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)))
-    return updated
-  }, [])
+    const prevTasks = [...(tasks || [])]
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...updates } : t)))
+    try {
+      const updated = await updateTask(taskId, updates)
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)))
+      return updated
+    } catch (error) {
+      setTasks(prevTasks)
+      throw error
+    }
+  }, [tasks])
 
   const removeTask = useCallback(async (taskId) => {
     setTasks((prev) => prev.filter((t) => t.id !== taskId))

@@ -45,7 +45,7 @@ export default function SprintReviewForm({ sprint, review, canManage, onSaved, o
     try {
       const saved = await saveSprintReview(sprint.id, form, profile.id)
       setSavedReview(saved)
-      await onSaved?.()
+      await onSaved?.(saved)
     } finally {
       setSaving(false)
     }

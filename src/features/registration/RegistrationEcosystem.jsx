@@ -178,8 +178,8 @@ function ProgressBar({ pct, tone }) {
 function statusTone(pct) { return pct >= 95 ? 'green' : pct >= 75 ? 'amber' : 'red'; }
 function statusLabel(pct) { return pct >= 95 ? 'On track' : pct >= 75 ? 'Tracking' : 'Behind'; }
 
-function Card({ children, style }) {
-  return <div style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, ...style }}>{children}</div>;
+function Card({ children, style, ...rest }) {
+  return <div {...rest} style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, ...style }}>{children}</div>;
 }
 
 function Btn({ children, onClick, tone = 'primary', small, disabled }) {
@@ -252,6 +252,17 @@ export default function App() {
         }
       }
 
+      // Load exempt fellowships from Supabase (overrides localStorage if present)
+      let finalExempt = ex;
+      try {
+        const { data: configRow } = await supabase
+          .from('registration_config')
+          .select('value')
+          .eq('key', 'exempt_fellowships')
+          .maybeSingle();
+        if (configRow?.value) finalExempt = configRow.value;
+      } catch { /* table may not exist yet; use localStorage fallback */ }
+
       // Fetch registrations from Supabase if not already loaded from localStorage
       let finalReg = reg;
       if (!reg || reg.length === 0) {
@@ -290,7 +301,7 @@ export default function App() {
         }
       }
 
-      setRoster(finalRoster); setRegistrations(finalReg); setFlights(fl); setConfirmations(conf); setTargets(tg); setExempt(ex); setLastImport(li);
+      setRoster(finalRoster); setRegistrations(finalReg); setFlights(fl); setConfirmations(conf); setTargets(tg); setExempt(finalExempt); setLastImport(li);
 
       // Load room assignments
       try {
@@ -374,8 +385,12 @@ export default function App() {
     });
   }, []);
 
-  const updateExempt = useCallback((list) => {
-    setExempt(list); saveKey('exempt-fellowships', list);
+  const updateExempt = useCallback(async (list) => {
+    setExempt(list);
+    saveKey('exempt-fellowships', list);
+    try {
+      await supabase.from('registration_config').upsert({ key: 'exempt_fellowships', value: list, updated_at: new Date().toISOString() });
+    } catch { /* silent — localStorage still updated */ }
   }, []);
 
   function initializeRooms(count, capacity) {
@@ -418,6 +433,18 @@ export default function App() {
     );
     setRooms(updated);
     saveRoomData(updated, numRooms, peoplePerRoom);
+  }
+
+  function handleBulkCreateRooms(prefix, count, capacity) {
+    const newRooms = Array.from({ length: count }, (_, i) => ({
+      id: `room-${Date.now()}-${i}`,
+      name: `${prefix} ${rooms.length + i + 1}`,
+      capacity: Math.max(1, Number(capacity) || 2),
+      people: [],
+    }));
+    const updated = [...rooms, ...newRooms];
+    setRooms(updated);
+    saveRoomData(updated, updated.length, peoplePerRoom);
   }
 
   function handleDeleteRoom(roomId) {
@@ -517,7 +544,7 @@ export default function App() {
         {tab === 'transport' && <TransportTab {...{ merged, exempt }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups }} />}
-        {tab === 'rooms' && <RoomAssignmentTab {...{ merged, rooms, handleAddRoom, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, peoplePerRoom }} />}
+        {tab === 'rooms' && <RoomAssignmentTab {...{ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, peoplePerRoom }} />}
         {tab === 'import' && <ImportTab {...{ handleImport, roster, registrations, flights, exempt, updateExempt, lastImport }} />}
       </div>
     </div>
@@ -635,11 +662,17 @@ function SummaryCard({ label, current, target, pct }) {
 
 function ExemptEditor({ exempt, onChange }) {
   const [text, setText] = useState(exempt.join(', '));
+  const [saved, setSaved] = useState(false);
   useEffect(() => setText(exempt.join(', ')), [exempt]);
+  function handleSave() {
+    onChange(text.split(',').map(s => s.trim()).filter(Boolean));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
   return (
-    <div style={{ display: 'flex', gap: 8 }}>
-      <input type="text" style={{ flex: 1 }} value={text} onChange={e => setText(e.target.value)} />
-      <Btn small onClick={() => onChange(text.split(',').map(s => s.trim()).filter(Boolean))}>Save</Btn>
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <input type="text" style={{ flex: 1 }} value={text} onChange={e => { setText(e.target.value); setSaved(false); }} onKeyDown={e => e.key === 'Enter' && handleSave()} />
+      <Btn small onClick={handleSave}>{saved ? '✓ Saved' : 'Save'}</Btn>
     </div>
   );
 }
@@ -821,9 +854,9 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups 
   const filtered = useMemo(() => merged.filter(r => {
     if (subgroupFilter !== 'All' && r.subgroup !== subgroupFilter) return false;
     const fsGraduated = /grad/i.test(r.foundationStatus);
-    const baptized = /yes/i.test(r.baptism);
+    const baptismFlag = /no|not sure/i.test(r.baptism);
     const flagFoundation = needFoundation && !fsGraduated;
-    const flagBaptism = needBaptism && !baptized;
+    const flagBaptism = needBaptism && baptismFlag;
     if (mode === 'both') return flagFoundation && flagBaptism;
     return flagFoundation || flagBaptism;
   }), [merged, subgroupFilter, needFoundation, needBaptism, mode]);
@@ -970,9 +1003,12 @@ function ImportBlock({ title, hint, count, last, onImport }) {
 }
 
 // ============ ROOM ASSIGNMENTS ============
-function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, peoplePerRoom }) {
+function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, peoplePerRoom }) {
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomCapacity, setNewRoomCapacity] = useState(peoplePerRoom);
+  const [bulkPrefix, setBulkPrefix] = useState('Room');
+  const [bulkCount, setBulkCount] = useState(5);
+  const [bulkCapacity, setBulkCapacity] = useState(2);
   const [draggedPerson, setDraggedPerson] = useState(null);
 
   const assignedEmails = new Set(rooms.flatMap(r => r.people.map(p => p.email)));
@@ -1078,34 +1114,58 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleDeleteRoom, han
         </div>
       </div>
 
-      {/* Add room */}
-      <Card>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            value={newRoomName}
-            onChange={e => setNewRoomName(e.target.value)}
-            placeholder="Room name (optional)"
-            style={{ flex: 1, minWidth: 140 }}
-            onKeyDown={e => {
-              if (e.key === 'Enter') { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); }
-            }}
-          />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: C.mute, whiteSpace: 'nowrap' }}>
-            Capacity:
+      {/* Add rooms */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {/* Single room */}
+        <Card>
+          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Add single room</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <input
-              type="number"
-              min={1}
-              value={newRoomCapacity}
-              onChange={e => setNewRoomCapacity(e.target.value)}
-              style={{ width: 52, fontSize: 13, padding: '5px 7px' }}
+              type="text"
+              value={newRoomName}
+              onChange={e => setNewRoomName(e.target.value)}
+              placeholder="Room name (optional)"
+              style={{ flex: 1, minWidth: 120 }}
+              onKeyDown={e => { if (e.key === 'Enter') { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); } }}
             />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: C.mute, whiteSpace: 'nowrap' }}>
+              Cap:
+              <input type="number" min={1} value={newRoomCapacity} onChange={e => setNewRoomCapacity(e.target.value)} style={{ width: 50, fontSize: 13, padding: '5px 7px' }} />
+            </div>
+            <Btn small onClick={() => { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); }} disabled={rooms.length >= 50}>
+              <Plus size={13} /> Add
+            </Btn>
           </div>
-          <Btn small onClick={() => { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); }} disabled={rooms.length >= 50}>
-            <Plus size={13} /> Add Room
-          </Btn>
-        </div>
-      </Card>
+        </Card>
+
+        {/* Bulk create */}
+        <Card>
+          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Bulk create rooms</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              value={bulkPrefix}
+              onChange={e => setBulkPrefix(e.target.value)}
+              placeholder="Prefix (e.g. Room)"
+              style={{ flex: 1, minWidth: 100 }}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: C.mute, whiteSpace: 'nowrap' }}>
+              Count:
+              <input type="number" min={1} max={50} value={bulkCount} onChange={e => setBulkCount(e.target.value)} style={{ width: 50, fontSize: 13, padding: '5px 7px' }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: C.mute, whiteSpace: 'nowrap' }}>
+              Cap:
+              <input type="number" min={1} value={bulkCapacity} onChange={e => setBulkCapacity(e.target.value)} style={{ width: 50, fontSize: 13, padding: '5px 7px' }} />
+            </div>
+            <Btn small onClick={() => handleBulkCreateRooms(bulkPrefix, Number(bulkCount), bulkCapacity)} disabled={rooms.length >= 50 || !bulkCount}>
+              <Plus size={13} /> Create {bulkCount || ''}
+            </Btn>
+          </div>
+          <div style={{ fontSize: 11, color: C.mute, marginTop: 8 }}>
+            Creates "{bulkPrefix} {rooms.length + 1}", "{bulkPrefix} {rooms.length + 2}", … each with capacity {bulkCapacity}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

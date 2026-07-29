@@ -200,45 +200,19 @@ export default function TaskComments({ taskId, subtaskId, onMentionAssigned }) {
     if (!body.trim()) return
     setSaving(true)
     try {
-      const comment = await createComment(taskId, body, profile.id, profile.id, profile.name ?? null)
+      const comment = await createComment(taskId, body, profile.id, profile.id, profile.name ?? null, mentions.length > 0 ? mentions : null)
       const assignedUserId = mentions[0]?.id ?? null
-      const assignedAt = assignedUserId ? new Date().toISOString() : null
 
-      const { data: updatedComment, error } = await supabase
-        .from('task_comments')
-        .update({
-          assigned_to: assignedUserId,
-          assigned_at: assignedAt,
-          mentions: mentions.map((entry) => entry.id),
-        })
-        .eq('id', comment.id)
-        .select(`
-          id,
-          body,
-          created_at,
-          assigned_to,
-          assigned_at,
-          resolved_by,
-          resolved_at,
-          mentions,
-          author:users!author_id(id, name, avatar_url),
-          assigned_user:users!assigned_to(id, name, avatar_url, role),
-          resolved_user:users!resolved_by(id, name, avatar_url)
-        `)
-        .single()
-
-      if (error) throw error
-
-      setComments((prev) => [...prev, updatedComment])
+      setComments((prev) => [...prev, comment])
 
       if (assignedUserId) {
         void recordActivity('comment_assigned', {
           task_id: taskId,
-          comment_id: updatedComment.id,
+          comment_id: comment.id,
           assigned_to: assignedUserId,
           actor_id: profile.id,
           task_title: task?.title ?? null,
-          body_preview: updatedComment.body.slice(0, 100),
+          body_preview: comment.body.slice(0, 100),
         })
       }
 

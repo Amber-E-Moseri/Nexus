@@ -454,25 +454,28 @@ export async function createTask(taskData) {
   return normalizeTaskResult(data)
 }
 
-export async function updateTask(taskId, updates, actorId = null) {
-  const { data: existingTask, error: existingTaskError } = await supabase
-    .from('tasks')
-    .select(`
-      id,
-      title,
-      assignee_id,
-      created_by,
-      due_date,
-      status,
-      department_id,
-      sprint_id,
-      parent_task_id,
-      ${TASK_STATUS_SELECT}
-    `)
-    .eq('id', taskId)
-    .single()
+export async function updateTask(taskId, updates, actorId = null, existingTask = null) {
+  if (!existingTask) {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select(`
+        id,
+        title,
+        assignee_id,
+        created_by,
+        due_date,
+        status,
+        department_id,
+        sprint_id,
+        parent_task_id,
+        ${TASK_STATUS_SELECT}
+      `)
+      .eq('id', taskId)
+      .single()
 
-  if (existingTaskError) throw existingTaskError
+    if (error) throw error
+    existingTask = data
+  }
 
   // The assignee set is always resolved to an explicit array (or left null
   // if this update doesn't touch assignment at all) and written through the
@@ -516,20 +519,15 @@ export async function updateTask(taskId, updates, actorId = null) {
 
   if (nextAssigneeIds !== null) {
     await syncTaskAssignees(taskId, nextAssigneeIds)
-  }
-
-  // Either the direct update was skipped (assignee-only change) or the
-  // assignee sync above may have changed assignee_id/assignees via the
-  // sync_primary_assignee trigger — re-read so the returned task reflects
-  // the true final state rather than a pre-sync snapshot.
-  if (!data || nextAssigneeIds !== null) {
-    const { data: freshRow, error: freshError } = await supabase
-      .from('tasks')
-      .select(TASK_FULL_SELECT)
-      .eq('id', taskId)
-      .single()
-    if (freshError) throw freshError
-    data = freshRow
+    if (!data) {
+      const { data: freshRow, error: freshError } = await supabase
+        .from('tasks')
+        .select(TASK_FULL_SELECT)
+        .eq('id', taskId)
+        .single()
+      if (freshError) throw freshError
+      data = freshRow
+    }
   }
 
   const normalized = normalizeTaskResult(data)
@@ -818,10 +816,20 @@ export async function getTaskComments(taskId) {
   return data ?? []
 }
 
-export async function createComment(taskId, body, authorId, actorId = null, authorName = null) {
+export async function createComment(taskId, body, authorId, actorId = null, authorName = null, mentions = null) {
+  const assignedUserId = mentions?.[0]?.id ?? null
+  const assignedAt = assignedUserId ? new Date().toISOString() : null
+
   const { data, error } = await supabase
     .from('task_comments')
-    .insert({ task_id: taskId, body: body.trim(), author_id: authorId })
+    .insert({
+      task_id: taskId,
+      body: body.trim(),
+      author_id: authorId,
+      assigned_to: assignedUserId,
+      assigned_at: assignedAt,
+      mentions: mentions?.map((m) => m.id) ?? null,
+    })
     .select(TASK_COMMENT_SELECT)
     .single()
 

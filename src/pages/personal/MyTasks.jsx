@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useWindowWidth } from '../../hooks/useWindowWidth'
 import { SlidersHorizontal } from 'lucide-react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
@@ -73,6 +74,7 @@ export default function MyTasks() {
     return { ...EMPTY_FILTERS, dateClosedOperator: operator, dateClosedRangeDays: rangeDays }
   })
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const isMobileView = useWindowWidth() < 640
 
   useEffect(() => {
     try {
@@ -347,7 +349,7 @@ export default function MyTasks() {
             </button>
 
             {filtersOpen ? (
-              <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[640px] max-w-[80vw] max-h-[70vh] overflow-y-auto rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--shadow-lg)]">
+              <div className={`absolute ${isMobileView ? 'left-0' : 'right-0'} top-[calc(100%+8px)] z-20 w-[640px] max-w-[calc(100vw-32px)] max-h-[70vh] overflow-y-auto rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--shadow-lg)]`}>
                 <TaskFilters forceExpanded filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={statusGroups.display} tasks={tabTasks} showDateClosedFilter />
               </div>
             ) : null}

@@ -226,7 +226,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
           </button>
         </div>
       )}
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
       {teams.map((team, idx) => {
         const teamMembers = getTeamMembers(team.id)
         const teamColor = TEAM_COLORS[idx % TEAM_COLORS.length]
