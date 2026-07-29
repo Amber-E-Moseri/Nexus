@@ -30,47 +30,74 @@ export default function MySprintTasksWidget({ userId }) {
     async function load() {
       setLoading(true)
       try {
-        // Fetch open tasks assigned to user that belong to a sprint
+        // Step 1: Find all active sprints the user is a member of
+        const { data: sprintMembers } = await supabase
+          .from('sprint_members')
+          .select('sprint_id, sprints!sprint_id(id, name, status)')
+          .eq('user_id', userId)
+
+        if (!active) return
+
+        const ACTIVE_SPRINT_STATUSES = new Set(['planning', 'active', 'review'])
+        const activeSprints = (sprintMembers ?? [])
+          .filter(sm => ACTIVE_SPRINT_STATUSES.has(sm.sprints?.status))
+          .map(sm => sm.sprint_id)
+
+        if (activeSprints.length === 0) {
+          setGroups([])
+          setLoading(false)
+          return
+        }
+
+        // Step 2: Fetch all open tasks in those sprints (for any assignee)
         const { data } = await supabase
           .from('tasks')
           .select(`
-            id, title, due_date,
+            id, title, due_date, assignee_id,
             sprint_id,
             sprint:sprints!sprint_id(id, name, status),
             status_definition:task_status_definitions!status_id(category, color, name)
           `)
-          .eq('assignee_id', userId)
-          .not('sprint_id', 'is', null)
-          .limit(40)
+          .in('sprint_id', activeSprints)
+          .limit(200)
 
         if (!active) return
 
-        // Filter to open tasks in active sprints
-        const ACTIVE_SPRINT_STATUSES = new Set(['planning', 'active', 'review'])
+        // Filter to open tasks
         const open = (data ?? []).filter(
           (t) =>
-            ACTIVE_SPRINT_STATUSES.has(t.sprint?.status) &&
             t.status_definition?.category !== 'completed' &&
             t.status_definition?.category !== 'cancelled',
         )
 
-        // Group by sprint
+        // Group by sprint, with user's tasks first
         const sprintMap = new Map()
         for (const task of open) {
           const sid = task.sprint_id
-          if (!sprintMap.has(sid)) sprintMap.set(sid, { sprint: task.sprint, tasks: [] })
-          sprintMap.get(sid).tasks.push(task)
+          if (!sprintMap.has(sid)) {
+            sprintMap.set(sid, { sprint: task.sprint, userTasks: [], otherTasks: [] })
+          }
+          const group = sprintMap.get(sid)
+          if (task.assignee_id === userId) {
+            group.userTasks.push(task)
+          } else {
+            group.otherTasks.push(task)
+          }
         }
 
         // Sort each sprint's tasks by due date (nulls last)
-        const grouped = [...sprintMap.values()].map((g) => ({
-          ...g,
-          tasks: g.tasks.sort((a, b) => {
+        const sortTasks = (tasks) =>
+          tasks.sort((a, b) => {
             if (!a.due_date && !b.due_date) return 0
             if (!a.due_date) return 1
             if (!b.due_date) return -1
             return a.due_date.localeCompare(b.due_date)
-          }),
+          })
+
+        const grouped = [...sprintMap.values()].map((g) => ({
+          sprint: g.sprint,
+          userTasks: sortTasks(g.userTasks),
+          otherTasks: sortTasks(g.otherTasks),
         }))
 
         setGroups(grouped)
@@ -86,13 +113,67 @@ export default function MySprintTasksWidget({ userId }) {
   if (loading) return <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>Loading…</div>
   if (groups.length === 0) return (
     <div style={{ fontSize: 13, color: 'var(--ink-3)', padding: '16px 0', textAlign: 'center' }}>
-      No open sprint tasks assigned to you.
+      You're not in any active sprints yet.
     </div>
   )
 
+  const hasAnyTasks = groups.some(g => g.userTasks.length > 0 || g.otherTasks.length > 0)
+  if (!hasAnyTasks) {
+    return (
+      <div style={{ fontSize: 13, color: 'var(--ink-3)', padding: '16px 0', textAlign: 'center' }}>
+        No open tasks in your sprints.
+        <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 8 }}>
+          <button
+            type="button"
+            onClick={() => navigate('/sprints')}
+            style={{ fontSize: 12, color: 'var(--purple-700)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            View all sprints →
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  function TaskRow({ task }) {
+    const due = dueDateStyle(task.due_date)
+    const statusColor = task.status_definition?.color ?? '#C8BFB2'
+    return (
+      <button
+        key={task.id}
+        type="button"
+        onClick={() => navigate(`/sprints?task=${task.id}`)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 9,
+          padding: '6px 8px',
+          background: 'transparent',
+          border: 'none',
+          borderRadius: 8,
+          cursor: 'pointer',
+          textAlign: 'left',
+          transition: 'background .1s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-sub)' }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+      >
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+        <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500, color: 'var(--ink-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {task.title}
+        </span>
+        {due.label && (
+          <span style={{ fontSize: 11, fontWeight: 600, color: due.color, flexShrink: 0 }}>
+            {due.label}
+          </span>
+        )}
+      </button>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {groups.map(({ sprint, tasks }) => {
+      {groups.map(({ sprint, userTasks, otherTasks }) => {
         const col = SPRINT_STATUS_COLORS[sprint?.status] ?? SPRINT_STATUS_COLORS.active
         return (
           <div key={sprint?.id}>
@@ -106,44 +187,25 @@ export default function MySprintTasksWidget({ userId }) {
               </span>
             </div>
 
-            {/* Tasks */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, paddingLeft: 4 }}>
-              {tasks.map((task) => {
-                const due = dueDateStyle(task.due_date)
-                const statusColor = task.status_definition?.color ?? '#C8BFB2'
-                return (
-                  <button
-                    key={task.id}
-                    type="button"
-                    onClick={() => navigate(`/sprints?task=${task.id}`)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 9,
-                      padding: '6px 8px',
-                      background: 'transparent',
-                      border: 'none',
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'background .1s',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-sub)' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                  >
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500, color: 'var(--ink-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {task.title}
-                    </span>
-                    {due.label && (
-                      <span style={{ fontSize: 11, fontWeight: 600, color: due.color, flexShrink: 0 }}>
-                        {due.label}
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
+            {/* Your tasks */}
+            {userTasks.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, paddingLeft: 4, marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-3)', marginBottom: 3 }}>Your tasks</div>
+                {userTasks.map((task) => <TaskRow key={task.id} task={task} />)}
+              </div>
+            )}
+
+            {/* Other team members' tasks */}
+            {otherTasks.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, paddingLeft: 4, opacity: 0.7 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-3)', marginBottom: 3 }}>Team</div>
+                {otherTasks.map((task) => <TaskRow key={task.id} task={task} />)}
+              </div>
+            )}
+
+            {userTasks.length === 0 && otherTasks.length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--ink-4)', paddingLeft: 4 }}>No open tasks</div>
+            )}
           </div>
         )
       })}
