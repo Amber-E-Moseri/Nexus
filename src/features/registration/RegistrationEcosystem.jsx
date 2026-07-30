@@ -1237,12 +1237,14 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <div>
-          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Confirmations</h2>
-          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>
-            In-state = manual checkbox. Out-of-state = confirmed automatically (with flight) or via bypass (flagged).
-            {confirmedCount}/{filtered.length} fully confirmed{bypassCount > 0 ? ` (${bypassCount} flagged bypasses)` : ''}.
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+          <div>
+            <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Confirmations</h2>
+            <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>
+              In-state = manual checkbox. Out-of-state = confirmed automatically (with flight) or via bypass (flagged).
+              {confirmedCount}/{filtered.length} fully confirmed{bypassCount > 0 ? ` (${bypassCount} flagged bypasses)` : ''}.
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1251,7 +1253,7 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
             placeholder="Search name, email, subgroup…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ padding: '6px 11px', border: `1px solid ${C.line}`, borderRadius: 7, fontSize: 13, fontFamily: 'Inter', width: 230, color: C.ink, background: '#fff' }}
+            style={{ padding: '6px 11px', border: `1px solid ${C.line}`, borderRadius: 7, fontSize: 13, fontFamily: 'Inter', flex: 1, maxWidth: 320, color: C.ink, background: '#fff' }}
           />
           {isLimited ? (
             <FellowshipSelect value={fellowshipFilter} onChange={setFellowshipFilter} fellowships={fellowships} />
