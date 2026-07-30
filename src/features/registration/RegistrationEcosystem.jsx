@@ -1044,21 +1044,33 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
     const win = window.open('', '_blank');
     const rows = rooms.map(room => {
       const head = room.people.find(p => p.email === room.roomHead);
+      const genders = new Set(room.people.map(p => {
+        const g = (p.gender || '').toLowerCase();
+        return (g.includes('female') || g === 'f') ? 'female' : 'male';
+      }));
+      const isMixed = genders.size > 1;
+      const isAllFemale = !isMixed && genders.has('female') && room.people.length > 0;
+      const isAllMale = !isMixed && genders.has('male') && room.people.length > 0;
+      const bg = isAllFemale ? '#FFE8F4' : isAllMale ? '#E8F0FF' : isMixed ? '#FBF0DE' : '#F8F8F8';
+      const accent = isAllFemale ? '#C0507A' : isAllMale ? '#2A5FA5' : isMixed ? '#B8710A' : '#6B5C8F';
       const people = room.people.map(p =>
-        `<li style="padding:3px 0;border-bottom:1px solid #eee">${p.fullName}${p.email === room.roomHead ? ' ⭐' : ''}</li>`
+        `<li style="padding:4px 0;border-bottom:1px solid rgba(0,0,0,0.07);font-size:13px">
+          <span style="font-weight:${p.email === room.roomHead ? 700 : 400}">${p.fullName}${p.email === room.roomHead ? ' ⭐' : ''}</span>
+          ${p.designation ? `<span style="font-size:11px;color:#888;margin-left:6px">${p.designation}</span>` : ''}
+        </li>`
       ).join('');
       return `
-        <div style="break-inside:avoid;border:1px solid #ccc;border-radius:8px;padding:14px 16px;margin-bottom:14px">
-          <div style="font-weight:700;font-size:15px;margin-bottom:4px">${room.name}</div>
-          <div style="font-size:12px;color:#666;margin-bottom:8px">${room.people.length} / ${room.capacity} people${head ? ` · Room head: ${head.fullName}` : ''}</div>
-          <ol style="margin:0;padding-left:18px;font-size:13px">${people || '<li style="color:#999">Empty</li>'}</ol>
+        <div style="break-inside:avoid;border:2px solid ${accent};border-radius:10px;background:${bg};padding:14px 16px;margin-bottom:14px">
+          <div style="font-weight:700;font-size:15px;color:${accent};margin-bottom:3px">${room.name}</div>
+          <div style="font-size:11px;color:#888;margin-bottom:8px">${room.people.length} / ${room.capacity} people${head ? ` · Head: ${head.fullName}` : ''}${isMixed ? ' · ⚠ Mixed gender' : ''}</div>
+          <ol style="margin:0;padding-left:18px">${people || '<li style="color:#aaa;font-size:12px">Empty</li>'}</ol>
         </div>`;
     }).join('');
     win.document.write(`<!doctype html><html><head><title>Room Assignments</title>
-      <style>body{font-family:sans-serif;padding:24px;max-width:800px;margin:0 auto}
-      h1{font-size:20px;margin-bottom:4px}p{color:#666;font-size:13px;margin-bottom:20px}
+      <style>body{font-family:sans-serif;padding:24px;max-width:860px;margin:0 auto}
+      h1{font-size:22px;margin-bottom:4px;color:#1A1220}p{color:#888;font-size:13px;margin-bottom:20px}
       .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-      @media print{@page{margin:1.5cm}}</style></head>
+      @media print{@page{margin:1.5cm}.grid{grid-template-columns:1fr 1fr}}</style></head>
       <body><h1>Room Assignments</h1>
       <p>Printed ${new Date().toLocaleDateString('en-CA', { weekday:'long', year:'numeric', month:'long', day:'numeric' })} · ${rooms.length} rooms · ${rooms.reduce((s,r)=>s+r.people.length,0)} assigned</p>
       <div class="grid">${rows}</div></body></html>`);
@@ -1110,7 +1122,18 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Rooms ({rooms.length})</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 12, marginBottom: 16 }}>
-          {rooms.map(room => (
+          {rooms.map(room => {
+            const genderSet = new Set(room.people.map(p => {
+              const g = (p.gender || '').toLowerCase();
+              return (g.includes('female') || g === 'f') ? 'female' : 'male';
+            }));
+            const isFull = room.people.length >= room.capacity;
+            const isMixed = genderSet.size > 1;
+            const isAllFemale = !isMixed && genderSet.has('female') && room.people.length > 0;
+            const isAllMale = !isMixed && genderSet.has('male') && room.people.length > 0;
+            const roomBg = isFull ? C.redBg : isAllFemale ? '#FFE8F0' : isAllMale ? C.blueBg : C.cream;
+            const roomBorder = isFull ? C.red : isMixed ? C.amber : isAllFemale ? '#F0A0C0' : isAllMale ? C.blue : C.line;
+            return (
             <Card
               key={room.id}
               onDragOver={e => e.preventDefault()}
@@ -1121,10 +1144,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                   setDraggedPerson(null);
                 }
               }}
-              style={{
-                background: room.people.length >= room.capacity ? C.redBg : C.cream,
-                border: `2px solid ${room.people.length >= room.capacity ? C.red : C.line}`,
-              }}
+              style={{ background: roomBg, border: `2px solid ${roomBorder}` }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                 <div style={{ flex: 1, minWidth: 0, marginRight: 6 }}>
@@ -1182,7 +1202,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                     >
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <span style={{ fontWeight: isHead ? 600 : 400, display: 'block' }}>{person.fullName}</span>
-                        {person.designation && <span style={{ fontSize: 10, color: '#999', display: 'block', marginTop: 1 }}>{person.designation}</span>}
+                        {person.designation && <span style={{ fontSize: 10, color: C.mute, display: 'block', marginTop: 1 }}>{person.designation}</span>}
                       </span>
                       <button
                         onClick={() => handleSetRoomHead(room.id, person.email)}
@@ -1197,7 +1217,8 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                 })}
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       </div>
 
