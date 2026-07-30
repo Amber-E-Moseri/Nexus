@@ -8,6 +8,7 @@ export default function RegistrationPage() {
   const { profile, role } = useAuth()
   const [canAccess, setCanAccess] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [limitedToSubgroups, setLimitedToSubgroups] = useState(null)
 
   useEffect(() => {
     checkAccess()
@@ -76,9 +77,22 @@ export default function RegistrationPage() {
         .eq('user_id', profile.id)
 
       if (userTeamsError || !userTeams?.length) {
-        // Pastor not in any team → limited view (own group only)
+        // Pastor not in any team → limited view (own subgroups only)
         if (role === 'pastor') {
-          setCanAccess('limited')
+          // Fetch pastor's subgroup assignments
+          const { data: subgroupData, error: subgroupError } = await supabase
+            .from('pastor_subgroup_assignments')
+            .select('subgroup')
+            .eq('user_id', profile.id)
+            .eq('status', 'active')
+
+          if (!subgroupError && subgroupData?.length > 0) {
+            const subgroups = subgroupData.map(s => s.subgroup)
+            setLimitedToSubgroups(subgroups)
+            setCanAccess('limited')
+          } else {
+            setCanAccess(false)
+          }
         } else {
           setCanAccess(false)
         }
@@ -112,8 +126,20 @@ export default function RegistrationPage() {
       if (userHasAccess) {
         setCanAccess(true)
       } else if (role === 'pastor') {
-        // Pastor in sprint but not in an allowed team → limited view
-        setCanAccess('limited')
+        // Pastor in sprint but not in an allowed team → limited view (own subgroups only)
+        const { data: subgroupData, error: subgroupError } = await supabase
+          .from('pastor_subgroup_assignments')
+          .select('subgroup')
+          .eq('user_id', profile.id)
+          .eq('status', 'active')
+
+        if (!subgroupError && subgroupData?.length > 0) {
+          const subgroups = subgroupData.map(s => s.subgroup)
+          setLimitedToSubgroups(subgroups)
+          setCanAccess('limited')
+        } else {
+          setCanAccess(false)
+        }
       } else {
         setCanAccess(false)
       }
@@ -138,6 +164,5 @@ export default function RegistrationPage() {
     )
   }
 
-  const limitedToGroup = canAccess === 'limited' ? (profile?.group_name || null) : null
-  return <RegistrationEcosystem limitedToGroup={limitedToGroup} />
+  return <RegistrationEcosystem limitedToSubgroups={canAccess === 'limited' ? limitedToSubgroups : null} />
 }
