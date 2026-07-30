@@ -428,6 +428,15 @@ export default function App({ limitedToGroup = null }) {
     return rosterFiltered.filter(p => !regByEmail[p.email]);
   }, [rosterFiltered, regByEmail]);
 
+  const visibleTabs = useMemo(() => {
+    const allowed = ALL_TABS.filter(t => {
+      if (t.restricted && !hasFinanceAccess) return false;
+      if (limitedToGroup && ['import', 'transport', 'rooms', 'finance'].includes(t.key)) return false;
+      return true;
+    });
+    return allowed;
+  }, [hasFinanceAccess, limitedToGroup]);
+
   // ---------- persistence actions ----------
   const setTarget = useCallback((sg, field, val) => {
     setTargets(prev => {
@@ -558,16 +567,6 @@ export default function App({ limitedToGroup = null }) {
   if (!loaded) {
     return <div style={{ padding: 60, fontFamily: 'Inter', color: C.mute }}>Loading…</div>;
   }
-
-  const visibleTabs = useMemo(() => {
-    const allowed = ALL_TABS.filter(t => {
-      if (t.restricted && !hasFinanceAccess) return false;
-      // Hide Import Data, Transportation, Room Assignments, Finance for limited users
-      if (limitedToGroup && ['import', 'transport', 'rooms', 'finance'].includes(t.key)) return false;
-      return true;
-    });
-    return allowed;
-  }, [hasFinanceAccess, limitedToGroup]);
 
   return (
     <div style={{ background: C.cream, minHeight: '100%', fontFamily: 'Inter, sans-serif', color: C.ink }}>
