@@ -7,8 +7,6 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Copy,
   Folder,
@@ -567,35 +565,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
         transition: 'width 0.16s ease',
       }}
     >
-      {!isMobileDrawer && (
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          style={{
-            position: 'absolute',
-            top: 22,
-            right: -12,
-            width: 24,
-            height: 24,
-            borderRadius: 999,
-            border: '1px solid #EDE8DC',
-            background: '#FFFFFF',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#7A6F5E',
-            cursor: 'pointer',
-            boxShadow: '0 1px 4px rgba(28,22,16,.14)',
-            zIndex: 10,
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = '#4C2A92' }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = '#7A6F5E' }}
-        >
-          {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
-        </button>
-      )}
       <div
         style={{
           padding: collapsed ? '10px 8px' : '10px 10px 10px 14px',
