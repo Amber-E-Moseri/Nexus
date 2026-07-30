@@ -259,15 +259,15 @@ export default function App() {
         loadKey('last-import', { roster: null, registrations: null, flights: null }),
       ]);
 
-      // Fetch roster from Supabase
+      // Always fetch roster from Supabase (authoritative source)
       let finalRoster = r;
-      if (!r || r.length === 0) {
-        try {
-          const { data: dbRoster } = await supabase
-            .from('roster')
-            .select('*')
-            .order('last_name', { ascending: true });
-          finalRoster = (dbRoster || []).map(m => ({
+      try {
+        const { data: dbRoster } = await supabase
+          .from('roster')
+          .select('*')
+          .order('last_name', { ascending: true });
+        if (dbRoster?.length) {
+          finalRoster = dbRoster.map(m => ({
             email: m.email,
             fullName: m.full_name,
             firstName: m.first_name,
@@ -275,9 +275,9 @@ export default function App() {
             subgroup: m.subgroup,
             leadership: m.leadership || '',
           }));
-        } catch (e) {
-          console.error('Failed to fetch roster from Supabase:', e);
         }
+      } catch (e) {
+        console.error('Failed to fetch roster from Supabase:', e);
       }
 
       // Load exempt fellowships from Supabase (overrides localStorage if present)
@@ -1452,40 +1452,85 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
     else byGender.male.push(p);
   });
 
+  const totalAssigned = rooms.reduce((s, r) => s + r.people.length, 0);
+  const totalCapacity = rooms.reduce((s, r) => s + r.capacity, 0);
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Room Assignments</h2>
-        <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0}><Download size={13} /> Print</Btn>
+      {/* header with stats */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 18, margin: '0 0 6px', fontWeight: 700 }}>🛏️ Room Assignments</h2>
+          <div style={{ fontSize: 12.5, color: C.mute }}>Assign {unassigned.length} registrants to {rooms.length} room{rooms.length !== 1 ? 's' : ''} · {totalAssigned} / {totalCapacity} capacity</div>
+        </div>
+        <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0} style={{ marginLeft: 16 }}><Download size={13} /> Print</Btn>
       </div>
-      <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 16 }}>Drag registrants to assign them to rooms. Click a room name to rename it.</div>
+
+      {/* tips */}
+      <div style={{ background: '#F7F3FF', border: '1px solid #E8E2F8', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: 12.5, color: C.mute }}>
+        ✋ Drag names from below to drop into rooms. Click room names to rename. Hit capacity? Try adjusting room numbers.
+      </div>
 
       {/* Unassigned registrants by gender */}
-      <div style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {['male', 'female'].map(gender => (
-          <Card key={gender} style={{ background: gender === 'male' ? '#E8F0FF' : '#FFE8F0' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, textTransform: 'capitalize' }}>{gender} ({byGender[gender].length})</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {byGender[gender].map(person => (
-                <div
-                  key={person.email}
-                  draggable
-                  onDragStart={() => setDraggedPerson(person)}
-                  style={{ padding: '8px 10px', background: '#fff', border: '1px solid #ddd', borderRadius: 5, fontSize: 12, cursor: 'grab', userSelect: 'none' }}
-                >
-                  <div>{person.fullName} <span style={{ color: '#999', fontWeight: 400 }}>({person.subgroup})</span></div>
-                  {person.designation && <div style={{ fontSize: 10.5, color: '#999', marginTop: 1 }}>{person.designation}</div>}
+      <div style={{ marginBottom: 28, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {['male', 'female'].map(gender => {
+          const genderIcon = gender === 'male' ? '👨' : '👩';
+          const genderColor = gender === 'male' ? '#2A5FA5' : '#C0507A';
+          const genderBg = gender === 'male' ? '#E8F0FF' : '#FFE8F0';
+          const count = byGender[gender].length;
+          return (
+            <div key={gender}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 20 }}>{genderIcon}</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, color: genderColor, textTransform: 'capitalize' }}>{gender}</div>
+                  <div style={{ fontSize: 11.5, color: C.mute }}>{count} unassigned</div>
                 </div>
-              ))}
+              </div>
+              <Card style={{ background: genderBg, padding: 12, border: `1px solid ${genderColor}33` }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {byGender[gender].length === 0 ? (
+                    <div style={{ fontSize: 12.5, color: C.mute, fontStyle: 'italic', padding: '16px 12px', textAlign: 'center' }}>Everyone assigned!</div>
+                  ) : (
+                    byGender[gender].map(person => (
+                      <div
+                        key={person.email}
+                        draggable
+                        onDragStart={() => setDraggedPerson(person)}
+                        style={{
+                          padding: '10px 12px',
+                          background: '#fff',
+                          border: `1.5px solid ${genderColor}66`,
+                          borderRadius: 7,
+                          fontSize: 12.5,
+                          cursor: 'grab',
+                          userSelect: 'none',
+                          transition: 'all .15s',
+                          boxShadow: '0 1px 3px rgba(0,0,0,.06)',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,.12)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,.06)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                      >
+                        <div style={{ fontWeight: 500, color: '#1A1220' }}>{person.fullName}</div>
+                        <div style={{ fontSize: 11, color: C.mute, marginTop: 2 }}>{person.subgroup}{person.designation ? ` · ${person.designation}` : ''}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card>
             </div>
-          </Card>
-        ))}
+          );
+        })}
       </div>
 
       {/* Room cards */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Rooms ({rooms.length})</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 12, marginBottom: 16 }}>
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <span style={{ fontSize: 18 }}>🏠</span>
+          <div style={{ fontWeight: 700, fontSize: 15, color: C.ink }}>Rooms</div>
+          <div style={{ fontSize: 12.5, color: C.mute }}>({rooms.length} total)</div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, marginBottom: 16 }}>
           {rooms.map(room => {
             const genderSet = new Set(room.people.map(p => {
               const g = (p.gender || '').toLowerCase();
@@ -1495,23 +1540,32 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
             const isMixed = genderSet.size > 1;
             const isAllFemale = !isMixed && genderSet.has('female') && room.people.length > 0;
             const isAllMale = !isMixed && genderSet.has('male') && room.people.length > 0;
-            const roomBg = isFull ? C.redBg : isAllFemale ? '#FFE8F0' : isAllMale ? C.blueBg : C.cream;
-            const roomBorder = isFull ? C.red : isMixed ? C.amber : isAllFemale ? '#F0A0C0' : isAllMale ? C.blue : C.line;
+            const isEmpty = room.people.length === 0;
+            const roomIcon = isAllFemale ? '👩' : isAllMale ? '👨' : isMixed ? '👥' : '🏠';
+            const roomBg = isFull ? C.redBg : isAllFemale ? '#FFE8F0' : isAllMale ? '#E8F0FF' : C.cream;
+            const roomBorder = isFull ? C.red : isMixed ? C.amber : isAllFemale ? '#E0A0C8' : isAllMale ? '#4A7FC4' : C.line;
+            const roomAccent = isFull ? C.red : isMixed ? C.amber : isAllFemale ? '#C0507A' : isAllMale ? C.blue : C.mute;
+
             return (
             <Card
               key={room.id}
-              onDragOver={e => e.preventDefault()}
+              onDragOver={e => { e.preventDefault(); e.currentTarget.style.opacity = '0.85'; e.currentTarget.style.transform = 'scale(1.02)'; }}
+              onDragLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'scale(1)'; }}
               onDrop={e => {
                 e.preventDefault();
+                e.currentTarget.style.opacity = '1';
+                e.currentTarget.style.transform = 'scale(1)';
                 if (draggedPerson && room.people.length < room.capacity) {
                   handleAssignPerson(draggedPerson, room.id);
                   setDraggedPerson(null);
                 }
               }}
-              style={{ background: roomBg, border: `2px solid ${roomBorder}` }}
+              style={{ background: roomBg, border: `2px solid ${roomBorder}`, transition: 'all .2s', cursor: 'default' }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                <div style={{ flex: 1, minWidth: 0, marginRight: 6 }}>
+              {/* header */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12, paddingBottom: 10, borderBottom: `1px solid ${roomBorder}88` }}>
+                <span style={{ fontSize: 20, lineHeight: 1 }}>{roomIcon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   {editingRoomId === room.id ? (
                     <input
                       autoFocus
@@ -1519,66 +1573,101 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                       onChange={e => setEditingRoomName(e.target.value)}
                       onBlur={() => commitRename(room.id)}
                       onKeyDown={e => { if (e.key === 'Enter') commitRename(room.id); if (e.key === 'Escape') setEditingRoomId(null); }}
-                      style={{ fontWeight: 600, fontSize: 13, width: '100%', border: `1px solid ${C.purple}`, borderRadius: 4, padding: '2px 6px' }}
+                      style={{ fontWeight: 700, fontSize: 14, width: '100%', border: `1px solid ${roomAccent}`, borderRadius: 5, padding: '4px 8px', color: roomAccent }}
                     />
                   ) : (
                     <div
-                      style={{ fontWeight: 600, fontSize: 13, cursor: 'text', borderRadius: 4, padding: '2px 4px', marginLeft: -4 }}
+                      style={{ fontWeight: 700, fontSize: 14, cursor: 'text', borderRadius: 5, padding: '2px 4px', marginLeft: -4, color: roomAccent, transition: 'all .15s' }}
                       onClick={() => { setEditingRoomId(room.id); setEditingRoomName(room.name); }}
+                      onMouseEnter={e => { e.currentTarget.style.background = `${roomAccent}11`; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                       title="Click to rename"
                     >{room.name}</div>
                   )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
-                    <span style={{ fontSize: 11.5, color: C.mute }}>{room.people.length} /</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, fontSize: 12.5, color: C.mute }}>
+                    <span style={{ fontWeight: 600, color: roomAccent }}>{room.people.length}</span>
+                    <span>/</span>
                     <input
                       type="number"
                       min={room.people.length || 1}
                       value={room.capacity}
                       onChange={e => handleUpdateRoomCapacity(room.id, e.target.value)}
-                      style={{ width: 44, fontSize: 12, padding: '2px 5px', borderRadius: 5, border: `1px solid ${C.line}` }}
+                      style={{ width: 45, fontSize: 12, padding: '4px 6px', borderRadius: 5, border: `1px solid ${C.line}`, color: roomAccent, fontWeight: 600 }}
                       title="Capacity"
                     />
                   </div>
                 </div>
-                <button onClick={() => handleDeleteRoom(room.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, padding: 4 }} title="Delete room">
-                  <Trash2 size={14} />
+                <button onClick={() => handleDeleteRoom(room.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, padding: '2px 4px', transition: 'all .15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = C.red; e.currentTarget.style.transform = 'scale(1.2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = C.mute; e.currentTarget.style.transform = 'scale(1)'; }}
+                  title="Delete room">
+                  <Trash2 size={15} />
                 </button>
               </div>
-              {room.people.length >= room.capacity && (
-                <div style={{ fontSize: 11, color: C.red, marginBottom: 8, fontWeight: 600 }}>Room is full</div>
+
+              {/* status badges */}
+              {(isFull || isMixed) && (
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                  {isFull && <Pill tone="red">🔴 Full</Pill>}
+                  {isMixed && <Pill tone="amber">⚠️ Mixed</Pill>}
+                </div>
               )}
-              {(() => {
-                const genders = new Set(room.people.map(p => {
-                  const g = (p.gender || '').toLowerCase();
-                  return (g.includes('female') || g === 'f') ? 'female' : 'male';
-                }));
-                return genders.size > 1 ? (
-                  <div style={{ fontSize: 11, color: C.amber, marginBottom: 8, fontWeight: 600 }}>⚠ Mixed gender assignment</div>
-                ) : null;
-              })()}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {room.people.map(person => {
-                  const isHead = room.roomHead === person.email;
-                  return (
-                    <div
-                      key={person.email}
-                      style={{ padding: '6px 8px', background: isHead ? '#FFF8E1' : '#fff', border: `1px solid ${isHead ? '#F5C842' : '#ddd'}`, borderRadius: 4, fontSize: 11.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}
-                    >
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ fontWeight: isHead ? 600 : 400, display: 'block' }}>{person.fullName}</span>
-                        {person.designation && <span style={{ fontSize: 10, color: C.mute, display: 'block', marginTop: 1 }}>{person.designation}</span>}
-                      </span>
-                      <button
-                        onClick={() => handleSetRoomHead(room.id, person.email)}
-                        title={isHead ? 'Remove as room head' : 'Set as room head'}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: isHead ? '#B8920A' : C.mute, padding: 0, display: 'flex', alignItems: 'center' }}
+
+              {/* people list */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {room.people.length === 0 ? (
+                  <div style={{ fontSize: 12.5, color: C.mute, fontStyle: 'italic', textAlign: 'center', padding: '24px 8px' }}>Drag names here to assign</div>
+                ) : (
+                  room.people.map(person => {
+                    const isHead = room.roomHead === person.email;
+                    const pGender = (person.gender || '').toLowerCase();
+                    const isFemale = pGender.includes('female') || pGender === 'f';
+                    return (
+                      <div
+                        key={person.email}
+                        style={{
+                          padding: '9px 10px',
+                          background: isHead ? '#FFF9E6' : '#fff',
+                          border: `1.5px solid ${isHead ? '#F5C842' : '#E8E2F8'}`,
+                          borderRadius: 6,
+                          fontSize: 12,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 6,
+                          transition: 'all .15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.08)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}
                       >
-                        <Crown size={12} fill={isHead ? '#F5C842' : 'none'} />
-                      </button>
-                      <button onClick={() => handleRemovePersonFromRoom(person, room.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, padding: 0, fontSize: 11 }} title="Remove from room">✕</button>
-                    </div>
-                  );
-                })}
+                        <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 14 }}>{isFemale ? '👩' : '👨'}</span>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: isHead ? 700 : 500, color: '#1A1220', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {person.fullName}{isHead ? ' ⭐' : ''}
+                            </div>
+                            {person.designation && <div style={{ fontSize: 10.5, color: C.mute, marginTop: 2 }}>{person.designation}</div>}
+                          </div>
+                        </span>
+                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                          <button
+                            onClick={() => handleSetRoomHead(room.id, person.email)}
+                            title={isHead ? 'Remove as room head' : 'Set as room head'}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: isHead ? '#F5C842' : C.mute, padding: '2px 4px', display: 'flex', alignItems: 'center', transition: 'all .15s' }}
+                            onMouseEnter={e => { if (!isHead) e.currentTarget.style.color = '#F5C842'; }}
+                            onMouseLeave={e => { if (!isHead) e.currentTarget.style.color = C.mute; }}
+                          >
+                            <Crown size={13} fill={isHead ? 'currentColor' : 'none'} />
+                          </button>
+                          <button onClick={() => handleRemovePersonFromRoom(person, room.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, padding: '2px 4px', fontSize: 14, transition: 'all .15s', lineHeight: 1 }}
+                            onMouseEnter={e => { e.currentTarget.style.color = C.red; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = C.mute; }}
+                            title="Remove from room">✕</button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </Card>
             );
@@ -1587,22 +1676,28 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
       </div>
 
       {/* Add rooms */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         {/* Single room */}
         <Card>
-          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Add single room</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 18 }}>➕</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>Add single room</div>
+              <div style={{ fontSize: 11, color: C.mute }}>Create one room manually</div>
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <input
               type="text"
               value={newRoomName}
               onChange={e => setNewRoomName(e.target.value)}
-              placeholder="Room name (optional)"
-              style={{ flex: 1, minWidth: 120 }}
+              placeholder="Room name"
+              style={{ flex: 1, minWidth: 100, fontSize: 13, padding: '7px 10px', borderRadius: 6, border: `1px solid ${C.line}` }}
               onKeyDown={e => { if (e.key === 'Enter') { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); } }}
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: C.mute, whiteSpace: 'nowrap' }}>
               Cap:
-              <input type="number" min={1} value={newRoomCapacity} onChange={e => setNewRoomCapacity(e.target.value)} style={{ width: 50, fontSize: 13, padding: '5px 7px' }} />
+              <input type="number" min={1} value={newRoomCapacity} onChange={e => setNewRoomCapacity(e.target.value)} style={{ width: 55, fontSize: 13, padding: '7px 8px', borderRadius: 6, border: `1px solid ${C.line}` }} />
             </div>
             <Btn small onClick={() => { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); }} disabled={rooms.length >= 50}>
               <Plus size={13} /> Add
@@ -1612,29 +1707,35 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
 
         {/* Bulk create */}
         <Card>
-          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Bulk create rooms</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 18 }}>⚡</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>Bulk create rooms</div>
+              <div style={{ fontSize: 11, color: C.mute }}>Generate multiple rooms at once</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
             <input
               type="text"
               value={bulkPrefix}
               onChange={e => setBulkPrefix(e.target.value)}
-              placeholder="Prefix (e.g. Room)"
-              style={{ flex: 1, minWidth: 100 }}
+              placeholder="Prefix"
+              style={{ flex: 1, minWidth: 80, fontSize: 13, padding: '7px 10px', borderRadius: 6, border: `1px solid ${C.line}` }}
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: C.mute, whiteSpace: 'nowrap' }}>
               Count:
-              <input type="number" min={1} max={50} value={bulkCount} onChange={e => setBulkCount(e.target.value)} style={{ width: 50, fontSize: 13, padding: '5px 7px' }} />
+              <input type="number" min={1} max={50} value={bulkCount} onChange={e => setBulkCount(e.target.value)} style={{ width: 55, fontSize: 13, padding: '7px 8px', borderRadius: 6, border: `1px solid ${C.line}` }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: C.mute, whiteSpace: 'nowrap' }}>
               Cap:
-              <input type="number" min={1} value={bulkCapacity} onChange={e => setBulkCapacity(e.target.value)} style={{ width: 50, fontSize: 13, padding: '5px 7px' }} />
+              <input type="number" min={1} value={bulkCapacity} onChange={e => setBulkCapacity(e.target.value)} style={{ width: 55, fontSize: 13, padding: '7px 8px', borderRadius: 6, border: `1px solid ${C.line}` }} />
             </div>
             <Btn small onClick={() => handleBulkCreateRooms(bulkPrefix, Number(bulkCount), bulkCapacity)} disabled={rooms.length >= 50 || !bulkCount}>
-              <Plus size={13} /> Create {bulkCount || ''}
+              <Plus size={13} /> Create
             </Btn>
           </div>
-          <div style={{ fontSize: 11, color: C.mute, marginTop: 8 }}>
-            Creates "{bulkPrefix} {rooms.length + 1}", "{bulkPrefix} {rooms.length + 2}", … each with capacity {bulkCapacity}
+          <div style={{ fontSize: 11, color: C.mute, background: '#F7F3FF', padding: '6px 8px', borderRadius: 5 }}>
+            Creates "{bulkPrefix} {rooms.length + 1}", "{bulkPrefix} {rooms.length + 2}", etc. (cap: {bulkCapacity} each)
           </div>
         </Card>
       </div>
