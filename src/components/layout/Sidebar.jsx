@@ -22,6 +22,7 @@ import {
   Map,
   MoreHorizontal,
   Network,
+  PanelLeft,
   Phone,
   Pencil,
   Plus,
@@ -597,68 +598,113 @@ export default function Sidebar({ isMobileDrawer = false }) {
       )}
       <div
         style={{
-          padding: collapsed ? '14px 8px' : '14px 16px',
+          padding: collapsed ? '10px 8px' : '10px 10px 10px 14px',
           borderBottom: '1px solid #EDE8DC',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: collapsed ? 'center' : 'flex-start',
-          gap: 10,
+          justifyContent: collapsed ? 'center' : 'space-between',
+          gap: 8,
         }}
       >
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 8,
-            flexShrink: 0,
-            background: 'linear-gradient(135deg, #4C2A92 0%, #6B4BBE 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(76,42,146,0.16)',
-          }}
-        >
-          <img
-            src="/canada_sr.png"
-            alt="BLW CAN NEXUS"
-            width="24"
-            height="24"
+        {collapsed ? (
+          <button
+            type="button"
+            onClick={!isMobileDrawer ? toggleCollapsed : undefined}
+            aria-label="Expand sidebar"
+            title="Expand sidebar"
             style={{
-              width: 24,
-              height: 24,
-              objectFit: 'contain',
-              filter: 'brightness(0) invert(1)',
+              border: 'none',
+              background: 'none',
+              padding: 6,
+              borderRadius: 7,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#7A6F5E',
+              cursor: 'pointer',
             }}
-          />
-        </div>
-        {!collapsed && (
-          <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: 13.5,
-                fontWeight: 800,
-                color: '#1C1610',
-                lineHeight: 1.15,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              BLW CAN NEXUS
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#EDE8DC'; e.currentTarget.style.color = '#4C2A92' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#7A6F5E' }}
+          >
+            <PanelLeft size={18} />
+          </button>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  flexShrink: 0,
+                  background: 'linear-gradient(135deg, #4C2A92 0%, #6B4BBE 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(76,42,146,0.16)',
+                }}
+              >
+                <img
+                  src="/canada_sr.png"
+                  alt="BLW CAN NEXUS"
+                  width="22"
+                  height="22"
+                  style={{ width: 22, height: 22, objectFit: 'contain', filter: 'brightness(0) invert(1)' }}
+                />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: '#1C1610',
+                    lineHeight: 1.15,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  BLW CAN NEXUS
+                </div>
+                <div
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.16em',
+                    color: '#B0A696',
+                    marginTop: 2,
+                  }}
+                >
+                  Operations
+                </div>
+              </div>
             </div>
-            <div
-              style={{
-                fontSize: 9,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.16em',
-                color: '#B0A696',
-                marginTop: 2,
-              }}
-            >
-              Operations
-            </div>
-          </div>
+            {!isMobileDrawer && (
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  padding: 6,
+                  borderRadius: 7,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#B0A696',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#EDE8DC'; e.currentTarget.style.color = '#4C2A92' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#B0A696' }}
+              >
+                <PanelLeft size={16} />
+              </button>
+            )}
+          </>
         )}
       </div>
 

@@ -348,12 +348,13 @@ export default function App() {
 
   const bySubgroup = useMemo(() => {
     const out = {};
-    subgroups.forEach(sg => { out[sg] = { total: 0, flights: 0, confirmed: 0 }; });
+    subgroups.forEach(sg => { out[sg] = { total: 0, flights: 0, confirmed: 0, needsFlight: 0 }; });
     merged.forEach(r => {
-      if (!out[r.subgroup]) out[r.subgroup] = { total: 0, flights: 0, confirmed: 0 };
+      if (!out[r.subgroup]) out[r.subgroup] = { total: 0, flights: 0, confirmed: 0, needsFlight: 0 };
       out[r.subgroup].total++;
       if (r.hasFlight) out[r.subgroup].flights++;
       if (r.fullyConfirmed) out[r.subgroup].confirmed++;
+      if (r.needsFlight) out[r.subgroup].needsFlight++;
     });
     return out;
   }, [merged, subgroups]);
@@ -361,7 +362,7 @@ export default function App() {
   const totalRegs = registrations.length;
   const totalRegTarget = Object.values(targets).reduce((s, t) => s + (Number(t.reg) || 0), 0);
   const totalFlights = merged.filter(r => r.hasFlight).length;
-  const totalFlightTarget = Object.values(targets).reduce((s, t) => s + (Number(t.flight) || 0), 0);
+  const totalFlightTarget = merged.filter(r => r.needsFlight).length;
 
   const workingList = useMemo(() => {
     return roster.filter(p => !regByEmail[p.email]);
@@ -600,10 +601,10 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
           </thead>
           <tbody>
             {subgroups.map(sg => {
-              const s = bySubgroup[sg] || { total: 0, flights: 0 };
+              const s = bySubgroup[sg] || { total: 0, flights: 0, needsFlight: 0 };
               const t = targets[sg] || {};
               const regTarget = Number(t.reg) || 0;
-              const flightTarget = Number(t.flight) || 0;
+              const flightTarget = s.needsFlight || 0;
               const regPctSg = regTarget ? Math.round((s.total / regTarget) * 100) : 0;
               const tone = statusTone(regPctSg);
               return (
@@ -619,10 +620,7 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
                       <div style={{ flex: 1 }}><ProgressBar pct={regPctSg} tone={tone} /></div>
                     </div>
                   </td>
-                  <td>
-                    <input type="number" style={{ width: 60 }} value={t.flight ?? ''} placeholder="0"
-                      onChange={e => setTarget(sg, 'flight', e.target.value)} />
-                  </td>
+                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: C.mute }}>{flightTarget || '—'}</td>
                   <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{s.flights}</td>
                   <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: regTarget - s.total > 0 ? C.red : C.green }}>
                     {regTarget ? (regTarget - s.total > 0 ? `−${regTarget - s.total}` : `+${s.total - regTarget}`) : '—'}
@@ -643,10 +641,10 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
       <div style={{ marginTop: 16, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <Btn tone="ghost" small onClick={() => downloadCSV('subgroup-overview.csv', subgroups.map(sg => ({
           subgroup: sg, regTarget: targets[sg]?.reg || 0, regs: bySubgroup[sg]?.total || 0,
-          flightTarget: targets[sg]?.flight || 0, flights: bySubgroup[sg]?.flights || 0,
+          flightTarget: bySubgroup[sg]?.needsFlight || 0, flights: bySubgroup[sg]?.flights || 0,
         })), [
           { key: 'subgroup', label: 'Subgroup' }, { key: 'regTarget', label: 'Reg Target' }, { key: 'regs', label: 'Registrations' },
-          { key: 'flightTarget', label: 'Flight Target' }, { key: 'flights', label: 'Flights' },
+          { key: 'flightTarget', label: 'Flight Target (out-of-state)' }, { key: 'flights', label: 'Flights' },
         ])}><Download size={13} /> Export overview</Btn>
       </div>
     </div>
