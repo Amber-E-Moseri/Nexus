@@ -1160,7 +1160,9 @@ function WorkingListRow({ p, useDb, canEdit, isLimited, registrations, onMarkAbs
 }
 
 function WorkingListTab({ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups, isLimited, merged, role, onAddPerson, onMarkAbsent, onEditPerson, onRemove }) {
-  const useDb = workingListDb.length > 0;
+  // Only use the DB working list when there are sheet-synced (imported) entries.
+  // Manually-added entries alone don't count — they get merged into both branches below.
+  const useDb = workingListDb.some(p => !p.manually_added);
   const [fellowshipFilter, setFellowshipFilter] = useState('All');
   // 'all' = pending + absent (not registered), 'pending' = not reg + not absent, 'absent' = absent only, 'registered' = registered only
   const [statusFilter, setStatusFilter] = useState('all');
@@ -1196,8 +1198,9 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
       return { registered: false, fuzzyMatched: false };
     }
 
-    if (useDb) {
-      return workingListDb.map(p => {
+    const manualEntries = workingListDb
+      .filter(p => p.manually_added)
+      .map(p => {
         const { registered, fuzzyMatched } = resolveRegistered(p);
         return {
           full_name: p.full_name,
@@ -1207,26 +1210,75 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
           email: p.email,
           absent: !!p.absent,
           absent_reason: p.absent_reason || '',
-          manually_added: !!p.manually_added,
+          manually_added: true,
           linked_registration_email: p.linked_registration_email || null,
           registered,
           fuzzyMatched,
         };
       });
+
+    if (useDb) {
+      // DB branch: all imported rows + manually-added (dedup by email)
+      const importedEmails = new Set();
+      const importedRows = workingListDb
+        .filter(p => !p.manually_added)
+        .map(p => {
+          importedEmails.add(p.email);
+          const { registered, fuzzyMatched } = resolveRegistered(p);
+          return {
+            full_name: p.full_name,
+            subgroup: p.subgroup,
+            fellowship: p.fellowship,
+            leadership_category: p.leadership_category,
+            email: p.email,
+            absent: !!p.absent,
+            absent_reason: p.absent_reason || '',
+            manually_added: false,
+            linked_registration_email: p.linked_registration_email || null,
+            registered,
+            fuzzyMatched,
+          };
+        });
+      const extraManual = manualEntries.filter(p => !importedEmails.has(p.email));
+      return [...importedRows, ...extraManual];
     }
-    return workingList.map(p => ({
-      full_name: p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim(),
-      subgroup: p.subgroup,
-      fellowship: p.fellowship || '',
-      leadership_category: p.leadership || '',
-      email: p.email,
-      absent: false,
-      absent_reason: '',
-      manually_added: false,
-      linked_registration_email: null,
-      registered: false,
-      fuzzyMatched: false,
-    }));
+
+    // Roster branch: everyone not yet registered + manually-added (dedup by email)
+    const rosterEmails = new Set();
+    const rosterRows = workingList.map(p => {
+      const email = p.email;
+      rosterEmails.add(email);
+      return {
+        full_name: p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim(),
+        subgroup: p.subgroup,
+        fellowship: p.fellowship || '',
+        leadership_category: p.leadership || '',
+        email,
+        absent: false,
+        absent_reason: '',
+        manually_added: false,
+        linked_registration_email: null,
+        registered: false,
+        fuzzyMatched: false,
+      };
+    });
+    // Overlay absent/linked data from DB onto matching roster entries
+    const dbByEmail = Object.fromEntries(workingListDb.map(p => [p.email, p]));
+    const enrichedRoster = rosterRows.map(p => {
+      const db = dbByEmail[p.email];
+      if (!db) return p;
+      const { registered, fuzzyMatched } = resolveRegistered(db);
+      return {
+        ...p,
+        absent: !!db.absent,
+        absent_reason: db.absent_reason || '',
+        linked_registration_email: db.linked_registration_email || null,
+        registered,
+        fuzzyMatched,
+      };
+    });
+    const extraManual = manualEntries.filter(p => !rosterEmails.has(p.email));
+    return [...enrichedRoster, ...extraManual];
   }, [useDb, workingListDb, workingList, regByEmail, regByNormalizedName]);
 
   const filtered = useMemo(() => {
