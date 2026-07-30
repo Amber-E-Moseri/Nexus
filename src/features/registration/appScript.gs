@@ -49,7 +49,7 @@ function onOpen() {
 
 // ========== ROSTER SYNC ==========
 function syncRosterToNexus() {
-  const ROSTER_SHEET_NAME = 'Expected'
+  const ROSTER_SHEET_NAME = 'Working List'
   const props = PropertiesService.getScriptProperties()
   const apiUrl = props.getProperty('NEXUS_API_URL') || ''
   const apiKey = props.getProperty('NEXUS_API_KEY') || ''
@@ -74,22 +74,46 @@ function syncRosterToNexus() {
       return
     }
 
-    const headers = data[0].map(h => h.toString().trim().toLowerCase())
+    const headers = data[0].map(h => h.toString().trim().toLowerCase().replace(/\s+/g, '_'))
+
+    // Support both old (First Name / Last Name) and new (full_name) column layouts
+    const fullNameIdx = headers.findIndex(h => h === 'full_name' || h === 'fullname' || h === 'name')
     const firstNameIdx = headers.findIndex(h => h.includes('first'))
     const lastNameIdx = headers.findIndex(h => h.includes('last'))
     const emailIdx = headers.findIndex(h => h.includes('email'))
     const subgroupIdx = headers.findIndex(h => h.includes('subgroup') || h.includes('unit'))
+    const leadershipIdx = headers.findIndex(h => h.includes('leadership') || h.includes('leader_category') || h.includes('position') || h.includes('role'))
 
     const members = []
     for (let i = 1; i < data.length; i++) {
       const row = data[i]
       const email = emailIdx >= 0 ? row[emailIdx].toString().trim() : ''
       if (!email) continue
+
+      let firstName = ''
+      let lastName = ''
+      let fullName = ''
+
+      if (fullNameIdx >= 0) {
+        // New layout: single full_name column
+        fullName = row[fullNameIdx].toString().trim()
+        const parts = fullName.split(' ')
+        firstName = parts[0] || ''
+        lastName = parts.slice(1).join(' ') || ''
+      } else {
+        // Old layout: separate first/last columns
+        firstName = firstNameIdx >= 0 ? row[firstNameIdx].toString().trim() : ''
+        lastName = lastNameIdx >= 0 ? row[lastNameIdx].toString().trim() : ''
+        fullName = [firstName, lastName].filter(Boolean).join(' ')
+      }
+
       members.push({
-        firstName: firstNameIdx >= 0 ? row[firstNameIdx].toString().trim() : '',
-        lastName: lastNameIdx >= 0 ? row[lastNameIdx].toString().trim() : '',
+        firstName,
+        lastName,
+        fullName,
         email,
         subgroup: subgroupIdx >= 0 ? row[subgroupIdx].toString().trim() : '',
+        leadership: leadershipIdx >= 0 ? row[leadershipIdx].toString().trim() : '',
       })
     }
 

@@ -1,3 +1,4 @@
+drop function if exists public.get_status_usage_counts(uuid);
 create or replace function public.get_status_usage_counts(p_department_id uuid)
 returns table(status_id uuid, count bigint)
 language sql security definer

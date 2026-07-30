@@ -41,7 +41,7 @@ serve(async (request) => {
     let updated = 0
 
     for (const member of members) {
-      const { firstName, lastName, email, subgroup } = member
+      const { firstName, lastName, fullName, email, subgroup, leadership } = member
       if (!email) continue
 
       const { data: existing } = await supabase
@@ -50,13 +50,18 @@ serve(async (request) => {
         .eq('email', email.toLowerCase())
         .single()
 
-      const memberData = {
+      const resolvedFirst = firstName || ''
+      const resolvedLast = lastName || ''
+      const resolvedFull = fullName || [resolvedFirst, resolvedLast].filter(Boolean).join(' ')
+
+      const memberData: Record<string, string> = {
         email: email.toLowerCase(),
-        first_name: firstName || '',
-        last_name: lastName || '',
-        full_name: [firstName, lastName].filter(Boolean).join(' '),
+        first_name: resolvedFirst,
+        last_name: resolvedLast,
+        full_name: resolvedFull,
         subgroup: subgroup || '',
       }
+      if (leadership !== undefined) memberData.leadership = leadership
 
       if (existing) {
         const { error } = await supabase.from('roster').update(memberData).eq('id', existing.id)

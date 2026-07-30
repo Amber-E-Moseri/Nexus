@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
+import { supabase } from '../../../lib/supabase'
 import { createNotification } from '../../notifications'
 import Badge from '../../../components/ui/Badge'
 import {
@@ -26,7 +27,14 @@ const TOKENS = {
   textSecondary: '#7A6F5E',
   textTertiary: '#9E9488',
   surfaceTertiary: '#F2EEE6',
-  cardShadow: '0 1px 3px rgba(28,22,16,0.05)',
+  cardShadow: '0 2px 6px rgba(28,22,16,0.08)',
+}
+
+const ROLE_COLORS = {
+  owner: '#5B34C7',
+  manager: '#1B72E8',
+  contributor: '#E8A020',
+  viewer: '#9E9488',
 }
 
 function selectedValuesFromOptions(options) {
@@ -170,6 +178,16 @@ export default function SprintMemberPanel({
 
   async function handleRoleChange(userId, role) {
     await updateSprintMemberRole(sprintId, userId, role)
+    await onChanged?.()
+  }
+
+  async function handleTeamRoleChange(userId, teamId, role) {
+    const { error } = await supabase
+      .from('sprint_team_members')
+      .update({ role })
+      .eq('team_id', teamId)
+      .eq('user_id', userId)
+    if (error) throw error
     await onChanged?.()
   }
 
@@ -452,10 +470,22 @@ export default function SprintMemberPanel({
                   flexWrap: 'wrap',
                   alignItems: 'center',
                   gap: 12,
-                  borderRadius: 16,
+                  borderRadius: 12,
                   border: `1px solid ${TOKENS.border}`,
-                  background: TOKENS.surfaceTertiary,
+                  borderLeft: `4px solid ${ROLE_COLORS[member.role] || ROLE_COLORS.contributor}`,
+                  background: 'white',
                   padding: '12px 16px',
+                  boxShadow: TOKENS.cardShadow,
+                  transition: 'all 0.2s ease',
+                  cursor: 'default',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(28,22,16,0.12)'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = TOKENS.cardShadow
+                  e.currentTarget.style.transform = 'translateY(0)'
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -499,25 +529,56 @@ export default function SprintMemberPanel({
                 </div>
 
                 {canEdit && !isArchived ? (
-                  <>
-                    <select
-                      value={member.role}
-                      onChange={(e) => handleRoleChange(member.user.id, e.target.value)}
-                      style={{
-                        borderRadius: 10,
-                        border: `1px solid ${TOKENS.border}`,
-                        background: 'white',
-                        padding: '8px 12px',
-                        fontSize: 13,
-                        color: TOKENS.textPrimary,
-                        fontFamily: 'DM Sans, system-ui, sans-serif',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {ROLE_OPTIONS.map((role) => (
-                        <option key={role} value={role}>{role}</option>
-                      ))}
-                    </select>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {member.sprint_teams?.length ? (
+                      <>
+                        {member.sprint_teams.map((team) => {
+                          const teamRole = member.team_member_roles?.[team.id] || 'contributor'
+                          return (
+                            <select
+                              key={team.id}
+                              value={teamRole}
+                              onChange={(e) => handleTeamRoleChange(member.user.id, team.id, e.target.value)}
+                              style={{
+                                borderRadius: 8,
+                                border: `1px solid ${TOKENS.border}`,
+                                background: 'white',
+                                padding: '6px 10px',
+                                fontSize: 12,
+                                color: TOKENS.textPrimary,
+                                fontFamily: 'DM Sans, system-ui, sans-serif',
+                                cursor: 'pointer',
+                                fontWeight: 500,
+                              }}
+                              title={team.name}
+                            >
+                              {ROLE_OPTIONS.map((role) => (
+                                <option key={role} value={role}>{team.name.slice(0, 12)} — {role}</option>
+                              ))}
+                            </select>
+                          )
+                        })}
+                      </>
+                    ) : (
+                      <select
+                        value={member.role}
+                        onChange={(e) => handleRoleChange(member.user.id, e.target.value)}
+                        style={{
+                          borderRadius: 10,
+                          border: `1px solid ${TOKENS.border}`,
+                          background: 'white',
+                          padding: '8px 12px',
+                          fontSize: 13,
+                          color: TOKENS.textPrimary,
+                          fontFamily: 'DM Sans, system-ui, sans-serif',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {ROLE_OPTIONS.map((role) => (
+                          <option key={role} value={role}>{role}</option>
+                        ))}
+                      </select>
+                    )}
 
                     <select
                       multiple
@@ -560,15 +621,34 @@ export default function SprintMemberPanel({
                     >
                       Remove
                     </button>
-                  </>
+                  </div>
                 ) : (
                   <>
-                    <Badge tone={member.role === 'owner' ? 'completed' : member.role === 'manager' ? 'active' : 'planning'}>
-                      {member.role}
-                    </Badge>
-                    <span style={{ fontSize: 12, color: TOKENS.textTertiary }}>
-                      {member.sprint_teams?.length ? member.sprint_teams.map((team) => team.name).join(', ') : 'No team'}
-                    </span>
+                    {member.sprint_teams?.length ? (
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        {member.sprint_teams.map((team) => {
+                          const teamRole = member.team_member_roles?.[team.id] || member.role || 'contributor'
+                          return (
+                            <span
+                              key={team.id}
+                              style={{
+                                fontSize: 12,
+                                padding: '4px 8px',
+                                background: `${ROLE_COLORS[teamRole] || ROLE_COLORS.contributor}15`,
+                                color: ROLE_COLORS[teamRole] || ROLE_COLORS.contributor,
+                                borderRadius: '6px',
+                                fontWeight: 500,
+                                border: `1px solid ${ROLE_COLORS[teamRole] || ROLE_COLORS.contributor}30`,
+                              }}
+                            >
+                              {team.name} — {teamRole}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 12, color: TOKENS.textTertiary }}>No team</span>
+                    )}
                     {member.is_temporary && (
                       <Badge tone="archived">Temp member</Badge>
                     )}
