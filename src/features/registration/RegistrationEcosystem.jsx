@@ -1105,8 +1105,15 @@ function SubgroupSelect({ value, onChange, subgroups }) {
 
 // ============ CONFIRMATIONS ============
 function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm }) {
+  const [bypassConfirmed, setBypassConfirmed] = useState({}); // email -> true if manually confirmed without flight
+
   const filtered = merged.filter(r => subgroupFilter === 'All' || r.subgroup === subgroupFilter);
-  const confirmedCount = filtered.filter(r => r.fullyConfirmed).length;
+  const confirmedCount = filtered.filter(r => r.fullyConfirmed || bypassConfirmed[r.email]).length;
+  const bypassCount = filtered.filter(r => bypassConfirmed[r.email] && !r.fullyConfirmed).length;
+
+  function toggleBypassConfirm(email) {
+    setBypassConfirmed(prev => ({ ...prev, [email]: !prev[email] }));
+  }
 
   return (
     <div>
@@ -1114,7 +1121,8 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
         <div>
           <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Confirmations</h2>
           <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>
-            In-state = manual checkbox. Out-of-state = confirmed automatically once a flight is on file. {confirmedCount}/{filtered.length} fully confirmed.
+            In-state = manual checkbox. Out-of-state = confirmed automatically (with flight) or via bypass (flagged).
+            {confirmedCount}/{filtered.length} fully confirmed{bypassCount > 0 ? ` (${bypassCount} flagged bypasses)` : ''}.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1137,14 +1145,26 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
                 <td>{r.subgroup}</td>
                 <td>{r.fellowship}</td>
                 <td>{r.exempt ? <Pill tone="blue">In-state / exempt</Pill> : <Pill tone="mute">Out-of-state</Pill>}</td>
-                <td>{r.exempt ? <span style={{ color: C.mute }}>n/a</span> : (r.hasFlight ? <Pill tone="green">On file</Pill> : <Pill tone="red">Missing</Pill>)}</td>
+                <td>{r.exempt ? <span style={{ color: C.mute }}>n/a</span> : (r.hasFlight ? <Pill tone="green">On file</Pill> : bypassConfirmed[r.email] ? <span style={{ color: C.amber, fontWeight: 600 }}>⚠️ Bypassed</span> : <Pill tone="red">Missing</Pill>)}</td>
                 <td>
                   {r.exempt ? (
                     <button onClick={() => toggleConfirm(r.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: r.inStateConfirmed ? C.green : C.mute, fontWeight: 600, fontSize: 12.5 }}>
                       {r.inStateConfirmed ? <CheckCircle2 size={16} /> : <Circle size={16} />} {r.inStateConfirmed ? 'Confirmed' : 'Mark confirmed'}
                     </button>
                   ) : (
-                    r.fullyConfirmed ? <Pill tone="green">Confirmed (flight purchased)</Pill> : <Pill tone="red">Awaiting flight</Pill>
+                    r.fullyConfirmed ? (
+                      <Pill tone="green">✓ Confirmed (flight)</Pill>
+                    ) : bypassConfirmed[r.email] ? (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <Pill tone="amber">⚠️ Confirmed (no flight)</Pill>
+                        <button onClick={() => toggleBypassConfirm(r.email)} style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>undo</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <Pill tone="red">Awaiting flight</Pill>
+                        <button onClick={() => toggleBypassConfirm(r.email)} style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>bypass</button>
+                      </div>
+                    )
                   )}
                 </td>
               </tr>
