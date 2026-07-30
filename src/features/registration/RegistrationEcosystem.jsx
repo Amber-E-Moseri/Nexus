@@ -1174,8 +1174,9 @@ function FellowshipSelect({ value, onChange, fellowships }) {
 
 // ============ CONFIRMATIONS ============
 function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm, isLimited, onEditReg }) {
-  const [bypassConfirmed, setBypassConfirmed] = useState({}); // email -> true if manually confirmed without flight
+  const [bypassConfirmed, setBypassConfirmed] = useState({});
   const [fellowshipFilter, setFellowshipFilter] = useState('All');
+  const [search, setSearch] = useState('');
 
   const fellowships = useMemo(() => {
     const f = new Set(merged.map(r => r.fellowship).filter(Boolean));
@@ -1183,15 +1184,21 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
   }, [merged]);
 
   const filtered = useMemo(() => {
-    let result = merged.filter(r => {
-      if (isLimited) {
-        // In limited mode, filter by fellowship instead of subgroup
-        return fellowshipFilter === 'All' || r.fellowship === fellowshipFilter;
-      }
-      return subgroupFilter === 'All' || r.subgroup === subgroupFilter;
+    const q = search.trim().toLowerCase();
+    return merged.filter(r => {
+      const matchesGroup = isLimited
+        ? (fellowshipFilter === 'All' || r.fellowship === fellowshipFilter)
+        : (subgroupFilter === 'All' || r.subgroup === subgroupFilter);
+      if (!matchesGroup) return false;
+      if (!q) return true;
+      return (
+        (r.fullName || '').toLowerCase().includes(q) ||
+        (r.email || '').toLowerCase().includes(q) ||
+        (r.subgroup || '').toLowerCase().includes(q) ||
+        (r.fellowship || '').toLowerCase().includes(q)
+      );
     });
-    return result;
-  }, [merged, isLimited, fellowshipFilter, subgroupFilter]);
+  }, [merged, isLimited, fellowshipFilter, subgroupFilter, search]);
 
   const confirmedCount = filtered.filter(r => r.fullyConfirmed || bypassConfirmed[r.email]).length;
   const bypassCount = filtered.filter(r => bypassConfirmed[r.email] && !r.fullyConfirmed).length;
@@ -1210,7 +1217,14 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
             {confirmedCount}/{filtered.length} fully confirmed{bypassCount > 0 ? ` (${bypassCount} flagged bypasses)` : ''}.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            type="text"
+            placeholder="Search name, email, subgroup…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ padding: '6px 11px', border: `1px solid ${C.line}`, borderRadius: 7, fontSize: 13, fontFamily: 'Inter', width: 230, color: C.ink, background: '#fff' }}
+          />
           {isLimited ? (
             <FellowshipSelect value={fellowshipFilter} onChange={setFellowshipFilter} fellowships={fellowships} />
           ) : (
