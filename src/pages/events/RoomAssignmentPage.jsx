@@ -216,7 +216,6 @@ export default function RoomAssignmentPage() {
   function handleDragStart(e, person) {
     setDraggedPerson(person)
     e.dataTransfer.effectAllowed = 'move'
-    // Store dragged email so drop handlers can read it even if state hasn't updated
     e.dataTransfer.setData('text/plain', person.email)
   }
 
@@ -225,21 +224,33 @@ export default function RoomAssignmentPage() {
     e.dataTransfer.dropEffect = 'move'
   }
 
+  // Collect actual person objects from rooms + unassigned pool by email
+  function getPeopleByEmails(emails) {
+    const emailSet = new Set(emails)
+    const allPeople = [...unassigned, ...rooms.flatMap(r => r.people)]
+    const seen = new Set()
+    return allPeople.filter(p => {
+      if (emailSet.has(p.email) && !seen.has(p.email)) {
+        seen.add(p.email)
+        return true
+      }
+      return false
+    })
+  }
+
   function handleDropOnRoom(e, roomId) {
     e.preventDefault()
-    const draggedEmail = e.dataTransfer.getData('text/plain')
-    const person = draggedPerson || registrations.find(r => r.email === draggedEmail)
-    if (!person) return
+    if (!draggedPerson) return
 
     const room = rooms.find(r => r.id === roomId)
     if (!room) return
 
     // If the dragged person is part of a multi-selection, move all selected
-    const emailsToMove = selectedPeople.has(person.email) && selectedPeople.size > 1
+    const emailsToMove = selectedPeople.has(draggedPerson.email) && selectedPeople.size > 1
       ? Array.from(selectedPeople)
-      : [person.email]
+      : [draggedPerson.email]
 
-    const peopleToMove = registrations.filter(r => emailsToMove.includes(r.email))
+    const peopleToMove = getPeopleByEmails(emailsToMove)
 
     if (room.people.length + peopleToMove.length > room.capacity) {
       alert(`Room can only hold ${room.capacity} people. This move would exceed capacity.`)
@@ -259,18 +270,16 @@ export default function RoomAssignmentPage() {
     setRooms(updated)
     saveRoomAssignments(updated, numRooms, peoplePerRoom)
     setDraggedPerson(null)
-    setSelectedPeople(new Set())
+    if (selectedPeople.size > 1) setSelectedPeople(new Set())
   }
 
   function handleDropOnUnassigned(e) {
     e.preventDefault()
-    const draggedEmail = e.dataTransfer.getData('text/plain')
-    const person = draggedPerson || registrations.find(r => r.email === draggedEmail)
-    if (!person) return
+    if (!draggedPerson) return
 
-    const emailsToRemove = selectedPeople.has(person.email) && selectedPeople.size > 1
+    const emailsToRemove = selectedPeople.has(draggedPerson.email) && selectedPeople.size > 1
       ? Array.from(selectedPeople)
-      : [person.email]
+      : [draggedPerson.email]
 
     const updated = rooms.map(r => ({
       ...r,
@@ -280,7 +289,7 @@ export default function RoomAssignmentPage() {
     setRooms(updated)
     saveRoomAssignments(updated, numRooms, peoplePerRoom)
     setDraggedPerson(null)
-    setSelectedPeople(new Set())
+    if (selectedPeople.size > 1) setSelectedPeople(new Set())
   }
 
   function handleClearAllAssignments() {
@@ -325,8 +334,7 @@ export default function RoomAssignmentPage() {
     const room = rooms.find(r => r.id === roomId)
     if (!room) return
 
-    const selectedArray = Array.from(selectedPeople)
-    const toMove = registrations.filter(r => selectedPeople.has(r.email))
+    const toMove = getPeopleByEmails(Array.from(selectedPeople))
 
     // Check capacity
     const newCount = room.people.length + toMove.length
