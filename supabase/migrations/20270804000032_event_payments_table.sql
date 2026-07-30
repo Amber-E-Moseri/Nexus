@@ -50,3 +50,9 @@ using (
 
 create index if not exists event_payments_email_idx on public.event_payments (email);
 create index if not exists event_payments_subgroup_idx on public.event_payments (subgroup);
+
+-- Explicit grants so PostgREST exposes the table to the authenticated role
+grant select, insert, update on public.event_payments to authenticated;
+
+-- Reload PostgREST schema cache
+notify pgrst, 'reload schema';

@@ -1148,6 +1148,7 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
   const [fellowshipFilter, setFellowshipFilter] = useState('All');
   const [showRegistered, setShowRegistered] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [search, setSearch] = useState('');
 
   const canEdit = !isLimited && (role === 'super_admin' || role === 'regional_secretary' || role === 'dept_lead' || role === 'pastor');
 
@@ -1212,12 +1213,20 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
   }, [useDb, workingListDb, workingList, regByEmail, regByNormalizedName]);
 
   const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
     return source.filter(p => {
       if (!showRegistered && p.registered) return false;
-      if (isLimited) return fellowshipFilter === 'All' || p.fellowship === fellowshipFilter;
-      return subgroupFilter === 'All' || p.subgroup === subgroupFilter;
+      if (isLimited) { if (fellowshipFilter !== 'All' && p.fellowship !== fellowshipFilter) return false; }
+      else { if (subgroupFilter !== 'All' && p.subgroup !== subgroupFilter) return false; }
+      if (q) {
+        return (p.full_name || '').toLowerCase().includes(q) ||
+               (p.email || '').toLowerCase().includes(q) ||
+               (p.fellowship || '').toLowerCase().includes(q) ||
+               (p.subgroup || '').toLowerCase().includes(q);
+      }
+      return true;
     });
-  }, [source, isLimited, fellowshipFilter, subgroupFilter, showRegistered]);
+  }, [source, isLimited, fellowshipFilter, subgroupFilter, showRegistered, search]);
 
   const byGroup = useMemo(() => {
     const g = {};
@@ -1237,6 +1246,16 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
   return (
     <div>
       {showAddModal && <AddPersonModal subgroups={subgroups} onSave={handleSaveAdd} onClose={() => setShowAddModal(false)} />}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by name, email, fellowship, subgroup…"
+          style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 13, outline: 'none' }}
+        />
+        {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, fontSize: 18, lineHeight: 1 }}>×</button>}
+      </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, gap: 12 }}>
         <div>
