@@ -21,8 +21,8 @@ export default function RegistrationPage() {
     }
 
     try {
-      // Check if user is a pastor or super admin
-      if (role === 'pastor' || role === 'super_admin') {
+      // Check if user is a super admin, regional secretary, or programs member (can see all)
+      if (role === 'super_admin' || role === 'regional_secretary' || role === 'programs') {
         setCanAccess(true)
         setLoading(false)
         return
@@ -34,7 +34,6 @@ export default function RegistrationPage() {
         'Secretariat and Planning',
         'Registration',
         'Secretariat Programs',
-        'Finance',
         'Transportation',
         'Delegates Compliance',
         'Accommodation and Room Coordination',
