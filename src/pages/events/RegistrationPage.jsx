@@ -76,7 +76,12 @@ export default function RegistrationPage() {
         .eq('user_id', profile.id)
 
       if (userTeamsError || !userTeams?.length) {
-        setCanAccess(false)
+        // Pastor not in any team → limited view (own group only)
+        if (role === 'pastor') {
+          setCanAccess('limited')
+        } else {
+          setCanAccess(false)
+        }
         setLoading(false)
         return
       }
@@ -104,7 +109,14 @@ export default function RegistrationPage() {
         )
       })
 
-      setCanAccess(userHasAccess)
+      if (userHasAccess) {
+        setCanAccess(true)
+      } else if (role === 'pastor') {
+        // Pastor in sprint but not in an allowed team → limited view
+        setCanAccess('limited')
+      } else {
+        setCanAccess(false)
+      }
       setLoading(false)
     } catch (error) {
       console.error('Error checking access:', error)
@@ -126,5 +138,6 @@ export default function RegistrationPage() {
     )
   }
 
-  return <RegistrationEcosystem />
+  const limitedToGroup = canAccess === 'limited' ? (profile?.group_name || null) : null
+  return <RegistrationEcosystem limitedToGroup={limitedToGroup} />
 }

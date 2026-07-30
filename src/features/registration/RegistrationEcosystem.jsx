@@ -218,7 +218,7 @@ const ALL_TABS = [
   { key: 'import', label: 'Import Data', icon: Upload },
 ];
 
-export default function App() {
+export default function App({ limitedToGroup = null }) {
   const { profile, role } = useAuth();
   const [tab, setTab] = useState('overview');
   const [roster, setRoster] = useState([]);
@@ -375,7 +375,12 @@ export default function App() {
   const regByEmail = useMemo(() => Object.fromEntries(registrations.map(r => [r.email, r])), [registrations]);
   const flightByEmail = useMemo(() => Object.fromEntries(flights.map(f => [f.email, f])), [flights]);
 
-  const merged = useMemo(() => registrations.map(r => {
+  const registrationsFiltered = useMemo(() => {
+    if (!limitedToGroup) return registrations;
+    return registrations.filter(r => (r.subgroup || '').toLowerCase() === limitedToGroup.toLowerCase());
+  }, [registrations, limitedToGroup]);
+
+  const merged = useMemo(() => registrationsFiltered.map(r => {
     const flight = flightByEmail[r.email];
     const exemptFlag = isExempt(r.fellowship, exempt);
     const hasFlight = !!(flight && flight.arrivalDate);
@@ -389,12 +394,12 @@ export default function App() {
       inStateConfirmed: !!conf.inState,
       fullyConfirmed: exemptFlag ? !!conf.inState : hasFlight,
     };
-  }), [registrations, flightByEmail, exempt, confirmations]);
+  }), [registrationsFiltered, flightByEmail, exempt, confirmations]);
 
   const subgroups = useMemo(() => {
-    const s = new Set([...roster.map(r => r.subgroup), ...registrations.map(r => r.subgroup)]);
+    const s = new Set([...rosterFiltered.map(r => r.subgroup), ...registrationsFiltered.map(r => r.subgroup)]);
     return [...s].filter(Boolean).sort();
-  }, [roster, registrations]);
+  }, [rosterFiltered, registrationsFiltered]);
 
   const bySubgroup = useMemo(() => {
     const out = {};
@@ -414,9 +419,14 @@ export default function App() {
   const totalFlights = merged.filter(r => r.hasFlight).length;
   const totalFlightTarget = merged.filter(r => r.needsFlight).length;
 
+  const rosterFiltered = useMemo(() => {
+    if (!limitedToGroup) return roster;
+    return roster.filter(r => (r.subgroup || '').toLowerCase() === limitedToGroup.toLowerCase());
+  }, [roster, limitedToGroup]);
+
   const workingList = useMemo(() => {
-    return roster.filter(p => !regByEmail[p.email]);
-  }, [roster, regByEmail]);
+    return rosterFiltered.filter(p => !regByEmail[p.email]);
+  }, [rosterFiltered, regByEmail]);
 
   // ---------- persistence actions ----------
   const setTarget = useCallback((sg, field, val) => {
@@ -549,6 +559,16 @@ export default function App() {
     return <div style={{ padding: 60, fontFamily: 'Inter', color: C.mute }}>Loading…</div>;
   }
 
+  const visibleTabs = useMemo(() => {
+    const allowed = ALL_TABS.filter(t => {
+      if (t.restricted && !hasFinanceAccess) return false;
+      // Hide Import Data, Transportation, Room Assignments, Finance for limited users
+      if (limitedToGroup && ['import', 'transport', 'rooms', 'finance'].includes(t.key)) return false;
+      return true;
+    });
+    return allowed;
+  }, [hasFinanceAccess, limitedToGroup]);
+
   return (
     <div style={{ background: C.cream, minHeight: '100%', fontFamily: 'Inter, sans-serif', color: C.ink }}>
       <style>{`
@@ -567,18 +587,20 @@ export default function App() {
       {/* header */}
       <div style={{ background: C.purple, padding: '22px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 20, color: '#fff', letterSpacing: -0.3 }}>This Is It 2.0</div>
+          <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 20, color: '#fff', letterSpacing: -0.3 }}>
+            This Is It 2.0{limitedToGroup && <span style={{ fontSize: 14, fontWeight: 500, marginLeft: 12, opacity: 0.9 }}>• Viewing: {limitedToGroup}</span>}
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 18, fontFamily: 'JetBrains Mono', fontSize: 11, color: '#D8CCF0' }}>
-          <span>roster: {roster.length > 0 ? roster.length : '—'}</span>
-          <span>reg: {registrations.length > 0 ? registrations.length : '—'}</span>
+          <span>roster: {rosterFiltered.length > 0 ? rosterFiltered.length : '—'}</span>
+          <span>reg: {registrationsFiltered.length > 0 ? registrationsFiltered.length : '—'}</span>
           <span>flights: {flights.length > 0 ? flights.length : '—'}</span>
         </div>
       </div>
 
       {/* tabs */}
       <div style={{ display: 'flex', gap: 4, padding: '14px 32px 0', borderBottom: `1px solid ${C.line}`, background: C.paper, overflowX: 'auto' }}>
-        {ALL_TABS.filter(t => !t.restricted || hasFinanceAccess).map(t => {
+        {visibleTabs.map(t => {
           const Icon = t.icon;
           const active = tab === t.key;
           return (
@@ -595,23 +617,23 @@ export default function App() {
 
       <div style={{ padding: 28, maxWidth: 1280, margin: '0 auto' }}>
         {tab === 'overview' && (
-          <OverviewTab {...{ totalRegs, totalRegTarget, totalFlights, totalFlightTarget, subgroups, bySubgroup, targets, setTarget, merged, exempt, updateExempt }} />
+          <OverviewTab {...{ totalRegs, totalRegTarget, totalFlights, totalFlightTarget, subgroups, bySubgroup, targets, setTarget, merged, exempt, updateExempt, limitedToGroup }} />
         )}
-        {tab === 'working' && <WorkingListTab {...{ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups }} />}
-        {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm }} />}
-        {tab === 'transport' && <TransportTab {...{ merged, exempt }} />}
-        {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups }} />}
-        {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups }} />}
-        {tab === 'rooms' && <RoomAssignmentTab {...{ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom }} />}
-        {tab === 'finance' && hasFinanceAccess && <FinanceTab {...{ registrations, payments, setPayments, userId: profile?.id }} />}
-        {tab === 'import' && <ImportTab {...{ handleImport, roster, registrations, flights, exempt, updateExempt, lastImport }} />}
+        {tab === 'working' && <WorkingListTab {...{ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups, limitedToGroup, merged }} />}
+        {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm, limitedToGroup }} />}
+        {tab === 'transport' && <TransportTab {...{ merged, exempt, limitedToGroup }} />}
+        {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, limitedToGroup }} />}
+        {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, limitedToGroup }} />}
+        {tab === 'rooms' && <RoomAssignmentTab {...{ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom, limitedToGroup }} />}
+        {tab === 'finance' && hasFinanceAccess && <FinanceTab {...{ registrations: registrationsFiltered, payments, setPayments, userId: profile?.id }} />}
+        {tab === 'import' && <ImportTab {...{ handleImport, roster: rosterFiltered, registrations: registrationsFiltered, flights, exempt, updateExempt, lastImport }} />}
       </div>
     </div>
   );
 }
 
 // ============ OVERVIEW ============
-function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarget, subgroups, bySubgroup, targets, setTarget, merged, exempt, updateExempt }) {
+function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarget, subgroups, bySubgroup, targets, setTarget, merged, exempt, updateExempt, limitedToGroup }) {
   const [showSettings, setShowSettings] = useState(false);
   const [waitingOpen, setWaitingOpen] = useState(false);
   const regPct = totalRegTarget ? Math.round((totalRegs / totalRegTarget) * 100) : 0;
@@ -798,15 +820,22 @@ function ExemptEditor({ exempt, onChange }) {
 }
 
 // ============ WORKING LIST ============
-function WorkingListTab({ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups }) {
+function WorkingListTab({ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups, limitedToGroup, merged }) {
   // Prefer synced DB data; fall back to roster-derived list
   const useDb = workingListDb.length > 0;
+  const [fellowshipFilter, setFellowshipFilter] = useState('All');
+
+  const fellowships = useMemo(() => {
+    const f = new Set(merged.map(r => r.fellowship).filter(Boolean));
+    return [...f].sort();
+  }, [merged]);
 
   const source = useMemo(() => {
     if (useDb) {
       return workingListDb.map(p => ({
         full_name: p.full_name,
         subgroup: p.subgroup,
+        fellowship: p.fellowship,
         leadership_category: p.leadership_category,
         email: p.email,
         registered: !!regByEmail[p.email],
@@ -815,13 +844,22 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
     return workingList.map(p => ({
       full_name: p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim(),
       subgroup: p.subgroup,
+      fellowship: p.fellowship || '',
       leadership_category: p.leadership || '',
       email: p.email,
       registered: false,
     }));
   }, [useDb, workingListDb, workingList, regByEmail]);
 
-  const filtered = source.filter(p => subgroupFilter === 'All' || p.subgroup === subgroupFilter);
+  const filtered = useMemo(() => {
+    // For limited users in WorkingList, we filter by fellowship
+    return source.filter(p => {
+      if (limitedToGroup) {
+        return fellowshipFilter === 'All' || p.fellowship === fellowshipFilter;
+      }
+      return subgroupFilter === 'All' || p.subgroup === subgroupFilter;
+    });
+  }, [source, limitedToGroup, fellowshipFilter, subgroupFilter]);
 
   const byGroup = useMemo(() => {
     const g = {};
@@ -843,7 +881,11 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />
+          {limitedToGroup ? (
+            <FellowshipSelect value={fellowshipFilter} onChange={setFellowshipFilter} fellowships={fellowships} />
+          ) : (
+            <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />
+          )}
           <Btn tone="ghost" small onClick={() => downloadCSV('working-list.csv', filtered, [
             { key: 'full_name', label: 'Full Name' },
             { key: 'subgroup', label: 'Subgroup' },
@@ -1106,11 +1148,36 @@ function SubgroupSelect({ value, onChange, subgroups }) {
   );
 }
 
-// ============ CONFIRMATIONS ============
-function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm }) {
-  const [bypassConfirmed, setBypassConfirmed] = useState({}); // email -> true if manually confirmed without flight
+function FellowshipSelect({ value, onChange, fellowships }) {
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)}>
+      <option value="All">All fellowships</option>
+      {fellowships.map(f => <option key={f} value={f}>{f || '(None)'}</option>)}
+    </select>
+  );
+}
 
-  const filtered = merged.filter(r => subgroupFilter === 'All' || r.subgroup === subgroupFilter);
+// ============ CONFIRMATIONS ============
+function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm, limitedToGroup }) {
+  const [bypassConfirmed, setBypassConfirmed] = useState({}); // email -> true if manually confirmed without flight
+  const [fellowshipFilter, setFellowshipFilter] = useState('All');
+
+  const fellowships = useMemo(() => {
+    const f = new Set(merged.map(r => r.fellowship).filter(Boolean));
+    return [...f].sort();
+  }, [merged]);
+
+  const filtered = useMemo(() => {
+    let result = merged.filter(r => {
+      if (limitedToGroup) {
+        // In limited mode, filter by fellowship instead of subgroup
+        return fellowshipFilter === 'All' || r.fellowship === fellowshipFilter;
+      }
+      return subgroupFilter === 'All' || r.subgroup === subgroupFilter;
+    });
+    return result;
+  }, [merged, limitedToGroup, fellowshipFilter, subgroupFilter]);
+
   const confirmedCount = filtered.filter(r => r.fullyConfirmed || bypassConfirmed[r.email]).length;
   const bypassCount = filtered.filter(r => bypassConfirmed[r.email] && !r.fullyConfirmed).length;
 
@@ -1129,7 +1196,11 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />
+          {limitedToGroup ? (
+            <FellowshipSelect value={fellowshipFilter} onChange={setFellowshipFilter} fellowships={fellowships} />
+          ) : (
+            <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />
+          )}
           <Btn tone="ghost" small onClick={() => downloadCSV('confirmations.csv', filtered, [
             { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' }, { key: 'fellowship', label: 'Fellowship' },
             { key: 'email', label: 'Email' }, { get: r => r.exempt ? 'In-state / exempt' : 'Out-of-state', label: 'Type' },
@@ -1181,7 +1252,7 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
 }
 
 // ============ TRANSPORTATION ============
-function TransportTab({ merged, exempt }) {
+function TransportTab({ merged, exempt, limitedToGroup }) {
   const flyers = useMemo(() => merged.filter(r => r.hasFlight && r.flight?.arrivalDate)
     .sort((a, b) => (a.flight.arrivalDate + a.flight.arrivalTime).localeCompare(b.flight.arrivalDate + b.flight.arrivalTime)), [merged]);
 
@@ -1240,16 +1311,27 @@ function TransportTab({ merged, exempt }) {
 }
 
 // ============ FOUNDATION SCHOOL & BAPTISM ============
-function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups }) {
+function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, limitedToGroup }) {
   const [needFoundation, setNeedFoundation] = useState(true);
   const [needBaptism, setNeedBaptism] = useState(true);
   const [mode, setMode] = useState('either'); // either | both
   const [dismissed, setDismissed] = useState(new Set());
+  const [fellowshipFilter, setFellowshipFilter] = useState('All');
+
+  const fellowships = useMemo(() => {
+    const f = new Set(merged.map(r => r.fellowship).filter(Boolean));
+    return [...f].sort();
+  }, [merged]);
 
   const dismiss = (key) => setDismissed(prev => new Set([...prev, key]));
 
   const filtered = useMemo(() => merged.filter(r => {
-    if (subgroupFilter !== 'All' && r.subgroup !== subgroupFilter) return false;
+    // Check filter (subgroup or fellowship depending on limited mode)
+    if (limitedToGroup) {
+      if (fellowshipFilter !== 'All' && r.fellowship !== fellowshipFilter) return false;
+    } else {
+      if (subgroupFilter !== 'All' && r.subgroup !== subgroupFilter) return false;
+    }
     if (dismissed.has(r.email || r.fullName)) return false;
     const fsGraduated = /grad/i.test(r.foundationStatus);
     const baptismFlag = /no|not sure/i.test(r.baptism);
@@ -1257,7 +1339,7 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups 
     const flagBaptism = needBaptism && baptismFlag;
     if (mode === 'both') return flagFoundation && flagBaptism;
     return flagFoundation || flagBaptism;
-  }), [merged, subgroupFilter, needFoundation, needBaptism, mode, dismissed]);
+  }), [merged, limitedToGroup, subgroupFilter, fellowshipFilter, needFoundation, needBaptism, mode, dismissed]);
 
   function fsPill(status) {
     if (/grad/i.test(status)) return <Pill tone="green">{status || 'Graduated'}</Pill>;
@@ -1280,7 +1362,11 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups 
             <option value="both">Match both</option>
           </select>
           {dismissed.size > 0 && <Btn tone="ghost" small onClick={() => setDismissed(new Set())}>Restore {dismissed.size} hidden</Btn>}
-          <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />
+          {limitedToGroup ? (
+            <FellowshipSelect value={fellowshipFilter} onChange={setFellowshipFilter} fellowships={fellowships} />
+          ) : (
+            <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />
+          )}
           <Btn tone="ghost" small onClick={() => downloadCSV('foundation-baptism.csv', filtered, [
             { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' }, { key: 'email', label: 'Email' },
             { key: 'foundationStatus', label: 'Foundation School' }, { key: 'baptism', label: 'Baptised' },
@@ -1313,7 +1399,7 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups 
 }
 
 // ============ IMPORT ============
-function ImportTab({ handleImport, roster, registrations, flights, exempt, updateExempt, lastImport }) {
+function ImportTab({ handleImport, roster, registrations, flights, exempt, updateExempt, lastImport, limitedToGroup }) {
   return (
     <div>
       <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, marginTop: 0 }}>Import from Google Sheets</h2>
@@ -1340,12 +1426,23 @@ function ImportTab({ handleImport, roster, registrations, flights, exempt, updat
 }
 
 // ============ DELEGATE COMPLIANCE ============
-function DelegateComplianceTab({ merged, subgroupFilter, setSubgroupFilter, subgroups }) {
+function DelegateComplianceTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, limitedToGroup }) {
+  const [fellowshipFilter, setFellowshipFilter] = useState('All');
+
+  const fellowships = useMemo(() => {
+    const f = new Set(merged.map(r => r.fellowship).filter(Boolean));
+    return [...f].sort();
+  }, [merged]);
+
   const filtered = useMemo(() => merged.filter(r => {
-    if (subgroupFilter !== 'All' && r.subgroup !== subgroupFilter) return false;
+    if (limitedToGroup) {
+      if (fellowshipFilter !== 'All' && r.fellowship !== fellowshipFilter) return false;
+    } else {
+      if (subgroupFilter !== 'All' && r.subgroup !== subgroupFilter) return false;
+    }
     const val = r.allergies?.trim().toLowerCase()
     return val && val !== '' && !['no', 'none', 'n/a', 'na', 'nil', 'nope', 'nope!'].includes(val)
-  }), [merged, subgroupFilter]);
+  }), [merged, limitedToGroup, subgroupFilter, fellowshipFilter]);
 
   return (
     <div>
@@ -1355,7 +1452,11 @@ function DelegateComplianceTab({ merged, subgroupFilter, setSubgroupFilter, subg
           <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>{filtered.length} people with allergies or diet restrictions.</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />
+          {limitedToGroup ? (
+            <FellowshipSelect value={fellowshipFilter} onChange={setFellowshipFilter} fellowships={fellowships} />
+          ) : (
+            <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />
+          )}
           <Btn tone="ghost" small onClick={() => downloadCSV('delegate-compliance.csv', filtered, [
             { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' }, { key: 'email', label: 'Email' },
             { key: 'allergies', label: 'Allergies / Diet Restrictions' },
@@ -1412,7 +1513,7 @@ function ImportBlock({ title, hint, count, last, onImport }) {
 }
 
 // ============ ROOM ASSIGNMENTS ============
-function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom }) {
+function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom, limitedToGroup }) {
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomCapacity, setNewRoomCapacity] = useState(peoplePerRoom);
   const [bulkPrefix, setBulkPrefix] = useState('Room');
