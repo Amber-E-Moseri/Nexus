@@ -13,7 +13,7 @@ CREATE POLICY "sprint_access_requests_update" ON public.sprint_access_requests
       WHERE s.id = sprint_access_requests.sprint_id
         AND s.created_by = auth.uid()
     )
-    -- Regional secretary can approve for regional (Pastors) sprints
+    -- Regional secretary can approve for Pastors sprints
     OR (
       public.current_user_role() = 'regional_secretary'
       AND EXISTS (
@@ -22,7 +22,7 @@ CREATE POLICY "sprint_access_requests_update" ON public.sprint_access_requests
           AND s.department_id = (SELECT id FROM public.departments WHERE name = 'Pastors')
       )
     )
-    -- Programs members can approve for regional (Pastors) sprints
+    -- Programs members can approve for Pastors sprints
     OR (
       EXISTS (
         SELECT 1 FROM public.space_members sm
@@ -35,23 +35,8 @@ CREATE POLICY "sprint_access_requests_update" ON public.sprint_access_requests
           AND s.department_id = (SELECT id FROM public.departments WHERE name = 'Pastors')
       )
     )
-    -- Group owner/manager can approve for their group sprints
-    OR (
-      EXISTS (
-        SELECT 1 FROM public.sprints s
-        WHERE s.id = sprint_access_requests.sprint_id
-          AND s.space_type = 'group'
-          AND EXISTS (
-            SELECT 1 FROM public.space_members sm
-            WHERE sm.space_id = s.department_id
-              AND sm.user_id = auth.uid()
-              AND sm.role IN ('owner', 'manager')
-          )
-      )
-    )
   )
   WITH CHECK (
-    -- Same as USING clause
     public.current_user_role() IN ('super_admin', 'dept_lead')
     OR EXISTS (
       SELECT 1 FROM public.sprints s
@@ -76,19 +61,6 @@ CREATE POLICY "sprint_access_requests_update" ON public.sprint_access_requests
         SELECT 1 FROM public.sprints s
         WHERE s.id = sprint_access_requests.sprint_id
           AND s.department_id = (SELECT id FROM public.departments WHERE name = 'Pastors')
-      )
-    )
-    OR (
-      EXISTS (
-        SELECT 1 FROM public.sprints s
-        WHERE s.id = sprint_access_requests.sprint_id
-          AND s.space_type = 'group'
-          AND EXISTS (
-            SELECT 1 FROM public.space_members sm
-            WHERE sm.space_id = s.department_id
-              AND sm.user_id = auth.uid()
-              AND sm.role IN ('owner', 'manager')
-          )
       )
     )
   );
@@ -122,19 +94,6 @@ CREATE POLICY "sprint_access_requests_delete" ON public.sprint_access_requests
         SELECT 1 FROM public.sprints s
         WHERE s.id = sprint_access_requests.sprint_id
           AND s.department_id = (SELECT id FROM public.departments WHERE name = 'Pastors')
-      )
-    )
-    OR (
-      EXISTS (
-        SELECT 1 FROM public.sprints s
-        WHERE s.id = sprint_access_requests.sprint_id
-          AND s.space_type = 'group'
-          AND EXISTS (
-            SELECT 1 FROM public.space_members sm
-            WHERE sm.space_id = s.department_id
-              AND sm.user_id = auth.uid()
-              AND sm.role IN ('owner', 'manager')
-          )
       )
     )
   );

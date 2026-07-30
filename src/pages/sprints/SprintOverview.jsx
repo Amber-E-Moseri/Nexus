@@ -460,10 +460,10 @@ export default function SprintOverview() {
         const sprintTeamIds = teamsRes.map((t) => t.id)
         let teamMembershipsMap = {}
         if (sprintTeamIds.length > 0) {
-          const { data: teamMemberships } = await supabase.from('sprint_team_members').select('team_id, user_id').in('team_id', sprintTeamIds)
+          const { data: teamMemberships } = await supabase.from('sprint_team_members').select('sprint_team_id, user_id').in('sprint_team_id', sprintTeamIds)
           for (const row of teamMemberships ?? []) {
             if (!teamMembershipsMap[row.user_id]) teamMembershipsMap[row.user_id] = []
-            teamMembershipsMap[row.user_id].push(row.team_id)
+            teamMembershipsMap[row.user_id].push(row.sprint_team_id)
           }
         }
         const membersWithTeams = (membersRes ?? []).map((member) => ({ ...member, sprint_team_ids: teamMembershipsMap[member.user_id] ?? [] }))

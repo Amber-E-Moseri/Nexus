@@ -43,6 +43,7 @@ serve(async (request) => {
         email: m.email.trim().toLowerCase(),
         full_name: (m.full_name || m.fullName || '').trim(),
         subgroup: (m.subgroup || '').trim(),
+        fellowship: (m.fellowship || '').trim(),
         leadership_category: (m.leadership_category || m.leadershipCategory || '').trim(),
         synced_at: new Date().toISOString(),
       }))

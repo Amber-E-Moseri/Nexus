@@ -39,12 +39,100 @@ function onOpen() {
     .addItem('🔍 Detect Duplicates', 'detectDuplicates')
     .addItem('🗑️ Clean Duplicates (Keep Latest)', 'cleanDuplicates')
     .addItem('📤 Sync Registrations to Nexus', 'syncAllToNexus')
+    .addItem('📋 Sync Working List to Nexus', 'syncWorkingListToNexus')
     .addItem('👥 Sync Roster (Expected) to Nexus', 'syncRosterToNexus')
     .addItem('📥 Export Clean Data', 'exportCleanData')
     .addItem('📊 View Duplicate Report', 'showDuplicateReport')
     .addSeparator()
     .addItem('⚙️ Settings', 'showSettings')
     .addToUi()
+}
+
+// ========== WORKING LIST SYNC ==========
+function syncWorkingListToNexus() {
+  const WORKING_LIST_SHEET_NAME = 'Working List'
+  const props = PropertiesService.getScriptProperties()
+  const apiUrl = props.getProperty('NEXUS_API_URL') || ''
+  const apiKey = props.getProperty('NEXUS_API_KEY') || ''
+
+  if (!apiUrl || !apiKey) {
+    SpreadsheetApp.getUi().alert('❌ API URL or Key not set. Go to Nexus Sync → ⚙️ Settings.')
+    return
+  }
+
+  const workingListUrl = apiUrl.replace('registrations-sync', 'working-list-sync')
+
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(WORKING_LIST_SHEET_NAME)
+    if (!sheet) {
+      SpreadsheetApp.getUi().alert(`❌ Sheet "${WORKING_LIST_SHEET_NAME}" not found.`)
+      return
+    }
+
+    const data = sheet.getDataRange().getValues()
+    if (data.length < 2) {
+      SpreadsheetApp.getUi().alert('No working list data found.')
+      return
+    }
+
+    const headers = data[0].map(h => h.toString().trim().toLowerCase().replace(/\s+/g, '_'))
+
+    const fullNameIdx = headers.findIndex(h => h === 'full_name' || h === 'fullname' || h === 'name')
+    const firstNameIdx = headers.findIndex(h => h.includes('first'))
+    const lastNameIdx = headers.findIndex(h => h.includes('last'))
+    const emailIdx = headers.findIndex(h => h.includes('email'))
+    const subgroupIdx = headers.findIndex(h => h.includes('subgroup') || h.includes('unit'))
+    const fellowshipIdx = headers.findIndex(h => h.includes('fellowship'))
+    const leadershipIdx = headers.findIndex(h => h.includes('leadership') || h.includes('leader_category') || h.includes('position') || h.includes('role'))
+
+    const members = []
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i]
+      const email = emailIdx >= 0 ? row[emailIdx].toString().trim() : ''
+      if (!email) continue
+
+      let fullName = ''
+      if (fullNameIdx >= 0) {
+        fullName = row[fullNameIdx].toString().trim()
+      } else {
+        const firstName = firstNameIdx >= 0 ? row[firstNameIdx].toString().trim() : ''
+        const lastName = lastNameIdx >= 0 ? row[lastNameIdx].toString().trim() : ''
+        fullName = [firstName, lastName].filter(Boolean).join(' ')
+      }
+
+      members.push({
+        email,
+        full_name: fullName,
+        subgroup: subgroupIdx >= 0 ? row[subgroupIdx].toString().trim() : '',
+        fellowship: fellowshipIdx >= 0 ? row[fellowshipIdx].toString().trim() : '',
+        leadership_category: leadershipIdx >= 0 ? row[leadershipIdx].toString().trim() : '',
+      })
+    }
+
+    if (members.length === 0) {
+      SpreadsheetApp.getUi().alert('No members with email addresses found.')
+      return
+    }
+
+    const response = UrlFetchApp.fetch(workingListUrl, {
+      method: 'post',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      payload: JSON.stringify({ members }),
+      muteHttpExceptions: true,
+    })
+
+    const result = JSON.parse(response.getContentText())
+    if (response.getResponseCode() === 200) {
+      SpreadsheetApp.getUi().alert(`✅ Working list synced!\n\n${result.message || 'Sync complete'}`)
+    } else {
+      SpreadsheetApp.getUi().alert(`❌ Sync failed: ${result.error}`)
+    }
+  } catch (e) {
+    SpreadsheetApp.getUi().alert(`❌ Error: ${e.message}`)
+  }
 }
 
 // ========== ROSTER SYNC ==========

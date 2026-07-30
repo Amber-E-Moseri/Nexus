@@ -288,9 +288,16 @@ export function TasksProvider({ departmentId, sprintId, initialTasks, children }
   }, [tasks])
 
   const removeTask = useCallback(async (taskId) => {
+    const removed = tasks.find(t => t.id === taskId)
     setTasks((prev) => prev.filter((t) => t.id !== taskId))
-    await deleteTask(taskId)
-  }, [])
+    try {
+      await deleteTask(taskId)
+    } catch (e) {
+      console.error('Delete failed, restoring task:', e)
+      if (removed) setTasks((prev) => [...prev, removed])
+      throw e
+    }
+  }, [tasks])
 
   const defaultStatus = selectDefaultStatus(statuses)
 

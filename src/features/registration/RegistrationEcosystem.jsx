@@ -30,6 +30,7 @@ const DEFAULT_EXEMPT = ['BLW University of Manitoba', 'BLW University of Winnipe
 // ---------- header normalization ----------
 const ALIASES = {
   submittedAt: [/submitted/i, /timestamp/i],
+  fullNameDirect: [/^full.?name$/i],
   firstName: [/^first.?name/i],
   lastName: [/^last.?name/i],
   email: [/email/i],
@@ -61,7 +62,7 @@ function normalizeRow(row) {
     out[field] = match ? (row[match] || '').toString().trim() : '';
   }
   out.email = out.email.toLowerCase();
-  out.fullName = [out.firstName, out.lastName].filter(Boolean).join(' ');
+  out.fullName = out.fullNameDirect || [out.firstName, out.lastName].filter(Boolean).join(' ');
   out._raw = row;
   return out;
 }
@@ -238,6 +239,7 @@ export default function App({ limitedToSubgroups = null }) {
   const [workingListDb, setWorkingListDb] = useState([]);
   const [workingListLoading, setWorkingListLoading] = useState(false);
   const [hasFinanceAccess, setHasFinanceAccess] = useState(false);
+  const [hasRoomsAccess, setHasRoomsAccess] = useState(false);
   const [payments, setPayments] = useState([]); // from event_payments table
   const [editingReg, setEditingReg] = useState(null);
 
@@ -245,7 +247,7 @@ export default function App({ limitedToSubgroups = null }) {
     setRegistrations(prev => prev.map(r => r.email === updated.email ? { ...r, ...updated } : r));
   }, []);
 
-  // Finance access: regional_secretary only (unless granted via user_grants)
+  // Finance access: regional_secretary only (unless granted via user_grants); super_admin sees tab but is restricted
   useEffect(() => {
     if (!profile?.id) return;
     if (role === 'regional_secretary') { setHasFinanceAccess(true); return; }
@@ -257,6 +259,29 @@ export default function App({ limitedToSubgroups = null }) {
       .then(({ data }) => { if (data) setHasFinanceAccess(true); })
       .catch(() => {});
   }, [profile?.id, role]);
+
+  // Rooms access: super_admin, regional_secretary, Programs space members, or Accommodation sprint team
+  useEffect(() => {
+    if (!profile?.id) return;
+    if (role === 'super_admin' || role === 'regional_secretary') { setHasRoomsAccess(true); return; }
+    // Programs space members always get rooms access
+    if (profile.is_programs_member) { setHasRoomsAccess(true); return; }
+    // Accommodation team members in This Is It 2.0 sprint also get access
+    supabase.from('sprints').select('id').ilike('name', '%This Is It 2.0%').limit(1).maybeSingle()
+      .then(({ data: sprint }) => {
+        if (!sprint?.id) return;
+        return supabase.from('sprint_team_members')
+          .select('sprint_teams:team_id(name)')
+          .eq('user_id', profile.id)
+          .then(({ data: teams }) => {
+            const ok = (teams || []).some(t =>
+              (t.sprint_teams?.name || '').toLowerCase().includes('accommodation')
+            );
+            if (ok) setHasRoomsAccess(true);
+          });
+      })
+      .catch(() => {});
+  }, [profile?.id, profile?.is_programs_member, role]);
 
   useEffect(() => {
     (async () => {
@@ -438,12 +463,18 @@ export default function App({ limitedToSubgroups = null }) {
 
   const visibleTabs = useMemo(() => {
     const allowed = ALL_TABS.filter(t => {
-      if (t.restricted && !hasFinanceAccess) return false;
+      // Finance: visible to super_admin (restricted msg on click), hidden to others without access
+      if (t.restricted && !hasFinanceAccess && role !== 'super_admin') return false;
+      // Rooms: Accommodation/Programs teams, reg sec, super admin only
+      if (t.key === 'rooms' && !hasRoomsAccess) return false;
+      // Import Data: super admin only
+      if (t.key === 'import' && role !== 'super_admin') return false;
+      // Limited pastors can't see transport, rooms, finance, import
       if (isLimited && ['import', 'transport', 'rooms', 'finance'].includes(t.key)) return false;
       return true;
     });
     return allowed;
-  }, [hasFinanceAccess, isLimited]);
+  }, [hasFinanceAccess, hasRoomsAccess, isLimited, role]);
 
   // ---------- persistence actions ----------
   const setTarget = useCallback((sg, field, val) => {
@@ -584,20 +615,83 @@ export default function App({ limitedToSubgroups = null }) {
       fellowship: r.fellowship || '',
       leadership_category: r.leadership || '',
       synced_at: now,
+      manually_added: false,
     })).filter(r => r.email);
 
     try {
-      // Delete existing and re-insert (full refresh from sheet)
-      await supabase.from('working_list').delete().neq('email', '');
-      const { error } = await supabase.from('working_list').insert(records);
+      // Preserve absent markings and manually-added rows across re-import
+      const { data: existing } = await supabase.from('working_list').select('email, absent, absent_reason, manually_added, full_name, subgroup, fellowship, leadership_category');
+      const absentByEmail = {};
+      const manualRows = [];
+      for (const row of existing || []) {
+        if (row.absent) absentByEmail[row.email] = { absent: true, absent_reason: row.absent_reason };
+        if (row.manually_added) manualRows.push(row);
+      }
+
+      // Delete only sheet-synced rows
+      await supabase.from('working_list').delete().eq('manually_added', false);
+
+      // Re-insert with absent data preserved
+      const withAbsent = records.map(r => ({ ...r, ...(absentByEmail[r.email] || {}) }));
+      const { error } = await supabase.from('working_list').insert(withAbsent);
       if (error) throw error;
-      setWorkingListDb(records.map((r, i) => ({ id: i, ...r })));
+
+      // Keep manually-added entries that aren't overwritten by the import
+      const importEmails = new Set(records.map(r => r.email));
+      const manualToKeep = manualRows.filter(m => !importEmails.has(m.email));
+      if (manualToKeep.length) await supabase.from('working_list').insert(manualToKeep.map(m => ({ ...m, synced_at: now })));
+
+      // Refresh state
+      const { data: refreshed } = await supabase.from('working_list').select('*').order('subgroup');
+      setWorkingListDb(refreshed || withAbsent);
     } catch (e) {
       console.error('Failed to save working list:', e);
       alert('Failed to save working list to database: ' + e.message);
     }
     const li = { ...lastImport, 'working-list': now };
     setLastImport(li); await saveKey('last-import', li);
+  }
+
+  async function handleAddToWorkingList(person) {
+    const now = new Date().toISOString();
+    const row = { ...person, synced_at: now, manually_added: true, absent: false };
+    try {
+      const { error } = await supabase.from('working_list').insert(row);
+      if (error) throw error;
+      setWorkingListDb(prev => [...prev, row]);
+    } catch (e) {
+      alert('Failed to add person: ' + e.message);
+    }
+  }
+
+  async function handleMarkAbsent(email, absent, reason) {
+    try {
+      const { error } = await supabase.from('working_list').update({ absent, absent_reason: reason || null }).eq('email', email);
+      if (error) throw error;
+      setWorkingListDb(prev => prev.map(p => p.email === email ? { ...p, absent, absent_reason: reason || null } : p));
+    } catch (e) {
+      alert('Failed to update: ' + e.message);
+    }
+  }
+
+  async function handleEditWorkingListPerson(email, updates) {
+    try {
+      const { error } = await supabase.from('working_list').update(updates).eq('email', email);
+      if (error) throw error;
+      setWorkingListDb(prev => prev.map(p => p.email === email ? { ...p, ...updates } : p));
+    } catch (e) {
+      alert('Failed to update: ' + e.message);
+    }
+  }
+
+  async function handleRemoveFromWorkingList(email) {
+    try {
+      const { error } = await supabase.from('working_list').delete().eq('email', email);
+      if (error) throw error;
+      setWorkingListDb(prev => prev.filter(p => p.email !== email));
+    } catch (e) {
+      alert('Failed to remove: ' + e.message);
+    }
   }
 
   if (!loaded) {
@@ -662,13 +756,20 @@ export default function App({ limitedToSubgroups = null }) {
         {tab === 'overview' && (
           <OverviewTab {...{ totalRegs, totalRegTarget, totalFlights, totalFlightTarget, subgroups, bySubgroup, targets, setTarget, merged, exempt, updateExempt, isLimited }} />
         )}
-        {tab === 'working' && <WorkingListTab {...{ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups, isLimited, merged }} />}
+        {tab === 'working' && <WorkingListTab {...{ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups, isLimited, merged, role, onAddPerson: handleAddToWorkingList, onMarkAbsent: handleMarkAbsent, onEditPerson: handleEditWorkingListPerson, onRemove: handleRemoveFromWorkingList }} />}
         {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm, isLimited, onEditReg: setEditingReg }} />}
         {tab === 'transport' && <TransportTab {...{ merged, exempt, isLimited }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
-        {tab === 'rooms' && <RoomAssignmentTab {...{ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom, isLimited }} />}
-        {tab === 'finance' && hasFinanceAccess && <FinanceTab {...{ registrations: registrationsFiltered, payments, setPayments, userId: profile?.id }} />}
+        {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.inStateConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom, isLimited }} />}
+        {tab === 'finance' && (hasFinanceAccess
+          ? <FinanceTab {...{ registrations: registrationsFiltered, payments, setPayments, userId: profile?.id }} />
+          : <div style={{ padding: 48, textAlign: 'center' }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
+              <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>Access Restricted</div>
+              <div style={{ color: C.mute, fontSize: 14 }}>Finance data is only accessible to the Regional Secretary and authorised team members.</div>
+            </div>
+        )}
         {tab === 'import' && <ImportTab {...{ handleImport, handleImportWorkingList, roster: rosterFiltered, registrations: registrationsFiltered, flights, workingListDb, exempt, updateExempt, lastImport, isLimited }} />}
       </div>
     </div>
@@ -863,26 +964,235 @@ function ExemptEditor({ exempt, onChange }) {
 }
 
 // ============ WORKING LIST ============
-function WorkingListTab({ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups, isLimited, merged }) {
-  // Prefer synced DB data; fall back to roster-derived list
+const TITLE_RE = /\b(pastor|bro|brother|sis|sister|dr|rev|reverend|mr|mrs|ms|evangelist|evang)\b\.?/gi;
+function normalizeName(n) {
+  return (n || '').replace(TITLE_RE, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function AddPersonModal({ subgroups, onSave, onClose }) {
+  const [form, setForm] = useState({ full_name: '', email: '', subgroup: '', fellowship: '', leadership_category: '' });
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+  const valid = form.full_name.trim() && form.email.trim();
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: 14, padding: 28, width: 420, maxWidth: '95vw', boxShadow: '0 8px 40px rgba(0,0,0,.18)' }}>
+        <h3 style={{ fontFamily: 'Space Grotesk', margin: '0 0 18px' }}>Add person to working list</h3>
+        {[
+          { k: 'full_name', label: 'Full Name *' },
+          { k: 'email', label: 'Email *' },
+          { k: 'fellowship', label: 'Fellowship' },
+          { k: 'leadership_category', label: 'Leadership Category' },
+        ].map(({ k, label }) => (
+          <div key={k} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, marginBottom: 4 }}>{label}</div>
+            <input value={form[k]} onChange={set(k)} style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 13 }} />
+          </div>
+        ))}
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, marginBottom: 4 }}>Subgroup</div>
+          <select value={form.subgroup} onChange={set('subgroup')} style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 13 }}>
+            <option value="">— Select —</option>
+            {subgroups.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Btn tone="ghost" small onClick={onClose}>Cancel</Btn>
+          <Btn tone="primary" small disabled={!valid} onClick={() => onSave(form)}>Add</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LinkRegistrationModal({ person, registrations, onLink, onClose }) {
+  const [search, setSearch] = useState('');
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    if (!q) return registrations.slice(0, 50);
+    return registrations.filter(r =>
+      (r.fullName || '').toLowerCase().includes(q) ||
+      (r.email || '').toLowerCase().includes(q) ||
+      (r.subgroup || '').toLowerCase().includes(q)
+    ).slice(0, 50);
+  }, [registrations, search]);
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: 14, padding: 24, width: 480, maxWidth: '95vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,.18)' }}>
+        <h3 style={{ fontFamily: 'Space Grotesk', margin: '0 0 4px' }}>Link to registration</h3>
+        <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 14 }}>Linking <strong>{person.full_name}</strong> — select their matching registration below.</div>
+        <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, email or subgroup…" style={{ padding: '8px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 13, marginBottom: 10 }} />
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {filtered.length === 0 && <div style={{ color: C.mute, padding: 16, textAlign: 'center' }}>No matches</div>}
+          {filtered.map((r, i) => (
+            <div key={i} onClick={() => onLink(r.email)} style={{ padding: '10px 12px', borderRadius: 8, cursor: 'pointer', marginBottom: 4, border: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#F5F0FF'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{r.fullName}</div>
+                <div style={{ fontSize: 12, color: C.mute }}>{r.subgroup} · {r.email}</div>
+              </div>
+              <div style={{ fontSize: 12 }}><Pill tone="green">Select</Pill></div>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 12, textAlign: 'right' }}>
+          <Btn tone="ghost" small onClick={onClose}>Cancel</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WorkingListRow({ p, useDb, canEdit, isLimited, registrations, onMarkAbsent, onEdit, onRemove, onLink, onUnlink }) {
+  const [showAbsent, setShowAbsent] = useState(false);
+  const [absentReason, setAbsentReason] = useState(p.absent_reason || '');
+  const [editing, setEditing] = useState(false);
+  const [showLink, setShowLink] = useState(false);
+  const [editForm, setEditForm] = useState({ full_name: p.full_name, email: p.email, subgroup: p.subgroup, fellowship: p.fellowship, leadership_category: p.leadership_category });
+
+  const rowStyle = p.registered
+    ? { background: '#F0FAF4', opacity: 0.7 }
+    : p.absent
+    ? { background: '#FAFAFA', opacity: 0.65 }
+    : { background: '#FFFBF4' };
+
+  if (editing) {
+    return (
+      <>
+        <tr style={{ background: '#F5F0FF' }}>
+          <td><input value={editForm.full_name} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 5, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 12.5 }} /></td>
+          <td><input value={editForm.fellowship} onChange={e => setEditForm(f => ({ ...f, fellowship: e.target.value }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 5, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 12.5 }} /></td>
+          <td><input value={editForm.leadership_category} onChange={e => setEditForm(f => ({ ...f, leadership_category: e.target.value }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 5, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 12.5 }} /></td>
+          <td><input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 5, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 12 }} /></td>
+          {useDb && <td>—</td>}
+          <td>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <Btn tone="primary" small onClick={() => { onEdit(p.email, editForm); setEditing(false); }}>Save</Btn>
+              <Btn tone="ghost" small onClick={() => setEditing(false)}>Cancel</Btn>
+            </div>
+          </td>
+        </tr>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <tr style={useDb ? rowStyle : undefined}>
+        <td style={p.absent ? { textDecoration: 'line-through', color: C.mute } : undefined}>{p.full_name}</td>
+        <td>{p.fellowship || '—'}</td>
+        <td>{p.leadership_category || '—'}</td>
+        <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{p.email}</td>
+        {useDb && (
+          <td>
+            {p.registered
+              ? <span><Pill tone="green">{p.fuzzyMatched ? 'Registered (fuzzy)' : p.linked_registration_email ? 'Registered (linked)' : 'Registered'}</Pill></span>
+              : p.absent ? <Pill tone="mute">Absent</Pill>
+              : <Pill tone="amber">Pending</Pill>}
+          </td>
+        )}
+        {canEdit && !isLimited && (
+          <td>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {!p.registered && !p.absent && (
+                <button onClick={() => setShowAbsent(true)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.amber}`, background: 'transparent', color: C.amber, cursor: 'pointer', fontFamily: 'Inter' }}>Absent</button>
+              )}
+              {p.absent && (
+                <button onClick={() => { onMarkAbsent(p.email, false, ''); setAbsentReason(''); }} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.line}`, background: 'transparent', color: C.mute, cursor: 'pointer', fontFamily: 'Inter' }}>Undo absent</button>
+              )}
+              {!p.registered && !p.linked_registration_email && (
+                <button onClick={() => setShowLink(true)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.purple}`, background: 'transparent', color: C.purple, cursor: 'pointer', fontFamily: 'Inter' }}>Link reg</button>
+              )}
+              {p.linked_registration_email && (
+                <button onClick={() => onUnlink(p.email)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.line}`, background: 'transparent', color: C.mute, cursor: 'pointer', fontFamily: 'Inter' }}>Unlink</button>
+              )}
+              <button onClick={() => setEditing(true)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.line}`, background: 'transparent', color: C.ink, cursor: 'pointer', fontFamily: 'Inter' }}>Edit</button>
+              {p.manually_added && (
+                <button onClick={() => { if (confirm(`Remove ${p.full_name} from the working list?`)) onRemove(p.email); }} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid #F44`, background: 'transparent', color: '#D00', cursor: 'pointer', fontFamily: 'Inter' }}>Remove</button>
+              )}
+            </div>
+          </td>
+        )}
+      </tr>
+      {showLink && (
+        <LinkRegistrationModal person={p} registrations={registrations} onLink={email => { onLink(p.email, email); setShowLink(false); }} onClose={() => setShowLink(false)} />
+      )}
+      {showAbsent && (
+        <tr style={{ background: '#FFF8E6' }}>
+          <td colSpan={canEdit ? (useDb ? 6 : 5) : (useDb ? 5 : 4)} style={{ padding: '8px 12px' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600 }}>Reason for absence:</span>
+              <input autoFocus value={absentReason} onChange={e => setAbsentReason(e.target.value)} placeholder="e.g. travelling, health, work" style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 12.5 }} onKeyDown={e => { if (e.key === 'Enter') { onMarkAbsent(p.email, true, absentReason); setShowAbsent(false); } if (e.key === 'Escape') setShowAbsent(false); }} />
+              <Btn tone="primary" small onClick={() => { onMarkAbsent(p.email, true, absentReason); setShowAbsent(false); }}>Confirm</Btn>
+              <Btn tone="ghost" small onClick={() => setShowAbsent(false)}>Cancel</Btn>
+            </div>
+          </td>
+        </tr>
+      )}
+      {p.absent && p.absent_reason && (
+        <tr style={{ background: '#FAFAFA' }}>
+          <td colSpan={canEdit ? (useDb ? 6 : 5) : (useDb ? 5 : 4)} style={{ padding: '4px 12px 8px', fontSize: 12, color: C.mute, fontStyle: 'italic' }}>
+            Reason: {p.absent_reason}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function WorkingListTab({ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups, isLimited, merged, role, onAddPerson, onMarkAbsent, onEditPerson, onRemove }) {
   const useDb = workingListDb.length > 0;
   const [fellowshipFilter, setFellowshipFilter] = useState('All');
+  const [showRegistered, setShowRegistered] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  const canEdit = !isLimited && (role === 'super_admin' || role === 'regional_secretary' || role === 'dept_lead' || role === 'pastor');
 
   const fellowships = useMemo(() => {
     const f = new Set(merged.map(r => r.fellowship).filter(Boolean));
     return [...f].sort();
   }, [merged]);
 
+  // Build a normalized-name → registration-email map for fuzzy fallback
+  const regByNormalizedName = useMemo(() => {
+    const map = {};
+    merged.forEach(r => {
+      const n = normalizeName(r.fullName || '');
+      if (n) map[n] = r.email;
+    });
+    return map;
+  }, [merged]);
+
   const source = useMemo(() => {
+    function resolveRegistered(p) {
+      // 1. Manual link takes priority
+      if (p.linked_registration_email && regByEmail[p.linked_registration_email]) return { registered: true, fuzzyMatched: false };
+      // 2. Direct email match
+      if (regByEmail[p.email]) return { registered: true, fuzzyMatched: false };
+      // 3. Fuzzy name match
+      const n = normalizeName(p.full_name);
+      if (n && regByNormalizedName[n]) return { registered: true, fuzzyMatched: true };
+      return { registered: false, fuzzyMatched: false };
+    }
+
     if (useDb) {
-      return workingListDb.map(p => ({
-        full_name: p.full_name,
-        subgroup: p.subgroup,
-        fellowship: p.fellowship,
-        leadership_category: p.leadership_category,
-        email: p.email,
-        registered: !!regByEmail[p.email],
-      }));
+      return workingListDb.map(p => {
+        const { registered, fuzzyMatched } = resolveRegistered(p);
+        return {
+          full_name: p.full_name,
+          subgroup: p.subgroup,
+          fellowship: p.fellowship,
+          leadership_category: p.leadership_category,
+          email: p.email,
+          absent: !!p.absent,
+          absent_reason: p.absent_reason || '',
+          manually_added: !!p.manually_added,
+          linked_registration_email: p.linked_registration_email || null,
+          registered,
+          fuzzyMatched,
+        };
+      });
     }
     return workingList.map(p => ({
       full_name: p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim(),
@@ -890,19 +1200,22 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
       fellowship: p.fellowship || '',
       leadership_category: p.leadership || '',
       email: p.email,
+      absent: false,
+      absent_reason: '',
+      manually_added: false,
+      linked_registration_email: null,
       registered: false,
+      fuzzyMatched: false,
     }));
-  }, [useDb, workingListDb, workingList, regByEmail]);
+  }, [useDb, workingListDb, workingList, regByEmail, regByNormalizedName]);
 
   const filtered = useMemo(() => {
-    // For limited users in WorkingList, we filter by fellowship
     return source.filter(p => {
-      if (isLimited) {
-        return fellowshipFilter === 'All' || p.fellowship === fellowshipFilter;
-      }
+      if (!showRegistered && p.registered) return false;
+      if (isLimited) return fellowshipFilter === 'All' || p.fellowship === fellowshipFilter;
       return subgroupFilter === 'All' || p.subgroup === subgroupFilter;
     });
-  }, [source, isLimited, fellowshipFilter, subgroupFilter]);
+  }, [source, isLimited, fellowshipFilter, subgroupFilter, showRegistered]);
 
   const byGroup = useMemo(() => {
     const g = {};
@@ -910,31 +1223,55 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
     return g;
   }, [filtered]);
 
-  const notRegistered = filtered.filter(p => !p.registered).length;
+  const totalNotReg = source.filter(p => !p.registered && !p.absent).length;
+  const totalRegistered = source.filter(p => p.registered).length;
+  const totalAbsent = source.filter(p => p.absent).length;
+
+  async function handleSaveAdd(person) {
+    await onAddPerson(person);
+    setShowAddModal(false);
+  }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+      {showAddModal && <AddPersonModal subgroups={subgroups} onSave={handleSaveAdd} onClose={() => setShowAddModal(false)} />}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, gap: 12 }}>
         <div>
           <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Working list</h2>
-          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>
-            {useDb
-              ? <>{filtered.length} people · <span style={{ color: notRegistered > 0 ? C.amber : C.green }}>{notRegistered} not yet registered</span></>
-              : <>On the roster but not yet registered — {filtered.length} people to follow up with.</>}
+          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {useDb ? (
+              <>
+                <span style={{ color: totalNotReg > 0 ? C.amber : C.green }}>{totalNotReg} to follow up</span>
+                {totalRegistered > 0 && <span style={{ color: C.green }}>· {totalRegistered} registered</span>}
+                {totalAbsent > 0 && <span style={{ color: C.mute }}>· {totalAbsent} absent</span>}
+              </>
+            ) : (
+              <span>On the roster but not yet registered — {source.length} people to follow up with.</span>
+            )}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {useDb && totalRegistered > 0 && (
+            <Btn tone="ghost" small onClick={() => setShowRegistered(v => !v)}>
+              {showRegistered ? 'Hide registered' : `Show registered (${totalRegistered})`}
+            </Btn>
+          )}
           {isLimited ? (
             <FellowshipSelect value={fellowshipFilter} onChange={setFellowshipFilter} fellowships={fellowships} />
           ) : (
             <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />
           )}
+          {canEdit && <Btn tone="subtle" small onClick={() => setShowAddModal(true)}><Plus size={13} /> Add Person</Btn>}
           <Btn tone="ghost" small onClick={() => downloadCSV('working-list.csv', filtered, [
             { key: 'full_name', label: 'Full Name' },
             { key: 'subgroup', label: 'Subgroup' },
+            { key: 'fellowship', label: 'Fellowship' },
             { key: 'leadership_category', label: 'Leadership Category' },
             { key: 'email', label: 'Email' },
             { key: 'registered', label: 'Registered', get: r => r.registered ? 'Yes' : 'No' },
+            { key: 'absent', label: 'Absent', get: r => r.absent ? 'Yes' : 'No' },
+            { key: 'absent_reason', label: 'Absent Reason' },
           ])}><Download size={13} /> Export</Btn>
         </div>
       </div>
@@ -942,19 +1279,25 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
       {Object.keys(byGroup).length === 0 && (
         <Card>
           <div style={{ color: C.mute, textAlign: 'center', padding: 20 }}>
-            {useDb ? 'Working list is empty — sync the "Working List" sheet tab.' : 'Nobody outstanding — roster may not be imported yet.'}
+            {useDb
+              ? totalRegistered > 0 && !showRegistered
+                ? `All ${totalRegistered} people on the list have registered.`
+                : 'Working list is empty — sync the "Working List" sheet tab or add someone manually.'
+              : 'Nobody outstanding — roster may not be imported yet.'}
           </div>
         </Card>
       )}
 
       {Object.entries(byGroup).sort().map(([sg, people]) => {
-        const notReg = people.filter(p => !p.registered).length;
+        const pending = people.filter(p => !p.registered && !p.absent).length;
+        const absent = people.filter(p => p.absent).length;
         return (
           <Card key={sg} style={{ marginBottom: 14, padding: 0, overflowX: 'auto' }}>
             <div style={{ padding: '12px 16px', background: '#FAF8FE', borderBottom: `1px solid ${C.line}`, fontWeight: 600, fontSize: 13.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <span>{sg}</span>
               <div style={{ display: 'flex', gap: 6 }}>
-                {useDb && notReg > 0 && <Pill tone="amber">{notReg} outstanding</Pill>}
+                {pending > 0 && <Pill tone="amber">{pending} pending</Pill>}
+                {absent > 0 && <Pill tone="mute">{absent} absent</Pill>}
                 <Pill tone="mute">{people.length} total</Pill>
               </div>
             </div>
@@ -962,19 +1305,16 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Fellowship</th>
                   <th>Leadership Category</th>
                   <th>Email</th>
-                  {useDb && <th>Registered</th>}
+                  {useDb && <th>Status</th>}
+                  {canEdit && !isLimited && <th></th>}
                 </tr>
               </thead>
               <tbody>
                 {people.map((p, i) => (
-                  <tr key={i} style={useDb && !p.registered ? { background: '#FFFBF4' } : undefined}>
-                    <td>{p.full_name}</td>
-                    <td>{p.leadership_category || '—'}</td>
-                    <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{p.email}</td>
-                    {useDb && <td>{p.registered ? <Pill tone="green">Yes</Pill> : <Pill tone="amber">No</Pill>}</td>}
-                  </tr>
+                  <WorkingListRow key={p.email || i} p={p} useDb={useDb} canEdit={canEdit} isLimited={isLimited} registrations={merged} onMarkAbsent={onMarkAbsent} onEdit={onEditPerson} onRemove={onRemove} onLink={(wlEmail, regEmail) => onEditPerson(wlEmail, { linked_registration_email: regEmail })} onUnlink={wlEmail => onEditPerson(wlEmail, { linked_registration_email: null })} />
                 ))}
               </tbody>
             </table>

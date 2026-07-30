@@ -343,7 +343,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
       const allowed = teams.filter(t => REGISTRATION_TEAMS.some(a => t.name.toLowerCase().includes(a.toLowerCase()))).map(t => t.id)
       if (!allowed.length) return
       const { data: membership } = await supabase
-        .from('sprint_team_members').select('team_id').in('team_id', allowed).eq('user_id', profile.id).limit(1)
+        .from('sprint_team_members').select('sprint_team_id').in('sprint_team_id', allowed).eq('user_id', profile.id).limit(1)
       if (membership?.length) setHasRegistrationAccess(true)
     })()
   }, [profile?.id, role])

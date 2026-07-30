@@ -22,8 +22,15 @@ export default function RegistrationPage() {
     }
 
     try {
-      // Check if user is a super admin, regional secretary, or programs member (can see all)
-      if (role === 'super_admin' || role === 'regional_secretary' || role === 'programs') {
+      // Super admin always has access
+      if (role === 'super_admin') {
+        setCanAccess(true)
+        setLoading(false)
+        return
+      }
+
+      // Regional secretary has access
+      if (role === 'regional_secretary') {
         setCanAccess(true)
         setLoading(false)
         return
@@ -35,6 +42,7 @@ export default function RegistrationPage() {
         'Secretariat and Planning',
         'Registration',
         'Secretariat Programs',
+        'Finance',
         'Transportation',
         'Delegates Compliance',
         'Accommodation and Room Coordination',
@@ -72,8 +80,8 @@ export default function RegistrationPage() {
       // Check if user is in any of the allowed teams
       const { data: userTeams, error: userTeamsError } = await supabase
         .from('sprint_team_members')
-        .select('team_id, sprint_teams:team_id(name)')
-        .in('team_id', teamIds)
+        .select('sprint_team_id, sprint_teams:sprint_team_id(name)')
+        .in('sprint_team_id', teamIds)
         .eq('user_id', profile.id)
 
       if (userTeamsError || !userTeams?.length) {
