@@ -216,6 +216,8 @@ export default function RoomAssignmentPage() {
   function handleDragStart(e, person) {
     setDraggedPerson(person)
     e.dataTransfer.effectAllowed = 'move'
+    // Store dragged email so drop handlers can read it even if state hasn't updated
+    e.dataTransfer.setData('text/plain', person.email)
   }
 
   function handleDragOver(e) {
@@ -225,47 +227,60 @@ export default function RoomAssignmentPage() {
 
   function handleDropOnRoom(e, roomId) {
     e.preventDefault()
-    if (!draggedPerson) return
+    const draggedEmail = e.dataTransfer.getData('text/plain')
+    const person = draggedPerson || registrations.find(r => r.email === draggedEmail)
+    if (!person) return
 
     const room = rooms.find(r => r.id === roomId)
     if (!room) return
 
-    // Check capacity
-    if (room.people.length >= room.capacity) {
-      alert(`Room is at capacity (${room.capacity} people)`)
+    // If the dragged person is part of a multi-selection, move all selected
+    const emailsToMove = selectedPeople.has(person.email) && selectedPeople.size > 1
+      ? Array.from(selectedPeople)
+      : [person.email]
+
+    const peopleToMove = registrations.filter(r => emailsToMove.includes(r.email))
+
+    if (room.people.length + peopleToMove.length > room.capacity) {
+      alert(`Room can only hold ${room.capacity} people. This move would exceed capacity.`)
       return
     }
 
-    // Remove from all rooms first
     const updated = rooms.map(r => ({
       ...r,
-      people: r.people.filter(p => p.email !== draggedPerson.email),
+      people: r.people.filter(p => !emailsToMove.includes(p.email)),
     }))
 
-    // Add to target room
     const targetRoom = updated.find(r => r.id === roomId)
     if (targetRoom) {
-      targetRoom.people.push(draggedPerson)
+      targetRoom.people.push(...peopleToMove)
     }
 
     setRooms(updated)
     saveRoomAssignments(updated, numRooms, peoplePerRoom)
     setDraggedPerson(null)
+    setSelectedPeople(new Set())
   }
 
   function handleDropOnUnassigned(e) {
     e.preventDefault()
-    if (!draggedPerson) return
+    const draggedEmail = e.dataTransfer.getData('text/plain')
+    const person = draggedPerson || registrations.find(r => r.email === draggedEmail)
+    if (!person) return
 
-    // Remove from all rooms
+    const emailsToRemove = selectedPeople.has(person.email) && selectedPeople.size > 1
+      ? Array.from(selectedPeople)
+      : [person.email]
+
     const updated = rooms.map(r => ({
       ...r,
-      people: r.people.filter(p => p.email !== draggedPerson.email),
+      people: r.people.filter(p => !emailsToRemove.includes(p.email)),
     }))
 
     setRooms(updated)
     saveRoomAssignments(updated, numRooms, peoplePerRoom)
     setDraggedPerson(null)
+    setSelectedPeople(new Set())
   }
 
   function handleClearAllAssignments() {
@@ -608,9 +623,30 @@ export default function RoomAssignmentPage() {
           }}
         >
           <div className="room-header">
-            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>
-              Unassigned ({unassigned.length})
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={unassigned.length > 0 && unassigned.every(p => selectedPeople.has(p.email))}
+                ref={el => {
+                  if (el) el.indeterminate = unassigned.some(p => selectedPeople.has(p.email)) && !unassigned.every(p => selectedPeople.has(p.email))
+                }}
+                onChange={() => {
+                  const allSelected = unassigned.every(p => selectedPeople.has(p.email))
+                  const newSelected = new Set(selectedPeople)
+                  if (allSelected) {
+                    unassigned.forEach(p => newSelected.delete(p.email))
+                  } else {
+                    unassigned.forEach(p => newSelected.add(p.email))
+                  }
+                  setSelectedPeople(newSelected)
+                }}
+                style={{ cursor: 'pointer', accentColor: COLORS.purple }}
+                title="Select all unassigned"
+              />
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>
+                Unassigned ({unassigned.length})
+              </h3>
+            </div>
           </div>
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {unassigned.map(person => {
@@ -707,6 +743,7 @@ export default function RoomAssignmentPage() {
                         checked={isSelected}
                         onChange={() => togglePersonSelection(person.email)}
                         onClick={e => e.stopPropagation()}
+                        draggable={false}
                         style={{ cursor: 'pointer', flexShrink: 0, accentColor: COLORS.purple }}
                       />
                       <div style={{ flex: 1, minWidth: 0 }}>
