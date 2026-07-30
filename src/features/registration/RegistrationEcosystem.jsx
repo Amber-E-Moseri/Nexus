@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Upload, Users, Plane, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, Settings, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
@@ -1115,8 +1116,9 @@ function WorkingListRow({ p, useDb, canEdit, isLimited, registrations, onMarkAbs
           </td>
         )}
       </tr>
-      {showLink && (
-        <LinkRegistrationModal person={p} registrations={registrations} onLink={email => { onLink(p.email, email); setShowLink(false); }} onClose={() => setShowLink(false)} />
+      {showLink && createPortal(
+        <LinkRegistrationModal person={p} registrations={registrations} onLink={email => { onLink(p.email, email); setShowLink(false); }} onClose={() => setShowLink(false)} />,
+        document.body
       )}
       {showAbsent && (
         <tr style={{ background: '#FFF8E6' }}>
