@@ -81,6 +81,21 @@ export default function RegistrationPage() {
         return
       }
 
+      // Check if user is on Programs or Secretariat team (full access)
+      const fullAccessTeams = ['Programs', 'Secretariat']
+      const hasFullAccessTeam = userTeams.some(ut => {
+        const teamName = ut.sprint_teams?.name || ''
+        return fullAccessTeams.some(team =>
+          teamName.toLowerCase().includes(team.toLowerCase())
+        )
+      })
+
+      if (hasFullAccessTeam) {
+        setCanAccess(true)
+        setLoading(false)
+        return
+      }
+
       // Check if any of user's teams match allowed team names
       const userHasAccess = userTeams.some(ut => {
         const teamName = ut.sprint_teams?.name || ''
