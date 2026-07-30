@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Upload, Users, Plane, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, Settings, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign } from 'lucide-react';
+import { Upload, Users, Plane, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, Settings, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
+import RegistrationEditModal from './RegistrationEditModal';
 
 // ---------- brand tokens ----------
 const C = {
@@ -238,6 +239,11 @@ export default function App({ limitedToSubgroups = null }) {
   const [workingListLoading, setWorkingListLoading] = useState(false);
   const [hasFinanceAccess, setHasFinanceAccess] = useState(false);
   const [payments, setPayments] = useState([]); // from event_payments table
+  const [editingReg, setEditingReg] = useState(null);
+
+  const handleSaveReg = useCallback((updated) => {
+    setRegistrations(prev => prev.map(r => r.email === updated.email ? { ...r, ...updated } : r));
+  }, []);
 
   // Finance access: regional_secretary only (unless granted via user_grants)
   useEffect(() => {
@@ -302,6 +308,7 @@ export default function App({ limitedToSubgroups = null }) {
             .order('submitted_at', { ascending: false });
           // Rename snake_case columns to camelCase for compatibility
           finalReg = (dbRegs || []).map(r => ({
+            id: r.id,
             email: r.email,
             fullName: r.full_name,
             firstName: r.first_name,
@@ -420,7 +427,7 @@ export default function App({ limitedToSubgroups = null }) {
     return out;
   }, [merged, subgroups]);
 
-  const totalRegs = registrations.length;
+  const totalRegs = registrationsFiltered.length;
   const totalRegTarget = Object.values(targets).reduce((s, t) => s + (Number(t.reg) || 0), 0);
   const totalFlights = merged.filter(r => r.hasFlight).length;
   const totalFlightTarget = merged.filter(r => r.needsFlight).length;
@@ -615,12 +622,20 @@ export default function App({ limitedToSubgroups = null }) {
         })}
       </div>
 
+      {editingReg && (
+        <RegistrationEditModal
+          registration={editingReg}
+          onClose={() => setEditingReg(null)}
+          onSave={(updated) => { handleSaveReg(updated); setEditingReg(null); }}
+        />
+      )}
+
       <div style={{ padding: 28, maxWidth: 1280, margin: '0 auto' }}>
         {tab === 'overview' && (
           <OverviewTab {...{ totalRegs, totalRegTarget, totalFlights, totalFlightTarget, subgroups, bySubgroup, targets, setTarget, merged, exempt, updateExempt, isLimited }} />
         )}
         {tab === 'working' && <WorkingListTab {...{ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups, isLimited, merged }} />}
-        {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm, isLimited }} />}
+        {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm, isLimited, onEditReg: setEditingReg }} />}
         {tab === 'transport' && <TransportTab {...{ merged, exempt, isLimited }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
@@ -1158,7 +1173,7 @@ function FellowshipSelect({ value, onChange, fellowships }) {
 }
 
 // ============ CONFIRMATIONS ============
-function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm, isLimited }) {
+function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm, isLimited, onEditReg }) {
   const [bypassConfirmed, setBypassConfirmed] = useState({}); // email -> true if manually confirmed without flight
   const [fellowshipFilter, setFellowshipFilter] = useState('All');
 
@@ -1211,7 +1226,7 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
 
       <Card style={{ padding: 0, overflowX: 'auto' }}>
         <table>
-          <thead><tr><th>Name</th><th>Subgroup</th><th>Fellowship</th><th>Type</th><th>Flight on file</th><th>Confirmed</th></tr></thead>
+          <thead><tr><th>Name</th><th>Subgroup</th><th>Fellowship</th><th>Type</th><th>Flight on file</th><th>Confirmed</th><th></th></tr></thead>
           <tbody>
             {filtered.map((r, i) => (
               <tr key={i}>
@@ -1241,9 +1256,22 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
                     )
                   )}
                 </td>
+                <td style={{ width: 36, padding: '6px 8px' }}>
+                  {onEditReg && (
+                    <button
+                      onClick={() => onEditReg(r)}
+                      title="Edit registration"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6 }}
+                      onMouseEnter={e => e.currentTarget.style.color = C.purple}
+                      onMouseLeave={e => e.currentTarget.style.color = C.mute}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
-            {filtered.length === 0 && <tr><td colSpan={6} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>No registrations imported yet.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={7} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>No registrations imported yet.</td></tr>}
           </tbody>
         </table>
       </Card>
