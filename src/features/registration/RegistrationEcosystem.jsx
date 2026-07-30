@@ -1162,6 +1162,15 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
               {room.people.length >= room.capacity && (
                 <div style={{ fontSize: 11, color: C.red, marginBottom: 8, fontWeight: 600 }}>Room is full</div>
               )}
+              {(() => {
+                const genders = new Set(room.people.map(p => {
+                  const g = (p.gender || '').toLowerCase();
+                  return (g.includes('female') || g === 'f') ? 'female' : 'male';
+                }));
+                return genders.size > 1 ? (
+                  <div style={{ fontSize: 11, color: C.amber, marginBottom: 8, fontWeight: 600 }}>⚠ Mixed gender assignment</div>
+                ) : null;
+              })()}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {room.people.map(person => {
                   const isHead = room.roomHead === person.email;
