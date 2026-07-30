@@ -898,66 +898,56 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
 }
 
 // ============ FINANCE TAB ============
+// Early-bird cutoff: $250 until Aug 5, $350 after
+const EARLY_CUTOFF = new Date('2026-08-06T00:00:00');
+function getDefaultFee() { return new Date() < EARLY_CUTOFF ? 250 : 350; }
+
 function FinanceTab({ registrations, payments, setPayments, userId }) {
-  // Merge registrations with their payment record
+  const defaultFee = getDefaultFee();
   const payByEmail = useMemo(() => Object.fromEntries(payments.map(p => [p.email, p])), [payments]);
 
-  const rows = useMemo(() => registrations.map(r => ({
-    email: r.email,
-    fullName: r.fullName || `${r.firstName || ''} ${r.lastName || ''}`.trim(),
-    subgroup: r.subgroup || '',
-    ...payByEmail[r.email] || { amount_expected: 0, amount_paid: 0, payment_date: null, payment_notes: '' },
-  })).sort((a, b) => a.subgroup.localeCompare(b.subgroup) || a.fullName.localeCompare(b.fullName)), [registrations, payByEmail]);
+  const rows = useMemo(() => registrations.map(r => {
+    const pay = payByEmail[r.email] || {};
+    const fee = Number(pay.amount_expected) || defaultFee;
+    const paid = Number(pay.amount_paid) || 0;
+    return {
+      email: r.email,
+      fullName: r.fullName || `${r.firstName || ''} ${r.lastName || ''}`.trim(),
+      subgroup: r.subgroup || '',
+      amount_expected: fee,
+      amount_paid: paid,
+      payment_date: pay.payment_date || null,
+      payment_notes: pay.payment_notes || '',
+    };
+  }).sort((a, b) => a.subgroup.localeCompare(b.subgroup) || a.fullName.localeCompare(b.fullName)),
+  [registrations, payByEmail, defaultFee]);
 
-  const totalExpected = rows.reduce((s, r) => s + (Number(r.amount_expected) || 0), 0);
-  const totalPaid    = rows.reduce((s, r) => s + (Number(r.amount_paid) || 0), 0);
-  const countFull    = rows.filter(r => Number(r.amount_paid) > 0 && Number(r.amount_paid) >= Number(r.amount_expected) && Number(r.amount_expected) > 0).length;
-  const countPartial = rows.filter(r => Number(r.amount_paid) > 0 && Number(r.amount_paid) < Number(r.amount_expected)).length;
-  const countUnpaid  = rows.filter(r => !(Number(r.amount_paid) > 0)).length;
+  const totalExpected = rows.length * defaultFee;
+  const totalPaid    = rows.reduce((s, r) => s + r.amount_paid, 0);
+  const countPaid    = rows.filter(r => r.amount_paid >= r.amount_expected && r.amount_paid > 0).length;
+  const countPartial = rows.filter(r => r.amount_paid > 0 && r.amount_paid < r.amount_expected).length;
+  const countUnpaid  = rows.filter(r => r.amount_paid === 0).length;
 
-  const [editing, setEditing] = useState({}); // email -> { amount_expected, amount_paid, payment_date, payment_notes }
   const [saving, setSaving] = useState({});
+  // partial editing: email -> draft amount string
+  const [partialDraft, setPartialDraft] = useState({});
 
-  function startEdit(r) {
-    setEditing(prev => ({
-      ...prev,
-      [r.email]: {
-        amount_expected: r.amount_expected ?? 0,
-        amount_paid: r.amount_paid ?? 0,
-        payment_date: r.payment_date || '',
-        payment_notes: r.payment_notes || '',
-      },
-    }));
-  }
-
-  function cancelEdit(email) {
-    setEditing(prev => { const n = { ...prev }; delete n[email]; return n; });
-  }
-
-  async function saveRow(email, fullName, subgroup) {
-    const draft = editing[email];
-    if (!draft) return;
+  async function upsertPayment(email, fullName, subgroup, amountExpected, amountPaid, paymentDate, notes) {
     setSaving(prev => ({ ...prev, [email]: true }));
     try {
       const payload = {
         email,
         full_name: fullName,
         subgroup,
-        amount_expected: Number(draft.amount_expected) || 0,
-        amount_paid: Number(draft.amount_paid) || 0,
-        payment_date: draft.payment_date || null,
-        payment_notes: draft.payment_notes || '',
+        amount_expected: amountExpected,
+        amount_paid: amountPaid,
+        payment_date: paymentDate || new Date().toISOString().split('T')[0],
+        payment_notes: notes || '',
         recorded_by: userId || null,
       };
-      const { error } = await supabase
-        .from('event_payments')
-        .upsert(payload, { onConflict: 'email' });
+      const { error } = await supabase.from('event_payments').upsert(payload, { onConflict: 'email' });
       if (!error) {
-        setPayments(prev => {
-          const without = prev.filter(p => p.email !== email);
-          return [...without, { ...payload }];
-        });
-        cancelEdit(email);
+        setPayments(prev => [...prev.filter(p => p.email !== email), payload]);
       } else {
         alert('Save failed: ' + error.message);
       }
@@ -966,22 +956,46 @@ function FinanceTab({ registrations, payments, setPayments, userId }) {
     }
   }
 
-  const fmt = n => n ? `$${Number(n).toFixed(2)}` : '—';
+  function markPaid(r) {
+    upsertPayment(r.email, r.fullName, r.subgroup, r.amount_expected, r.amount_expected, null, r.payment_notes);
+  }
+
+  function markUnpaid(r) {
+    upsertPayment(r.email, r.fullName, r.subgroup, r.amount_expected, 0, null, r.payment_notes);
+  }
+
+  function savePartial(r) {
+    const amt = Number(partialDraft[r.email]);
+    if (!amt || amt <= 0) return;
+    upsertPayment(r.email, r.fullName, r.subgroup, r.amount_expected, amt, null, r.payment_notes);
+    setPartialDraft(prev => { const n = { ...prev }; delete n[r.email]; return n; });
+  }
+
+  const fmt = n => `$${Number(n).toFixed(2)}`;
+  const earlyBirdActive = new Date() < EARLY_CUTOFF;
 
   return (
     <div>
-      {/* summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14, marginBottom: 24 }}>
+      {/* fee banner */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: earlyBirdActive ? C.greenBg : C.amberBg, border: `1px solid ${earlyBirdActive ? '#B7DFC5' : '#F0D4A0'}`, borderRadius: 10, padding: '10px 16px', marginBottom: 20, fontSize: 13 }}>
+        <span style={{ fontWeight: 700, color: earlyBirdActive ? C.green : C.amber }}>
+          {earlyBirdActive ? '🟢 Early bird rate active — $250' : '🟡 Standard rate — $350'}
+        </span>
+        <span style={{ color: C.mute }}>{earlyBirdActive ? '(until Aug 5)' : '(early bird closed Aug 5)'}</span>
+      </div>
+
+      {/* summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 14, marginBottom: 24 }}>
         {[
-          { label: 'Total expected', value: `$${totalExpected.toFixed(2)}`, tone: 'mute' },
-          { label: 'Total collected', value: `$${totalPaid.toFixed(2)}`, tone: totalPaid >= totalExpected && totalExpected > 0 ? 'green' : 'amber' },
-          { label: 'Fully paid', value: countFull, tone: 'green' },
-          { label: 'Partial', value: countPartial, tone: 'amber' },
-          { label: 'Unpaid', value: countUnpaid, tone: countUnpaid > 0 ? 'red' : 'green' },
+          { label: 'Total collected', value: fmt(totalPaid), sub: `of ${fmt(totalExpected)}`, tone: totalPaid >= totalExpected && totalExpected > 0 ? 'green' : 'mute' },
+          { label: 'Paid in full', value: countPaid, sub: `${rows.length} total`, tone: 'green' },
+          { label: 'Partial', value: countPartial, sub: 'paid something', tone: countPartial > 0 ? 'amber' : 'mute' },
+          { label: 'Unpaid', value: countUnpaid, sub: 'nothing received', tone: countUnpaid > 0 ? 'red' : 'green' },
         ].map(s => (
           <Card key={s.label}>
-            <div style={{ fontSize: 10.5, fontFamily: 'JetBrains Mono', color: C.mute, textTransform: 'uppercase', letterSpacing: 0.06, marginBottom: 6 }}>{s.label}</div>
-            <div style={{ fontFamily: 'Space Grotesk', fontSize: 26, fontWeight: 700, color: s.tone === 'green' ? C.green : s.tone === 'amber' ? C.amber : s.tone === 'red' ? C.red : C.ink }}>{s.value}</div>
+            <div style={{ fontSize: 10.5, fontFamily: 'JetBrains Mono', color: C.mute, textTransform: 'uppercase', letterSpacing: 0.06, marginBottom: 4 }}>{s.label}</div>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 26, fontWeight: 700, color: s.tone === 'green' ? C.green : s.tone === 'amber' ? C.amber : s.tone === 'red' ? C.red : C.ink, lineHeight: 1.1 }}>{s.value}</div>
+            <div style={{ fontSize: 11.5, color: C.mute, marginTop: 3 }}>{s.sub}</div>
           </Card>
         ))}
       </div>
@@ -989,7 +1003,7 @@ function FinanceTab({ registrations, payments, setPayments, userId }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div>
           <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Payment tracker</h2>
-          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>Click a row to edit. Changes save to the database immediately.</div>
+          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>Check off each person as they pay. Use "partial" to record a lower amount.</div>
         </div>
         <Btn tone="ghost" small onClick={() => downloadCSV('finance-payments.csv', rows, [
           { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' }, { key: 'email', label: 'Email' },
@@ -1004,80 +1018,74 @@ function FinanceTab({ registrations, payments, setPayments, userId }) {
             <tr>
               <th>Name</th>
               <th>Subgroup</th>
-              <th>Expected</th>
+              <th>Fee</th>
               <th>Paid</th>
-              <th>Remaining</th>
               <th>Date</th>
-              <th>Notes</th>
-              <th>Status</th>
-              <th></th>
+              <th style={{ textAlign: 'center' }}>Status</th>
             </tr>
           </thead>
           <tbody>
             {rows.map(r => {
-              const draft = editing[r.email];
-              const exp = Number(draft?.amount_expected ?? r.amount_expected) || 0;
-              const paid = Number(draft?.amount_paid ?? r.amount_paid) || 0;
-              const remaining = exp - paid;
-              const status = paid <= 0 ? 'Unpaid' : paid < exp ? 'Partial' : 'Paid';
-              const statusToneMap = { Paid: 'green', Partial: 'amber', Unpaid: 'red' };
-
-              if (draft) {
-                return (
-                  <tr key={r.email} style={{ background: '#F7F3FF' }}>
-                    <td style={{ fontWeight: 600 }}>{r.fullName}</td>
-                    <td style={{ color: C.mute, fontSize: 12 }}>{r.subgroup}</td>
-                    <td>
-                      <input type="number" min="0" step="0.01" style={{ width: 80 }}
-                        value={draft.amount_expected}
-                        onChange={e => setEditing(prev => ({ ...prev, [r.email]: { ...draft, amount_expected: e.target.value } }))} />
-                    </td>
-                    <td>
-                      <input type="number" min="0" step="0.01" style={{ width: 80 }}
-                        value={draft.amount_paid}
-                        onChange={e => setEditing(prev => ({ ...prev, [r.email]: { ...draft, amount_paid: e.target.value } }))} />
-                    </td>
-                    <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: remaining > 0 ? C.red : C.green }}>
-                      {exp > 0 ? fmt(remaining) : '—'}
-                    </td>
-                    <td>
-                      <input type="date" style={{ width: 130 }}
-                        value={draft.payment_date || ''}
-                        onChange={e => setEditing(prev => ({ ...prev, [r.email]: { ...draft, payment_date: e.target.value } }))} />
-                    </td>
-                    <td>
-                      <input type="text" style={{ width: 160 }} placeholder="Notes…"
-                        value={draft.payment_notes}
-                        onChange={e => setEditing(prev => ({ ...prev, [r.email]: { ...draft, payment_notes: e.target.value } }))} />
-                    </td>
-                    <td><Pill tone={statusToneMap[status]}>{status}</Pill></td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      <Btn small onClick={() => saveRow(r.email, r.fullName, r.subgroup)} disabled={saving[r.email]}>{saving[r.email] ? '…' : 'Save'}</Btn>
-                      {' '}
-                      <Btn tone="ghost" small onClick={() => cancelEdit(r.email)}>Cancel</Btn>
-                    </td>
-                  </tr>
-                );
-              }
+              const isPaid = r.amount_paid >= r.amount_expected && r.amount_paid > 0;
+              const isPartial = r.amount_paid > 0 && r.amount_paid < r.amount_expected;
+              const isSaving = saving[r.email];
+              const showPartialInput = partialDraft[r.email] !== undefined;
 
               return (
-                <tr key={r.email} style={{ cursor: 'pointer' }} onClick={() => startEdit(r)}>
+                <tr key={r.email} style={{ background: isPaid ? '#F0FAF4' : undefined }}>
                   <td style={{ fontWeight: 600 }}>{r.fullName}</td>
-                  <td style={{ color: C.mute, fontSize: 12 }}>{r.subgroup}</td>
+                  <td style={{ color: C.mute, fontSize: 12.5 }}>{r.subgroup}</td>
                   <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{fmt(r.amount_expected)}</td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{fmt(r.amount_paid)}</td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: remaining > 0 ? C.red : C.green }}>
-                    {exp > 0 ? fmt(remaining) : '—'}
+                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>
+                    {r.amount_paid > 0 ? fmt(r.amount_paid) : '—'}
                   </td>
                   <td style={{ color: C.mute, fontSize: 12.5 }}>{r.payment_date || '—'}</td>
-                  <td style={{ color: C.mute, fontSize: 12.5 }}>{r.payment_notes || '—'}</td>
-                  <td><Pill tone={statusToneMap[status]}>{status}</Pill></td>
-                  <td style={{ color: C.mute, fontSize: 11 }}>click to edit</td>
+                  <td>
+                    {isPaid ? (
+                      /* Paid — show checkmark + undo link */
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Pill tone="green">✓ Paid</Pill>
+                        <button onClick={() => markUnpaid(r)} disabled={isSaving}
+                          style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                          undo
+                        </button>
+                      </div>
+                    ) : showPartialInput ? (
+                      /* Partial amount entry */
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 12, color: C.mute }}>$</span>
+                        <input
+                          type="number" min="1" max={r.amount_expected} step="0.01"
+                          autoFocus
+                          style={{ width: 70, padding: '4px 6px', fontSize: 13 }}
+                          value={partialDraft[r.email]}
+                          onChange={e => setPartialDraft(prev => ({ ...prev, [r.email]: e.target.value }))}
+                          onKeyDown={e => { if (e.key === 'Enter') savePartial(r); if (e.key === 'Escape') setPartialDraft(prev => { const n = { ...prev }; delete n[r.email]; return n; }); }}
+                        />
+                        <Btn small onClick={() => savePartial(r)} disabled={isSaving}>Save</Btn>
+                        <button onClick={() => setPartialDraft(prev => { const n = { ...prev }; delete n[r.email]; return n; })}
+                          style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+                      </div>
+                    ) : (
+                      /* Unpaid / partial — show action buttons */
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        {isPartial && <Pill tone="amber">Partial {fmt(r.amount_paid)}</Pill>}
+                        <Btn small onClick={() => markPaid(r)} disabled={isSaving} style={{ background: C.green, color: '#fff' }}>
+                          {isSaving ? '…' : `✓ Mark paid ${fmt(r.amount_expected)}`}
+                        </Btn>
+                        <button
+                          onClick={() => setPartialDraft(prev => ({ ...prev, [r.email]: '' }))}
+                          style={{ fontSize: 11.5, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                          partial
+                        </button>
+                      </div>
+                    )}
+                  </td>
                 </tr>
               );
             })}
             {rows.length === 0 && (
-              <tr><td colSpan={9} style={{ textAlign: 'center', color: C.mute, padding: 24 }}>No registrations yet.</td></tr>
+              <tr><td colSpan={6} style={{ textAlign: 'center', color: C.mute, padding: 24 }}>No registrations yet.</td></tr>
             )}
           </tbody>
         </table>
