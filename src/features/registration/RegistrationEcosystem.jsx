@@ -427,6 +427,13 @@ export default function App() {
     saveRoomData(updated, numRooms, peoplePerRoom);
   }
 
+  function handleRenameRoom(roomId, newName) {
+    if (!newName.trim()) return;
+    const updated = rooms.map(r => r.id === roomId ? { ...r, name: newName.trim() } : r);
+    setRooms(updated);
+    saveRoomData(updated, numRooms, peoplePerRoom);
+  }
+
   function handleSetRoomHead(roomId, personEmail) {
     const updated = rooms.map(r =>
       r.id === roomId ? { ...r, roomHead: r.roomHead === personEmail ? null : personEmail } : r
@@ -544,7 +551,7 @@ export default function App() {
         {tab === 'transport' && <TransportTab {...{ merged, exempt }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups }} />}
-        {tab === 'rooms' && <RoomAssignmentTab {...{ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, peoplePerRoom }} />}
+        {tab === 'rooms' && <RoomAssignmentTab {...{ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom }} />}
         {tab === 'import' && <ImportTab {...{ handleImport, roster, registrations, flights, exempt, updateExempt, lastImport }} />}
       </div>
     </div>
@@ -576,7 +583,7 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
         </Card>
       )}
 
-      <Card style={{ padding: 0, overflow: 'hidden' }}>
+      <Card style={{ padding: 0, overflowX: 'auto' }}>
         <div style={{ overflowX: 'auto', minWidth: 0 }}>
         <table>
           <thead>
@@ -705,7 +712,7 @@ function WorkingListTab({ workingList, subgroupFilter, setSubgroupFilter, subgro
       {Object.keys(byGroup).length === 0 && <Card><div style={{ color: C.mute, textAlign: 'center', padding: 20 }}>Nobody outstanding — either everyone on the roster has registered, or the roster hasn't been imported yet.</div></Card>}
 
       {Object.entries(byGroup).sort().map(([sg, people]) => (
-        <Card key={sg} style={{ marginBottom: 14, padding: 0, overflow: 'hidden' }}>
+        <Card key={sg} style={{ marginBottom: 14, padding: 0, overflowX: 'auto' }}>
           <div style={{ padding: '12px 16px', background: '#FAF8FE', borderBottom: `1px solid ${C.line}`, fontWeight: 600, fontSize: 13.5, display: 'flex', justifyContent: 'space-between' }}>
             <span>{sg}</span><Pill tone="mute">{people.length} outstanding</Pill>
           </div>
@@ -756,7 +763,7 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
         </div>
       </div>
 
-      <Card style={{ padding: 0, overflow: 'hidden' }}>
+      <Card style={{ padding: 0, overflowX: 'auto' }}>
         <table>
           <thead><tr><th>Name</th><th>Subgroup</th><th>Fellowship</th><th>Type</th><th>Flight on file</th><th>Confirmed</th></tr></thead>
           <tbody>
@@ -814,7 +821,7 @@ function TransportTab({ merged, exempt }) {
       </div>
 
       {Object.entries(batches).sort().map(([date, people]) => (
-        <Card key={date} style={{ marginBottom: 14, padding: 0, overflow: 'hidden' }}>
+        <Card key={date} style={{ marginBottom: 14, padding: 0, overflowX: 'auto' }}>
           <div style={{ padding: '12px 16px', background: '#FAF8FE', borderBottom: `1px solid ${C.line}`, fontWeight: 600, fontSize: 13.5, display: 'flex', justifyContent: 'space-between' }}>
             <span>{date || 'Date unknown'}</span><Pill tone="blue">{people.length} arriving</Pill>
           </div>
@@ -894,7 +901,7 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups 
         </div>
       </div>
 
-      <Card style={{ padding: 0, overflow: 'hidden' }}>
+      <Card style={{ padding: 0, overflowX: 'auto' }}>
         <table>
           <thead><tr><th>Name</th><th>Subgroup</th><th>Email</th><th><Droplets size={11} style={{ verticalAlign: -2 }} /> Foundation School</th><th>Baptised</th><th style={{ width: 32 }}></th></tr></thead>
           <tbody>
@@ -969,7 +976,7 @@ function DelegateComplianceTab({ merged, subgroupFilter, setSubgroupFilter, subg
         </div>
       </div>
 
-      <Card style={{ padding: 0, overflow: 'hidden' }}>
+      <Card style={{ padding: 0, overflowX: 'auto' }}>
         <table>
           <thead><tr><th>Name</th><th>Subgroup</th><th>Email</th><th>Phone</th><th>Allergies / Diet Restrictions</th></tr></thead>
           <tbody>
@@ -1018,13 +1025,47 @@ function ImportBlock({ title, hint, count, last, onImport }) {
 }
 
 // ============ ROOM ASSIGNMENTS ============
-function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, peoplePerRoom }) {
+function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom }) {
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomCapacity, setNewRoomCapacity] = useState(peoplePerRoom);
   const [bulkPrefix, setBulkPrefix] = useState('Room');
   const [bulkCount, setBulkCount] = useState(5);
   const [bulkCapacity, setBulkCapacity] = useState(2);
   const [draggedPerson, setDraggedPerson] = useState(null);
+  const [editingRoomId, setEditingRoomId] = useState(null);
+  const [editingRoomName, setEditingRoomName] = useState('');
+
+  function commitRename(roomId) {
+    handleRenameRoom(roomId, editingRoomName);
+    setEditingRoomId(null);
+  }
+
+  function printRooms() {
+    const win = window.open('', '_blank');
+    const rows = rooms.map(room => {
+      const head = room.people.find(p => p.email === room.roomHead);
+      const people = room.people.map(p =>
+        `<li style="padding:3px 0;border-bottom:1px solid #eee">${p.fullName}${p.email === room.roomHead ? ' ⭐' : ''}</li>`
+      ).join('');
+      return `
+        <div style="break-inside:avoid;border:1px solid #ccc;border-radius:8px;padding:14px 16px;margin-bottom:14px">
+          <div style="font-weight:700;font-size:15px;margin-bottom:4px">${room.name}</div>
+          <div style="font-size:12px;color:#666;margin-bottom:8px">${room.people.length} / ${room.capacity} people${head ? ` · Room head: ${head.fullName}` : ''}</div>
+          <ol style="margin:0;padding-left:18px;font-size:13px">${people || '<li style="color:#999">Empty</li>'}</ol>
+        </div>`;
+    }).join('');
+    win.document.write(`<!doctype html><html><head><title>Room Assignments</title>
+      <style>body{font-family:sans-serif;padding:24px;max-width:800px;margin:0 auto}
+      h1{font-size:20px;margin-bottom:4px}p{color:#666;font-size:13px;margin-bottom:20px}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+      @media print{@page{margin:1.5cm}}</style></head>
+      <body><h1>Room Assignments</h1>
+      <p>Printed ${new Date().toLocaleDateString('en-CA', { weekday:'long', year:'numeric', month:'long', day:'numeric' })} · ${rooms.length} rooms · ${rooms.reduce((s,r)=>s+r.people.length,0)} assigned</p>
+      <div class="grid">${rows}</div></body></html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 400);
+  }
 
   const assignedEmails = new Set(rooms.flatMap(r => r.people.map(p => p.email)));
   const unassigned = merged.filter(m => !assignedEmails.has(m.email));
@@ -1037,8 +1078,11 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
 
   return (
     <div>
-      <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, marginTop: 0 }}>Room Assignments</h2>
-      <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 16 }}>Drag registrants to assign them to rooms.</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Room Assignments</h2>
+        <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0}><Download size={13} /> Print</Btn>
+      </div>
+      <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 16 }}>Drag registrants to assign them to rooms. Click a room name to rename it.</div>
 
       {/* Unassigned registrants by gender */}
       <div style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -1082,8 +1126,23 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{room.name}</div>
+                <div style={{ flex: 1, minWidth: 0, marginRight: 6 }}>
+                  {editingRoomId === room.id ? (
+                    <input
+                      autoFocus
+                      value={editingRoomName}
+                      onChange={e => setEditingRoomName(e.target.value)}
+                      onBlur={() => commitRename(room.id)}
+                      onKeyDown={e => { if (e.key === 'Enter') commitRename(room.id); if (e.key === 'Escape') setEditingRoomId(null); }}
+                      style={{ fontWeight: 600, fontSize: 13, width: '100%', border: `1px solid ${C.purple}`, borderRadius: 4, padding: '2px 6px' }}
+                    />
+                  ) : (
+                    <div
+                      style={{ fontWeight: 600, fontSize: 13, cursor: 'text', borderRadius: 4, padding: '2px 4px', marginLeft: -4 }}
+                      onClick={() => { setEditingRoomId(room.id); setEditingRoomName(room.name); }}
+                      title="Click to rename"
+                    >{room.name}</div>
+                  )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
                     <span style={{ fontSize: 11.5, color: C.mute }}>{room.people.length} /</span>
                     <input
