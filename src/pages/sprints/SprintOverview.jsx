@@ -199,15 +199,15 @@ export default function SprintOverview() {
     return grouped
   }, [tasks])
 
-  const canManage = role === 'super_admin' || hasSpaceRole(profile, null, 'dept_lead') || hasSpaceRole(profile, null, 'programs') || detail?.members?.some(
+  const canManage = role === 'super_admin' || role === 'regional_secretary' || hasSpaceRole(profile, null, 'dept_lead') || hasSpaceRole(profile, null, 'programs') || detail?.members?.some(
     (member) => member.user?.id === profile?.id && ['owner', 'manager'].includes(member.role),
   )
   const isMember = detail?.members?.some((m) => m.user?.id === profile?.id)
   const canCreateTask = canManage || isMember
-  const canAssignPrivilegedSprintRoles = role === 'super_admin' || hasSpaceRole(profile, null, 'dept_lead') || detail?.members?.some(
+  const canAssignPrivilegedSprintRoles = role === 'super_admin' || hasSpaceRole(profile, null, 'dept_lead') || hasSpaceRole(profile, null, 'programs') || detail?.members?.some(
     (member) => member.user?.id === profile?.id && member.role === 'owner',
   )
-  const canCreateSprint = role === 'super_admin' || role === 'dept_lead' || role === 'pastor' || role === 'regional_secretary' || hasSpaceRole(profile, null, 'dept_lead')
+  const canCreateSprint = role === 'super_admin' || role === 'dept_lead' || role === 'pastor' || role === 'regional_secretary' || hasSpaceRole(profile, null, 'dept_lead') || hasSpaceRole(profile, null, 'programs')
 
   async function loadDetail() {
     setLoading(true)
