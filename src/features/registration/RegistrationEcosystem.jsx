@@ -572,6 +572,34 @@ export default function App({ limitedToSubgroups = null }) {
     setLastImport(li); await saveKey('last-import', li);
   }
 
+  async function handleImportWorkingList(text) {
+    if (!text || !text.trim()) return;
+    const rows = parseCSV(text);
+    if (!rows.length) return;
+    const now = new Date().toISOString();
+    const records = rows.map(r => ({
+      email: r.email,
+      full_name: r.fullName || `${r.firstName} ${r.lastName}`.trim(),
+      subgroup: r.subgroup || '',
+      fellowship: r.fellowship || '',
+      leadership_category: r.leadership || '',
+      synced_at: now,
+    })).filter(r => r.email);
+
+    try {
+      // Delete existing and re-insert (full refresh from sheet)
+      await supabase.from('working_list').delete().neq('email', '');
+      const { error } = await supabase.from('working_list').insert(records);
+      if (error) throw error;
+      setWorkingListDb(records.map((r, i) => ({ id: i, ...r })));
+    } catch (e) {
+      console.error('Failed to save working list:', e);
+      alert('Failed to save working list to database: ' + e.message);
+    }
+    const li = { ...lastImport, 'working-list': now };
+    setLastImport(li); await saveKey('last-import', li);
+  }
+
   if (!loaded) {
     return <div style={{ padding: 60, fontFamily: 'Inter', color: C.mute }}>Loading…</div>;
   }
@@ -641,7 +669,7 @@ export default function App({ limitedToSubgroups = null }) {
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'rooms' && <RoomAssignmentTab {...{ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom, isLimited }} />}
         {tab === 'finance' && hasFinanceAccess && <FinanceTab {...{ registrations: registrationsFiltered, payments, setPayments, userId: profile?.id }} />}
-        {tab === 'import' && <ImportTab {...{ handleImport, roster: rosterFiltered, registrations: registrationsFiltered, flights, exempt, updateExempt, lastImport, isLimited }} />}
+        {tab === 'import' && <ImportTab {...{ handleImport, handleImportWorkingList, roster: rosterFiltered, registrations: registrationsFiltered, flights, workingListDb, exempt, updateExempt, lastImport, isLimited }} />}
       </div>
     </div>
   );
@@ -1441,16 +1469,18 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups,
 }
 
 // ============ IMPORT ============
-function ImportTab({ handleImport, roster, registrations, flights, exempt, updateExempt, lastImport, isLimited }) {
+function ImportTab({ handleImport, handleImportWorkingList, roster, registrations, flights, workingListDb, exempt, updateExempt, lastImport, isLimited }) {
   return (
     <div>
       <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, marginTop: 0 }}>Import from Google Sheets</h2>
       <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 18, maxWidth: 640 }}>
         In each sheet: File → Download → Comma-separated values (.csv), open the file, select all, copy, and paste below.
-        Column headers are matched automatically (first/last name, email, subgroup, arrival/departure date & time, etc.) —
+        Column headers are matched automatically (first/last name, email, subgroup, fellowship, arrival/departure date & time, etc.) —
         exact header wording doesn't need to match. Re-paste any time; confirmations are kept by email across re-imports.
       </div>
 
+      <ImportBlock title="Working List" hint="Name, Email, Subgroup, Fellowship, Leadership Category — replaces existing working list"
+        count={workingListDb.length} last={lastImport['working-list']} onImport={handleImportWorkingList} />
       <ImportBlock title="Roster (who we're working on)" hint="First Name, Last Name, Subgroup, Leadership Position, Email"
         count={roster.length} last={lastImport.roster} onImport={t => handleImport('roster', t)} />
       <ImportBlock title="Registrations" hint="Your registration form export"
