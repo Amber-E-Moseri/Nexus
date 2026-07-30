@@ -511,6 +511,11 @@ export default function SprintMemberPanel({
                   <div style={{ fontSize: 12, color: TOKENS.textTertiary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {member.user?.email}
                   </div>
+                  {member.user?.space?.name && (
+                    <div style={{ fontSize: 11, color: TOKENS.textTertiary, fontWeight: 500, padding: '2px 6px', background: TOKENS.background, borderRadius: 4 }}>
+                      {member.user.space.name}
+                    </div>
+                  )}
                   {member.is_temporary && member.membership_end_date && (
                     <div style={{ marginTop: 4, fontSize: 12, color: '#DC2626' }}>
                       Expires: {new Date(`${member.membership_end_date}T00:00:00`).toLocaleDateString()}

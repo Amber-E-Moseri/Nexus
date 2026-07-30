@@ -25,9 +25,10 @@ begin
     raise exception 'Access request not found';
   end if;
 
-  -- Check permission: super_admin, sprint creator, or sprint member
-  if auth.uid() <> (select created_by from public.sprints where id = v_sprint_id)
-     and public.current_user_role() <> 'super_admin'
+  -- Check permission: super_admin, regional_secretary, sprint creator, or sprint member
+  if public.current_user_role() <> 'super_admin'
+     and public.current_user_role() <> 'regional_secretary'
+     and auth.uid() <> (select created_by from public.sprints where id = v_sprint_id)
      and not exists (
        select 1 from public.sprint_members
        where sprint_id = v_sprint_id and user_id = auth.uid()
