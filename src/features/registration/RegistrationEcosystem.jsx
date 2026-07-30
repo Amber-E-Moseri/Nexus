@@ -850,23 +850,33 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups 
   const [needFoundation, setNeedFoundation] = useState(true);
   const [needBaptism, setNeedBaptism] = useState(true);
   const [mode, setMode] = useState('either'); // either | both
+  const [dismissed, setDismissed] = useState(new Set());
+
+  const dismiss = (key) => setDismissed(prev => new Set([...prev, key]));
 
   const filtered = useMemo(() => merged.filter(r => {
     if (subgroupFilter !== 'All' && r.subgroup !== subgroupFilter) return false;
+    if (dismissed.has(r.email || r.fullName)) return false;
     const fsGraduated = /grad/i.test(r.foundationStatus);
     const baptismFlag = /no|not sure/i.test(r.baptism);
     const flagFoundation = needFoundation && !fsGraduated;
     const flagBaptism = needBaptism && baptismFlag;
     if (mode === 'both') return flagFoundation && flagBaptism;
     return flagFoundation || flagBaptism;
-  }), [merged, subgroupFilter, needFoundation, needBaptism, mode]);
+  }), [merged, subgroupFilter, needFoundation, needBaptism, mode, dismissed]);
+
+  function fsPill(status) {
+    if (/grad/i.test(status)) return <Pill tone="green">{status || 'Graduated'}</Pill>;
+    if (/complet/i.test(status)) return <Pill tone="blue">{status}</Pill>;
+    return <Pill tone="amber">{status || 'Not started'}</Pill>;
+  }
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Foundation School &amp; baptism</h2>
-          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>{filtered.length} people flagged.</div>
+          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>{filtered.length} people flagged{dismissed.size > 0 ? ` · ${dismissed.size} verified & hidden` : ''}.</div>
         </div>
         <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', gap: 6, fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={needFoundation} onChange={e => setNeedFoundation(e.target.checked)} /> Needs Foundation School</label>
@@ -875,6 +885,7 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups 
             <option value="either">Match either</option>
             <option value="both">Match both</option>
           </select>
+          {dismissed.size > 0 && <Btn tone="ghost" small onClick={() => setDismissed(new Set())}>Restore {dismissed.size} hidden</Btn>}
           <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />
           <Btn tone="ghost" small onClick={() => downloadCSV('foundation-baptism.csv', filtered, [
             { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' }, { key: 'email', label: 'Email' },
@@ -885,17 +896,21 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups 
 
       <Card style={{ padding: 0, overflow: 'hidden' }}>
         <table>
-          <thead><tr><th>Name</th><th>Subgroup</th><th>Email</th><th><Droplets size={11} style={{ verticalAlign: -2 }} /> Foundation School</th><th>Baptised</th></tr></thead>
+          <thead><tr><th>Name</th><th>Subgroup</th><th>Email</th><th><Droplets size={11} style={{ verticalAlign: -2 }} /> Foundation School</th><th>Baptised</th><th style={{ width: 32 }}></th></tr></thead>
           <tbody>
             {filtered.map((r, i) => (
               <tr key={i}>
                 <td style={{ fontWeight: 600 }}>{r.fullName}</td><td>{r.subgroup}</td>
                 <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.email}</td>
-                <td>{/grad/i.test(r.foundationStatus) ? <Pill tone="green">{r.foundationStatus || 'Graduated'}</Pill> : <Pill tone="amber">{r.foundationStatus || 'Not started'}</Pill>}</td>
+                <td>{fsPill(r.foundationStatus)}</td>
                 <td>{/yes/i.test(r.baptism) ? <Pill tone="green">Yes</Pill> : <Pill tone="amber">{r.baptism || 'No'}</Pill>}</td>
+                <td>
+                  <button onClick={() => dismiss(r.email || r.fullName)} title="Verified — hide from list"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, fontSize: 16, lineHeight: 1, padding: '2px 4px' }}>×</button>
+                </td>
               </tr>
             ))}
-            {filtered.length === 0 && <tr><td colSpan={5} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>Nobody matches the current filters.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={6} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>Nobody matches the current filters.</td></tr>}
           </tbody>
         </table>
       </Card>
