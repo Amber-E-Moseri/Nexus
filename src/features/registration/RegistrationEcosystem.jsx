@@ -519,9 +519,9 @@ export default function App() {
           <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 20, color: '#fff', letterSpacing: -0.3 }}>This Is It 2.0</div>
         </div>
         <div style={{ display: 'flex', gap: 18, fontFamily: 'JetBrains Mono', fontSize: 11, color: '#D8CCF0' }}>
-          <span>roster: {lastImport.roster ? new Date(lastImport.roster).toLocaleDateString() : '—'}</span>
-          <span>reg: {lastImport.registrations ? new Date(lastImport.registrations).toLocaleDateString() : '—'}</span>
-          <span>flights: {lastImport.flights ? new Date(lastImport.flights).toLocaleDateString() : '—'}</span>
+          <span>roster: {roster.length > 0 ? roster.length : '—'}</span>
+          <span>reg: {registrations.length > 0 ? registrations.length : '—'}</span>
+          <span>flights: {flights.length > 0 ? flights.length : '—'}</span>
         </div>
       </div>
 
