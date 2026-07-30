@@ -25,6 +25,7 @@ export default function RoomAssignmentPage() {
   const [peoplePerRoom, setPeoplePerRoom] = useState(2)
   const [loading, setLoading] = useState(true)
   const [draggedPerson, setDraggedPerson] = useState(null)
+  const [selectedPeople, setSelectedPeople] = useState(new Set())
 
   useEffect(() => {
     checkAccessAndLoadData()
@@ -293,6 +294,52 @@ export default function RoomAssignmentPage() {
     URL.revokeObjectURL(url)
   }
 
+  function togglePersonSelection(email) {
+    const newSelected = new Set(selectedPeople)
+    if (newSelected.has(email)) {
+      newSelected.delete(email)
+    } else {
+      newSelected.add(email)
+    }
+    setSelectedPeople(newSelected)
+  }
+
+  function moveSelectedToRoom(roomId) {
+    if (selectedPeople.size === 0) return
+
+    const room = rooms.find(r => r.id === roomId)
+    if (!room) return
+
+    const selectedArray = Array.from(selectedPeople)
+    const toMove = registrations.filter(r => selectedPeople.has(r.email))
+
+    // Check capacity
+    const newCount = room.people.length + toMove.length
+    if (newCount > room.capacity) {
+      alert(`Room can only hold ${room.capacity} people. Adding ${toMove.length} people would exceed capacity.`)
+      return
+    }
+
+    // Remove from all rooms and add to target
+    const updated = rooms.map(r => ({
+      ...r,
+      people: r.people.filter(p => !selectedPeople.has(p.email)),
+    }))
+
+    const targetRoom = updated.find(r => r.id === roomId)
+    if (targetRoom) {
+      targetRoom.people.push(...toMove)
+    }
+
+    setRooms(updated)
+    saveRoomAssignments(updated, numRooms, peoplePerRoom)
+    setSelectedPeople(new Set()) // Clear selection
+  }
+
+  function clearSelection() {
+    setSelectedPeople(new Set())
+  }
+
   const confirmed = useMemo(() => registrations.filter(r => r.fullyConfirmed), [registrations])
   const likely = useMemo(() => registrations.filter(r => !r.fullyConfirmed), [registrations])
 
@@ -380,6 +427,77 @@ export default function RoomAssignmentPage() {
           Drag people to assign rooms. Confirmed registrations shown in green, likely in amber (light).
         </p>
       </div>
+
+      {/* Selection Toolbar */}
+      {selectedPeople.size > 0 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          marginBottom: 16,
+          background: COLORS.purpleLight,
+          padding: 16,
+          borderRadius: 12,
+          border: `2px solid ${COLORS.purple}`,
+        }}>
+          <div style={{ flex: 1 }}>
+            <span style={{ fontWeight: 600, color: COLORS.purple }}>
+              {selectedPeople.size} selected
+            </span>
+          </div>
+          <select
+            onChange={(e) => {
+              if (e.target.value === '__unassigned__') {
+                // Remove from all rooms
+                const updated = rooms.map(r => ({
+                  ...r,
+                  people: r.people.filter(p => !selectedPeople.has(p.email)),
+                }))
+                setRooms(updated)
+                saveRoomAssignments(updated, numRooms, peoplePerRoom)
+                setSelectedPeople(new Set())
+              } else if (e.target.value) {
+                moveSelectedToRoom(e.target.value)
+              }
+              e.target.value = ''
+            }}
+            style={{
+              padding: '8px 12px',
+              border: `1px solid ${COLORS.purple}`,
+              borderRadius: 6,
+              background: 'white',
+              color: COLORS.purple,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontSize: 13,
+            }}
+            defaultValue=""
+          >
+            <option value="">Move to…</option>
+            <option value="__unassigned__">↩ Unassigned</option>
+            {rooms.map(room => (
+              <option key={room.id} value={room.id}>
+                {room.name} ({room.people.length}/{room.capacity})
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={clearSelection}
+            style={{
+              padding: '8px 12px',
+              background: 'white',
+              color: COLORS.purple,
+              border: `1px solid ${COLORS.purple}`,
+              borderRadius: 6,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontSize: 13,
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {/* Controls */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 28, background: 'white', padding: 16, borderRadius: 12, border: `1px solid #E7E2EE` }}>
@@ -495,20 +613,35 @@ export default function RoomAssignmentPage() {
             </h3>
           </div>
           <div style={{ flex: 1, overflowY: 'auto' }}>
-            {unassigned.map(person => (
-              <div
-                key={person.email}
-                draggable
-                onDragStart={e => handleDragStart(e, person)}
-                className={`person-card person-${person.fullyConfirmed ? 'confirmed' : 'likely'}`}
-                title={`${person.fullName}\n${person.email}\n${person.fullyConfirmed ? '✓ Confirmed' : '○ Likely'}`}
-              >
-                <div style={{ fontWeight: 600 }}>{person.fullName}</div>
-                <div style={{ fontSize: 11, color: 'inherit', opacity: 0.8 }}>
-                  {person.subgroup} • {person.fullyConfirmed ? '✓' : '○'}
+            {unassigned.map(person => {
+              const isSelected = selectedPeople.has(person.email)
+              return (
+                <div
+                  key={person.email}
+                  draggable
+                  onDragStart={e => handleDragStart(e, person)}
+                  className={`person-card person-${person.fullyConfirmed ? 'confirmed' : 'likely'}`}
+                  title={`${person.fullName}\n${person.email}\n${person.fullyConfirmed ? '✓ Confirmed' : '○ Likely'}`}
+                  style={{ outline: isSelected ? `2px solid ${COLORS.purple}` : 'none' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => togglePersonSelection(person.email)}
+                      onClick={e => e.stopPropagation()}
+                      style={{ cursor: 'pointer', flexShrink: 0, accentColor: COLORS.purple }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600 }}>{person.fullName}</div>
+                      <div style={{ fontSize: 11, color: 'inherit', opacity: 0.8 }}>
+                        {person.subgroup} • {person.fullyConfirmed ? '✓' : '○'}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
             {unassigned.length === 0 && (
               <div style={{ textAlign: 'center', color: COLORS.mute, padding: 20, fontSize: 12 }}>
                 No unassigned people
@@ -557,20 +690,35 @@ export default function RoomAssignmentPage() {
               onDragOver={handleDragOver}
               onDrop={e => handleDropOnRoom(e, room.id)}
             >
-              {room.people.map(person => (
-                <div
-                  key={person.email}
-                  draggable
-                  onDragStart={e => handleDragStart(e, person)}
-                  className={`person-card person-${person.fullyConfirmed ? 'confirmed' : 'likely'}`}
-                  title={`${person.fullName}\n${person.email}\n${person.fullyConfirmed ? '✓ Confirmed' : '○ Likely'}`}
-                >
-                  <div style={{ fontWeight: 600 }}>{person.fullName}</div>
-                  <div style={{ fontSize: 11, color: 'inherit', opacity: 0.8 }}>
-                    {person.subgroup}
+              {room.people.map(person => {
+                const isSelected = selectedPeople.has(person.email)
+                return (
+                  <div
+                    key={person.email}
+                    draggable
+                    onDragStart={e => handleDragStart(e, person)}
+                    className={`person-card person-${person.fullyConfirmed ? 'confirmed' : 'likely'}`}
+                    title={`${person.fullName}\n${person.email}\n${person.fullyConfirmed ? '✓ Confirmed' : '○ Likely'}`}
+                    style={{ outline: isSelected ? `2px solid ${COLORS.purple}` : 'none' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => togglePersonSelection(person.email)}
+                        onClick={e => e.stopPropagation()}
+                        style={{ cursor: 'pointer', flexShrink: 0, accentColor: COLORS.purple }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600 }}>{person.fullName}</div>
+                        <div style={{ fontSize: 11, color: 'inherit', opacity: 0.8 }}>
+                          {person.subgroup}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
               {room.people.length === 0 && (
                 <div style={{ textAlign: 'center', color: COLORS.mute, padding: 20, fontSize: 12, opacity: 0.5 }}>
                   Drag people here
