@@ -736,11 +736,13 @@ export async function getSprintInvitePermissions(sprintId) {
     { data: sprint, error: sprintError },
     { data: profile, error: profileError },
     { data: memberRow },
+    { data: isProgramsTeam },
   ] = await Promise.all([
     supabase.rpc('can_manage_sprint', { p_sprint_id: sprintId }),
     supabase.from('sprints').select('created_by').eq('id', sprintId).maybeSingle(),
     supabase.from('users').select('role').eq('id', userId).maybeSingle(),
     supabase.from('sprint_members').select('user_id').eq('sprint_id', sprintId).eq('user_id', userId).maybeSingle(),
+    supabase.rpc('is_programs_team'),
   ])
 
   if (manageError) throw manageError
@@ -749,12 +751,13 @@ export async function getSprintInvitePermissions(sprintId) {
 
   const isSuperAdmin = profile?.role === 'super_admin'
   const isDeptLead = profile?.role === 'dept_lead'
+  const isRegionalSecretary = profile?.role === 'regional_secretary'
   const isSprintOwner = sprint?.created_by === userId
   const isMember = Boolean(memberRow)
 
   return {
-    canInvite: Boolean(canManage || isSuperAdmin || isDeptLead || isMember),
-    canAssignPrivilegedRoles: Boolean(isSuperAdmin || isSprintOwner),
+    canInvite: Boolean(canManage || isSuperAdmin || isDeptLead || isRegionalSecretary || isMember),
+    canAssignPrivilegedRoles: Boolean(isSuperAdmin || isSprintOwner || isProgramsTeam),
   }
 }
 
