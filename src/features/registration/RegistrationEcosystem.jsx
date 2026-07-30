@@ -414,21 +414,31 @@ export default function App({ limitedToSubgroups = null }) {
     return registrations.filter(r => limitedToSubgroups.includes(r.subgroup));
   }, [registrations, isLimited, limitedToSubgroups]);
 
+  const paymentByEmail = useMemo(
+    () => Object.fromEntries(payments.map(p => [p.email, p])),
+    [payments],
+  );
+
   const merged = useMemo(() => registrationsFiltered.map(r => {
     const flight = flightByEmail[r.email];
     const exemptFlag = isExempt(r.fellowship, exempt);
     const hasFlight = !!(flight && flight.arrivalDate);
     const conf = confirmations[r.email] || {};
+    const pay = paymentByEmail[r.email];
+    const hasPaid = pay ? (Number(pay.amount_paid) || 0) > 0 && (Number(pay.amount_paid) || 0) >= (Number(pay.amount_expected) || 0) : false;
+    const inStateConfirmed = !!conf.inState || hasPaid;
+    const fullyConfirmed = hasPaid || (exemptFlag ? inStateConfirmed : hasFlight);
     return {
       ...r,
       flight: flight || null,
       hasFlight,
+      hasPaid,
       exempt: exemptFlag,
       needsFlight: !exemptFlag,
-      inStateConfirmed: !!conf.inState,
-      fullyConfirmed: exemptFlag ? !!conf.inState : hasFlight,
+      inStateConfirmed,
+      fullyConfirmed,
     };
-  }), [registrationsFiltered, flightByEmail, exempt, confirmations]);
+  }), [registrationsFiltered, flightByEmail, exempt, confirmations, paymentByEmail]);
 
   const rosterFiltered = useMemo(() => {
     if (!isLimited) return roster;
@@ -610,7 +620,7 @@ export default function App({ limitedToSubgroups = null }) {
     if (!rows.length) return;
     const now = new Date().toISOString();
     const records = rows.map(r => ({
-      email: r.email,
+      email: (r.email || '').toLowerCase().trim(),
       full_name: r.fullName || `${r.firstName} ${r.lastName}`.trim(),
       subgroup: r.subgroup || '',
       fellowship: r.fellowship || '',
@@ -618,6 +628,12 @@ export default function App({ limitedToSubgroups = null }) {
       synced_at: now,
       manually_added: false,
     })).filter(r => r.email);
+
+    // Safety guard: refuse to wipe existing data if the new import looks suspiciously small
+    if (records.length === 0) {
+      alert('No valid rows found in the pasted data. Import cancelled — existing working list is unchanged.');
+      return;
+    }
 
     try {
       // Preserve absent markings and manually-added rows across re-import
@@ -629,8 +645,8 @@ export default function App({ limitedToSubgroups = null }) {
         if (row.manually_added) manualRows.push(row);
       }
 
-      // Delete only sheet-synced rows
-      await supabase.from('working_list').delete().eq('manually_added', false);
+      // Delete only sheet-synced rows (manually_added = false OR null for legacy rows)
+      await supabase.from('working_list').delete().or('manually_added.eq.false,manually_added.is.null');
 
       // Re-insert with absent data preserved
       const withAbsent = records.map(r => ({ ...r, ...(absentByEmail[r.email] || {}) }));
@@ -1146,7 +1162,8 @@ function WorkingListRow({ p, useDb, canEdit, isLimited, registrations, onMarkAbs
 function WorkingListTab({ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups, isLimited, merged, role, onAddPerson, onMarkAbsent, onEditPerson, onRemove }) {
   const useDb = workingListDb.length > 0;
   const [fellowshipFilter, setFellowshipFilter] = useState('All');
-  const [showRegistered, setShowRegistered] = useState(false);
+  // 'all' = pending + absent (not registered), 'pending' = not reg + not absent, 'absent' = absent only, 'registered' = registered only
+  const [statusFilter, setStatusFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -1215,7 +1232,10 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return source.filter(p => {
-      if (!showRegistered && p.registered) return false;
+      if (statusFilter === 'pending' && (p.registered || p.absent)) return false;
+      if (statusFilter === 'absent' && !p.absent) return false;
+      if (statusFilter === 'registered' && !p.registered) return false;
+      if (statusFilter === 'all' && p.registered) return false;
       if (isLimited) { if (fellowshipFilter !== 'All' && p.fellowship !== fellowshipFilter) return false; }
       else { if (subgroupFilter !== 'All' && p.subgroup !== subgroupFilter) return false; }
       if (q) {
@@ -1226,7 +1246,7 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
       }
       return true;
     });
-  }, [source, isLimited, fellowshipFilter, subgroupFilter, showRegistered, search]);
+  }, [source, isLimited, fellowshipFilter, subgroupFilter, statusFilter, search]);
 
   const byGroup = useMemo(() => {
     const g = {};
@@ -1273,10 +1293,23 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {useDb && totalRegistered > 0 && (
-            <Btn tone="ghost" small onClick={() => setShowRegistered(v => !v)}>
-              {showRegistered ? 'Hide registered' : `Show registered (${totalRegistered})`}
-            </Btn>
+          {useDb && (
+            <div style={{ display: 'flex', background: '#F3F0EB', borderRadius: 8, padding: 2, gap: 2 }}>
+              {[
+                { key: 'all', label: `All (${totalNotReg + totalAbsent})` },
+                { key: 'pending', label: `Pending (${totalNotReg})` },
+                { key: 'absent', label: `Absent (${totalAbsent})` },
+                { key: 'registered', label: `Registered (${totalRegistered})` },
+              ].map(opt => (
+                <button key={opt.key} onClick={() => setStatusFilter(opt.key)} style={{
+                  padding: '4px 10px', fontSize: 12, fontWeight: 500, borderRadius: 6, border: 'none', cursor: 'pointer',
+                  background: statusFilter === opt.key ? 'white' : 'transparent',
+                  color: statusFilter === opt.key ? C.text : C.mute,
+                  boxShadow: statusFilter === opt.key ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  whiteSpace: 'nowrap',
+                }}>{opt.label}</button>
+              ))}
+            </div>
           )}
           {isLimited ? (
             <FellowshipSelect value={fellowshipFilter} onChange={setFellowshipFilter} fellowships={fellowships} />
@@ -1301,9 +1334,15 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
         <Card>
           <div style={{ color: C.mute, textAlign: 'center', padding: 20 }}>
             {useDb
-              ? totalRegistered > 0 && !showRegistered
+              ? statusFilter === 'all' && totalRegistered > 0 && totalNotReg === 0 && totalAbsent === 0
                 ? `All ${totalRegistered} people on the list have registered.`
-                : 'Working list is empty — sync the "Working List" sheet tab or add someone manually.'
+                : statusFilter === 'pending' && totalNotReg === 0
+                  ? 'No one pending — everyone has registered or is marked absent.'
+                  : statusFilter === 'absent' && totalAbsent === 0
+                    ? 'No one marked absent.'
+                    : statusFilter === 'registered' && totalRegistered === 0
+                      ? 'No registrations matched yet.'
+                      : 'Working list is empty — sync the "Working List" sheet tab or add someone manually.'
               : 'Nobody outstanding — roster may not be imported yet.'}
           </div>
         </Card>
@@ -1603,7 +1642,7 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
           <div>
             <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Confirmations</h2>
             <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>
-              In-state = manual checkbox. Out-of-state = confirmed automatically (with flight) or via bypass (flagged).
+              Payment confirmed = auto. In-state = manual checkbox. Out-of-state = flight on file or bypass (flagged).
               {confirmedCount}/{filtered.length} fully confirmed{bypassCount > 0 ? ` (${bypassCount} flagged bypasses)` : ''}.
             </div>
           </div>
@@ -1641,7 +1680,9 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
                 <td>{r.exempt ? <Pill tone="blue">In-state / exempt</Pill> : <Pill tone="mute">Out-of-state</Pill>}</td>
                 <td>{r.exempt ? <span style={{ color: C.mute }}>n/a</span> : (r.hasFlight ? <Pill tone="green">On file</Pill> : bypassConfirmed[r.email] ? <span style={{ color: C.amber, fontWeight: 600 }}>Bypassed</span> : <Pill tone="red">Missing</Pill>)}</td>
                 <td>
-                  {r.exempt ? (
+                  {r.hasPaid ? (
+                    <Pill tone="green">Confirmed (paid)</Pill>
+                  ) : r.exempt ? (
                     <button onClick={() => toggleConfirm(r.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: r.inStateConfirmed ? C.green : C.mute, fontWeight: 600, fontSize: 12.5 }}>
                       {r.inStateConfirmed ? <CheckCircle2 size={16} /> : <Circle size={16} />} {r.inStateConfirmed ? 'Confirmed' : 'Mark confirmed'}
                     </button>
