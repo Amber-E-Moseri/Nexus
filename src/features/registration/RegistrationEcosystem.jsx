@@ -1145,7 +1145,7 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
                 <td>{r.subgroup}</td>
                 <td>{r.fellowship}</td>
                 <td>{r.exempt ? <Pill tone="blue">In-state / exempt</Pill> : <Pill tone="mute">Out-of-state</Pill>}</td>
-                <td>{r.exempt ? <span style={{ color: C.mute }}>n/a</span> : (r.hasFlight ? <Pill tone="green">On file</Pill> : bypassConfirmed[r.email] ? <span style={{ color: C.amber, fontWeight: 600 }}>⚠️ Bypassed</span> : <Pill tone="red">Missing</Pill>)}</td>
+                <td>{r.exempt ? <span style={{ color: C.mute }}>n/a</span> : (r.hasFlight ? <Pill tone="green">On file</Pill> : bypassConfirmed[r.email] ? <span style={{ color: C.amber, fontWeight: 600 }}>Bypassed</span> : <Pill tone="red">Missing</Pill>)}</td>
                 <td>
                   {r.exempt ? (
                     <button onClick={() => toggleConfirm(r.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: r.inStateConfirmed ? C.green : C.mute, fontWeight: 600, fontSize: 12.5 }}>
@@ -1153,10 +1153,10 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
                     </button>
                   ) : (
                     r.fullyConfirmed ? (
-                      <Pill tone="green">✓ Confirmed (flight)</Pill>
+                      <Pill tone="green">Confirmed (flight)</Pill>
                     ) : bypassConfirmed[r.email] ? (
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <Pill tone="amber">⚠️ Confirmed (no flight)</Pill>
+                        <Pill tone="amber">Confirmed (no flight)</Pill>
                         <button onClick={() => toggleBypassConfirm(r.email)} style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>undo</button>
                       </div>
                     ) : (
@@ -1438,15 +1438,20 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
       const bg = isAllFemale ? '#FFE8F4' : isAllMale ? '#E8F0FF' : isMixed ? '#FBF0DE' : '#F8F8F8';
       const accent = isAllFemale ? '#C0507A' : isAllMale ? '#2A5FA5' : isMixed ? '#B8710A' : '#6B5C8F';
       const people = room.people.map(p =>
-        `<li style="padding:4px 0;border-bottom:1px solid rgba(0,0,0,0.07);font-size:13px">
-          <span style="font-weight:${p.email === room.roomHead ? 700 : 400}">${p.fullName}${p.email === room.roomHead ? ' ⭐' : ''}</span>
-          ${p.designation ? `<span style="font-size:11px;color:#888;margin-left:6px">${p.designation}</span>` : ''}
+        `<li style="padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.07);font-size:13px;display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <span style="font-weight:${p.email === room.roomHead ? 700 : 400}">${p.fullName}</span>
+            ${p.designation ? `<div style="font-size:10px;color:#888;margin-top:2px">${p.designation}</div>` : ''}
+          </div>
+          ${p.email === room.roomHead ? '<span style="font-weight:700;color:' + accent + ';font-size:11px">HEAD</span>' : ''}
         </li>`
       ).join('');
       return `
-        <div style="break-inside:avoid;border:2px solid ${accent};border-radius:10px;background:${bg};padding:14px 16px;margin-bottom:14px">
-          <div style="font-weight:700;font-size:15px;color:${accent};margin-bottom:3px">${room.name}</div>
-          <div style="font-size:11px;color:#888;margin-bottom:8px">${room.people.length} / ${room.capacity} people${head ? ` · Head: ${head.fullName}` : ''}${isMixed ? ' · ⚠ Mixed gender' : ''}</div>
+        <div style="break-inside:avoid;border:2px solid ${accent};border-radius:10px;background:${bg};padding:16px;margin-bottom:16px">
+          <div style="border-bottom:1px solid ${accent}33;padding-bottom:10px;margin-bottom:10px">
+            <div style="font-weight:700;font-size:16px;color:${accent};margin-bottom:4px">${room.name}</div>
+            <div style="font-size:12px;color:#888">${room.people.length} / ${room.capacity} ${room.people.length === 1 ? 'person' : 'people'}${head ? ` · Head: ${head.fullName}` : ''}${isMixed ? ' · Mixed gender' : ''}</div>
+          </div>
           <ol style="margin:0;padding-left:18px">${people || '<li style="color:#aaa;font-size:12px">Empty</li>'}</ol>
         </div>`;
     }).join('');
@@ -1480,7 +1485,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
       {/* header with stats */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 18, margin: '0 0 6px', fontWeight: 700 }}>🛏️ Room Assignments</h2>
+          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 18, margin: '0 0 6px', fontWeight: 700 }}>Room Assignments</h2>
           <div style={{ fontSize: 12.5, color: C.mute }}>Assign {unassigned.length} registrants to {rooms.length} room{rooms.length !== 1 ? 's' : ''} · {totalAssigned} / {totalCapacity} capacity</div>
         </div>
         <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0} style={{ marginLeft: 16 }}><Download size={13} /> Print</Btn>
@@ -1494,7 +1499,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
       {/* Unassigned registrants by gender */}
       <div style={{ marginBottom: 28, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         {['male', 'female'].map(gender => {
-          const genderIcon = gender === 'male' ? '👨' : '👩';
+          const genderIcon = gender === 'male' ? 'M' : 'F';
           const genderColor = gender === 'male' ? '#2A5FA5' : '#C0507A';
           const genderBg = gender === 'male' ? '#E8F0FF' : '#FFE8F0';
           const count = byGender[gender].length;
@@ -1546,7 +1551,6 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
       {/* Room cards */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-          <span style={{ fontSize: 18 }}>🏠</span>
           <div style={{ fontWeight: 700, fontSize: 15, color: C.ink }}>Rooms</div>
           <div style={{ fontSize: 12.5, color: C.mute }}>({rooms.length} total)</div>
         </div>
@@ -1561,7 +1565,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
             const isAllFemale = !isMixed && genderSet.has('female') && room.people.length > 0;
             const isAllMale = !isMixed && genderSet.has('male') && room.people.length > 0;
             const isEmpty = room.people.length === 0;
-            const roomIcon = isAllFemale ? '👩' : isAllMale ? '👨' : isMixed ? '👥' : '🏠';
+            const roomIcon = isAllFemale ? 'F' : isAllMale ? 'M' : isMixed ? 'MF' : null;
             const roomBg = isFull ? C.redBg : isAllFemale ? '#FFE8F0' : isAllMale ? '#E8F0FF' : C.cream;
             const roomBorder = isFull ? C.red : isMixed ? C.amber : isAllFemale ? '#E0A0C8' : isAllMale ? '#4A7FC4' : C.line;
             const roomAccent = isFull ? C.red : isMixed ? C.amber : isAllFemale ? '#C0507A' : isAllMale ? C.blue : C.mute;
@@ -1584,7 +1588,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
             >
               {/* header */}
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12, paddingBottom: 10, borderBottom: `1px solid ${roomBorder}88` }}>
-                <span style={{ fontSize: 20, lineHeight: 1 }}>{roomIcon}</span>
+                {roomIcon && <span style={{ fontSize: 11.5, fontWeight: 700, color: roomAccent, background: `${roomAccent}15`, padding: '4px 7px', borderRadius: 5, lineHeight: 1 }}>{roomIcon}</span>}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {editingRoomId === room.id ? (
                     <input
@@ -1628,8 +1632,8 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
               {/* status badges */}
               {(isFull || isMixed) && (
                 <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-                  {isFull && <Pill tone="red">🔴 Full</Pill>}
-                  {isMixed && <Pill tone="amber">⚠️ Mixed</Pill>}
+                  {isFull && <Pill tone="red">Full</Pill>}
+                  {isMixed && <Pill tone="amber">Mixed</Pill>}
                 </div>
               )}
 
@@ -1661,7 +1665,6 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                         onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}
                       >
                         <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 14 }}>{isFemale ? '👩' : '👨'}</span>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: isHead ? 700 : 500, color: '#1A1220', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {person.fullName}{isHead ? ' ⭐' : ''}
@@ -1699,10 +1702,8 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         {/* Single room */}
         <Card>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 18 }}>➕</span>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>Add single room</div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>Add single room</div>
               <div style={{ fontSize: 11, color: C.mute }}>Create one room manually</div>
             </div>
           </div>
@@ -1727,10 +1728,8 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
 
         {/* Bulk create */}
         <Card>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 18 }}>⚡</span>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>Bulk create rooms</div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>Bulk create rooms</div>
               <div style={{ fontSize: 11, color: C.mute }}>Generate multiple rooms at once</div>
             </div>
           </div>
