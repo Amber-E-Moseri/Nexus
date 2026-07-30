@@ -145,15 +145,23 @@ function isExempt(fellowship, exemptList) {
   return exemptList.some(ex => fellowship.toLowerCase().includes(ex.toLowerCase()));
 }
 
-// ---------- storage helpers ----------
+// ---------- storage helpers (Supabase-backed) ----------
 async function loadKey(key, fallback) {
   try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : fallback;
+    const { data } = await supabase
+      .from('registration_config')
+      .select('value')
+      .eq('key', key)
+      .single()
+    return data ? data.value : fallback
   } catch { return fallback; }
 }
 async function saveKey(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { console.error('save failed', key, e); }
+  try {
+    await supabase
+      .from('registration_config')
+      .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+  } catch (e) { console.error('save failed', key, e); }
 }
 
 // ---------- UI atoms ----------
