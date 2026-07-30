@@ -396,6 +396,11 @@ export default function App({ limitedToGroup = null }) {
     };
   }), [registrationsFiltered, flightByEmail, exempt, confirmations]);
 
+  const rosterFiltered = useMemo(() => {
+    if (!limitedToGroup) return roster;
+    return roster.filter(r => (r.subgroup || '').toLowerCase() === limitedToGroup.toLowerCase());
+  }, [roster, limitedToGroup]);
+
   const subgroups = useMemo(() => {
     const s = new Set([...rosterFiltered.map(r => r.subgroup), ...registrationsFiltered.map(r => r.subgroup)]);
     return [...s].filter(Boolean).sort();
@@ -418,11 +423,6 @@ export default function App({ limitedToGroup = null }) {
   const totalRegTarget = Object.values(targets).reduce((s, t) => s + (Number(t.reg) || 0), 0);
   const totalFlights = merged.filter(r => r.hasFlight).length;
   const totalFlightTarget = merged.filter(r => r.needsFlight).length;
-
-  const rosterFiltered = useMemo(() => {
-    if (!limitedToGroup) return roster;
-    return roster.filter(r => (r.subgroup || '').toLowerCase() === limitedToGroup.toLowerCase());
-  }, [roster, limitedToGroup]);
 
   const workingList = useMemo(() => {
     return rosterFiltered.filter(p => !regByEmail[p.email]);
