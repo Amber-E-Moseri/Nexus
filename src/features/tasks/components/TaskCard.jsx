@@ -225,15 +225,6 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
           <p style={{ fontSize: 10.5, color: 'var(--text-tertiary)', margin: '-6px 0 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↳ {parentTitle}</p>
         ) : null}
 
-        {/* Team label — only shown when the viewer is in multiple sprint
-            teams (see SprintTaskBoard's "My Team" view), to disambiguate
-            which team a task belongs to in an otherwise-merged list. */}
-        {teamLabel ? (
-          <span style={{ display: 'inline-block', fontSize: 9.5, fontWeight: 700, color: '#4C2A92', background: '#EDE8F8', borderRadius: 999, padding: '2px 8px', margin: '-4px 0 8px' }}>
-            {teamLabel}
-          </span>
-        ) : null}
-
         {/* Meta row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
 
