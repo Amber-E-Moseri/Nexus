@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Upload, Users, Plane, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, Settings, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown } from 'lucide-react';
+import { Upload, Users, Plane, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, Settings, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
 
 // ---------- brand tokens ----------
 const C = {
@@ -205,7 +206,7 @@ function Btn({ children, onClick, tone = 'primary', small, disabled }) {
   );
 }
 
-const TABS = [
+const ALL_TABS = [
   { key: 'overview', label: 'Overview', icon: Home },
   { key: 'working', label: 'Working List', icon: Users },
   { key: 'confirm', label: 'Confirmations', icon: CheckCircle2 },
@@ -213,10 +214,12 @@ const TABS = [
   { key: 'discipleship', label: 'Foundation & Baptism', icon: Church },
   { key: 'compliance', label: 'Delegate Compliance', icon: AlertCircle },
   { key: 'rooms', label: 'Room Assignments', icon: DoorOpen },
+  { key: 'finance', label: 'Finance', icon: DollarSign, restricted: true },
   { key: 'import', label: 'Import Data', icon: Upload },
 ];
 
 export default function App() {
+  const { profile, role } = useAuth();
   const [tab, setTab] = useState('overview');
   const [roster, setRoster] = useState([]);
   const [registrations, setRegistrations] = useState([]);
@@ -232,6 +235,21 @@ export default function App() {
   const [peoplePerRoom, setPeoplePerRoom] = useState(2);
   const [workingListDb, setWorkingListDb] = useState([]);
   const [workingListLoading, setWorkingListLoading] = useState(false);
+  const [hasFinanceAccess, setHasFinanceAccess] = useState(false);
+  const [payments, setPayments] = useState([]); // from event_payments table
+
+  // Finance access: regional_secretary / super_admin always; others need finance_data_access grant
+  useEffect(() => {
+    if (!profile?.id) return;
+    if (['regional_secretary', 'super_admin'].includes(role)) { setHasFinanceAccess(true); return; }
+    supabase.from('user_grants')
+      .select('id')
+      .eq('user_id', profile.id)
+      .eq('grant_type', 'finance_data_access')
+      .maybeSingle()
+      .then(({ data }) => { if (data) setHasFinanceAccess(true); })
+      .catch(() => {});
+  }, [profile?.id, role]);
 
   useEffect(() => {
     (async () => {
@@ -320,6 +338,17 @@ export default function App() {
         if (dbWl?.length) setWorkingListDb(dbWl);
       } catch (e) {
         console.error('Failed to fetch working list from Supabase:', e);
+      }
+
+      // Fetch payments (RLS enforces access — returns empty for non-finance users)
+      try {
+        const { data: dbPay } = await supabase
+          .from('event_payments')
+          .select('*')
+          .order('subgroup', { ascending: true });
+        if (dbPay?.length) setPayments(dbPay);
+      } catch (e) {
+        console.error('Failed to fetch payments from Supabase:', e);
       }
 
       setRoster(finalRoster); setRegistrations(finalReg); setFlights(fl); setConfirmations(conf); setTargets(tg); setExempt(finalExempt); setLastImport(li);
@@ -549,7 +578,7 @@ export default function App() {
 
       {/* tabs */}
       <div style={{ display: 'flex', gap: 4, padding: '14px 32px 0', borderBottom: `1px solid ${C.line}`, background: C.paper, overflowX: 'auto' }}>
-        {TABS.map(t => {
+        {ALL_TABS.filter(t => !t.restricted || hasFinanceAccess).map(t => {
           const Icon = t.icon;
           const active = tab === t.key;
           return (
@@ -574,6 +603,7 @@ export default function App() {
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups }} />}
         {tab === 'rooms' && <RoomAssignmentTab {...{ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom }} />}
+        {tab === 'finance' && hasFinanceAccess && <FinanceTab {...{ registrations, payments, setPayments, userId: profile?.id }} />}
         {tab === 'import' && <ImportTab {...{ handleImport, roster, registrations, flights, exempt, updateExempt, lastImport }} />}
       </div>
     </div>
@@ -863,6 +893,195 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+// ============ FINANCE TAB ============
+function FinanceTab({ registrations, payments, setPayments, userId }) {
+  // Merge registrations with their payment record
+  const payByEmail = useMemo(() => Object.fromEntries(payments.map(p => [p.email, p])), [payments]);
+
+  const rows = useMemo(() => registrations.map(r => ({
+    email: r.email,
+    fullName: r.fullName || `${r.firstName || ''} ${r.lastName || ''}`.trim(),
+    subgroup: r.subgroup || '',
+    ...payByEmail[r.email] || { amount_expected: 0, amount_paid: 0, payment_date: null, payment_notes: '' },
+  })).sort((a, b) => a.subgroup.localeCompare(b.subgroup) || a.fullName.localeCompare(b.fullName)), [registrations, payByEmail]);
+
+  const totalExpected = rows.reduce((s, r) => s + (Number(r.amount_expected) || 0), 0);
+  const totalPaid    = rows.reduce((s, r) => s + (Number(r.amount_paid) || 0), 0);
+  const countFull    = rows.filter(r => Number(r.amount_paid) > 0 && Number(r.amount_paid) >= Number(r.amount_expected) && Number(r.amount_expected) > 0).length;
+  const countPartial = rows.filter(r => Number(r.amount_paid) > 0 && Number(r.amount_paid) < Number(r.amount_expected)).length;
+  const countUnpaid  = rows.filter(r => !(Number(r.amount_paid) > 0)).length;
+
+  const [editing, setEditing] = useState({}); // email -> { amount_expected, amount_paid, payment_date, payment_notes }
+  const [saving, setSaving] = useState({});
+
+  function startEdit(r) {
+    setEditing(prev => ({
+      ...prev,
+      [r.email]: {
+        amount_expected: r.amount_expected ?? 0,
+        amount_paid: r.amount_paid ?? 0,
+        payment_date: r.payment_date || '',
+        payment_notes: r.payment_notes || '',
+      },
+    }));
+  }
+
+  function cancelEdit(email) {
+    setEditing(prev => { const n = { ...prev }; delete n[email]; return n; });
+  }
+
+  async function saveRow(email, fullName, subgroup) {
+    const draft = editing[email];
+    if (!draft) return;
+    setSaving(prev => ({ ...prev, [email]: true }));
+    try {
+      const payload = {
+        email,
+        full_name: fullName,
+        subgroup,
+        amount_expected: Number(draft.amount_expected) || 0,
+        amount_paid: Number(draft.amount_paid) || 0,
+        payment_date: draft.payment_date || null,
+        payment_notes: draft.payment_notes || '',
+        recorded_by: userId || null,
+      };
+      const { error } = await supabase
+        .from('event_payments')
+        .upsert(payload, { onConflict: 'email' });
+      if (!error) {
+        setPayments(prev => {
+          const without = prev.filter(p => p.email !== email);
+          return [...without, { ...payload }];
+        });
+        cancelEdit(email);
+      } else {
+        alert('Save failed: ' + error.message);
+      }
+    } finally {
+      setSaving(prev => { const n = { ...prev }; delete n[email]; return n; });
+    }
+  }
+
+  const fmt = n => n ? `$${Number(n).toFixed(2)}` : '—';
+
+  return (
+    <div>
+      {/* summary */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14, marginBottom: 24 }}>
+        {[
+          { label: 'Total expected', value: `$${totalExpected.toFixed(2)}`, tone: 'mute' },
+          { label: 'Total collected', value: `$${totalPaid.toFixed(2)}`, tone: totalPaid >= totalExpected && totalExpected > 0 ? 'green' : 'amber' },
+          { label: 'Fully paid', value: countFull, tone: 'green' },
+          { label: 'Partial', value: countPartial, tone: 'amber' },
+          { label: 'Unpaid', value: countUnpaid, tone: countUnpaid > 0 ? 'red' : 'green' },
+        ].map(s => (
+          <Card key={s.label}>
+            <div style={{ fontSize: 10.5, fontFamily: 'JetBrains Mono', color: C.mute, textTransform: 'uppercase', letterSpacing: 0.06, marginBottom: 6 }}>{s.label}</div>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 26, fontWeight: 700, color: s.tone === 'green' ? C.green : s.tone === 'amber' ? C.amber : s.tone === 'red' ? C.red : C.ink }}>{s.value}</div>
+          </Card>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div>
+          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Payment tracker</h2>
+          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>Click a row to edit. Changes save to the database immediately.</div>
+        </div>
+        <Btn tone="ghost" small onClick={() => downloadCSV('finance-payments.csv', rows, [
+          { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' }, { key: 'email', label: 'Email' },
+          { key: 'amount_expected', label: 'Expected ($)' }, { key: 'amount_paid', label: 'Paid ($)' },
+          { key: 'payment_date', label: 'Payment Date' }, { key: 'payment_notes', label: 'Notes' },
+        ])}><Download size={13} /> Export</Btn>
+      </div>
+
+      <Card style={{ padding: 0, overflowX: 'auto' }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Subgroup</th>
+              <th>Expected</th>
+              <th>Paid</th>
+              <th>Remaining</th>
+              <th>Date</th>
+              <th>Notes</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const draft = editing[r.email];
+              const exp = Number(draft?.amount_expected ?? r.amount_expected) || 0;
+              const paid = Number(draft?.amount_paid ?? r.amount_paid) || 0;
+              const remaining = exp - paid;
+              const status = paid <= 0 ? 'Unpaid' : paid < exp ? 'Partial' : 'Paid';
+              const statusToneMap = { Paid: 'green', Partial: 'amber', Unpaid: 'red' };
+
+              if (draft) {
+                return (
+                  <tr key={r.email} style={{ background: '#F7F3FF' }}>
+                    <td style={{ fontWeight: 600 }}>{r.fullName}</td>
+                    <td style={{ color: C.mute, fontSize: 12 }}>{r.subgroup}</td>
+                    <td>
+                      <input type="number" min="0" step="0.01" style={{ width: 80 }}
+                        value={draft.amount_expected}
+                        onChange={e => setEditing(prev => ({ ...prev, [r.email]: { ...draft, amount_expected: e.target.value } }))} />
+                    </td>
+                    <td>
+                      <input type="number" min="0" step="0.01" style={{ width: 80 }}
+                        value={draft.amount_paid}
+                        onChange={e => setEditing(prev => ({ ...prev, [r.email]: { ...draft, amount_paid: e.target.value } }))} />
+                    </td>
+                    <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: remaining > 0 ? C.red : C.green }}>
+                      {exp > 0 ? fmt(remaining) : '—'}
+                    </td>
+                    <td>
+                      <input type="date" style={{ width: 130 }}
+                        value={draft.payment_date || ''}
+                        onChange={e => setEditing(prev => ({ ...prev, [r.email]: { ...draft, payment_date: e.target.value } }))} />
+                    </td>
+                    <td>
+                      <input type="text" style={{ width: 160 }} placeholder="Notes…"
+                        value={draft.payment_notes}
+                        onChange={e => setEditing(prev => ({ ...prev, [r.email]: { ...draft, payment_notes: e.target.value } }))} />
+                    </td>
+                    <td><Pill tone={statusToneMap[status]}>{status}</Pill></td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <Btn small onClick={() => saveRow(r.email, r.fullName, r.subgroup)} disabled={saving[r.email]}>{saving[r.email] ? '…' : 'Save'}</Btn>
+                      {' '}
+                      <Btn tone="ghost" small onClick={() => cancelEdit(r.email)}>Cancel</Btn>
+                    </td>
+                  </tr>
+                );
+              }
+
+              return (
+                <tr key={r.email} style={{ cursor: 'pointer' }} onClick={() => startEdit(r)}>
+                  <td style={{ fontWeight: 600 }}>{r.fullName}</td>
+                  <td style={{ color: C.mute, fontSize: 12 }}>{r.subgroup}</td>
+                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{fmt(r.amount_expected)}</td>
+                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{fmt(r.amount_paid)}</td>
+                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: remaining > 0 ? C.red : C.green }}>
+                    {exp > 0 ? fmt(remaining) : '—'}
+                  </td>
+                  <td style={{ color: C.mute, fontSize: 12.5 }}>{r.payment_date || '—'}</td>
+                  <td style={{ color: C.mute, fontSize: 12.5 }}>{r.payment_notes || '—'}</td>
+                  <td><Pill tone={statusToneMap[status]}>{status}</Pill></td>
+                  <td style={{ color: C.mute, fontSize: 11 }}>click to edit</td>
+                </tr>
+              );
+            })}
+            {rows.length === 0 && (
+              <tr><td colSpan={9} style={{ textAlign: 'center', color: C.mute, padding: 24 }}>No registrations yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </Card>
     </div>
   );
 }
