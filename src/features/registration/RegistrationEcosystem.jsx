@@ -238,10 +238,10 @@ export default function App() {
   const [hasFinanceAccess, setHasFinanceAccess] = useState(false);
   const [payments, setPayments] = useState([]); // from event_payments table
 
-  // Finance access: regional_secretary / super_admin always; others need finance_data_access grant
+  // Finance access: regional_secretary only (unless granted via user_grants)
   useEffect(() => {
     if (!profile?.id) return;
-    if (['regional_secretary', 'super_admin'].includes(role)) { setHasFinanceAccess(true); return; }
+    if (role === 'regional_secretary') { setHasFinanceAccess(true); return; }
     supabase.from('user_grants')
       .select('id')
       .eq('user_id', profile.id)
