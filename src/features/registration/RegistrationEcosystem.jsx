@@ -212,7 +212,7 @@ const ALL_TABS = [
   { key: 'confirm', label: 'Confirmations', icon: CheckCircle2 },
   { key: 'transport', label: 'Transportation', icon: Plane },
   { key: 'discipleship', label: 'Foundation & Baptism', icon: Church },
-  { key: 'compliance', label: 'Delegate Compliance', icon: AlertCircle },
+  { key: 'compliance', label: 'Hospitality', icon: AlertCircle },
   { key: 'rooms', label: 'Room Assignments', icon: DoorOpen },
   { key: 'finance', label: 'Finance', icon: DollarSign, restricted: true },
   { key: 'import', label: 'Import Data', icon: Upload },
