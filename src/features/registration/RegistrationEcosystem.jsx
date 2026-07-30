@@ -222,6 +222,8 @@ export default function App() {
   const [rooms, setRooms] = useState([]);
   const [numRooms, setNumRooms] = useState(5);
   const [peoplePerRoom, setPeoplePerRoom] = useState(2);
+  const [workingListDb, setWorkingListDb] = useState([]);
+  const [workingListLoading, setWorkingListLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -299,6 +301,17 @@ export default function App() {
         } catch (e) {
           console.error('Failed to fetch registrations from Supabase:', e);
         }
+      }
+
+      // Fetch working list from Supabase
+      try {
+        const { data: dbWl } = await supabase
+          .from('working_list')
+          .select('*')
+          .order('subgroup', { ascending: true });
+        if (dbWl?.length) setWorkingListDb(dbWl);
+      } catch (e) {
+        console.error('Failed to fetch working list from Supabase:', e);
       }
 
       setRoster(finalRoster); setRegistrations(finalReg); setFlights(fl); setConfirmations(conf); setTargets(tg); setExempt(finalExempt); setLastImport(li);
@@ -547,7 +560,7 @@ export default function App() {
         {tab === 'overview' && (
           <OverviewTab {...{ totalRegs, totalRegTarget, totalFlights, totalFlightTarget, subgroups, bySubgroup, targets, setTarget, merged, exempt, updateExempt }} />
         )}
-        {tab === 'working' && <WorkingListTab {...{ workingList, subgroupFilter, setSubgroupFilter, subgroups }} />}
+        {tab === 'working' && <WorkingListTab {...{ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups }} />}
         {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm }} />}
         {tab === 'transport' && <TransportTab {...{ merged, exempt }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups }} />}
@@ -562,14 +575,69 @@ export default function App() {
 // ============ OVERVIEW ============
 function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarget, subgroups, bySubgroup, targets, setTarget, merged, exempt, updateExempt }) {
   const [showSettings, setShowSettings] = useState(false);
+  const [waitingOpen, setWaitingOpen] = useState(false);
   const regPct = totalRegTarget ? Math.round((totalRegs / totalRegTarget) * 100) : 0;
   const flightPct = totalFlightTarget ? Math.round((totalFlights / totalFlightTarget) * 100) : 0;
 
+  const waitingList = useMemo(
+    () => merged.filter(r => r.needsFlight && !r.hasFlight).sort((a, b) => (a.subgroup || '').localeCompare(b.subgroup || '')),
+    [merged],
+  );
+
   return (
     <div>
+      {waitingOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setWaitingOpen(false)}>
+          <div style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,.18)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '18px 24px', borderBottom: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 16 }}>Waiting on flights</div>
+                <div style={{ fontSize: 12.5, color: C.mute, marginTop: 2 }}>{waitingList.length} registrant{waitingList.length !== 1 ? 's' : ''} need a flight but don't have one on file yet</div>
+              </div>
+              <button onClick={() => setWaitingOpen(false)} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: C.mute, lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ overflowY: 'auto', padding: 16 }}>
+              {waitingList.length === 0 ? (
+                <div style={{ textAlign: 'center', color: C.mute, padding: 32 }}>Everyone who needs a flight has one on file.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono', fontSize: 10.5, color: C.mute, textTransform: 'uppercase', padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Name</th>
+                      <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono', fontSize: 10.5, color: C.mute, textTransform: 'uppercase', padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Subgroup</th>
+                      <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono', fontSize: 10.5, color: C.mute, textTransform: 'uppercase', padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Email</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {waitingList.map((r, i) => (
+                      <tr key={i}>
+                        <td style={{ padding: '9px 10px', fontSize: 13, borderBottom: `1px solid ${C.line}` }}>{r.fullName || `${r.firstName} ${r.lastName}`}</td>
+                        <td style={{ padding: '9px 10px', fontSize: 13, borderBottom: `1px solid ${C.line}`, color: C.mute }}>{r.subgroup}</td>
+                        <td style={{ padding: '9px 10px', fontSize: 12, borderBottom: `1px solid ${C.line}`, fontFamily: 'JetBrains Mono' }}>{r.email}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: `1px solid ${C.line}`, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <Btn tone="ghost" small onClick={() => downloadCSV('waiting-on-flights.csv', waitingList, [
+                { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' },
+                { key: 'fellowship', label: 'Fellowship' }, { key: 'email', label: 'Email' },
+              ])}><Download size={13} /> Export</Btn>
+              <Btn small onClick={() => setWaitingOpen(false)}>Close</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
         <SummaryCard label="Total registrations" current={totalRegs} target={totalRegTarget} pct={regPct} />
-        <SummaryCard label="Flights purchased" current={totalFlights} target={totalFlightTarget} pct={flightPct} />
+        <SummaryCard label="Flights purchased" current={totalFlights} target={totalFlightTarget} pct={flightPct}
+          onTargetClick={totalFlightTarget > 0 ? () => setWaitingOpen(true) : undefined}
+          targetHint={waitingList.length > 0 ? `${waitingList.length} waiting` : undefined} />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -651,13 +719,19 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
   );
 }
 
-function SummaryCard({ label, current, target, pct }) {
+function SummaryCard({ label, current, target, pct, onTargetClick, targetHint }) {
   const tone = statusTone(pct);
   return (
     <Card>
       <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: C.mute, textTransform: 'uppercase', letterSpacing: 0.06 }}>{label}</div>
-      <div style={{ fontFamily: 'Space Grotesk', fontSize: 30, fontWeight: 700, margin: '6px 0 10px' }}>
-        {current} <span style={{ color: C.mute, fontWeight: 500, fontSize: 18 }}>/ {target || '—'}</span>
+      <div style={{ fontFamily: 'Space Grotesk', fontSize: 30, fontWeight: 700, margin: '6px 0 10px', display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+        {current}
+        <span style={{ color: C.mute, fontWeight: 500, fontSize: 18 }}>/ {target || '—'}</span>
+        {onTargetClick && (
+          <button onClick={onTargetClick} style={{ fontSize: 11, fontWeight: 600, fontFamily: 'Inter', background: C.amberBg, color: C.amber, border: 'none', borderRadius: 20, padding: '2px 9px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            {targetHint || 'View waiting'}
+          </button>
+        )}
       </div>
       <ProgressBar pct={pct} tone={tone} />
       <div style={{ marginTop: 8, fontSize: 12, color: C.mute }}>{target ? `${pct}% of target` : 'Set targets in the table below'}</div>
@@ -683,47 +757,104 @@ function ExemptEditor({ exempt, onChange }) {
 }
 
 // ============ WORKING LIST ============
-function WorkingListTab({ workingList, subgroupFilter, setSubgroupFilter, subgroups }) {
-  const filtered = workingList.filter(p => subgroupFilter === 'All' || p.subgroup === subgroupFilter);
+function WorkingListTab({ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups }) {
+  // Prefer synced DB data; fall back to roster-derived list
+  const useDb = workingListDb.length > 0;
+
+  const source = useMemo(() => {
+    if (useDb) {
+      return workingListDb.map(p => ({
+        full_name: p.full_name,
+        subgroup: p.subgroup,
+        leadership_category: p.leadership_category,
+        email: p.email,
+        registered: !!regByEmail[p.email],
+      }));
+    }
+    return workingList.map(p => ({
+      full_name: p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim(),
+      subgroup: p.subgroup,
+      leadership_category: p.leadership || '',
+      email: p.email,
+      registered: false,
+    }));
+  }, [useDb, workingListDb, workingList, regByEmail]);
+
+  const filtered = source.filter(p => subgroupFilter === 'All' || p.subgroup === subgroupFilter);
+
   const byGroup = useMemo(() => {
     const g = {};
     filtered.forEach(p => { (g[p.subgroup || 'Unassigned'] ||= []).push(p); });
     return g;
   }, [filtered]);
 
+  const notRegistered = filtered.filter(p => !p.registered).length;
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div>
           <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Working list</h2>
-          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>On the roster but not yet registered — {filtered.length} people to follow up with.</div>
+          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>
+            {useDb
+              ? <>{filtered.length} people · <span style={{ color: notRegistered > 0 ? C.amber : C.green }}>{notRegistered} not yet registered</span></>
+              : <>On the roster but not yet registered — {filtered.length} people to follow up with.</>}
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />
           <Btn tone="ghost" small onClick={() => downloadCSV('working-list.csv', filtered, [
-            { key: 'firstName', label: 'First Name' }, { key: 'lastName', label: 'Last Name' },
-            { key: 'subgroup', label: 'Subgroup' }, { key: 'leadership', label: 'Leadership Position' }, { key: 'email', label: 'Email' },
+            { key: 'full_name', label: 'Full Name' },
+            { key: 'subgroup', label: 'Subgroup' },
+            { key: 'leadership_category', label: 'Leadership Category' },
+            { key: 'email', label: 'Email' },
+            { key: 'registered', label: 'Registered', get: r => r.registered ? 'Yes' : 'No' },
           ])}><Download size={13} /> Export</Btn>
         </div>
       </div>
 
-      {Object.keys(byGroup).length === 0 && <Card><div style={{ color: C.mute, textAlign: 'center', padding: 20 }}>Nobody outstanding — either everyone on the roster has registered, or the roster hasn't been imported yet.</div></Card>}
-
-      {Object.entries(byGroup).sort().map(([sg, people]) => (
-        <Card key={sg} style={{ marginBottom: 14, padding: 0, overflowX: 'auto' }}>
-          <div style={{ padding: '12px 16px', background: '#FAF8FE', borderBottom: `1px solid ${C.line}`, fontWeight: 600, fontSize: 13.5, display: 'flex', justifyContent: 'space-between' }}>
-            <span>{sg}</span><Pill tone="mute">{people.length} outstanding</Pill>
+      {Object.keys(byGroup).length === 0 && (
+        <Card>
+          <div style={{ color: C.mute, textAlign: 'center', padding: 20 }}>
+            {useDb ? 'Working list is empty — sync the "Working List" sheet tab.' : 'Nobody outstanding — roster may not be imported yet.'}
           </div>
-          <table>
-            <thead><tr><th>Name</th><th>Leadership</th><th>Email</th></tr></thead>
-            <tbody>
-              {people.map((p, i) => (
-                <tr key={i}><td>{p.fullName || `${p.firstName} ${p.lastName}`}</td><td>{p.leadership || '—'}</td><td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{p.email}</td></tr>
-              ))}
-            </tbody>
-          </table>
         </Card>
-      ))}
+      )}
+
+      {Object.entries(byGroup).sort().map(([sg, people]) => {
+        const notReg = people.filter(p => !p.registered).length;
+        return (
+          <Card key={sg} style={{ marginBottom: 14, padding: 0, overflowX: 'auto' }}>
+            <div style={{ padding: '12px 16px', background: '#FAF8FE', borderBottom: `1px solid ${C.line}`, fontWeight: 600, fontSize: 13.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <span>{sg}</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {useDb && notReg > 0 && <Pill tone="amber">{notReg} outstanding</Pill>}
+                <Pill tone="mute">{people.length} total</Pill>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Leadership Category</th>
+                  <th>Email</th>
+                  {useDb && <th>Registered</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {people.map((p, i) => (
+                  <tr key={i} style={useDb && !p.registered ? { background: '#FFFBF4' } : undefined}>
+                    <td>{p.full_name}</td>
+                    <td>{p.leadership_category || '—'}</td>
+                    <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{p.email}</td>
+                    {useDb && <td>{p.registered ? <Pill tone="green">Yes</Pill> : <Pill tone="amber">No</Pill>}</td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        );
+      })}
     </div>
   );
 }
