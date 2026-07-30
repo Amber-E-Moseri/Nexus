@@ -1097,7 +1097,8 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                   onDragStart={() => setDraggedPerson(person)}
                   style={{ padding: '8px 10px', background: '#fff', border: '1px solid #ddd', borderRadius: 5, fontSize: 12, cursor: 'grab', userSelect: 'none' }}
                 >
-                  {person.fullName} ({person.subgroup})
+                  <div>{person.fullName} <span style={{ color: '#999', fontWeight: 400 }}>({person.subgroup})</span></div>
+                  {person.leadership && <div style={{ fontSize: 10.5, color: '#999', marginTop: 1 }}>{person.leadership}</div>}
                 </div>
               ))}
             </div>
@@ -1179,7 +1180,10 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                       key={person.email}
                       style={{ padding: '6px 8px', background: isHead ? '#FFF8E1' : '#fff', border: `1px solid ${isHead ? '#F5C842' : '#ddd'}`, borderRadius: 4, fontSize: 11.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}
                     >
-                      <span style={{ flex: 1, fontWeight: isHead ? 600 : 400 }}>{person.fullName}</span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontWeight: isHead ? 600 : 400, display: 'block' }}>{person.fullName}</span>
+                        {person.leadership && <span style={{ fontSize: 10, color: '#999', display: 'block', marginTop: 1 }}>{person.leadership}</span>}
+                      </span>
                       <button
                         onClick={() => handleSetRoomHead(room.id, person.email)}
                         title={isHead ? 'Remove as room head' : 'Set as room head'}
