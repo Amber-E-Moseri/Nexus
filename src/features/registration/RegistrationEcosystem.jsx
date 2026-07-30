@@ -622,6 +622,8 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
     [merged],
   );
 
+  const confirmedCount = useMemo(() => merged.filter(r => r.fullyConfirmed).length, [merged]);
+
   return (
     <div>
       {waitingOpen && (
@@ -671,8 +673,9 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
         <SummaryCard label="Total registrations" current={totalRegs} target={totalRegTarget} pct={regPct} />
+        <SummaryCard label="Confirmed" current={confirmedCount} target={totalRegs} pct={totalRegs ? Math.round((confirmedCount / totalRegs) * 100) : 0} />
         <SummaryCard label="Flights purchased" current={totalFlights} target={totalFlightTarget} pct={flightPct}
           onTargetClick={totalFlightTarget > 0 ? () => setWaitingOpen(true) : undefined}
           targetHint={waitingList.length > 0 ? `${waitingList.length} waiting` : undefined} />
