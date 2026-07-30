@@ -156,7 +156,7 @@ async function loadKey(key, fallback) {
       .from('registration_config')
       .select('value')
       .eq('key', key)
-      .single()
+      .maybeSingle()
     return data ? data.value : fallback
   } catch { return fallback; }
 }
