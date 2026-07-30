@@ -1707,8 +1707,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
         <Card>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontWeight: 700, fontSize: 13 }}>Add single room</div>
-              <div style={{ fontSize: 11, color: C.mute }}>Create one room manually</div>
-            </div>
+            <div style={{ fontSize: 11, color: C.mute }}>Create one room manually</div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <input
@@ -1733,8 +1732,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
         <Card>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontWeight: 700, fontSize: 13 }}>Bulk create rooms</div>
-              <div style={{ fontSize: 11, color: C.mute }}>Generate multiple rooms at once</div>
-            </div>
+            <div style={{ fontSize: 11, color: C.mute }}>Generate multiple rooms at once</div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
             <input
