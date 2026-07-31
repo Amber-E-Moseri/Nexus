@@ -162,10 +162,11 @@ async function loadKey(key, fallback) {
 }
 async function saveKey(key, value) {
   try {
-    await supabase
+    const { error } = await supabase
       .from('registration_config')
       .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
-  } catch (e) { console.error('save failed', key, e); }
+    if (error) console.error('saveKey failed:', key, error.message);
+  } catch (e) { console.error('saveKey error:', key, e.message); }
 }
 
 // ---------- UI atoms ----------
