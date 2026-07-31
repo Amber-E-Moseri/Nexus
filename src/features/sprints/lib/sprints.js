@@ -103,7 +103,7 @@ export async function getSprintDetail(sprintId) {
       .eq('id', sprintId)
       .single(),
     supabase.from('sprint_teams').select(SPRINT_TEAM_SELECT).eq('sprint_id', sprintId).order('created_at'),
-    supabase.from('sprint_members').select(`${SPRINT_MEMBER_WITH_TEMP_SELECT}, user:user_id(id, name, email, status, is_temporary, department_id, space:department_id(id, name))`).eq('sprint_id', sprintId).order('joined_at'),
+    supabase.from('sprint_members').select(`${SPRINT_MEMBER_WITH_TEMP_SELECT}, user:user_id(id, name, email, status, is_temporary, department_id)`).eq('sprint_id', sprintId).order('joined_at'),
     (async () => {
       try {
         return await supabase.from('sprint_reviews').select(SPRINT_REVIEW_SELECT).eq('sprint_id', sprintId).maybeSingle()
