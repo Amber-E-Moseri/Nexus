@@ -124,18 +124,21 @@ export async function getSprintDetail(sprintId) {
   if (sprintTeamIds.length > 0) {
     const { data: teamMemberships } = await supabase
       .from('sprint_team_members')
-      .select('team_id, user_id')
+      .select('team_id, user_id, role')
       .in('team_id', sprintTeamIds)
+    const teamMemberRolesMap = {}
     for (const row of teamMemberships ?? []) {
       if (!teamMembershipsMap[row.user_id]) teamMembershipsMap[row.user_id] = []
       teamMembershipsMap[row.user_id].push(row.team_id)
+      if (!teamMemberRolesMap[row.user_id]) teamMemberRolesMap[row.user_id] = {}
+      teamMemberRolesMap[row.user_id][row.team_id] = row.role ?? null
     }
   }
 
   const membersWithTeams = (membersRes.data ?? []).map((member) => ({
     ...member,
     sprint_team_ids: teamMembershipsMap[member.user_id] ?? [],
-    team_member_roles: teamMemberRolesMap[member.user_id] ?? {}, // { teamId → role }
+    team_member_roles: (teamMemberRolesMap ?? {})[member.user_id] ?? {}, // { teamId → role }
   }))
 
   return {

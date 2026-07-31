@@ -535,9 +535,8 @@ export default function SprintMemberPanel({
 
                 {canEdit && !isArchived ? (
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {member.sprint_teams?.length ? (
-                      <>
-                        {member.sprint_teams.map((team) => {
+                    {member.sprint_teams?.length
+                      ? member.sprint_teams.map((team) => {
                           const teamRole = member.team_member_roles?.[team.id] || 'contributor'
                           return (
                             <select
@@ -562,9 +561,8 @@ export default function SprintMemberPanel({
                               ))}
                             </select>
                           )
-                        })}
-                      </>
-                    ) : (
+                        })
+                      : (
                       <select
                         value={member.role}
                         onChange={(e) => handleRoleChange(member.user.id, e.target.value)}

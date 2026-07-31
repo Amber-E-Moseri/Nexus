@@ -212,8 +212,8 @@ function Btn({ children, onClick, tone = 'primary', small, disabled }) {
 
 const ALL_TABS = [
   { key: 'overview', label: 'Overview', icon: Home },
-  { key: 'working', label: 'Working List', icon: Users },
-  { key: 'confirm', label: 'Confirmations', icon: CheckCircle2 },
+  { key: 'working', label: 'Eligible Delegates', icon: Users },
+  { key: 'confirm', label: 'Delegates', icon: CheckCircle2 },
   { key: 'transport', label: 'Transportation', icon: Plane },
   { key: 'discipleship', label: 'Foundation & Baptism', icon: Church },
   { key: 'compliance', label: 'Hospitality', icon: AlertCircle },
@@ -887,10 +887,8 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
               <th>Subgroup</th>
               <th>Registration target</th>
               <th>Registrations</th>
-              <th>Flight target</th>
-              <th>Flights</th>
               <th>Difference (reg)</th>
-              <th>Difference (flights)</th>
+              <th>Net flights needed</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -915,13 +913,11 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
                       <div style={{ flex: 1 }}><ProgressBar pct={regPctSg} tone={tone} /></div>
                     </div>
                   </td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: C.mute }}>{flightTarget || '—'}</td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{s.flights}</td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: regTarget - s.total > 0 ? C.red : C.green }}>
+                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: regTarget - s.total > 0 ? C.green : C.mute }}>
                     {regTarget ? (regTarget - s.total > 0 ? `−${regTarget - s.total}` : `+${s.total - regTarget}`) : '—'}
                   </td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: flightTarget - s.flights > 0 ? C.red : C.green }}>
-                    {flightTarget ? (flightTarget - s.flights > 0 ? `−${flightTarget - s.flights}` : `+${s.flights - flightTarget}`) : '—'}
+                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: flightTarget - s.flights > 0 ? C.amber : C.green }}>
+                    {flightTarget ? `${flightTarget - s.flights}` : '—'}
                   </td>
                   <td><Pill tone={tone}>{statusLabel(regPctSg)}</Pill></td>
                 </tr>
@@ -933,13 +929,27 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
         </div>
       </Card>
 
-      <div style={{ marginTop: 16, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+      <div style={{ marginTop: 10, display: 'flex', gap: 16, alignItems: 'center', padding: '8px 4px' }}>
+        <span style={{ fontSize: 11.5, color: C.mute, fontFamily: 'JetBrains Mono', textTransform: 'uppercase', letterSpacing: 0.05 }}>Status:</span>
+        {[
+          { tone: 'green', label: 'On track', desc: '≥ 95% of reg target' },
+          { tone: 'amber', label: 'Tracking', desc: '75–94%' },
+          { tone: 'red',   label: 'Behind',   desc: '< 75%' },
+        ].map(({ tone, label, desc }) => (
+          <div key={tone} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Pill tone={tone}>{label}</Pill>
+            <span style={{ fontSize: 11.5, color: C.mute }}>{desc}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 8, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <Btn tone="ghost" small onClick={() => downloadCSV('subgroup-overview.csv', subgroups.map(sg => ({
           subgroup: sg, regTarget: targets[sg]?.reg || 0, regs: bySubgroup[sg]?.total || 0,
-          flightTarget: bySubgroup[sg]?.needsFlight || 0, flights: bySubgroup[sg]?.flights || 0,
+          netFlights: (bySubgroup[sg]?.needsFlight || 0) - (bySubgroup[sg]?.flights || 0),
         })), [
           { key: 'subgroup', label: 'Subgroup' }, { key: 'regTarget', label: 'Reg Target' }, { key: 'regs', label: 'Registrations' },
-          { key: 'flightTarget', label: 'Flight Target (out-of-state)' }, { key: 'flights', label: 'Flights' },
+          { key: 'netFlights', label: 'Net Flights Needed' },
         ])}><Download size={13} /> Export overview</Btn>
       </div>
     </div>
@@ -2116,281 +2126,221 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   const totalCapacity = rooms.reduce((s, r) => s + r.capacity, 0);
 
   return (
-    <div>
-      {/* header with stats */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 200px)', minHeight: 520 }}>
+      {/* header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexShrink: 0 }}>
         <div>
-          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 18, margin: '0 0 6px', fontWeight: 700 }}>Room Assignments</h2>
-          <div style={{ fontSize: 12.5, color: C.mute }}>Assign {unassigned.length} registrants to {rooms.length} room{rooms.length !== 1 ? 's' : ''} · {totalAssigned} / {totalCapacity} capacity</div>
+          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 18, margin: '0 0 3px', fontWeight: 700 }}>Room Assignments</h2>
+          <div style={{ fontSize: 12, color: C.mute }}>
+            {unassigned.length} unassigned · {rooms.length} rooms · {totalAssigned}/{totalCapacity} filled · drag names into rooms
+          </div>
         </div>
-        <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0} style={{ marginLeft: 16 }}><Download size={13} /> Print</Btn>
+        <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0}><Download size={13} /> Print</Btn>
       </div>
 
-      {/* tips */}
-      <div style={{ background: '#F7F3FF', border: '1px solid #E8E2F8', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: 12.5, color: C.mute }}>
-        ✋ Drag names from below to drop into rooms. Click room names to rename. Hit capacity? Try adjusting room numbers.
-      </div>
+      {/* two-panel body */}
+      <div style={{ flex: 1, display: 'flex', gap: 14, overflow: 'hidden' }}>
 
-      {/* Unassigned registrants by gender */}
-      <div style={{ marginBottom: 28, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        {['male', 'female'].map(gender => {
-          const genderIcon = gender === 'male' ? 'M' : 'F';
-          const genderColor = gender === 'male' ? '#2A5FA5' : '#C0507A';
-          const genderBg = gender === 'male' ? '#E8F0FF' : '#FFE8F0';
-          const count = byGender[gender].length;
-          return (
-            <div key={gender}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <span style={{ fontSize: 20 }}>{genderIcon}</span>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 13.5, color: genderColor, textTransform: 'capitalize' }}>{gender}</div>
-                  <div style={{ fontSize: 11.5, color: C.mute }}>{count} unassigned</div>
+        {/* ── LEFT: unassigned pool ── */}
+        <div style={{ width: 230, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {['male', 'female'].map(gender => {
+            const genderColor = gender === 'male' ? '#2A5FA5' : '#C0507A';
+            const genderBg   = gender === 'male' ? '#EEF3FF' : '#FFF0F6';
+            const label      = gender === 'male' ? 'Men' : 'Women';
+            const count      = byGender[gender].length;
+            return (
+              <div key={gender} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', marginBottom: gender === 'male' ? 10 : 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: genderColor, background: `${genderColor}18`, padding: '2px 7px', borderRadius: 99 }}>{label}</span>
+                  <span style={{ fontSize: 11.5, color: C.mute }}>{count} left</span>
                 </div>
-              </div>
-              <Card style={{ background: genderBg, padding: 12, border: `1px solid ${genderColor}33` }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {byGender[gender].length === 0 ? (
-                    <div style={{ fontSize: 12.5, color: C.mute, fontStyle: 'italic', padding: '16px 12px', textAlign: 'center' }}>Everyone assigned!</div>
+                <div style={{ flex: 1, overflowY: 'auto', background: genderBg, borderRadius: 8, border: `1px solid ${genderColor}25`, padding: 6 }}>
+                  {count === 0 ? (
+                    <div style={{ fontSize: 11.5, color: C.mute, fontStyle: 'italic', textAlign: 'center', padding: '20px 8px' }}>All assigned!</div>
                   ) : (
                     byGender[gender].map(person => (
                       <div
                         key={person.email}
                         draggable
-                        onDragStart={(e) => { setDraggedPerson(person); e.dataTransfer.effectAllowed = 'move'; }}
-                        style={{
-                          padding: '10px 12px',
-                          background: '#fff',
-                          border: `1.5px solid ${genderColor}66`,
-                          borderRadius: 7,
-                          fontSize: 12.5,
-                          cursor: 'grab',
-                          userSelect: 'none',
-                          transition: 'all .15s',
-                          boxShadow: '0 1px 3px rgba(0,0,0,.06)',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,.12)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,.06)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                        onDragStart={e => { setDraggedPerson(person); e.dataTransfer.effectAllowed = 'move'; }}
+                        style={{ padding: '6px 8px', background: '#fff', border: `1px solid ${genderColor}33`, borderRadius: 5, fontSize: 12, cursor: 'grab', userSelect: 'none', marginBottom: 4, transition: 'box-shadow .12s' }}
+                        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.12)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}
                       >
-                        <div style={{ fontWeight: 500, color: '#1A1220' }}>{person.fullName}</div>
-                        <div style={{ fontSize: 11, color: C.mute, marginTop: 2 }}>{person.subgroup}{person.designation ? ` · ${person.designation}` : ''}</div>
+                        <div style={{ fontWeight: 500, color: '#1A1220', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{person.fullName}</div>
+                        {(person.subgroup || person.designation) && (
+                          <div style={{ fontSize: 10.5, color: C.mute, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {person.subgroup}{person.designation ? ` · ${person.designation}` : ''}
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
                 </div>
-              </Card>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Room cards */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: C.ink }}>Rooms</div>
-          <div style={{ fontSize: 12.5, color: C.mute }}>({rooms.length} total)</div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, marginBottom: 16 }}>
-          {rooms.map(room => {
-            const genderSet = new Set(room.people.map(p => {
-              const g = (p.gender || '').toLowerCase();
-              return (g.includes('female') || g === 'f') ? 'female' : 'male';
-            }));
-            const isFull = room.people.length >= room.capacity;
-            const isMixed = genderSet.size > 1;
-            const isAllFemale = !isMixed && genderSet.has('female') && room.people.length > 0;
-            const isAllMale = !isMixed && genderSet.has('male') && room.people.length > 0;
-            const isEmpty = room.people.length === 0;
-            const roomIcon = isAllFemale ? 'F' : isAllMale ? 'M' : isMixed ? 'MF' : null;
-            const roomBg = isFull ? C.redBg : isAllFemale ? '#FFE8F0' : isAllMale ? '#E8F0FF' : C.cream;
-            const roomBorder = isFull ? C.red : isMixed ? C.amber : isAllFemale ? '#E0A0C8' : isAllMale ? '#4A7FC4' : C.line;
-            const roomAccent = isFull ? C.red : isMixed ? C.amber : isAllFemale ? '#C0507A' : isAllMale ? C.blue : C.mute;
-
-            return (
-            <Card
-              key={room.id}
-              onDragOver={e => { e.preventDefault(); e.currentTarget.style.opacity = '0.85'; e.currentTarget.style.transform = 'scale(1.02)'; }}
-              onDragLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'scale(1)'; }}
-              onDrop={e => {
-                e.preventDefault();
-                e.currentTarget.style.opacity = '1';
-                e.currentTarget.style.transform = 'scale(1)';
-                e.dataTransfer.dropEffect = 'move';
-                if (draggedPerson && room.people.length < room.capacity) {
-                  handleAssignPerson(draggedPerson, room.id);
-                  setDraggedPerson(null);
-                }
-              }}
-              style={{ background: roomBg, border: `2px solid ${roomBorder}`, transition: 'all .2s', cursor: 'default' }}
-            >
-              {/* header */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12, paddingBottom: 10, borderBottom: `1px solid ${roomBorder}88` }}>
-                {roomIcon && <span style={{ fontSize: 11.5, fontWeight: 700, color: roomAccent, background: `${roomAccent}15`, padding: '4px 7px', borderRadius: 5, lineHeight: 1 }}>{roomIcon}</span>}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  {editingRoomId === room.id ? (
-                    <input
-                      autoFocus
-                      value={editingRoomName}
-                      onChange={e => setEditingRoomName(e.target.value)}
-                      onBlur={() => commitRename(room.id)}
-                      onKeyDown={e => { if (e.key === 'Enter') commitRename(room.id); if (e.key === 'Escape') setEditingRoomId(null); }}
-                      style={{ fontWeight: 700, fontSize: 14, width: '100%', border: `1px solid ${roomAccent}`, borderRadius: 5, padding: '4px 8px', color: roomAccent }}
-                    />
-                  ) : (
-                    <div
-                      style={{ fontWeight: 700, fontSize: 14, cursor: 'text', borderRadius: 5, padding: '2px 4px', marginLeft: -4, color: roomAccent, transition: 'all .15s' }}
-                      onClick={() => { setEditingRoomId(room.id); setEditingRoomName(room.name); }}
-                      onMouseEnter={e => { e.currentTarget.style.background = `${roomAccent}11`; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-                      title="Click to rename"
-                    >{room.name}</div>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, fontSize: 12.5, color: C.mute }}>
-                    <span style={{ fontWeight: 600, color: roomAccent }}>{room.people.length}</span>
-                    <span>/</span>
-                    <input
-                      type="number"
-                      min={room.people.length || 1}
-                      value={room.capacity}
-                      onChange={e => handleUpdateRoomCapacity(room.id, e.target.value)}
-                      style={{ width: 45, fontSize: 12, padding: '4px 6px', borderRadius: 5, border: `1px solid ${C.line}`, color: roomAccent, fontWeight: 600 }}
-                      title="Capacity"
-                    />
-                  </div>
-                </div>
-                <button onClick={() => handleDeleteRoom(room.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, padding: '2px 4px', transition: 'all .15s' }}
-                  onMouseEnter={e => { e.currentTarget.style.color = C.red; e.currentTarget.style.transform = 'scale(1.2)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = C.mute; e.currentTarget.style.transform = 'scale(1)'; }}
-                  title="Delete room">
-                  <Trash2 size={15} />
-                </button>
               </div>
-
-              {/* status badges */}
-              {(isFull || isMixed) && (
-                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-                  {isFull && <Pill tone="red">Full</Pill>}
-                  {isMixed && <Pill tone="amber">Mixed</Pill>}
-                </div>
-              )}
-
-              {/* people list */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {room.people.length === 0 ? (
-                  <div style={{ fontSize: 12.5, color: C.mute, fontStyle: 'italic', textAlign: 'center', padding: '24px 8px' }}>Drag names here to assign</div>
-                ) : (
-                  room.people.map(person => {
-                    const isHead = room.roomHead === person.email;
-                    const pGender = (person.gender || '').toLowerCase();
-                    const isFemale = pGender.includes('female') || pGender === 'f';
-                    return (
-                      <div
-                        key={person.email}
-                        style={{
-                          padding: '9px 10px',
-                          background: isHead ? '#FFF9E6' : '#fff',
-                          border: `1.5px solid ${isHead ? '#F5C842' : '#E8E2F8'}`,
-                          borderRadius: 6,
-                          fontSize: 12,
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          gap: 6,
-                          transition: 'all .15s',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.08)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}
-                      >
-                        <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: isHead ? 700 : 500, color: '#1A1220', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {person.fullName}{isHead ? ' ⭐' : ''}
-                            </div>
-                            {person.designation && <div style={{ fontSize: 10.5, color: C.mute, marginTop: 2 }}>{person.designation}</div>}
-                          </div>
-                        </span>
-                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                          <button
-                            onClick={() => handleSetRoomHead(room.id, person.email)}
-                            title={isHead ? 'Remove as room head' : 'Set as room head'}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: isHead ? '#F5C842' : C.mute, padding: '2px 4px', display: 'flex', alignItems: 'center', transition: 'all .15s' }}
-                            onMouseEnter={e => { if (!isHead) e.currentTarget.style.color = '#F5C842'; }}
-                            onMouseLeave={e => { if (!isHead) e.currentTarget.style.color = C.mute; }}
-                          >
-                            <Crown size={13} fill={isHead ? 'currentColor' : 'none'} />
-                          </button>
-                          <button onClick={() => handleRemovePersonFromRoom(person, room.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, padding: '2px 4px', fontSize: 14, transition: 'all .15s', lineHeight: 1 }}
-                            onMouseEnter={e => { e.currentTarget.style.color = C.red; }}
-                            onMouseLeave={e => { e.currentTarget.style.color = C.mute; }}
-                            title="Remove from room">✕</button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </Card>
             );
           })}
         </div>
-      </div>
 
-      {/* Add rooms */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        {/* Single room */}
-        <Card>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, fontSize: 13 }}>Add single room</div>
-            <div style={{ fontSize: 11, color: C.mute }}>Create one room manually</div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              value={newRoomName}
-              onChange={e => setNewRoomName(e.target.value)}
-              placeholder="Room name"
-              style={{ flex: 1, minWidth: 100, fontSize: 13, padding: '7px 10px', borderRadius: 6, border: `1px solid ${C.line}` }}
-              onKeyDown={e => { if (e.key === 'Enter') { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); } }}
-            />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: C.mute, whiteSpace: 'nowrap' }}>
-              Cap:
-              <input type="number" min={1} value={newRoomCapacity} onChange={e => setNewRoomCapacity(e.target.value)} style={{ width: 55, fontSize: 13, padding: '7px 8px', borderRadius: 6, border: `1px solid ${C.line}` }} />
-            </div>
-            <Btn small onClick={() => { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); }} disabled={rooms.length >= 50}>
-              <Plus size={13} /> Add
-            </Btn>
-          </div>
-        </Card>
+        {/* ── RIGHT: rooms grid + add controls ── */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+          {/* rooms grid */}
+          <div style={{ flex: 1, overflowY: 'auto', paddingRight: 2 }}>
+            {rooms.length === 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: C.mute, fontSize: 13 }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>🏠</div>
+                No rooms yet — use the controls below to create some.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 8 }}>
+                {rooms.map(room => {
+                  const genderSet = new Set(room.people.map(p => {
+                    const g = (p.gender || '').toLowerCase();
+                    return (g.includes('female') || g === 'f') ? 'female' : 'male';
+                  }));
+                  const isFull     = room.people.length >= room.capacity;
+                  const isMixed    = genderSet.size > 1;
+                  const isAllFemale = !isMixed && genderSet.has('female') && room.people.length > 0;
+                  const isAllMale   = !isMixed && genderSet.has('male')   && room.people.length > 0;
+                  const roomBg     = isFull ? C.redBg   : isAllFemale ? '#FFF0F6' : isAllMale ? '#EEF3FF' : '#FAFAF8';
+                  const roomBorder = isFull ? C.red     : isMixed ? C.amber : isAllFemale ? '#E0A0C8' : isAllMale ? '#4A7FC4' : C.line;
+                  const roomAccent = isFull ? C.red     : isMixed ? C.amber : isAllFemale ? '#C0507A' : isAllMale ? C.blue : C.mute;
+                  const genderTag  = isAllFemale ? 'F' : isAllMale ? 'M' : isMixed ? 'MF' : null;
+                  const fillPct    = Math.min(100, Math.round((room.people.length / room.capacity) * 100));
 
-        {/* Bulk create */}
-        <Card>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, fontSize: 13 }}>Bulk create rooms</div>
-            <div style={{ fontSize: 11, color: C.mute }}>Generate multiple rooms at once</div>
+                  return (
+                    <div
+                      key={room.id}
+                      onDragOver={e => { e.preventDefault(); e.currentTarget.style.outline = `2px solid ${roomAccent}`; e.currentTarget.style.transform = 'scale(1.01)'; }}
+                      onDragLeave={e => { e.currentTarget.style.outline = 'none'; e.currentTarget.style.transform = 'scale(1)'; }}
+                      onDrop={e => {
+                        e.preventDefault();
+                        e.currentTarget.style.outline = 'none';
+                        e.currentTarget.style.transform = 'scale(1)';
+                        if (draggedPerson && room.people.length < room.capacity) {
+                          handleAssignPerson(draggedPerson, room.id);
+                          setDraggedPerson(null);
+                        }
+                      }}
+                      style={{ background: roomBg, border: `1.5px solid ${roomBorder}`, borderRadius: 8, padding: '8px 10px', transition: 'all .15s', cursor: 'default' }}
+                    >
+                      {/* compact header row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                        {genderTag && <span style={{ fontSize: 9.5, fontWeight: 700, color: roomAccent, background: `${roomAccent}18`, padding: '1px 5px', borderRadius: 4, lineHeight: 1.6, flexShrink: 0 }}>{genderTag}</span>}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {editingRoomId === room.id ? (
+                            <input
+                              autoFocus
+                              value={editingRoomName}
+                              onChange={e => setEditingRoomName(e.target.value)}
+                              onBlur={() => commitRename(room.id)}
+                              onKeyDown={e => { if (e.key === 'Enter') commitRename(room.id); if (e.key === 'Escape') setEditingRoomId(null); }}
+                              style={{ fontWeight: 700, fontSize: 12.5, width: '100%', border: `1px solid ${roomAccent}`, borderRadius: 4, padding: '2px 6px', color: roomAccent }}
+                            />
+                          ) : (
+                            <div
+                              style={{ fontWeight: 700, fontSize: 12.5, color: roomAccent, cursor: 'text', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                              onClick={() => { setEditingRoomId(room.id); setEditingRoomName(room.name); }}
+                              title={`${room.name} — click to rename`}
+                            >{room.name}</div>
+                          )}
+                        </div>
+                        {/* capacity: n / [input] */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, fontSize: 11.5, color: roomAccent, fontWeight: 600 }}>
+                          <span>{room.people.length}/</span>
+                          <input
+                            type="number"
+                            min={room.people.length || 1}
+                            value={room.capacity}
+                            onChange={e => handleUpdateRoomCapacity(room.id, e.target.value)}
+                            style={{ width: 32, fontSize: 11.5, padding: '1px 3px', borderRadius: 4, border: `1px solid ${C.line}`, color: roomAccent, fontWeight: 600, textAlign: 'center' }}
+                            title="Capacity"
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleDeleteRoom(room.id)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, padding: '1px 3px', flexShrink: 0, lineHeight: 1, transition: 'color .12s' }}
+                          onMouseEnter={e => { e.currentTarget.style.color = C.red; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = C.mute; }}
+                          title="Delete room"
+                        ><Trash2 size={12} /></button>
+                      </div>
+
+                      {/* fill bar */}
+                      <div style={{ height: 3, background: `${roomAccent}22`, borderRadius: 2, marginBottom: 7, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${fillPct}%`, background: roomAccent, borderRadius: 2, transition: 'width .3s' }} />
+                      </div>
+
+                      {/* people list — compact */}
+                      {room.people.length === 0 ? (
+                        <div style={{ fontSize: 11, color: C.mute, fontStyle: 'italic', textAlign: 'center', padding: '10px 0' }}>Drop here</div>
+                      ) : (
+                        room.people.map(person => {
+                          const isHead = room.roomHead === person.email;
+                          return (
+                            <div
+                              key={person.email}
+                              style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '3px 0', borderBottom: `1px solid ${roomBorder}44`, fontSize: 11.5 }}
+                            >
+                              {isHead && <Crown size={10} fill="#F5C842" color="#F5C842" style={{ flexShrink: 0 }} />}
+                              <span style={{ flex: 1, minWidth: 0, fontWeight: isHead ? 700 : 400, color: '#1A1220', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {person.fullName}
+                              </span>
+                              <button
+                                onClick={() => handleSetRoomHead(room.id, person.email)}
+                                title={isHead ? 'Remove as head' : 'Set as head'}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: isHead ? '#F5C842' : `${C.mute}88`, padding: '0 2px', flexShrink: 0, lineHeight: 1, transition: 'color .12s', display: 'flex', alignItems: 'center' }}
+                                onMouseEnter={e => { if (!isHead) e.currentTarget.style.color = '#F5C842'; }}
+                                onMouseLeave={e => { if (!isHead) e.currentTarget.style.color = `${C.mute}88`; }}
+                              ><Crown size={10} fill={isHead ? 'currentColor' : 'none'} /></button>
+                              <button
+                                onClick={() => handleRemovePersonFromRoom(person, room.id)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: `${C.mute}88`, padding: '0 2px', fontSize: 12, flexShrink: 0, lineHeight: 1, transition: 'color .12s' }}
+                                onMouseEnter={e => { e.currentTarget.style.color = C.red; }}
+                                onMouseLeave={e => { e.currentTarget.style.color = `${C.mute}88`; }}
+                                title="Remove"
+                              >✕</button>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-            <input
-              type="text"
-              value={bulkPrefix}
-              onChange={e => setBulkPrefix(e.target.value)}
-              placeholder="Prefix"
-              style={{ flex: 1, minWidth: 80, fontSize: 13, padding: '7px 10px', borderRadius: 6, border: `1px solid ${C.line}` }}
-            />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: C.mute, whiteSpace: 'nowrap' }}>
-              Count:
-              <input type="number" min={1} max={50} value={bulkCount} onChange={e => setBulkCount(e.target.value)} style={{ width: 55, fontSize: 13, padding: '7px 8px', borderRadius: 6, border: `1px solid ${C.line}` }} />
+
+          {/* add room controls — fixed at bottom of right panel */}
+          <div style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, marginTop: 10 }}>
+            {/* single room */}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={newRoomName}
+                onChange={e => setNewRoomName(e.target.value)}
+                placeholder="Room name"
+                style={{ flex: 1, minWidth: 80, fontSize: 12.5, padding: '6px 9px', borderRadius: 6, border: `1px solid ${C.line}` }}
+                onKeyDown={e => { if (e.key === 'Enter') { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); } }}
+              />
+              <input type="number" min={1} value={newRoomCapacity} onChange={e => setNewRoomCapacity(e.target.value)} style={{ width: 48, fontSize: 12.5, padding: '6px 6px', borderRadius: 6, border: `1px solid ${C.line}` }} title="Capacity" />
+              <Btn small onClick={() => { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); }} disabled={rooms.length >= 50}><Plus size={12} /> Add room</Btn>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: C.mute, whiteSpace: 'nowrap' }}>
-              Cap:
-              <input type="number" min={1} value={bulkCapacity} onChange={e => setBulkCapacity(e.target.value)} style={{ width: 55, fontSize: 13, padding: '7px 8px', borderRadius: 6, border: `1px solid ${C.line}` }} />
+            {/* bulk */}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={bulkPrefix}
+                onChange={e => setBulkPrefix(e.target.value)}
+                placeholder="Prefix"
+                style={{ flex: 1, minWidth: 60, fontSize: 12.5, padding: '6px 9px', borderRadius: 6, border: `1px solid ${C.line}` }}
+              />
+              <input type="number" min={1} max={50} value={bulkCount} onChange={e => setBulkCount(e.target.value)} style={{ width: 44, fontSize: 12.5, padding: '6px 6px', borderRadius: 6, border: `1px solid ${C.line}` }} title="Count" />
+              <input type="number" min={1} value={bulkCapacity} onChange={e => setBulkCapacity(e.target.value)} style={{ width: 44, fontSize: 12.5, padding: '6px 6px', borderRadius: 6, border: `1px solid ${C.line}` }} title="Capacity each" />
+              <Btn small onClick={() => handleBulkCreateRooms(bulkPrefix, Number(bulkCount), bulkCapacity)} disabled={rooms.length >= 50 || !bulkCount}><Plus size={12} /> Bulk</Btn>
             </div>
-            <Btn small onClick={() => handleBulkCreateRooms(bulkPrefix, Number(bulkCount), bulkCapacity)} disabled={rooms.length >= 50 || !bulkCount}>
-              <Plus size={13} /> Create
-            </Btn>
           </div>
-          <div style={{ fontSize: 11, color: C.mute, background: '#F7F3FF', padding: '6px 8px', borderRadius: 5 }}>
-            Creates "{bulkPrefix} {rooms.length + 1}", "{bulkPrefix} {rooms.length + 2}", etc. (cap: {bulkCapacity} each)
-          </div>
-        </Card>
+        </div>
       </div>
     </div>
   );
