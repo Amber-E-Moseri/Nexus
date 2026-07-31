@@ -2158,7 +2158,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                       <div
                         key={person.email}
                         draggable
-                        onDragStart={() => setDraggedPerson(person)}
+                        onDragStart={(e) => { setDraggedPerson(person); e.dataTransfer.effectAllowed = 'move'; }}
                         style={{
                           padding: '10px 12px',
                           background: '#fff',
@@ -2216,6 +2216,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                 e.preventDefault();
                 e.currentTarget.style.opacity = '1';
                 e.currentTarget.style.transform = 'scale(1)';
+                e.dataTransfer.dropEffect = 'move';
                 if (draggedPerson && room.people.length < room.capacity) {
                   handleAssignPerson(draggedPerson, room.id);
                   setDraggedPerson(null);
