@@ -481,6 +481,8 @@ export default function App({ limitedToSubgroups = null }) {
       if (t.key === 'rooms' && !hasRoomsAccess) return false;
       // Import Data: super admin only
       if (t.key === 'import' && role !== 'super_admin') return false;
+      // Confirmations: super admin only
+      if (t.key === 'confirm' && role !== 'super_admin') return false;
       // Limited pastors can't see transport, rooms, finance, import
       if (isLimited && ['import', 'transport', 'rooms', 'finance'].includes(t.key)) return false;
       return true;
