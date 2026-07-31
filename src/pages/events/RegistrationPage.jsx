@@ -80,8 +80,8 @@ export default function RegistrationPage() {
       // Check if user is in any of the allowed teams
       const { data: userTeams, error: userTeamsError } = await supabase
         .from('sprint_team_members')
-        .select('sprint_team_id, sprint_teams:sprint_team_id(name)')
-        .in('sprint_team_id', teamIds)
+        .select('team_id, sprint_teams:team_id(name)')
+        .in('team_id', teamIds)
         .eq('user_id', profile.id)
 
       if (userTeamsError || !userTeams?.length) {
