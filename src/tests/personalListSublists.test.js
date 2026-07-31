@@ -89,8 +89,7 @@ describe('Personal List Sublists', () => {
     it('should update task with new sublist', async () => {
       vi.spyOn(supabase, 'from').mockReturnValueOnce({
         update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        mockResolvedValueOnce({ error: null }),
+        eq: vi.fn().mockReturnThis().mockResolvedValueOnce({ 'error': null }),
       })
 
       await expect(moveTaskToSublist(testTaskId, testListId)).resolves.toBeUndefined()
