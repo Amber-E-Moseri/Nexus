@@ -127,6 +127,8 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
           padding: '24px',
           maxWidth: '400px',
           width: '90%',
+          maxHeight: '90vh',
+          overflowY: 'auto',
           boxShadow: '0 20px 25px rgba(0,0,0,0.15)',
         }}
         onClick={(e) => e.stopPropagation()}

@@ -821,6 +821,7 @@ export default function SprintOverview() {
           sprintId={detail.sprint.id}
           sprintName={detail.sprint.name}
           sprintEndDate={detail.sprint.end_date}
+          teams={detail.teams ?? []}
           canInvite={Boolean((canManage || isMember) && !isArchived)}
           canAssignPrivilegedRoles={Boolean(canAssignPrivilegedSprintRoles)}
           onClose={() => setShowInviteExternalModal(false)}
