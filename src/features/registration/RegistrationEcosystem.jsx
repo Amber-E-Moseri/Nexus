@@ -268,6 +268,8 @@ export default function App({ limitedToSubgroups = null }) {
     if (role === 'super_admin' || role === 'regional_secretary') { setHasRoomsAccess(true); return; }
     // Programs space members always get rooms access
     if (profile.is_programs_member) { setHasRoomsAccess(true); return; }
+    // Pastor Nigel gets room assignment access
+    if (profile.name && profile.name.toLowerCase().includes('nigel')) { setHasRoomsAccess(true); return; }
     // Accommodation team members in This Is It 2.0 sprint also get access
     supabase.from('sprints').select('id').ilike('name', '%This Is It 2.0%').limit(1).maybeSingle()
       .then(({ data: sprint }) => {
