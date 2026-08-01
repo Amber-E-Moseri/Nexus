@@ -49,6 +49,7 @@ export default function RegistrationPublicPage() {
   useEffect(() => {
     if (!token) { setInvalid(true); return; }
     supabase.rpc('get_public_registration_data', { p_token: token })
+      .range(0, 9999)
       .then(({ data: rows, error }) => {
         if (error || !rows || rows.length === 0) {
           setInvalid(true);
@@ -280,7 +281,9 @@ export default function RegistrationPublicPage() {
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan={5} style={{ padding: 32, textAlign: 'center', color: C.mute, background: C.paper }}>
-                      No people match the current filters.
+                      {statusFilter !== 'all' || subgroupFilter !== 'All' || fellowshipFilter !== 'All' || search.trim()
+                        ? <span>No people match the current filters. <button onClick={() => { setStatusFilter('all'); setSubgroupFilter('All'); setFellowshipFilter('All'); setSearch(''); }} style={{ background: 'none', border: 'none', color: C.purple, fontWeight: 600, cursor: 'pointer', fontSize: 13, fontFamily: 'Inter' }}>Clear all filters</button></span>
+                        : 'No data available yet.'}
                     </td>
                   </tr>
                 )}
