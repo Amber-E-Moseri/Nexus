@@ -184,8 +184,11 @@ export default function RegistrationDataTab({
     setTokenLoading(false);
   }
 
+  const siteOrigin = (import.meta.env.VITE_FRONTEND_URL || window.location.origin).replace(/\/$/, '');
+  const isLocalhost = /localhost|127\.0\.0\.1/.test(siteOrigin);
+
   function copyPublicUrl() {
-    const url = `${window.location.origin}/registration/public/${publicToken}`;
+    const url = `${siteOrigin}/registration/public/${publicToken}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopyLabel('Copied!');
       setTimeout(() => setCopyLabel('Copy link'), 2500);
@@ -584,8 +587,13 @@ export default function RegistrationDataTab({
             <div style={{ padding: '20px' }}>
               {publicToken ? (
                 <>
+                  {isLocalhost && (
+                    <div style={{ background: '#FBF0DE', border: `1px solid ${C.amber}`, borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: C.amber, fontWeight: 600 }}>
+                      ⚠ Dev server detected — this URL only works on your machine. The link will use the correct production URL once deployed to Vercel.
+                    </div>
+                  )}
                   <div style={{ background: '#F1EEF6', borderRadius: 8, padding: '10px 14px', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: C.ink, wordBreak: 'break-all', marginBottom: 16, border: `1px solid ${C.line}` }}>
-                    {`${window.location.origin}/registration/public/${publicToken}`}
+                    {`${siteOrigin}/registration/public/${publicToken}`}
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button
