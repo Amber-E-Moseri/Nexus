@@ -38,7 +38,7 @@ function ToolbarBtn({ title, isActive, disabled, onClick, children }) {
 }
 
 const RichMinutesEditor = forwardRef(function RichMinutesEditor(
-  { meetingId, initialBlocks, fallbackText, canEdit, onSave },
+  { meetingId, initialBlocks, fallbackText, canEdit, onSave, injectContent, onInjectConsumed },
   ref,
 ) {
   const { profile } = useAuth()
@@ -107,6 +107,13 @@ const RichMinutesEditor = forwardRef(function RichMinutesEditor(
       editor.commands.setContent(target, false)
     }
   }, [initialBlocks]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply content injected from the AI tab (editor may not have been mounted when the button was clicked)
+  useEffect(() => {
+    if (!injectContent || !editor || editor.isDestroyed) return
+    editor.commands.setContent(injectContent, true)
+    onInjectConsumed?.()
+  }, [injectContent, editor]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Expose replaceContent(doc) so parent can inject AI extraction results
   useImperativeHandle(ref, () => ({

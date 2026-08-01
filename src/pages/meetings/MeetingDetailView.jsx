@@ -78,6 +78,7 @@ function MeetingDetailViewInner() {
   const { showToast } = useToast()
   const extraction = useExtractionStatus(meetingId)
   const editorRef  = useRef(null) // exposes replaceContent(doc) from RichMinutesEditor
+  const [pendingMinutesInject, setPendingMinutesInject] = useState(null)
 
   const [meeting, setMeeting]   = useState(null)
   const [agenda, setAgenda]     = useState([])
@@ -1622,6 +1623,8 @@ function MeetingDetailViewInner() {
                         })()}
                         canEdit={canEditVisibility}
                         onSave={doc => setMeeting(m => m ? { ...m, notes_blocks: doc } : m)}
+                        injectContent={pendingMinutesInject}
+                        onInjectConsumed={() => setPendingMinutesInject(null)}
                       />
                     </div>
 
@@ -2214,7 +2217,7 @@ function MeetingDetailViewInner() {
                           style={{ width:'100%', fontSize:13, color: FS.text, lineHeight:1.7, fontFamily:'inherit', border:`1px solid ${FS.borderL}`, borderRadius:6, padding:'8px 10px', resize:'vertical', background:'#fff' }}
                         />
                         <button
-                          onClick={() => { editorRef.current?.replaceContent(textToBlocks(editableDetailedNotes)); setActiveTab('minutes') }}
+                          onClick={() => { setPendingMinutesInject(textToBlocks(editableDetailedNotes)); setActiveTab('minutes') }}
                           style={{ marginTop:8, padding:'7px 14px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
                         >
                           → Copy to Minutes
@@ -2247,7 +2250,7 @@ function MeetingDetailViewInner() {
                         ))}
                         <button onClick={() => {
                           const text = editableDecisions.map(d => d.decision).join('\n• ')
-                          editorRef.current?.replaceContent(textToBlocks(text))
+                          setPendingMinutesInject(textToBlocks(text))
                           setActiveTab('minutes')
                         }} style={{ marginTop:4, padding:'7px 14px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}>
                           → Copy to Minutes

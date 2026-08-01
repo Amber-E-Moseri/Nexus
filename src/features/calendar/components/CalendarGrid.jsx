@@ -82,7 +82,7 @@ export default function CalendarGrid({
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+      <div className="rounded-[24px] border border-[var(--border)] bg-white p-2 sm:p-5 shadow-[var(--card-shadow)]">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="text-xl font-semibold text-[var(--text-primary)]">
             {new Date(year, month, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })}
@@ -100,7 +100,7 @@ export default function CalendarGrid({
           </div>
         </div>
 
-        <div className="grid grid-cols-7 gap-1 sm:gap-2">
+        <div className="grid grid-cols-7 gap-0.5 sm:gap-1 md:gap-2">
           {WEEKDAYS.map((weekday) => (
             <div key={weekday} className="px-1 py-2 text-[10px] sm:text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
               {weekday}
@@ -118,7 +118,7 @@ export default function CalendarGrid({
               <div
                 key={day.toISOString()}
                 id={dayId}
-                className="group min-h-[110px] sm:min-h-[160px] rounded-[12px] sm:rounded-[18px] border border-[var(--border)] p-2 sm:p-3 transition-colors hover:border-[var(--border-hover,var(--border))]"
+                className="group min-h-[80px] sm:min-h-[110px] md:min-h-[160px] overflow-hidden rounded-[6px] sm:rounded-[12px] md:rounded-[18px] border border-[var(--border)] p-1 sm:p-2 md:p-3 transition-colors hover:border-[var(--border-hover,var(--border))]"
                 style={{ background: inMonth ? 'white' : 'var(--surface-tertiary)' }}
               >
                 <div className="mb-2 flex items-center justify-between">

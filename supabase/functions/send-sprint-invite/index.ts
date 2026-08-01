@@ -1,12 +1,23 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+const ALLOWED_ORIGINS = [
+  Deno.env.get('ALLOWED_ORIGIN') ?? 'https://nexus.lwcanada.org',
+  'http://localhost:5173',
+  'http://localhost:5217',
+  'http://localhost:3000',
+]
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('Origin') ?? ''
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  }
 }
 
-function jsonResponse(status: number, body: Record<string, unknown>) {
+function jsonResponse(status: number, body: Record<string, unknown>, corsHeaders: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -69,13 +80,14 @@ function emailHtml({
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
     })
   }
-  if (req.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed' })
+  if (req.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed' }, corsHeaders)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
@@ -96,11 +108,11 @@ Deno.serve(async (req) => {
   ].filter(Boolean)
 
   if (missing.length > 0) {
-    return jsonResponse(500, { error: `Missing env vars: ${missing.join(', ')}` })
+    return jsonResponse(500, { error: `Missing env vars: ${missing.join(', ')}` }, corsHeaders)
   }
 
   const authHeader = req.headers.get('Authorization')
-  if (!authHeader) return jsonResponse(401, { error: 'Missing authorization header' })
+  if (!authHeader) return jsonResponse(401, { error: 'Missing authorization header' }, corsHeaders)
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey)
 
@@ -109,7 +121,7 @@ Deno.serve(async (req) => {
     global: { headers: { Authorization: authHeader } },
   })
   const { data: { user: caller } } = await userClient.auth.getUser()
-  if (!caller?.id) return jsonResponse(401, { error: 'Unable to determine caller' })
+  if (!caller?.id) return jsonResponse(401, { error: 'Unable to determine caller' }, corsHeaders)
   const callerId = caller.id
 
   const body = await req.json().catch(() => null) as {
@@ -123,7 +135,7 @@ Deno.serve(async (req) => {
   } | null
 
   if (!body?.email || !body?.sprintId || !body?.sprintName) {
-    return jsonResponse(400, { error: 'email, sprintId and sprintName are required' })
+    return jsonResponse(400, { error: 'email, sprintId and sprintName are required' }, corsHeaders)
   }
 
   const { email, name, sprintId, sprintName, membershipEndDate } = body
@@ -133,7 +145,7 @@ Deno.serve(async (req) => {
   const requestedRole = body.role || 'contributor'
 
   if (!isValidSprintRole(requestedRole)) {
-    return jsonResponse(400, { error: `Invalid sprint role: ${requestedRole}` })
+    return jsonResponse(400, { error: `Invalid sprint role: ${requestedRole}` }, corsHeaders)
   }
 
   // 1. Validate sprint exists
@@ -144,7 +156,7 @@ Deno.serve(async (req) => {
     .single()
 
   if (sprintError || !sprint) {
-    return jsonResponse(400, { error: 'Sprint not found' })
+    return jsonResponse(400, { error: 'Sprint not found' }, corsHeaders)
   }
 
   const [{ data: callerProfile, error: callerProfileError }, { data: callerMember, error: callerMemberError }] = await Promise.all([
@@ -162,11 +174,11 @@ Deno.serve(async (req) => {
   ])
 
   if (callerProfileError) {
-    return jsonResponse(500, { error: `Failed to verify caller role: ${callerProfileError.message}` })
+    return jsonResponse(500, { error: `Failed to verify caller role: ${callerProfileError.message}` }, corsHeaders)
   }
 
   if (callerMemberError) {
-    return jsonResponse(500, { error: `Failed to verify sprint membership: ${callerMemberError.message}` })
+    return jsonResponse(500, { error: `Failed to verify sprint membership: ${callerMemberError.message}` }, corsHeaders)
   }
 
   const callerRole = callerProfile?.role
@@ -179,11 +191,11 @@ Deno.serve(async (req) => {
   const canInvite = isSuperAdmin || isDeptLead || isSprintOwner || isSprintMember
 
   if (!canInvite) {
-    return jsonResponse(403, { error: 'You do not have permission to invite members to this sprint' })
+    return jsonResponse(403, { error: 'You do not have permission to invite members to this sprint' }, corsHeaders)
   }
 
   if (['owner', 'manager'].includes(requestedRole) && !isSuperAdmin && !isSprintOwner) {
-    return jsonResponse(403, { error: 'Only the sprint owner or a super admin can assign manager or owner access' })
+    return jsonResponse(403, { error: 'Only the sprint owner or a super admin can assign manager or owner access' }, corsHeaders)
   }
 
   // 2. Generate invite token
@@ -208,7 +220,7 @@ Deno.serve(async (req) => {
       },
     })
 
-  if (tokenError) return jsonResponse(502, { error: `Failed to create invite token: ${tokenError.message}` })
+  if (tokenError) return jsonResponse(502, { error: `Failed to create invite token: ${tokenError.message}` }, corsHeaders)
 
   const { error: auditError } = await adminClient
     .from('activity_log')
@@ -280,11 +292,11 @@ Deno.serve(async (req) => {
     console.error('Resend error detail:', detail)
     console.error('Email payload:', JSON.stringify({ ...emailPayload, from: '[redacted]', to: '[redacted]' }))
     await logDelivery(resendRes.status, detail)
-    return jsonResponse(resendRes.status, { error: `Email delivery failed: ${detail}` })
+    return jsonResponse(resendRes.status, { error: `Email delivery failed: ${detail}` }, corsHeaders)
   }
 
   const resendBody = await resendRes.json().catch(() => ({}))
   console.log('Email sent successfully. Resend ID:', resendBody.id)
   await logDelivery(200, null, resendBody.id)
-  return jsonResponse(200, { sent: true, email_id: resendBody.id, token })
+  return jsonResponse(200, { sent: true, email_id: resendBody.id, token }, corsHeaders)
 })

@@ -741,7 +741,7 @@ export default function SprintOverview() {
 
       {/* Calendar Tab */}
       {activeTab === 'Calendar' && (
-        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+        <div className="min-w-0 overflow-x-auto">
           <CalendarView
             events={[
               ...calendarEvents,
