@@ -94,6 +94,7 @@ const CampusEditsPage = lazy(() => import('./pages/admin/CampusEditsPage'))
 const CampusPhotosSettings = lazy(() => import('./pages/settings/CampusPhotosSettings'))
 const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
 const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
+const RegistrationPublicPage = lazy(() => import('./pages/events/RegistrationPublicPage'))
 const SubscribePage = lazy(() => import('./pages/communications/SubscribePage'))
 const ConfirmSubscriptionPage = lazy(() => import('./pages/communications/ConfirmSubscriptionPage'))
 const InvitationWizard = lazy(() => import('./pages/communications/InvitationWizard'))
@@ -139,6 +140,7 @@ export default function App() {
       <Route path="/auth/outlook_calendar-callback" element={<OutlookCalendarCallback />} />
       <Route path="/auth/teams-callback" element={<TeamsCallback />} />
       <Route path="/reports/:share_token" element={<MeetingReportPublicPage />} />
+      <Route path="/registration/public/:token" element={<RegistrationPublicPage />} />
       <Route path="/rsvp" element={<RSVPPage />} />
       <Route path="/subscribe" element={<SubscribePage />} />
       <Route path="/confirm-subscription/:token" element={<ConfirmSubscriptionPage />} />

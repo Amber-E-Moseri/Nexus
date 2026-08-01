@@ -4,6 +4,7 @@ import { Upload, Users, Plane, CheckCircle2, Circle, Filter, Download, RefreshCw
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import RegistrationEditModal from './RegistrationEditModal';
+import RegistrationDataTab from './RegistrationDataTab';
 
 // ---------- brand tokens ----------
 const C = {
@@ -212,6 +213,7 @@ function Btn({ children, onClick, tone = 'primary', small, disabled }) {
 
 const ALL_TABS = [
   { key: 'overview', label: 'Overview', icon: Home },
+  { key: 'central',  label: 'Registration Data', icon: Users },
   { key: 'working', label: 'Eligible Delegates', icon: Users },
   { key: 'confirm', label: 'Delegates', icon: CheckCircle2 },
   { key: 'transport', label: 'Transportation', icon: Plane },
@@ -775,6 +777,17 @@ export default function App({ limitedToSubgroups = null }) {
       <div style={{ padding: 28, maxWidth: 1280, margin: '0 auto' }}>
         {tab === 'overview' && (
           <OverviewTab {...{ totalRegs, totalRegTarget, totalFlights, totalFlightTarget, subgroups, bySubgroup, targets, setTarget, merged, exempt, updateExempt, isLimited }} />
+        )}
+        {tab === 'central' && (
+          <RegistrationDataTab
+            workingListDb={workingListDb}
+            merged={merged}
+            paymentByEmail={paymentByEmail}
+            hasFinanceAccess={hasFinanceAccess}
+            subgroups={subgroups}
+            isLimited={isLimited}
+            onSaveReg={handleSaveReg}
+          />
         )}
         {tab === 'working' && <WorkingListTab {...{ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups, isLimited, merged, role, onAddPerson: handleAddToWorkingList, onMarkAbsent: handleMarkAbsent, onEditPerson: handleEditWorkingListPerson, onRemove: handleRemoveFromWorkingList }} />}
         {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm, isLimited, onEditReg: setEditingReg }} />}
