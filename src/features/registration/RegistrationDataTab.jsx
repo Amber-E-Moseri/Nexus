@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { CheckCircle2, XCircle, Pencil, Download, ChevronUp, ChevronDown, Link2, Copy, RefreshCw, Trash2, X } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { CheckCircle2, XCircle, Pencil, Download, ChevronUp, ChevronDown, Link2, Copy, RefreshCw, Trash2, X, Plus, UserX } from 'lucide-react';
 import RegistrationEditModal from './RegistrationEditModal';
 import { supabase } from '../../lib/supabase';
 
@@ -24,8 +25,9 @@ const C = {
 
 const STATUS = {
   not_registered:        { label: 'Not Registered', color: C.red,   bg: C.redBg,   tone: 'red' },
-  registered_outstanding:{ label: 'Outstanding',    color: C.amber, bg: C.amberBg, tone: 'amber' },
+  registered_outstanding:{ label: 'Confirming',     color: C.amber, bg: C.amberBg, tone: 'amber' },
   confirmed:             { label: 'Confirmed',       color: C.green, bg: C.greenBg, tone: 'green' },
+  absent:                { label: 'Absent',          color: C.mute,  bg: '#F5F4F7', tone: 'mute' },
 };
 
 // ─── UI atoms ────────────────────────────────────────────────────────────────
@@ -85,11 +87,13 @@ function DonutChart({ stats }) {
   const rPct  = (stats.not_registered         / total) * 100;
   const aPct  = (stats.registered_outstanding / total) * 100;
   const gPct  = (stats.confirmed              / total) * 100;
+  const mPct  = ((stats.absent || 0)          / total) * 100;
 
   const gradient = `conic-gradient(
-    ${C.red}   0%          ${rPct}%,
-    ${C.amber} ${rPct}%    ${rPct + aPct}%,
-    ${C.green} ${rPct + aPct}% 100%
+    ${C.red}   0%                      ${rPct}%,
+    ${C.amber} ${rPct}%                ${rPct + aPct}%,
+    ${C.green} ${rPct + aPct}%         ${rPct + aPct + gPct}%,
+    ${C.mute}  ${rPct + aPct + gPct}%  100%
   )`;
 
   return (
@@ -137,6 +141,12 @@ function SortTh({ label, field, sortField, sortDir, onSort, style }) {
   );
 }
 
+// ─── helpers ─────────────────────────────────────────────────────────────────
+const TITLE_RE = /\b(pastor|bro|brother|sis|sister|dr|rev|reverend|mr|mrs|ms|evangelist|evang)\b\.?/gi;
+function normWlName(n) {
+  return (n || '').replace(TITLE_RE, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function RegistrationDataTab({
   workingListDb,
@@ -145,14 +155,45 @@ export default function RegistrationDataTab({
   hasFinanceAccess,
   subgroups,
   isLimited,
+  role,
   onSaveReg,
+  onMarkAbsent,
+  onAddPerson,
+  onEditPerson,
+  onRemove,
+  highlightEmail,
+  onClearHighlight,
 }) {
+  const canEdit = !isLimited && (role === 'super_admin' || role === 'regional_secretary' || role === 'dept_lead' || role === 'pastor');
+
   const [statusFilter,    setStatusFilter]    = useState('all');
   const [subgroupFilter,  setSubgroupFilter]  = useState('All');
   const [fellowshipFilter,setFellowshipFilter] = useState('All');
   const [search,          setSearch]           = useState('');
   const [sortField,       setSortField]        = useState('name');
   const [sortDir,         setSortDir]          = useState('asc');
+  const highlightRowRef = useRef(null);
+
+  // absent inline row state
+  const [absentExpandedEmail, setAbsentExpandedEmail] = useState(null);
+  const [absentReason,        setAbsentReason]        = useState('');
+  // add-person modal
+  const [showAddModal,  setShowAddModal]  = useState(false);
+  // link-registration modal
+  const [linkingPerson, setLinkingPerson] = useState(null);
+
+  useEffect(() => {
+    if (!highlightEmail) return;
+    setStatusFilter('all');
+    setSubgroupFilter('All');
+    setFellowshipFilter('All');
+    setSearch('');
+    setSortField('name');
+    setSortDir('asc');
+    setTimeout(() => {
+      highlightRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+  }, [highlightEmail]);
   const [editingReg,      setEditingReg]       = useState(null);
   const [publicToken,     setPublicToken]      = useState(null);
   const [showShareModal,  setShowShareModal]   = useState(false);
@@ -160,6 +201,21 @@ export default function RegistrationDataTab({
   const [tokenLoading,    setTokenLoading]     = useState(false);
 
   const showFees = hasFinanceAccess || isLimited;
+
+  // bulk email sender
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [selectedStatuses, setSelectedStatuses] = useState({ not_registered: false, confirming: false, confirmed: false });
+
+  const not_registered = useMemo(() => merged.filter(r => r.emailStatus === 'not_registered').length, [merged]);
+  const confirming = useMemo(() => merged.filter(r => r.emailStatus === 'confirming').length, [merged]);
+  const confirmed = useMemo(() => merged.filter(r => r.emailStatus === 'confirmed').length, [merged]);
+
+  const statusCounts = { not_registered, confirming, confirmed };
+  const totalToEmail = Object.entries(selectedStatuses).reduce((sum, [status, selected]) => sum + (selected ? statusCounts[status] : 0), 0);
+
+  function toggleStatus(status) {
+    setSelectedStatuses(prev => ({ ...prev, [status]: !prev[status] }));
+  }
 
   // Load existing share token on mount
   useEffect(() => {
@@ -201,20 +257,40 @@ export default function RegistrationDataTab({
     [merged],
   );
 
+  // Normalize a name for fuzzy comparison: lowercase, strip honorifics, collapse spaces
+  function normName(s = '') {
+    return s.toLowerCase()
+      .replace(/\b(pastor|sis|brother|bro|sister|dr|rev|pastor|prolific)\b/g, '')
+      .replace(/[^a-z0-9 ]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   // ── unified people list ────────────────────────────────────────────────────
   const allPeople = useMemo(() => {
     const byEmail = {};
 
+    // Track registration emails already claimed by a linked working-list entry
+    // so we don't gap-fill a duplicate row for them
+    const claimedRegEmails = new Set(
+      workingListDb
+        .map(p => p.linked_registration_email?.toLowerCase())
+        .filter(Boolean),
+    );
+
     // Seed from working list (authoritative roster)
     workingListDb.forEach(p => {
-      const reg     = mergedByEmail[p.email];
-      const pay     = paymentByEmail[p.email];
+      // If this person was manually linked to a different registration email, use that
+      const regLookup = p.linked_registration_email?.toLowerCase() || p.email;
+      const reg     = mergedByEmail[regLookup] || mergedByEmail[p.email];
+      const pay     = paymentByEmail[regLookup] || paymentByEmail[p.email];
       const hasPaid = pay
         ? (Number(pay.amount_paid) || 0) > 0 &&
           Number(pay.amount_paid) >= Number(pay.amount_expected)
         : false;
       const isRegistered = !!reg;
       const isConfirmed  = reg?.fullyConfirmed || false;
+      const isAbsent     = !!p.absent;
 
       byEmail[p.email] = {
         ...(reg || {}),
@@ -226,23 +302,89 @@ export default function RegistrationDataTab({
         hasPaid,
         isRegistered,
         isConfirmed,
-        registrationStatus: !isRegistered
-          ? 'not_registered'
-          : isConfirmed
-            ? 'confirmed'
-            : 'registered_outstanding',
+        // WL-specific fields
+        absent:                   isAbsent,
+        absent_reason:            p.absent_reason || '',
+        manually_added:           !!p.manually_added,
+        wl_phone:                 p.phone_number  || '',
+        on_working_list:          true,
+        linked_registration_email: p.linked_registration_email || null,
+        _fuzzyMatched:            false,
+        _fuzzyMatchedEmail:       null,
+        registrationStatus: isAbsent
+          ? 'absent'
+          : !isRegistered
+            ? 'not_registered'
+            : isConfirmed
+              ? 'confirmed'
+              : 'registered_outstanding',
       };
     });
 
-    // Gap-fill: registrants not on working list
+    // Name-based fallback: for working-list entries still showing not_registered,
+    // try matching by normalized full name against unmatched registrations
+    const unmatchedRegs = merged.filter(
+      r => !byEmail[r.email] && !claimedRegEmails.has(r.email?.toLowerCase()),
+    );
+    const regByNormName = new Map(
+      unmatchedRegs.map(r => [normName(r.fullName || ''), r]),
+    );
+    Object.keys(byEmail).forEach(wlEmail => {
+      const entry = byEmail[wlEmail];
+      if (entry.isRegistered || entry.absent) return;
+      const norm = normName(entry.full_name);
+      if (!norm) return;
+      const match = regByNormName.get(norm);
+      if (!match) return;
+      // Merge: update the working-list entry with the registration data
+      const pay = paymentByEmail[match.email] || paymentByEmail[wlEmail];
+      const hasPaid = pay
+        ? (Number(pay.amount_paid) || 0) > 0 &&
+          Number(pay.amount_paid) >= Number(pay.amount_expected)
+        : false;
+      byEmail[wlEmail] = {
+        ...entry,
+        ...(match || {}),
+        full_name: match.fullName || entry.full_name,
+        phone: match.phone || entry.phone || '',
+        email: wlEmail,
+        hasPaid,
+        isRegistered: true,
+        isConfirmed: match.fullyConfirmed || false,
+        // preserve WL fields
+        absent:              entry.absent,
+        absent_reason:       entry.absent_reason,
+        manually_added:      entry.manually_added,
+        wl_phone:            entry.wl_phone,
+        on_working_list:     entry.on_working_list,
+        linked_registration_email: entry.linked_registration_email,
+        _fuzzyMatched:       true,
+        _fuzzyMatchedEmail:  match.email,
+        registrationStatus: match.fullyConfirmed ? 'confirmed' : 'registered_outstanding',
+      };
+      // Claim this registration so it doesn't gap-fill as a separate row
+      claimedRegEmails.add(match.email?.toLowerCase());
+      regByNormName.delete(norm);
+    });
+
+    // Gap-fill: registrants not on working list and not name-matched above
     merged.forEach(r => {
-      if (!byEmail[r.email]) {
+      if (!byEmail[r.email] && !claimedRegEmails.has(r.email?.toLowerCase())) {
         byEmail[r.email] = {
           ...r,
           full_name: r.fullName || '',
           hasPaid: r.hasPaid,
           isRegistered: true,
           isConfirmed: r.fullyConfirmed,
+          // not on working list
+          absent:                   false,
+          absent_reason:            '',
+          manually_added:           false,
+          wl_phone:                 '',
+          on_working_list:          false,
+          linked_registration_email: null,
+          _fuzzyMatched:            false,
+          _fuzzyMatchedEmail:       null,
           registrationStatus: r.fullyConfirmed ? 'confirmed' : 'registered_outstanding',
         };
       }
@@ -263,8 +405,8 @@ export default function RegistrationDataTab({
 
   // ── stats (always from full list, not filtered) ───────────────────────────
   const stats = useMemo(() => {
-    const s = { total: 0, not_registered: 0, registered_outstanding: 0, confirmed: 0 };
-    allPeople.forEach(p => { s.total++; s[p.registrationStatus]++; });
+    const s = { total: 0, not_registered: 0, registered_outstanding: 0, confirmed: 0, absent: 0 };
+    allPeople.forEach(p => { s.total++; s[p.registrationStatus] = (s[p.registrationStatus] || 0) + 1; });
     return s;
   }, [allPeople]);
 
@@ -318,14 +460,16 @@ export default function RegistrationDataTab({
     { get: r => r.isRegistered ? 'Yes' : 'No', label: 'Registered' },
     ...(showFees ? [{ get: r => r.hasPaid ? 'Yes' : 'No', label: 'Fees Paid' }] : []),
     { get: r => STATUS[r.registrationStatus]?.label || r.registrationStatus, label: 'Status' },
+    { get: r => r.absent_reason || '', label: 'Absent Reason' },
     { key: 'email', label: 'Email' },
   ];
 
   const statusPills = [
     { key: 'all',                  label: `All (${stats.total})` },
     { key: 'not_registered',       label: `Not Registered (${stats.not_registered})`,         color: C.red },
-    { key: 'registered_outstanding',label: `Outstanding (${stats.registered_outstanding})`,   color: C.amber },
+    { key: 'registered_outstanding',label: `Confirming (${stats.registered_outstanding})`,    color: C.amber },
     { key: 'confirmed',            label: `Confirmed (${stats.confirmed})`,                    color: C.green },
+    { key: 'absent',               label: `Absent (${stats.absent || 0})`,                    color: C.mute },
   ];
 
   return (
@@ -340,8 +484,9 @@ export default function RegistrationDataTab({
         <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', flex: 1 }}>
           {[
             { key: 'not_registered',        color: C.red,   label: 'Not Registered' },
-            { key: 'registered_outstanding', color: C.amber, label: 'Outstanding' },
+            { key: 'registered_outstanding', color: C.amber, label: 'Confirming' },
             { key: 'confirmed',             color: C.green, label: 'Confirmed' },
+            { key: 'absent',                color: C.mute,  label: 'Absent' },
           ].map(({ key, color, label }) => (
             <div
               key={key}
@@ -382,6 +527,38 @@ export default function RegistrationDataTab({
           );
         })}
       </div>
+
+      {/* ── Bulk email sender ─────────────────────────────────────────── */}
+      <div style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, padding: '16px 20px', marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: 14, color: C.ink, marginBottom: 10 }}>Send bulk email</div>
+          <div style={{ display: 'flex', gap: 16 }}>
+            {[
+              { key: 'not_registered', label: 'Not Registered', count: not_registered, tone: 'red' },
+              { key: 'confirming', label: 'Confirming', count: confirming, tone: 'amber' },
+              { key: 'confirmed', label: 'Confirmed', count: confirmed, tone: 'green' },
+            ].map(({ key, label, count, tone }) => (
+              <label key={key} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+                <input type="checkbox" checked={selectedStatuses[key]} onChange={() => toggleStatus(key)} style={{ cursor: 'pointer', accentColor: C.purple }} />
+                <span style={{ fontWeight: 600 }}>{label}</span>
+                <span style={{ background: tone === 'red' ? '#FBE9E9' : tone === 'amber' ? '#FBF0DE' : '#E8F5EC', color: tone === 'red' ? '#C4383A' : tone === 'amber' ? '#B8710A' : '#1F8A4C', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12 }}>{count}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <button onClick={() => setEmailModalOpen(true)} disabled={totalToEmail === 0} style={{ background: totalToEmail === 0 ? '#CCC' : C.purple, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: totalToEmail === 0 ? 'not-allowed' : 'pointer' }}>
+          {totalToEmail > 0 ? `Email ${totalToEmail}` : 'Email none selected'}
+        </button>
+      </div>
+
+      {emailModalOpen && (
+        <BulkEmailSender
+          selectedStatuses={selectedStatuses}
+          statusCounts={statusCounts}
+          merged={merged}
+          onClose={() => setEmailModalOpen(false)}
+        />
+      )}
 
       {/* ── Subgroup pill filters ────────────────────────────────────── */}
       {subgroups.length > 0 && (
@@ -445,6 +622,11 @@ export default function RegistrationDataTab({
         <Btn tone="ghost" small onClick={() => setShowShareModal(true)}>
           <Link2 size={13} /> Share
         </Btn>
+        {canEdit && (
+          <Btn tone="subtle" small onClick={() => setShowAddModal(true)}>
+            <Plus size={13} /> Add Person
+          </Btn>
+        )}
       </div>
 
       {/* ── Table ────────────────────────────────────────────────────── */}
@@ -463,19 +645,28 @@ export default function RegistrationDataTab({
                   <SortTh label="Fees" field="fees" sortField={sortField} sortDir={sortDir} onSort={toggleSort} style={{ width: 50 }} />
                 )}
                 <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Status</th>
+                {canEdit && <th style={{ borderBottom: `1px solid ${C.line}`, minWidth: 100 }} />}
                 <th style={{ width: 40, borderBottom: `1px solid ${C.line}` }} />
               </tr>
             </thead>
             <tbody>
               {filtered.map(p => {
-                const st = STATUS[p.registrationStatus];
+                const st = STATUS[p.registrationStatus] || STATUS.not_registered;
                 const regObj = mergedByEmail[p.email] || null;
+                const isAbsentExpanded = absentExpandedEmail === p.email;
+                const colCount = (showFees ? 10 : 9) + (canEdit ? 1 : 0);
                 return (
+                  <React.Fragment key={p.email}>
                   <tr
-                    key={p.email}
+                    ref={p.email === highlightEmail ? highlightRowRef : null}
+                    onClick={p.email === highlightEmail ? onClearHighlight : undefined}
                     style={{
-                      background: st.bg,
-                      borderLeft: `4px solid ${st.color}`,
+                      background: p.email === highlightEmail ? '#EDE9FF' : st.bg,
+                      borderLeft: `4px solid ${p.email === highlightEmail ? C.purple : st.color}`,
+                      outline: p.email === highlightEmail ? `2px solid ${C.purple}` : 'none',
+                      outlineOffset: -2,
+                      cursor: p.email === highlightEmail ? 'default' : undefined,
+                      opacity: p.absent ? 0.7 : 1,
                     }}
                   >
                     {/* # */}
@@ -483,7 +674,7 @@ export default function RegistrationDataTab({
                       {p._rowNum}
                     </td>
                     {/* Name */}
-                    <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}`, fontWeight: 600, fontSize: 13 }}>
+                    <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}`, fontWeight: 600, fontSize: 13, textDecoration: p.absent ? 'line-through' : 'none' }}>
                       {p.full_name || '—'}
                     </td>
                     {/* Subgroup */}
@@ -496,7 +687,7 @@ export default function RegistrationDataTab({
                     </td>
                     {/* Phone */}
                     <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}`, fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: C.ink }}>
-                      {p.phone || <span style={{ color: C.mute }}>—</span>}
+                      {p.phone || p.wl_phone || <span style={{ color: C.mute }}>—</span>}
                     </td>
                     {/* Reg */}
                     <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}`, width: 50 }}>
@@ -518,7 +709,46 @@ export default function RegistrationDataTab({
                     <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}` }}>
                       <Pill tone={st.tone}>{st.label}</Pill>
                     </td>
-                    {/* Edit — always visible; stub for not-yet-registered rows */}
+                    {/* Actions (canEdit only) */}
+                    {canEdit && (
+                      <td style={{ padding: '6px 10px', borderBottom: `1px solid ${C.line}` }}>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {!p.absent && p.on_working_list && (
+                            <button
+                              onClick={() => { setAbsentExpandedEmail(p.email); setAbsentReason(''); }}
+                              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.amber}`, background: 'transparent', color: C.amber, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
+                            >
+                              Mark absent
+                            </button>
+                          )}
+                          {p.absent && (
+                            <button
+                              onClick={() => onMarkAbsent?.(p.email, false, '')}
+                              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.line}`, background: 'transparent', color: C.mute, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
+                            >
+                              Undo absent
+                            </button>
+                          )}
+                          {p._fuzzyMatched && p._fuzzyMatchedEmail && !p.linked_registration_email && (
+                            <button
+                              onClick={() => onEditPerson?.(p.email, { linked_registration_email: p._fuzzyMatchedEmail })}
+                              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.green}`, background: C.greenBg, color: C.green, cursor: 'pointer', fontFamily: 'Inter', fontWeight: 600, whiteSpace: 'nowrap' }}
+                            >
+                              ✓ Validate match
+                            </button>
+                          )}
+                          {p.manually_added && (
+                            <button
+                              onClick={() => { if (confirm(`Remove ${p.full_name} from the working list?`)) onRemove?.(p.email); }}
+                              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: '1px solid #F44', background: 'transparent', color: '#D00', cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                    {/* Edit pencil */}
                     <td style={{ padding: '6px 8px', borderBottom: `1px solid ${C.line}`, width: 40 }}>
                       <button
                         onClick={() => setEditingReg(regObj || {
@@ -537,11 +767,43 @@ export default function RegistrationDataTab({
                       </button>
                     </td>
                   </tr>
+                  {/* Inline absent reason row */}
+                  {isAbsentExpanded && (
+                    <tr style={{ background: '#FFF8E6' }}>
+                      <td colSpan={colCount} style={{ padding: '8px 14px', borderBottom: `1px solid ${C.line}` }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <span style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>Reason for absence:</span>
+                          <input
+                            autoFocus
+                            value={absentReason}
+                            onChange={e => setAbsentReason(e.target.value)}
+                            placeholder="e.g. travelling, health, work"
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') { onMarkAbsent?.(p.email, true, absentReason); setAbsentExpandedEmail(null); }
+                              if (e.key === 'Escape') setAbsentExpandedEmail(null);
+                            }}
+                            style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 12.5 }}
+                          />
+                          <Btn tone="primary" small onClick={() => { onMarkAbsent?.(p.email, true, absentReason); setAbsentExpandedEmail(null); }}>Confirm</Btn>
+                          <Btn tone="ghost" small onClick={() => setAbsentExpandedEmail(null)}>Cancel</Btn>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  {/* Absent reason display row */}
+                  {p.absent && p.absent_reason && !isAbsentExpanded && (
+                    <tr style={{ background: '#FAFAFA' }}>
+                      <td colSpan={colCount} style={{ padding: '3px 14px 7px', fontSize: 12, color: C.mute, fontStyle: 'italic', borderBottom: `1px solid ${C.line}` }}>
+                        Reason: {p.absent_reason}
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={showFees ? 9 : 8} style={{ padding: 32, textAlign: 'center', color: C.mute, background: C.paper }}>
+                  <td colSpan={(showFees ? 10 : 9) + (canEdit ? 1 : 0)} style={{ padding: 32, textAlign: 'center', color: C.mute, background: C.paper }}>
                     {stats.total === 0
                       ? 'No data yet — import the working list and registrations first.'
                       : 'No people match the current filters.'}
@@ -560,6 +822,26 @@ export default function RegistrationDataTab({
           onClose={() => setEditingReg(null)}
           onSave={updated => { onSaveReg?.(updated); setEditingReg(null); }}
         />
+      )}
+
+      {/* ── Add person modal ──────────────────────────────────────────── */}
+      {showAddModal && (
+        <AddPersonModal
+          subgroups={subgroups}
+          onSave={async person => { await onAddPerson?.(person); setShowAddModal(false); }}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
+
+      {/* ── Link registration modal ───────────────────────────────────── */}
+      {linkingPerson && createPortal(
+        <LinkRegistrationModal
+          person={linkingPerson}
+          registrations={merged}
+          onLink={regEmail => { onEditPerson?.(linkingPerson.email, { linked_registration_email: regEmail }); setLinkingPerson(null); }}
+          onClose={() => setLinkingPerson(null)}
+        />,
+        document.body,
       )}
 
       {/* ── Share modal ───────────────────────────────────────────────── */}
@@ -646,5 +928,224 @@ export default function RegistrationDataTab({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Add person modal ─────────────────────────────────────────────────────────
+function AddPersonModal({ subgroups, onSave, onClose }) {
+  const [form, setForm] = useState({ full_name: '', email: '', subgroup: '', fellowship: '', phone_number: '' });
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+  const valid = form.full_name.trim() && form.email.trim();
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: 14, padding: 28, width: 420, maxWidth: '95vw', boxShadow: '0 8px 40px rgba(0,0,0,.18)', fontFamily: 'Inter, sans-serif' }}>
+        <h3 style={{ fontFamily: 'Space Grotesk', margin: '0 0 18px', fontSize: 16, color: C.ink }}>Add person to working list</h3>
+        {[
+          { k: 'full_name', label: 'Full Name *' },
+          { k: 'email',     label: 'Email *' },
+          { k: 'fellowship',label: 'Fellowship' },
+          { k: 'phone_number', label: 'Phone' },
+        ].map(({ k, label }) => (
+          <div key={k} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, marginBottom: 4, textTransform: 'uppercase' }}>{label}</div>
+            <input value={form[k]} onChange={set(k)} style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 13, boxSizing: 'border-box' }} />
+          </div>
+        ))}
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, marginBottom: 4, textTransform: 'uppercase' }}>Subgroup</div>
+          <select value={form.subgroup} onChange={set('subgroup')} style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 13, boxSizing: 'border-box' }}>
+            <option value="">— Select —</option>
+            {subgroups.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Btn tone="ghost" small onClick={onClose}>Cancel</Btn>
+          <Btn tone="primary" small disabled={!valid} onClick={() => onSave(form)}>Add</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Link registration modal ──────────────────────────────────────────────────
+function LinkRegistrationModal({ person, registrations, onLink, onClose }) {
+  const [search, setSearch] = useState('');
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    if (!q) return registrations.slice(0, 50);
+    return registrations.filter(r =>
+      (r.fullName || '').toLowerCase().includes(q) ||
+      (r.email    || '').toLowerCase().includes(q) ||
+      (r.subgroup || '').toLowerCase().includes(q)
+    ).slice(0, 50);
+  }, [registrations, search]);
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: 14, padding: 24, width: 480, maxWidth: '95vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,.18)', fontFamily: 'Inter, sans-serif' }}>
+        <h3 style={{ fontFamily: 'Space Grotesk', margin: '0 0 4px', fontSize: 16, color: C.ink }}>Link to registration</h3>
+        <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 14 }}>Linking <strong>{person.full_name}</strong> — select their matching registration below.</div>
+        <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, email or subgroup…" style={{ padding: '8px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 13, marginBottom: 10 }} />
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {filtered.length === 0 && <div style={{ color: C.mute, padding: 16, textAlign: 'center' }}>No matches</div>}
+          {filtered.map((r, i) => (
+            <div key={i} onClick={() => onLink(r.email)}
+              style={{ padding: '10px 12px', borderRadius: 8, cursor: 'pointer', marginBottom: 4, border: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#F5F0FF'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{r.fullName}</div>
+                <div style={{ fontSize: 12, color: C.mute }}>{r.subgroup} · {r.email}</div>
+              </div>
+              <Pill tone="green">Select</Pill>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 12, textAlign: 'right' }}>
+          <Btn tone="ghost" small onClick={onClose}>Cancel</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============ BULK EMAIL SENDER ============
+function BulkEmailSender({ selectedStatuses, statusCounts, merged, onClose }) {
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  async function loadTemplates() {
+    try {
+      const { data } = await supabase
+        .from('absence_email_templates')
+        .select('id, name, subject, body')
+        .order('is_default', { ascending: false })
+        .order('updated_at', { ascending: false });
+      setTemplates(data || []);
+      if (data?.length) setSelectedTemplate(data[0].id);
+    } catch (err) {
+      setError('Failed to load templates: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const recipientEmails = useMemo(() => {
+    return merged
+      .filter(r => {
+        if (selectedStatuses.not_registered && r.emailStatus === 'not_registered') return true;
+        if (selectedStatuses.confirming && r.emailStatus === 'confirming') return true;
+        if (selectedStatuses.confirmed && r.emailStatus === 'confirmed') return true;
+        return false;
+      })
+      .map(r => ({ email: r.email, name: r.fullName, id: r.id }));
+  }, [merged, selectedStatuses]);
+
+  const template = templates.find(t => t.id === selectedTemplate);
+
+  async function handleSend() {
+    if (!template || recipientEmails.length === 0) return;
+    setSending(true);
+    setError(null);
+
+    try {
+      const { data, error: invokeErr } = await supabase.functions.invoke('registration-bulk-email', {
+        body: {
+          recipients: recipientEmails,
+          templateId: template.id,
+          subject: template.subject,
+          body: template.body,
+        },
+      });
+
+      if (invokeErr) throw invokeErr;
+      if (data?.error) throw new Error(data.error);
+
+      // Update email_status to confirming for sent recipients
+      const registrationIds = recipientEmails.map(r => r.id).filter(Boolean);
+      if (registrationIds.length > 0) {
+        await supabase
+          .from('registrations')
+          .update({ email_status: 'confirming' })
+          .in('id', registrationIds);
+      }
+
+      alert(`✓ Email sent to ${recipientEmails.length} people`);
+      onClose();
+    } catch (err) {
+      setError('Failed to send: ' + err.message);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+      <div style={{ background: C.paper, borderRadius: 14, width: '90%', maxWidth: 680, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '20px 24px', borderBottom: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0, fontWeight: 700 }}>Send bulk email</h2>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 24, cursor: 'pointer', color: C.mute, padding: 0 }}>×</button>
+        </div>
+
+        <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, textTransform: 'uppercase', marginBottom: 8 }}>Template</div>
+            {loading ? (
+              <div style={{ color: C.mute, fontSize: 13 }}>Loading templates...</div>
+            ) : templates.length === 0 ? (
+              <div style={{ color: C.red, fontSize: 13 }}>No email templates found. Create one in Communications → Email Templates first.</div>
+            ) : (
+              <select value={selectedTemplate || ''} onChange={e => setSelectedTemplate(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 13, marginBottom: 16 }}>
+                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            )}
+            {template && (
+              <div style={{ background: C.cream, borderRadius: 8, padding: 12, fontSize: 12 }}>
+                <div style={{ fontWeight: 600, color: C.ink, marginBottom: 4 }}>Preview:</div>
+                <div style={{ color: C.mute, fontSize: 11 }}>Subject: {template.subject}</div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, textTransform: 'uppercase', marginBottom: 8 }}>Recipients ({recipientEmails.length})</div>
+            <div style={{ background: C.cream, borderRadius: 8, padding: 12, maxHeight: 200, overflowY: 'auto' }}>
+              {recipientEmails.length === 0 ? (
+                <div style={{ color: C.mute, fontSize: 13 }}>No recipients selected</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {recipientEmails.map((r, i) => (
+                    <div key={i} style={{ fontSize: 12, color: C.ink }}>
+                      {r.name} <span style={{ color: C.mute, fontFamily: 'JetBrains Mono', fontSize: 11 }}>({r.email})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <div style={{ padding: '12px 24px', background: '#FBE9E9', borderTop: `1px solid ${C.line}`, color: C.red, fontSize: 13 }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{ padding: '12px 24px', borderTop: `1px solid ${C.line}`, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onClose} style={{ background: '#fff', color: C.purple, border: `1px solid ${C.line}`, borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+          <button onClick={handleSend} disabled={sending || !template || recipientEmails.length === 0} style={{ background: sending || !template || recipientEmails.length === 0 ? '#CCC' : C.purple, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: sending || !template || recipientEmails.length === 0 ? 'not-allowed' : 'pointer' }}>
+            {sending ? 'Sending…' : `Send to ${recipientEmails.length}`}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
