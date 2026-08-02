@@ -105,6 +105,7 @@ const RegistrationPage = lazyRoute('/registration', () => import('./pages/events
 const HelpPage = lazyRoute('/help', () => import('./pages/HelpPage'))
 const SupportPage = lazyRoute('/support', () => import('./pages/SupportPage'))
 const SupportTicketsAdminPage = lazyRoute('/admin/tickets', () => import('./pages/SupportTicketsAdminPage'))
+const GrowthTrackingPage = lazyRoute('/growth-tracking', () => import('./pages/growth/GrowthTrackingPage'))
 const GlowCardDemo = lazy(() => import('./components/ui/GlowCardDemo'))
 
 function onError(error, errorInfo) {
@@ -409,6 +410,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['super_admin']}>
                 <SupportTicketsAdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/growth-tracking"
+            element={
+              <ProtectedRoute roles={['super_admin']}>
+                <GrowthTrackingPage />
               </ProtectedRoute>
             }
           />

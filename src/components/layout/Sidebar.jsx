@@ -13,6 +13,7 @@ import {
   HelpCircle,
   HeadphonesIcon,
   Ticket,
+  TrendingUp,
   LayoutGrid,
   Lock,
   Mail,
@@ -1654,6 +1655,14 @@ export default function Sidebar({ isMobileDrawer = false }) {
                 icon={Ticket}
                 label="Support Tickets"
                 to="/admin/tickets"
+              />
+            )}
+            {role === 'super_admin' && (
+              <SidebarItem
+                active={isPathActive(location.pathname, '/growth-tracking')}
+                icon={TrendingUp}
+                label="Growth Tracking"
+                to="/growth-tracking"
               />
             )}
           </>

@@ -11,3 +11,12 @@ verify_jwt = false
 
 [functions."archive-completed-tasks"]
 verify_jwt = false
+
+[functions."test-reports-api"]
+verify_jwt = false
+
+[functions."growth-reports-sync"]
+verify_jwt = false
+
+[functions."weekly-growth-report"]
+verify_jwt = false

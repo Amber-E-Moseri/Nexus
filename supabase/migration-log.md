@@ -1,5 +1,49 @@
 # Migration Log
 
+## 20270804000046 — growth_tracking_schema
+
+**Date:** 2026-08-01
+**Status:** ⏳ NOT YET PUSHED — push with `supabase db push`, then deploy edge functions.
+**Tables added:** `service_center_schedule`, `service_center_week_status`, `report_recipients`, `service_reports`
+**Views added:** none (see 47)
+**Functions added:** none (RPCs live in edge functions)
+
+### Background
+New Service Center Growth Tracking module (super_admin only). Pulls per-attendee CSV data from `leaders.lwcanada.org/api/services/export` via the `growth-reports-sync` edge function, mirrors it into `service_reports` (aggregated per service), and exposes a weekly growth view. Seeded with all 17 BLW Canada church units and their `leaders.lwcanada.org` unit IDs. Phase 1 scope: SundayService + GlobalService, Church host type only.
+
+Uses `service_role` bypass RLS policies on `service_reports` and `service_center_schedule` so the cron-invoked sync function (which authenticates as service role) can upsert without hitting RLS blocks.
+
+## 20270804000047 — v_service_center_weekly_growth
+
+**Date:** 2026-08-01
+**Status:** ⏳ NOT YET PUSHED — push with migration 46 above.
+**Views added:** `v_service_center_weekly_growth`
+
+### Background
+`security_invoker = on` view that generates one row per (active center × ISO week) spanning from the earliest `service_reports` row to the current week. Computes: `wow_delta` (LAG window), `rolling_avg_4wk` (4-row window avg), and `status` (merged/did_not_meet from admin flags; reported = has data; missing = past week no data; current = in-progress this week).
+
+## 20270804000048 — growth_tracking_cron
+
+**Date:** 2026-08-01
+**Status:** ⏳ NOT YET PUSHED — requires `pg_cron` + `pg_net` extensions enabled on the project.
+**Cron jobs added:** `growth-reports-sync-weekly` (Sun 22:00 UTC), `weekly-growth-report` (Sun 23:30 UTC)
+
+### Background
+Schedules the sync and email report functions via `cron.schedule` + `net.http_post`. Sync runs at 22:00 UTC (6pm EDT) to pull fresh service data; report runs at 23:30 UTC (7:30pm EDT) to send the weekly email to `report_recipients`. Both authenticate using the `app.service_role_key` setting.
+
+**Pre-requisite:** Verify `pg_cron` and `pg_net` are enabled in the Supabase dashboard under Database → Extensions before pushing this migration.
+
+## 20270804000049 — fill_center_gaps_rpc
+
+**Date:** 2026-08-01
+**Status:** ⏳ NOT YET PUSHED — push after migrations 46-48.
+**Functions added:** `fill_center_gaps(p_from date, p_to date, p_unit_ids text[] DEFAULT NULL)`
+
+### Background
+RPC that creates `did_not_meet` entries in `service_center_week_status` for weeks where a center has no service data.
+- `p_unit_ids = NULL` → targets all currently-inactive centers (used by the Settings UI "Fill Inactive Center Gaps" button)
+- `p_unit_ids = [...]` → targets specific centers regardless of active state (used automatically by `growth-reports-sync` when auto-reactivating a center — fills the gap period before flipping `active = true` so those historical weeks show as `did_not_meet`, not `missing`)
+
 ## 20270720000022 — tasks_realtime_publication
 
 **Date:** 2026-07-20
