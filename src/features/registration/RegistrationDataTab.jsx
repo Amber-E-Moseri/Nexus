@@ -211,6 +211,18 @@ export default function RegistrationDataTab({
   const confirmed = useMemo(() => merged.filter(r => r.email && r.emailStatus === 'confirmed').length, [merged]);
 
   const statusCounts = { not_registered, confirming, confirmed };
+
+  // Debug: log status distribution
+  useEffect(() => {
+    const dist = {};
+    merged.forEach(r => {
+      if (r.email) {
+        const status = r.emailStatus || 'undefined';
+        dist[status] = (dist[status] || 0) + 1;
+      }
+    });
+    console.log('Email status distribution:', dist, 'Counts:', statusCounts);
+  }, [merged, statusCounts]);
   const totalToEmail = Object.entries(selectedStatuses).reduce((sum, [status, selected]) => sum + (selected ? statusCounts[status] : 0), 0);
 
   function toggleStatus(status) {
@@ -529,9 +541,11 @@ export default function RegistrationDataTab({
       </div>
 
       {/* ── Bulk email button ─────────────────────────────────────────── */}
-      <button onClick={() => setEmailModalOpen(true)} style={{ background: C.purple, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginBottom: 18 }}>
-        Email
-      </button>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 18 }}>
+        <button onClick={() => setEmailModalOpen(true)} style={{ background: C.purple, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          Email
+        </button>
+      </div>
 
       {emailModalOpen && (
         <BulkEmailSender
