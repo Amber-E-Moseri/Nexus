@@ -539,7 +539,7 @@ export default function RegistrationDataTab({
         <BulkEmailSender
           selectedStatuses={selectedStatuses}
           statusCounts={statusCounts}
-          merged={merged}
+          merged={allPeople}
           onClose={() => setEmailModalOpen(false)}
           onToggleStatus={toggleStatus}
         />
