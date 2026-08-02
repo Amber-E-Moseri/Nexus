@@ -2362,15 +2362,19 @@ function DelegateComplianceTab({ merged, subgroupFilter, setSubgroupFilter, subg
         <table>
           <thead><tr><th>Name</th><th>Subgroup</th><th>Email</th><th>Phone</th><th>Allergies / Diet Restrictions</th></tr></thead>
           <tbody>
-            {filtered.map((r, i) => (
-              <tr key={i}>
-                <td style={{ fontWeight: 600 }}>{r.fullName}</td>
-                <td>{r.subgroup}</td>
-                <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.email}</td>
-                <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.phone || '—'}</td>
-                <td style={{ background: '#FBF0DE', fontWeight: 500 }}>{r.allergies}</td>
-              </tr>
-            ))}
+            {filtered.map((r, i) => {
+              const allergyVal = r.allergies?.trim().toLowerCase();
+              const showAllergy = allergyVal && !['no', 'none', 'n/a', 'na', 'nil', 'nope', 'nope!'].includes(allergyVal);
+              return (
+                <tr key={i}>
+                  <td style={{ fontWeight: 600 }}>{r.fullName}</td>
+                  <td>{r.subgroup}</td>
+                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.email}</td>
+                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.phone || '—'}</td>
+                  <td style={{ background: '#FBF0DE', fontWeight: 500 }}>{showAllergy ? r.allergies : '—'}</td>
+                </tr>
+              );
+            })}
             {filtered.length === 0 && <tr><td colSpan={5} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>No registrations with allergies or diet restrictions.</td></tr>}
           </tbody>
         </table>
