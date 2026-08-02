@@ -204,25 +204,13 @@ export default function RegistrationDataTab({
 
   // bulk email sender
   const [emailModalOpen, setEmailModalOpen] = useState(false);
-  const [selectedStatuses, setSelectedStatuses] = useState({ not_registered: false, confirming: false, confirmed: false });
+  const [selectedStatuses, setSelectedStatuses] = useState({ not_registered: false, registered_outstanding: false, confirmed: false });
 
-  const not_registered = useMemo(() => merged.filter(r => r.emailStatus === 'not_registered').length, [merged]);
-  const confirming = useMemo(() => merged.filter(r => r.emailStatus === 'confirming').length, [merged]);
-  const confirmed = useMemo(() => merged.filter(r => r.emailStatus === 'confirmed').length, [merged]);
+  const not_registered = useMemo(() => merged.filter(r => r.registrationStatus === 'not_registered').length, [merged]);
+  const registered_outstanding = useMemo(() => merged.filter(r => r.registrationStatus === 'registered_outstanding').length, [merged]);
+  const confirmed = useMemo(() => merged.filter(r => r.registrationStatus === 'confirmed').length, [merged]);
 
-  const statusCounts = { not_registered, confirming, confirmed };
-
-  // Debug: log status distribution
-  useEffect(() => {
-    const dist = {};
-    merged.forEach(r => {
-      if (r.email) {
-        const status = r.emailStatus || 'undefined';
-        dist[status] = (dist[status] || 0) + 1;
-      }
-    });
-    console.log('Email status distribution:', dist, 'Counts:', statusCounts);
-  }, [merged, statusCounts]);
+  const statusCounts = { not_registered, registered_outstanding, confirmed };
   const totalToEmail = Object.entries(selectedStatuses).reduce((sum, [status, selected]) => sum + (selected ? statusCounts[status] : 0), 0);
 
   function toggleStatus(status) {
@@ -1038,9 +1026,9 @@ function BulkEmailSender({ selectedStatuses, statusCounts, merged, onClose, onTo
     return merged
       .filter(r => {
         if (!r.email) return false;
-        if (selectedStatuses.not_registered && r.email && r.emailStatus === 'not_registered') return true;
-        if (selectedStatuses.confirming && r.email && r.emailStatus === 'confirming') return true;
-        if (selectedStatuses.confirmed && r.email && r.emailStatus === 'confirmed') return true;
+        if (selectedStatuses.not_registered && r.registrationStatus === 'not_registered') return true;
+        if (selectedStatuses.registered_outstanding && r.registrationStatus === 'registered_outstanding') return true;
+        if (selectedStatuses.confirmed && r.registrationStatus === 'confirmed') return true;
         return false;
       })
       .map(r => ({ email: r.email, name: r.fullName, id: r.id }));
@@ -1097,7 +1085,7 @@ function BulkEmailSender({ selectedStatuses, statusCounts, merged, onClose, onTo
           <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, textTransform: 'uppercase' }}>Send to:</div>
           {[
             { key: 'not_registered', label: 'Not Registered', count: statusCounts.not_registered, tone: 'red' },
-            { key: 'confirming', label: 'Confirming', count: statusCounts.confirming, tone: 'amber' },
+            { key: 'registered_outstanding', label: 'Confirming', count: statusCounts.registered_outstanding, tone: 'amber' },
             { key: 'confirmed', label: 'Confirmed', count: statusCounts.confirmed, tone: 'green' },
           ].map(({ key, label, count, tone }) => (
             <label key={key} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>

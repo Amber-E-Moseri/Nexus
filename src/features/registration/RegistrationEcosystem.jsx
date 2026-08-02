@@ -274,38 +274,11 @@ export default function App({ limitedToSubgroups = null }) {
         phone: r.phone, designation: r.designation, shirtSize: r.shirt_size,
         foundationStatus: r.foundation_status, baptism: r.baptism, allergies: r.allergies,
         team: r.team, leadership: r.leadership, submittedAt: r.submitted_at,
-        emailStatus: r.email_status || 'not_registered',
       }));
       setRegistrations(mapped);
     } catch (e) {
       console.error('Failed to refetch registrations:', e);
     }
-  }, []);
-
-  // Fetch fresh data on mount to ensure email_status is loaded
-  useEffect(() => {
-    refetchRegistrations();
-  }, []);
-
-  // Update emailStatus when bulk send completes
-  useEffect(() => {
-    const channel = supabase
-      .channel('registrations-email-status')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'registrations' },
-        (payload) => {
-          setRegistrations(prev =>
-            prev.map(r =>
-              r.id === payload.new.id
-                ? { ...r, emailStatus: payload.new.email_status || 'not_registered' }
-                : r
-            )
-          );
-        }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
   }, []);
 
   // Finance access: regional_secretary only (unless granted via user_grants); super_admin sees tab but is restricted
@@ -402,7 +375,6 @@ export default function App({ limitedToSubgroups = null }) {
             team: r.team,
             leadership: r.leadership,
             submittedAt: r.submitted_at,
-            emailStatus: r.email_status || 'not_registered',
           }));
         } catch (e) {
           console.error('Failed to fetch registrations from Supabase:', e);
@@ -431,13 +403,7 @@ export default function App({ limitedToSubgroups = null }) {
         console.error('Failed to fetch payments from Supabase:', e);
       }
 
-      // Ensure all registrations have emailStatus
-      const regWithEmailStatus = (finalReg || []).map(r => ({
-        ...r,
-        emailStatus: r.emailStatus || 'not_registered'
-      }));
-
-      setRoster(finalRoster); setRegistrations(regWithEmailStatus); setConfirmations(conf); setTargets(tg); setLastImport(li);
+      setRoster(finalRoster); setRegistrations(finalReg); setConfirmations(conf); setTargets(tg); setLastImport(li);
 
       // Load room assignments
       try {
