@@ -282,13 +282,18 @@ export default function App({ limitedToSubgroups = null }) {
     }
   }, []);
 
+  // Fetch fresh data on mount to ensure email_status is loaded
+  useEffect(() => {
+    refetchRegistrations();
+  }, [refetchRegistrations]);
+
   // Update emailStatus when bulk send completes
   useEffect(() => {
     const channel = supabase
       .channel('registrations-email-status')
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'registrations', filter: 'email_status=neq.not_registered' },
+        { event: 'UPDATE', schema: 'public', table: 'registrations' },
         (payload) => {
           setRegistrations(prev =>
             prev.map(r =>
@@ -426,7 +431,13 @@ export default function App({ limitedToSubgroups = null }) {
         console.error('Failed to fetch payments from Supabase:', e);
       }
 
-      setRoster(finalRoster); setRegistrations(finalReg); setConfirmations(conf); setTargets(tg); setLastImport(li);
+      // Ensure all registrations have emailStatus
+      const regWithEmailStatus = (finalReg || []).map(r => ({
+        ...r,
+        emailStatus: r.emailStatus || 'not_registered'
+      }));
+
+      setRoster(finalRoster); setRegistrations(regWithEmailStatus); setConfirmations(conf); setTargets(tg); setLastImport(li);
 
       // Load room assignments
       try {
