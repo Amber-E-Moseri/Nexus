@@ -274,11 +274,33 @@ export default function App({ limitedToSubgroups = null }) {
         phone: r.phone, designation: r.designation, shirtSize: r.shirt_size,
         foundationStatus: r.foundation_status, baptism: r.baptism, allergies: r.allergies,
         team: r.team, leadership: r.leadership, submittedAt: r.submitted_at,
+        emailStatus: r.email_status || 'not_registered',
       }));
       setRegistrations(mapped);
     } catch (e) {
       console.error('Failed to refetch registrations:', e);
     }
+  }, []);
+
+  // Update emailStatus when bulk send completes
+  useEffect(() => {
+    const channel = supabase
+      .channel('registrations-email-status')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'registrations', filter: 'email_status=neq.not_registered' },
+        (payload) => {
+          setRegistrations(prev =>
+            prev.map(r =>
+              r.id === payload.new.id
+                ? { ...r, emailStatus: payload.new.email_status || 'not_registered' }
+                : r
+            )
+          );
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   // Finance access: regional_secretary only (unless granted via user_grants); super_admin sees tab but is restricted
@@ -375,6 +397,7 @@ export default function App({ limitedToSubgroups = null }) {
             team: r.team,
             leadership: r.leadership,
             submittedAt: r.submitted_at,
+            emailStatus: r.email_status || 'not_registered',
           }));
         } catch (e) {
           console.error('Failed to fetch registrations from Supabase:', e);
@@ -808,13 +831,18 @@ export default function App({ limitedToSubgroups = null }) {
 function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets, setTarget, merged, isLimited }) {
   const regPct = totalRegTarget ? Math.round((totalRegs / totalRegTarget) * 100) : 0;
   const confirmedCount = useMemo(() => merged.filter(r => r.fullyConfirmed).length, [merged]);
+  const not_registered = useMemo(() => merged.filter(r => r.emailStatus === 'not_registered').length, [merged]);
+  const confirming = useMemo(() => merged.filter(r => r.emailStatus === 'confirming').length, [merged]);
+  const confirmed = useMemo(() => merged.filter(r => r.emailStatus === 'confirmed').length, [merged]);
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
         <SummaryCard label="Total registrations" current={totalRegs} target={totalRegTarget} pct={regPct} />
-        <SummaryCard label="Confirmed" current={confirmedCount} target={totalRegs} pct={totalRegs ? Math.round((confirmedCount / totalRegs) * 100) : 0} />
+        <SummaryCard label="Confirmed" current={confirmed} target={totalRegs} pct={totalRegs ? Math.round((confirmed / totalRegs) * 100) : 0} />
+        <SummaryCard label="Awaiting email" current={not_registered} target={totalRegs} pct={totalRegs ? Math.round((not_registered / totalRegs) * 100) : 0} />
       </div>
+
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>By subgroup</h2>
@@ -2315,5 +2343,151 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
         </div>
       </div>
     </div>
+  );
+}
+
+// ============ BULK EMAIL SENDER ============
+function BulkEmailSender({ selectedStatuses, statusCounts, merged, onClose }) {
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  async function loadTemplates() {
+    try {
+      const { data } = await supabase
+        .from('absence_email_templates')
+        .select('id, name, subject, body')
+        .order('is_default', { ascending: false })
+        .order('updated_at', { ascending: false });
+      setTemplates(data || []);
+      if (data?.length) setSelectedTemplate(data[0].id);
+    } catch (err) {
+      setError('Failed to load templates: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const recipientEmails = useMemo(() => {
+    return merged
+      .filter(r => {
+        if (selectedStatuses.not_registered && r.emailStatus === 'not_registered') return true;
+        if (selectedStatuses.confirming && r.emailStatus === 'confirming') return true;
+        if (selectedStatuses.confirmed && r.emailStatus === 'confirmed') return true;
+        return false;
+      })
+      .map(r => ({ email: r.email, name: r.fullName, id: r.id }));
+  }, [merged, selectedStatuses]);
+
+  const template = templates.find(t => t.id === selectedTemplate);
+
+  async function handleSend() {
+    if (!template || recipientEmails.length === 0) return;
+    setSending(true);
+    setError(null);
+
+    try {
+      const { data, error: invokeErr } = await supabase.functions.invoke('registration-bulk-email', {
+        body: {
+          recipients: recipientEmails,
+          templateId: template.id,
+          subject: template.subject,
+          body: template.body,
+        },
+      });
+
+      if (invokeErr) throw invokeErr;
+      if (data?.error) throw new Error(data.error);
+
+      // Update email_status to confirming for sent recipients
+      const registrationIds = recipientEmails.map(r => r.id).filter(Boolean);
+      if (registrationIds.length > 0) {
+        await supabase
+          .from('registrations')
+          .update({ email_status: 'confirming' })
+          .in('id', registrationIds);
+      }
+
+      alert(`✓ Email sent to ${recipientEmails.length} people`);
+      onClose();
+    } catch (err) {
+      setError('Failed to send: ' + err.message);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+      <div style={{ background: C.paper, borderRadius: 14, width: '90%', maxWidth: 680, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ padding: '20px 24px', borderBottom: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0, fontWeight: 700 }}>Send bulk email</h2>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 24, cursor: 'pointer', color: C.mute, padding: 0 }}>×</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {/* Left: Template selection */}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, textTransform: 'uppercase', marginBottom: 8 }}>Template</div>
+            {loading ? (
+              <div style={{ color: C.mute, fontSize: 13 }}>Loading templates...</div>
+            ) : templates.length === 0 ? (
+              <div style={{ color: C.red, fontSize: 13 }}>No email templates found. Create one in Communications → Email Templates first.</div>
+            ) : (
+              <select value={selectedTemplate || ''} onChange={e => setSelectedTemplate(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 13, marginBottom: 16 }}>
+                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            )}
+            {template && (
+              <div style={{ background: C.cream, borderRadius: 8, padding: 12, fontSize: 12 }}>
+                <div style={{ fontWeight: 600, color: C.ink, marginBottom: 4 }}>Preview:</div>
+                <div style={{ color: C.mute, fontSize: 11 }}>Subject: {template.subject}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Right: Recipients */}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, textTransform: 'uppercase', marginBottom: 8 }}>Recipients ({recipientEmails.length})</div>
+            <div style={{ background: C.cream, borderRadius: 8, padding: 12, maxHeight: 200, overflowY: 'auto' }}>
+              {recipientEmails.length === 0 ? (
+                <div style={{ color: C.mute, fontSize: 13 }}>No recipients selected</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {recipientEmails.map((r, i) => (
+                    <div key={i} style={{ fontSize: 12, color: C.ink }}>
+                      {r.name} <span style={{ color: C.mute, fontFamily: 'JetBrains Mono', fontSize: 11 }}>({r.email})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <div style={{ padding: '12px 24px', background: '#FBE9E9', borderTop: `1px solid ${C.line}`, color: C.red, fontSize: 13 }}>
+            {error}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div style={{ padding: '12px 24px', borderTop: `1px solid ${C.line}`, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Btn tone="ghost" small onClick={onClose}>Cancel</Btn>
+          <Btn tone="primary" small onClick={handleSend} disabled={sending || !template || recipientEmails.length === 0}>
+            {sending ? 'Sending…' : `Send to ${recipientEmails.length}`}
+          </Btn>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
