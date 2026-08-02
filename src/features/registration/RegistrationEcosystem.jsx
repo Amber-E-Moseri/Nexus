@@ -274,6 +274,8 @@ export default function App({ limitedToSubgroups = null }) {
         phone: r.phone, designation: r.designation, shirtSize: r.shirt_size,
         foundationStatus: r.foundation_status, baptism: r.baptism, allergies: r.allergies,
         team: r.team, leadership: r.leadership, submittedAt: r.submitted_at,
+        arrivalDate: r.arrival_date, arrivalTime: r.arrival_time, arrivalFlight: r.arrival_flight,
+        departureDate: r.departure_date, departureTime: r.departure_time, departureFlight: r.departure_flight,
       }));
       setRegistrations(mapped);
     } catch (e) {
@@ -375,6 +377,12 @@ export default function App({ limitedToSubgroups = null }) {
             team: r.team,
             leadership: r.leadership,
             submittedAt: r.submitted_at,
+            arrivalDate: r.arrival_date,
+            arrivalTime: r.arrival_time,
+            arrivalFlight: r.arrival_flight,
+            departureDate: r.departure_date,
+            departureTime: r.departure_time,
+            departureFlight: r.departure_flight,
           }));
         } catch (e) {
           console.error('Failed to fetch registrations from Supabase:', e);
@@ -461,11 +469,12 @@ export default function App({ limitedToSubgroups = null }) {
 
   const bySubgroup = useMemo(() => {
     const out = {};
-    subgroups.forEach(sg => { out[sg] = { total: 0, confirmed: 0 }; });
+    subgroups.forEach(sg => { out[sg] = { total: 0, confirmed: 0, flights: 0 }; });
     merged.forEach(r => {
-      if (!out[r.subgroup]) out[r.subgroup] = { total: 0, confirmed: 0 };
+      if (!out[r.subgroup]) out[r.subgroup] = { total: 0, confirmed: 0, flights: 0 };
       out[r.subgroup].total++;
       if (r.fullyConfirmed) out[r.subgroup].confirmed++;
+      if (r.arrivalFlight || r.departureFlight) out[r.subgroup].flights++;
     });
     return out;
   }, [merged, subgroups]);
@@ -863,8 +872,8 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets
                     <input type="number" style={{ width: 60 }} value={t.flights ?? ''} placeholder="0"
                       onChange={e => setTarget(sg, 'flights', e.target.value)} />
                   </td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: C.mute }}>
-                    —
+                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: (t.flights || 0) - (s.flights || 0) > 0 ? C.green : C.mute }}>
+                    {t.flights ? ((t.flights || 0) - (s.flights || 0) > 0 ? `−${(t.flights || 0) - (s.flights || 0)}` : `+${(s.flights || 0) - (t.flights || 0)}`) : '—'}
                   </td>
                   <td><Pill tone={tone}>{statusLabel(regPctSg)}</Pill></td>
                 </tr>
