@@ -488,6 +488,7 @@ export default function App({ limitedToSubgroups = null }) {
     return {
       ...r,
       hasPaid,
+      hasFlightInfo,
       inStateConfirmed,
       fullyConfirmed: inStateConfirmed,
     };
@@ -1721,31 +1722,39 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
         <table>
           <thead><tr><th>Name</th><th>Subgroup</th><th>Fellowship</th><th>Confirmed</th><th></th></tr></thead>
           <tbody>
-            {filtered.map((r, i) => (
+            {filtered.map((r, i) => {
+              const isConfirmed = r.hasPaid || r.inStateConfirmed || bypassConfirmed[r.email];
+              const noFlightFlag = isConfirmed && !r.hasFlightInfo;
+              return (
               <tr key={i}>
                 <td style={{ fontWeight: 600 }}>{r.fullName}</td>
                 <td>{r.subgroup}</td>
                 <td>{r.fellowship}</td>
                 <td>
-                  {r.hasPaid ? (
-                    <Pill tone="green">Confirmed (paid)</Pill>
-                  ) : r.inStateConfirmed ? (
-                    <button onClick={() => toggleConfirm(r.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: C.green, fontWeight: 600, fontSize: 12.5 }}>
-                      <CheckCircle2 size={16} /> Confirmed
-                    </button>
-                  ) : bypassConfirmed[r.email] ? (
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <Pill tone="amber">Confirmed (bypassed)</Pill>
-                      <button onClick={() => toggleBypass(r.email)} style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>undo</button>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <button onClick={() => toggleConfirm(r.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: C.mute, fontWeight: 600, fontSize: 12.5 }}>
-                        <Circle size={16} /> Mark confirmed
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {r.hasPaid ? (
+                      <Pill tone="green">Confirmed (paid)</Pill>
+                    ) : r.inStateConfirmed ? (
+                      <button onClick={() => toggleConfirm(r.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: C.green, fontWeight: 600, fontSize: 12.5 }}>
+                        <CheckCircle2 size={16} /> Confirmed
                       </button>
-                      <button onClick={() => toggleBypass(r.email)} style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>bypass</button>
-                    </div>
-                  )}
+                    ) : bypassConfirmed[r.email] ? (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <Pill tone="amber">Confirmed (bypassed)</Pill>
+                        <button onClick={() => toggleBypass(r.email)} style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>undo</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <button onClick={() => toggleConfirm(r.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: C.mute, fontWeight: 600, fontSize: 12.5 }}>
+                          <Circle size={16} /> Mark confirmed
+                        </button>
+                        <button onClick={() => toggleBypass(r.email)} style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>bypass</button>
+                      </div>
+                    )}
+                    {noFlightFlag && (
+                      <AlertCircle size={16} style={{ color: '#FF9500', flexShrink: 0 }} title="Confirmed but no flights" />
+                    )}
+                  </div>
                 </td>
                 <td style={{ width: 36, padding: '6px 8px' }}>
                   {onEditReg && (
@@ -1761,7 +1770,8 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
                   )}
                 </td>
               </tr>
-            ))}
+            );
+            })}
             {filtered.length === 0 && <tr><td colSpan={5} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>No registrations imported yet.</td></tr>}
           </tbody>
         </table>
