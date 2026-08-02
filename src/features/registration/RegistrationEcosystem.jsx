@@ -831,16 +831,13 @@ export default function App({ limitedToSubgroups = null }) {
 function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets, setTarget, merged, isLimited }) {
   const regPct = totalRegTarget ? Math.round((totalRegs / totalRegTarget) * 100) : 0;
   const confirmedCount = useMemo(() => merged.filter(r => r.fullyConfirmed).length, [merged]);
-  const not_registered = useMemo(() => merged.filter(r => r.emailStatus === 'not_registered').length, [merged]);
-  const confirming = useMemo(() => merged.filter(r => r.emailStatus === 'confirming').length, [merged]);
-  const confirmed = useMemo(() => merged.filter(r => r.emailStatus === 'confirmed').length, [merged]);
 
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
         <SummaryCard label="Total registrations" current={totalRegs} target={totalRegTarget} pct={regPct} />
-        <SummaryCard label="Confirmed" current={confirmed} target={totalRegs} pct={totalRegs ? Math.round((confirmed / totalRegs) * 100) : 0} />
-        <SummaryCard label="Awaiting email" current={not_registered} target={totalRegs} pct={totalRegs ? Math.round((not_registered / totalRegs) * 100) : 0} />
+        <SummaryCard label="Confirmed" current={confirmedCount} target={totalRegs} pct={totalRegs ? Math.round((confirmedCount / totalRegs) * 100) : 0} />
+        <SummaryCard label="Flights" current={0} target={totalRegs} pct={0} />
       </div>
 
 
