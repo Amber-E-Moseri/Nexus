@@ -285,7 +285,7 @@ export default function App({ limitedToSubgroups = null }) {
   // Fetch fresh data on mount to ensure email_status is loaded
   useEffect(() => {
     refetchRegistrations();
-  }, [refetchRegistrations]);
+  }, []);
 
   // Update emailStatus when bulk send completes
   useEffect(() => {
