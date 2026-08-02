@@ -206,9 +206,9 @@ export default function RegistrationDataTab({
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState({ not_registered: false, registered_outstanding: false, confirmed: false });
 
-  const not_registered = useMemo(() => merged.filter(r => r.registrationStatus === 'not_registered').length, [merged]);
-  const registered_outstanding = useMemo(() => merged.filter(r => r.registrationStatus === 'registered_outstanding').length, [merged]);
-  const confirmed = useMemo(() => merged.filter(r => r.registrationStatus === 'confirmed').length, [merged]);
+  const not_registered = useMemo(() => allPeople.filter(r => r.registrationStatus === 'not_registered').length, [allPeople]);
+  const registered_outstanding = useMemo(() => allPeople.filter(r => r.registrationStatus === 'registered_outstanding').length, [allPeople]);
+  const confirmed = useMemo(() => allPeople.filter(r => r.registrationStatus === 'confirmed').length, [allPeople]);
 
   const statusCounts = { not_registered, registered_outstanding, confirmed };
   const totalToEmail = Object.entries(selectedStatuses).reduce((sum, [status, selected]) => sum + (selected ? statusCounts[status] : 0), 0);
