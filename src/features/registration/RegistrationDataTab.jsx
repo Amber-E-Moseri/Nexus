@@ -177,6 +177,8 @@ export default function RegistrationDataTab({
   // absent inline row state
   const [absentExpandedEmail, setAbsentExpandedEmail] = useState(null);
   const [absentReason,        setAbsentReason]        = useState('');
+  // full view toggle
+  const [showFullView,        setShowFullView]        = useState(false);
   // add-person modal
   const [showAddModal,  setShowAddModal]  = useState(false);
   // link-registration modal
@@ -627,6 +629,19 @@ export default function RegistrationDataTab({
                   <SortTh label="Fees" field="fees" sortField={sortField} sortDir={sortDir} onSort={toggleSort} style={{ width: 50 }} />
                 )}
                 <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Status</th>
+                <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}`, cursor: 'pointer' }} onClick={() => setShowFullView(!showFullView)} title="Toggle extra columns">
+                  {showFullView ? '✕' : '+'}
+                </th>
+                {showFullView && (
+                  <>
+                    <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Baptism</th>
+                    <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Foundation</th>
+                    <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Department</th>
+                    <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Designation</th>
+                    <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Shirt</th>
+                    <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Dietary</th>
+                  </>
+                )}
                 {canEdit && <th style={{ borderBottom: `1px solid ${C.line}`, minWidth: 100 }} />}
                 <th style={{ width: 40, borderBottom: `1px solid ${C.line}` }} />
               </tr>
@@ -636,7 +651,7 @@ export default function RegistrationDataTab({
                 const st = STATUS[p.registrationStatus] || STATUS.not_registered;
                 const regObj = mergedByEmail[p.email] || null;
                 const isAbsentExpanded = absentExpandedEmail === p.email;
-                const colCount = (showFees ? 10 : 9) + (canEdit ? 1 : 0);
+                const colCount = (showFees ? 10 : 9) + (canEdit ? 1 : 0) + 1 + (showFullView ? 6 : 0);
                 return (
                   <React.Fragment key={p.email}>
                   <tr
@@ -729,6 +744,32 @@ export default function RegistrationDataTab({
                           )}
                         </div>
                       </td>
+                    )}
+                    {/* Toggle button */}
+                    <td style={{ padding: '6px 8px', borderBottom: `1px solid ${C.line}`, width: 36, textAlign: 'center', color: C.mute, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                      —
+                    </td>
+                    {showFullView && (
+                      <>
+                        <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}`, fontSize: 12.5, color: C.ink }}>
+                          {regObj?.baptism || '—'}
+                        </td>
+                        <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}`, fontSize: 12.5, color: C.ink }}>
+                          {regObj?.foundationStatus || '—'}
+                        </td>
+                        <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}`, fontSize: 12.5, color: C.ink }}>
+                          {regObj?.team || '—'}
+                        </td>
+                        <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}`, fontSize: 12.5, color: C.ink }}>
+                          {regObj?.designation || '—'}
+                        </td>
+                        <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}`, fontSize: 12.5, color: C.ink }}>
+                          {regObj?.shirtSize || '—'}
+                        </td>
+                        <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}`, fontSize: 12.5, color: C.ink, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {regObj?.allergies || '—'}
+                        </td>
+                      </>
                     )}
                     {/* Edit pencil */}
                     <td style={{ padding: '6px 8px', borderBottom: `1px solid ${C.line}`, width: 40 }}>
