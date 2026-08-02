@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil } from 'lucide-react';
+import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import RegistrationEditModal from './RegistrationEditModal';
@@ -26,6 +26,8 @@ const C = {
 };
 
 const FONT_LINK = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap';
+
+const EXEMPT_FELLOWSHIPS = new Set(['BLW University of Manitoba', 'BLW University of Winnipeg']);;
 
 
 // Convert any raw time value to "h:mm AM/PM" for display
@@ -232,6 +234,7 @@ const ALL_TABS = [
   { key: 'discipleship', label: 'Foundation & Baptism', icon: Church },
   { key: 'compliance', label: 'Hospitality', icon: AlertCircle },
   { key: 'rooms', label: 'Room Assignments', icon: DoorOpen },
+  { key: 'transport', label: 'Transportation', icon: Plane },
   { key: 'finance', label: 'Finance', icon: DollarSign, restricted: true },
   { key: 'import', label: 'Import Data', icon: Upload },
 ];
@@ -282,6 +285,38 @@ export default function App({ limitedToSubgroups = null }) {
       console.error('Failed to refetch registrations:', e);
     }
   }, []);
+
+  const handleClearFlight = useCallback(async (regEmail) => {
+    try {
+      // Optimistically update local state first
+      setRegistrations(prev => prev.map(r =>
+        r.email === regEmail
+          ? { ...r, arrivalDate: null, arrivalTime: null, arrivalFlight: null, departureDate: null, departureTime: null, departureFlight: null }
+          : r
+      ));
+      // Try direct client update first (may fail due to RLS)
+      const { error, count } = await supabase
+        .from('registrations')
+        .update({ arrival_date: null, arrival_time: null, arrival_flight: null, departure_date: null, departure_time: null, departure_flight: null })
+        .eq('email', regEmail.toLowerCase());
+
+      console.log('Clear flight response:', { error, count });
+      if (error) {
+        console.error('RLS blocked direct update, trying edge function...');
+        // If RLS blocks it, try the edge function
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('clear-flight', {
+          body: { email: regEmail },
+        });
+        console.log('Edge function response:', { fnData, fnError });
+        if (fnError) throw new Error(fnError.message || 'Failed to clear flight');
+      }
+    } catch (e) {
+      console.error('Failed to clear flight:', e);
+      alert(`Failed to clear flight: ${e.message}`);
+      // Refetch to undo optimistic update on error
+      await refetchRegistrations();
+    }
+  }, [refetchRegistrations]);
 
   // Finance access: regional_secretary only (unless granted via user_grants); super_admin sees tab but is restricted
   useEffect(() => {
@@ -469,12 +504,17 @@ export default function App({ limitedToSubgroups = null }) {
 
   const bySubgroup = useMemo(() => {
     const out = {};
-    subgroups.forEach(sg => { out[sg] = { total: 0, confirmed: 0, flights: 0 }; });
+    subgroups.forEach(sg => { out[sg] = { total: 0, confirmed: 0, flights: 0, flightsNeeded: 0 }; });
     merged.forEach(r => {
-      if (!out[r.subgroup]) out[r.subgroup] = { total: 0, confirmed: 0, flights: 0 };
+      if (!out[r.subgroup]) out[r.subgroup] = { total: 0, confirmed: 0, flights: 0, flightsNeeded: 0 };
       out[r.subgroup].total++;
       if (r.fullyConfirmed) out[r.subgroup].confirmed++;
       if (r.arrivalFlight || r.departureFlight) out[r.subgroup].flights++;
+
+      // Count out-of-state people (excluding exempt fellowships) as flights needed
+      if (!r.inStateConfirmed && !EXEMPT_FELLOWSHIPS.has(r.fellowship)) {
+        out[r.subgroup].flightsNeeded++;
+      }
     });
     return out;
   }, [merged, subgroups]);
@@ -799,6 +839,7 @@ export default function App({ limitedToSubgroups = null }) {
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.inStateConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom, isLimited }} />}
+        {tab === 'transport' && <TransportTab {...{ merged, isLimited, onApplied: refetchRegistrations, onClearFlight: handleClearFlight }} />}
         {tab === 'finance' && (hasFinanceAccess
           ? <FinanceTab {...{ registrations: registrationsFiltered, payments, setPayments, userId: profile?.id }} />
           : <div style={{ padding: 48, textAlign: 'center' }}>
@@ -817,13 +858,15 @@ export default function App({ limitedToSubgroups = null }) {
 function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets, setTarget, merged, isLimited }) {
   const regPct = totalRegTarget ? Math.round((totalRegs / totalRegTarget) * 100) : 0;
   const confirmedCount = useMemo(() => merged.filter(r => r.fullyConfirmed).length, [merged]);
+  const totalFlightsNeeded = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.flightsNeeded || 0), 0), [bySubgroup]);
+  const totalFlightsBooked = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.flights || 0), 0), [bySubgroup]);
 
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
         <SummaryCard label="Total registrations" current={totalRegs} target={totalRegTarget} pct={regPct} />
         <SummaryCard label="Confirmed" current={confirmedCount} target={totalRegs} pct={totalRegs ? Math.round((confirmedCount / totalRegs) * 100) : 0} />
-        <SummaryCard label="Flights" current={0} target={totalRegs} pct={0} />
+        <SummaryCard label="Flights" current={totalFlightsBooked} target={totalFlightsNeeded} pct={totalFlightsNeeded ? Math.round((totalFlightsBooked / totalFlightsNeeded) * 100) : 0} />
       </div>
 
 
@@ -840,8 +883,7 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets
               <th>Registration target</th>
               <th>Registrations</th>
               <th>Difference (reg)</th>
-              <th>Flights target</th>
-              <th>Difference (flights)</th>
+              <th>Flights needed</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -868,18 +910,14 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets
                   <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: regTarget - s.total > 0 ? C.green : C.mute }}>
                     {regTarget ? (regTarget - s.total > 0 ? `−${regTarget - s.total}` : `+${s.total - regTarget}`) : '—'}
                   </td>
-                  <td>
-                    <input type="number" style={{ width: 60 }} value={t.flights ?? ''} placeholder="0"
-                      onChange={e => setTarget(sg, 'flights', e.target.value)} />
-                  </td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: (t.flights || 0) - (s.flights || 0) > 0 ? C.green : C.mute }}>
-                    {t.flights ? ((t.flights || 0) - (s.flights || 0) > 0 ? `−${(t.flights || 0) - (s.flights || 0)}` : `+${(s.flights || 0) - (t.flights || 0)}`) : '—'}
+                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: C.mute }}>
+                    {s.flightsNeeded || 0}
                   </td>
                   <td><Pill tone={tone}>{statusLabel(regPctSg)}</Pill></td>
                 </tr>
               );
             })}
-            {subgroups.length === 0 && <tr><td colSpan={7} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>Import registrations to see subgroup breakdown.</td></tr>}
+            {subgroups.length === 0 && <tr><td colSpan={6} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>Import registrations to see subgroup breakdown.</td></tr>}
           </tbody>
         </table>
         </div>
@@ -1819,6 +1857,329 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups,
   );
 }
 
+// ============ TRANSPORTATION ============
+function FlightsSyncBlock({ onApplied }) {
+  const [state, setState] = useState('idle'); // idle | loading | preview | applying | done | error
+  const [preview, setPreview] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  async function fetchPreview() {
+    setState('loading');
+    setPreview(null);
+    setErrorMsg('');
+    try {
+      const { data, error } = await supabase.functions.invoke('registration-api-sync', {
+        body: { action: 'preview', form: 'flights' },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error + (data.details ? ` — ${data.details}` : ''));
+      setPreview(data);
+      setState('preview');
+    } catch (e) {
+      setErrorMsg(String(e));
+      setState('error');
+    }
+  }
+
+  async function applySync() {
+    setState('applying');
+    try {
+      const { data, error } = await supabase.functions.invoke('registration-api-sync', {
+        body: { action: 'apply', form: 'flights' },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error + (data.details ? ` — ${data.details}` : ''));
+      setState('done');
+      onApplied?.();
+    } catch (e) {
+      setErrorMsg(String(e));
+      setState('error');
+    }
+  }
+
+  return (
+    <Card style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: 13.5 }}>Sync flight data from Ministry Platform</div>
+          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>
+            Pulls flight form submissions and matches them to registrations by name. Preview before applying.
+          </div>
+        </div>
+        {(state === 'idle' || state === 'error') && (
+          <Btn tone="subtle" small onClick={fetchPreview}>Fetch preview</Btn>
+        )}
+        {state === 'loading' && <span style={{ fontSize: 12.5, color: C.mute }}>Fetching…</span>}
+        {state === 'done' && <span style={{ fontSize: 12.5, color: C.green, fontWeight: 600 }}>✓ Synced</span>}
+      </div>
+
+      {state === 'error' && (
+        <div style={{ marginTop: 10, padding: '8px 12px', background: C.redBg, borderRadius: 8, fontSize: 12.5, color: C.red }}>
+          {errorMsg}
+        </div>
+      )}
+
+      {(state === 'preview' || state === 'applying') && preview && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12.5 }}><b>{preview.total_submissions}</b> submissions</span>
+            <span style={{ fontSize: 12.5 }}><b>{preview.unique_people}</b> unique people</span>
+            <span style={{ fontSize: 12.5, color: C.green }}><b>{preview.matched_count}</b> matched</span>
+            <span style={{ fontSize: 12.5, color: C.red }}><b>{preview.unmatched_count}</b> unmatched by name</span>
+          </div>
+
+          {preview.rows?.length > 0 && (
+            <div style={{ overflowX: 'auto', marginBottom: 12, maxHeight: 280, overflowY: 'auto', border: `1px solid ${C.line}`, borderRadius: 8 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#F7F5FC', position: 'sticky', top: 0 }}>
+                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Name</th>
+                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Arrival</th>
+                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Arr. Flight</th>
+                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Departure</th>
+                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Dep. Flight</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.rows.map((r, i) => (
+                    <tr key={i} style={{ borderTop: `1px solid ${C.line}` }}>
+                      <td style={{ padding: '5px 10px', fontWeight: 500 }}>{r.full_name}</td>
+                      <td style={{ padding: '5px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{r.arrival_date}{r.arrival_time ? ` ${fmtTime(r.arrival_time)}` : ''}</td>
+                      <td style={{ padding: '5px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{r.arrival_flight || '—'}</td>
+                      <td style={{ padding: '5px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{r.departure_date}{r.departure_time ? ` ${fmtTime(r.departure_time)}` : ''}</td>
+                      <td style={{ padding: '5px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{r.departure_flight || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {preview.unmatched?.length > 0 && (
+            <div style={{ marginBottom: 12, padding: '8px 12px', background: C.amberBg, borderRadius: 8, fontSize: 12.5, color: C.amber }}>
+              <b>Could not match:</b> {preview.unmatched.join(', ')}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Btn tone="primary" small onClick={applySync} disabled={state === 'applying'}>
+              {state === 'applying' ? 'Applying…' : `Apply — write ${preview.matched_count} records`}
+            </Btn>
+            <Btn tone="ghost" small onClick={() => { setState('idle'); setPreview(null); }}>Cancel</Btn>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function TransportTab({ merged, isLimited, onApplied, onClearFlight }) {
+  const [subgroupFilter, setSubgroupFilter] = useState('All');
+  const [refreshing, setRefreshing] = useState(false);
+  const [clearingEmail, setClearingEmail] = useState(null);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await onApplied?.();
+    setRefreshing(false);
+  }
+
+  async function clearFlight(person) {
+    console.log('clearFlight called for:', person.email);
+    setClearingEmail(person.email);
+    if (!onClearFlight) {
+      console.error('onClearFlight is not defined');
+      alert('Error: Clear flight handler not available');
+      setClearingEmail(null);
+      return;
+    }
+    console.log('Calling onClearFlight...');
+    await onClearFlight(person.email);
+    console.log('onClearFlight completed');
+    setClearingEmail(null);
+  }
+
+  const subgroups = useMemo(() => {
+    const s = new Set(merged.map(r => r.subgroup).filter(Boolean));
+    return [...s].sort();
+  }, [merged]);
+
+  // Out-of-state delegates = not inStateConfirmed, not from exempt fellowships
+  const outOfState = useMemo(() =>
+    merged.filter(r => !r.inStateConfirmed && !EXEMPT_FELLOWSHIPS.has(r.fellowship)),
+    [merged]);
+
+  const filtered = useMemo(() =>
+    subgroupFilter === 'All' ? outOfState : outOfState.filter(r => r.subgroup === subgroupFilter),
+    [outOfState, subgroupFilter]);
+
+  const withFlight = useMemo(() =>
+    filtered.filter(r => r.arrivalFlight || r.departureFlight || r.arrivalDate || r.departureDate),
+    [filtered]);
+
+  const missingFlight = useMemo(() =>
+    filtered.filter(r => !r.arrivalFlight && !r.departureFlight && !r.arrivalDate && !r.departureDate),
+    [filtered]);
+
+  // Group people with flights by arrival date for pickup logistics
+  const byArrivalDate = useMemo(() => {
+    const groups = {};
+    withFlight.forEach(r => {
+      const key = r.arrivalDate || 'Unknown';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(r);
+    });
+    // Sort each group by arrival time
+    Object.values(groups).forEach(g =>
+      g.sort((a, b) => (a.arrivalTime || '').localeCompare(b.arrivalTime || '')),
+    );
+    // Return entries sorted by date (Unknown last)
+    return Object.entries(groups).sort(([a], [b]) => {
+      if (a === 'Unknown') return 1;
+      if (b === 'Unknown') return -1;
+      return a.localeCompare(b);
+    });
+  }, [withFlight]);
+
+  const flightCols = [
+    { key: 'fullName', label: 'Name' },
+    { key: 'subgroup', label: 'Subgroup' },
+    { key: 'arrivalDate', label: 'Arrival Date' },
+    { key: 'arrivalTime', label: 'Arrival Time' },
+    { key: 'arrivalFlight', label: 'Arrival Flight' },
+    { key: 'departureDate', label: 'Departure Date' },
+    { key: 'departureTime', label: 'Departure Time' },
+    { key: 'departureFlight', label: 'Departure Flight' },
+  ];
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Transportation</h2>
+          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>
+            Out-of-state delegates (excludes in-state confirmed &amp; exempt fellowships).
+            {' '}{withFlight.length} with flights · {missingFlight.length} awaiting flight info.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {!isLimited && <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />}
+          <Btn tone="ghost" small onClick={handleRefresh} disabled={refreshing}>
+            <RefreshCw size={13} style={refreshing ? { animation: 'spin 1s linear infinite' } : {}} />
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </Btn>
+          <Btn tone="ghost" small onClick={() => downloadCSV('flight-manifest.csv', withFlight, flightCols)}>
+            <Download size={13} /> Export manifest
+          </Btn>
+        </div>
+      </div>
+
+      <FlightsSyncBlock onApplied={onApplied} />
+
+      {/* Flight manifest grouped by arrival date */}
+      {byArrivalDate.length > 0 ? byArrivalDate.map(([date, people]) => (
+        <div key={date} style={{ marginBottom: 24 }}>
+          <div style={{ fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 13.5, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Plane size={14} color={C.purple} />
+            {date === 'Unknown' ? 'Arrival date unknown' : `Arriving ${date}`}
+            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11.5, fontWeight: 400, color: C.mute }}>{people.length} person{people.length !== 1 ? 's' : ''}</span>
+          </div>
+          <Card style={{ padding: 0 }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Subgroup</th>
+                    <th>Arrival Time</th>
+                    <th>Arrival Flight</th>
+                    <th>Departure Date</th>
+                    <th>Departure Time</th>
+                    <th>Departure Flight</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {people.map(r => (
+                    <tr key={r.email}>
+                      <td style={{ fontWeight: 500 }}>{r.fullName}</td>
+                      <td style={{ color: C.mute }}>{r.subgroup}</td>
+                      <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.arrivalTime ? fmtTime(r.arrivalTime) : '—'}</td>
+                      <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.arrivalFlight || '—'}</td>
+                      <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.departureDate || '—'}</td>
+                      <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.departureTime ? fmtTime(r.departureTime) : '—'}</td>
+                      <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.departureFlight || '—'}</td>
+                      <td>
+                        <button
+                          onClick={() => clearFlight(r)}
+                          disabled={clearingEmail === r.email}
+                          title="Clear flight info"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: clearingEmail === r.email ? C.mute : `${C.mute}88`, padding: '2px 4px', lineHeight: 1, transition: 'color .12s' }}
+                          onMouseEnter={e => { if (clearingEmail !== r.email) e.currentTarget.style.color = C.red; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = clearingEmail === r.email ? C.mute : `${C.mute}88`; }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )) : (
+        <Card>
+          <div style={{ color: C.mute, textAlign: 'center', padding: '20px 0', fontSize: 13 }}>
+            No flight data yet. Sync from the platform above or edit individual records.
+          </div>
+        </Card>
+      )}
+
+      {/* Missing flight info */}
+      {missingFlight.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 13.5, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={14} color={C.amber} />
+            Awaiting flight info
+            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11.5, fontWeight: 400, color: C.mute }}>{missingFlight.length} person{missingFlight.length !== 1 ? 's' : ''}</span>
+          </div>
+          <Card style={{ padding: 0 }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Subgroup</th>
+                    <th>Fellowship</th>
+                    <th>Email</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {missingFlight.map(r => (
+                    <tr key={r.email}>
+                      <td style={{ fontWeight: 500 }}>{r.fullName}</td>
+                      <td style={{ color: C.mute }}>{r.subgroup}</td>
+                      <td style={{ color: C.mute }}>{r.fellowship}</td>
+                      <td style={{ fontFamily: 'JetBrains Mono', fontSize: 11.5, color: C.mute }}>{r.email}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+            <Btn tone="ghost" small onClick={() => downloadCSV('missing-flights.csv', missingFlight, [
+              { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' },
+              { key: 'fellowship', label: 'Fellowship' }, { key: 'email', label: 'Email' },
+            ])}><Download size={13} /> Export missing list</Btn>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ============ IMPORT ============
 function ApiSyncBlock({ onApplied }) {
   const [state, setState] = useState('idle'); // idle | loading | preview | applying | done | error
@@ -2053,8 +2414,16 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   const [bulkCount, setBulkCount] = useState(5);
   const [bulkCapacity, setBulkCapacity] = useState(2);
   const [draggedPerson, setDraggedPerson] = useState(null);
+  const [selectedPerson, setSelectedPerson] = useState(null); // mobile tap-to-assign
   const [editingRoomId, setEditingRoomId] = useState(null);
   const [editingRoomName, setEditingRoomName] = useState('');
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  useEffect(() => {
+    const h = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  const isMobile = windowWidth < 700;
 
   function commitRename(roomId) {
     handleRenameRoom(roomId, editingRoomName);
@@ -2118,55 +2487,84 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   const totalCapacity = rooms.reduce((s, r) => s + r.capacity, 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 200px)', minHeight: 520 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 200px)', minHeight: isMobile ? 0 : 520 }}>
       {/* header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexShrink: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexShrink: 0, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 18, margin: '0 0 3px', fontWeight: 700 }}>Room Assignments</h2>
           <div style={{ fontSize: 12, color: C.mute }}>
-            {unassigned.length} unassigned · {rooms.length} rooms · {totalAssigned}/{totalCapacity} filled · drag names into rooms
+            {unassigned.length} unassigned · {rooms.length} rooms · {totalAssigned}/{totalCapacity} filled
+            {isMobile ? ' · tap name then tap room' : ' · drag names into rooms'}
           </div>
         </div>
         <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0}><Download size={13} /> Print</Btn>
       </div>
 
-      {/* two-panel body */}
-      <div style={{ flex: 1, display: 'flex', gap: 14, overflow: 'hidden' }}>
+      {/* tap-to-assign banner on mobile */}
+      {isMobile && selectedPerson && (
+        <div style={{ marginBottom: 10, padding: '8px 12px', background: C.blueBg, borderRadius: 8, fontSize: 12.5, color: C.blue, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Assigning: {selectedPerson.fullName} — tap a room</span>
+          <button onClick={() => setSelectedPerson(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.blue, fontWeight: 700, fontSize: 14, lineHeight: 1 }}>✕</button>
+        </div>
+      )}
 
-        {/* ── LEFT: unassigned pool ── */}
-        <div style={{ width: 230, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* body — side-by-side on desktop, stacked on mobile */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 14, overflow: isMobile ? 'visible' : 'hidden' }}>
+
+        {/* ── unassigned pool ── */}
+        <div style={isMobile
+          ? { flexShrink: 0 }
+          : { width: 230, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+        }>
           {['male', 'female'].map(gender => {
             const genderColor = gender === 'male' ? '#2A5FA5' : '#C0507A';
             const genderBg   = gender === 'male' ? '#EEF3FF' : '#FFF0F6';
             const label      = gender === 'male' ? 'Men' : 'Women';
             const count      = byGender[gender].length;
             return (
-              <div key={gender} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', marginBottom: gender === 'male' ? 10 : 0 }}>
+              <div key={gender} style={isMobile
+                ? { marginBottom: gender === 'male' ? 10 : 0 }
+                : { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', marginBottom: gender === 'male' ? 10 : 0 }
+              }>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexShrink: 0 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: genderColor, background: `${genderColor}18`, padding: '2px 7px', borderRadius: 99 }}>{label}</span>
                   <span style={{ fontSize: 11.5, color: C.mute }}>{count} left</span>
                 </div>
-                <div style={{ flex: 1, overflowY: 'auto', background: genderBg, borderRadius: 8, border: `1px solid ${genderColor}25`, padding: 6 }}>
+                <div style={isMobile
+                  ? { display: 'flex', flexWrap: 'wrap', gap: 6, background: genderBg, borderRadius: 8, border: `1px solid ${genderColor}25`, padding: 8 }
+                  : { flex: 1, overflowY: 'auto', background: genderBg, borderRadius: 8, border: `1px solid ${genderColor}25`, padding: 6 }
+                }>
                   {count === 0 ? (
-                    <div style={{ fontSize: 11.5, color: C.mute, fontStyle: 'italic', textAlign: 'center', padding: '20px 8px' }}>All assigned!</div>
+                    <div style={{ fontSize: 11.5, color: C.mute, fontStyle: 'italic', textAlign: 'center', padding: '12px 8px', width: '100%' }}>All assigned!</div>
                   ) : (
-                    byGender[gender].map(person => (
-                      <div
-                        key={person.email}
-                        draggable
-                        onDragStart={e => { setDraggedPerson(person); e.dataTransfer.effectAllowed = 'move'; }}
-                        style={{ padding: '6px 8px', background: '#fff', border: `1px solid ${genderColor}33`, borderRadius: 5, fontSize: 12, cursor: 'grab', userSelect: 'none', marginBottom: 4, transition: 'box-shadow .12s' }}
-                        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.12)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}
-                      >
-                        <div style={{ fontWeight: 500, color: '#1A1220', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{person.fullName}</div>
-                        {(person.subgroup || person.designation) && (
-                          <div style={{ fontSize: 10.5, color: C.mute, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {person.subgroup}{person.designation ? ` · ${person.designation}` : ''}
-                          </div>
-                        )}
-                      </div>
-                    ))
+                    byGender[gender].map(person => {
+                      const isSelected = selectedPerson?.email === person.email;
+                      return isMobile ? (
+                        <button
+                          key={person.email}
+                          onClick={() => setSelectedPerson(isSelected ? null : person)}
+                          style={{ padding: '6px 10px', background: isSelected ? genderColor : '#fff', color: isSelected ? '#fff' : '#1A1220', border: `1.5px solid ${isSelected ? genderColor : genderColor + '44'}`, borderRadius: 20, fontSize: 12, cursor: 'pointer', fontWeight: isSelected ? 700 : 400, transition: 'all .12s', lineHeight: 1.3 }}
+                        >
+                          {person.fullName}
+                        </button>
+                      ) : (
+                        <div
+                          key={person.email}
+                          draggable
+                          onDragStart={e => { setDraggedPerson(person); e.dataTransfer.effectAllowed = 'move'; }}
+                          style={{ padding: '6px 8px', background: '#fff', border: `1px solid ${genderColor}33`, borderRadius: 5, fontSize: 12, cursor: 'grab', userSelect: 'none', marginBottom: 4, transition: 'box-shadow .12s' }}
+                          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.12)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}
+                        >
+                          <div style={{ fontWeight: 500, color: '#1A1220', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{person.fullName}</div>
+                          {(person.subgroup || person.designation) && (
+                            <div style={{ fontSize: 10.5, color: C.mute, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {person.subgroup}{person.designation ? ` · ${person.designation}` : ''}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -2174,17 +2572,17 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
           })}
         </div>
 
-        {/* ── RIGHT: rooms grid + add controls ── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+        {/* ── rooms grid + add controls ── */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: isMobile ? 'visible' : 'hidden', minWidth: 0 }}>
           {/* rooms grid */}
-          <div style={{ flex: 1, overflowY: 'auto', paddingRight: 2 }}>
+          <div style={{ flex: isMobile ? 'none' : 1, overflowY: isMobile ? 'visible' : 'auto', paddingRight: 2 }}>
             {rooms.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: C.mute, fontSize: 13 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', color: C.mute, fontSize: 13 }}>
                 <div style={{ fontSize: 28, marginBottom: 8 }}>🏠</div>
                 No rooms yet — use the controls below to create some.
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fill, minmax(190px, 1fr))', gap: 8 }}>
                 {rooms.map(room => {
                   const genderSet = new Set(room.people.map(p => {
                     const g = (p.gender || '').toLowerCase();
@@ -2214,7 +2612,13 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                           setDraggedPerson(null);
                         }
                       }}
-                      style={{ background: roomBg, border: `1.5px solid ${roomBorder}`, borderRadius: 8, padding: '8px 10px', transition: 'all .15s', cursor: 'default' }}
+                      onClick={() => {
+                        if (selectedPerson && room.people.length < room.capacity) {
+                          handleAssignPerson(selectedPerson, room.id);
+                          setSelectedPerson(null);
+                        }
+                      }}
+                      style={{ background: roomBg, border: `1.5px solid ${selectedPerson && room.people.length < room.capacity ? roomAccent : roomBorder}`, borderRadius: 8, padding: '8px 10px', transition: 'all .15s', cursor: selectedPerson ? 'pointer' : 'default' }}
                     >
                       {/* compact header row */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
@@ -2303,8 +2707,8 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
             )}
           </div>
 
-          {/* add room controls — fixed at bottom of right panel */}
-          <div style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, marginTop: 10 }}>
+          {/* add room controls */}
+          <div style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, marginTop: 10 }}>
             {/* single room */}
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               <input
@@ -2312,10 +2716,10 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                 value={newRoomName}
                 onChange={e => setNewRoomName(e.target.value)}
                 placeholder="Room name"
-                style={{ flex: 1, minWidth: 80, fontSize: 12.5, padding: '6px 9px', borderRadius: 6, border: `1px solid ${C.line}` }}
+                style={{ flex: 1, minWidth: 80, fontSize: 12.5, padding: '8px 9px', borderRadius: 6, border: `1px solid ${C.line}` }}
                 onKeyDown={e => { if (e.key === 'Enter') { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); } }}
               />
-              <input type="number" min={1} value={newRoomCapacity} onChange={e => setNewRoomCapacity(e.target.value)} style={{ width: 48, fontSize: 12.5, padding: '6px 6px', borderRadius: 6, border: `1px solid ${C.line}` }} title="Capacity" />
+              <input type="number" min={1} value={newRoomCapacity} onChange={e => setNewRoomCapacity(e.target.value)} style={{ width: 52, fontSize: 12.5, padding: '8px 6px', borderRadius: 6, border: `1px solid ${C.line}` }} title="Capacity" />
               <Btn small onClick={() => { handleAddRoom(newRoomName, newRoomCapacity); setNewRoomName(''); }} disabled={rooms.length >= 50}><Plus size={12} /> Add room</Btn>
             </div>
             {/* bulk */}
@@ -2325,10 +2729,10 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                 value={bulkPrefix}
                 onChange={e => setBulkPrefix(e.target.value)}
                 placeholder="Prefix"
-                style={{ flex: 1, minWidth: 60, fontSize: 12.5, padding: '6px 9px', borderRadius: 6, border: `1px solid ${C.line}` }}
+                style={{ flex: 1, minWidth: 60, fontSize: 12.5, padding: '8px 9px', borderRadius: 6, border: `1px solid ${C.line}` }}
               />
-              <input type="number" min={1} max={50} value={bulkCount} onChange={e => setBulkCount(e.target.value)} style={{ width: 44, fontSize: 12.5, padding: '6px 6px', borderRadius: 6, border: `1px solid ${C.line}` }} title="Count" />
-              <input type="number" min={1} value={bulkCapacity} onChange={e => setBulkCapacity(e.target.value)} style={{ width: 44, fontSize: 12.5, padding: '6px 6px', borderRadius: 6, border: `1px solid ${C.line}` }} title="Capacity each" />
+              <input type="number" min={1} max={50} value={bulkCount} onChange={e => setBulkCount(e.target.value)} style={{ width: 48, fontSize: 12.5, padding: '8px 6px', borderRadius: 6, border: `1px solid ${C.line}` }} title="Count" />
+              <input type="number" min={1} value={bulkCapacity} onChange={e => setBulkCapacity(e.target.value)} style={{ width: 48, fontSize: 12.5, padding: '8px 6px', borderRadius: 6, border: `1px solid ${C.line}` }} title="Capacity each" />
               <Btn small onClick={() => handleBulkCreateRooms(bulkPrefix, Number(bulkCount), bulkCapacity)} disabled={rooms.length >= 50 || !bulkCount}><Plus size={12} /> Bulk</Btn>
             </div>
           </div>
