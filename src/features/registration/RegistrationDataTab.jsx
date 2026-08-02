@@ -528,28 +528,10 @@ export default function RegistrationDataTab({
         })}
       </div>
 
-      {/* ── Bulk email sender ─────────────────────────────────────────── */}
-      <div style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, padding: '16px 20px', marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 14, color: C.ink, marginBottom: 10 }}>Send bulk email</div>
-          <div style={{ display: 'flex', gap: 16 }}>
-            {[
-              { key: 'not_registered', label: 'Not Registered', count: not_registered, tone: 'red' },
-              { key: 'confirming', label: 'Confirming', count: confirming, tone: 'amber' },
-              { key: 'confirmed', label: 'Confirmed', count: confirmed, tone: 'green' },
-            ].map(({ key, label, count, tone }) => (
-              <label key={key} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
-                <input type="checkbox" checked={selectedStatuses[key]} onChange={() => toggleStatus(key)} style={{ cursor: 'pointer', accentColor: C.purple }} />
-                <span style={{ fontWeight: 600 }}>{label}</span>
-                <span style={{ background: tone === 'red' ? '#FBE9E9' : tone === 'amber' ? '#FBF0DE' : '#E8F5EC', color: tone === 'red' ? '#C4383A' : tone === 'amber' ? '#B8710A' : '#1F8A4C', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12 }}>{count}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <button onClick={() => setEmailModalOpen(true)} disabled={totalToEmail === 0} style={{ background: totalToEmail === 0 ? '#CCC' : C.purple, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: totalToEmail === 0 ? 'not-allowed' : 'pointer' }}>
-          {totalToEmail > 0 ? `Email ${totalToEmail}` : 'Email none selected'}
-        </button>
-      </div>
+      {/* ── Bulk email button ─────────────────────────────────────────── */}
+      <button onClick={() => setEmailModalOpen(true)} style={{ background: C.purple, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginBottom: 18 }}>
+        Email
+      </button>
 
       {emailModalOpen && (
         <BulkEmailSender
@@ -557,6 +539,7 @@ export default function RegistrationDataTab({
           statusCounts={statusCounts}
           merged={merged}
           onClose={() => setEmailModalOpen(false)}
+          onToggleStatus={toggleStatus}
         />
       )}
 
@@ -1010,7 +993,7 @@ function LinkRegistrationModal({ person, registrations, onLink, onClose }) {
 }
 
 // ============ BULK EMAIL SENDER ============
-function BulkEmailSender({ selectedStatuses, statusCounts, merged, onClose }) {
+function BulkEmailSender({ selectedStatuses, statusCounts, merged, onClose, onToggleStatus }) {
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1040,9 +1023,10 @@ function BulkEmailSender({ selectedStatuses, statusCounts, merged, onClose }) {
   const recipientEmails = useMemo(() => {
     return merged
       .filter(r => {
-        if (selectedStatuses.not_registered && r.emailStatus === 'not_registered') return true;
-        if (selectedStatuses.confirming && r.emailStatus === 'confirming') return true;
-        if (selectedStatuses.confirmed && r.emailStatus === 'confirmed') return true;
+        if (!r.email) return false;
+        if (selectedStatuses.not_registered && r.email && r.emailStatus === 'not_registered') return true;
+        if (selectedStatuses.confirming && r.email && r.emailStatus === 'confirming') return true;
+        if (selectedStatuses.confirmed && r.email && r.emailStatus === 'confirmed') return true;
         return false;
       })
       .map(r => ({ email: r.email, name: r.fullName, id: r.id }));
@@ -1092,6 +1076,22 @@ function BulkEmailSender({ selectedStatuses, statusCounts, merged, onClose }) {
         <div style={{ padding: '20px 24px', borderBottom: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0, fontWeight: 700 }}>Send bulk email</h2>
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 24, cursor: 'pointer', color: C.mute, padding: 0 }}>×</button>
+        </div>
+
+        {/* Status filters */}
+        <div style={{ padding: '14px 24px', borderBottom: `1px solid ${C.line}`, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, textTransform: 'uppercase' }}>Send to:</div>
+          {[
+            { key: 'not_registered', label: 'Not Registered', count: statusCounts.not_registered, tone: 'red' },
+            { key: 'confirming', label: 'Confirming', count: statusCounts.confirming, tone: 'amber' },
+            { key: 'confirmed', label: 'Confirmed', count: statusCounts.confirmed, tone: 'green' },
+          ].map(({ key, label, count, tone }) => (
+            <label key={key} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+              <input type="checkbox" checked={selectedStatuses[key]} onChange={() => onToggleStatus(key)} style={{ cursor: 'pointer', accentColor: C.purple }} />
+              <span style={{ fontWeight: 600 }}>{label}</span>
+              <span style={{ background: tone === 'red' ? '#FBE9E9' : tone === 'amber' ? '#FBF0DE' : '#E8F5EC', color: tone === 'red' ? '#C4383A' : tone === 'amber' ? '#B8710A' : '#1F8A4C', fontSize: 11, fontWeight: 600, padding: '2px 6px', borderRadius: 12 }}>{count}</span>
+            </label>
+          ))}
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
