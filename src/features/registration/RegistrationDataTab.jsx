@@ -506,31 +506,29 @@ export default function RegistrationDataTab({
         <DonutChart stats={stats} />
       </div>
 
-      {/* ── Status pill filters ──────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-        {statusPills.map(p => {
-          const active = statusFilter === p.key;
-          return (
-            <button
-              key={p.key}
-              onClick={() => setStatusFilter(p.key)}
-              style={{
-                padding: '5px 13px', borderRadius: 20, fontSize: 12.5, fontWeight: 600,
-                fontFamily: 'Inter', cursor: 'pointer', border: 'none',
-                background: active ? (p.color || C.purple) : '#F1EEF6',
-                color: active ? '#fff' : (p.color || C.mute),
-                transition: 'background .15s, color .15s',
-              }}
-            >
-              {p.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Bulk email button ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 18 }}>
-        <button onClick={() => setEmailModalOpen(true)} style={{ background: C.purple, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+      {/* ── Status pill filters + Email button ────────────────────────── */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {statusPills.map(p => {
+            const active = statusFilter === p.key;
+            return (
+              <button
+                key={p.key}
+                onClick={() => setStatusFilter(p.key)}
+                style={{
+                  padding: '5px 13px', borderRadius: 20, fontSize: 12.5, fontWeight: 600,
+                  fontFamily: 'Inter', cursor: 'pointer', border: 'none',
+                  background: active ? (p.color || C.purple) : '#F1EEF6',
+                  color: active ? '#fff' : (p.color || C.mute),
+                  transition: 'background .15s, color .15s',
+                }}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+        <button onClick={() => setEmailModalOpen(true)} style={{ background: C.purple, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
           Email
         </button>
       </div>
