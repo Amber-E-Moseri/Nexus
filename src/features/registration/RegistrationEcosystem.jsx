@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Users, Plane, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, Settings, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil } from 'lucide-react';
+import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import RegistrationEditModal from './RegistrationEditModal';
@@ -27,7 +27,32 @@ const C = {
 
 const FONT_LINK = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap';
 
-const DEFAULT_EXEMPT = ['BLW University of Manitoba', 'BLW University of Winnipeg'];
+
+// Convert any raw time value to "h:mm AM/PM" for display
+function fmtTime(raw) {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  // ISO datetime: "...T14:30:00..."
+  const isoM = s.match(/T(\d{2}):(\d{2})/);
+  if (isoM) {
+    let h = parseInt(isoM[1], 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${isoM[2]} ${ampm}`;
+  }
+  // 24-hour: "14:30" or "14:30:00"
+  const h24 = s.match(/^(\d{1,2}):(\d{2})/);
+  if (h24) {
+    let h = parseInt(h24[1], 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${h24[2]} ${ampm}`;
+  }
+  // "2:30PM" → "2:30 PM"
+  const nospace = s.match(/^(\d{1,2}:\d{2})\s*(AM|PM)$/i);
+  if (nospace) return `${nospace[1]} ${nospace[2].toUpperCase()}`;
+  return s;
+}
 
 // ---------- header normalization ----------
 const ALIASES = {
@@ -47,12 +72,6 @@ const ALIASES = {
   allergies: [/allerg|diet/i],
   team: [/team/i],
   leadership: [/leader/i, /position/i, /role/i],
-  arrivalDate: [/arrival.*date/i],
-  arrivalFlight: [/arrival.*flight/i],
-  arrivalTime: [/arrival.*time/i],
-  departureDate: [/depart.*date/i],
-  departureFlight: [/depart.*flight/i],
-  departureTime: [/depart.*time/i],
 };
 
 function normalizeRow(row) {
@@ -145,11 +164,6 @@ function downloadCSV(filename, rows, columns) {
   URL.revokeObjectURL(url);
 }
 
-function isExempt(fellowship, exemptList) {
-  if (!fellowship) return false;
-  return exemptList.some(ex => fellowship.toLowerCase().includes(ex.toLowerCase()));
-}
-
 // ---------- storage helpers (Supabase-backed) ----------
 async function loadKey(key, fallback) {
   try {
@@ -214,9 +228,7 @@ function Btn({ children, onClick, tone = 'primary', small, disabled }) {
 const ALL_TABS = [
   { key: 'overview', label: 'Overview', icon: Home },
   { key: 'central',  label: 'Registration Data', icon: Users },
-  { key: 'working', label: 'Eligible Delegates', icon: Users },
   { key: 'confirm', label: 'Delegates', icon: CheckCircle2 },
-  { key: 'transport', label: 'Transportation', icon: Plane },
   { key: 'discipleship', label: 'Foundation & Baptism', icon: Church },
   { key: 'compliance', label: 'Hospitality', icon: AlertCircle },
   { key: 'rooms', label: 'Room Assignments', icon: DoorOpen },
@@ -228,14 +240,13 @@ export default function App({ limitedToSubgroups = null }) {
   const { profile, role } = useAuth();
   const isLimited = limitedToSubgroups && limitedToSubgroups.length > 0;
   const [tab, setTab] = useState('overview');
+  const [highlightEmail, setHighlightEmail] = useState(null);
   const [roster, setRoster] = useState([]);
   const [registrations, setRegistrations] = useState([]);
-  const [flights, setFlights] = useState([]);
-  const [confirmations, setConfirmations] = useState({}); // email -> {inState, notes}
-  const [targets, setTargets] = useState({}); // subgroup -> {reg, flight}
-  const [exempt, setExempt] = useState(DEFAULT_EXEMPT);
+  const [confirmations, setConfirmations] = useState({});
+  const [targets, setTargets] = useState({});
   const [loaded, setLoaded] = useState(false);
-  const [lastImport, setLastImport] = useState({ roster: null, registrations: null, flights: null });
+  const [lastImport, setLastImport] = useState({ roster: null, registrations: null });
   const [subgroupFilter, setSubgroupFilter] = useState('All');
   const [rooms, setRooms] = useState([]);
   const [numRooms, setNumRooms] = useState(5);
@@ -249,6 +260,25 @@ export default function App({ limitedToSubgroups = null }) {
 
   const handleSaveReg = useCallback((updated) => {
     setRegistrations(prev => prev.map(r => r.email === updated.email ? { ...r, ...updated } : r));
+  }, []);
+
+  const refetchRegistrations = useCallback(async () => {
+    try {
+      const { data: dbRegs } = await supabase
+        .from('registrations')
+        .select('*')
+        .order('submitted_at', { ascending: false });
+      const mapped = (dbRegs || []).map(r => ({
+        id: r.id, email: r.email, fullName: r.full_name, firstName: r.first_name,
+        lastName: r.last_name, gender: r.gender, subgroup: r.subgroup, fellowship: r.fellowship,
+        phone: r.phone, designation: r.designation, shirtSize: r.shirt_size,
+        foundationStatus: r.foundation_status, baptism: r.baptism, allergies: r.allergies,
+        team: r.team, leadership: r.leadership, submittedAt: r.submitted_at,
+      }));
+      setRegistrations(mapped);
+    } catch (e) {
+      console.error('Failed to refetch registrations:', e);
+    }
   }, []);
 
   // Finance access: regional_secretary only (unless granted via user_grants); super_admin sees tab but is restricted
@@ -291,10 +321,10 @@ export default function App({ limitedToSubgroups = null }) {
 
   useEffect(() => {
     (async () => {
-      const [r, reg, fl, conf, tg, ex, li] = await Promise.all([
-        loadKey('roster', []), loadKey('registrations', []), loadKey('flights', []),
-        loadKey('confirmations', {}), loadKey('targets', {}), loadKey('exempt-fellowships', DEFAULT_EXEMPT),
-        loadKey('last-import', { roster: null, registrations: null, flights: null }),
+      const [r, reg, conf, tg, li] = await Promise.all([
+        loadKey('roster', []), loadKey('registrations', []),
+        loadKey('confirmations', {}), loadKey('targets', {}),
+        loadKey('last-import', { roster: null, registrations: null }),
       ]);
 
       // Always fetch roster from Supabase (authoritative source)
@@ -317,17 +347,6 @@ export default function App({ limitedToSubgroups = null }) {
       } catch (e) {
         console.error('Failed to fetch roster from Supabase:', e);
       }
-
-      // Load exempt fellowships from Supabase (overrides localStorage if present)
-      let finalExempt = ex;
-      try {
-        const { data: configRow } = await supabase
-          .from('registration_config')
-          .select('value')
-          .eq('key', 'exempt_fellowships')
-          .maybeSingle();
-        if (configRow?.value) finalExempt = configRow.value;
-      } catch { /* table may not exist yet; use localStorage fallback */ }
 
       // Fetch registrations from Supabase if not already loaded from localStorage
       let finalReg = reg;
@@ -355,12 +374,6 @@ export default function App({ limitedToSubgroups = null }) {
             allergies: r.allergies,
             team: r.team,
             leadership: r.leadership,
-            arrivalDate: r.arrival_date,
-            arrivalTime: r.arrival_time,
-            arrivalFlight: r.arrival_flight,
-            departureDate: r.departure_date,
-            departureTime: r.departure_time,
-            departureFlight: r.departure_flight,
             submittedAt: r.submitted_at,
           }));
         } catch (e) {
@@ -390,7 +403,7 @@ export default function App({ limitedToSubgroups = null }) {
         console.error('Failed to fetch payments from Supabase:', e);
       }
 
-      setRoster(finalRoster); setRegistrations(finalReg); setFlights(fl); setConfirmations(conf); setTargets(tg); setExempt(finalExempt); setLastImport(li);
+      setRoster(finalRoster); setRegistrations(finalReg); setConfirmations(conf); setTargets(tg); setLastImport(li);
 
       // Load room assignments
       try {
@@ -412,7 +425,6 @@ export default function App({ limitedToSubgroups = null }) {
 
   // ---------- derived: merged registrant records ----------
   const regByEmail = useMemo(() => Object.fromEntries(registrations.map(r => [r.email, r])), [registrations]);
-  const flightByEmail = useMemo(() => Object.fromEntries(flights.map(f => [f.email, f])), [flights]);
 
   const registrationsFiltered = useMemo(() => {
     if (!isLimited) return registrations;
@@ -425,25 +437,17 @@ export default function App({ limitedToSubgroups = null }) {
   );
 
   const merged = useMemo(() => registrationsFiltered.map(r => {
-    const flight = flightByEmail[r.email];
-    const exemptFlag = isExempt(r.fellowship, exempt);
-    const hasFlight = !!(flight && flight.arrivalDate);
     const conf = confirmations[r.email] || {};
     const pay = paymentByEmail[r.email];
     const hasPaid = pay ? (Number(pay.amount_paid) || 0) > 0 && (Number(pay.amount_paid) || 0) >= (Number(pay.amount_expected) || 0) : false;
     const inStateConfirmed = !!conf.inState || hasPaid;
-    const fullyConfirmed = hasPaid || (exemptFlag ? inStateConfirmed : hasFlight);
     return {
       ...r,
-      flight: flight || null,
-      hasFlight,
       hasPaid,
-      exempt: exemptFlag,
-      needsFlight: !exemptFlag,
       inStateConfirmed,
-      fullyConfirmed,
+      fullyConfirmed: inStateConfirmed,
     };
-  }), [registrationsFiltered, flightByEmail, exempt, confirmations, paymentByEmail]);
+  }), [registrationsFiltered, confirmations, paymentByEmail]);
 
   const rosterFiltered = useMemo(() => {
     if (!isLimited) return roster;
@@ -457,21 +461,17 @@ export default function App({ limitedToSubgroups = null }) {
 
   const bySubgroup = useMemo(() => {
     const out = {};
-    subgroups.forEach(sg => { out[sg] = { total: 0, flights: 0, confirmed: 0, needsFlight: 0 }; });
+    subgroups.forEach(sg => { out[sg] = { total: 0, confirmed: 0 }; });
     merged.forEach(r => {
-      if (!out[r.subgroup]) out[r.subgroup] = { total: 0, flights: 0, confirmed: 0, needsFlight: 0 };
+      if (!out[r.subgroup]) out[r.subgroup] = { total: 0, confirmed: 0 };
       out[r.subgroup].total++;
-      if (r.hasFlight) out[r.subgroup].flights++;
       if (r.fullyConfirmed) out[r.subgroup].confirmed++;
-      if (r.needsFlight) out[r.subgroup].needsFlight++;
     });
     return out;
   }, [merged, subgroups]);
 
   const totalRegs = registrationsFiltered.length;
   const totalRegTarget = Object.values(targets).reduce((s, t) => s + (Number(t.reg) || 0), 0);
-  const totalFlights = merged.filter(r => r.hasFlight).length;
-  const totalFlightTarget = merged.filter(r => r.needsFlight).length;
 
   const workingList = useMemo(() => {
     return rosterFiltered.filter(p => !regByEmail[p.email]);
@@ -485,8 +485,7 @@ export default function App({ limitedToSubgroups = null }) {
       if (t.key === 'rooms' && !hasRoomsAccess) return false;
       // Import Data: super admin only
       if (t.key === 'import' && role !== 'super_admin') return false;
-      // Limited pastors can't see transport, rooms, finance, import
-      if (isLimited && ['import', 'transport', 'rooms', 'finance'].includes(t.key)) return false;
+      if (isLimited && ['import', 'rooms', 'finance'].includes(t.key)) return false;
       return true;
     });
     return allowed;
@@ -510,13 +509,6 @@ export default function App({ limitedToSubgroups = null }) {
     });
   }, []);
 
-  const updateExempt = useCallback(async (list) => {
-    setExempt(list);
-    saveKey('exempt-fellowships', list);
-    try {
-      await supabase.from('registration_config').upsert({ key: 'exempt_fellowships', value: list, updated_at: new Date().toISOString() });
-    } catch { /* silent — localStorage still updated */ }
-  }, []);
 
   function initializeRooms(count, capacity) {
     const newRooms = Array.from({ length: count }, (_, i) => ({
@@ -614,7 +606,6 @@ export default function App({ limitedToSubgroups = null }) {
     const now = new Date().toISOString();
     if (kind === 'roster') { setRoster(rows); await saveKey('roster', rows); }
     if (kind === 'registrations') { setRegistrations(rows); await saveKey('registrations', rows); }
-    if (kind === 'flights') { setFlights(rows); await saveKey('flights', rows); }
     const li = { ...lastImport, [kind]: now };
     setLastImport(li); await saveKey('last-import', li);
   }
@@ -629,7 +620,7 @@ export default function App({ limitedToSubgroups = null }) {
       full_name: r.fullName || `${r.firstName} ${r.lastName}`.trim(),
       subgroup: r.subgroup || '',
       fellowship: r.fellowship || '',
-      leadership_category: r.leadership || '',
+      phone_number: r.phone_number || r.phone || '',
       synced_at: now,
       manually_added: false,
     })).filter(r => r.email);
@@ -642,7 +633,7 @@ export default function App({ limitedToSubgroups = null }) {
 
     try {
       // Preserve absent markings and manually-added rows across re-import
-      const { data: existing } = await supabase.from('working_list').select('email, absent, absent_reason, manually_added, full_name, subgroup, fellowship, leadership_category');
+      const { data: existing } = await supabase.from('working_list').select('email, absent, absent_reason, manually_added, full_name, subgroup, fellowship, phone_number');
       const absentByEmail = {};
       const manualRows = [];
       for (const row of existing || []) {
@@ -745,7 +736,6 @@ export default function App({ limitedToSubgroups = null }) {
         <div style={{ display: 'flex', gap: 18, fontFamily: 'JetBrains Mono', fontSize: 11, color: '#D8CCF0' }}>
           <span>roster: {rosterFiltered.length > 0 ? rosterFiltered.length : '—'}</span>
           <span>reg: {registrationsFiltered.length > 0 ? registrationsFiltered.length : '—'}</span>
-          <span>flights: {flights.length > 0 ? flights.length : '—'}</span>
         </div>
       </div>
 
@@ -776,7 +766,7 @@ export default function App({ limitedToSubgroups = null }) {
 
       <div style={{ padding: 28, maxWidth: 1280, margin: '0 auto' }}>
         {tab === 'overview' && (
-          <OverviewTab {...{ totalRegs, totalRegTarget, totalFlights, totalFlightTarget, subgroups, bySubgroup, targets, setTarget, merged, exempt, updateExempt, isLimited }} />
+          <OverviewTab {...{ totalRegs, totalRegTarget, subgroups, bySubgroup, targets, setTarget, merged, isLimited }} />
         )}
         {tab === 'central' && (
           <RegistrationDataTab
@@ -786,12 +776,17 @@ export default function App({ limitedToSubgroups = null }) {
             hasFinanceAccess={hasFinanceAccess}
             subgroups={subgroups}
             isLimited={isLimited}
+            role={role}
             onSaveReg={handleSaveReg}
+            onMarkAbsent={handleMarkAbsent}
+            onAddPerson={handleAddToWorkingList}
+            onEditPerson={handleEditWorkingListPerson}
+            onRemove={handleRemoveFromWorkingList}
+            highlightEmail={highlightEmail}
+            onClearHighlight={() => setHighlightEmail(null)}
           />
         )}
-        {tab === 'working' && <WorkingListTab {...{ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups, isLimited, merged, role, onAddPerson: handleAddToWorkingList, onMarkAbsent: handleMarkAbsent, onEditPerson: handleEditWorkingListPerson, onRemove: handleRemoveFromWorkingList }} />}
         {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm, isLimited, onEditReg: setEditingReg }} />}
-        {tab === 'transport' && <TransportTab {...{ merged, exempt, isLimited }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.inStateConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom, isLimited }} />}
@@ -803,94 +798,27 @@ export default function App({ limitedToSubgroups = null }) {
               <div style={{ color: C.mute, fontSize: 14 }}>Finance data is only accessible to the Regional Secretary and authorised team members.</div>
             </div>
         )}
-        {tab === 'import' && <ImportTab {...{ handleImport, handleImportWorkingList, roster: rosterFiltered, registrations: registrationsFiltered, flights, workingListDb, exempt, updateExempt, lastImport, isLimited }} />}
+        {tab === 'import' && <ImportTab {...{ handleImport, handleImportWorkingList, roster: rosterFiltered, registrations: registrationsFiltered, workingListDb, lastImport, isLimited, onApiSyncApplied: refetchRegistrations }} />}
       </div>
     </div>
   );
 }
 
 // ============ OVERVIEW ============
-function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarget, subgroups, bySubgroup, targets, setTarget, merged, exempt, updateExempt, isLimited }) {
-  const [showSettings, setShowSettings] = useState(false);
-  const [waitingOpen, setWaitingOpen] = useState(false);
+function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets, setTarget, merged, isLimited }) {
   const regPct = totalRegTarget ? Math.round((totalRegs / totalRegTarget) * 100) : 0;
-  const flightPct = totalFlightTarget ? Math.round((totalFlights / totalFlightTarget) * 100) : 0;
-
-  const waitingList = useMemo(
-    () => merged.filter(r => r.needsFlight && !r.hasFlight).sort((a, b) => (a.subgroup || '').localeCompare(b.subgroup || '')),
-    [merged],
-  );
-
   const confirmedCount = useMemo(() => merged.filter(r => r.fullyConfirmed).length, [merged]);
 
   return (
     <div>
-      {waitingOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={() => setWaitingOpen(false)}>
-          <div style={{ background: '#fff', borderRadius: 14, width: '90%', maxWidth: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,.18)' }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '18px 24px', borderBottom: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 16 }}>Waiting on flights</div>
-                <div style={{ fontSize: 12.5, color: C.mute, marginTop: 2 }}>{waitingList.length} registrant{waitingList.length !== 1 ? 's' : ''} need a flight but don't have one on file yet</div>
-              </div>
-              <button onClick={() => setWaitingOpen(false)} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: C.mute, lineHeight: 1 }}>×</button>
-            </div>
-            <div style={{ overflowY: 'auto', padding: 16 }}>
-              {waitingList.length === 0 ? (
-                <div style={{ textAlign: 'center', color: C.mute, padding: 32 }}>Everyone who needs a flight has one on file.</div>
-              ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono', fontSize: 10.5, color: C.mute, textTransform: 'uppercase', padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Name</th>
-                      <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono', fontSize: 10.5, color: C.mute, textTransform: 'uppercase', padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Subgroup</th>
-                      <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono', fontSize: 10.5, color: C.mute, textTransform: 'uppercase', padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Email</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {waitingList.map((r, i) => (
-                      <tr key={i}>
-                        <td style={{ padding: '9px 10px', fontSize: 13, borderBottom: `1px solid ${C.line}` }}>{r.fullName || `${r.firstName} ${r.lastName}`}</td>
-                        <td style={{ padding: '9px 10px', fontSize: 13, borderBottom: `1px solid ${C.line}`, color: C.mute }}>{r.subgroup}</td>
-                        <td style={{ padding: '9px 10px', fontSize: 12, borderBottom: `1px solid ${C.line}`, fontFamily: 'JetBrains Mono' }}>{r.email}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-            <div style={{ padding: '12px 20px', borderTop: `1px solid ${C.line}`, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <Btn tone="ghost" small onClick={() => downloadCSV('waiting-on-flights.csv', waitingList, [
-                { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' },
-                { key: 'fellowship', label: 'Fellowship' }, { key: 'email', label: 'Email' },
-              ])}><Download size={13} /> Export</Btn>
-              <Btn small onClick={() => setWaitingOpen(false)}>Close</Btn>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
         <SummaryCard label="Total registrations" current={totalRegs} target={totalRegTarget} pct={regPct} />
         <SummaryCard label="Confirmed" current={confirmedCount} target={totalRegs} pct={totalRegs ? Math.round((confirmedCount / totalRegs) * 100) : 0} />
-        <SummaryCard label="Flights purchased" current={totalFlights} target={totalFlightTarget} pct={flightPct}
-          onTargetClick={totalFlightTarget > 0 ? () => setWaitingOpen(true) : undefined}
-          targetHint={waitingList.length > 0 ? `${waitingList.length} waiting` : undefined} />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>By subgroup</h2>
-        <Btn tone="ghost" small onClick={() => setShowSettings(s => !s)}><Settings size={13} /> Exempt fellowships</Btn>
       </div>
-
-      {showSettings && (
-        <Card style={{ marginBottom: 16, background: '#FAF8FE' }}>
-          <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 8 }}>Fellowships in this list don't need flights to count as fully confirmed (local/no-flight groups).</div>
-          <ExemptEditor exempt={exempt} onChange={updateExempt} />
-        </Card>
-      )}
 
       <Card style={{ padding: 0, overflowX: 'auto' }}>
         <div style={{ overflowX: 'auto', minWidth: 0 }}>
@@ -901,16 +829,14 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
               <th>Registration target</th>
               <th>Registrations</th>
               <th>Difference (reg)</th>
-              <th>Net flights needed</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
             {subgroups.map(sg => {
-              const s = bySubgroup[sg] || { total: 0, flights: 0, needsFlight: 0 };
+              const s = bySubgroup[sg] || { total: 0 };
               const t = targets[sg] || {};
               const regTarget = Number(t.reg) || 0;
-              const flightTarget = s.needsFlight || 0;
               const regPctSg = regTarget ? Math.round((s.total / regTarget) * 100) : 0;
               const tone = statusTone(regPctSg);
               return (
@@ -923,20 +849,17 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 110 }}>
                       <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{s.total}</span>
-                      <div style={{ flex: 1 }}><ProgressBar pct={regPctSg} tone={tone} /></div>
+                      <div style={{ flex: 1 }}><ProgressBar pct={regPctSg} tone="green" /></div>
                     </div>
                   </td>
                   <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: regTarget - s.total > 0 ? C.green : C.mute }}>
                     {regTarget ? (regTarget - s.total > 0 ? `−${regTarget - s.total}` : `+${s.total - regTarget}`) : '—'}
                   </td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: flightTarget - s.flights > 0 ? C.amber : C.green }}>
-                    {flightTarget ? `${flightTarget - s.flights}` : '—'}
-                  </td>
                   <td><Pill tone={tone}>{statusLabel(regPctSg)}</Pill></td>
                 </tr>
               );
             })}
-            {subgroups.length === 0 && <tr><td colSpan={8} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>Import registrations to see subgroup breakdown.</td></tr>}
+            {subgroups.length === 0 && <tr><td colSpan={5} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>Import registrations to see subgroup breakdown.</td></tr>}
           </tbody>
         </table>
         </div>
@@ -959,10 +882,8 @@ function OverviewTab({ totalRegs, totalRegTarget, totalFlights, totalFlightTarge
       <div style={{ marginTop: 8, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <Btn tone="ghost" small onClick={() => downloadCSV('subgroup-overview.csv', subgroups.map(sg => ({
           subgroup: sg, regTarget: targets[sg]?.reg || 0, regs: bySubgroup[sg]?.total || 0,
-          netFlights: (bySubgroup[sg]?.needsFlight || 0) - (bySubgroup[sg]?.flights || 0),
         })), [
           { key: 'subgroup', label: 'Subgroup' }, { key: 'regTarget', label: 'Reg Target' }, { key: 'regs', label: 'Registrations' },
-          { key: 'netFlights', label: 'Net Flights Needed' },
         ])}><Download size={13} /> Export overview</Btn>
       </div>
     </div>
@@ -989,22 +910,6 @@ function SummaryCard({ label, current, target, pct, onTargetClick, targetHint })
   );
 }
 
-function ExemptEditor({ exempt, onChange }) {
-  const [text, setText] = useState(exempt.join(', '));
-  const [saved, setSaved] = useState(false);
-  useEffect(() => setText(exempt.join(', ')), [exempt]);
-  function handleSave() {
-    onChange(text.split(',').map(s => s.trim()).filter(Boolean));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
-  return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-      <input type="text" style={{ flex: 1 }} value={text} onChange={e => { setText(e.target.value); setSaved(false); }} onKeyDown={e => e.key === 'Enter' && handleSave()} />
-      <Btn small onClick={handleSave}>{saved ? '✓ Saved' : 'Save'}</Btn>
-    </div>
-  );
-}
 
 // ============ WORKING LIST ============
 const TITLE_RE = /\b(pastor|bro|brother|sis|sister|dr|rev|reverend|mr|mrs|ms|evangelist|evang)\b\.?/gi;
@@ -1013,7 +918,7 @@ function normalizeName(n) {
 }
 
 function AddPersonModal({ subgroups, onSave, onClose }) {
-  const [form, setForm] = useState({ full_name: '', email: '', subgroup: '', fellowship: '', leadership_category: '' });
+  const [form, setForm] = useState({ full_name: '', email: '', subgroup: '', fellowship: '', phone_number: '' });
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
   const valid = form.full_name.trim() && form.email.trim();
   return (
@@ -1024,7 +929,7 @@ function AddPersonModal({ subgroups, onSave, onClose }) {
           { k: 'full_name', label: 'Full Name *' },
           { k: 'email', label: 'Email *' },
           { k: 'fellowship', label: 'Fellowship' },
-          { k: 'leadership_category', label: 'Leadership Category' },
+          { k: 'phone_number', label: 'Phone' },
         ].map(({ k, label }) => (
           <div key={k} style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, marginBottom: 4 }}>{label}</div>
@@ -1087,12 +992,12 @@ function LinkRegistrationModal({ person, registrations, onLink, onClose }) {
   );
 }
 
-function WorkingListRow({ p, useDb, canEdit, isLimited, registrations, onMarkAbsent, onEdit, onRemove, onLink, onUnlink }) {
+function WorkingListRow({ p, useDb, canEdit, isLimited, registrations, onMarkAbsent, onEdit, onRemove, onLink, onUnlink, onSetStatusFilter, onGoToRegistration }) {
   const [showAbsent, setShowAbsent] = useState(false);
   const [absentReason, setAbsentReason] = useState(p.absent_reason || '');
   const [editing, setEditing] = useState(false);
   const [showLink, setShowLink] = useState(false);
-  const [editForm, setEditForm] = useState({ full_name: p.full_name, email: p.email, subgroup: p.subgroup, fellowship: p.fellowship, leadership_category: p.leadership_category });
+  const [editForm, setEditForm] = useState({ full_name: p.full_name, email: p.email, subgroup: p.subgroup, fellowship: p.fellowship, phone_number: p.phone_number || '' });
 
   const rowStyle = p.registered
     ? { background: '#F0FAF4', opacity: 0.7 }
@@ -1106,7 +1011,7 @@ function WorkingListRow({ p, useDb, canEdit, isLimited, registrations, onMarkAbs
         <tr style={{ background: '#F5F0FF' }}>
           <td><input value={editForm.full_name} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 5, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 12.5 }} /></td>
           <td><input value={editForm.fellowship} onChange={e => setEditForm(f => ({ ...f, fellowship: e.target.value }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 5, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 12.5 }} /></td>
-          <td><input value={editForm.leadership_category} onChange={e => setEditForm(f => ({ ...f, leadership_category: e.target.value }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 5, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 12.5 }} /></td>
+          <td><input value={editForm.phone_number} onChange={e => setEditForm(f => ({ ...f, phone_number: e.target.value }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 5, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 12.5 }} /></td>
           <td><input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 5, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 12 }} /></td>
           {useDb && <td>—</td>}
           <td>
@@ -1125,14 +1030,17 @@ function WorkingListRow({ p, useDb, canEdit, isLimited, registrations, onMarkAbs
       <tr style={useDb ? rowStyle : undefined}>
         <td style={p.absent ? { textDecoration: 'line-through', color: C.mute } : undefined}>{p.full_name}</td>
         <td>{p.fellowship || '—'}</td>
-        <td>{p.leadership_category || '—'}</td>
+        <td>{p.phone_number || '—'}</td>
         <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{p.email}</td>
         {useDb && (
           <td>
             {p.registered
-              ? <span><Pill tone="green">{p.fuzzyMatched ? 'Registered (fuzzy)' : p.linked_registration_email ? 'Registered (linked)' : 'Registered'}</Pill></span>
-              : p.absent ? <Pill tone="mute">Absent</Pill>
-              : <Pill tone="amber">Pending</Pill>}
+              ? <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span onClick={() => onSetStatusFilter?.('registered')} style={{ cursor: 'pointer' }} title="Filter by Registered"><Pill tone="green">{p.fuzzyMatched ? 'Registered (fuzzy)' : p.linked_registration_email ? 'Registered (linked)' : 'Registered'}</Pill></span>
+                  {onGoToRegistration && <button onClick={() => onGoToRegistration(p.email)} style={{ fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', color: '#4C2A92', padding: 0, fontFamily: 'Inter', textDecoration: 'underline', textUnderlineOffset: 2 }} title="View in Registration Data">View →</button>}
+                </div>
+              : p.absent ? <span onClick={() => onSetStatusFilter?.('absent')} style={{ cursor: 'pointer' }} title="Filter by Absent"><Pill tone="mute">Absent</Pill></span>
+              : <span onClick={() => onSetStatusFilter?.('pending')} style={{ cursor: 'pointer' }} title="Filter by Pending"><Pill tone="amber">Pending</Pill></span>}
           </td>
         )}
         {canEdit && !isLimited && (
@@ -1143,6 +1051,9 @@ function WorkingListRow({ p, useDb, canEdit, isLimited, registrations, onMarkAbs
               )}
               {p.absent && (
                 <button onClick={() => { onMarkAbsent(p.email, false, ''); setAbsentReason(''); }} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.line}`, background: 'transparent', color: C.mute, cursor: 'pointer', fontFamily: 'Inter' }}>Undo absent</button>
+              )}
+              {p.fuzzyMatched && p.fuzzyMatchedEmail && (
+                <button onClick={() => onLink(p.email, p.fuzzyMatchedEmail)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.green}`, background: C.greenBg, color: C.green, cursor: 'pointer', fontFamily: 'Inter', fontWeight: 600 }}>✓ Validate match</button>
               )}
               {!p.registered && !p.linked_registration_email && (
                 <button onClick={() => setShowLink(true)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.purple}`, background: 'transparent', color: C.purple, cursor: 'pointer', fontFamily: 'Inter' }}>Link reg</button>
@@ -1185,7 +1096,7 @@ function WorkingListRow({ p, useDb, canEdit, isLimited, registrations, onMarkAbs
   );
 }
 
-function WorkingListTab({ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups, isLimited, merged, role, onAddPerson, onMarkAbsent, onEditPerson, onRemove }) {
+function WorkingListTab({ workingList, workingListDb, workingListLoading, regByEmail, subgroupFilter, setSubgroupFilter, subgroups, isLimited, merged, role, onAddPerson, onMarkAbsent, onEditPerson, onRemove, onGoToRegistration }) {
   // Only use the DB working list when there are sheet-synced (imported) entries.
   // Manually-added entries alone don't count — they get merged into both branches below.
   const useDb = workingListDb.some(p => !p.manually_added);
@@ -1215,13 +1126,13 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
   const source = useMemo(() => {
     function resolveRegistered(p) {
       // 1. Manual link takes priority
-      if (p.linked_registration_email && regByEmail[p.linked_registration_email]) return { registered: true, fuzzyMatched: false };
+      if (p.linked_registration_email && regByEmail[p.linked_registration_email]) return { registered: true, fuzzyMatched: false, fuzzyMatchedEmail: null };
       // 2. Direct email match
-      if (regByEmail[p.email]) return { registered: true, fuzzyMatched: false };
+      if (regByEmail[p.email]) return { registered: true, fuzzyMatched: false, fuzzyMatchedEmail: null };
       // 3. Fuzzy name match
       const n = normalizeName(p.full_name);
-      if (n && regByNormalizedName[n]) return { registered: true, fuzzyMatched: true };
-      return { registered: false, fuzzyMatched: false };
+      if (n && regByNormalizedName[n]) return { registered: true, fuzzyMatched: true, fuzzyMatchedEmail: regByNormalizedName[n] };
+      return { registered: false, fuzzyMatched: false, fuzzyMatchedEmail: null };
     }
 
     const manualEntries = workingListDb
@@ -1232,7 +1143,7 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
           full_name: p.full_name,
           subgroup: p.subgroup,
           fellowship: p.fellowship,
-          leadership_category: p.leadership_category,
+          phone_number: p.phone_number || '',
           email: p.email,
           absent: !!p.absent,
           absent_reason: p.absent_reason || '',
@@ -1240,6 +1151,7 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
           linked_registration_email: p.linked_registration_email || null,
           registered,
           fuzzyMatched,
+          fuzzyMatchedEmail,
         };
       });
 
@@ -1250,12 +1162,12 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
         .filter(p => !p.manually_added)
         .map(p => {
           importedEmails.add(p.email);
-          const { registered, fuzzyMatched } = resolveRegistered(p);
+          const { registered, fuzzyMatched, fuzzyMatchedEmail } = resolveRegistered(p);
           return {
             full_name: p.full_name,
             subgroup: p.subgroup,
             fellowship: p.fellowship,
-            leadership_category: p.leadership_category,
+            phone_number: p.phone_number || '',
             email: p.email,
             absent: !!p.absent,
             absent_reason: p.absent_reason || '',
@@ -1263,6 +1175,7 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
             linked_registration_email: p.linked_registration_email || null,
             registered,
             fuzzyMatched,
+            fuzzyMatchedEmail,
           };
         });
       const extraManual = manualEntries.filter(p => !importedEmails.has(p.email));
@@ -1278,7 +1191,7 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
         full_name: p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim(),
         subgroup: p.subgroup,
         fellowship: p.fellowship || '',
-        leadership_category: p.leadership || '',
+        phone_number: p.phone_number || '',
         email,
         absent: false,
         absent_reason: '',
@@ -1310,10 +1223,10 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return source.filter(p => {
+      if (statusFilter === 'all' && p.absent) return false;
       if (statusFilter === 'pending' && (p.registered || p.absent)) return false;
       if (statusFilter === 'absent' && !p.absent) return false;
       if (statusFilter === 'registered' && !p.registered) return false;
-      if (statusFilter === 'all' && p.registered) return false;
       if (isLimited) { if (fellowshipFilter !== 'All' && p.fellowship !== fellowshipFilter) return false; }
       else { if (subgroupFilter !== 'All' && p.subgroup !== subgroupFilter) return false; }
       if (q) {
@@ -1374,7 +1287,7 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
           {useDb && (
             <div style={{ display: 'flex', background: '#F3F0EB', borderRadius: 8, padding: 2, gap: 2 }}>
               {[
-                { key: 'all', label: `All (${totalNotReg + totalAbsent})` },
+                { key: 'all', label: `All (${source.length})` },
                 { key: 'pending', label: `Pending (${totalNotReg})` },
                 { key: 'absent', label: `Absent (${totalAbsent})` },
                 { key: 'registered', label: `Registered (${totalRegistered})` },
@@ -1399,7 +1312,7 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
             { key: 'full_name', label: 'Full Name' },
             { key: 'subgroup', label: 'Subgroup' },
             { key: 'fellowship', label: 'Fellowship' },
-            { key: 'leadership_category', label: 'Leadership Category' },
+            { key: 'phone_number', label: 'Phone' },
             { key: 'email', label: 'Email' },
             { key: 'registered', label: 'Registered', get: r => r.registered ? 'Yes' : 'No' },
             { key: 'absent', label: 'Absent', get: r => r.absent ? 'Yes' : 'No' },
@@ -1444,7 +1357,7 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
                 <tr>
                   <th>Name</th>
                   <th>Fellowship</th>
-                  <th>Leadership Category</th>
+                  <th>Phone</th>
                   <th>Email</th>
                   {useDb && <th>Status</th>}
                   {canEdit && !isLimited && <th></th>}
@@ -1452,7 +1365,7 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
               </thead>
               <tbody>
                 {people.map((p, i) => (
-                  <WorkingListRow key={p.email || i} p={p} useDb={useDb} canEdit={canEdit} isLimited={isLimited} registrations={merged} onMarkAbsent={onMarkAbsent} onEdit={onEditPerson} onRemove={onRemove} onLink={(wlEmail, regEmail) => onEditPerson(wlEmail, { linked_registration_email: regEmail })} onUnlink={wlEmail => onEditPerson(wlEmail, { linked_registration_email: null })} />
+                  <WorkingListRow key={p.email || i} p={p} useDb={useDb} canEdit={canEdit} isLimited={isLimited} registrations={merged} onMarkAbsent={onMarkAbsent} onEdit={onEditPerson} onRemove={onRemove} onLink={(wlEmail, regEmail) => onEditPerson(wlEmail, { linked_registration_email: regEmail })} onUnlink={wlEmail => onEditPerson(wlEmail, { linked_registration_email: null })} onSetStatusFilter={setStatusFilter} onGoToRegistration={onGoToRegistration} />
                 ))}
               </tbody>
             </table>
@@ -1684,6 +1597,10 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
   const [fellowshipFilter, setFellowshipFilter] = useState('All');
   const [search, setSearch] = useState('');
 
+  function toggleBypass(email) {
+    setBypassConfirmed(prev => ({ ...prev, [email]: !prev[email] }));
+  }
+
   const fellowships = useMemo(() => {
     const f = new Set(merged.map(r => r.fellowship).filter(Boolean));
     return [...f].sort();
@@ -1709,10 +1626,6 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
   const confirmedCount = filtered.filter(r => r.fullyConfirmed || bypassConfirmed[r.email]).length;
   const bypassCount = filtered.filter(r => bypassConfirmed[r.email] && !r.fullyConfirmed).length;
 
-  function toggleBypassConfirm(email) {
-    setBypassConfirmed(prev => ({ ...prev, [email]: !prev[email] }));
-  }
-
   return (
     <div>
       <div style={{ marginBottom: 14 }}>
@@ -1720,8 +1633,8 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
           <div>
             <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Confirmations</h2>
             <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>
-              Payment confirmed = auto. In-state = manual checkbox. Out-of-state = flight on file or bypass (flagged).
-              {confirmedCount}/{filtered.length} fully confirmed{bypassCount > 0 ? ` (${bypassCount} flagged bypasses)` : ''}.
+              Paid = auto-confirmed. In-state = tick the checkbox (persisted). One-offs = bypass (session only, flagged).
+              {confirmedCount}/{filtered.length} confirmed{bypassCount > 0 ? ` · ${bypassCount} bypassed` : ''}.
             </div>
           </div>
         </div>
@@ -1740,44 +1653,39 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
           )}
           <Btn tone="ghost" small onClick={() => downloadCSV('confirmations.csv', filtered, [
             { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' }, { key: 'fellowship', label: 'Fellowship' },
-            { key: 'email', label: 'Email' }, { get: r => r.exempt ? 'In-state / exempt' : 'Out-of-state', label: 'Type' },
-            { get: r => r.hasFlight ? 'Yes' : 'No', label: 'Flight on file' }, { get: r => r.fullyConfirmed ? 'Yes' : 'No', label: 'Fully confirmed' },
+            { key: 'email', label: 'Email' }, { get: r => (r.fullyConfirmed || bypassConfirmed[r.email]) ? 'Yes' : 'No', label: 'Confirmed' },
           ])}><Download size={13} /> Export</Btn>
         </div>
       </div>
 
       <Card style={{ padding: 0, overflowX: 'auto' }}>
         <table>
-          <thead><tr><th>Name</th><th>Subgroup</th><th>Fellowship</th><th>Type</th><th>Flight on file</th><th>Confirmed</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Subgroup</th><th>Fellowship</th><th>Confirmed</th><th></th></tr></thead>
           <tbody>
             {filtered.map((r, i) => (
               <tr key={i}>
                 <td style={{ fontWeight: 600 }}>{r.fullName}</td>
                 <td>{r.subgroup}</td>
                 <td>{r.fellowship}</td>
-                <td>{r.exempt ? <Pill tone="blue">In-state / exempt</Pill> : <Pill tone="mute">Out-of-state</Pill>}</td>
-                <td>{r.exempt ? <span style={{ color: C.mute }}>n/a</span> : (r.hasFlight ? <Pill tone="green">On file</Pill> : bypassConfirmed[r.email] ? <span style={{ color: C.amber, fontWeight: 600 }}>Bypassed</span> : <Pill tone="red">Missing</Pill>)}</td>
                 <td>
                   {r.hasPaid ? (
                     <Pill tone="green">Confirmed (paid)</Pill>
-                  ) : r.exempt ? (
-                    <button onClick={() => toggleConfirm(r.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: r.inStateConfirmed ? C.green : C.mute, fontWeight: 600, fontSize: 12.5 }}>
-                      {r.inStateConfirmed ? <CheckCircle2 size={16} /> : <Circle size={16} />} {r.inStateConfirmed ? 'Confirmed' : 'Mark confirmed'}
+                  ) : r.inStateConfirmed ? (
+                    <button onClick={() => toggleConfirm(r.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: C.green, fontWeight: 600, fontSize: 12.5 }}>
+                      <CheckCircle2 size={16} /> Confirmed
                     </button>
+                  ) : bypassConfirmed[r.email] ? (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <Pill tone="amber">Confirmed (bypassed)</Pill>
+                      <button onClick={() => toggleBypass(r.email)} style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>undo</button>
+                    </div>
                   ) : (
-                    r.fullyConfirmed ? (
-                      <Pill tone="green">Confirmed (flight)</Pill>
-                    ) : bypassConfirmed[r.email] ? (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <Pill tone="amber">Confirmed (no flight)</Pill>
-                        <button onClick={() => toggleBypassConfirm(r.email)} style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>undo</button>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <Pill tone="red">Awaiting flight</Pill>
-                        <button onClick={() => toggleBypassConfirm(r.email)} style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>bypass</button>
-                      </div>
-                    )
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <button onClick={() => toggleConfirm(r.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: C.mute, fontWeight: 600, fontSize: 12.5 }}>
+                        <Circle size={16} /> Mark confirmed
+                      </button>
+                      <button onClick={() => toggleBypass(r.email)} style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>bypass</button>
+                    </div>
                   )}
                 </td>
                 <td style={{ width: 36, padding: '6px 8px' }}>
@@ -1795,68 +1703,9 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && <tr><td colSpan={7} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>No registrations imported yet.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={5} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>No registrations imported yet.</td></tr>}
           </tbody>
         </table>
-      </Card>
-    </div>
-  );
-}
-
-// ============ TRANSPORTATION ============
-function TransportTab({ merged, exempt, isLimited }) {
-  const flyers = useMemo(() => merged.filter(r => r.hasFlight && r.flight?.arrivalDate)
-    .sort((a, b) => (a.flight.arrivalDate + a.flight.arrivalTime).localeCompare(b.flight.arrivalDate + b.flight.arrivalTime)), [merged]);
-
-  const batches = useMemo(() => {
-    const g = {};
-    flyers.forEach(r => { (g[r.flight.arrivalDate] ||= []).push(r); });
-    return g;
-  }, [flyers]);
-
-  const missingFlights = merged.filter(r => !r.exempt && !r.hasFlight);
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <div>
-          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Transportation batching</h2>
-          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>Grouped by arrival date so pickups can be batched. {flyers.length} people with flights on file.</div>
-        </div>
-        <Btn tone="ghost" small onClick={() => downloadCSV('transportation-batches.csv', flyers, [
-          { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' }, { key: 'phone', label: 'Phone' },
-          { get: r => r.flight.arrivalDate, label: 'Arrival Date' }, { get: r => r.flight.arrivalTime, label: 'Arrival Time' }, { get: r => r.flight.arrivalFlight, label: 'Arrival Flight #' },
-          { get: r => r.flight.departureDate, label: 'Departure Date' }, { get: r => r.flight.departureTime, label: 'Departure Time' }, { get: r => r.flight.departureFlight, label: 'Departure Flight #' },
-        ])}><Download size={13} /> Export batches</Btn>
-      </div>
-
-      {Object.entries(batches).sort().map(([date, people]) => (
-        <Card key={date} style={{ marginBottom: 14, padding: 0, overflowX: 'auto' }}>
-          <div style={{ padding: '12px 16px', background: '#FAF8FE', borderBottom: `1px solid ${C.line}`, fontWeight: 600, fontSize: 13.5, display: 'flex', justifyContent: 'space-between' }}>
-            <span>{date || 'Date unknown'}</span><Pill tone="blue">{people.length} arriving</Pill>
-          </div>
-          <table>
-            <thead><tr><th>Name</th><th>Subgroup</th><th>Time</th><th>Flight #</th><th>Departure</th><th>Phone</th></tr></thead>
-            <tbody>
-              {people.map((r, i) => (
-                <tr key={i}>
-                  <td style={{ fontWeight: 600 }}>{r.fullName}</td><td>{r.subgroup}</td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{r.flight.arrivalTime || '—'}</td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{r.flight.arrivalFlight || '—'}</td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{r.flight.departureDate || '—'} {r.flight.departureTime || ''}</td>
-                  <td>{r.phone || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      ))}
-      {flyers.length === 0 && <Card><div style={{ color: C.mute, textAlign: 'center', padding: 20 }}>No flights imported yet.</div></Card>}
-
-      <Card style={{ marginTop: 8, background: C.redBg, borderColor: '#F0C9CA' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, color: C.red, marginBottom: 6, fontSize: 13 }}>
-          <AlertCircle size={15} /> {missingFlights.length} out-of-state registrants still need to submit flights
-        </div>
       </Card>
     </div>
   );
@@ -1951,15 +1800,133 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups,
 }
 
 // ============ IMPORT ============
-function ImportTab({ handleImport, handleImportWorkingList, roster, registrations, flights, workingListDb, exempt, updateExempt, lastImport, isLimited }) {
+function ApiSyncBlock({ onApplied }) {
+  const [state, setState] = useState('idle'); // idle | loading | preview | applying | done | error
+  const [preview, setPreview] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  async function fetchPreview() {
+    setState('loading');
+    setPreview(null);
+    setErrorMsg('');
+    try {
+      const { data, error } = await supabase.functions.invoke('registration-api-sync', {
+        body: { action: 'preview' },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error + (data.details ? ` — ${data.details}` : ''));
+      setPreview(data);
+      setState('preview');
+    } catch (e) {
+      setErrorMsg(String(e));
+      setState('error');
+    }
+  }
+
+  async function applySync() {
+    setState('applying');
+    try {
+      const { data, error } = await supabase.functions.invoke('registration-api-sync', {
+        body: { action: 'apply' },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error + (data.details ? ` — ${data.details}` : ''));
+      setState('done');
+      onApplied?.();
+    } catch (e) {
+      setErrorMsg(String(e));
+      setState('error');
+    }
+  }
+
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: 13.5 }}>Sync from Ministry Platform API</div>
+          <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>
+            Fetches form submissions directly from leaders.lwcanada.org. Preview before applying — existing records are updated, nothing is deleted.
+          </div>
+        </div>
+        {(state === 'idle' || state === 'error') && (
+          <Btn tone="subtle" small onClick={fetchPreview}>Fetch preview</Btn>
+        )}
+        {state === 'loading' && (
+          <span style={{ fontSize: 12.5, color: C.mute }}>Fetching…</span>
+        )}
+        {state === 'done' && (
+          <span style={{ fontSize: 12.5, color: C.green, fontWeight: 600 }}>✓ Synced</span>
+        )}
+      </div>
+
+      {state === 'error' && (
+        <div style={{ marginTop: 10, padding: '8px 12px', background: '#FBE9E9', borderRadius: 8, fontSize: 12.5, color: C.red }}>
+          {errorMsg}
+        </div>
+      )}
+
+      {(state === 'preview' || state === 'applying') && preview && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12.5 }}><b>{preview.total_submissions}</b> submissions fetched</span>
+            <span style={{ fontSize: 12.5 }}><b>{preview.unique_emails}</b> unique emails (after dedup)</span>
+            <span style={{ fontSize: 12.5, color: C.green }}><b>{preview.new_count}</b> new</span>
+            <span style={{ fontSize: 12.5, color: C.amber }}><b>{preview.update_count}</b> updates</span>
+          </div>
+
+          <div style={{ overflowX: 'auto', marginBottom: 12, maxHeight: 320, overflowY: 'auto', border: `1px solid ${C.line}`, borderRadius: 8 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#F7F5FC', position: 'sticky', top: 0 }}>
+                  <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Status</th>
+                  <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Name</th>
+                  <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Email</th>
+                  <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Subgroup</th>
+                  <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Fellowship</th>
+                  <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Designation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.rows.map((r, i) => (
+                  <tr key={i} style={{ borderTop: `1px solid ${C.line}`, background: r._status === 'new' ? '#F0FBF4' : 'white' }}>
+                    <td style={{ padding: '5px 10px' }}>
+                      <Pill tone={r._status === 'new' ? 'green' : 'amber'}>{r._status === 'new' ? 'New' : 'Update'}</Pill>
+                    </td>
+                    <td style={{ padding: '5px 10px', fontWeight: 500 }}>{r.full_name}</td>
+                    <td style={{ padding: '5px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{r.email}</td>
+                    <td style={{ padding: '5px 10px', color: C.mute }}>{r.subgroup}</td>
+                    <td style={{ padding: '5px 10px', color: C.mute }}>{r.fellowship}</td>
+                    <td style={{ padding: '5px 10px', color: C.mute }}>{r.designation}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Btn tone="primary" small onClick={applySync} disabled={state === 'applying'}>
+              {state === 'applying' ? 'Applying…' : `Apply — sync ${preview.unique_emails} records`}
+            </Btn>
+            <Btn tone="ghost" small onClick={() => { setState('idle'); setPreview(null); }}>Cancel</Btn>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+
+function ImportTab({ handleImport, handleImportWorkingList, roster, registrations, workingListDb, lastImport, isLimited, onApiSyncApplied }) {
   return (
     <div>
       <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, marginTop: 0 }}>Import from Google Sheets</h2>
       <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 18, maxWidth: 640 }}>
         In each sheet: File → Download → Comma-separated values (.csv), open the file, select all, copy, and paste below.
-        Column headers are matched automatically (first/last name, email, subgroup, fellowship, arrival/departure date & time, etc.) —
+        Column headers are matched automatically (first/last name, email, subgroup, fellowship, etc.) —
         exact header wording doesn't need to match. Re-paste any time; confirmations are kept by email across re-imports.
       </div>
+
+      <ApiSyncBlock onApplied={onApiSyncApplied} />
 
       <ImportBlock title="Working List" hint="Name, Email, Subgroup, Fellowship, Leadership Category — replaces existing working list"
         count={workingListDb.length} last={lastImport['working-list']} onImport={handleImportWorkingList} />
@@ -1967,14 +1934,6 @@ function ImportTab({ handleImport, handleImportWorkingList, roster, registration
         count={roster.length} last={lastImport.roster} onImport={t => handleImport('roster', t)} />
       <ImportBlock title="Registrations" hint="Your registration form export"
         count={registrations.length} last={lastImport.registrations} onImport={t => handleImport('registrations', t)} />
-      <ImportBlock title="Flights" hint="Your flights form export"
-        count={flights.length} last={lastImport.flights} onImport={t => handleImport('flights', t)} />
-
-      <Card style={{ marginTop: 8 }}>
-        <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 8 }}>Exempt fellowships</div>
-        <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 10 }}>These fellowships don't need flights — comma-separated, matched as substrings (case-insensitive).</div>
-        <ExemptEditor exempt={exempt} onChange={updateExempt} />
-      </Card>
     </div>
   );
 }

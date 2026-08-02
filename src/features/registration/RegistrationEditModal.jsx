@@ -11,6 +11,7 @@ const C = {
   ink: '#1A1220',
 };
 
+
 export default function RegistrationEditModal({ registration, onClose, onSave }) {
   const [formData, setFormData] = useState({
     subgroup: registration.subgroup || '',
@@ -22,12 +23,6 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
     baptism: registration.baptism || '',
     allergies: registration.allergies || '',
     leadership: registration.leadership || '',
-    arrivalDate: registration.arrivalDate || '',
-    arrivalTime: registration.arrivalTime || '',
-    arrivalFlight: registration.arrivalFlight || '',
-    departureDate: registration.departureDate || '',
-    departureTime: registration.departureTime || '',
-    departureFlight: registration.departureFlight || '',
   });
 
   const [saving, setSaving] = useState(false);
@@ -51,12 +46,6 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
         baptism: formData.baptism,
         allergies: formData.allergies,
         leadership: formData.leadership,
-        arrival_date: formData.arrivalDate || null,
-        arrival_time: formData.arrivalTime || null,
-        arrival_flight: formData.arrivalFlight,
-        departure_date: formData.departureDate || null,
-        departure_time: formData.departureTime || null,
-        departure_flight: formData.departureFlight,
       };
 
       let updateError;
@@ -174,25 +163,6 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
               <FormField label="Allergies/Diet" value={formData.allergies} onChange={(v) => handleChange('allergies', v)} multiline />
             </div>
 
-            <div style={{ gridColumn: '1 / -1', borderTop: `1px solid ${C.line}`, paddingTop: 16, marginTop: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, textTransform: 'uppercase', marginBottom: 12 }}>
-                Arrival
-              </div>
-            </div>
-
-            <FormField label="Arrival Date" value={formData.arrivalDate} onChange={(v) => handleChange('arrivalDate', v)} type="date" />
-            <FormField label="Arrival Time" value={formData.arrivalTime} onChange={(v) => handleChange('arrivalTime', v)} type="time" />
-            <FormField label="Arrival Flight" value={formData.arrivalFlight} onChange={(v) => handleChange('arrivalFlight', v)} />
-
-            <div style={{ gridColumn: '1 / -1', borderTop: `1px solid ${C.line}`, paddingTop: 16, marginTop: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, textTransform: 'uppercase', marginBottom: 12 }}>
-                Departure
-              </div>
-            </div>
-
-            <FormField label="Departure Date" value={formData.departureDate} onChange={(v) => handleChange('departureDate', v)} type="date" />
-            <FormField label="Departure Time" value={formData.departureTime} onChange={(v) => handleChange('departureTime', v)} type="time" />
-            <FormField label="Departure Flight" value={formData.departureFlight} onChange={(v) => handleChange('departureFlight', v)} />
           </div>
         </div>
 
