@@ -831,6 +831,8 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets
               <th>Registration target</th>
               <th>Registrations</th>
               <th>Difference (reg)</th>
+              <th>Flights target</th>
+              <th>Difference (flights)</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -857,11 +859,18 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets
                   <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: regTarget - s.total > 0 ? C.green : C.mute }}>
                     {regTarget ? (regTarget - s.total > 0 ? `−${regTarget - s.total}` : `+${s.total - regTarget}`) : '—'}
                   </td>
+                  <td>
+                    <input type="number" style={{ width: 60 }} value={t.flights ?? ''} placeholder="0"
+                      onChange={e => setTarget(sg, 'flights', e.target.value)} />
+                  </td>
+                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: C.mute }}>
+                    —
+                  </td>
                   <td><Pill tone={tone}>{statusLabel(regPctSg)}</Pill></td>
                 </tr>
               );
             })}
-            {subgroups.length === 0 && <tr><td colSpan={5} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>Import registrations to see subgroup breakdown.</td></tr>}
+            {subgroups.length === 0 && <tr><td colSpan={7} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>Import registrations to see subgroup breakdown.</td></tr>}
           </tbody>
         </table>
         </div>
