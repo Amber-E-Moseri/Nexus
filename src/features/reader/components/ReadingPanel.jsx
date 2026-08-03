@@ -24,6 +24,8 @@ export default function ReadingPanel({ sentences, currentIdx, highlights, onSele
     onSelectionChange({ text, sentenceIdx: idx, rect })
   }
 
+  const isChapterHeading = (s) => /^(chapter|part|prologue|epilogue|introduction|preface|afterword)\b/i.test(s.trim()) || /^[A-Z\s\d]{4,40}$/.test(s.trim())
+
   return (
     <div
       className="im-reading-text"
@@ -31,6 +33,19 @@ export default function ReadingPanel({ sentences, currentIdx, highlights, onSele
       onMouseUp={handleMouseUp}
     >
       {sentences.map((sentence, idx) => {
+        if (isChapterHeading(sentence) && sentence.trim().length < 50) {
+          return (
+            <div
+              key={idx}
+              ref={idx === currentIdx ? activeRef : null}
+              data-idx={idx}
+              style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--im-text-dim)', margin: '2.5rem 0 1.5rem', fontFamily: 'Inter, sans-serif' }}
+            >
+              {sentence.trim()}
+            </div>
+          )
+        }
+
         let cls = 'im-sentence'
         if (idx < currentIdx) cls += ' im-sentence--heard'
         else if (idx === currentIdx) cls += ' im-sentence--active'

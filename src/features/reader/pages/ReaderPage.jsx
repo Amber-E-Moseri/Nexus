@@ -125,20 +125,15 @@ export default function ReaderPage({
     <>
       {/* Mobile header */}
       <div className="im-header">
-        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-blue)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Inter, sans-serif' }}>
-          <IconBack size={16} /> Library
+        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text)', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'Inter, sans-serif', minWidth: 72 }}>
+          <IconBack size={15} /> Library
         </button>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--im-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
-          {book.title}
+        <span style={{ fontSize: 12, padding: '4px 12px', background: '#F3F4F6', borderRadius: 20, color: 'var(--im-text-muted)', fontWeight: 600, letterSpacing: '0.2px' }}>
+          Credits: <span style={{ color: 'var(--im-blue)' }}>{credits} hrs</span>
         </span>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <span style={{ fontSize: 10, padding: '3px 8px', background: 'var(--im-border-lt)', borderRadius: 20, color: 'var(--im-blue)', fontWeight: 600 }}>
-            {credits} hrs
-          </span>
-          <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-muted)', padding: 4, display: 'flex', alignItems: 'center' }}>
-            <IconSettings size={16} />
-          </button>
-        </div>
+        <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 18, fontWeight: 700, minWidth: 72, justifyContent: 'flex-end' }}>
+          ···
+        </button>
       </div>
 
       {/* Reading area */}
