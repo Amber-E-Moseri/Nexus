@@ -1432,17 +1432,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
                 >
                   <Library size={15} style={{ opacity: 0.85, flexShrink: 0 }} />
                   <span className="sidebar-item__label">Surprise</span>
-                  <span style={{
-                    marginLeft: 'auto',
-                    fontSize: 9,
-                    fontWeight: 700,
-                    color: '#7C5CBF',
-                    background: '#EDE8F8',
-                    borderRadius: 20,
-                    padding: '2px 7px',
-                    whiteSpace: 'nowrap',
-                    letterSpacing: '0.04em',
-                  }}>Aug 5</span>
                 </div>
               )
             )}
