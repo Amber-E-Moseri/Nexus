@@ -15,6 +15,8 @@ function formatMeetingType(type) {
   return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+// canEdit should be true only for sprint owner, manager, or super_admin/dept_lead.
+// All users can view linked meetings, but only those with canEdit can link/unlink.
 export default function SprintMeetingsPanel({ sprintId, canEdit }) {
   const { profile } = useAuth()
   const [links, setLinks] = useState([])
@@ -204,7 +206,7 @@ export default function SprintMeetingsPanel({ sprintId, canEdit }) {
                 >
                   <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{m.title}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                    {m.date ? new Date(m.date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
+                    {m.date ? new Date(m.date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
                     {m.meeting_type ? ` · ${formatMeetingType(m.meeting_type)}` : ''}
                     {m.department?.name ? ` · ${m.department.name}` : ''}
                   </div>
@@ -247,7 +249,7 @@ export default function SprintMeetingsPanel({ sprintId, canEdit }) {
                 {m.title}
               </Link>
               <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                {m.date ? new Date(m.date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
+                {m.date ? new Date(m.date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
                 {m.meeting_type ? ` · ${formatMeetingType(m.meeting_type)}` : ''}
                 {m.department?.name ? ` · ${m.department.name}` : ''}
               </div>

@@ -797,7 +797,7 @@ export default function SprintOverview() {
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
           <SprintMeetingsPanel
             sprintId={detail.sprint.id}
-            canEdit={Boolean((canManage || isMember) && !isArchived)}
+            canEdit={Boolean(canManage && !isArchived)}
           />
         </div>
       )}
