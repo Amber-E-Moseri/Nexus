@@ -159,7 +159,7 @@ serve(async (req) => {
 
     const { error: upsertErr } = await supabase
       .from('service_reports')
-      .upsert(upsertRows, { onConflict: 'church_unit_id,service_kind,service_date,service_name' })
+      .upsert(upsertRows, { onConflict: 'church_unit_id,service_kind,service_date' })
 
     if (upsertErr) {
       errors.push(`${from}: upsert error — ${upsertErr.message}`)
