@@ -1,7 +1,7 @@
 import { supabase } from '../../../lib/supabase'
 import { getDefaultTaskStatusId, normalizeTaskRows } from '../../../lib/taskStatuses.js'
 import { recordActivity } from '../../../lib/activityFeed'
-import { addDays, subMinutes } from 'date-fns'
+import { addDays } from 'date-fns'
 import { getNextOccurrenceDate } from './recurrence'
 
 export const MEETINGS_PAGE_SIZE = 50
@@ -190,11 +190,12 @@ export async function createMeeting(meetingData) {
 export async function createRecurringMeeting({ baseMeeting, attendeeIds = [], recurrenceRule }) {
   const recurrenceId = crypto.randomUUID()
 
-  // Schedule generation of occurrence #2 for 30 minutes before it's due to
-  // happen. If the series ends after just one occurrence, nothing to schedule.
+  // Schedule generation of occurrence #2 for 1 day before it's due, matching
+  // the edge function's behavior for all subsequent occurrences. 30-minute
+  // lead time was too short — the hourly pg_cron could miss the window.
   const startDateTime = new Date(baseMeeting.date)
   const secondOccurrenceDate = recurrenceRule ? getNextOccurrenceDate(recurrenceRule, startDateTime, 1) : null
-  const nextOccurrenceScheduled = secondOccurrenceDate ? subMinutes(secondOccurrenceDate, 30) : null
+  const nextOccurrenceScheduled = secondOccurrenceDate ? addDays(secondOccurrenceDate, -1) : null
 
   const meeting = {
     ...baseMeeting,

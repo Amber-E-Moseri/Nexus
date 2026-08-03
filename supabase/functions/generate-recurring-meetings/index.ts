@@ -205,6 +205,8 @@ Deno.serve(async (req) => {
   let generated = 0
   const errors: string[] = []
 
+  const now = new Date()
+
   for (const meeting of dueMeetings) {
     try {
       const { data: parent, error: parentError } = await supabase
@@ -216,16 +218,30 @@ Deno.serve(async (req) => {
       if (parentError) throw parentError
 
       const seriesStartDate = new Date(parent.date)
-      const nextDate = getNextOccurrenceDate(meeting.recurrence_rule, seriesStartDate, meeting.series_instance_num)
-
-      if (!nextDate) {
-        // Series has reached its end condition — stop generating.
+      const recData = parseRecurrenceRule(meeting.recurrence_rule)
+      if (!recData) {
         await supabase.from('meetings').update({ next_occurrence_scheduled: null }).eq('id', meeting.id)
         continue
       }
 
-      const nextInstanceNum = meeting.series_instance_num + 1
-      const followingDate = getNextOccurrenceDate(meeting.recurrence_rule, seriesStartDate, nextInstanceNum)
+      const allDates = generateOccurrenceDates(seriesStartDate, recData)
+
+      // Fast-forward past any occurrences that have already passed — prevents a
+      // cascade of back-dated rows when the cron was delayed or misconfigured.
+      let targetIndex = meeting.series_instance_num
+      while (targetIndex < allDates.length && allDates[targetIndex] <= now) {
+        targetIndex++
+      }
+
+      if (targetIndex >= allDates.length) {
+        // All remaining occurrences are in the past or series ended — stop.
+        await supabase.from('meetings').update({ next_occurrence_scheduled: null }).eq('id', meeting.id)
+        continue
+      }
+
+      const nextDate = allDates[targetIndex]
+      const nextInstanceNum = targetIndex + 1
+      const followingDate = allDates[targetIndex + 1] ?? null
       const followingScheduled = followingDate ? addDaysUtc(followingDate, -1).toISOString() : null
 
       const { data: newMeeting, error: insertError } = await supabase
