@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registration System — Event Setup Guide</title>
+<style>
+/* ── tokens ──────────────────────────────────────────────────────── */
+:root {
+  --accent:        #4C2A92;
+  --accent-bright: #6B46C1;
+  --accent-faint:  #EDE8F8;
+  --ink:           #1A1220;
+  --ink-2:         #6B5E7A;
+  --ink-3:         #9B8DAE;
+  --ground:        #F4F1F9;
+  --surface:       #FFFFFF;
+  --surface-2:     #FAF8FC;
+  --border:        #DDD8E8;
+  --code-bg:       #1A1129;
+  --code-text:     #CDB8F5;
+  --code-comment:  #6B5E7A;
+  --code-key:      #A78BFA;
+  --code-str:      #86EFAC;
+  --code-num:      #FCA5A5;
+  --warn-bg:       #FBF4E6;
+  --warn-border:   #B8710A;
+  --warn-text:     #7A4A06;
+  --ok-bg:         #E8F5EC;
+  --ok-border:     #1F8A4C;
+  --step-w:        3px;
+  --r:             8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent:       #8B5CF6;
+    --accent-bright:#A78BFA;
+    --accent-faint: #231B38;
+    --ink:          #EDE8F5;
+    --ink-2:        #9B8DAE;
+    --ink-3:        #5E5270;
+    --ground:       #0D0A14;
+    --surface:      #1A1220;
+    --surface-2:    #231B2E;
+    --border:       #2E2540;
+    --warn-bg:      #2A1F08;
+    --warn-border:  #B8710A;
+    --warn-text:    #FBCC6A;
+    --ok-bg:        #0C2216;
+    --ok-border:    #1F8A4C;
+  }
+}
+:root[data-theme="light"] {
+  --accent:        #4C2A92;
+  --accent-bright: #6B46C1;
+  --accent-faint:  #EDE8F8;
+  --ink:           #1A1220;
+  --ink-2:         #6B5E7A;
+  --ink-3:         #9B8DAE;
+  --ground:        #F4F1F9;
+  --surface:       #FFFFFF;
+  --surface-2:     #FAF8FC;
+  --border:        #DDD8E8;
+  --warn-bg:       #FBF4E6;
+  --warn-border:   #B8710A;
+  --warn-text:     #7A4A06;
+  --ok-bg:         #E8F5EC;
+  --ok-border:     #1F8A4C;
+}
+:root[data-theme="dark"] {
+  --accent:       #8B5CF6;
+  --accent-bright:#A78BFA;
+  --accent-faint: #231B38;
+  --ink:          #EDE8F5;
+  --ink-2:        #9B8DAE;
+  --ink-3:        #5E5270;
+  --ground:       #0D0A14;
+  --surface:      #1A1220;
+  --surface-2:    #231B2E;
+  --border:       #2E2540;
+  --warn-bg:      #2A1F08;
+  --warn-border:  #B8710A;
+  --warn-text:    #FBCC6A;
+  --ok-bg:        #0C2216;
+  --ok-border:    #1F8A4C;
+}
+
+/* ── reset ───────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--ground);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ── top bar ─────────────────────────────────────────────────────── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  box-shadow: 0 1px 0 rgba(0,0,0,.15), 0 2px 8px rgba(0,0,0,.12);
+}
+.topbar-brand {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.9);
+  padding: 0 20px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid rgba(255,255,255,.15);
+  white-space: nowrap;
+}
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1;
+  height: 44px;
+}
+.topbar-nav::-webkit-scrollbar { display: none; }
+.topbar-nav a {
+  color: rgba(255,255,255,.75);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: 5px;
+  transition: background .12s, color .12s;
+  text-decoration: none;
+}
+.topbar-nav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+.theme-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  margin-right: 12px;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  color: rgba(255,255,255,.85);
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-btn:hover { background: rgba(255,255,255,.18); }
+
+/* ── page layout ─────────────────────────────────────────────────── */
+.page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 48px 24px 96px;
+}
+
+/* ── page header ─────────────────────────────────────────────────── */
+.page-header {
+  margin-bottom: 48px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--border);
+}
+.page-header .eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+.page-header h1 {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -.02em;
+  text-wrap: balance;
+  color: var(--ink);
+  margin-bottom: 12px;
+}
+.page-header .lead {
+  font-size: 15px;
+  color: var(--ink-2);
+  max-width: 560px;
+  line-height: 1.6;
+}
+.page-header .tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.tag {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: var(--accent-faint);
+  color: var(--accent);
+}
+
+/* ── pre-launch section ──────────────────────────────────────────── */
+.prelaunch {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--r);
+  padding: 28px 32px;
+  margin-bottom: 48px;
+}
+.prelaunch h2 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 20px;
+}
+.prelaunch h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin: 24px 0 10px;
+}
+.prelaunch h3:first-of-type { margin-top: 0; }
+
+/* ── checklist ───────────────────────────────────────────────────── */
+.checklist { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.checklist li label {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.5;
+}
+.checklist li input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+  position: relative;
+}
+.checklist li input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.checklist li input[type="checkbox"]:checked::after {
+  content: '';
+  display: block;
+  width: 9px;
+  height: 5px;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(-45deg) translate(2px, 1px);
+}
+.checklist li:has(input:checked) label { color: var(--ink-3); text-decoration: line-through; }
+.check-note {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 1px;
+  display: block;
+  text-decoration: none !important;
+}
+
+/* ── steps ───────────────────────────────────────────────────────── */
+.steps { display: flex; flex-direction: column; gap: 0; }
+.step {
+  position: relative;
+  padding-left: 52px;
+  padding-bottom: 48px;
+}
+.step::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 40px;
+  bottom: 0;
+  width: var(--step-w);
+  background: var(--border);
+}
+.step:last-child::before { display: none; }
+.step-num {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: -.01em;
+}
+.step-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding-top: 8px;
+}
+.step-header h2 {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.step-header .step-sub {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* ── content blocks ──────────────────────────────────────────────── */
+.step p, .step li { font-size: 14px; line-height: 1.65; color: var(--ink); }
+.step p + p { margin-top: 12px; }
+
+.prose { display: flex; flex-direction: column; gap: 14px; }
+.prose p { font-size: 14px; line-height: 1.65; color: var(--ink); }
+.prose ul { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.prose ul li { font-size: 14px; }
+
+.file-group { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+.file-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.file-label {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  padding: 7px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.file-label .fl-path {
+  font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.file-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.file-body p { font-size: 13px; color: var(--ink-2); }
+
+/* ── code blocks ─────────────────────────────────────────────────── */
+.code-wrap { overflow-x: auto; border-radius: 6px; }
+pre {
+  background: var(--code-bg);
+  color: var(--code-text);
+  font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: 14px 16px;
+  border-radius: 6px;
+  white-space: pre;
+  overflow-x: auto;
+  tab-size: 2;
+}
+pre .c  { color: #6B5E7A; font-style: italic; }   /* comment */
+pre .k  { color: #A78BFA; }                        /* keyword / sql kw */
+pre .s  { color: #86EFAC; }                        /* string */
+pre .n  { color: #FCA5A5; }                        /* number */
+pre .p  { color: #94A3B8; }                        /* punctuation */
+pre .t  { color: #7DD3FC; }                        /* table/type name */
+code {
+  font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+  font-size: .875em;
+  background: var(--accent-faint);
+  color: var(--accent);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* ── callouts ────────────────────────────────────────────────────── */
+.callout {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--r);
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 16px 0;
+}
+.callout.warn {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--warn-text);
+}
+.callout.ok {
+  background: var(--ok-bg);
+  border: 1px solid var(--ok-border);
+  color: var(--ink);
+}
+.callout-icon { flex-shrink: 0; font-size: 15px; line-height: 1.55; }
+.callout p { font-size: 13px; line-height: 1.55; color: inherit; }
+.callout p + p { margin-top: 6px; }
+
+/* ── tables ──────────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; border-radius: var(--r); border: 1px solid var(--border); margin: 16px 0; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+thead tr { background: var(--surface-2); }
+th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--ink);
+  line-height: 1.45;
+}
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--surface-2); }
+.cell-role { font-weight: 600; font-size: 13px; }
+.cell-access { font-size: 12.5px; color: var(--ink-2); }
+
+/* ── section spacers ─────────────────────────────────────────────── */
+.mt { margin-top: 20px; }
+.mt-sm { margin-top: 12px; }
+h3.sub {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin: 20px 0 10px;
+}
+</style>
+</head>
+<body>
+
+<!-- ── top bar ─────────────────────────────────────────────────── -->
+<header class="topbar">
+  <div class="topbar-brand">BLW Canada Nexus</div>
+  <nav class="topbar-nav" aria-label="Steps">
+    <a href="#prelaunch">Pre-Launch</a>
+    <a href="#step1">1 Sprint</a>
+    <a href="#step2">2 Code</a>
+    <a href="#step3">3 Clear Data</a>
+    <a href="#step4">4 Apps Script</a>
+    <a href="#step5">5 API Key</a>
+    <a href="#step6">6 Share Link</a>
+    <a href="#step7">7 Finance</a>
+    <a href="#step8">8 Verify</a>
+    <a href="#troubleshoot">Troubleshoot</a>
+  </nav>
+  <button class="theme-btn" onclick="toggleTheme()" aria-label="Toggle theme">◐</button>
+</header>
+
+<!-- ── main ───────────────────────────────────────────────────── -->
+<main class="page">
+
+  <header class="page-header">
+    <div class="eyebrow">Registration System</div>
+    <h1>Event Setup &amp; Handoff Guide</h1>
+    <p class="lead">How to launch, configure, and swap the registration system for a new regional program. Programs are not run simultaneously — follow these steps each time.</p>
+    <div class="tags">
+      <span class="tag">One event at a time</span>
+      <span class="tag">No schema changes needed</span>
+      <span class="tag">~6 files to update</span>
+    </div>
+  </header>
+
+  <!-- ── pre-launch ─────────────────────────────────────────── -->
+  <section class="prelaunch" id="prelaunch">
+    <h2>Before You Touch Code — Answer These First</h2>
+
+    <h3>Event Identity</h3>
+    <ul class="checklist">
+      <li><label><input type="checkbox"><span>What is the <strong>full event name</strong>? (e.g. "This Is It 2.0", "Atmosphere Conference")<br><span class="check-note">This exact string is used in 4 code places. Decide it once and lock it.</span></span></label></li>
+      <li><label><input type="checkbox"><span>What <strong>sprint name</strong> will you create in Nexus?<br><span class="check-note">Must match what you type in code — the lookup uses <code>LIKE '%name%'</code>.</span></span></label></li>
+      <li><label><input type="checkbox"><span>What <strong>subgroups</strong> exist? (e.g. Zone A, Zone B, Youth, Partners)</span></label></li>
+      <li><label><input type="checkbox"><span>Which fellowships are <strong>exempt from flying</strong> (expected to drive)?<br><span class="check-note">Updates <code>EXEMPT_FELLOWSHIPS</code> in RegistrationEcosystem.jsx.</span></span></label></li>
+    </ul>
+
+    <h3>Teams &amp; Access</h3>
+    <ul class="checklist">
+      <li><label><input type="checkbox"><span>List every <strong>event team</strong> with their exact names.<br><span class="check-note">Team membership gates access to <code>/registration</code>. No team = no entry.</span></span></label></li>
+      <li><label><input type="checkbox"><span>Who is on the <strong>Accommodation / Room Coordination</strong> team?<br><span class="check-note">This team automatically gets the Room Assignment tab.</span></span></label></li>
+      <li><label><input type="checkbox"><span>Who needs <strong>Finance tab access</strong> outside of their team?<br><span class="check-note">Add a <code>user_grants</code> row with <code>finance_data_access</code>.</span></span></label></li>
+      <li><label><input type="checkbox"><span>Anyone needing <strong>Rooms access</strong> not on the Accommodation team?<br><span class="check-note">Add a <code>user_grants</code> row with <code>rooms_access</code>.</span></span></label></li>
+      <li><label><input type="checkbox"><span>Which users are in the <strong>Programs space</strong>?<br><span class="check-note">Programs space members get Rooms access automatically.</span></span></label></li>
+    </ul>
+
+    <h3>External Forms &amp; API</h3>
+    <ul class="checklist">
+      <li><label><input type="checkbox"><span><strong>Registrations form URL</strong> from lwcanada.org<br><span class="check-note">Format: <code>https://leaders.lwcanada.org/api/forms/&lt;FORM_ID&gt;/submissions</code></span></span></label></li>
+      <li><label><input type="checkbox"><span><strong>Flights/travel form URL</strong> (if applicable)</span></label></li>
+      <li><label><input type="checkbox"><span>Who holds the <strong>NEXUS_API_KEY</strong> Supabase secret?</span></label></li>
+    </ul>
+  </section>
+
+  <!-- ── steps ──────────────────────────────────────────────── -->
+  <div class="steps">
+
+    <!-- step 1 -->
+    <section class="step" id="step1">
+      <div class="step-num" aria-hidden="true">1</div>
+      <div class="step-header">
+        <h2>Create the Sprint in Nexus</h2>
+        <span class="step-sub">This gates all registration page access</span>
+      </div>
+      <div class="prose">
+        <p>Go to <strong>Sprints → Create new sprint</strong>. Name it exactly as decided above — the code matches on this string with <code>ILIKE</code>.</p>
+        <p>Create every <strong>team</strong> inside the sprint (one per function group). Add team members to each team. If someone's not in a team in this sprint, they cannot open <code>/registration</code>.</p>
+      </div>
+    </section>
+
+    <!-- step 2 -->
+    <section class="step" id="step2">
+      <div class="step-num" aria-hidden="true">2</div>
+      <div class="step-header">
+        <h2>Update the Code</h2>
+        <span class="step-sub">6 files — make all edits in one PR</span>
+      </div>
+
+      <div class="file-group">
+
+        <div class="file-block">
+          <div class="file-label">
+            <span>Sidebar</span>
+            <span class="fl-path">src/components/layout/Sidebar.jsx</span>
+          </div>
+          <div class="file-body">
+            <p>Sprint name match (~line 343) and nav label (~line 795):</p>
+            <div class="code-wrap"><pre><span class="c">// Sprint lookup — change event name</span>
+.ilike(<span class="s">'name'</span>, <span class="s">'%Your New Event Name%'</span>)
+
+<span class="c">// Nav label</span>
+<span class="s">"Your Event Registration"</span>
+
+<span class="c">// REGISTRATION_TEAMS array (~line 330) — exact team name matches</span>
+<span class="k">const</span> REGISTRATION_TEAMS = [
+  <span class="s">'Secretariat and Planning'</span>,
+  <span class="s">'Finance'</span>,
+  <span class="s">'Transportation'</span>,
+  <span class="c">// ...</span>
+]</pre></div>
+          </div>
+        </div>
+
+        <div class="file-block">
+          <div class="file-label">
+            <span>Page gate</span>
+            <span class="fl-path">src/pages/events/RegistrationPage.jsx</span>
+          </div>
+          <div class="file-body">
+            <p>Sprint name match (~line 56) and <code>allowedTeams</code> array (~line 40):</p>
+            <div class="code-wrap"><pre>.ilike(<span class="s">'name'</span>, <span class="s">'%Your New Event Name%'</span>)
+
+<span class="k">const</span> allowedTeams = [<span class="s">'Secretariat and Planning'</span>, <span class="s">'Finance'</span>, <span class="c">/*...*/</span>]</pre></div>
+          </div>
+        </div>
+
+        <div class="file-block">
+          <div class="file-label">
+            <span>Ecosystem</span>
+            <span class="fl-path">src/features/registration/RegistrationEcosystem.jsx</span>
+          </div>
+          <div class="file-body">
+            <p>Three things to change:</p>
+            <div class="code-wrap"><pre><span class="c">// Sprint name match (~line 343)</span>
+.ilike(<span class="s">'name'</span>, <span class="s">'%Your New Event Name%'</span>)
+
+<span class="c">// Page header text (~line 784)</span>
+<span class="s">"Your New Event Name"</span>
+
+<span class="c">// Exempt fellowships (~line 30) — expected to DRIVE, not fly</span>
+<span class="k">const</span> EXEMPT_FELLOWSHIPS = <span class="k">new</span> Set([
+  <span class="s">'BLW University of Manitoba'</span>,
+  <span class="s">'BLW University of Winnipeg'</span>,
+  <span class="c">// Add/remove for this event's location</span>
+])</pre></div>
+          </div>
+        </div>
+
+        <div class="file-block">
+          <div class="file-label">
+            <span>Public page</span>
+            <span class="fl-path">src/pages/events/RegistrationPublicPage.jsx</span>
+          </div>
+          <div class="file-body">
+            <p>Header (~line 131) and footer (~line 303):</p>
+            <div class="code-wrap"><pre><span class="s">"Your New Event Name"</span>  <span class="c">// header</span>
+<span class="s">"BLW Canada Nexus · Your New Event Name · Shared registration view"</span></pre></div>
+          </div>
+        </div>
+
+        <div class="file-block">
+          <div class="file-label">
+            <span>Bulk email function</span>
+            <span class="fl-path">supabase/functions/registration-bulk-email/index.ts</span>
+          </div>
+          <div class="file-body">
+            <p>Email subheader (~line 54), then deploy:</p>
+            <div class="code-wrap"><pre><span class="c">// Change "This Is It 2.0 Registration" to event name</span></pre></div>
+            <div class="code-wrap"><pre>supabase functions deploy registration-bulk-email</pre></div>
+          </div>
+        </div>
+
+        <div class="file-block">
+          <div class="file-label">
+            <span>API sync function</span>
+            <span class="fl-path">supabase/functions/registration-api-sync/index.ts</span>
+          </div>
+          <div class="file-body">
+            <p>Update both form URLs at the top of the file, then deploy:</p>
+            <div class="code-wrap"><pre><span class="k">const</span> REGISTRATIONS_FORM_URL =
+  <span class="s">'https://leaders.lwcanada.org/api/forms/&lt;NEW_FORM_ID&gt;/submissions'</span>
+<span class="k">const</span> FLIGHTS_FORM_URL =
+  <span class="s">'https://leaders.lwcanada.org/api/forms/&lt;NEW_FLIGHTS_FORM_ID&gt;/submissions'</span></pre></div>
+            <div class="code-wrap"><pre>supabase functions deploy registration-api-sync</pre></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- step 3 -->
+    <section class="step" id="step3">
+      <div class="step-num" aria-hidden="true">3</div>
+      <div class="step-header">
+        <h2>Clear Old Event Data</h2>
+        <span class="step-sub">Only after TII2 is fully wrapped up</span>
+      </div>
+      <div class="callout warn">
+        <span class="callout-icon">⚠</span>
+        <div><p><strong>Irreversible.</strong> Export anything you need first. Verify the Registration page shows 0 records before proceeding with any other step.</p></div>
+      </div>
+      <p class="mt" style="font-size:14px;color:var(--ink-2)">Run in the Supabase SQL editor:</p>
+      <div class="code-wrap mt-sm"><pre><span class="c">-- Clear the five registration tables</span>
+<span class="k">truncate table</span> <span class="t">registrations</span>  <span class="k">restart identity cascade</span>;
+<span class="k">truncate table</span> <span class="t">roster</span>          <span class="k">restart identity cascade</span>;
+<span class="k">truncate table</span> <span class="t">working_list</span>    <span class="k">restart identity cascade</span>;
+<span class="k">truncate table</span> <span class="t">event_payments</span>  <span class="k">restart identity cascade</span>;
+
+<span class="c">-- Clear config: targets, room assignments, public token</span>
+<span class="k">delete from</span> <span class="t">registration_config</span>;</pre></div>
+    </section>
+
+    <!-- step 4 -->
+    <section class="step" id="step4">
+      <div class="step-num" aria-hidden="true">4</div>
+      <div class="step-header">
+        <h2>Set Up the Google Sheet &amp; Apps Script</h2>
+        <span class="step-sub">Connects the source form to Nexus</span>
+      </div>
+      <div class="prose">
+        <p>Make a copy of the TII2 Google Sheet (or create a new one with the same column headers). Open <strong>Extensions → Apps Script</strong>. Paste the contents of <code>src/features/registration/appScript.gs</code>.</p>
+      </div>
+      <h3 class="sub mt">Script Properties</h3>
+      <p style="font-size:14px;color:var(--ink-2);margin-bottom:10px">In Apps Script: Project Settings → Script Properties → Add property:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Property</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td><code>NEXUS_API_URL</code></td><td><code>https://blwcannexus.vercel.app/functions/v1/registrations-sync</code></td></tr>
+            <tr><td><code>NEXUS_API_KEY</code></td><td><em>The key from Step 5</em></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="mt" style="font-size:14px;color:var(--ink)">Run <code>onOpen()</code> once to register the Nexus Sync custom menu. Test with <strong>Nexus Sync → Sync Working List to Nexus</strong> — should complete with no errors.</p>
+      <div class="callout ok mt-sm">
+        <span class="callout-icon">ℹ</span>
+        <div><p>If the new form uses different column headers, update <code>HEADER_MAP</code> in <code>appScript.gs</code> to match. Column matching is exact-string — check spelling carefully.</p></div>
+      </div>
+    </section>
+
+    <!-- step 5 -->
+    <section class="step" id="step5">
+      <div class="step-num" aria-hidden="true">5</div>
+      <div class="step-header">
+        <h2>API Key — Set, Rotate, or Recover</h2>
+        <span class="step-sub">Authenticates the Google Sheet → Nexus sync</span>
+      </div>
+
+      <h3 class="sub">First-time setup</h3>
+      <div class="code-wrap"><pre>supabase secrets set NEXUS_API_KEY=&lt;generate-a-long-random-string&gt;</pre></div>
+
+      <h3 class="sub mt">If the key has expired or was rotated</h3>
+      <div class="code-wrap"><pre><span class="c"># 1. Generate a new key with any secure random generator</span>
+<span class="c"># 2. Update the Supabase secret</span>
+supabase secrets set NEXUS_API_KEY=&lt;new-key&gt;
+
+<span class="c"># 3. Update the Google Sheet: Extensions → Apps Script</span>
+<span class="c">#    Project Settings → Script Properties → NEXUS_API_KEY</span>
+
+<span class="c"># 4. Test: run "Sync Working List to Nexus" from the sheet menu</span></pre></div>
+
+      <h3 class="sub mt">Verify what's set</h3>
+      <div class="code-wrap"><pre>supabase secrets list  <span class="c"># shows key names only, not values</span></pre></div>
+
+      <h3 class="sub mt">If the edge function rejects all requests (401)</h3>
+      <div class="prose">
+        <ul>
+          <li>Check the Apps Script property — no trailing space, no quotes around the value</li>
+          <li>Re-deploy in case the secret wasn't picked up after rotation:</li>
+        </ul>
+      </div>
+      <div class="code-wrap mt-sm"><pre>supabase functions deploy registration-api-sync
+supabase functions deploy registrations-sync</pre></div>
+    </section>
+
+    <!-- step 6 -->
+    <section class="step" id="step6">
+      <div class="step-num" aria-hidden="true">6</div>
+      <div class="step-header">
+        <h2>Generate the Public Share Link</h2>
+        <span class="step-sub">Read-only view — no emails or phone numbers exposed</span>
+      </div>
+      <div class="prose">
+        <p>Once data is loading correctly, go to <code>/registration</code> → <strong>Data</strong> tab → <strong>Public Share Link</strong> → click <strong>Generate link</strong>. Share the URL with whoever needs read-only access (subgroup leaders, exec team).</p>
+        <p>The link shows: name, subgroup, fellowship, registration status only.</p>
+      </div>
+      <h3 class="sub mt">To expire a token</h3>
+      <p style="font-size:14px;color:var(--ink)">Click <strong>Remove link</strong> in the Data tab. The old URL immediately returns empty results. Generate a new one if needed.</p>
+      <div class="callout ok mt">
+        <span class="callout-icon">ℹ</span>
+        <div><p>If the token stops working, the <code>get_public_registration_data</code> RPC reads from <code>registration_config</code> where <code>key = 'public_token'</code>. If that row was deleted, regenerating from the UI recreates it.</p></div>
+      </div>
+    </section>
+
+    <!-- step 7 -->
+    <section class="step" id="step7">
+      <div class="step-num" aria-hidden="true">7</div>
+      <div class="step-header">
+        <h2>Set Up Finance &amp; Rooms Access</h2>
+        <span class="step-sub">Granted per-user, independent of team membership</span>
+      </div>
+      <div class="code-wrap"><pre><span class="c">-- Find a user's UUID</span>
+<span class="k">select</span> id, name, email <span class="k">from</span> <span class="t">users</span> <span class="k">where</span> name <span class="k">ilike</span> <span class="s">'%Name%'</span>;
+
+<span class="c">-- Grant finance tab access</span>
+<span class="k">insert into</span> <span class="t">user_grants</span> (user_id, grant_type, granted_by)
+<span class="k">values</span> (<span class="s">'&lt;user-uuid&gt;'</span>, <span class="s">'finance_data_access'</span>, <span class="s">'&lt;your-uuid&gt;'</span>);
+
+<span class="c">-- Grant room assignment tab access</span>
+<span class="k">insert into</span> <span class="t">user_grants</span> (user_id, grant_type, granted_by)
+<span class="k">values</span> (<span class="s">'&lt;user-uuid&gt;'</span>, <span class="s">'rooms_access'</span>, <span class="s">'&lt;your-uuid&gt;'</span>);
+
+<span class="c">-- Revoke when the event is done or person changes</span>
+<span class="k">delete from</span> <span class="t">user_grants</span>
+<span class="k">where</span> user_id = <span class="s">'&lt;user-uuid&gt;'</span>
+  <span class="k">and</span> grant_type = <span class="s">'finance_data_access'</span>;</pre></div>
+    </section>
+
+    <!-- step 8 -->
+    <section class="step" id="step8">
+      <div class="step-num" aria-hidden="true">8</div>
+      <div class="step-header">
+        <h2>Verify Access — End to End</h2>
+        <span class="step-sub">Test each tier with a real account before going live</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Role / Grant</th>
+              <th>Expected Access</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cell-role">super_admin / regional_secretary</td>
+              <td class="cell-access">All tabs: Roster, Registrations, Delegates Compliance, Flights, Finance, Room Assignment</td>
+            </tr>
+            <tr>
+              <td class="cell-role">Accommodation team member</td>
+              <td class="cell-access">All tabs including Room Assignment — not Finance unless separately granted</td>
+            </tr>
+            <tr>
+              <td class="cell-role">finance_data_access grant</td>
+              <td class="cell-access">All tabs including Finance — not Room Assignment unless also on Accommodation team</td>
+            </tr>
+            <tr>
+              <td class="cell-role">rooms_access grant</td>
+              <td class="cell-access">All tabs including Room Assignment</td>
+            </tr>
+            <tr>
+              <td class="cell-role">Programs space member</td>
+              <td class="cell-access">All tabs including Room Assignment</td>
+            </tr>
+            <tr>
+              <td class="cell-role">Any other event team member</td>
+              <td class="cell-access">Roster, Registrations, Delegates Compliance, Flights</td>
+            </tr>
+            <tr>
+              <td class="cell-role">Pastor (scoped)</td>
+              <td class="cell-access">Roster tab only, filtered to their subgroup</td>
+            </tr>
+            <tr>
+              <td class="cell-role">No team / no grant</td>
+              <td class="cell-access">Cannot access <code>/registration</code> at all</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div><!-- /steps -->
+
+  <!-- ── troubleshoot ────────────────────────────────────────── -->
+  <section id="troubleshoot" style="margin-top:8px; padding-top:40px; border-top:1px solid var(--border)">
+    <h2 style="font-size:17px;font-weight:700;letter-spacing:-.01em;margin-bottom:20px;color:var(--ink)">Troubleshooting</h2>
+
+    <div style="display:flex;flex-direction:column;gap:1px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;">
+
+      <details style="background:var(--surface);">
+        <summary style="padding:14px 16px;cursor:pointer;font-size:13px;font-weight:600;color:var(--ink);list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          "Access denied" on /registration
+          <span style="color:var(--ink-3);font-weight:400;font-size:12px;flex-shrink:0;">▸</span>
+        </summary>
+        <div style="padding:0 16px 14px;font-size:13px;color:var(--ink-2)">The person isn't in any sprint team for this event. Add them to a team in the Nexus Sprint page.</div>
+      </details>
+
+      <details style="background:var(--surface);border-top:1px solid var(--border)">
+        <summary style="padding:14px 16px;cursor:pointer;font-size:13px;font-weight:600;color:var(--ink);list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          Sync button does nothing / no data appears
+          <span style="color:var(--ink-3);font-weight:400;font-size:12px;flex-shrink:0;">▸</span>
+        </summary>
+        <div style="padding:0 16px 14px;font-size:13px;color:var(--ink-2);display:flex;flex-direction:column;gap:8px;">
+          <p>Check Apps Script properties — <code>NEXUS_API_URL</code> and <code>NEXUS_API_KEY</code> must both be set.</p>
+          <p>Run <code>syncAllToNexus</code> manually from Apps Script and read the execution log.</p>
+          <p>Confirm edge functions are deployed: <code>supabase functions list</code></p>
+        </div>
+      </details>
+
+      <details style="background:var(--surface);border-top:1px solid var(--border)">
+        <summary style="padding:14px 16px;cursor:pointer;font-size:13px;font-weight:600;color:var(--ink);list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          Rooms tab is missing
+          <span style="color:var(--ink-3);font-weight:400;font-size:12px;flex-shrink:0;">▸</span>
+        </summary>
+        <div style="padding:0 16px 14px;font-size:13px;color:var(--ink-2)">User isn't a super_admin, regional_secretary, Programs space member, Accommodation team member, or <code>rooms_access</code> grant holder. Add them to the Accommodation sprint team or insert a <code>user_grants</code> row.</div>
+      </details>
+
+      <details style="background:var(--surface);border-top:1px solid var(--border)">
+        <summary style="padding:14px 16px;cursor:pointer;font-size:13px;font-weight:600;color:var(--ink);list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          Public link returns an empty page
+          <span style="color:var(--ink-3);font-weight:400;font-size:12px;flex-shrink:0;">▸</span>
+        </summary>
+        <div style="padding:0 16px 14px;font-size:13px;color:var(--ink-2)">Token was deleted or never generated. Go to Data tab → Generate link.</div>
+      </details>
+
+      <details style="background:var(--surface);border-top:1px solid var(--border)">
+        <summary style="padding:14px 16px;cursor:pointer;font-size:13px;font-weight:600;color:var(--ink);list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          API sync returns 401 Unauthorized
+          <span style="color:var(--ink-3);font-weight:400;font-size:12px;flex-shrink:0;">▸</span>
+        </summary>
+        <div style="padding:0 16px 14px;font-size:13px;color:var(--ink-2)">Rotate the API key — see Step 5.</div>
+      </details>
+
+      <details style="background:var(--surface);border-top:1px solid var(--border)">
+        <summary style="padding:14px 16px;cursor:pointer;font-size:13px;font-weight:600;color:var(--ink);list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          Registrations not matching roster names
+          <span style="color:var(--ink-3);font-weight:400;font-size:12px;flex-shrink:0;">▸</span>
+        </summary>
+        <div style="padding:0 16px 14px;font-size:13px;color:var(--ink-2)">The sync strips honorifics (Pastor, Sis, Bro, Dr) and normalises spacing before matching. If it still fails, check the roster <code>full_name</code> column for extra characters or encoding issues.</div>
+      </details>
+
+    </div>
+  </section>
+
+</main>
+
+<script>
+function toggleTheme() {
+  const root = document.documentElement;
+  const current = root.getAttribute('data-theme');
+  if (!current) {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    root.setAttribute('data-theme', prefersDark ? 'light' : 'dark');
+  } else {
+    root.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+  }
+}
+
+// Persist checkbox state across page reloads
+document.querySelectorAll('.checklist input[type="checkbox"]').forEach((cb, i) => {
+  const key = 'reg-check-' + i;
+  cb.checked = localStorage.getItem(key) === '1';
+  cb.addEventListener('change', () => localStorage.setItem(key, cb.checked ? '1' : '0'));
+});
+</script>
+</body>
+</html>
