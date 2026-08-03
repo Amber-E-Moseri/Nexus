@@ -737,18 +737,18 @@ export default function RegistrationDataTab({
                               </button>
                             )
                           )}
-                          {!p.absent && p.on_working_list && (
+                          {!p.absent && p.on_working_list && (p.registrationStatus === 'registered_outstanding' || p.registrationStatus === 'confirmed') && (
                             <button
                               onClick={() => { setAbsentExpandedEmail(p.email); setAbsentReason(''); }}
-                              style={{ fontSize: 10, padding: '2px 5px', borderRadius: 4, border: `1px solid ${C.amber}`, background: 'transparent', color: C.amber, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap', opacity: 0.7 }}
+                              style={{ fontSize: 9, padding: '1px 4px', border: 'none', background: 'transparent', color: C.mute, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap', opacity: 0.45, textDecoration: 'underline' }}
                             >
-                              absent
+                              mark absent
                             </button>
                           )}
                           {p.absent && (
                             <button
                               onClick={() => onMarkAbsent?.(p.email, false, '')}
-                              style={{ fontSize: 10, padding: '2px 5px', borderRadius: 4, border: `1px solid ${C.line}`, background: 'transparent', color: C.mute, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap', opacity: 0.7 }}
+                              style={{ fontSize: 9, padding: '1px 4px', border: 'none', background: 'transparent', color: C.mute, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap', opacity: 0.45, textDecoration: 'underline' }}
                             >
                               undo absent
                             </button>
