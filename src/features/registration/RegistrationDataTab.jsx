@@ -738,17 +738,17 @@ export default function RegistrationDataTab({
                           {!p.absent && p.on_working_list && (
                             <button
                               onClick={() => { setAbsentExpandedEmail(p.email); setAbsentReason(''); }}
-                              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.amber}`, background: 'transparent', color: C.amber, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
+                              style={{ fontSize: 10, padding: '2px 5px', borderRadius: 4, border: `1px solid ${C.amber}`, background: 'transparent', color: C.amber, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap', opacity: 0.7 }}
                             >
-                              Mark absent
+                              absent
                             </button>
                           )}
                           {p.absent && (
                             <button
                               onClick={() => onMarkAbsent?.(p.email, false, '')}
-                              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.line}`, background: 'transparent', color: C.mute, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
+                              style={{ fontSize: 10, padding: '2px 5px', borderRadius: 4, border: `1px solid ${C.line}`, background: 'transparent', color: C.mute, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap', opacity: 0.7 }}
                             >
-                              Undo absent
+                              undo absent
                             </button>
                           )}
                           {p._fuzzyMatched && p._fuzzyMatchedEmail && !p.linked_registration_email && (
