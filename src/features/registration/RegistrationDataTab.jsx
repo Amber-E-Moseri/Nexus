@@ -737,6 +737,14 @@ export default function RegistrationDataTab({
                               </button>
                             )
                           )}
+                          {!p.absent && p.on_working_list && p.registrationStatus === 'not_registered' && (
+                            <button
+                              onClick={() => { setAbsentExpandedEmail(p.email); setAbsentReason(''); }}
+                              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.amber}`, background: 'transparent', color: C.amber, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
+                            >
+                              Mark absent
+                            </button>
+                          )}
                           {!p.absent && p.on_working_list && (p.registrationStatus === 'registered_outstanding' || p.registrationStatus === 'confirmed') && (
                             <button
                               onClick={() => { setAbsentExpandedEmail(p.email); setAbsentReason(''); }}
