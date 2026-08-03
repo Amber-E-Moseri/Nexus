@@ -331,26 +331,34 @@ export default function App({ limitedToSubgroups = null }) {
       .catch(() => {});
   }, [profile?.id, role]);
 
-  // Rooms access: super_admin, regional_secretary, Programs space members, or Accommodation sprint team
+  // Rooms access: super_admin, regional_secretary, Programs space members,
+  // explicit rooms_access grant, or Accommodation sprint team member
   useEffect(() => {
     if (!profile?.id) return;
     if (role === 'super_admin' || role === 'regional_secretary') { setHasRoomsAccess(true); return; }
-    // Programs space members always get rooms access
     if (profile.is_programs_member) { setHasRoomsAccess(true); return; }
-    // Pastor Nigel gets room assignment access
-    if (profile.name && profile.name.toLowerCase().includes('nigel')) { setHasRoomsAccess(true); return; }
-    // Accommodation team members in This Is It 2.0 sprint also get access
-    supabase.from('sprints').select('id').ilike('name', '%This Is It 2.0%').limit(1).maybeSingle()
-      .then(({ data: sprint }) => {
-        if (!sprint?.id) return;
-        return supabase.from('sprint_team_members')
-          .select('sprint_teams:team_id(name)')
-          .eq('user_id', profile.id)
-          .then(({ data: teams }) => {
-            const ok = (teams || []).some(t =>
-              (t.sprint_teams?.name || '').toLowerCase().includes('accommodation')
-            );
-            if (ok) setHasRoomsAccess(true);
+
+    // Check user_grants for an explicit rooms_access grant (e.g. Pastor Nigel)
+    supabase.from('user_grants')
+      .select('id')
+      .eq('user_id', profile.id)
+      .eq('grant_type', 'rooms_access')
+      .maybeSingle()
+      .then(({ data: grant }) => {
+        if (grant) { setHasRoomsAccess(true); return; }
+        // Accommodation team members in the active event sprint also get access
+        return supabase.from('sprints').select('id').ilike('name', '%This Is It 2.0%').limit(1).maybeSingle()
+          .then(({ data: sprint }) => {
+            if (!sprint?.id) return;
+            return supabase.from('sprint_team_members')
+              .select('sprint_teams:team_id(name)')
+              .eq('user_id', profile.id)
+              .then(({ data: teams }) => {
+                const ok = (teams || []).some(t =>
+                  (t.sprint_teams?.name || '').toLowerCase().includes('accommodation')
+                );
+                if (ok) setHasRoomsAccess(true);
+              });
           });
       })
       .catch(() => {});
@@ -2359,6 +2367,16 @@ function ImportTab({ handleImport, handleImportWorkingList, roster, registration
 }
 
 // ============ DELEGATE COMPLIANCE ============
+function isNaAllergy(val) {
+  // Strip all N/A variants (N/A, N\A, NA, none, nil, nope, no) plus separators
+  // to catch compound values like "N\A . n/a"
+  return val
+    .replace(/[nN][\\\/]?[aA]/g, '')
+    .replace(/\bnone\b|\bnil\b|\bnope\b|\bno\b/gi, '')
+    .replace(/[\s.,\\/!]+/g, '')
+    .length === 0;
+}
+
 function DelegateComplianceTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }) {
   const [fellowshipFilter, setFellowshipFilter] = useState('All');
 
@@ -2374,7 +2392,7 @@ function DelegateComplianceTab({ merged, subgroupFilter, setSubgroupFilter, subg
       if (subgroupFilter !== 'All' && r.subgroup !== subgroupFilter) return false;
     }
     const val = r.allergies?.trim().toLowerCase()
-    return val && val !== '' && !['no', 'none', 'n/a', 'na', 'nil', 'nope', 'nope!'].includes(val)
+    return val && val !== '' && !isNaAllergy(val)
   }), [merged, isLimited, subgroupFilter, fellowshipFilter]);
 
   return (
@@ -2403,7 +2421,7 @@ function DelegateComplianceTab({ merged, subgroupFilter, setSubgroupFilter, subg
           <tbody>
             {filtered.map((r, i) => {
               const allergyVal = r.allergies?.trim().toLowerCase();
-              const showAllergy = allergyVal && !['no', 'none', 'n/a', 'na', 'nil', 'nope', 'nope!'].includes(allergyVal);
+              const showAllergy = allergyVal && !isNaAllergy(allergyVal);
               return (
                 <tr key={i}>
                   <td style={{ fontWeight: 600 }}>{r.fullName}</td>
