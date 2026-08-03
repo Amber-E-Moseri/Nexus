@@ -1725,7 +1725,8 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
           <tbody>
             {filtered.map((r, i) => {
               const isConfirmed = r.hasPaid || r.inStateConfirmed || bypassConfirmed[r.email];
-              const noFlightFlag = isConfirmed && !r.hasFlightInfo;
+              const isLocal = /manitoba|winnipeg/i.test(r.fellowship || '');
+              const noFlightFlag = isConfirmed && !r.hasFlightInfo && !isLocal;
               return (
               <tr key={i}>
                 <td style={{ fontWeight: 600 }}>{r.fullName}</td>
@@ -1753,7 +1754,9 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
                       </div>
                     )}
                     {noFlightFlag && (
-                      <AlertCircle size={16} style={{ color: '#FF9500', flexShrink: 0 }} title="Confirmed but no flights" />
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#FFF3CD', color: '#B8710A', border: '1px solid #F5C842', borderRadius: 12, fontSize: 11, fontWeight: 600, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                        <AlertCircle size={11} /> No flights
+                      </span>
                     )}
                   </div>
                 </td>
