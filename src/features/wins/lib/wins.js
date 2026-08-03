@@ -49,6 +49,19 @@ export async function deleteWin(winId) {
   if (error) throw error
 }
 
+export async function searchWins(departmentId, query) {
+  const { data, error } = await supabase
+    .from('weekly_wins')
+    .select(WIN_SELECT)
+    .eq('department_id', departmentId)
+    .ilike('content', `%${query}%`)
+    .order('week_start', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error) throw error
+  return data ?? []
+}
+
 // Candidates for the optional "link a task" picker: department tasks
 // completed during the sheet's week.
 export async function listCompletedTasksForWeek(departmentId, weekStartISO, weekEndISO) {

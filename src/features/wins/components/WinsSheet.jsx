@@ -54,7 +54,7 @@ function WinRow({ win, canDelete, onDelete }) {
  * Free-text entries, optionally linked to a task completed that week.
  * Used in the Planner sidebar and as a Dashboard widget (compact).
  */
-export default function WinsSheet({ departmentId, weekStart, compact = false }) {
+export default function WinsSheet({ departmentId, weekStart, compact = false, unbounded = false }) {
   const { profile } = useAuth()
   const { showToast } = useToast()
   const userId = profile?.id
@@ -110,7 +110,7 @@ export default function WinsSheet({ departmentId, weekStart, compact = false }) 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <div style={{ maxHeight: compact ? 220 : 180, overflowY: 'auto' }}>
+      <div style={{ maxHeight: unbounded ? undefined : (compact ? 220 : 180), overflowY: unbounded ? undefined : 'auto' }}>
         {isLoading && <div style={{ fontSize: 11.5, color: MUTED, padding: '6px 0' }}>Loading…</div>}
         {!isLoading && wins.length === 0 && (
           <div style={{ fontSize: 11.5, color: MUTED, padding: '6px 0' }}>

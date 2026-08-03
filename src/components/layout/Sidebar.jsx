@@ -13,6 +13,7 @@ import {
   HelpCircle,
   HeadphonesIcon,
   Ticket,
+  Trophy,
   TrendingUp,
   LayoutGrid,
   Library,
@@ -764,6 +765,12 @@ export default function Sidebar({ isMobileDrawer = false }) {
           icon={Clock}
           label="Planner"
           to="/planner"
+        />
+        <SidebarItem
+          active={isPathActive(location.pathname, '/wins')}
+          icon={Trophy}
+          label="Wins"
+          to="/wins"
         />
         <SidebarItem
           active={isPathActive(location.pathname, '/calendar')}
@@ -1631,16 +1638,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
               </>
             )}
           </>
-        )}
-
-        {/* Growth Tracking — super_admin only */}
-        {role === 'super_admin' && (
-          <SidebarItem
-            active={isPathActive(location.pathname, '/growth-tracking')}
-            icon={TrendingUp}
-            label="Growth Tracking"
-            to="/growth-tracking"
-          />
         )}
 
         {/* Help & Support - collapsible */}

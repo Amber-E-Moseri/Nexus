@@ -1083,7 +1083,7 @@ const TABS = [
   { key: 'settings',  label: 'Settings' },
 ]
 
-export default function GrowthTrackingPage() {
+export default function GrowthTrackingPage({ embedded = false }) {
   const [tab, setTab] = useState('dashboard')
   const [growthData, setGrowthData] = useState([])
   const [schedule, setSchedule] = useState([])
@@ -1164,15 +1164,18 @@ export default function GrowthTrackingPage() {
   }
 
   return (
-    <div style={{ background: C.cream, minHeight: '100vh', fontFamily: 'Inter' }}>
+    <div style={{ background: C.cream, minHeight: embedded ? undefined : '100vh', fontFamily: 'Inter' }}>
 
       {/* Page header */}
       <div style={{ background: C.paper, borderBottom: `1px solid ${C.line}`, padding: '20px 32px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <TrendingUp size={20} color={C.purple} />
-          <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 20, fontWeight: 700, margin: 0, color: C.ink, flex: 1 }}>
-            Growth Tracking
-          </h1>
+          {!embedded && <TrendingUp size={20} color={C.purple} />}
+          {!embedded && (
+            <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 20, fontWeight: 700, margin: 0, color: C.ink, flex: 1 }}>
+              Growth Tracking
+            </h1>
+          )}
+          {embedded && <div style={{ flex: 1 }} />}
 
           {/* Action buttons + status */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

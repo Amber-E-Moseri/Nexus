@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import TaskExpandable from './TaskExpandable'
 import WinsSheet from '../../wins/components/WinsSheet'
@@ -178,6 +179,14 @@ export default function PlannerSidebar({
           {winsOpen ? <ChevronDown size={13} color={MUTED} /> : <ChevronRight size={13} color={MUTED} />}
           <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.05em', textTransform: 'uppercase' }}>Wins this week</span>
           <span aria-hidden="true" style={{ fontSize: 12 }}>🙌</span>
+          <Link
+            to="/wins"
+            onClick={(e) => e.stopPropagation()}
+            style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 600, color: MUTED, textDecoration: 'none', padding: '1px 6px', borderRadius: 5 }}
+            title="See all wins"
+          >
+            See all →
+          </Link>
         </button>
         {winsOpen && (
           <div style={{ marginTop: 6 }}>
