@@ -108,6 +108,7 @@ const HelpPage = lazyRoute('/help', () => import('./pages/HelpPage'))
 const SupportPage = lazyRoute('/support', () => import('./pages/SupportPage'))
 const SupportTicketsAdminPage = lazyRoute('/admin/tickets', () => import('./pages/SupportTicketsAdminPage'))
 const GrowthTrackingPage = lazyRoute('/growth-tracking', () => import('./pages/growth/GrowthTrackingPage'))
+const RegistrationGuide = lazyRoute('/app/registration-guide', () => import('./pages/apps/RegistrationGuide'))
 const GlowCardDemo = lazy(() => import('./components/ui/GlowCardDemo'))
 const BooksApp = lazy(() => import('./features/reader/pages/BooksApp'))
 
@@ -431,6 +432,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['super_admin']}>
                 <GrowthTrackingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/registration-guide"
+            element={
+              <ProtectedRoute roles={['super_admin']}>
+                <RegistrationGuide />
               </ProtectedRoute>
             }
           />

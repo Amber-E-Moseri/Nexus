@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { TrendingUp, Trophy, Map, Library } from 'lucide-react'
+import { TrendingUp, Trophy, Map, Library, Send, BookOpen } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
 const PRIMARY = '#4C2A92'
@@ -56,6 +56,7 @@ export default function AppsPage() {
   const isSuperAdmin = role === 'super_admin'
   const canSeeMap = ['super_admin', 'dept_lead', 'regional_secretary', 'pastor'].includes(role)
   const canSeeLibrary = ['super_admin', 'regional_secretary'].includes(role)
+  const canSeeCommunications = ['super_admin', 'regional_secretary', 'ors', 'dept_lead', 'programs'].includes(role)
   const navigate = useNavigate()
 
   return (
@@ -85,6 +86,16 @@ export default function AppsPage() {
               onClick={() => navigate('/growth-tracking')}
             />
           )}
+          {isSuperAdmin && (
+            <AppIcon
+              icon={BookOpen}
+              label="Event Setup Guide"
+              color="#4C2A92"
+              bg="linear-gradient(135deg, #F1EEF6 0%, #E8E0FF 100%)"
+              description="Plan events from CMP"
+              onClick={() => navigate('/app/registration-guide')}
+            />
+          )}
           {canSeeMap && (
             <AppIcon
               icon={Map}
@@ -103,6 +114,16 @@ export default function AppsPage() {
               bg="linear-gradient(135deg, #FBF0DE 0%, #F5E0C0 100%)"
               description="Books & reading"
               onClick={() => navigate('/books')}
+            />
+          )}
+          {canSeeCommunications && (
+            <AppIcon
+              icon={Send}
+              label="Communications"
+              color="#0F6E8A"
+              bg="linear-gradient(135deg, #E3F4F8 0%, #C8EBF3 100%)"
+              description="Campaigns & emails"
+              onClick={() => navigate('/communications')}
             />
           )}
         </div>
