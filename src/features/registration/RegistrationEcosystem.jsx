@@ -833,6 +833,7 @@ export default function App({ limitedToSubgroups = null }) {
             onAddPerson={handleAddToWorkingList}
             onEditPerson={handleEditWorkingListPerson}
             onRemove={handleRemoveFromWorkingList}
+            onConfirm={toggleConfirm}
             highlightEmail={highlightEmail}
             onClearHighlight={() => setHighlightEmail(null)}
           />

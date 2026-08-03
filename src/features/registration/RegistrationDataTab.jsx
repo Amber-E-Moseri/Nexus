@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle2, XCircle, Pencil, Download, ChevronUp, ChevronDown, Link2, Copy, RefreshCw, Trash2, X, Plus, UserX } from 'lucide-react';
+import { CheckCircle2, XCircle, Circle, AlertCircle, Pencil, Download, ChevronUp, ChevronDown, Link2, Copy, RefreshCw, Trash2, X, Plus, UserX } from 'lucide-react';
 import RegistrationEditModal from './RegistrationEditModal';
 import { supabase } from '../../lib/supabase';
 
@@ -161,6 +161,7 @@ export default function RegistrationDataTab({
   onAddPerson,
   onEditPerson,
   onRemove,
+  onConfirm,
   highlightEmail,
   onClearHighlight,
 }) {
@@ -709,7 +710,31 @@ export default function RegistrationDataTab({
                     {/* Actions (canEdit only) */}
                     {canEdit && (
                       <td style={{ padding: '6px 10px', borderBottom: `1px solid ${C.line}` }}>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                          {/* Confirm button + flight flag */}
+                          {p.isRegistered && onConfirm && (
+                            p.isConfirmed ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <button
+                                  onClick={() => onConfirm(p.email)}
+                                  title="Click to un-confirm"
+                                  style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.green}`, background: C.greenBg, color: C.green, cursor: 'pointer', fontFamily: 'Inter', fontWeight: 600, whiteSpace: 'nowrap' }}
+                                >
+                                  <CheckCircle2 size={12} /> Confirmed
+                                </button>
+                                {!p.hasFlightInfo && (
+                                  <AlertCircle size={14} style={{ color: '#FF9500', flexShrink: 0 }} title="Confirmed but no flights" />
+                                )}
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => onConfirm(p.email)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.line}`, background: 'transparent', color: C.mute, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
+                              >
+                                <Circle size={12} /> Confirm
+                              </button>
+                            )
+                          )}
                           {!p.absent && p.on_working_list && (
                             <button
                               onClick={() => { setAbsentExpandedEmail(p.email); setAbsentReason(''); }}
