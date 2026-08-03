@@ -838,7 +838,7 @@ export default function App({ limitedToSubgroups = null }) {
             onClearHighlight={() => setHighlightEmail(null)}
           />
         )}
-        {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm, isLimited, onEditReg: setEditingReg }} />}
+        {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onEditReg: setEditingReg }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.inStateConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom, isLimited }} />}
@@ -1652,24 +1652,21 @@ function FellowshipSelect({ value, onChange, fellowships }) {
   );
 }
 
-// ============ CONFIRMATIONS ============
-function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, toggleConfirm, isLimited, onEditReg }) {
-  const [bypassConfirmed, setBypassConfirmed] = useState({});
+// ============ DELEGATES ============
+function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onEditReg }) {
   const [fellowshipFilter, setFellowshipFilter] = useState('All');
   const [search, setSearch] = useState('');
 
-  function toggleBypass(email) {
-    setBypassConfirmed(prev => ({ ...prev, [email]: !prev[email] }));
-  }
-
   const fellowships = useMemo(() => {
-    const f = new Set(merged.map(r => r.fellowship).filter(Boolean));
+    const f = new Set(merged.filter(r => r.fullyConfirmed).map(r => r.fellowship).filter(Boolean));
     return [...f].sort();
   }, [merged]);
 
+  const confirmed = useMemo(() => merged.filter(r => r.fullyConfirmed), [merged]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return merged.filter(r => {
+    return confirmed.filter(r => {
       const matchesGroup = isLimited
         ? (fellowshipFilter === 'All' || r.fellowship === fellowshipFilter)
         : (subgroupFilter === 'All' || r.subgroup === subgroupFilter);
@@ -1682,20 +1679,16 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
         (r.fellowship || '').toLowerCase().includes(q)
       );
     });
-  }, [merged, isLimited, fellowshipFilter, subgroupFilter, search]);
-
-  const confirmedCount = filtered.filter(r => r.fullyConfirmed || bypassConfirmed[r.email]).length;
-  const bypassCount = filtered.filter(r => bypassConfirmed[r.email] && !r.fullyConfirmed).length;
+  }, [confirmed, isLimited, fellowshipFilter, subgroupFilter, search]);
 
   return (
     <div>
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
           <div>
-            <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Confirmations</h2>
+            <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Delegates</h2>
             <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>
-              Paid = auto-confirmed. In-state = tick the checkbox (persisted). One-offs = bypass (session only, flagged).
-              {confirmedCount}/{filtered.length} confirmed{bypassCount > 0 ? ` · ${bypassCount} bypassed` : ''}.
+              {filtered.length} confirmed delegate{filtered.length !== 1 ? 's' : ''}
             </div>
           </div>
         </div>
@@ -1712,71 +1705,102 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, togg
           ) : (
             <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />
           )}
-          <Btn tone="ghost" small onClick={() => downloadCSV('confirmations.csv', filtered, [
-            { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' }, { key: 'fellowship', label: 'Fellowship' },
-            { key: 'email', label: 'Email' }, { get: r => (r.fullyConfirmed || bypassConfirmed[r.email]) ? 'Yes' : 'No', label: 'Confirmed' },
+          <Btn tone="ghost" small onClick={() => downloadCSV('delegates.csv', filtered, [
+            { key: 'fullName', label: 'Name' },
+            { key: 'subgroup', label: 'Subgroup' },
+            { key: 'fellowship', label: 'Fellowship' },
+            { key: 'phone', label: 'Phone' },
+            { key: 'email', label: 'Email' },
+            { key: 'baptism', label: 'Baptism' },
+            { key: 'foundationStatus', label: 'Foundation Status' },
+            { key: 'team', label: 'Department' },
+            { key: 'designation', label: 'Designation' },
+            { key: 'shirtSize', label: 'Shirt Size' },
+            { key: 'allergies', label: 'Dietary' },
+            { key: 'arrivalDate', label: 'Arrival Date' },
+            { key: 'arrivalFlight', label: 'Arrival Flight' },
+            { key: 'departureDate', label: 'Departure Date' },
+            { key: 'departureFlight', label: 'Departure Flight' },
+            { get: r => r.hasPaid ? 'Yes' : 'No', label: 'Paid' },
           ])}><Download size={13} /> Export</Btn>
         </div>
       </div>
 
       <Card style={{ padding: 0, overflowX: 'auto' }}>
         <table>
-          <thead><tr><th>Name</th><th>Subgroup</th><th>Fellowship</th><th>Confirmed</th><th></th></tr></thead>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>Subgroup</th>
+              <th>Fellowship</th>
+              <th>Phone</th>
+              <th>Baptism</th>
+              <th>Foundation</th>
+              <th>Department</th>
+              <th>Designation</th>
+              <th>Shirt</th>
+              <th>Dietary</th>
+              <th>Arrival</th>
+              <th>Dep. Flight</th>
+              <th>Paid</th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody>
             {filtered.map((r, i) => {
-              const isConfirmed = r.hasPaid || r.inStateConfirmed || bypassConfirmed[r.email];
               const isLocal = /manitoba|winnipeg/i.test(r.fellowship || '');
-              const noFlightFlag = isConfirmed && !r.hasFlightInfo && !isLocal;
+              const noFlightFlag = !r.hasFlightInfo && !isLocal;
               return (
-              <tr key={i}>
-                <td style={{ fontWeight: 600 }}>{r.fullName}</td>
-                <td>{r.subgroup}</td>
-                <td>{r.fellowship}</td>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {r.hasPaid ? (
-                      <Pill tone="green">Confirmed (paid)</Pill>
-                    ) : r.inStateConfirmed ? (
-                      <button onClick={() => toggleConfirm(r.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: C.green, fontWeight: 600, fontSize: 12.5 }}>
-                        <CheckCircle2 size={16} /> Confirmed
+                <tr key={i}>
+                  <td style={{ color: C.mute, fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}>{i + 1}</td>
+                  <td style={{ fontWeight: 600 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {r.fullName}
+                      {noFlightFlag && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#FFF3CD', color: '#B8710A', border: '1px solid #F5C842', borderRadius: 12, fontSize: 10, fontWeight: 600, padding: '1px 6px', whiteSpace: 'nowrap' }}>
+                          <AlertCircle size={10} /> No flights
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td>{r.subgroup || '—'}</td>
+                  <td>{r.fellowship || '—'}</td>
+                  <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>{r.phone || '—'}</td>
+                  <td>{r.baptism || '—'}</td>
+                  <td>{r.foundationStatus || '—'}</td>
+                  <td>{r.team || '—'}</td>
+                  <td>{r.designation || '—'}</td>
+                  <td>{r.shirtSize || '—'}</td>
+                  <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.allergies || '—'}</td>
+                  <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, whiteSpace: 'nowrap' }}>
+                    {r.arrivalDate ? `${r.arrivalDate}${r.arrivalFlight ? ` · ${r.arrivalFlight}` : ''}` : '—'}
+                  </td>
+                  <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, whiteSpace: 'nowrap' }}>
+                    {r.departureDate ? `${r.departureDate}${r.departureFlight ? ` · ${r.departureFlight}` : ''}` : '—'}
+                  </td>
+                  <td>{r.hasPaid ? <Pill tone="green">Paid</Pill> : <span style={{ color: C.mute }}>—</span>}</td>
+                  <td style={{ width: 36, padding: '6px 8px' }}>
+                    {onEditReg && (
+                      <button
+                        onClick={() => onEditReg(r)}
+                        title="Edit registration"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6 }}
+                        onMouseEnter={e => e.currentTarget.style.color = C.purple}
+                        onMouseLeave={e => e.currentTarget.style.color = C.mute}
+                      >
+                        <Pencil size={14} />
                       </button>
-                    ) : bypassConfirmed[r.email] ? (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <Pill tone="amber">Confirmed (bypassed)</Pill>
-                        <button onClick={() => toggleBypass(r.email)} style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>undo</button>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <button onClick={() => toggleConfirm(r.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: C.mute, fontWeight: 600, fontSize: 12.5 }}>
-                          <Circle size={16} /> Mark confirmed
-                        </button>
-                        <button onClick={() => toggleBypass(r.email)} style={{ fontSize: 11, color: C.mute, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>bypass</button>
-                      </div>
                     )}
-                    {noFlightFlag && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#FFF3CD', color: '#B8710A', border: '1px solid #F5C842', borderRadius: 12, fontSize: 11, fontWeight: 600, padding: '2px 8px', whiteSpace: 'nowrap' }}>
-                        <AlertCircle size={11} /> No flights
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td style={{ width: 36, padding: '6px 8px' }}>
-                  {onEditReg && (
-                    <button
-                      onClick={() => onEditReg(r)}
-                      title="Edit registration"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6 }}
-                      onMouseEnter={e => e.currentTarget.style.color = C.purple}
-                      onMouseLeave={e => e.currentTarget.style.color = C.mute}
-                    >
-                      <Pencil size={14} />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            );
+                  </td>
+                </tr>
+              );
             })}
-            {filtered.length === 0 && <tr><td colSpan={5} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>No registrations imported yet.</td></tr>}
+            {filtered.length === 0 && (
+              <tr><td colSpan={15} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>
+                {confirmed.length === 0 ? 'No confirmed delegates yet.' : 'No delegates match the current filters.'}
+              </td></tr>
+            )}
           </tbody>
         </table>
       </Card>
