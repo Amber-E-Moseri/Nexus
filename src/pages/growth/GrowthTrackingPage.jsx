@@ -96,11 +96,12 @@ const TH = ({ children, right }) => (
   }}>{children}</th>
 )
 
-const TD = ({ children, right, bold, color }) => (
+const TD = ({ children, right, bold, color, extra }) => (
   <td style={{
     padding: '10px 14px', textAlign: right ? 'right' : 'left',
     borderBottom: `1px solid ${C.line}`, fontSize: 13,
     fontWeight: bold ? 600 : 400, color: color,
+    ...extra,
   }}>{children}</td>
 )
 
@@ -360,6 +361,7 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
   const networkFT      = activeRows.filter(r => r.status === 'reported').reduce((s, r) => s + r.first_timers, 0)
   const networkDelta   = activeRows.filter(r => r.status === 'reported').reduce((s, r) => s + (r.wow_delta ?? 0), 0)
   const reportingCount = activeRows.filter(r => r.status === 'reported').length
+  const maxAttendance  = Math.max(...activeRows.filter(r => r.status === 'reported').map(r => r.total_attendance), 1)
 
   // The ReferenceLine xAxisId value must match the XAxis dataKey label
   const refLabel = formatWeek(activeWeek)
@@ -432,15 +434,33 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
         <StatCard
           label="Network Attendance"
           value={networkTotal.toLocaleString()}
-          sub={`${networkDelta >= 0 ? '+' : ''}${networkDelta} vs prev week`}
-          subColor={networkDelta >= 0 ? C.green : C.red}
+          sub={networkDelta !== 0
+            ? `${networkDelta >= 0 ? '↑' : '↓'} ${Math.abs(networkDelta)} vs prev week`
+            : '→ same as prev week'}
+          subColor={networkDelta > 0 ? C.green : networkDelta < 0 ? C.red : C.mute}
         />
         <StatCard label="First-Timers" value={networkFT.toLocaleString()} sub="this week" />
-        <StatCard
-          label="Reporting"
-          value={`${reportingCount} / ${activeRows.length}`}
-          sub="service centers"
-        />
+        {/* Reporting card with progress bar */}
+        <Card style={{ padding: '18px 22px', flex: '1 1 160px', position: 'relative', overflow: 'hidden' }}>
+          <Label>Reporting</Label>
+          <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: C.ink, marginTop: 6 }}>
+            {reportingCount}
+            <span style={{ fontSize: 18, color: C.mute, fontWeight: 400 }}> / {activeRows.length}</span>
+          </div>
+          <div style={{ fontSize: 12, color: C.mute, marginTop: 3, fontFamily: 'Inter' }}>service centers</div>
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0, height: 4,
+            background: C.line, borderRadius: '0 0 14px 14px',
+          }}>
+            <div style={{
+              height: '100%',
+              width: `${activeRows.length > 0 ? Math.round((reportingCount / activeRows.length) * 100) : 0}%`,
+              background: reportingCount === activeRows.length ? C.green : C.purple,
+              borderRadius: '0 0 0 14px',
+              transition: 'width .4s ease',
+            }} />
+          </div>
+        </Card>
       </div>
 
       {/* Status chips */}
@@ -503,8 +523,13 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
       </Card>
 
       {/* Per-center table for selected week */}
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 15, color: C.ink, marginBottom: 10 }}>
-        Week of {formatWeekFull(activeWeek)}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 15, color: C.ink }}>
+          Week of {formatWeekFull(activeWeek)}
+        </div>
+        <div style={{ fontSize: 12, color: C.mute, fontFamily: 'Inter' }}>
+          {reportingCount} of {activeRows.length} reporting
+        </div>
       </div>
       <Card style={{ overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
@@ -520,24 +545,38 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
               </tr>
             </thead>
             <tbody>
-              {[...activeRows].sort((a, b) => b.total_attendance - a.total_attendance).map(row => (
-                <tr key={row.church_name} style={{ background: C.paper }}>
-                  <TD bold>{row.church_name}</TD>
-                  <TD right bold color={C.ink}>
-                    {row.status === 'reported' ? row.total_attendance.toLocaleString() : '—'}
-                  </TD>
-                  <TD right>
-                    {row.status === 'reported' ? row.first_timers.toLocaleString() : '—'}
-                  </TD>
-                  <TD right color={(row.wow_delta ?? 0) >= 0 ? C.green : C.red}>
-                    {row.status === 'reported' && row.wow_delta != null
-                      ? (row.wow_delta >= 0 ? `+${row.wow_delta}` : row.wow_delta)
-                      : '—'}
-                  </TD>
-                  <TD right color={C.mute}>{row.rolling_avg_4wk ?? '—'}</TD>
-                  <TD right><Pill status={row.status} /></TD>
-                </tr>
-              ))}
+              {[...activeRows].sort((a, b) => b.total_attendance - a.total_attendance).map(row => {
+                const statusColor = STATUS_META[row.status]?.color ?? C.mute
+                const attPct = row.status === 'reported'
+                  ? Math.round((row.total_attendance / maxAttendance) * 100)
+                  : 0
+                return (
+                  <tr key={row.church_name} className="growth-row" style={{ background: C.paper }}>
+                    <TD bold extra={{ borderLeft: `3px solid ${statusColor}`, paddingLeft: 11 }}>
+                      {row.church_name}
+                    </TD>
+                    <TD right bold color={C.ink} extra={{
+                      background: attPct > 0
+                        ? `linear-gradient(to left, ${C.purpleBg} ${attPct}%, transparent ${attPct}%)`
+                        : undefined,
+                    }}>
+                      {row.status === 'reported' ? row.total_attendance.toLocaleString() : '—'}
+                    </TD>
+                    <TD right>
+                      {row.status === 'reported' ? row.first_timers.toLocaleString() : '—'}
+                    </TD>
+                    <TD right color={row.status === 'reported' && row.wow_delta != null
+                      ? (row.wow_delta > 0 ? C.green : row.wow_delta < 0 ? C.red : C.mute)
+                      : C.mute}>
+                      {row.status === 'reported' && row.wow_delta != null
+                        ? `${row.wow_delta > 0 ? '↑' : row.wow_delta < 0 ? '↓' : '→'} ${Math.abs(row.wow_delta)}`
+                        : '—'}
+                    </TD>
+                    <TD right color={C.mute}>{row.rolling_avg_4wk ?? '—'}</TD>
+                    <TD right><Pill status={row.status} /></TD>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -1001,7 +1040,10 @@ export default function GrowthTrackingPage() {
         </div>
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .growth-row:hover td { background: ${C.cream} !important; }
+      `}</style>
 
       {/* Tab content */}
       <div style={{ padding: '28px 32px 64px', maxWidth: 1100, margin: '0 auto' }}>
