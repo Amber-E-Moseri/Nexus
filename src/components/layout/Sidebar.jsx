@@ -1414,15 +1414,38 @@ export default function Sidebar({ isMobileDrawer = false }) {
         </>
         ) : null}
 
-        {!collapsed && (role === 'regional_secretary' || role === 'super_admin') ? (
+        {(role === 'regional_secretary' || role === 'super_admin') ? (
           <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12 }}>
-            <div style={{ ...SECTION_LABEL_STYLE }}>Learning</div>
-            <SidebarItem
-              active={false}
-              icon={Library}
-              label="My Library"
-              href="https://nexus.lwcanada.org/books"
-            />
+            {!collapsed && <div style={{ ...SECTION_LABEL_STYLE }}>Learning</div>}
+            {role === 'super_admin' ? (
+              <SidebarItem
+                active={false}
+                icon={Library}
+                label="My Library"
+                href="https://nexus.lwcanada.org/books"
+              />
+            ) : (
+              !collapsed && (
+                <div
+                  className="sidebar-item"
+                  style={{ cursor: 'default', opacity: 0.75 }}
+                >
+                  <Library size={15} style={{ opacity: 0.85, flexShrink: 0 }} />
+                  <span className="sidebar-item__label">Surprise</span>
+                  <span style={{
+                    marginLeft: 'auto',
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: '#7C5CBF',
+                    background: '#EDE8F8',
+                    borderRadius: 20,
+                    padding: '2px 7px',
+                    whiteSpace: 'nowrap',
+                    letterSpacing: '0.04em',
+                  }}>Aug 5</span>
+                </div>
+              )
+            )}
           </div>
         ) : null}
 
