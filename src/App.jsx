@@ -60,6 +60,7 @@ const PersonalList = lazyRoute('/personal-list', () => import('./pages/personal/
 const TrashPage = lazyRoute('/trash', () => import('./pages/tasks/TrashPage'))
 const Planner = lazyRoute('/planner', () => import('./pages/Planner'))
 const WinsPage = lazyRoute('/wins', () => import('./pages/wins/WinsPage'))
+const AppsPage = lazyRoute('/apps', () => import('./pages/apps/AppsPage'))
 const AllPeoplePage = lazy(() => import('./pages/people/AllPeoplePage'))
 const DepartmentsPage = lazy(() => import('./pages/people/DepartmentsPage'))
 const InvitationsPage = lazy(() => import('./pages/people/InvitationsPage'))
@@ -186,6 +187,7 @@ export default function App() {
           <Route path="/trash" element={<TrashPage />} />
           <Route path="/planner" element={<Planner />} />
           <Route path="/wins" element={<WinsPage />} />
+          <Route path="/apps" element={<AppsPage />} />
           <Route path="/calendar" element={<MinistryCalendar />} />
           <Route
             path="/calendar-management"

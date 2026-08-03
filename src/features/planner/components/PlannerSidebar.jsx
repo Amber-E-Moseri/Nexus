@@ -180,7 +180,7 @@ export default function PlannerSidebar({
           <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.05em', textTransform: 'uppercase' }}>Wins this week</span>
           <span aria-hidden="true" style={{ fontSize: 12 }}>🙌</span>
           <Link
-            to="/wins"
+            to="/apps"
             onClick={(e) => e.stopPropagation()}
             style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 600, color: MUTED, textDecoration: 'none', padding: '1px 6px', borderRadius: 5 }}
             title="See all wins"

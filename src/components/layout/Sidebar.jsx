@@ -15,6 +15,7 @@ import {
   Ticket,
   Trophy,
   TrendingUp,
+  Search,
   LayoutGrid,
   Library,
   Lock,
@@ -317,6 +318,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
   })
   const [collapsedPref, setCollapsedPref] = useState(() => getItemSafe(CACHE_KEYS.SIDEBAR_COLLAPSED) === true)
   const collapsed = !isMobileDrawer && collapsedPref
+  const [featureSearch, setFeatureSearch] = useState('')
 
   const [hasRegistrationAccess, setHasRegistrationAccess] = useState(false)
   useEffect(() => {
@@ -681,7 +683,92 @@ export default function Sidebar({ isMobileDrawer = false }) {
       </div>
 
       <div className={collapsed ? 'sidebar-nav sidebar-nav--collapsed' : 'sidebar-nav'} style={{ flex: 1, overflowY: 'auto', padding: '8px 6px 12px' }}>
-        {!collapsed && <SidebarSectionLabel>Workspace</SidebarSectionLabel>}
+        {!collapsed && (
+          <div style={{ position: 'relative', marginBottom: 8 }}>
+            <Search size={12} color="#B0A696" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            <input
+              type="text"
+              value={featureSearch}
+              onChange={(e) => setFeatureSearch(e.target.value)}
+              placeholder="Search features…"
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                paddingLeft: 28, paddingRight: featureSearch ? 26 : 10,
+                paddingTop: 6, paddingBottom: 6,
+                border: '1px solid #EDE8DC', borderRadius: 7,
+                fontSize: 12, fontFamily: 'inherit', outline: 'none',
+                background: '#F7F4EF', color: '#2D2A22',
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#4C2A92'; e.currentTarget.style.background = '#fff' }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#EDE8DC'; e.currentTarget.style.background = '#F7F4EF' }}
+            />
+            {featureSearch && (
+              <button
+                onClick={() => setFeatureSearch('')}
+                style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', color: '#B0A696', cursor: 'pointer', display: 'flex', padding: 1, lineHeight: 1 }}
+              >
+                ×
+              </button>
+            )}
+            {featureSearch && (() => {
+              const q = featureSearch.toLowerCase()
+              const all = [
+                { label: 'Dashboard', to: '/dashboard', icon: LayoutGrid },
+                { label: 'Inbox', to: '/inbox', icon: Bell },
+                { label: 'My Tasks', to: '/my-tasks', icon: CheckCircle2 },
+                { label: 'Today & Tomorrow', to: '/my-tasks/today', icon: CalendarClock },
+                { label: 'Personal List', to: '/personal-list', icon: Lock },
+                { label: 'Planner', to: '/planner', icon: Clock },
+                { label: 'Apps', to: '/apps', icon: Trophy },
+                { label: 'Ministry Calendar', to: '/calendar', icon: CalendarDays },
+                ...(['regional_secretary', 'pastor', 'super_admin'].includes(role) ? [{ label: 'My Flock', to: '/flock', icon: Users }] : []),
+                ...(hasRegistrationAccess ? [{ label: 'This Is It Registration', to: '/registration', icon: CheckCircle2 }] : []),
+                { label: 'All Sprints', to: '/sprints', icon: Zap },
+                { label: 'Meetings', to: '/meetings', icon: Video },
+                { label: 'Communications', to: '/communications', icon: Send },
+                { label: 'Campaigns', to: '/campaigns', icon: Mail },
+                { label: 'Templates', to: '/templates', icon: MailPlus },
+                { label: 'Flock CRM', to: '/flock-crm', icon: Network },
+                { label: 'People Management', to: '/people', icon: Users2 },
+                { label: 'Trash', to: '/trash', icon: Trash2 },
+                { label: 'CAN Map', to: '/can-map', icon: Map },
+                { label: 'Settings', to: '/settings', icon: Settings },
+                { label: 'Help & FAQ', to: '/help', icon: HelpCircle },
+                { label: 'Get Support', to: '/support', icon: HeadphonesIcon },
+                ...(['super_admin', 'regional_secretary'].includes(role) ? [
+                  { label: 'Instagram Grading', to: '/instagram', icon: Image },
+                  { label: 'Growth Tracking', to: '/apps', icon: TrendingUp },
+                ] : []),
+              ]
+              const matches = all.filter((item) => item.label.toLowerCase().includes(q))
+              if (!matches.length) return (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200, background: '#fff', border: '1px solid #EDE8DC', borderRadius: 8, marginTop: 4, padding: '8px 6px', fontSize: 11.5, color: '#9E9488', textAlign: 'center' }}>
+                  No features found
+                </div>
+              )
+              return (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200, background: '#fff', border: '1px solid #EDE8DC', borderRadius: 8, marginTop: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+                  {matches.map(({ label, to, icon: Icon }) => (
+                    <div
+                      key={to + label}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => { navigate(to); setFeatureSearch('') }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { navigate(to); setFeatureSearch('') } }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, color: '#2D2A22', fontWeight: 500 }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = '#F7F4EF' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                    >
+                      <Icon size={13} style={{ color: '#9E9488', flexShrink: 0 }} />
+                      {label}
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
+          </div>
+        )}
+        {!collapsed && !featureSearch && <SidebarSectionLabel>Workspace</SidebarSectionLabel>}
         <SidebarItem
           active={isPathActive(location.pathname, '/dashboard')}
           icon={LayoutGrid}
@@ -767,10 +854,10 @@ export default function Sidebar({ isMobileDrawer = false }) {
           to="/planner"
         />
         <SidebarItem
-          active={isPathActive(location.pathname, '/wins')}
+          active={isPathActive(location.pathname, '/apps')}
           icon={Trophy}
-          label="Wins"
-          to="/wins"
+          label="Apps"
+          to="/apps"
         />
         <SidebarItem
           active={isPathActive(location.pathname, '/calendar')}
