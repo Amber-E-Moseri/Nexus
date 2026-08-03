@@ -164,7 +164,77 @@ function formatWeekFull(dateStr) {
 
 // ── Print/PDF helper (client-side) ─────────────────────────────────────────────
 
-function buildPrintHTML(weekLabel, rows) {
+function buildChartSVG(growthData, activeWeek) {
+  const allWeeks = [...new Set(growthData.map(r => r.week_start_date))].sort()
+  const chartWeeks = allWeeks.slice(-12)
+  if (chartWeeks.length < 2) return ''
+
+  const fmtLbl = dateStr => {
+    const d = new Date(dateStr + 'T00:00:00')
+    return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
+  }
+
+  const points = chartWeeks.map(week => {
+    const weekRows = growthData.filter(r => r.week_start_date === week && r.status === 'reported')
+    return { week, label: fmtLbl(week), total: weekRows.length > 0 ? weekRows.reduce((s, r) => s + r.total_attendance, 0) : null }
+  })
+
+  const W = 680, H = 200
+  const pad = { top: 24, right: 16, bottom: 36, left: 44 }
+  const cW = W - pad.left - pad.right
+  const cH = H - pad.top - pad.bottom
+  const n = points.length
+
+  const vals = points.filter(p => p.total != null).map(p => p.total)
+  if (vals.length === 0) return ''
+  const rawMax = Math.max(...vals)
+  const niceMax = Math.ceil(rawMax / 10) * 10 || 10
+
+  const xOf = i => pad.left + (i / (n - 1)) * cW
+  const yOf = v => pad.top + cH - (v / niceMax) * cH
+
+  const tickCount = 4
+  const yTicks = Array.from({ length: tickCount + 1 }, (_, i) => {
+    const v = Math.round((niceMax * i) / tickCount)
+    return { v, y: yOf(v) }
+  })
+
+  // Build polyline path, breaking on null gaps
+  let pathSegs = ''
+  let seg = []
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i]
+    if (p.total != null) {
+      seg.push(`${xOf(i).toFixed(1)},${yOf(p.total).toFixed(1)}`)
+    } else {
+      if (seg.length > 1) pathSegs += `<polyline points="${seg.join(' ')}" fill="none" stroke="#4C2A92" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`
+      seg = []
+    }
+  }
+  if (seg.length > 1) pathSegs += `<polyline points="${seg.join(' ')}" fill="none" stroke="#4C2A92" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`
+
+  // Active week dashed highlight
+  const activeIdx = points.findIndex(p => p.week === activeWeek)
+  const refLine = activeIdx >= 0
+    ? `<line x1="${xOf(activeIdx).toFixed(1)}" y1="${pad.top}" x2="${xOf(activeIdx).toFixed(1)}" y2="${pad.top + cH}" stroke="#4C2A92" stroke-width="1" stroke-dasharray="4 3"/>`
+    : ''
+
+  return `<div style="margin:20px 0 24px;">
+<div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#8A7F99;font-weight:700;margin-bottom:6px;">Network Attendance — Last ${n} Weeks</div>
+<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;font-family:system-ui,sans-serif;overflow:visible;">
+  ${yTicks.map(t => `<line x1="${pad.left}" y1="${t.y.toFixed(1)}" x2="${W - pad.right}" y2="${t.y.toFixed(1)}" stroke="#E7E2EE" stroke-width="1"/>
+  <text x="${(pad.left - 5).toFixed(1)}" y="${(t.y + 3.5).toFixed(1)}" text-anchor="end" font-size="8.5" fill="#8A7F99">${t.v}</text>`).join('')}
+  ${refLine}
+  ${pathSegs}
+  ${points.map((p, i) => p.total != null ? `
+  <circle cx="${xOf(i).toFixed(1)}" cy="${yOf(p.total).toFixed(1)}" r="${p.week === activeWeek ? 4.5 : 3}" fill="${p.week === activeWeek ? '#4C2A92' : '#7C5CCC'}" stroke="white" stroke-width="1.5"/>
+  <text x="${xOf(i).toFixed(1)}" y="${(yOf(p.total) - 7).toFixed(1)}" text-anchor="middle" font-size="8" fill="#4C2A92" font-weight="600">${p.total}</text>` : '').join('')}
+  ${points.map((p, i) => `<text x="${xOf(i).toFixed(1)}" y="${(H - 4).toFixed(1)}" text-anchor="middle" font-size="8" fill="#8A7F99">${p.label}</text>`).join('')}
+</svg>
+</div>`
+}
+
+function buildPrintHTML(weekLabel, rows, growthData, activeWeek) {
   const f    = n => n == null ? '—' : Number(n).toLocaleString()
   const d    = n => n == null ? '—' : n >= 0 ? `+${n}` : String(n)
   const icon = { reported: '🟢', merged: '🟡', did_not_meet: '⚪', missing: '🔴', current: '🔵' }
@@ -174,6 +244,7 @@ function buildPrintHTML(weekLabel, rows) {
   const netFT    = reported.reduce((s, r) => s + r.first_timers, 0)
   const netDelta = reported.reduce((s, r) => s + (r.wow_delta ?? 0), 0)
   const sorted   = [...rows].sort((a, b) => b.total_attendance - a.total_attendance)
+  const chartSVG = growthData ? buildChartSVG(growthData, activeWeek) : ''
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>BLW Canada Growth Report – ${weekLabel}</title>
@@ -206,6 +277,7 @@ function buildPrintHTML(weekLabel, rows) {
   <div><div class="stat-label">First-Timers</div><div class="stat-value">${f(netFT)}</div></div>
   <div><div class="stat-label">Centers Reporting</div><div class="stat-value">${reported.length}<span style="font-size:15px;color:#8A7F99;"> / ${rows.length}</span></div></div>
 </div>
+${chartSVG}
 <table>
   <thead><tr>
     <th>Center</th><th class="r">Attendance</th><th class="r">1st-Timers</th>
@@ -224,8 +296,8 @@ function buildPrintHTML(weekLabel, rows) {
 </body></html>`
 }
 
-function downloadReport(activeWeek, activeRows) {
-  const html = buildPrintHTML(formatWeekFull(activeWeek), activeRows)
+function downloadReport(activeWeek, activeRows, growthData) {
+  const html = buildPrintHTML(formatWeekFull(activeWeek), activeRows, growthData, activeWeek)
   const win = window.open('', '_blank', 'width=960,height=720')
   if (!win) { alert('Allow popups to download the report.'); return }
   win.document.write(html)
@@ -339,7 +411,7 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
         )}
         {/* Download PDF — opens browser print dialog for save-as-PDF */}
         <button
-          onClick={() => downloadReport(activeWeek, activeRows)}
+          onClick={() => downloadReport(activeWeek, activeRows, growthData)}
           title="Open print dialog to save as PDF"
           style={{
             marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5,
