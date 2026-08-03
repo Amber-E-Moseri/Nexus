@@ -7,6 +7,7 @@ import { BellRing, ChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useNotifications } from '../context/NotificationsContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../hooks/useAuth'
@@ -386,6 +387,7 @@ function HeroStatCard({ label, value, sub, bg, blobColor, onClick }) {
 
 function MyTasksSummaryWidget({ userId, data }) {
   const navigate = useNavigate()
+  const isMobile = useMediaQuery('(max-width: 640px)')
   const [counts, setCounts] = useState({ today: null, overdue: null, thisWeek: null, sprintOpen: null })
 
   useEffect(() => {
@@ -438,7 +440,7 @@ function MyTasksSummaryWidget({ userId, data }) {
   ]
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${stats.length}, 1fr)`, gap: 10 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : `repeat(${stats.length}, 1fr)`, gap: 10 }}>
       {stats.map((stat) => (
         <button
           key={stat.label}
@@ -1033,14 +1035,12 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      <div className="space-y-5 pb-20" style={{ fontFamily: FONT_BODY }}>
-        <section className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 style={{ fontFamily: FONT_HEADING, fontSize: 26, fontWeight: 700, color: 'var(--ink-1)', margin: 0, letterSpacing: '-0.02em' }}>
-              {greetingForHour()}, {profile?.name?.replace(/_/g, ' ').split(' ')[0] ?? 'there'} 👋
-            </h1>
-          </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+      <div className="space-y-5 pb-20" style={{ fontFamily: FONT_BODY, overflowX: 'hidden' }}>
+        <section className="flex flex-wrap items-start justify-between gap-3">
+          <h1 style={{ fontFamily: FONT_HEADING, fontSize: 22, fontWeight: 700, color: 'var(--ink-1)', margin: 0, letterSpacing: '-0.02em' }}>
+            {greetingForHour()}, {profile?.name?.replace(/_/g, ' ').split(' ')[0] ?? 'there'} 👋
+          </h1>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <OrgReportExport role={role} />
             <button
               type="button"
@@ -1059,7 +1059,7 @@ export default function Dashboard() {
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--purple-500)' }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-1)' }}
             >
-              Customize Dashboard
+              Customize
             </button>
           </div>
         </section>
