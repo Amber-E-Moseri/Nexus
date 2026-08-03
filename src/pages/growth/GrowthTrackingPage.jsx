@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
 import { TrendingUp, Trash2, ToggleLeft, ToggleRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -851,10 +851,216 @@ function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, synci
   )
 }
 
+// ── Month End tab ──────────────────────────────────────────────────────────────
+
+const MONTH_NAMES = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
+]
+
+function MonthEnd({ growthData, schedule, onRefresh }) {
+  const now = new Date()
+  const defaultMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1
+  const defaultYear  = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
+
+  const [month, setMonth]       = useState(defaultMonth)
+  const [year, setYear]         = useState(defaultYear)
+  const [marking, setMarking]   = useState(false)
+  const [markResult, setMarkResult] = useState(null)
+
+  // ISO week-start Mondays whose Monday falls within the selected month
+  const monthWeeks = useMemo(() => {
+    const result = []
+    const firstDay = new Date(year, month, 1)
+    const dow = firstDay.getDay()
+    const startMonday = new Date(firstDay)
+    startMonday.setDate(firstDay.getDate() - (dow === 0 ? 6 : dow - 1))
+    const lastDay = new Date(year, month + 1, 0)
+    let cur = new Date(startMonday)
+    while (cur <= lastDay) {
+      result.push(cur.toISOString().split('T')[0])
+      cur.setDate(cur.getDate() + 7)
+    }
+    return result
+  }, [year, month])
+
+  const activeSchedule = useMemo(() => schedule.filter(s => s.active), [schedule])
+
+  const matrix = useMemo(() =>
+    activeSchedule.map(center => {
+      const weekData = monthWeeks.map(week => {
+        const row = growthData.find(r => r.schedule_id === center.id && r.week_start_date === week)
+        return { week, status: row?.status ?? null }
+      })
+      const missing  = weekData.filter(w => w.status === 'missing').length
+      const reported = weekData.filter(w => w.status === 'reported').length
+      return { center, weekData, missing, reported }
+    }),
+  [activeSchedule, monthWeeks, growthData])
+
+  const totalMissing       = matrix.reduce((s, r) => s + r.missing, 0)
+  const centersWithMissing = matrix.filter(r => r.missing > 0)
+  const fullyReported      = matrix.filter(r => r.missing === 0 && r.reported === monthWeeks.length).length
+
+  async function markAllMissing() {
+    if (centersWithMissing.length === 0) return
+    setMarking(true)
+    setMarkResult(null)
+    const unitIds  = centersWithMissing.map(m => m.center.church_unit_id)
+    const fromDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
+    const toDate   = new Date(year, month + 1, 0).toISOString().split('T')[0]
+    const { data, error } = await supabase.rpc('fill_center_gaps', { p_from: fromDate, p_to: toDate, p_unit_ids: unitIds })
+    setMarking(false)
+    setMarkResult(error ? { error: error.message } : data)
+    setTimeout(() => setMarkResult(null), 6000)
+    onRefresh()
+  }
+
+  const CellIcon = ({ status }) => {
+    const icons = {
+      reported:     { char: '✓', color: C.green  },
+      merged:       { char: '~', color: C.amber  },
+      did_not_meet: { char: '○', color: C.mute   },
+      missing:      { char: '✗', color: C.red    },
+      current:      { char: '…', color: C.blue   },
+    }
+    const m = status ? icons[status] : null
+    return m
+      ? <span style={{ color: m.color, fontSize: 13, fontWeight: 700 }}>{m.char}</span>
+      : <span style={{ color: C.line }}>—</span>
+  }
+
+  const availableYears = []
+  for (let y = 2026; y <= now.getFullYear(); y++) availableYears.push(y)
+
+  return (
+    <div>
+      {/* Month picker + action */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
+        <Select value={month} onChange={e => setMonth(Number(e.target.value))} style={{ flex: '0 0 auto' }}>
+          {MONTH_NAMES.map((name, i) => <option key={i} value={i}>{name}</option>)}
+        </Select>
+        <Select value={year} onChange={e => setYear(Number(e.target.value))} style={{ flex: '0 0 auto' }}>
+          {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+        </Select>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          {markResult && !markResult.error && (
+            <span style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>
+              ✓ {markResult[0]?.created_count ?? 0} entries marked as Did Not Meet
+            </span>
+          )}
+          {markResult?.error && (
+            <span style={{ fontSize: 12, color: C.red, fontWeight: 600 }}>Error: {markResult.error}</span>
+          )}
+          <Btn
+            onClick={markAllMissing}
+            disabled={marking || totalMissing === 0}
+            tone={totalMissing > 0 ? 'primary' : 'ghost'}
+          >
+            {marking ? 'Marking…' : `Mark ${totalMissing} Missing as Did Not Meet`}
+          </Btn>
+        </div>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: 'flex', gap: 14, marginBottom: 24, flexWrap: 'wrap' }}>
+        <StatCard label="Weeks in Month" value={monthWeeks.length} sub="ISO weeks tracked" />
+        <StatCard
+          label="Fully Reported"
+          value={fullyReported}
+          sub={`of ${activeSchedule.length} centers`}
+          subColor={fullyReported === activeSchedule.length ? C.green : C.mute}
+        />
+        <StatCard
+          label="Missing Reports"
+          value={totalMissing}
+          sub={`across ${centersWithMissing.length} center${centersWithMissing.length !== 1 ? 's' : ''}`}
+          subColor={totalMissing > 0 ? C.red : C.green}
+        />
+      </div>
+
+      {/* Center × week matrix */}
+      <Card style={{ overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <TH>Center</TH>
+                {monthWeeks.map(w => (
+                  <th key={w} style={{
+                    padding: '9px 6px', textAlign: 'center',
+                    fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                    letterSpacing: '0.03em', textTransform: 'uppercase',
+                    color: C.mute, fontWeight: 600,
+                    borderBottom: `1px solid ${C.line}`,
+                    background: C.cream, minWidth: 64,
+                  }}>
+                    {formatWeek(w)}
+                  </th>
+                ))}
+                <TH right>Summary</TH>
+              </tr>
+            </thead>
+            <tbody>
+              {matrix.map(({ center, weekData, missing, reported }) => {
+                const rowColor = missing > 0 ? C.red : reported === monthWeeks.length ? C.green : C.mute
+                return (
+                  <tr key={center.id} className="growth-row" style={{ background: C.paper }}>
+                    <TD bold extra={{ borderLeft: `3px solid ${rowColor}`, paddingLeft: 11 }}>
+                      {center.church_name}
+                    </TD>
+                    {weekData.map(({ week, status }) => (
+                      <td key={week} style={{
+                        padding: '9px 6px', textAlign: 'center',
+                        borderBottom: `1px solid ${C.line}`,
+                        background: status === 'missing' ? '#FEF2F2' : undefined,
+                      }}>
+                        <CellIcon status={status} />
+                      </td>
+                    ))}
+                    <td style={{
+                      padding: '9px 14px', textAlign: 'right',
+                      borderBottom: `1px solid ${C.line}`, fontSize: 12, fontWeight: 600,
+                      color: missing > 0 ? C.red : C.green,
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {missing > 0 ? `${missing} missing` : 'Complete'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Legend */}
+        <div style={{
+          display: 'flex', gap: 20, padding: '10px 16px',
+          borderTop: `1px solid ${C.line}`, background: C.cream,
+          fontSize: 11, color: C.mute, fontFamily: 'Inter', flexWrap: 'wrap',
+        }}>
+          {[
+            { char: '✓', color: C.green, label: 'Reported' },
+            { char: '○', color: C.mute,  label: 'Did Not Meet' },
+            { char: '~', color: C.amber, label: 'Merged' },
+            { char: '✗', color: C.red,   label: 'Missing' },
+            { char: '…', color: C.blue,  label: 'In Progress' },
+          ].map(({ char, color, label }) => (
+            <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ color, fontWeight: 700 }}>{char}</span> {label}
+            </span>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 // ── Page shell ─────────────────────────────────────────────────────────────────
 
 const TABS = [
   { key: 'dashboard', label: 'Dashboard' },
+  { key: 'month-end', label: 'Month End' },
   { key: 'settings',  label: 'Settings' },
 ]
 
@@ -1048,6 +1254,7 @@ export default function GrowthTrackingPage() {
       {/* Tab content */}
       <div style={{ padding: '28px 32px 64px', maxWidth: 1100, margin: '0 auto' }}>
         {tab === 'dashboard' && <Dashboard growthData={growthData} loading={loading} selectedWeek={selectedWeek} onWeekChange={setSelectedWeek} />}
+        {tab === 'month-end' && <MonthEnd growthData={growthData} schedule={schedule} onRefresh={load} />}
         {tab === 'settings' && (
           <Settings
             schedule={schedule}
