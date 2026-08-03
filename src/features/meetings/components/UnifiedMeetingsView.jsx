@@ -399,8 +399,8 @@ export default function UnifiedMeetingsView({
         </div>
 
         {/* Row 2: type chips + status + date dropdowns */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, flex: 1 }} role="group" aria-label="Filter by type">
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? 8 : 6 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, flex: isMobile ? 'unset' : 1 }} role="group" aria-label="Filter by type">
             {['all', ...allTypes].map((type) => (
               <button
                 key={type}
@@ -424,20 +424,22 @@ export default function UnifiedMeetingsView({
             ))}
           </div>
 
-          <select value={activeStatus} onChange={(e) => setActiveStatus(e.target.value)} style={selectStyle}>
-            <option value="all">All statuses</option>
-            <option value="scheduled">Scheduled</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+          <div style={{ display: 'flex', gap: 6, ...(isMobile ? { flex: '1 1 100%' } : {}) }}>
+            <select value={activeStatus} onChange={(e) => setActiveStatus(e.target.value)} style={{...selectStyle, ...(isMobile ? { flex: 1 } : {})}}>
+              <option value="all">All statuses</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
 
-          <select value={dateRange} onChange={(e) => setDateRange(e.target.value)} style={selectStyle}>
-            <option value="all">Any time</option>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="90d">Last 90 days</option>
-          </select>
+            <select value={dateRange} onChange={(e) => setDateRange(e.target.value)} style={{...selectStyle, ...(isMobile ? { flex: 1 } : {})}}>
+              <option value="all">Any time</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+            </select>
+          </div>
         </div>
 
         {/* Result count */}
@@ -507,8 +509,8 @@ export default function UnifiedMeetingsView({
                         {icon}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-1)', overflow: 'hidden', textOverflow: isMobile ? 'unset' : 'ellipsis', whiteSpace: isMobile ? 'normal' : 'nowrap', wordBreak: isMobile ? 'break-word' : 'unset', flex: isMobile ? '1 1 100%' : 'unset' }}>
                             {meeting.title}
                           </span>
                           {meeting.visibility === 'private' && (

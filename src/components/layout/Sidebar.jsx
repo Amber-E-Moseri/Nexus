@@ -15,6 +15,7 @@ import {
   Ticket,
   TrendingUp,
   LayoutGrid,
+  Library,
   Lock,
   Mail,
   MailPlus,
@@ -1413,6 +1414,18 @@ export default function Sidebar({ isMobileDrawer = false }) {
         </>
         ) : null}
 
+        {!collapsed && (role === 'regional_secretary' || role === 'super_admin') ? (
+          <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12 }}>
+            <div style={{ ...SECTION_LABEL_STYLE }}>Learning</div>
+            <SidebarItem
+              active={false}
+              icon={Library}
+              label="My Library"
+              href="https://nexus.lwcanada.org/books"
+            />
+          </div>
+        ) : null}
+
         {!collapsed && (role === 'regional_secretary' || role === 'super_admin' || hasGrant(profile, 'regional_secretary_access')) ? (
           <div style={{ borderTop: '1px solid #EDE8DC', marginTop: 12, paddingTop: 12, paddingBottom: 12, paddingLeft: 10, paddingRight: 10 }}>
             <div
@@ -1608,6 +1621,16 @@ export default function Sidebar({ isMobileDrawer = false }) {
           </>
         )}
 
+        {/* Growth Tracking — super_admin only */}
+        {role === 'super_admin' && (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/growth-tracking')}
+            icon={TrendingUp}
+            label="Growth Tracking"
+            to="/growth-tracking"
+          />
+        )}
+
         {/* Help & Support - collapsible */}
         {!collapsed && (
           <div
@@ -1655,14 +1678,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
                 icon={Ticket}
                 label="Support Tickets"
                 to="/admin/tickets"
-              />
-            )}
-            {role === 'super_admin' && (
-              <SidebarItem
-                active={isPathActive(location.pathname, '/growth-tracking')}
-                icon={TrendingUp}
-                label="Growth Tracking"
-                to="/growth-tracking"
               />
             )}
           </>
