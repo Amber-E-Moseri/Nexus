@@ -871,9 +871,26 @@ export default function AudioTranscriptionPanel({
     const gridCols = canRecord ? '1fr 1fr 1fr' : '1fr 1fr'
     return (
       <div style={s.container}>
+        {/* Show existing transcriptions so they're visible before picking a mode */}
+        {transcriptions.length > 0 && (
+          <div style={s.card}>
+            <h3 style={s.title}>📚 Audio Segments ({transcriptions.length})</h3>
+            {transcriptions.map((t, idx) => (
+              <div key={t.id} style={{ marginBottom: 12, padding: 10, background: '#fff', borderRadius: 6, border: '1px solid #E9E4D8' }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: '#2D2A22', marginBottom: 4 }}>
+                  Segment {idx + 1} {t.input_file_name && `• ${t.input_file_name}`}
+                </div>
+                <div style={{ fontSize: 12, color: '#7A6F5E', marginBottom: 6 }}>
+                  {new Date(t.created_at).toLocaleString()} • {t.input_type}
+                </div>
+                <div style={{ ...s.transcriptBox, maxHeight: 80, fontSize: 12 }}>{t.summary.slice(0, 200)}{t.summary.length > 200 ? '...' : ''}</div>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={s.card}>
-          <h3 style={s.title}>Transcribe Meeting Audio</h3>
-          <p style={s.sub}>Upload a recording, record live, or paste an existing transcript</p>
+          <h3 style={s.title}>{transcriptions.length > 0 ? 'Add another segment' : 'Transcribe Meeting Audio'}</h3>
+          <p style={s.sub}>{transcriptions.length > 0 ? 'Upload, record, or paste an additional transcript segment' : 'Upload a recording, record live, or paste an existing transcript'}</p>
           <div style={{ ...s.modeGrid, gridTemplateColumns: gridCols }}>
             <button
               style={s.modeBtn}

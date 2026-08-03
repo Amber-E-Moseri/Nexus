@@ -74,7 +74,7 @@ export async function getDeptMeetings(departmentId, { limit = MEETINGS_PAGE_SIZE
     .from('meeting_spaces')
     .select('meeting_id')
     .eq('department_id', departmentId)
-    .order('created_at', { ascending: false })
+    .order('added_at', { ascending: false })
     .limit(maxFetch)
 
   // Execute primary and shared queries in parallel
