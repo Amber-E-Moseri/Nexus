@@ -74,7 +74,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: 'How do I manage Inbox items?',
-        a: 'Click any item to open the related task or record. Use the context menu (hover to reveal) to mark as read/unread or delete individual notifications. You can also mark all as read in one click from the top of the page.',
+        a: 'Click any item to open the related task or record. Use the context menu (hover to reveal) to mark as read/unread or delete individual notifications. You can also mark all as read in one click from the top of the page. Deleting an Inbox item does not delete the underlying task or comment — it just removes the notification.',
       },
       {
         q: 'How is Notifications different from Inbox?',
@@ -83,6 +83,10 @@ const FAQ_SECTIONS = [
       {
         q: 'What notification types are there?',
         a: 'Task assigned, task comment, meeting created, calendar event approved/rejected, @mentions, and system alerts. Each type has its own icon so you can scan the list quickly.',
+      },
+      {
+        q: 'Can I customize what notifications I receive?',
+        a: 'Yes — go to Settings to fine-tune which events trigger notifications and whether they appear as push, in-app, or email alerts. You can also mute notifications from a specific person or space temporarily.',
       },
     ],
   },

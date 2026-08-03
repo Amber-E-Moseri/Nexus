@@ -308,8 +308,8 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const [spaceActionsOpenId, setSpaceActionsOpenId] = useState(null)
   const [openSpaceMenuId, setOpenSpaceMenuId] = useState(null)
   const [toolsExpanded, setToolsExpanded] = useState(false)
-  const [adminExpanded, setAdminExpanded] = useState(true)
-  const [helpExpanded, setHelpExpanded] = useState(true)
+  const [adminExpanded, setAdminExpanded] = useState(false)
+  const [helpExpanded, setHelpExpanded] = useState(false)
   const [regionalUpdatesExpanded, setRegionalUpdatesExpanded] = useState(false)
   const [hiddenSpaceIds, setHiddenSpaceIds] = useState(() => {
     // Defer to profile load, will initialize after
