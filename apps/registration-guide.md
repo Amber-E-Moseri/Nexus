@@ -1,7 +1,13 @@
 # Registration System — Setup & Handoff Guide
 
-How to launch, configure, and swap the registration system for a new regional program.
-Programs are not run simultaneously — this guide assumes you're replacing TII2 with the next event.
+**For super_admin users:** This guide is now integrated into Nexus. Go to **Apps** → **Event Setup Guide** for the interactive version with time estimates, progress checkboxes, and expandable steps.
+
+This markdown version is the detailed reference. It covers how to launch, configure, and swap the registration system for a new regional program. Programs are not run simultaneously — this guide assumes you're replacing one event with the next.
+
+**Quick reference:**
+- **First-time setup:** ~1.5–2 hours
+- **Repeat event:** 45 min–1 hour  
+- **Total steps:** 8 (from sprint creation to access verification)
 
 ---
 
@@ -20,9 +26,9 @@ Work through this section before touching any code or data. The answers feed eve
   Whoever is on a team gets access to the `/registration` page.
 - [ ] Who is on the **Accommodation / Room Coordination** team? *(Gets room assignment tab)*
 - [ ] Who needs **finance tab access** that is NOT already on a team?  
-  Finance tab is gated separately — these people get a `user_grants` row.
-- [ ] Is there a specific person who needs room access but isn't on the Accommodation team?  
-  *(Currently "Nigel" is hardcoded as a one-off — replace this with a `user_grants` row instead.)*
+  Finance tab is gated separately via `user_grants` with `grant_type = 'finance_data_access'`.
+- [ ] Who needs **room assignment access** but isn't on the Accommodation team?  
+  Add a `user_grants` row with `grant_type = 'rooms_access'`.
 
 ### Access & visibility
 - [ ] Who should see the **public share link** (read-only registration overview)?  
@@ -128,13 +134,13 @@ const EXEMPT_FELLOWSHIPS = new Set([
 ])
 ```
 
-**Remove the "Nigel" one-off** (line ~341) and replace with a `user_grants` entry:
+**Rooms access grants** — Instead of hardcoding name checks, use `user_grants` with `grant_type = 'rooms_access'`. Example:
 ```sql
--- Run in Supabase SQL editor:
+-- Run in Supabase SQL editor to grant rooms access to a specific user:
 insert into user_grants (user_id, grant_type, granted_by)
 values ('<user-uuid>', 'rooms_access', '<your-uuid>');
 ```
-Then update `RegistrationEcosystem.jsx` rooms access check to also query `user_grants` for `'rooms_access'`.
+The code now checks `user_grants` automatically — no need for name-based hacks.
 
 ---
 
@@ -274,9 +280,9 @@ The link shows: name, subgroup, fellowship, registration status — no emails or
 Click **Remove link** in the Data tab. The old URL immediately returns empty results. Generate a new one if needed.
 
 ### If the token stops working
-The `get_public_registration_data` RPC reads the token from `registration_config` where `key = 'tii2_public_token'`. If the row was accidentally deleted, regenerating from the UI recreates it.
+The `get_public_registration_data` RPC reads the token from `registration_config` where `key = 'public_token'`. If the row was accidentally deleted, regenerating from the UI recreates it.
 
-> **Future improvement:** Rename the config key from `'tii2_public_token'` to `'public_token'` when updating code for the next event. Also update the RPC `supabase/migrations/20270804000042_registration_public_rpc.sql`.
+> **Note:** The config key is now generic (`'public_token'`), so future events don't need code changes to the RPC — only update the string literals in the 6 UI files.
 
 ---
 
