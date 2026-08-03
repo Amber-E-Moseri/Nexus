@@ -83,7 +83,7 @@ function syncWorkingListToNexus() {
     const emailIdx = headers.findIndex(h => h.includes('email'))
     const subgroupIdx = headers.findIndex(h => h.includes('subgroup') || h.includes('unit'))
     const fellowshipIdx = headers.findIndex(h => h.includes('fellowship'))
-    const leadershipIdx = headers.findIndex(h => h.includes('leadership') || h.includes('leader_category') || h.includes('position') || h.includes('role'))
+    const phoneIdx = headers.findIndex(h => h.includes('phone'))
 
     const members = []
     for (let i = 1; i < data.length; i++) {
@@ -105,7 +105,7 @@ function syncWorkingListToNexus() {
         full_name: fullName,
         subgroup: subgroupIdx >= 0 ? row[subgroupIdx].toString().trim() : '',
         fellowship: fellowshipIdx >= 0 ? row[fellowshipIdx].toString().trim() : '',
-        leadership_category: leadershipIdx >= 0 ? row[leadershipIdx].toString().trim() : '',
+        phone_number: phoneIdx >= 0 ? row[phoneIdx].toString().trim() : '',
       })
     }
 
@@ -124,11 +124,15 @@ function syncWorkingListToNexus() {
       muteHttpExceptions: true,
     })
 
-    const result = JSON.parse(response.getContentText())
-    if (response.getResponseCode() === 200) {
-      SpreadsheetApp.getUi().alert(`✅ Working list synced!\n\n${result.message || 'Sync complete'}`)
+    const responseCode = response.getResponseCode()
+    const responseText = response.getContentText()
+    let result
+    try { result = JSON.parse(responseText) } catch (e) { result = {} }
+
+    if (responseCode === 200) {
+      SpreadsheetApp.getUi().alert(`✅ Working list synced!\n\n${result.message || 'Sync complete'}\n${result.upserted != null ? result.upserted + ' rows written.' : ''}`)
     } else {
-      SpreadsheetApp.getUi().alert(`❌ Sync failed: ${result.error}`)
+      SpreadsheetApp.getUi().alert(`❌ Sync failed (HTTP ${responseCode})\n\n${result.error || result.message || responseText}`)
     }
   } catch (e) {
     SpreadsheetApp.getUi().alert(`❌ Error: ${e.message}`)

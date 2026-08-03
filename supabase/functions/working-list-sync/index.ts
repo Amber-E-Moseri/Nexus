@@ -37,6 +37,7 @@ serve(async (request) => {
     if (!Array.isArray(members)) return jsonResponse(400, { error: 'members must be an array' })
     if (members.length === 0) return jsonResponse(200, { message: 'No members to sync', upserted: 0 })
 
+    const seen = new Set<string>()
     const rows = members
       .filter((m: Record<string, string>) => m.email?.trim())
       .map((m: Record<string, string>) => ({
@@ -44,9 +45,14 @@ serve(async (request) => {
         full_name: (m.full_name || m.fullName || '').trim(),
         subgroup: (m.subgroup || '').trim(),
         fellowship: (m.fellowship || '').trim(),
-        leadership_category: (m.leadership_category || m.leadershipCategory || '').trim(),
+        phone_number: (m.phone_number || m.phoneNumber || m.phone || '').trim(),
         synced_at: new Date().toISOString(),
       }))
+      .filter((r) => {
+        if (seen.has(r.email)) return false
+        seen.add(r.email)
+        return true
+      })
 
     const { error } = await supabase
       .from('working_list')

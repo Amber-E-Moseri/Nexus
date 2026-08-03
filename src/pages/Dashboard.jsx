@@ -37,7 +37,6 @@ import MyAssignedTasksWidget from '../features/dashboard/components/MyAssignedTa
 import MySprintTasksWidget from '../features/dashboard/components/MySprintTasksWidget'
 import ChartWidget from '../features/dashboard/components/ChartWidget'
 import CalculationWidget from '../features/dashboard/components/CalculationWidget'
-import GoalsWidget from '../features/dashboard/components/GoalsWidget'
 import EmbedWidget from '../features/dashboard/components/EmbedWidget'
 import { RegionalUpdateWidget } from '../features/regional-updates/components/RegionalUpdateWidget'
 import { getDashboardPresets } from '../features/dashboard/lib/dashboard-queries'
@@ -613,7 +612,6 @@ const WIDGET_META = {
   personal_reminders:     { title: 'Personal Reminders',        Component: PersonalRemindersWidget },
   chart_widget:           { title: 'Chart',                     Component: ChartWidget, configurable: true },
   calculation_widget:     { title: 'Calculation',                Component: CalculationWidget, configurable: true },
-  goals:                  { title: 'Goals & OKRs',              Component: GoalsWidget },
   weekly_wins:            { title: 'Wins This Week',            Component: WeeklyWinsWidget },
   embed:                  { title: 'Embed Content',            Component: EmbedWidget },
   my_assigned_tasks:      { title: 'Assigned to Me',           Component: MyAssignedTasksWidget },
@@ -647,6 +645,8 @@ function WidgetCard({ widgetKey, role, userId, departmentId, config, onConfigCha
   return (
     <div
       style={{
+        minWidth: 0,
+        overflow: 'hidden',
         background: 'var(--surface-card)',
         border: '1px solid var(--border-1)',
         borderRadius: 20,
@@ -914,6 +914,7 @@ export default function Dashboard() {
   const { unreadCount } = useNotifications()
   const { showToast } = useToast()
   const location = useLocation()
+  const isMobile = useMediaQuery('(max-width: 640px)')
   const dashboardData = useDashboardData(profile?.id, role, profile?.department_id)
   const orgStats = useOrgStats(profile?.id, dashboardData?.hero)
   const navigate = useNavigate()
@@ -1015,7 +1016,7 @@ export default function Dashboard() {
     return (
       <div className="space-y-4 pb-20">
         <div className="h-16 animate-pulse rounded-[14px] bg-[var(--surface-secondary)]" />
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="h-48 animate-pulse rounded-[20px] bg-[var(--surface-secondary)]" />
           ))}
@@ -1066,7 +1067,7 @@ export default function Dashboard() {
 
         {/* ── Hero stat cards — semantic accent mapping: purple anchor /
             blue progress / orange priority / green active ── */}
-        <div className="dash-stagger dash-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+        <div className="dash-stagger dash-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
           <CustomHeroStatCard
             meta={customStat.meta}
             value={customStat.value}
@@ -1123,7 +1124,7 @@ export default function Dashboard() {
             to add some.
           </div>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-2 dash-stagger">
+          <div className="grid gap-4 dash-stagger" style={{ gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))' }}>
             {visibleWidgets.map((pref) => (
               <WidgetCard
                 key={pref.widget_key}

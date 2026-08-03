@@ -123,7 +123,7 @@ BLW CAN NEXUS is an internal workspace for BLW Canada Sub-Region's 30-person tea
 - JWT fallback to direct DB lookup if claims absent (for pre-hook sessions)
 - Cross-department access: super_admin only (except explicit share workflows)
 
-## Edge Functions (18+)
+## Edge Functions (20+)
 
 - `send-user-invitation` — transactional invite email via Resend
 - `send-sprint-invite` — external sprint member invite (custom token)
@@ -134,6 +134,8 @@ BLW CAN NEXUS is an internal workspace for BLW Canada Sub-Region's 30-person tea
 - `send-notification-email` — automation/system email notifications
 - `automation-engine` — trigger detector and action executor
 - `task-api` — public task API (rate-limited by key)
+- `working-list-sync` — Google Sheets → working_list table sync (for event registration rosters)
+- `test-reports-api` — Exploratory integration with external leadership/attendance API
 - Calendar sync webhooks
 - Slack integration functions (async dispatch)
 - Google Drive file attachment functions
@@ -184,8 +186,12 @@ BLW CAN NEXUS is an internal workspace for BLW Canada Sub-Region's 30-person tea
 - **Supabase Realtime** for live collaboration (task updates, sprint changes)
 - **Per-space task statuses** with global fallback (backfilled on migration)
 - **Temporary sprint membership** with auto-expiration (cron job on sprint archive)
+- **Registration data gap-fill** (working list + registrations + manual confirmations for multi-source RSVP tracking)
 
 See `docs/decision-catalog.md` for 35+ documented decisions with rationale.
+
+**Recent decisions (August 2026):**
+- See `DECISIONS.md` for new features: Test Reports API, phone number tracking, registration gap-fill pattern
 
 ## Local setup
 
@@ -253,6 +259,8 @@ supabase functions deploy send-user-invitation
 supabase functions deploy task-api
 supabase functions deploy automation-engine
 supabase functions deploy send-notification-email
+supabase functions deploy working-list-sync
+supabase functions deploy test-reports-api
 ```
 
 Required secrets:
@@ -264,6 +272,8 @@ supabase secrets set INVITATION_FRONTEND_URL=https://your-frontend-url
 supabase secrets set ALLOWED_ORIGIN=https://your-frontend-url
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 supabase secrets set NOTIFICATION_FROM_EMAIL="BLW CAN NEXUS <notifications@yourdomain.com>"
+supabase secrets set REGISTRATION_SYNC_API_KEY=your_registration_sync_key
+supabase secrets set REPORTS_API_TOKEN=your_reports_api_bearer_token
 ```
 
 | Secret | Used by | Purpose |
@@ -274,6 +284,8 @@ supabase secrets set NOTIFICATION_FROM_EMAIL="BLW CAN NEXUS <notifications@yourd
 | `NOTIFICATION_FROM_EMAIL` | `send-notification-email` | From address for notification emails |
 | `ALLOWED_ORIGIN` | `automation-engine` | CORS allowed origin (`*` in dev) |
 | `SUPABASE_SERVICE_ROLE_KEY` | `automation-engine`, `task-api` | Service role for DB writes inside edge functions |
+| `REGISTRATION_SYNC_API_KEY` | `working-list-sync` | Bearer token for Google Sheets → Nexus sync |
+| `REPORTS_API_TOKEN` | `test-reports-api` | Bearer token for external leadership/attendance API |
 
 ## JWT custom claims hook
 
@@ -394,6 +406,9 @@ Apply these files in alphabetical order (which matches chronological order by fi
 24. `20260625000000_jwt_role_fallback.sql`
 25. `20260625000001_missing_indexes.sql`
 26. `20260626000000_rate_limits.sql`
+27. `20270804000043_fix_public_registration_rpc_gap_fill.sql` — Registration data gap-fill (working list + registrations)
+28. `20270804000044_fix_public_rpc_include_manual_confirmations.sql` — Manual confirmations in registration_config
+29. `20270804000045_working_list_phone_number.sql` — Add phone_number to working_list (clears existing rows)
 
 ## Smoke test
 
@@ -412,8 +427,9 @@ After first setup, verify the app is working end-to-end:
 
 ## Documentation
 
-Complete documentation is available in the `docs/` directory:
+Complete documentation is available in the `docs/` directory and root:
 
+- **[DECISIONS.md](DECISIONS.md)** — Recent decisions and new features (August 2026 onwards)
 - **[docs/README.md](docs/README.md)** — Master documentation index with quick links
 - **[docs/architecture/decision-catalog.md](docs/architecture/decision-catalog.md)** — 35+ documented architecture decisions
 - **[docs/setup/](docs/setup/)** — Environment setup and configuration guides

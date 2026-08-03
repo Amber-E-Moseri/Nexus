@@ -32,11 +32,15 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: 'What does the Dashboard show me?',
-        a: 'A cross-space summary: your open tasks, upcoming meetings and calendar events, and department activity, so you don\'t have to visit every space individually to see what\'s next.',
+        a: 'A cross-space summary of what matters to you right now: open tasks, upcoming meetings and calendar events, sprint progress, team workload, and department activity — so you don\'t have to visit every space individually. What you see depends on your role: super_admin gets org-wide widgets like Team Velocity and Regional Updates; dept_lead sees department-scoped workload and completion rates; members get a personal focus with their assigned tasks, action items, and upcoming events.',
+      },
+      {
+        q: 'Can I customize which widgets appear on my Dashboard?',
+        a: 'Yes — click "Customize" in the top-right of the Dashboard to open the widget panel. From there you can toggle any widget on or off, and drag to reorder them. Your layout is saved per-account, so it persists across sessions. Available widgets include: Assigned to Me, My Sprint Tasks, Sprint Progress, Team Workload, Team Velocity Trend, Completion Rate, Overdue by Member, Member Activity, Team Activity Heatmap, Upcoming Meetings, Upcoming Events, Attendance Summary, Recent Activity, My Action Items, Wins This Week, Personal Reminders, Quick Actions, My Spaces, Regional Updates, and more. If you want to start fresh, use "Reset to defaults" to go back to your role\'s default layout.',
       },
       {
         q: 'How is My Tasks different from the Dashboard?',
-        a: 'My Tasks is a focused, filterable list of every task assigned to you across every space and sprint, with sorting by status, priority, and due date. The Dashboard is a higher-level overview; My Tasks is where you actually work through your list.',
+        a: 'My Tasks is a focused, filterable list of every task assigned to you across every space and sprint, with sorting by status, priority, and due date. The Dashboard is a higher-level overview with widgets; My Tasks is where you actually work through your list.',
       },
       {
         q: 'What is Planner for?',
@@ -48,7 +52,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: 'What is Personal List?',
-        a: 'A private task list visible only to you. Use it for personal to-dos, reminders, and notes that don\'t belong in a shared space. You can also "pin" any team task to your Personal List to keep it visible there as a second location — the task still lives in its original space, you\'re just tracking it personally too. Find it under My Tasks → Personal List in the sidebar.',
+        a: 'A private task list visible only to you. Use it for personal to-dos, reminders, and notes that don\'t belong in a shared space. You can also "pin" any team task to your Personal List to keep it visible there as a second location — the task still lives in its original space, you\'re just tracking it personally too. Sublists let you organize items into groups like "This Week" or "Someday." Find it under My Tasks → Personal List in the sidebar.',
       },
       {
         q: 'What are Task Followers?',
@@ -114,6 +118,18 @@ const FAQ_SECTIONS = [
         q: 'What are Group Spaces?',
         a: 'Group Spaces are shared workspaces for cross-department groups (e.g. a campus team or outreach unit). Members are added via group invitations and automatically gain access to the group\'s space, folders, and lists. Group members see the group space in their sidebar alongside their department space.',
       },
+      {
+        q: 'How do I share a space or list with people outside my department?',
+        a: 'Use the Share menu on a space or list. You can invite individual users by email or share with an entire department. Shared items appear in the recipient\'s sidebar under "Shared with me" and they gain view/edit permissions based on what you grant.',
+      },
+      {
+        q: 'What\'s the difference between Hiding and Archiving a space?',
+        a: 'Hiding removes a space from your personal sidebar only — it\'s reversible and doesn\'t affect anyone else. Archiving (super_admin only) removes it from everyone\'s sidebar and grays it out; it\'s meant for spaces no longer in use. Archived spaces are still searchable and restorable.',
+      },
+      {
+        q: 'Can I see a Space\'s activity and file history?',
+        a: 'Yes — open the space and go to Overview → Activity. This shows every action in that space (task creates, updates, comments, etc.) sorted by date. Super_admin and dept_lead can also access the org-wide Activity Log and Files page from the sidebar to audit or search across all spaces.',
+      },
     ],
   },
   {
@@ -122,19 +138,71 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: 'What is a Sprint used for?',
-        a: 'A Sprint is a time-boxed push (with a team, start/end dates, and status) for focused work that cuts across normal space/task organization — useful for events, launches, or short-term initiatives.',
+        a: 'A Sprint is a time-boxed push (with a team, start/end dates, and status) for focused work that cuts across normal space/task organization — useful for events, launches, or short-term initiatives. Think of it as a temporary project container: it has its own board, members, and progress tracking, and it dissolves when the dates end.',
+      },
+      {
+        q: 'What are the different sprint types and when should I use each one?',
+        a: 'There are three types, and choosing the right one matters because it controls where tasks show up. (1) Single-department — tied to one department space. Tasks appear on both the sprint board and that department\'s Board/List views and stats. Use this for department-internal pushes like "Media Q3 content blitz." (2) Multi-department — has teams mapped to real departments (e.g. a "Media" team, a "PFCC" team). Each task surfaces in its assignee\'s department space as well as the sprint board, so every department\'s regular reporting reflects the sprint work. Use this when multiple departments are collaborating and each needs to see their slice in their own space — for example, a region-wide outreach where Media handles promo, ORS handles logistics, and Pastors handle follow-up. (3) Custom — for one-off events like a conference, festival, or retreat. Tasks live only on the sprint\'s own board and never leak into any department\'s space, even if the teams happen to reuse department names. This keeps event work out of regular department reporting. If a sprint\'s tasks are unexpectedly showing up in a department\'s board, the sprint type is likely set to multi-department when it should be custom.',
       },
       {
         q: 'How do I get added to a sprint?',
-        a: 'Sprint membership is temporary and auto-expires at the sprint end date. A dept_lead or super_admin adds members when creating or editing the sprint via the Sprint modal (+ next to "Sprints" in the sidebar).',
+        a: 'Sprint membership is temporary and auto-expires at the sprint end date. A dept_lead or super_admin adds members when creating or editing the sprint via the Sprint modal (+ next to "Sprints" in the sidebar). You\'ll see sprints you belong to listed in the Sprints section of your sidebar.',
       },
       {
         q: 'Where do I see sprints outside my own team?',
         a: 'Click "All Sprints" at the bottom of the Sprints section in the sidebar, or visit All Teams from the Sprints list to see active and planning sprints across every department.',
       },
       {
-        q: 'What\'s the difference between a single-department, multi-department, and custom sprint — and where do the tasks show up?',
-        a: 'A single-department sprint is tied to one space: its tasks automatically surface in that space\'s Board/List/Space Overview stats, in addition to the sprint\'s own board. A multi-department sprint has teams mapped to real departments (e.g. a "Media" team, a "PFCC" team) — each task shows up in its assignee\'s own department space as well as the sprint board, so multiple spaces see a slice of the sprint\'s work. A custom sprint (used for one-off events like a conference or festival) never attaches tasks to any department space, even if its teams happen to reuse department names for convenience — its tasks live only on the sprint\'s own board, keeping one-off event work out of every department\'s regular reporting. If an event sprint\'s tasks are unexpectedly appearing on a department\'s board, its sprint_type is probably set to multi-department when it should be custom.',
+        q: 'What happens to a sprint when it ends?',
+        a: 'The sprint status moves to "completed" and membership auto-expires — members no longer see it in their sidebar. The sprint board and its tasks remain accessible for reference (navigate via All Sprints), but active work is expected to wrap up or move to a new sprint. Incomplete tasks stay in whatever status they\'re in; they don\'t auto-close.',
+      },
+      {
+        q: 'Can a sprint have goals?',
+        a: 'Yes — each sprint team can have goals set by the sprint creator. Goals appear on the sprint overview and help the team track whether the sprint achieved its objectives beyond just completing tasks.',
+      },
+    ],
+  },
+  {
+    id: 'registration',
+    title: 'Registration & Roster',
+    items: [
+      {
+        q: 'What is Registration?',
+        a: 'A central hub for managing event registrations and attendee info. Access it from the sidebar at Registration → or from the Apps page. It\'s the single source of truth for who signed up, which room they\'re assigned to, special requests (dietary restrictions, accessibility), and more.',
+      },
+      {
+        q: 'Who can access Registration?',
+        a: 'Visible to pastors, organizers (super_admin), sprint/team members working on an event, and regional_secretary. It\'s role-gated so only people actively involved in event planning can see attendee details.',
+      },
+      {
+        q: 'What tabs are in Registration?',
+        a: 'Registrations (list of all sign-ups), Roster (attendee details by role or status), Flights (if the event involves travel logistics), Room Assignments (map attendees to accommodations), Delegate Compliance (allergy and medical info for safety), and Dashboard (overview stats).',
+      },
+      {
+        q: 'How do I manage room assignments?',
+        a: 'Go to Registration → Room Assignments. Unassigned attendees appear in a sortable list (you can sort by gender or other filters). Drag them onto room cards to assign housing. The system prevents invalid assignments and tracks who still needs placement.',
+      },
+      {
+        q: 'Can I sync registrations from Google Forms or a website?',
+        a: 'Yes — use the Apps Script integration (configured by super_admin) to auto-pull new responses into the Registrations tab. This keeps your NEXUS roster in sync with sign-ups without manual data entry.',
+      },
+    ],
+  },
+  {
+    id: 'apps',
+    title: 'Apps & Add-ons',
+    items: [
+      {
+        q: 'What are Apps?',
+        a: 'Add-on features accessible from the Apps page (click "Apps" in the sidebar). Each app is a specialized tool for a specific need: Wins for testimonies, CAN Map for location info, Communications for email campaigns, Registration for event sign-ups, and more. Apps live outside regular spaces and are available based on your role.',
+      },
+      {
+        q: 'What apps are available?',
+        a: 'Wins (testimonies, available to all), CAN Map (view/edit campus locations), Communications (emails & campaigns, for super_admin/ors), Growth Tracking (service center stats, super_admin only), Event Setup Guide (guide for planning events from CMP, super_admin only), and Registration (attendee management).',
+      },
+      {
+        q: 'Can I add custom apps?',
+        a: 'Currently apps are built-in. Super_admin can configure which apps are visible in the Apps page via Settings → App Settings.',
       },
     ],
   },
@@ -429,6 +497,18 @@ const FAQ_SECTIONS = [
       {
         q: 'Where\'s the API documentation?',
         a: 'Settings → API Docs lists every endpoint (tasks, spaces, folders, lists, sprints) with request/response examples, auth header format, and rate limits — for anyone building external integrations against NEXUS.',
+      },
+      {
+        q: 'What are the different Settings sections?',
+        a: 'Your Profile: name, email, photo, timezone, and language preferences. Personal Integrations: connect Google Calendar, Google Drive, Slack, Outlook, Teams, or other personal accounts for syncing. Task Defaults: how you want new tasks to behave. Dashboard Defaults: which widgets show up when you reset your dashboard. Security: password, 2FA, recovery codes, active sessions. Sidebar Tools: toggle visibility of role-gated features (for super_admin, dept_lead, regional_secretary). Admin Settings (super_admin only): org-wide integrations (Slack workspace, Google shared account, Resend email), People Management, and Activity Audit.',
+      },
+      {
+        q: 'What integrations are available?',
+        a: 'Personal: Google Calendar, Google Drive, Slack, Outlook, Microsoft Teams. Org-wide (super_admin): Slack workspace webhooks (for automations and alerts), Google shared account (for Ministry Calendar sync), Resend email service (for campaigns and notifications). Each is configured separately — personal integrations are per-account, org integrations affect the entire workspace.',
+      },
+      {
+        q: 'Can I export my data from NEXUS?',
+        a: 'Activity Log and Files can be exported as CSV. Individual tasks, spaces, and sprints can be exported where export buttons appear in the interface. There\'s no one-click full-export, but super_admin has audit access to everything.',
       },
     ],
   },

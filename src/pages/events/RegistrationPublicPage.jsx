@@ -48,16 +48,23 @@ export default function RegistrationPublicPage() {
 
   useEffect(() => {
     if (!token) { setInvalid(true); return; }
-    supabase.rpc('get_public_registration_data', { p_token: token })
-      .range(0, 9999)
-      .then(({ data: rows, error }) => {
-        if (error || !rows || rows.length === 0) {
-          setInvalid(true);
-          setData([]);
-        } else {
-          setData(rows);
-        }
-      });
+
+    function fetchData() {
+      supabase.rpc('get_public_registration_data', { p_token: token })
+        .range(0, 9999)
+        .then(({ data: rows, error }) => {
+          if (error || !rows || rows.length === 0) {
+            setInvalid(true);
+            setData([]);
+          } else {
+            setData(rows);
+          }
+        });
+    }
+
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
   }, [token]);
 
   const subgroups = useMemo(() => {

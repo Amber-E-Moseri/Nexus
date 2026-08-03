@@ -480,6 +480,54 @@ export default function AudioTranscriptionPanel({
     }
   }
 
+  // ── Transcript persistence ────────────────────────────────────────────────────
+
+  // Appends a new segment to the meeting transcript — always reads the current
+  // full text from the DB instead of rebuilding from meeting_transcriptions.summary,
+  // which is capped at 500 chars and would truncate every segment except the last.
+  const appendSegmentToMeeting = async (inputType, fileName, transcript) => {
+    let existingSummary = ''
+    let existingCount = 0
+    try {
+      const [mtgRes, countRes] = await Promise.all([
+        supabase.from('meetings').select('summary').eq('id', meetingId).single(),
+        supabase.from('meeting_transcriptions')
+          .select('id', { count: 'exact', head: true })
+          .eq('meeting_id', meetingId),
+      ])
+      existingSummary = mtgRes.data?.summary ?? ''
+      existingCount = countRes.count ?? 0
+    } catch {}
+
+    const segNum = existingCount + 1
+    const { data: record, error: recErr } = await supabase
+      .from('meeting_transcriptions')
+      .insert([{
+        meeting_id: meetingId,
+        input_type: inputType,
+        input_file_name: fileName,
+        summary: transcript.slice(0, 500),
+        status: 'complete',
+        tokens_used: 0,
+        created_by: profile?.id,
+        processed_at: new Date().toISOString(),
+        sequence_number: segNum - 1,
+      }])
+      .select()
+      .single()
+    if (recErr) console.warn('Transcription record save failed:', recErr)
+
+    if (record) setTranscriptions(prev => [...prev, record])
+
+    const segHeader = `[Segment ${segNum}${fileName ? ` - ${fileName}` : ''}]`
+    const concatenatedTranscript = existingSummary
+      ? `${existingSummary}\n\n---\n\n${segHeader}\n${transcript}`
+      : `${segHeader}\n${transcript}`
+
+    await supabase.from('meetings').update({ summary: concatenatedTranscript }).eq('id', meetingId)
+    return { record, concatenatedTranscript }
+  }
+
   // ── Transcription ─────────────────────────────────────────────────────────────
 
   const handleTranscribe = async () => {
@@ -549,49 +597,22 @@ export default function AudioTranscriptionPanel({
       setChunkStatus('Saving transcript…')
       setProgress(85)
 
-      const sequenceNumber = transcriptions.length
-      const { data: record, error: recErr } = await supabase
-        .from('meeting_transcriptions')
-        .insert([{
-          meeting_id: meetingId,
-          input_type: 'audio',
-          input_file_name: originalName,
-          summary: transcript.slice(0, 500),
-          status: 'complete',
-          tokens_used: 0,
-          created_by: profile?.id,
-          processed_at: new Date().toISOString(),
-          sequence_number: sequenceNumber,
-        }])
-        .select()
-        .single()
-      if (recErr) console.warn('Transcription record save failed:', recErr)
-
-      // Update transcriptions list with new record
-      if (record) {
-        setTranscriptions(prev => [...prev, record])
-      }
-
-      // Concatenate all transcripts (including this new one) and save to meeting
-      const allTranscriptions = [...transcriptions, { ...record, summary: transcript }]
-      const concatenatedTranscript = allTranscriptions
-        .map((t, idx) => `[Segment ${idx + 1}${t.input_file_name ? ` - ${t.input_file_name}` : ''}]\n${t.summary}`)
-        .join('\n\n---\n\n')
-      await supabase.from('meetings').update({ summary: concatenatedTranscript }).eq('id', meetingId)
+      const { record, concatenatedTranscript } = await appendSegmentToMeeting(
+        'audio', originalName, transcript,
+      )
 
       setProgress(100)
       setChunkStatus('')
 
-      // If more files are queued, load the next one and transcribe it automatically
+      // If more files are queued, process the next one
       if (audioQueue.length > 0) {
         const [nextFile, ...remaining] = audioQueue
         setAudioFile(nextFile)
         setAudioPreview(URL.createObjectURL(nextFile))
         setAudioQueue(remaining)
-        // Persist what we have so far so the user sees progress
         setTranscript(concatenatedTranscript)
         setTranscribing(false)
-        // Kick off the next transcription after a brief paint cycle
+        // Brief paint cycle before next file — uses updated state on next tick
         setTimeout(() => handleTranscribe(), 100)
         return
       }
@@ -612,35 +633,9 @@ export default function AudioTranscriptionPanel({
   }
 
   const saveTranscriptText = async (transcriptText) => {
-    const sequenceNumber = transcriptions.length
-    const { data: record, error: recErr } = await supabase
-      .from('meeting_transcriptions')
-      .insert([{
-        meeting_id: meetingId,
-        input_type: 'text',
-        input_file_name: 'pasted-transcript',
-        summary: transcriptText.slice(0, 500),
-        status: 'complete',
-        tokens_used: 0,
-        created_by: profile?.id,
-        processed_at: new Date().toISOString(),
-        sequence_number: sequenceNumber,
-      }])
-      .select()
-      .single()
-    if (recErr) console.warn('Transcription record save failed:', recErr)
-
-    // Update transcriptions list with new record
-    if (record) {
-      setTranscriptions(prev => [...prev, record])
-    }
-
-    // Concatenate all transcripts and save to meeting
-    const allTranscriptions = [...transcriptions, { ...record, summary: transcriptText }]
-    const concatenatedTranscript = allTranscriptions
-      .map((t, idx) => `[Segment ${idx + 1}${t.input_file_name ? ` - ${t.input_file_name}` : ''}]\n${t.summary}`)
-      .join('\n\n---\n\n')
-    await supabase.from('meetings').update({ summary: concatenatedTranscript }).eq('id', meetingId)
+    const { record, concatenatedTranscript } = await appendSegmentToMeeting(
+      'text', 'pasted-transcript', transcriptText,
+    )
     return { record, concatenatedTranscript }
   }
 

@@ -14,7 +14,6 @@ export const ROLE_DEFAULTS: RoleDefault[] = [
     widgets: [
       'regional_updates',
       'my_tasks_summary',
-      'goals',
       'sprint_progress',
       'team_workload',
       'team_velocity',
@@ -28,7 +27,6 @@ export const ROLE_DEFAULTS: RoleDefault[] = [
     role: 'dept_lead',
     widgets: [
       'my_tasks_summary',
-      'goals',
       'sprint_progress',
       'team_workload',
       'overdue_by_member',
@@ -44,7 +42,6 @@ export const ROLE_DEFAULTS: RoleDefault[] = [
     widgets: [
       'my_tasks_summary',
       'action_items',
-      'goals',
       'upcoming_meetings',
       'upcoming_events',
       'my_spaces',

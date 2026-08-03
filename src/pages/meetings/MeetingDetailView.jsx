@@ -171,10 +171,11 @@ function MeetingDetailViewInner() {
   // the one users actually hit when opening a meeting.
   const canManage = ['super_admin', 'dept_lead', 'pastor', 'regional_secretary'].includes((role ?? '').toLowerCase()) ||
                     hasSpaceRole(profile, null, 'ors') ||
-                    hasSpaceRole(profile, null, 'dept_lead')
+                    hasSpaceRole(profile, null, 'dept_lead') ||
+                    meeting?.created_by === profile?.id
   // Mirrors the meetings_update RLS policy: creator can always edit their own
   // meeting, regardless of current visibility (private or published).
-  const canEditVisibility = canManage || meeting?.created_by === profile?.id
+  const canEditVisibility = canManage
   // Live audio recording is available to everyone who can view this meeting —
   // not just leadership. Persisting the recorded/uploaded summary for
   // non-editors is enforced narrowly at the DB layer (see migration
@@ -1021,7 +1022,7 @@ function MeetingDetailViewInner() {
       `}</style>
 
       {/* ── UNIFIED HEADER ── */}
-      <div style={{ flexShrink:0, background: isLive ? FS.navy : FS.surface, borderBottom: isLive ? 'none' : `1px solid ${FS.border}`, padding: isMobile ? '10px 14px' : '13px 20px', display:'flex', alignItems:'center', gap: isMobile ? 10 : 14, flexWrap:'wrap' }}>
+      <div style={{ flexShrink:0, background: isLive ? FS.navy : FS.surface, borderBottom: isLive ? 'none' : `1px solid ${FS.border}`, padding: isMobile ? '10px 14px' : '13px 20px', display:'flex', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 8 : 14, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
         {/* Back + title */}
         <button onClick={() => navigate('/meetings')} style={{ background:'transparent', border:'none', color: isLive ? 'rgba(255,255,255,.4)' : FS.muted, fontSize:16, cursor:'pointer', padding:'0 6px 0 0', lineHeight:1, flexShrink:0 }}>←</button>
 
@@ -1036,7 +1037,7 @@ function MeetingDetailViewInner() {
           <span style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.sage, flexShrink:0 }}>✓ Complete</span>
         )}
 
-        <div style={{ minWidth:0, flex:1 }}>
+        <div style={{ minWidth:0, flex:1, ...(isMobile ? { flexBasis:'100%', order:2 } : {}) }}>
           {editingTitle ? (
             <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
               <input
@@ -1236,13 +1237,15 @@ function MeetingDetailViewInner() {
             </>
           )}
 
-          {/* View in hub */}
-          <Link
-            to="/meetings/minutes"
-            style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', textDecoration:'none', display:'inline-flex', alignItems:'center' }}
-          >
-            📋 Minutes Hub
-          </Link>
+          {/* View in hub — hidden on mobile to reduce header clutter */}
+          {!isMobile && (
+            <Link
+              to="/meetings/minutes"
+              style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', textDecoration:'none', display:'inline-flex', alignItems:'center' }}
+            >
+              📋 Minutes Hub
+            </Link>
+          )}
 
           {/* Post: export buttons */}
           {isPost && canManage && (
@@ -1251,7 +1254,7 @@ function MeetingDetailViewInner() {
               disabled={exportingPdf}
               style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor: exportingPdf ? 'wait' : 'pointer', opacity: exportingPdf ? 0.7 : 1 }}
             >
-              {exportingPdf ? '⏳ Exporting…' : '📤 Export PDF'}
+              {exportingPdf ? '⏳' : '📤'}{!isMobile && (exportingPdf ? ' Exporting…' : ' Export PDF')}
             </button>
           )}
 
@@ -1961,45 +1964,19 @@ function MeetingDetailViewInner() {
             {activeTab === 'audio' && (
               <div style={{ flex:1, overflowY:'auto', padding: isMobile ? 12 : 18, display:'flex', flexDirection:'column', gap: isMobile ? 12 : 16, animation:'fadein .18s ease' }}>
 
-                {/* Live Recording */}
-                {canRecord && (
-                  <AudioTranscriptionPanel
-                    key={`record-${meetingId}`}
-                    meetingId={meetingId}
-                    departmentId={meeting.department_id}
-                    canRecord={canRecord}
-                    canManage={canManage}
-                    meetingContext={context}
-                    recordOnly
-                    startImmediately={recording}
-                    stopImmediately={!recording}
-                    onRecordingChange={(isRec) => { if (!isRec) setRecording(false) }}
-                    onTranscriptionComplete={({ transcript }) => setMeeting(m => ({ ...m, summary: transcript }))}
-                    onActionItemsExtracted={() => { fetchActionItems(); setActiveTab('actions') }}
-                  />
-                )}
-
-                {/* Upload */}
+                {/* Unified panel — mode selector lets user choose Record / Upload / Paste.
+                    One instance avoids the previous problem where three separate panels each
+                    independently fetched and displayed the same segments list. */}
                 <AudioTranscriptionPanel
-                  key={`upload-${meetingId}`}
+                  key={`unified-${meetingId}`}
                   meetingId={meetingId}
                   departmentId={meeting.department_id}
-                  canRecord={false}
+                  canRecord={canRecord}
                   canManage={canManage}
                   meetingContext={context}
-                  onTranscriptionComplete={({ transcript }) => setMeeting(m => ({ ...m, summary: transcript }))}
-                  onActionItemsExtracted={() => { fetchActionItems(); setActiveTab('actions') }}
-                />
-
-                {/* Paste transcript */}
-                <AudioTranscriptionPanel
-                  key={`paste-${meetingId}`}
-                  meetingId={meetingId}
-                  departmentId={meeting.department_id}
-                  canRecord={false}
-                  canManage={canManage}
-                  meetingContext={context}
-                  pasteOnly
+                  startImmediately={recording}
+                  stopImmediately={!recording}
+                  onRecordingChange={(isRec) => { if (!isRec) setRecording(false) }}
                   onTranscriptionComplete={({ transcript }) => setMeeting(m => ({ ...m, summary: transcript }))}
                   onActionItemsExtracted={() => { fetchActionItems(); setActiveTab('actions') }}
                 />

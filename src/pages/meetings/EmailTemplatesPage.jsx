@@ -118,6 +118,11 @@ export default function EmailTemplatesPage() {
     body: renderPreview(formState.body),
   }), [formState.body, formState.subject])
 
+  const isHtmlBody = useMemo(() => {
+    const b = formState.body.trim()
+    return b.startsWith('<!DOCTYPE') || b.startsWith('<html') || (b.startsWith('<') && /<(table|td|tr|div|p)\b/i.test(b))
+  }, [formState.body])
+
   function beginCreate() {
     setGlobalMessage(null)
     setFormState(emptyTemplate(profile))
@@ -342,11 +347,11 @@ export default function EmailTemplatesPage() {
                   </div>
                   <textarea
                     ref={bodyRef}
-                    rows={10}
+                    rows={isHtmlBody ? 18 : 10}
                     value={formState.body}
                     onChange={(event) => setField('body', event.target.value)}
                     required
-                    style={{ ...INPUT, resize: 'vertical', lineHeight: 1.5 }}
+                    style={{ ...INPUT, resize: 'vertical', lineHeight: 1.5, fontFamily: isHtmlBody ? 'monospace' : 'inherit', fontSize: isHtmlBody ? 12 : 13 }}
                   />
                 </div>
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -413,15 +418,29 @@ export default function EmailTemplatesPage() {
                 </div>
 
                 <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, padding: '14px 16px' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>
-                    Preview
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                      Preview
+                    </div>
+                    {isHtmlBody && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: ACCENT, background: '#F0EAFA', borderRadius: 999, padding: '2px 8px' }}>HTML</span>
+                    )}
                   </div>
                   <div style={{ fontSize: 15, fontWeight: 800, color: TEXT, marginBottom: 10 }}>
                     {preview.subject || 'Subject preview'}
                   </div>
-                  <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, color: TEXT, lineHeight: 1.65 }}>
-                    {preview.body || 'Body preview'}
-                  </div>
+                  {isHtmlBody ? (
+                    <iframe
+                      srcDoc={preview.body}
+                      title="Email preview"
+                      sandbox="allow-same-origin"
+                      style={{ width: '100%', minHeight: 480, border: `1px solid ${PANEL_BORDER}`, borderRadius: 8, display: 'block' }}
+                    />
+                  ) : (
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, color: TEXT, lineHeight: 1.65 }}>
+                      {preview.body || 'Body preview'}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

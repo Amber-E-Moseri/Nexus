@@ -1,6 +1,8 @@
 import { FONT_HEADING } from '../../../lib/fonts'
+import { useMediaQuery } from '../../../hooks/useMediaQuery'
 
 export default function StatsCards({ stats }) {
+  const isMobile = useMediaQuery('(max-width: 640px)')
   const cards = [
     { label: 'LOGGED (30D)', value: stats.logged30d, bg: 'var(--purple-700)', textColor: 'white' },
     { label: 'ACTION ITEMS', value: stats.actionItems, bg: 'var(--ink-1)', textColor: 'white' },
@@ -9,7 +11,7 @@ export default function StatsCards({ stats }) {
   ]
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: isMobile ? 10 : 14 }}>
       {cards.map((card, idx) => (
         <div
           key={idx}
