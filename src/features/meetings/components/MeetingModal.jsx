@@ -11,6 +11,7 @@ import { saveAgendaItemsForMeeting } from '../lib/agendaSync'
 
 const MEETING_TYPES = [
   { value: 'general', label: 'General' },
+  { value: 'direction_meeting', label: 'Direction Meeting' },
   { value: 'regional_group', label: 'Regional Group' },
   { value: 'staff_meeting', label: 'Staff Meeting' },
   { value: 'department_meeting', label: 'Department Meeting' },

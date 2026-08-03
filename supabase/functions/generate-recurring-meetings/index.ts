@@ -211,7 +211,7 @@ Deno.serve(async (req) => {
     try {
       const { data: parent, error: parentError } = await supabase
         .from('meetings')
-        .select('date')
+        .select('id, date')
         .eq('recurrence_id', meeting.recurrence_id)
         .eq('series_instance_num', 1)
         .single()

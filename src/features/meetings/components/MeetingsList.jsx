@@ -7,6 +7,7 @@ import { useAuth } from '../../../hooks/useAuth'
 
 const TYPE_CHIP_COLORS = {
   general: 'var(--purple-700)',
+  direction_meeting: '#C2410C',
   team: 'var(--accent-blue)',
   media: 'var(--accent-yellow)',
   department: 'var(--accent-green)',

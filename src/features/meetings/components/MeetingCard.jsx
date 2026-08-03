@@ -6,6 +6,7 @@ import ActionItemBridge from './ActionItemBridge'
 
 const TYPE_LABELS = {
   general: 'General',
+  direction_meeting: 'Direction Meeting',
   team: 'Team',
   media: 'Media',
   department: 'Department',

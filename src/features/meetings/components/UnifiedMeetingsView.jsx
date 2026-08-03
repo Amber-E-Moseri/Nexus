@@ -16,6 +16,7 @@ import ScheduleMeetingModal from './ScheduleMeetingModal'
 
 const TYPE_CHIP_COLORS = {
   general: '#4C2A92',
+  direction_meeting: '#C2410C',
   team: '#1B72E8',
   media: '#E8A020',
   department: '#16A34A',
@@ -310,7 +311,7 @@ export default function UnifiedMeetingsView({
 
   const totalCount = filteredMeetings.length
 
-  const TYPE_ICONS = { general: '🗓', team: '👥', media: '🎬', department: '🏛' }
+  const TYPE_ICONS = { general: '🗓', direction_meeting: '🧭', team: '👥', media: '🎬', department: '🏛' }
 
   const selectStyle = {
     padding: '6px 10px',
