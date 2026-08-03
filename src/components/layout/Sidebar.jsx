@@ -712,33 +712,78 @@ export default function Sidebar({ isMobileDrawer = false }) {
             )}
             {featureSearch && (() => {
               const q = featureSearch.toLowerCase()
+              const isAdmin = ['super_admin', 'regional_secretary'].includes(role)
+              const isMeetingsRole = ['super_admin', 'regional_secretary', 'dept_lead', 'ors', 'programs'].includes(role)
               const all = [
+                // Workspace
                 { label: 'Dashboard', to: '/dashboard', icon: LayoutGrid },
                 { label: 'Inbox', to: '/inbox', icon: Bell },
                 { label: 'My Tasks', to: '/my-tasks', icon: CheckCircle2 },
                 { label: 'Today & Tomorrow', to: '/my-tasks/today', icon: CalendarClock },
                 { label: 'Personal List', to: '/personal-list', icon: Lock },
                 { label: 'Planner', to: '/planner', icon: Clock },
-                { label: 'Apps', to: '/apps', icon: Trophy },
                 { label: 'Ministry Calendar', to: '/calendar', icon: CalendarDays },
-                ...(['regional_secretary', 'pastor', 'super_admin'].includes(role) ? [{ label: 'My Flock', to: '/flock', icon: Users }] : []),
-                ...(hasRegistrationAccess ? [{ label: 'This Is It Registration', to: '/registration', icon: CheckCircle2 }] : []),
-                { label: 'All Sprints', to: '/sprints', icon: Zap },
-                { label: 'Meetings', to: '/meetings', icon: Video },
-                { label: 'Communications', to: '/communications', icon: Send },
-                { label: 'Campaigns', to: '/campaigns', icon: Mail },
-                { label: 'Templates', to: '/templates', icon: MailPlus },
-                { label: 'Flock CRM', to: '/flock-crm', icon: Network },
-                { label: 'People Management', to: '/people', icon: Users2 },
+                { label: 'Notifications', to: '/notifications', icon: Bell },
+                { label: 'Activity Log', to: '/activity-log', icon: Zap },
                 { label: 'Trash', to: '/trash', icon: Trash2 },
-                { label: 'CAN Map', to: '/can-map', icon: Map },
+                // Apps (not in main sidebar nav)
+                { label: 'Apps', to: '/apps', icon: Trophy },
+                { label: 'Wins', to: '/wins', icon: Trophy },
+                ...(['super_admin'].includes(role) ? [{ label: 'Growth Tracking', to: '/growth-tracking', icon: TrendingUp }] : []),
+                // Sprints
+                { label: 'All Sprints', to: '/sprints', icon: Zap },
+                // Meetings
+                { label: 'Meetings', to: '/meetings', icon: Video },
+                { label: 'Attendee Roster', to: '/meetings/expected-attendees', icon: Users },
+                ...(isMeetingsRole ? [
+                  { label: 'Attendance Trends', to: '/meetings/attendance-trends', icon: TrendingUp },
+                  { label: 'Absence Email Log', to: '/meetings/absence-email-log', icon: Mail },
+                  { label: 'Meeting Minutes', to: '/meetings/minutes', icon: MailPlus },
+                ] : []),
+                // Communications
+                ...(isMeetingsRole ? [
+                  { label: 'Communications', to: '/communications', icon: Send },
+                  { label: 'Campaigns', to: '/communications/campaigns', icon: Mail },
+                  { label: 'Email Templates', to: '/communications/templates', icon: MailPlus },
+                  { label: 'Recipients', to: '/communications/recipients', icon: Users },
+                  { label: 'Segments', to: '/communications/segments', icon: Users2 },
+                  { label: 'Email Analytics', to: '/communications/analytics', icon: TrendingUp },
+                  { label: 'Invitations', to: '/communications/invitations', icon: Send },
+                  { label: 'Absentee Follow-up', to: '/communications/absentees', icon: Mail },
+                ] : []),
+                // People
+                ...(isAdmin ? [
+                  { label: 'People Management', to: '/people', icon: Users2 },
+                  { label: 'Users', to: '/people/users', icon: Users },
+                  { label: 'Invitations', to: '/people/invitations', icon: MailPlus },
+                  { label: 'Departments', to: '/people/departments', icon: Network },
+                  { label: 'Pastoral Assignments', to: '/people/pastoral-assignments', icon: Users },
+                  { label: 'Permissions', to: '/people/permissions', icon: Settings },
+                ] : []),
+                // My Flock
+                ...(['regional_secretary', 'pastor', 'super_admin'].includes(role) ? [{ label: 'My Flock', to: '/flock', icon: Users }] : []),
+                ...(role === 'super_admin' ? [{ label: 'Flock CRM', to: '/flock-crm', icon: Network }] : []),
+                // Registration
+                ...(hasRegistrationAccess ? [{ label: 'This Is It Registration', to: '/registration', icon: CheckCircle2 }] : []),
+                // Admin tools
+                ...(isAdmin ? [
+                  { label: 'Instagram Grading', to: '/instagram', icon: Image },
+                  { label: 'CAN Map', to: '/map', icon: Map },
+                  { label: 'Org Chart', to: '/org', icon: Network },
+                  { label: 'Automations', to: '/automations', icon: Zap },
+                  { label: 'Calendar Management', to: '/calendar-management', icon: CalendarDays },
+                  { label: 'Campus Photos', to: '/settings/campus-photos', icon: Image },
+                  { label: 'Support Tickets', to: '/admin/tickets', icon: HeadphonesIcon },
+                ] : []),
+                // Settings
                 { label: 'Settings', to: '/settings', icon: Settings },
+                { label: 'Integrations', to: '/settings/integrations', icon: Settings },
+                { label: 'Personal Integrations', to: '/settings/personal-integrations', icon: Settings },
+                // Learning
+                ...(['super_admin', 'regional_secretary'].includes(role) ? [{ label: 'Books / Library', to: '/books', icon: Library }] : []),
+                // Help
                 { label: 'Help & FAQ', to: '/help', icon: HelpCircle },
                 { label: 'Get Support', to: '/support', icon: HeadphonesIcon },
-                ...(['super_admin', 'regional_secretary'].includes(role) ? [
-                  { label: 'Instagram Grading', to: '/instagram', icon: Image },
-                  { label: 'Growth Tracking', to: '/apps', icon: TrendingUp },
-                ] : []),
               ]
               const matches = all.filter((item) => item.label.toLowerCase().includes(q))
               if (!matches.length) return (
