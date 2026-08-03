@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { TrendingUp, Trophy } from 'lucide-react'
+import { TrendingUp, Trophy, Map, Library } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
 const PRIMARY = '#4C2A92'
@@ -52,7 +52,10 @@ function AppIcon({ icon: Icon, label, color, bg, description, onClick }) {
 
 export default function AppsPage() {
   const { profile } = useAuth()
-  const isSuperAdmin = profile?.role === 'super_admin'
+  const role = profile?.role
+  const isSuperAdmin = role === 'super_admin'
+  const canSeeMap = ['super_admin', 'dept_lead', 'regional_secretary', 'pastor'].includes(role)
+  const canSeeLibrary = ['super_admin', 'regional_secretary'].includes(role)
   const navigate = useNavigate()
 
   return (
@@ -80,6 +83,26 @@ export default function AppsPage() {
               bg="linear-gradient(135deg, #E8F5EC 0%, #D0EDD8 100%)"
               description="Service center reports"
               onClick={() => navigate('/growth-tracking')}
+            />
+          )}
+          {canSeeMap && (
+            <AppIcon
+              icon={Map}
+              label="CAN Map"
+              color="#2A5FA5"
+              bg="linear-gradient(135deg, #E9F0FA 0%, #D4E4F7 100%)"
+              description="Canada service centres"
+              onClick={() => navigate('/map')}
+            />
+          )}
+          {canSeeLibrary && (
+            <AppIcon
+              icon={Library}
+              label="My Library"
+              color="#B8710A"
+              bg="linear-gradient(135deg, #FBF0DE 0%, #F5E0C0 100%)"
+              description="Books & reading"
+              onClick={() => navigate('/books')}
             />
           )}
         </div>

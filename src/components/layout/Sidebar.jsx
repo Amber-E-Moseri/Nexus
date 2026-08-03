@@ -769,6 +769,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
                 ...(isAdmin ? [
                   { label: 'Instagram Grading', to: '/instagram', icon: Image },
                   { label: 'CAN Map', to: '/map', icon: Map },
+
                   { label: 'Org Chart', to: '/org', icon: Network },
                   { label: 'Automations', to: '/automations', icon: Zap },
                   { label: 'Calendar Management', to: '/calendar-management', icon: CalendarDays },
@@ -1629,12 +1630,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
               icon={Settings}
               label="Settings"
               to="/settings"
-            />
-            <SidebarItem
-              active={isPathActive(location.pathname, '/map')}
-              icon={Map}
-              label="CAN Map"
-              to="/map"
             />
           </>
         ) : null}
