@@ -110,7 +110,10 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
     const assignedTaskIds = new Set()
 
     teamsWithMembers.forEach((team) => {
-      const teamTasks = filtered.filter((task) => team.sprint_team_members?.some((m) => m.user_id === task.assignee_id))
+      const teamTasks = filtered.filter((task) =>
+        !assignedTaskIds.has(task.id) &&
+        team.sprint_team_members?.some((m) => m.user_id === task.assignee_id),
+      )
       grouped[team.id] = { team, tasks: teamTasks }
       teamTasks.forEach((t) => assignedTaskIds.add(t.id))
     })

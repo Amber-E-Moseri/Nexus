@@ -68,6 +68,11 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
       return
     }
 
+    if (!profile?.id) {
+      showToast('Session error — please refresh and try again', { tone: 'error' })
+      return
+    }
+
     setLoading(true)
     try {
       // Destructure start_time / end_time out — they're UI-only fields used to
@@ -92,8 +97,9 @@ export default function EventSubmitModal({ onClose, onSubmitted, departments = [
       onSubmitted?.()
       onClose()
     } catch (err) {
-      console.error('Failed to submit event:', err?.message ?? err, err?.details, err?.hint, err?.code)
-      showToast('Failed to submit event', { tone: 'error' })
+      const msg = err?.message ?? String(err)
+      console.error('Failed to submit event:', msg, err?.details, err?.hint, err?.code)
+      showToast(`Failed to submit event: ${msg}`, { tone: 'error', duration: 8000 })
     } finally {
       setLoading(false)
     }

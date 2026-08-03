@@ -1419,10 +1419,10 @@ export default function Sidebar({ isMobileDrawer = false }) {
             {!collapsed && <div style={{ ...SECTION_LABEL_STYLE }}>Learning</div>}
             {role === 'super_admin' ? (
               <SidebarItem
-                active={false}
+                active={isPathActive(location.pathname, '/books')}
                 icon={Library}
                 label="My Library"
-                href="https://nexus.lwcanada.org/books"
+                to="/books"
               />
             ) : (
               !collapsed && (

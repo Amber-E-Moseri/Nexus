@@ -107,6 +107,7 @@ const SupportPage = lazyRoute('/support', () => import('./pages/SupportPage'))
 const SupportTicketsAdminPage = lazyRoute('/admin/tickets', () => import('./pages/SupportTicketsAdminPage'))
 const GrowthTrackingPage = lazyRoute('/growth-tracking', () => import('./pages/growth/GrowthTrackingPage'))
 const GlowCardDemo = lazy(() => import('./components/ui/GlowCardDemo'))
+const BooksApp = lazy(() => import('./features/reader/pages/BooksApp'))
 
 function onError(error, errorInfo) {
   console.error('[AppErrorBoundary]', error, errorInfo)
@@ -147,6 +148,14 @@ export default function App() {
       <Route path="/confirm-subscription/:token" element={<ConfirmSubscriptionPage />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/demo/glow-card" element={<GlowCardDemo />} />
+        <Route
+          path="/books"
+          element={
+            <ProtectedRoute roles={['super_admin', 'regional_secretary']}>
+              <BooksApp />
+            </ProtectedRoute>
+          }
+        />
         <Route element={<Shell />}>
           {/* Home merged into Dashboard (experiment/clickup-ui-refresh) */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
