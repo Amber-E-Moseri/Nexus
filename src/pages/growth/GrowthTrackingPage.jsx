@@ -546,8 +546,9 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
             </thead>
             <tbody>
               {[...activeRows].sort((a, b) => b.total_attendance - a.total_attendance).map(row => {
-                const statusColor = STATUS_META[row.status]?.color ?? C.mute
-                const attPct = row.status === 'reported'
+                const zeroCheckin  = row.status === 'reported' && row.total_attendance === 0
+                const statusColor  = zeroCheckin ? C.amber : (STATUS_META[row.status]?.color ?? C.mute)
+                const attPct = row.status === 'reported' && !zeroCheckin
                   ? Math.round((row.total_attendance / maxAttendance) * 100)
                   : 0
                 return (
@@ -555,12 +556,14 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
                     <TD bold extra={{ borderLeft: `3px solid ${statusColor}`, paddingLeft: 11 }}>
                       {row.church_name}
                     </TD>
-                    <TD right bold color={C.ink} extra={{
+                    <TD right bold color={zeroCheckin ? C.amber : C.ink} extra={{
                       background: attPct > 0
                         ? `linear-gradient(to left, ${C.purpleBg} ${attPct}%, transparent ${attPct}%)`
                         : undefined,
                     }}>
-                      {row.status === 'reported' ? row.total_attendance.toLocaleString() : '—'}
+                      {row.status === 'reported'
+                        ? zeroCheckin ? '⚠ 0' : row.total_attendance.toLocaleString()
+                        : '—'}
                     </TD>
                     <TD right>
                       {row.status === 'reported' ? row.first_timers.toLocaleString() : '—'}
@@ -573,7 +576,18 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
                         : '—'}
                     </TD>
                     <TD right color={C.mute}>{row.rolling_avg_4wk ?? '—'}</TD>
-                    <TD right><Pill status={row.status} /></TD>
+                    <TD right>
+                      {zeroCheckin
+                        ? <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            background: C.amberBg, color: C.amber,
+                            fontSize: 11, fontWeight: 700, padding: '3px 9px',
+                            borderRadius: 20, letterSpacing: 0.2, whiteSpace: 'nowrap',
+                          }}>
+                            <span style={{ fontSize: 7 }}>●</span> Verify
+                          </span>
+                        : <Pill status={row.status} />}
+                    </TD>
                   </tr>
                 )
               })}
@@ -890,7 +904,7 @@ function MonthEnd({ growthData, schedule, onRefresh }) {
     activeSchedule.map(center => {
       const weekData = monthWeeks.map(week => {
         const row = growthData.find(r => r.schedule_id === center.id && r.week_start_date === week)
-        return { week, status: row?.status ?? null }
+        return { week, status: row?.status ?? null, attendance: row?.total_attendance ?? null }
       })
       const missing  = weekData.filter(w => w.status === 'missing').length
       const reported = weekData.filter(w => w.status === 'reported').length
@@ -916,7 +930,9 @@ function MonthEnd({ growthData, schedule, onRefresh }) {
     onRefresh()
   }
 
-  const CellIcon = ({ status }) => {
+  const CellIcon = ({ status, attendance }) => {
+    if (status === 'reported' && attendance === 0)
+      return <span style={{ color: C.amber, fontSize: 13, fontWeight: 700 }} title="Reported but 0 check-ins">⚠</span>
     const icons = {
       reported:     { char: '✓', color: C.green  },
       merged:       { char: '~', color: C.amber  },
@@ -1009,13 +1025,15 @@ function MonthEnd({ growthData, schedule, onRefresh }) {
                     <TD bold extra={{ borderLeft: `3px solid ${rowColor}`, paddingLeft: 11 }}>
                       {center.church_name}
                     </TD>
-                    {weekData.map(({ week, status }) => (
+                    {weekData.map(({ week, status, attendance }) => (
                       <td key={week} style={{
                         padding: '9px 6px', textAlign: 'center',
                         borderBottom: `1px solid ${C.line}`,
-                        background: status === 'missing' ? '#FEF2F2' : undefined,
+                        background: status === 'missing' ? '#FEF2F2'
+                          : (status === 'reported' && attendance === 0) ? C.amberBg
+                          : undefined,
                       }}>
-                        <CellIcon status={status} />
+                        <CellIcon status={status} attendance={attendance} />
                       </td>
                     ))}
                     <td style={{
@@ -1041,6 +1059,7 @@ function MonthEnd({ growthData, schedule, onRefresh }) {
         }}>
           {[
             { char: '✓', color: C.green, label: 'Reported' },
+            { char: '⚠', color: C.amber, label: 'Verify (0 check-ins)' },
             { char: '○', color: C.mute,  label: 'Did Not Meet' },
             { char: '~', color: C.amber, label: 'Merged' },
             { char: '✗', color: C.red,   label: 'Missing' },
