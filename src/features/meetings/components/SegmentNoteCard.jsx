@@ -151,7 +151,7 @@ export default function SegmentNoteCard({ segment, minutesId, meetingId, departm
                     </div>
                     <div style={{ fontSize: 11, color: '#9E9488' }}>
                       {action.user ? `Assigned to: ${action.user.name}` : 'Unassigned'}
-                      {action.due_date && ` • Due: ${new Date(action.due_date).toLocaleDateString()}`}
+                      {action.due_date && ` • Due: ${new Date(action.due_date + 'T00:00:00').toLocaleDateString()}`}
                     </div>
                   </div>
                 ))}

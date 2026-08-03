@@ -17,7 +17,7 @@ function deriveStatusKey(item) {
   if (status === 'done' || status === 'completed') return 'completed'
   if (item.is_overdue) return 'overdue'
   if (item.due_date) {
-    const due = new Date(item.due_date)
+    const due = new Date(item.due_date + 'T00:00:00')
     const soon = new Date()
     soon.setDate(soon.getDate() + 3)
     if (due <= soon) return 'due_soon'
@@ -56,7 +56,7 @@ export default function ActionItemsWidget({ userId }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {items.map(item => {
         const colors = STATUS_COLORS[deriveStatusKey(item)] || STATUS_COLORS.on_track
-        const dueStr = item.due_date ? new Date(item.due_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'
+        const dueStr = item.due_date ? new Date(item.due_date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'
         const isUpdating = updating === item.task_id
 
         return (

@@ -9,7 +9,7 @@ function memberStatusBadge(member, memberTasks) {
   const tasks = memberTasks[member.id] ?? []
   const now = new Date()
   const hasOverdue = tasks.some(
-    (t) => t.due_date && new Date(t.due_date) < now && !isTaskCompleted(t),
+    (t) => t.due_date && new Date(t.due_date + 'T00:00:00') < now && !isTaskCompleted(t),
   )
   if (hasOverdue) return { label: 'Has overdue', bg: 'var(--status-review-bg)', text: 'var(--status-review-text)' }
 
@@ -74,7 +74,7 @@ function WorkloadSummary({ tasks, deptGroups }) {
   const now = new Date()
   const completed = tasks.filter((t) => isTaskCompleted(t)).length
   const inProgress = tasks.filter((t) => isTaskInProgress(t)).length
-  const overdue = tasks.filter((t) => t.due_date && new Date(t.due_date) < now && !isTaskCompleted(t)).length
+  const overdue = tasks.filter((t) => t.due_date && new Date(t.due_date + 'T00:00:00') < now && !isTaskCompleted(t)).length
   const notStarted = tasks.length - completed - inProgress
 
   const stats = [
@@ -254,7 +254,7 @@ export default function FlockView() {
 
         {members.map((member) => {
           const overdueCount = (memberTasks[member.id] ?? []).filter(
-            (t) => t.due_date && new Date(t.due_date) < new Date() && !isTaskCompleted(t),
+            (t) => t.due_date && new Date(t.due_date + 'T00:00:00') < new Date() && !isTaskCompleted(t),
           ).length
           const statusBadge = memberStatusBadge(member, memberTasks)
           const isSelected = member.id === selectedId
@@ -375,7 +375,7 @@ export default function FlockView() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {tasks.map((task) => {
                         const isOverdue =
-                          task.due_date && new Date(task.due_date) < new Date() && !isTaskCompleted(task)
+                          task.due_date && new Date(task.due_date + 'T00:00:00') < new Date() && !isTaskCompleted(task)
                         const priority = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium
                         const statusName = task.status_definition?.name ?? task.status ?? ''
 
@@ -436,7 +436,7 @@ export default function FlockView() {
                                 }}
                               >
                                 {isOverdue ? '⚠ ' : ''}
-                                {new Date(task.due_date).toLocaleDateString('en-CA', {
+                                {new Date(task.due_date + 'T00:00:00').toLocaleDateString('en-CA', {
                                   month: 'short', day: 'numeric',
                                 })}
                               </span>

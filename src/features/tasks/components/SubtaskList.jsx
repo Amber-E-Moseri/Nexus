@@ -191,7 +191,7 @@ function SubtaskRow({
         {/* Compact meta */}
         {subtask.due_date ? (
           <span style={{ fontSize: 11, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
-            {new Date(subtask.due_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}
+            {new Date(subtask.due_date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}
           </span>
         ) : null}
         <span

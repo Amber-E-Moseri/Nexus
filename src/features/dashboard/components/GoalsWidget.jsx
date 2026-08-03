@@ -87,7 +87,7 @@ export default function GoalsWidget({ departmentId }) {
       {goals.map((goal) => {
         const percent = goal.target_value ? Math.min(100, Math.round((goal.current_value / goal.target_value) * 100)) : 0
         const colors = STATUS_COLORS[goal.status] || STATUS_COLORS.not_started
-        const dueDate = goal.due_date ? new Date(goal.due_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'
+        const dueDate = goal.due_date ? new Date(goal.due_date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'
 
         return (
           <div key={goal.id} style={{

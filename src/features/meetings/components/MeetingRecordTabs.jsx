@@ -161,7 +161,7 @@ export default function MeetingRecordTabs({ meeting }) {
                                 <span>•</span>
                                 <span>
                                   Due{' '}
-                                  {new Date(task.due_date).toLocaleDateString('en-CA', {
+                                  {new Date(task.due_date + 'T00:00:00').toLocaleDateString('en-CA', {
                                     month: 'short',
                                     day: 'numeric',
                                   })}
@@ -272,7 +272,7 @@ export default function MeetingRecordTabs({ meeting }) {
                         {task.due_date ? (
                           <>
                             <span>•</span>
-                            <span>Due {new Date(task.due_date).toLocaleDateString('en-CA')}</span>
+                            <span>Due {new Date(task.due_date + 'T00:00:00').toLocaleDateString('en-CA')}</span>
                           </>
                         ) : null}
                       </div>

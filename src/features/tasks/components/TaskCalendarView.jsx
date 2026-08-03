@@ -26,7 +26,7 @@ function sameDay(a, b) {
 }
 
 function tasksForDay(tasks, day) {
-  return tasks.filter((task) => task.due_date && sameDay(new Date(task.due_date), day))
+  return tasks.filter((task) => task.due_date && sameDay(new Date(task.due_date + 'T00:00:00'), day))
 }
 
 function TaskCalendarCard({ task, isDragging, onClick }) {

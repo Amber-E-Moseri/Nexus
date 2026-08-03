@@ -16,8 +16,7 @@ function UpcomingTasksList({ tasks, onTaskClick }) {
       .filter((task) => {
         if (isTaskCompleted(task)) return false
         if (!task.due_date) return false
-        const dueDate = new Date(task.due_date)
-        dueDate.setHours(0, 0, 0, 0)
+        const dueDate = new Date(task.due_date + 'T00:00:00')
         return dueDate >= today
       })
       .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
@@ -25,7 +24,7 @@ function UpcomingTasksList({ tasks, onTaskClick }) {
   }, [tasks])
 
   const formatDate = (dateStr) => {
-    const date = new Date(dateStr)
+    const date = new Date(dateStr + 'T00:00:00')
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })
   }
 

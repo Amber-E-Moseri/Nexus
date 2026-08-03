@@ -220,7 +220,7 @@ export default function MeetingCard({ meeting, canManage = false, onTasksAdded }
                         {task.due_date ? (
                           <>
                             <span>•</span>
-                            <span>Due {new Date(task.due_date).toLocaleDateString('en-CA')}</span>
+                            <span>Due {new Date(task.due_date + 'T00:00:00').toLocaleDateString('en-CA')}</span>
                           </>
                         ) : null}
                       </div>

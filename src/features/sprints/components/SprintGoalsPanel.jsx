@@ -400,7 +400,7 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
 
                   <div style={styles.goalMeta}>
                     <div>Progress: {goal.current_value} / {goal.target_value}</div>
-                    {goal.due_date && <div>Due: {new Date(goal.due_date).toLocaleDateString()}</div>}
+                    {goal.due_date && <div>Due: {new Date(goal.due_date + 'T00:00:00').toLocaleDateString()}</div>}
                     {teams.length > 0 && <div>{goal.team?.name ? `Team: ${goal.team.name}` : 'Collective'}</div>}
                   </div>
 

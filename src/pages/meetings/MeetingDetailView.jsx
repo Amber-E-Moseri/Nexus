@@ -1738,7 +1738,7 @@ function MeetingDetailViewInner() {
                                   {name.split(' ')[0]}
                                 </span>
                               )}
-                              {task.due_date && <span>· Due {new Date(task.due_date).toLocaleDateString('en-CA', { month:'short', day:'numeric' })}</span>}
+                              {task.due_date && <span>· Due {new Date(task.due_date + 'T00:00:00').toLocaleDateString('en-CA', { month:'short', day:'numeric' })}</span>}
                             </div>
                           </div>
                           <div style={{ display:'flex', gap:6, flexShrink:0, alignItems:'center' }}>

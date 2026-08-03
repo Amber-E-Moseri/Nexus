@@ -94,6 +94,14 @@ export function formatDuration(minutes) {
   return `${hours} h ${remainingMinutes} min`
 }
 
+// Parse a date-only string (YYYY-MM-DD) as local midnight to prevent UTC
+// shift from showing the previous day in timezones behind UTC.
+export function localDate(dateStr) {
+  if (!dateStr) return null
+  const s = String(dateStr)
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(`${s}T00:00:00`) : new Date(s)
+}
+
 export function extractISODate(val) {
   if (!val) return null
   const m = String(val).match(/\d{4}-\d{2}-\d{2}/)

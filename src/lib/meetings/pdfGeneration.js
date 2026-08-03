@@ -369,7 +369,7 @@ export async function generateMinutesPDF(minutesData, meeting) {
       doc.text(item.owner || 'Unassigned', MARGIN + contentWidth * 0.58, y + 1);
 
       const dueText = item.dueDate
-        ? new Date(item.dueDate).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
+        ? new Date(item.dueDate + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
         : '—';
       doc.text(dueText, MARGIN + contentWidth * 0.78, y + 1);
 

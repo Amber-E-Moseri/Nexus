@@ -71,7 +71,7 @@ export function applyTaskFilters(tasks = [], filters = EMPTY_FILTERS) {
 
     if (filters.dueDateRange) {
       const today = startOfDay(new Date())
-      const due = task.due_date ? startOfDay(new Date(task.due_date)) : null
+      const due = task.due_date ? startOfDay(new Date(task.due_date + 'T00:00:00')) : null
 
       if (filters.dueDateRange === 'overdue') {
         if (!due || due >= today) return false
@@ -87,14 +87,14 @@ export function applyTaskFilters(tasks = [], filters = EMPTY_FILTERS) {
     }
 
     if (filters.dateRange?.startDate || filters.dateRange?.endDate) {
-      const due = task.due_date ? startOfDay(new Date(task.due_date)) : null
+      const due = task.due_date ? startOfDay(new Date(task.due_date + 'T00:00:00')) : null
       if (!due) return false
       if (filters.dateRange.startDate) {
-        const start = startOfDay(new Date(filters.dateRange.startDate))
+        const start = startOfDay(new Date(filters.dateRange.startDate + 'T00:00:00'))
         if (due < start) return false
       }
       if (filters.dateRange.endDate) {
-        const end = startOfDay(new Date(filters.dateRange.endDate))
+        const end = startOfDay(new Date(filters.dateRange.endDate + 'T00:00:00'))
         if (due > end) return false
       }
     }

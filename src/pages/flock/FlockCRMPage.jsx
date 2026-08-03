@@ -212,7 +212,7 @@ function DuePersonCard({ person, expanded, onExpand, onRefresh, onOpenPerson, to
                     </div>
                     {todo.dueDate && (
                       <div style={{ fontSize: '11px', color: FLOCK.muted, marginTop: '2px', fontFamily: FLOCK.fontMono }}>
-                        Due: {new Date(todo.dueDate).toLocaleDateString()}
+                        Due: {new Date(todo.dueDate + 'T00:00:00').toLocaleDateString()}
                       </div>
                     )}
                   </div>
