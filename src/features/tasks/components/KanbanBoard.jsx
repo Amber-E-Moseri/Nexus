@@ -53,6 +53,8 @@ export default function KanbanBoard({
   teamMembers = [],
   showSubtasks = true,
   teamLabelByAssigneeId = null,
+  sprintTeams = [],
+  currentUserId = null,
 }) {
   const { tasks: contextTasks, moveTask: contextMoveTask, statuses } = useTasks()
   // filteredTasks may come from a source unrelated to TasksContext (e.g. a
@@ -257,6 +259,8 @@ export default function KanbanBoard({
               defaultDepartmentId={defaultDepartmentId}
               listId={listId}
               teamMembers={teamMembers}
+              sprintTeams={sprintTeams}
+              currentUserId={currentUserId}
               onCancel={() => setComposerStatusId(null)}
               onSubmit={async (draft) => {
                 await onCreateTask?.({

@@ -250,6 +250,7 @@ export function TasksProvider({ departmentId, sprintId, initialTasks, children }
         department_id: payload.department_id ?? null,
         department: taskData.department ?? null,
         sprint_id: payload.sprint_id ?? null,
+        sprint_team_id: payload.sprint_team_id ?? null,
         list_id: payload.list_id ?? null,
         list: taskData.list ?? null,
         is_personal: Boolean(payload.is_personal),

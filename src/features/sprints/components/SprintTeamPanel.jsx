@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { Pencil, Crown } from 'lucide-react'
 import { removeSprintMember, updateSprintMemberTeams, updateSprintTeam, deleteSprintTeam, getActiveUsers, addSprintMember } from '../lib/sprints'
 
 const TEAM_COLORS = ['#5B34C7', '#1C87BE', '#E8A020', '#C94830', '#4A8F6C']
@@ -374,10 +374,18 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
-                    background: '#fff',
+                    background: team.lead_user_id === member.user_id ? 'rgba(76, 42, 146, 0.08)' : '#fff',
                     border: '1px solid var(--border)',
                     borderRadius: 999,
                     padding: '4px 10px 4px 4px',
+                  }}
+                  onMouseEnter={(e) => {
+                    const btn = e.currentTarget.querySelector('[data-lead-btn]')
+                    if (btn) btn.style.opacity = '1'
+                  }}
+                  onMouseLeave={(e) => {
+                    const btn = e.currentTarget.querySelector('[data-lead-btn]')
+                    if (btn) btn.style.opacity = '0'
                   }}
                 >
                   <div
@@ -404,14 +412,36 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                     {member.user?.name || '?'}
                   </span>
                   {canEdit && !isArchived && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveMember(member, team.id)}
-                      disabled={saving}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1, marginLeft: 2, opacity: saving ? 0.4 : 1 }}
-                    >
-                      ×
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        data-lead-btn
+                        onClick={async () => {
+                          setSaving(true)
+                          try {
+                            await updateSprintTeam(team.id, { lead_user_id: member.user_id })
+                            await onTeamChanged?.()
+                          } catch (err) {
+                            alert(`Failed to update team lead: ${err?.message || String(err)}`)
+                          } finally {
+                            setSaving(false)
+                          }
+                        }}
+                        disabled={saving}
+                        title="Make team lead"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', opacity: 0, transition: 'opacity 0.15s' }}
+                      >
+                        <Crown size={14} color={team.lead_user_id === member.user_id ? 'var(--accent)' : 'var(--text-tertiary)'} fill={team.lead_user_id === member.user_id ? 'var(--accent)' : 'none'} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMember(member, team.id)}
+                        disabled={saving}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1, marginLeft: 2, opacity: saving ? 0.4 : 1 }}
+                      >
+                        ×
+                      </button>
+                    </>
                   )}
                 </div>
               ))}

@@ -240,13 +240,12 @@ export default function TaskModal({
   const [dueDate, setDueDate] = useState(task?.due_date ?? defaultDueDate ?? '')
   const [dueTime, setDueTime] = useState(task?.due_time ?? '')
 
-  console.log('[TaskModal] opened with task:', { taskId: task?.id, due_date: task?.due_date, due_time: task?.due_time })
   const [personal, setPersonal] = useState(task?.is_personal ?? isPersonal)
   const [subtasks, setSubtasks] = useState(task?.subtasks ?? [])
   const [spaces, setSpaces] = useState([])
   const [selectedSpaceId, setSelectedSpaceId] = useState(departmentId ?? '')
   const [selectedSprintId, setSelectedSprintId] = useState(sprintId ?? task?.sprint_id ?? '')
-  const [selectedSprintTeamId, setSelectedSprintTeamId] = useState(null)
+  const [selectedSprintTeamId, setSelectedSprintTeamId] = useState(task?.sprint_team_id ?? null)
   const sprintTeamAutoSelected = useRef(false)
 
   function resolveDeptFromTeams(userId) {
@@ -307,9 +306,12 @@ export default function TaskModal({
   // Auto-select the current user's sprint team so external members (who have
   // no department) get a meaningful department context without manual picking.
   // Runs once; the ref prevents re-triggering after the user changes selection.
+  // Never applies to a task that already has a team — that would silently
+  // rewrite another team's task to the viewer's own team on open.
   useEffect(() => {
     if (sprintTeamAutoSelected.current || !sprintId || !sprintTeams?.length || !profile?.id) return
     sprintTeamAutoSelected.current = true
+    if (task?.sprint_team_id) return
     const myTeam = sprintTeams.find((t) => t.sprint_team_members?.some((m) => m.user_id === profile.id))
     if (myTeam) setSelectedSprintTeamId(myTeam.id)
   }, [sprintId, sprintTeams, profile?.id])
@@ -474,14 +476,13 @@ export default function TaskModal({
         due_time: (dueDate && dueTime) ? dueTime : null,
         is_personal: personal,
         source: 'manual',
-        department_id: personal ? departmentId ?? null : (selectedSpaceId || (sprintTeams?.find((t) => t.id === selectedSprintTeamId)?.department_id) || departmentId || resolveDeptFromTeams(assigneeIds[0])) ?? null,
+        department_id: effectiveSprintId ? null : (personal ? departmentId ?? null : (selectedSpaceId || departmentId || resolveDeptFromTeams(assigneeIds[0])) ?? null),
         sprint_id: effectiveSprintId,
+        sprint_team_id: effectiveSprintId && selectedSprintTeamId ? selectedSprintTeamId : null,
         list_id: personal || effectiveSprintId ? null : listId ?? task?.list_id ?? null,
         task_type: personal ? 'personal' : effectiveSprintId ? 'sprint' : 'space',
         ...(parentTaskId ? { parent_task_id: parentTaskId } : {}),
       }
-
-      console.log('[TaskModal] payload before save:', { mode, dueDate, dueTime, payload })
 
       if (mode === 'create') {
         payload.created_by = profile?.id
@@ -503,9 +504,7 @@ export default function TaskModal({
 
         onSaved?.(created)
       } else {
-        console.log('[TaskModal] updating task with payload:', { taskId: task.id, dueDate, dueTime, payload })
         const updated = ctx ? await ctx.editTask(task.id, payload) : await updateTask(task.id, payload)
-        console.log('[TaskModal] update response:', { due_time: updated?.due_time })
 
         if (assigneeIds[0] && assigneeIds[0] !== previousAssigneeId && assigneeIds[0] !== profile?.id) {
           const { error: notifyError } = await supabase.rpc('create_task_notification', {

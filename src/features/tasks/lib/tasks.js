@@ -15,7 +15,7 @@ const TASK_COLS = `
   assignee_id, department_id, parent_task_id, meeting_id, goal_id,
   source, source_name, source_type, external_unique_key,
   due_date, due_time, completed_at, created_by, created_at,
-  sprint_id, task_type, status_id, list_id, sort_order, deleted_at
+  sprint_id, sprint_team_id, task_type, status_id, list_id, sort_order, deleted_at
 `
 
 const TASK_STATUS_SELECT = `
@@ -499,8 +499,6 @@ export async function updateTask(taskId, updates, actorId = null, existingTask =
   applyCompletionMetadata(patch, updates.statusCategory, updates.completed_at)
   if (nextAssigneeIds !== null) delete patch.assignee_id
 
-  console.log('[updateTask] patch to send:', { taskId, patch, updates })
-
   let data = null
   if (Object.keys(patch).length > 0) {
     const { data: updatedRow, error } = await supabase
@@ -509,11 +507,7 @@ export async function updateTask(taskId, updates, actorId = null, existingTask =
       .eq('id', taskId)
       .select(TASK_FULL_SELECT)
       .single()
-    if (error) {
-      console.error('[updateTask] Supabase error:', error)
-      throw error
-    }
-    console.log('[updateTask] response data:', { taskId, due_time: updatedRow.due_time })
+    if (error) throw error
     data = updatedRow
   }
 

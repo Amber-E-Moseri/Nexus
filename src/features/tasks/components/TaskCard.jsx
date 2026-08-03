@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect } from 'react'
-import { Paperclip } from 'lucide-react'
+import { Paperclip, PenLine } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { formatDueDate } from '../../../lib/dateUtils'
@@ -211,7 +211,7 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
           >
             <button title="Mark complete" onClick={handleMarkComplete} style={{ ...actionBtnStyle, color: isTaskCompleted(localTask) ? '#2D8653' : 'var(--text-secondary)' }}>✓</button>
             <button title="Add subtask" onClick={(e) => { e.stopPropagation(); setAddingSubtask(true) }} style={actionBtnStyle}>⊕</button>
-            <button title="Edit" onClick={(e) => { e.stopPropagation(); onClick?.(e) }} style={actionBtnStyle}>✏️</button>
+            <button title="Edit" onClick={(e) => { e.stopPropagation(); onClick?.(e) }} style={actionBtnStyle}><PenLine size={13} /></button>
             <button title="More" style={actionBtnStyle}>···</button>
           </div>
         )}

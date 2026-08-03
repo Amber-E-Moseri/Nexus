@@ -8,7 +8,30 @@ import {
 } from './TaskPickers'
 import { formatDueDate } from '../../../lib/dateUtils'
 
-const LABEL_STYLE = { fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9A8E7A', marginBottom: 6, display: 'block' }
+const LABEL_STYLE = {
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  color: 'var(--text-tertiary)',
+  marginBottom: 5,
+  display: 'block',
+}
+
+const CHIP_BASE = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  padding: '6px 10px',
+  fontSize: 12.5,
+  color: 'var(--text-secondary)',
+  background: 'var(--surface-secondary)',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+  transition: 'border-color 0.15s, background 0.15s',
+}
 
 export default function InlineTaskComposer({
   departments = [],
@@ -19,6 +42,8 @@ export default function InlineTaskComposer({
   compact = false,
   teamMembers = [],
   statuses = [],
+  sprintTeams = [],
+  currentUserId = null,
 }) {
   const { profile, role } = useAuth()
   const [title, setTitle] = useState('')
@@ -37,6 +62,13 @@ export default function InlineTaskComposer({
   const [subtasks, setSubtasks] = useState([])
   const [newSubtask, setNewSubtask] = useState('')
 
+  // sprintTeams is already scoped to the viewer's own teams by the caller
+  // (org-wide roles like super_admin/programs/regional_secretary see all).
+  // Auto-select when there's exactly one option.
+  const [sprintTeamId, setSprintTeamId] = useState(() =>
+    sprintTeams.length === 1 ? sprintTeams[0].id : null
+  )
+
   // picker open states
   const [dueDateOpen, setDueDateOpen] = useState(false)
   const [priorityOpen, setPriorityOpen] = useState(false)
@@ -48,10 +80,6 @@ export default function InlineTaskComposer({
   )
   const [otherMembers, setOtherMembers] = useState([])
 
-  // Org-wide roles can assign to anyone; everyone else is scoped to their own
-  // department for direct assignment (matches TaskModal.jsx's canAssignOrgWide) —
-  // others still show up in a separate "Others" section for search/mention-style
-  // visibility, not as directly assignable.
   const canAssignOrgWide = checkCanAssignOrgWide(profile, role)
 
   useEffect(() => {
@@ -66,8 +94,6 @@ export default function InlineTaskComposer({
     }
 
     if (teamMembers.length > 0) {
-      // Already have a pre-scoped department list from the parent — just fetch org
-      // members to populate "Others" for search/mention visibility.
       getAllOrgMembers()
         .then((data) => {
           const deptIds = new Set(teamMembers.map((m) => m.id))
@@ -106,6 +132,7 @@ export default function InlineTaskComposer({
         assigneeIds: assigneeIds.length > 0 ? assigneeIds : undefined,
         statusId: statusId || undefined,
         subtasks: subtasks.filter((s) => s.trim()),
+        sprintTeamId: sprintTeamId || null,
       })
     } catch (err) {
       setError(err.message ?? 'Failed to create task.')
@@ -121,50 +148,80 @@ export default function InlineTaskComposer({
   const priorityColor = PRIORITY_COLORS[priority] ?? '#B0A898'
   const priorityLabel = PRIORITY_OPTIONS.find((p) => p.value === priority)?.label ?? 'Normal'
   const assigneeNames = members.filter((m) => assigneeIds.includes(m.id)).map((m) => m.full_name).join(', ')
-
-  const fieldStyle = { border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px', fontSize: 12.5, color: 'var(--text-primary)', background: '#FAFAF8', width: '100%', boxSizing: 'border-box', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }
+  const selectedTeamName = sprintTeams.find((t) => t.id === sprintTeamId)?.name ?? null
 
   return (
     <form
       onSubmit={handleSubmit}
-      style={{ marginTop: 8, padding: compact ? 12 : 14, border: '1px solid rgba(91,52,199,0.18)', borderRadius: 14, background: '#FFFFFF', boxShadow: '0 8px 24px rgba(28,22,16,0.06)' }}
+      style={{
+        marginTop: 8,
+        padding: 14,
+        border: '1px solid var(--accent)',
+        borderRadius: 14,
+        background: 'white',
+        boxShadow: '0 4px 20px rgba(76,42,146,0.10)',
+      }}
     >
       {/* Title */}
       <input
         autoFocus
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onCancel() } }}
-        placeholder="Task title"
-        style={{ width: '100%', border: '1.5px solid var(--accent)', borderRadius: 10, padding: compact ? '9px 11px' : '10px 12px', fontSize: 13, color: 'var(--text-primary)', background: '#FFFFFF', outline: 'none', boxSizing: 'border-box' }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') { e.preventDefault(); onCancel() }
+          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e) }
+        }}
+        placeholder="What needs to get done?"
+        style={{
+          width: '100%',
+          border: 'none',
+          borderBottom: '1px solid var(--border)',
+          borderRadius: 0,
+          padding: '4px 0 10px',
+          fontSize: 14,
+          fontWeight: 500,
+          color: 'var(--text-primary)',
+          background: 'transparent',
+          outline: 'none',
+          boxSizing: 'border-box',
+          marginBottom: 12,
+        }}
       />
 
       {/* Department (if multiple) */}
       {departments.length > 0 && (
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginBottom: 10 }}>
           <span style={LABEL_STYLE}>Department</span>
-          <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}
-            style={{ ...fieldStyle, display: 'block' }}>
+          <select
+            value={departmentId}
+            onChange={(e) => setDepartmentId(e.target.value)}
+            style={{ ...CHIP_BASE, display: 'block', width: '100%' }}
+          >
             {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         </div>
       )}
 
-      {/* Due date + Priority row */}
-      <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+      {/* Chip row: Due date · Priority · Assignee */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', position: 'relative' }}>
+
         {/* Due date */}
-        <div style={{ flex: 1, position: 'relative' }}>
-          <span style={LABEL_STYLE}>Due date</span>
-          <button type="button" onClick={() => { setDueDateOpen((v) => !v); setAssigneeOpen(false); setPriorityOpen(false) }}
-            style={{ ...fieldStyle, color: dueDate ? dueColor : 'var(--text-tertiary)' }}>
+        <div style={{ position: 'relative' }}>
+          <button
+            type="button"
+            onClick={() => { setDueDateOpen((v) => !v); setAssigneeOpen(false); setPriorityOpen(false) }}
+            style={{ ...CHIP_BASE, color: dueDate ? dueColor : 'var(--text-tertiary)' }}
+          >
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
               <rect x="1" y="3" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
               <path d="M5 1v4M11 1v4M1 7h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
-            <span style={{ flex: 1 }}>{dueDate ? due.label : 'Set date'}</span>
+            {dueDate ? due.label : 'Due date'}
             {dueDate && (
-              <span onClick={(e) => { e.stopPropagation(); setDueDate(''); setDueTime('') }}
-                style={{ color: 'var(--text-tertiary)', fontSize: 14, lineHeight: 1, marginLeft: 'auto' }}>×</span>
+              <span
+                onClick={(e) => { e.stopPropagation(); setDueDate(''); setDueTime('') }}
+                style={{ color: 'var(--text-tertiary)', fontSize: 14, lineHeight: 1 }}
+              >×</span>
             )}
           </button>
           {dueDateOpen && (
@@ -179,9 +236,11 @@ export default function InlineTaskComposer({
 
         {/* Priority */}
         <div style={{ position: 'relative' }}>
-          <span style={LABEL_STYLE}>Priority</span>
-          <button type="button" onClick={() => { setPriorityOpen((v) => !v); setDueDateOpen(false); setAssigneeOpen(false) }}
-            style={{ ...fieldStyle, gap: 6, paddingLeft: 10, paddingRight: 10, whiteSpace: 'nowrap' }}>
+          <button
+            type="button"
+            onClick={() => { setPriorityOpen((v) => !v); setDueDateOpen(false); setAssigneeOpen(false) }}
+            style={{ ...CHIP_BASE, color: priorityColor }}
+          >
             <FlagIcon color={priorityColor} size={12} />
             {priorityLabel}
           </button>
@@ -193,32 +252,61 @@ export default function InlineTaskComposer({
             />
           )}
         </div>
+
+        {/* Assignee */}
+        <div style={{ position: 'relative' }}>
+          <button
+            type="button"
+            onClick={() => { setAssigneeOpen((v) => !v); setDueDateOpen(false); setPriorityOpen(false) }}
+            style={{ ...CHIP_BASE, color: assigneeIds.length ? 'var(--text-primary)' : 'var(--text-tertiary)' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+              <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
+              <path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            {assigneeIds.length ? assigneeNames : 'Assign'}
+          </button>
+          {assigneeOpen && (
+            <AssigneePickerPopover
+              currentIds={assigneeIds}
+              members={members}
+              otherMembers={otherMembers}
+              profile={profile}
+              onToggle={(id) => {
+                setAssigneeIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
+              }}
+              onClose={() => setAssigneeOpen(false)}
+            />
+          )}
+        </div>
       </div>
 
-      {/* Assign to */}
-      <div style={{ marginTop: 10, position: 'relative' }}>
-        <span style={LABEL_STYLE}>Assign to</span>
-        <button type="button" onClick={() => { setAssigneeOpen((v) => !v); setDueDateOpen(false); setPriorityOpen(false) }}
-          style={{ ...fieldStyle, color: assigneeIds.length ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: 'var(--text-tertiary)' }}>
-            <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
-            <path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-          </svg>
-          {assigneeIds.length ? assigneeNames : 'Unassigned'}
-        </button>
-        {assigneeOpen && (
-          <AssigneePickerPopover
-            currentIds={assigneeIds}
-            members={members}
-            otherMembers={otherMembers}
-            profile={profile}
-            onToggle={(id) => {
-              setAssigneeIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
+      {/* Team picker — only shown in sprint context with teams */}
+      {sprintTeams.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <span style={LABEL_STYLE}>Team</span>
+          <select
+            value={sprintTeamId ?? ''}
+            onChange={(e) => setSprintTeamId(e.target.value || null)}
+            style={{
+              ...CHIP_BASE,
+              display: 'block',
+              width: '100%',
+              color: sprintTeamId ? 'var(--text-primary)' : 'var(--text-tertiary)',
             }}
-            onClose={() => setAssigneeOpen(false)}
-          />
-        )}
-      </div>
+          >
+            <option value="">No team (sprint-wide)</option>
+            {sprintTeams.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          {sprintTeams.length >= 2 && !sprintTeamId && (
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--coral-dark)' }}>
+              You're in multiple teams — pick one so this task is grouped correctly.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Status (if not compact and statuses available) */}
       {!compact && statuses.length > 0 && (
@@ -228,8 +316,21 @@ export default function InlineTaskComposer({
             {statuses.map((s) => {
               const active = statusId === s.id
               return (
-                <button key={s.id} type="button" onClick={() => setStatusId(s.id)}
-                  style={{ border: active ? '1px solid transparent' : '1px solid var(--border)', borderRadius: 999, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: active ? `#${s.color || '4C2A92'}` : '#FFFFFF', color: active ? '#FFFFFF' : 'var(--text-secondary)' }}>
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setStatusId(s.id)}
+                  style={{
+                    border: active ? '1px solid transparent' : '1px solid var(--border)',
+                    borderRadius: 999,
+                    padding: '4px 10px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    background: active ? (s.color ?? 'var(--accent)') : 'transparent',
+                    color: active ? '#FFFFFF' : 'var(--text-secondary)',
+                  }}
+                >
                   {s.name}
                 </button>
               )
@@ -245,10 +346,13 @@ export default function InlineTaskComposer({
           {subtasks.length > 0 && (
             <div style={{ marginBottom: 8 }}>
               {subtasks.map((sub, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, marginBottom: 6, background: '#F5F3F0', borderRadius: 8, border: '1px solid var(--border)' }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', marginBottom: 4, background: 'var(--surface-secondary)', borderRadius: 8, border: '1px solid var(--border)' }}>
                   <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', wordBreak: 'break-word' }}>{sub}</span>
-                  <button type="button" onClick={() => setSubtasks(subtasks.filter((_, j) => j !== i))}
-                    style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 14, padding: '0 4px', flexShrink: 0 }}>×</button>
+                  <button
+                    type="button"
+                    onClick={() => setSubtasks(subtasks.filter((_, j) => j !== i))}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 14, padding: '0 4px', flexShrink: 0 }}
+                  >×</button>
                 </div>
               ))}
             </div>
@@ -258,27 +362,43 @@ export default function InlineTaskComposer({
               type="text"
               value={newSubtask}
               onChange={(e) => setNewSubtask(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && newSubtask.trim()) { e.preventDefault(); setSubtasks([...subtasks, newSubtask.trim()]); setNewSubtask('') } }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newSubtask.trim()) {
+                  e.preventDefault()
+                  setSubtasks([...subtasks, newSubtask.trim()])
+                  setNewSubtask('')
+                }
+              }}
               placeholder="Add a subtask"
-              style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: 'var(--text-primary)', background: '#FFFFFF', outline: 'none' }}
+              style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--text-primary)', background: 'transparent', outline: 'none' }}
             />
-            <button type="button" onClick={() => { if (newSubtask.trim()) { setSubtasks([...subtasks, newSubtask.trim()]); setNewSubtask('') } }}
-              style={{ border: '1px solid var(--border)', background: '#FFFFFF', color: 'var(--accent)', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            <button
+              type="button"
+              onClick={() => { if (newSubtask.trim()) { setSubtasks([...subtasks, newSubtask.trim()]); setNewSubtask('') } }}
+              style={{ border: '1px solid var(--border)', background: 'transparent', color: 'var(--accent)', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            >
               + Add
             </button>
           </div>
         </div>
       )}
 
-      {error ? <div style={{ marginTop: 10, fontSize: 12, color: 'var(--coral-dark)' }}>{error}</div> : null}
+      {error ? <div style={{ marginTop: 8, fontSize: 12, color: 'var(--coral-dark)' }}>{error}</div> : null}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-        <button type="button" onClick={onCancel} disabled={saving}
-          style={{ border: '1px solid var(--border)', background: '#FFFFFF', color: 'var(--text-secondary)', borderRadius: 10, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          style={{ border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', borderRadius: 8, padding: '7px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}
+        >
           Cancel
         </button>
-        <button type="submit" disabled={saving}
-          style={{ border: 'none', background: 'var(--accent)', color: '#FFFFFF', borderRadius: 10, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+        <button
+          type="submit"
+          disabled={saving}
+          style={{ border: 'none', background: 'var(--accent)', color: '#FFFFFF', borderRadius: 8, padding: '7px 16px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}
+        >
           {saving ? 'Saving…' : 'Save task'}
         </button>
       </div>

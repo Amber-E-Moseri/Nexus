@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
+import { canAssignOrgWide } from '../../../lib/permissions'
 import AssignedToMeToggle from '../../tasks/components/AssignedToMeToggle'
 import KanbanBoard from '../../tasks/components/KanbanBoard'
 import TaskFilters from '../../tasks/components/TaskFilters'
@@ -11,7 +12,7 @@ import { TasksProvider, useTasks } from '../../tasks/TasksContext'
 import { useTaskFilters } from '../../tasks/hooks/useTaskFilters'
 
 function SprintTasksInner({ sprintId, sprint, canEdit }) {
-  const { profile } = useAuth()
+  const { profile, role } = useAuth()
   const { tasks, loading, error, statuses, defaultStatusId, moveTask, addTask } = useTasks()
 
   // Sprint boards always show the 6 canonical org-level status columns only.
@@ -56,6 +57,16 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
     }))
   }, [sprint?.teams, sprint?.members])
 
+  // Team picker scope: org-wide roles see all teams; everyone else sees only
+  // the teams they're a member of (so the dropdown isn't overwhelming and
+  // tasks can't be mis-assigned to unrelated teams).
+  const pickerTeams = useMemo(() => {
+    if (canAssignOrgWide(profile, role)) return teamsWithMembers
+    return teamsWithMembers.filter((t) =>
+      t.sprint_team_members?.some((m) => m.user_id === profile?.id)
+    )
+  }, [teamsWithMembers, profile, role])
+
   function handleTaskStatusChange({ taskId, newStatus }) {
     moveTask(taskId, newStatus)
   }
@@ -73,6 +84,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
     const myTeamIds = myTeams.map((t) => t.id)
 
     return filtered.filter((task) => {
+      if (task.sprint_team_id) return myTeamIds.includes(task.sprint_team_id)
       return (
         task.assignee_id === profile?.id ||
         task.created_by === profile?.id ||
@@ -111,8 +123,10 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
 
     teamsWithMembers.forEach((team) => {
       const teamTasks = filtered.filter((task) =>
-        !assignedTaskIds.has(task.id) &&
-        team.sprint_team_members?.some((m) => m.user_id === task.assignee_id),
+        !assignedTaskIds.has(task.id) && (
+          task.sprint_team_id === team.id ||
+          (!task.sprint_team_id && team.sprint_team_members?.some((m) => m.user_id === task.assignee_id))
+        ),
       )
       grouped[team.id] = { team, tasks: teamTasks }
       teamTasks.forEach((t) => assignedTaskIds.add(t.id))
@@ -246,7 +260,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
             sprint={sprint}
             currentUser={profile}
             onTaskClick={(task) => setModal({ mode: 'edit', task })}
-            onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, department_id: resolveDeptId(draft.assigneeId), subtasks: draft.subtasks }) : undefined}
+            onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, department_id: resolveDeptId(draft.assigneeId), sprint_team_id: draft.sprintTeamId ?? null, subtasks: draft.subtasks }) : undefined}
             readOnly={!canEdit}
             teamMembers={members}
             statuses={orgStatusColumns}
@@ -256,11 +270,13 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
             <KanbanBoard
               filteredTasks={hasTeams && teamView === 'my' ? getMyTeamTasks() : filtered}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
-              onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, department_id: resolveDeptId(draft.assigneeId), subtasks: draft.subtasks }) : undefined}
+              onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, department_id: resolveDeptId(draft.assigneeId), sprint_team_id: draft.sprintTeamId ?? null, subtasks: draft.subtasks }) : undefined}
               readOnly={!canEdit}
               teamMembers={members}
               statusesOverride={orgStatusColumns}
               teamLabelByAssigneeId={teamView === 'my' ? teamLabelByAssigneeId : null}
+              sprintTeams={pickerTeams}
+              currentUserId={profile?.id}
             />
           </div>
         ) : view === 'list' ? (

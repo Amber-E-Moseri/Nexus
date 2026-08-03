@@ -68,11 +68,13 @@ export default function AllTeamsBoard({
             >
               {teamTasks.length} task{teamTasks.length !== 1 ? 's' : ''}
             </span>
-            {team.lead_user_id && (
-              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                Lead: {team.lead_user_id === currentUser?.id ? 'You' : 'TBD'}
-              </span>
-            )}
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+              Lead: {team.lead_user_id
+                ? team.lead_user_id === currentUser?.id
+                  ? 'You'
+                  : team.sprint_team_members?.find((m) => m.user_id === team.lead_user_id)?.users?.name ?? 'TBD'
+                : 'TBD'}
+            </span>
           </div>
 
           {/* Team's Kanban board — KanbanBoard renders empty columns with their
@@ -84,10 +86,12 @@ export default function AllTeamsBoard({
               <KanbanBoard
                 filteredTasks={teamTasks}
                 onTaskClick={onTaskClick}
-                onCreateTask={onCreateTask}
+                onCreateTask={onCreateTask ? (draft) => onCreateTask({ ...draft, sprintTeamId: team.id }) : undefined}
                 readOnly={readOnly}
                 teamMembers={teamMembers}
                 statusesOverride={statuses}
+                sprintTeams={[team]}
+                currentUserId={currentUser?.id}
               />
             </div>
           )}

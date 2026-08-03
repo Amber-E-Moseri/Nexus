@@ -295,7 +295,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const [showSprintModal, setShowSprintModal] = useState(false)
   const [myTasksExpanded, setMyTasksExpanded] = useState(false)
   const [meetingsExpanded, setMeetingsExpanded] = useState(false)
-  const [communicationsExpanded, setCommunicationsExpanded] = useState(false)
   const [platformExpanded, setPlatformExpanded] = useState(false)
   const [editingSpace, setEditingSpace] = useState(null)
   const [hoveredSpaceId, setHoveredSpaceId] = useState(null)
@@ -366,23 +365,9 @@ export default function Sidebar({ isMobileDrawer = false }) {
   // communications, map), no people management, and no Sprints unless they've
   // been added to a specific sprint (RLS scopes displayedSprints to theirs).
   const isGroupMember = role === 'group_member'
-  // Communications is open to super_admin + regional_secretary (org-wide roles)
-  // and to anyone holding an ors / dept_lead / programs space role, or members
-  // of the Programs department. Mirrors the route guard on /communications in App.jsx.
-  const canAccessCommunications =
-    ['super_admin', 'regional_secretary', 'dept_lead'].includes(role) ||
-    hasSpaceRole(profile, null, 'ors') ||
-    hasSpaceRole(profile, null, 'dept_lead') ||
-    hasSpaceRole(profile, null, 'programs') ||
-    isProgramsMember(profile) ||
-    hasGrant(profile, 'regional_secretary_access')
-  // Display-only aggregate — decides only whether "Platform" starts expanded
-  // or collapsed. Does not gate any individual item inside it; each item
-  // keeps its own existing condition unchanged.
   const hasAnyPlatformAccess =
     showAdminPlatform ||
     role === 'pastor' ||
-    canAccessCommunications ||
     (INSTAGRAM_GRADING_ENABLED && (['super_admin', 'regional_secretary'].includes(role) || hasSpaceRole(profile, null, 'media'))) ||
     hasSpaceRole(profile, null, 'ors') ||
     FLOCK_CRM_CONFIG.checkAccess(role)
@@ -1336,16 +1321,8 @@ export default function Sidebar({ isMobileDrawer = false }) {
             entirely for group members — they have no platform access. */}
         {!isGroupMember ? (
         <>
-        {!collapsed && (
-        <SidebarSectionLabel
-          collapsible
-          expanded={isPlatformExpanded}
-          onToggle={() => setPlatformExpanded(!isPlatformExpanded)}
-        >
-          Tools
-        </SidebarSectionLabel>
-        )}
-        {(collapsed || isPlatformExpanded) ? (
+        {!collapsed && <SidebarSectionLabel>Tools</SidebarSectionLabel>}
+        {(
         <>
         {collapsed ? (
           <SidebarItem
@@ -1437,105 +1414,12 @@ export default function Sidebar({ isMobileDrawer = false }) {
             ) : null}
           </>
         ) : null}
-        {canAccessCommunications && (
-          collapsed ? (
-            <SidebarItem
-              active={isPathActive(location.pathname, '/communications')}
-              icon={Send}
-              label="Communications"
-              onClick={() => go('/communications')}
-            />
-          ) : (
-        <div
-          style={{
-            ...ITEM_BASE_STYLE,
-            borderLeft: isPathActive(location.pathname, '/communications') ? '3px solid var(--purple-700)' : '3px solid transparent',
-            background: isPathActive(location.pathname, '/communications') ? 'var(--purple-tint, #EDE8F8)' : 'transparent',
-            color: isPathActive(location.pathname, '/communications') ? 'var(--purple-700)' : 'var(--ink-1)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}
-          onMouseEnter={(e) => {
-            if (!isPathActive(location.pathname, '/communications')) e.currentTarget.style.background = 'var(--surface-sub)'
-          }}
-          onMouseLeave={(e) => {
-            if (!isPathActive(location.pathname, '/communications')) e.currentTarget.style.background = 'transparent'
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => go('/communications')}
-            style={{ flex: 1, border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'inherit', fontSize: 'inherit' }}
-          >
-            Communications
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              setCommunicationsExpanded(!communicationsExpanded)
-            }}
-            style={{ border: 'none', background: 'none', padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'inherit' }}
-          >
-            <ChevronDown size={15} style={{ opacity: 0.85, transform: communicationsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
-          </button>
-        </div>
-          )
-        )}
-        {(!collapsed && communicationsExpanded && canAccessCommunications) ? (
-          <>
-            <SidebarItem
-              active={isPathActive(location.pathname, '/communications/campaigns')}
-              label="Campaigns"
-              to="/communications/campaigns"
-            />
-            <SidebarItem
-              active={isPathActive(location.pathname, '/communications/templates')}
-              label="Templates"
-              to="/communications/templates"
-            />
-            <SidebarItem
-              active={isPathActive(location.pathname, '/communications/recipients')}
-              label="Recipients"
-              to="/communications/recipients"
-            />
-            <SidebarItem
-              active={isPathActive(location.pathname, '/communications/segments')}
-              label="Segments"
-              to="/communications/segments"
-            />
-            <SidebarItem
-              active={isPathActive(location.pathname, '/communications/analytics')}
-              label="Analytics"
-              to="/communications/analytics"
-            />
-            <SidebarItem
-              active={isPathActive(location.pathname, '/communications/invitations')}
-              label="Invitations"
-              to="/communications/invitations"
-            />
-            <SidebarItem
-              active={isPathActive(location.pathname, '/communications/absentees')}
-              label="Absentee follow-up"
-              to="/communications/absentees"
-            />
-          </>
-        ) : null}
         {(INSTAGRAM_GRADING_ENABLED && (['super_admin', 'regional_secretary'].includes(role) || hasSpaceRole(profile, null, 'media'))) && (
           <SidebarItem
             active={isPathActive(location.pathname, '/instagram')}
             icon={Image}
             label="Instagram Grading"
             to="/instagram"
-          />
-        )}
-        {(role === 'super_admin' || hasSpaceRole(profile, null, 'ors')) && (
-          <SidebarItem
-            active={isPathActive(location.pathname, '/settings/campus-photos')}
-            icon={Image}
-            label="Campus Photos"
-            to="/settings/campus-photos"
           />
         )}
         {FLOCK_CRM_CONFIG.checkAccess(role) ? (
@@ -1549,8 +1433,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
             />
           </div>
         ) : null}
-        </>
-        ) : null}
+        </>)}
         </>
         ) : null}
 
