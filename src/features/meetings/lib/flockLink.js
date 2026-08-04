@@ -1,6 +1,13 @@
 import { supabase } from '../../../lib/supabase'
 import { callFlockCRM } from '../../../lib/flockSupabase'
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function validUuid(value) {
+  const id = String(value || '').trim()
+  return UUID_PATTERN.test(id) ? id : null
+}
+
 // Adapted from src/components/flock/FlockAiLogPanel.jsx's levenshtein/
 // matchPerson (duplicated intentionally — small, stable, and avoids a
 // features/meetings -> components/flock cross-feature import).
@@ -63,35 +70,38 @@ function matchPersonByName(name, contacts) {
 // Fails silently — a Flock hiccup should never block ending the meeting.
 export async function syncFlockInteractionForMeeting(meeting, currentUserId) {
   try {
+    const meetingId = validUuid(meeting?.id)
+    const ownerId = validUuid(currentUserId)
+    if (!meetingId || !ownerId) return { skipped: 'invalid_meeting_or_owner' }
     if (meeting.meeting_type !== '1_on_1_meeting') return { skipped: 'not_1on1' }
     // flock_contacts/flock_interactions RLS is pastor_id = auth.uid() only —
     // a non-creator editor's own Flock RLS genuinely cannot write into the
     // creator's contact list, so skip rather than attempt a write RLS would
     // reject anyway (narrow edge case: 1-on-1s default private, so a
     // non-creator editor ending one is uncommon).
-    if (meeting.created_by !== currentUserId) return { skipped: 'not_creator' }
+    if (meeting.created_by !== ownerId) return { skipped: 'not_creator' }
 
     const { data: existing } = await supabase
       .from('flock_interactions')
       .select('id')
-      .eq('meeting_id', meeting.id)
+      .eq('meeting_id', meetingId)
       .maybeSingle()
     if (existing) return { skipped: 'already_logged' }
 
-    let contactId = meeting.flock_contact_id || null
+    let contactId = validUuid(meeting.flock_contact_id)
 
     if (!contactId) {
       const { data: attendance } = await supabase
         .from('meeting_attendance')
         .select('user_id, attendee:users(id, name)')
-        .eq('meeting_id', meeting.id)
+        .eq('meeting_id', meetingId)
       const other = (attendance ?? []).find((a) => a.user_id !== currentUserId)
       if (!other) return { skipped: 'no_other_attendee' }
 
       const { data: contacts } = await supabase
         .from('flock_contacts')
         .select('id, full_name, linked_user_id')
-        .eq('pastor_id', currentUserId)
+        .eq('pastor_id', ownerId)
         .eq('active', true)
 
       const byLink = (contacts ?? []).find((c) => c.linked_user_id === other.user_id)
@@ -109,7 +119,7 @@ export async function syncFlockInteractionForMeeting(meeting, currentUserId) {
         result: 'Reached',
         summary,
         nextAction: 'None',
-        meetingId: meeting.id,
+        meetingId,
         interactedAt: meeting.date || new Date().toISOString(),
       }),
     })

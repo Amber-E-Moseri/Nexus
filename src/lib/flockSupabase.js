@@ -36,10 +36,18 @@ const SETTINGS_ORDER = ['YOUR_NAME', 'REMINDER_EMAIL', 'MORNING_REMINDER_HOUR', 
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function validUuid(value) {
+  const id = String(value || '').trim()
+  return UUID_PATTERN.test(id) ? id : null
+}
+
 async function myPastorId() {
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user?.id) throw new Error('Not authenticated')
-  return user.id
+  const id = validUuid(user?.id)
+  if (!id) throw new Error('Your session is invalid. Sign out and sign in again.')
+  return id
 }
 
 function toIso(raw) {
@@ -64,13 +72,6 @@ function fmtDate(iso) {
 
 function todayIso() {
   return new Date().toISOString().split('T')[0]
-}
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function validUuid(value) {
-  const id = String(value || '').trim()
-  return UUID_PATTERN.test(id) ? id : null
 }
 
 const validContactId = validUuid
