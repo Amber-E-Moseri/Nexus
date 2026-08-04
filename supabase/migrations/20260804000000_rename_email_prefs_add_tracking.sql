@@ -53,4 +53,4 @@ SELECT cron.schedule(
     body      := '{}'::jsonb
   );
   $$
-) ON CONFLICT DO NOTHING;
+);
