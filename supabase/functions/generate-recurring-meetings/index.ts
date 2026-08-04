@@ -2,7 +2,7 @@
 // (public.generate_recurring_meetings_trigger(), called hourly by pg_cron).
 //
 // Progressively materializes the next occurrence of each recurring meeting
-// series, ~1 day before it's due to happen, instead of creating dozens of
+// series on its scheduled day, instead of creating dozens of
 // meetings up front. Only one row per series ever carries a non-null
 // `next_occurrence_scheduled` at a time (the most recently generated/edited
 // occurrence) — this function finds those that are due, generates the next
@@ -242,7 +242,7 @@ Deno.serve(async (req) => {
       const nextDate = allDates[targetIndex]
       const nextInstanceNum = targetIndex + 1
       const followingDate = allDates[targetIndex + 1] ?? null
-      const followingScheduled = followingDate ? addDaysUtc(followingDate, -1).toISOString() : null
+      const followingScheduled = followingDate?.toISOString() ?? null
 
       const { data: newMeeting, error: insertError } = await supabase
         .from('meetings')

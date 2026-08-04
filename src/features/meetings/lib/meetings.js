@@ -1,7 +1,6 @@
 import { supabase } from '../../../lib/supabase'
 import { getDefaultTaskStatusId, normalizeTaskRows } from '../../../lib/taskStatuses.js'
 import { recordActivity } from '../../../lib/activityFeed'
-import { addDays } from 'date-fns'
 import { getNextOccurrenceDate } from './recurrence'
 
 export const MEETINGS_PAGE_SIZE = 50
@@ -180,7 +179,7 @@ export async function createMeeting(meetingData) {
 }
 
 // Creates only the FIRST meeting of a recurring series. Future occurrences are
-// NOT materialized here — they're generated progressively (~1 day ahead of
+// NOT materialized here — they're generated progressively on the day they
 // when they occur) by the generate-recurring-meetings edge function, driven by
 // `next_occurrence_scheduled`. This keeps the table from being bloated with
 // dozens of far-future rows up front, and lets each occurrence be edited
@@ -190,12 +189,11 @@ export async function createMeeting(meetingData) {
 export async function createRecurringMeeting({ baseMeeting, attendeeIds = [], recurrenceRule }) {
   const recurrenceId = crypto.randomUUID()
 
-  // Schedule generation of occurrence #2 for 1 day before it's due, matching
-  // the edge function's behavior for all subsequent occurrences. 30-minute
-  // lead time was too short — the hourly pg_cron could miss the window.
+  // Schedule generation of occurrence #2 on its meeting day, matching the
+  // edge function's behavior for all subsequent occurrences.
   const startDateTime = new Date(baseMeeting.date)
   const secondOccurrenceDate = recurrenceRule ? getNextOccurrenceDate(recurrenceRule, startDateTime, 1) : null
-  const nextOccurrenceScheduled = secondOccurrenceDate ? addDays(secondOccurrenceDate, -1) : null
+  const nextOccurrenceScheduled = secondOccurrenceDate
 
   const meeting = {
     ...baseMeeting,
