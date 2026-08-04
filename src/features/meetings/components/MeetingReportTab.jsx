@@ -2029,7 +2029,7 @@ export default function MeetingReportTab() {
     }
   }
 
-  const canGenerate = !rosterLoading && !rosterError && !attendedError
+  const canGenerate = !rosterLoading && !rosterError && !attendedError && !saving
 
   if (report && visibleReport) {
     const band = reachBand(visibleReport.reachPct)
@@ -3380,6 +3380,12 @@ export default function MeetingReportTab() {
         />
       </div>
 
+      {saveError && (
+        <div role="alert" style={{ fontSize: 12, color: '#C94830', background: '#FEF0ED', border: '1px solid #F5C4B8', borderRadius: 8, padding: '9px 12px' }}>
+          {saveError}
+        </div>
+      )}
+
       <button
         type="button"
         onClick={handleGenerate}
@@ -3397,7 +3403,7 @@ export default function MeetingReportTab() {
           transition: 'opacity .15s',
         }}
       >
-        {syncingReport ? 'Review and Update Report' : 'Generate Report'}
+        {saving ? 'Updating report...' : syncingReport ? 'Review and Update Report' : 'Generate Report'}
       </button>
 
       {!rosterLoading && filteredRoster.length > 0 && (
