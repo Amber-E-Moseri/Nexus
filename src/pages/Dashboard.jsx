@@ -18,6 +18,7 @@ import { getMySpaces } from '../features/spaces'
 import { isTaskCompleted } from '../lib/taskStatuses'
 import CompletionRateWidget from '../features/dashboard/components/CompletionRateWidget'
 import MemberActivityWidget from '../features/dashboard/components/MemberActivityWidget'
+import DepartmentUtilizationWidget from '../features/dashboard/components/DepartmentUtilizationWidget'
 import OverdueByMemberWidget from '../features/dashboard/components/OverdueByMemberWidget'
 import SprintProgressWidget from '../features/dashboard/components/SprintProgressWidget'
 import UpcomingEventsWidget from '../features/dashboard/components/UpcomingEventsWidget'
@@ -598,6 +599,7 @@ const WIDGET_META = {
   sprint_progress:        { title: 'Sprint Progress',           Component: SprintProgressWidget },
   overdue_by_member:      { title: 'Overdue Tasks by Member',   Component: OverdueByMemberWidget },
   member_activity:        { title: 'Member Activity',           Component: MemberActivityWidget },
+  department_utilization: { title: 'Department Utilization',    Component: DepartmentUtilizationWidget },
   completion_rate:        { title: 'Completion Rate This Week', Component: CompletionRateWidget },
   attendance_summary:     { title: 'Attendance Summary',        Component: AttendanceSummaryWidget },
   activity_feed:          { title: 'Recent Activity',           Component: ActivityFeedWidget },
@@ -633,6 +635,12 @@ function mergeWithAllKeys(rows) {
   return ALL_WIDGET_KEYS.map((key, i) =>
     map.has(key) ? map.get(key) : { widget_key: key, visible: false, sort_order: maxOrder + i + 1, config: {} },
   )
+}
+
+function addOrgUtilizationDefault(rows, role) {
+  if (!['super_admin', 'regional_secretary'].includes(role) || rows.some((row) => row.widget_key === 'department_utilization')) return rows
+  const maxOrder = rows.length > 0 ? Math.max(...rows.map((row) => row.sort_order ?? 0)) : 0
+  return [...rows, { widget_key: 'department_utilization', visible: true, sort_order: maxOrder + 1, config: {} }]
 }
 
 // ─── Widget card ──────────────────────────────────────────────────────────────
@@ -935,7 +943,7 @@ export default function Dashboard() {
         if (!active) return
 
         if (userPrefs && userPrefs.length > 0) {
-          setPrefs(mergeWithAllKeys(userPrefs))
+          setPrefs(mergeWithAllKeys(addOrgUtilizationDefault(userPrefs, role)))
           return
         }
 
@@ -952,7 +960,7 @@ export default function Dashboard() {
           sort_order: i + 1,
         }))
 
-        setPrefs(mergeWithAllKeys(defaultPrefs))
+        setPrefs(mergeWithAllKeys(addOrgUtilizationDefault(defaultPrefs, role)))
       } catch {
         if (active) setPrefs(FALLBACK_PREFS)
       } finally {
@@ -1008,7 +1016,7 @@ export default function Dashboard() {
     if (!profile?.id) return
     await deleteDashboardPreferences(profile.id)
     const roleDefaults = await getRoleDashboardDefaults(role)
-    setPrefs(mergeWithAllKeys(roleDefaults ?? []))
+    setPrefs(mergeWithAllKeys(addOrgUtilizationDefault(roleDefaults ?? [], role)))
     setShowCustomize(false)
   }
 

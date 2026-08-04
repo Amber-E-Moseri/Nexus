@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
-import { CalendarRange, Check, Files, LayoutGrid, Link2, Mail, Printer, RotateCcw, Search, Users, TrendingDown, Upload, UserCheck } from 'lucide-react'
+import { CalendarRange, Check, Database, Files, LayoutGrid, Link2, Mail, Printer, RefreshCw, RotateCcw, Search, Users, TrendingDown, Upload, UserCheck, X } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
@@ -423,6 +423,27 @@ function reachBand(pct) {
 
 function todayLabel() {
   return new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
+function formatServiceDate(date) {
+  return new Date(`${date}T12:00:00`).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+async function edgeFunctionErrorMessage(data, error, fallback) {
+  if (data?.error) return data.error
+  if (error?.context) {
+    try {
+      const body = await error.context.clone().json()
+      if (body?.error) return body.error
+    } catch {
+      // Fall through to the client error message.
+    }
+  }
+  return error?.message ?? fallback
+}
+
+function isMissingAttendanceSourceError(error) {
+  return Boolean(error?.message?.includes('attendance_source'))
 }
 
 function timestampLabel() {
@@ -1097,6 +1118,7 @@ function buildReportFromHistoryRecord(record, rosterRows) {
     bySubgroup,
     subgroups: subgroupNames,
     visitors: record.unexpected_names ?? [],
+    cmpService: record.attendance_source?.type === 'cmp' ? record.attendance_source.service : null,
     fromHistory: true,
   }
 }
@@ -1112,7 +1134,7 @@ export default function MeetingReportTab() {
   const [viewMode, setViewMode] = useState('single') // 'single' | 'trends'
 
   const [phase, setPhase] = useState('input')
-  const [inputMode, setInputMode] = useState('csv') // 'csv' | 'checkin'
+  const [inputMode, setInputMode] = useState('csv') // 'csv' | 'checkin' | 'cmp'
   const [checkedNames, setCheckedNames] = useState(new Set())
   const [checkinSearch, setCheckinSearch] = useState('')
   const [meetingLabel, setMeetingLabel] = useState('')
@@ -1124,6 +1146,12 @@ export default function MeetingReportTab() {
   const [attendedRawCount, setAttendedRawCount] = useState(0)
   const [attendedError, setAttendedError] = useState(null)
   const [unexpectedPreview, setUnexpectedPreview] = useState([])
+  const [cmpServices, setCmpServices] = useState([])
+  const [cmpLoading, setCmpLoading] = useState(false)
+  const [cmpError, setCmpError] = useState(null)
+  const [cmpSelected, setCmpSelected] = useState(null)
+  const [cmpLoadingAttendees, setCmpLoadingAttendees] = useState(false)
+  const [syncingReport, setSyncingReport] = useState(null)
 
   const [report, setReport] = useState(null)
   const [activeSubgroup, setActiveSubgroup] = useState('')
@@ -1192,11 +1220,19 @@ export default function MeetingReportTab() {
 
     async function loadSharedReport() {
       try {
-        const { data, error } = await supabase
+        const reportFields = 'id, share_token, label, report_date, reach_pct, expected_count, attended_count, absent_count, unexpected_count, present_names, absent_names, unexpected_names, subgroup_filter'
+        let { data, error } = await supabase
           .from('meeting_attendance_reports')
-          .select('id, share_token, label, report_date, reach_pct, expected_count, attended_count, absent_count, unexpected_count, present_names, absent_names, unexpected_names, subgroup_filter')
+          .select(`${reportFields}, attendance_source`)
           .eq('id', reportId)
           .single()
+        if (isMissingAttendanceSourceError(error)) {
+          ;({ data, error } = await supabase
+            .from('meeting_attendance_reports')
+            .select(reportFields)
+            .eq('id', reportId)
+            .single())
+        }
 
         if (error || !data || cancelled) return
 
@@ -1260,11 +1296,20 @@ export default function MeetingReportTab() {
   async function loadHistory() {
     setLoadingHistory(true)
     try {
-      const { data } = await supabase
+      const reportFields = 'id, share_token, label, report_date, reach_pct, expected_count, attended_count, absent_count, unexpected_count, present_names, absent_names, unexpected_names, subgroup_filter'
+      let { data, error } = await supabase
         .from('meeting_attendance_reports')
-        .select('id, share_token, label, report_date, reach_pct, expected_count, attended_count, absent_count, unexpected_count, present_names, absent_names, unexpected_names, subgroup_filter')
+        .select(`${reportFields}, attendance_source`)
         .order('created_at', { ascending: false })
         .limit(10)
+      if (isMissingAttendanceSourceError(error)) {
+        ;({ data, error } = await supabase
+          .from('meeting_attendance_reports')
+          .select(reportFields)
+          .order('created_at', { ascending: false })
+          .limit(10))
+      }
+      if (error) throw error
       setHistory(data ?? [])
     } catch {
       setHistory([])
@@ -1381,6 +1426,10 @@ export default function MeetingReportTab() {
     }
   }, [inputMode, checkedNames])
 
+  useEffect(() => {
+    if (inputMode === 'cmp' && cmpServices.length === 0 && !cmpLoading && !cmpError) fetchCmpServices()
+  }, [inputMode, cmpServices.length, cmpLoading, cmpError])
+
   function handleToggleSubgroup(subgroup) {
     if (!subgroup) {
       setSelectedSubgroups([])
@@ -1411,6 +1460,83 @@ export default function MeetingReportTab() {
     setAttendedNames(names)
     setAttendedRawCount(names.length)
     setAttendedError(error)
+  }
+
+  async function fetchCmpServices() {
+    setCmpLoading(true)
+    setCmpError(null)
+    const { data, error } = await supabase.functions.invoke('service-attendees', {
+      body: { action: 'list' },
+    })
+    if (error || data?.error) {
+      setCmpError(await edgeFunctionErrorMessage(data, error, 'Unable to load recent services.'))
+      setCmpLoading(false)
+      return
+    }
+    setCmpServices(data?.services ?? [])
+    setCmpLoading(false)
+  }
+
+  async function handleCmpServiceSelect(service) {
+    if (cmpLoadingAttendees) return
+    if (cmpSelected?.date === service.date && cmpSelected?.service_name === service.service_name && cmpSelected?.host_unit === service.host_unit) return
+
+    setCmpLoadingAttendees(true)
+    setCmpError(null)
+    setCmpSelected(service)
+    const { data, error } = await supabase.functions.invoke('service-attendees', {
+      body: { action: 'attendees', ...service },
+    })
+    if (error || data?.error) {
+      setCmpError(await edgeFunctionErrorMessage(data, error, 'Unable to load service attendees.'))
+      setCmpSelected(null)
+      setCmpLoadingAttendees(false)
+      return
+    }
+
+    const names = data?.names ?? []
+    setAttendedNames(names)
+    setAttendedRawCount(names.length)
+    setAttendedError(null)
+    setAttendedFile(null)
+    setCmpSelected(service)
+    if (!meetingLabel.trim()) setMeetingLabel(`${service.service_name} - ${formatServiceDate(service.date)}`)
+    setCmpLoadingAttendees(false)
+  }
+
+  function clearCmpSelection() {
+    setCmpSelected(null)
+    setAttendedNames([])
+    setAttendedRawCount(0)
+    setAttendedError(null)
+  }
+
+  async function handleSyncCmpReport() {
+    if (!report?.cmpService || cmpLoadingAttendees) return
+    const service = report.cmpService
+    setCmpLoadingAttendees(true)
+    setSaveError(null)
+    const { data, error } = await supabase.functions.invoke('service-attendees', {
+      body: { action: 'attendees', ...service },
+    })
+    if (error || data?.error) {
+      setSaveError(await edgeFunctionErrorMessage(data, error, 'Unable to sync this CMP service.'))
+      setCmpLoadingAttendees(false)
+      return
+    }
+
+    const names = data?.names ?? []
+    setSyncingReport({ id: report.id, share_token: report.share_token, cmpService: service })
+    setCmpSelected(service)
+    setInputMode('cmp')
+    setAttendedNames(names)
+    setAttendedRawCount(names.length)
+    setAttendedFile(null)
+    setAttendedError(null)
+    setMeetingLabel(report.label)
+    setPhase('input')
+    setReport(null)
+    setCmpLoadingAttendees(false)
   }
 
   async function fetchReportRoster() {
@@ -1492,28 +1618,63 @@ export default function MeetingReportTab() {
       }
       setSaving(true)
       try {
-        const { data, error } = await supabase
+        if (syncingReport) {
+          const { error } = await supabase
+            .from('meeting_attendance_reports')
+            .update({
+              expected_count: result.expectedCount,
+              attended_count: result.attendedCount,
+              absent_count: result.absentCount,
+              unexpected_count: result.unexpectedCount,
+              reach_pct: parseFloat((result.reachPct * 100).toFixed(2)),
+              present_names: result.present.map((person) => person.name),
+              absent_names: result.absent.map((person) => person.name),
+              unexpected_names: result.unexpected.map((person) => person.name),
+              by_subgroup: result.bySubgroup || null,
+            })
+            .eq('id', syncingReport.id)
+          if (error) { setSaveError(error.message); return }
+
+          const nextReport = { ...result, id: syncingReport.id, share_token: syncingReport.share_token, cmpService: syncingReport.cmpService }
+          setReport(nextReport)
+          setSyncingReport(null)
+          setSearchParams({ report: syncingReport.id })
+          loadHistory()
+          return
+        }
+
+        const reportInsert = {
+          label: result.label,
+          report_date: new Date().toISOString().slice(0, 10),
+          expected_count: result.expectedCount,
+          attended_count: result.attendedCount,
+          absent_count: result.absentCount,
+          unexpected_count: result.unexpectedCount,
+          reach_pct: parseFloat((result.reachPct * 100).toFixed(2)),
+          present_names: result.present.map((person) => person.name),
+          absent_names: result.absent.map((person) => person.name),
+          unexpected_names: result.unexpected.map((person) => person.name),
+          subgroup_filter: result.subgroupFilter,
+          by_subgroup: result.bySubgroup || null,
+          attendance_source: inputMode === 'cmp' && cmpSelected ? { type: 'cmp', service: cmpSelected } : null,
+          created_by: profile?.id ?? null,
+        }
+        let { data, error } = await supabase
           .from('meeting_attendance_reports')
-          .insert({
-            label: result.label,
-            report_date: new Date().toISOString().slice(0, 10),
-            expected_count: result.expectedCount,
-            attended_count: result.attendedCount,
-            absent_count: result.absentCount,
-            unexpected_count: result.unexpectedCount,
-            reach_pct: parseFloat((result.reachPct * 100).toFixed(2)),
-            present_names: result.present.map((person) => person.name),
-            absent_names: result.absent.map((person) => person.name),
-            unexpected_names: result.unexpected.map((person) => person.name),
-            subgroup_filter: result.subgroupFilter,
-            by_subgroup: result.bySubgroup || null, // Store per-subgroup breakdown
-            created_by: profile?.id ?? null,
-          })
+          .insert(reportInsert)
           .select('id, share_token')
           .single()
+        if (isMissingAttendanceSourceError(error)) {
+          delete reportInsert.attendance_source
+          ;({ data, error } = await supabase
+            .from('meeting_attendance_reports')
+            .insert(reportInsert)
+            .select('id, share_token')
+            .single())
+        }
         if (error) setSaveError(error.message)
         else {
-          const nextReport = { ...result, id: data.id, share_token: data.share_token }
+          const nextReport = { ...result, id: data.id, share_token: data.share_token, cmpService: inputMode === 'cmp' ? cmpSelected : null }
           setReport(nextReport)
           sessionStorage.setItem(
             'meeting_report_state',
@@ -1694,6 +1855,7 @@ export default function MeetingReportTab() {
     setAttendedRawCount(0)
     setAttendedError(null)
     setUnexpectedPreview([])
+    setSyncingReport(null)
     setSaveError(null)
   }
 
@@ -1928,6 +2090,22 @@ export default function MeetingReportTab() {
               </div>
 
               <div className="report-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {report.cmpService && (
+                  <button
+                    type="button"
+                    onClick={handleSyncCmpReport}
+                    disabled={cmpLoadingAttendees}
+                    title="Reload CMP attendees and update this report"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      background: 'rgba(255,255,255,0.10)', color: '#DCE9F8',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: cmpLoadingAttendees ? 'wait' : 'pointer', opacity: cmpLoadingAttendees ? 0.6 : 1,
+                    }}
+                  >
+                    <RefreshCw size={13} /> {cmpLoadingAttendees ? 'Syncing...' : 'Sync from CMP'}
+                  </button>
+                )}
                 {report.id && report.share_token ? (
                   <button
                     type="button"
@@ -2923,7 +3101,7 @@ export default function MeetingReportTab() {
           <div style={{ fontSize: 12.5, fontWeight: 600, color: '#2D2A22', marginBottom: 8 }}>
             Mark Attendance
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8, marginBottom: 12 }}>
             <button
               type="button"
               onClick={() => setInputMode('checkin')}
@@ -2970,6 +3148,30 @@ export default function MeetingReportTab() {
                 <span style={{ fontSize: 11, color: '#9E9488' }}>Import from file</span>
               </span>
             </button>
+            <button
+              type="button"
+              onClick={() => setInputMode('cmp')}
+              style={{
+                textAlign: 'left',
+                border: inputMode === 'cmp' ? '2px solid #4C2A92' : '1px solid #EDE8DC',
+                background: inputMode === 'cmp' ? '#F5F0FF' : 'white',
+                borderRadius: 10,
+                padding: '12px 10px',
+                cursor: 'pointer',
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+                minWidth: 0,
+              }}
+            >
+              <span style={{ width: 30, height: 30, borderRadius: 999, background: inputMode === 'cmp' ? '#4C2A92' : '#F0EBFC', color: inputMode === 'cmp' ? 'white' : '#4C2A92', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Database size={14} />
+              </span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#2D2A22', display: 'block' }}>Ministry Platform</span>
+                <span style={{ fontSize: 10.5, color: '#9E9488', display: 'block' }}>Pull from CMP service</span>
+              </span>
+            </button>
           </div>
 
           {inputMode === 'csv' ? (
@@ -2979,6 +3181,47 @@ export default function MeetingReportTab() {
               </div>
               <FileZone file={attendedFile} rowCount={attendedNames.length} error={attendedError} onFile={handleAttendedFile} />
             </>
+          ) : inputMode === 'cmp' ? (
+            <div style={{ border: '1px solid #EDE8DC', borderRadius: 12, overflow: 'hidden', background: '#FAFAF7' }}>
+              {cmpSelected && !cmpLoadingAttendees && (
+                <div style={{ padding: '9px 12px', display: 'flex', alignItems: 'center', gap: 8, background: '#EEF8F2', borderBottom: '1px solid #CBE8D4', color: '#1B5E3C' }}>
+                  <Check size={15} strokeWidth={3} />
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 700 }}>{attendedNames.length} attendees loaded - {cmpSelected.service_name}, {formatServiceDate(cmpSelected.date)}</span>
+                  <button type="button" onClick={clearCmpSelection} aria-label="Clear loaded service" title="Clear loaded service" style={{ border: 'none', background: 'transparent', color: '#1B5E3C', padding: 2, cursor: 'pointer', display: 'inline-flex' }}><X size={15} /></button>
+                </div>
+              )}
+              {cmpLoading ? (
+                <div style={{ padding: '28px 14px', textAlign: 'center', fontSize: 12.5, color: '#9E9488' }}>Fetching recent services...</div>
+              ) : cmpError ? (
+                <div style={{ padding: '18px 14px', color: '#C94830', fontSize: 12.5 }}>
+                  {cmpError} <button type="button" onClick={fetchCmpServices} style={{ color: '#4C2A92', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: 0 }}>Retry</button>
+                </div>
+              ) : cmpServices.length === 0 ? (
+                <div style={{ padding: '28px 14px', textAlign: 'center', fontSize: 12.5, color: '#9E9488' }}>No submitted services found in the last 60 days.</div>
+              ) : (
+                <div style={{ maxHeight: 360, overflowY: 'auto', padding: 4 }}>
+                  {cmpServices.map((service) => {
+                    const selected = cmpSelected?.date === service.date && cmpSelected?.service_name === service.service_name && cmpSelected?.host_unit === service.host_unit
+                    const loading = cmpLoadingAttendees && selected
+                    return (
+                      <button
+                        key={`${service.date}-${service.service_name}-${service.host_unit}`}
+                        type="button"
+                        onClick={() => handleCmpServiceSelect(service)}
+                        disabled={cmpLoadingAttendees}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', border: selected ? '1px solid #A8DBC0' : '1px solid transparent', borderRadius: 8, background: selected ? '#F0FFF5' : 'white', padding: '10px 11px', cursor: cmpLoadingAttendees ? 'wait' : 'pointer', fontFamily: 'inherit', marginBottom: 3 }}
+                      >
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#2D2A22' }}>{service.service_name}</span>
+                          <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: '#9E9488' }}>{service.host_unit} - {formatServiceDate(service.date)}</span>
+                        </span>
+                        {loading ? <span style={{ fontSize: 11, color: '#4C2A92', fontWeight: 700 }}>Loading...</span> : selected ? <Check size={16} color="#2D8653" strokeWidth={3} /> : <span style={{ fontSize: 11, fontWeight: 700, color: '#4C2A92', background: '#F0EBFC', borderRadius: 999, padding: '3px 8px', whiteSpace: 'nowrap' }}>{service.count}</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           ) : (
             <div style={{ border: '1px solid #EDE8DC', borderRadius: 12, overflow: 'hidden', background: '#FAFAF7' }}>
               <div style={{ padding: '10px 12px', borderBottom: '1px solid #EDE8DC', background: 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -3118,27 +3361,36 @@ export default function MeetingReportTab() {
           transition: 'opacity .15s',
         }}
       >
-        Generate Report
+        {syncingReport ? 'Review and Update Report' : 'Generate Report'}
       </button>
 
       {!rosterLoading && filteredRoster.length > 0 && (
-        <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 12, padding: '12px 16px' }}>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#9E9488', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
-            Expected from roster - {filteredRoster.length} {selectedSubgroups.length > 0 ? 'in selected subgroups' : 'total active'}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
+          <div style={{ width: '100%', background: 'white', border: '1px solid #EDE8DC', borderRadius: 12, padding: '12px 16px', boxSizing: 'border-box' }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: '#9E9488', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
+              Expected from roster - {filteredRoster.length} {selectedSubgroups.length > 0 ? 'in selected subgroups' : 'total active'}
+            </div>
+            <div>
+              {filteredRoster.slice(0, 30).map((row) => (
+                <span key={row.id} style={{ display: 'inline-block', fontSize: 11.5, color: '#2D2A22', background: '#F4F1EA', borderRadius: 6, padding: '2px 8px', margin: '2px 3px 2px 0' }}>
+                  {row.full_name}
+                </span>
+              ))}
+              {filteredRoster.length > 30 && <span style={{ fontSize: 11.5, color: '#9E9488' }}>+{filteredRoster.length - 30} more</span>}
+            </div>
           </div>
-          <div>
-            {filteredRoster.slice(0, 30).map((row) => (
-              <span key={row.id} style={{ display: 'inline-block', fontSize: 11.5, color: '#2D2A22', background: '#F4F1EA', borderRadius: 6, padding: '2px 8px', margin: '2px 3px 2px 0' }}>
-                {row.full_name}
-              </span>
-            ))}
-            {filteredRoster.length > 30 && <span style={{ fontSize: 11.5, color: '#9E9488' }}>+{filteredRoster.length - 30} more</span>}
-          </div>
+          <button
+            type="button"
+            onClick={() => document.getElementById('past-reports')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0, border: 'none', background: 'transparent', color: '#4C2A92', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            <Files size={14} /> {loadingHistory ? 'Loading past reports...' : `Past reports (${history.length})`}
+          </button>
         </div>
       )}
 
       {!loadingHistory && history.length > 0 && (
-        <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 14, overflow: 'hidden' }}>
+        <div id="past-reports" style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 14, overflow: 'hidden' }}>
           <div style={{ padding: '12px 16px', borderBottom: '1px solid #EDE8DC' }}>
             <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: '#9E9488' }}>Recent Reports</span>
           </div>
