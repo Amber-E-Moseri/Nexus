@@ -93,6 +93,25 @@ Deno.serve(async (req) => {
     return jsonResponse(400, { error: `Invalid sprint role in invite token: ${sprintRole}` })
   }
 
+  // Revalidate token metadata at acceptance. This protects invitees who were
+  // sent a legacy or manually-created token with team IDs from another sprint.
+  if (teamIds.length > 0) {
+    const { data: teams, error: teamsError } = await adminClient
+      .from('sprint_teams')
+      .select('id')
+      .eq('sprint_id', inviteToken.sprint_id)
+      .in('id', teamIds)
+
+    if (teamsError) {
+      console.error('Failed to validate sprint teams:', teamsError)
+      return jsonResponse(500, { error: `Failed to validate sprint teams: ${teamsError.message}` })
+    }
+
+    if ((teams?.length ?? 0) !== teamIds.length) {
+      return jsonResponse(400, { error: 'This invitation includes a team that is no longer part of the sprint. Ask the inviter to send a new invitation.' })
+    }
+  }
+
   // Provision the app-layer user row before inserting into sprint_members.
   // sprint_members.user_id references public.users(id), so this must exist first.
   //
@@ -187,7 +206,7 @@ Deno.serve(async (req) => {
       .upsert(teamRows, { onConflict: 'team_id,user_id', ignoreDuplicates: true })
     if (teamError) {
       console.error('Failed to add to sprint teams:', teamError)
-      // Non-fatal: sprint membership succeeded; log and continue
+      return jsonResponse(500, { error: `Failed to add to the selected sprint teams: ${teamError.message}` })
     }
   }
 

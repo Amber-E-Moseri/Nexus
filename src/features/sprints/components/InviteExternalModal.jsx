@@ -229,7 +229,7 @@ export default function InviteExternalModal({ sprintId, sprintEndDate, sprintNam
             </div>
             {selectedTeamIds.length > 0 && (
               <div style={{ marginTop: 4, fontSize: 11, color: TOKENS.textTertiary }}>
-                {selectedTeamIds.length} team{selectedTeamIds.length !== 1 ? 's' : ''} selected
+                {selectedTeamIds.length} team{selectedTeamIds.length !== 1 ? 's' : ''} selected. They will be added when the invitation is accepted.
               </div>
             )}
           </div>

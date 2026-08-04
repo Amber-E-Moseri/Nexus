@@ -139,7 +139,9 @@ Deno.serve(async (req) => {
   }
 
   const { email, name, sprintId, sprintName, membershipEndDate } = body
-  const teamIds = Array.isArray(body.teamIds) ? body.teamIds : []
+  const teamIds = Array.isArray(body.teamIds)
+    ? [...new Set(body.teamIds.filter((teamId): teamId is string => typeof teamId === 'string' && teamId.trim().length > 0))]
+    : []
   const cleanEmail = email.trim().toLowerCase()
   const cleanName = name?.trim() || cleanEmail.split('@')[0]
   const requestedRole = body.role || 'contributor'
@@ -157,6 +159,25 @@ Deno.serve(async (req) => {
 
   if (sprintError || !sprint) {
     return jsonResponse(400, { error: 'Sprint not found' }, corsHeaders)
+  }
+
+  // An invitation may only assign teams that belong to its sprint. Persisting
+  // arbitrary IDs would either leak access across sprints or fail later after
+  // the invitee has already accepted the invitation.
+  if (teamIds.length > 0) {
+    const { data: teams, error: teamsError } = await adminClient
+      .from('sprint_teams')
+      .select('id')
+      .eq('sprint_id', sprintId)
+      .in('id', teamIds)
+
+    if (teamsError) {
+      return jsonResponse(500, { error: `Failed to validate sprint teams: ${teamsError.message}` }, corsHeaders)
+    }
+
+    if ((teams?.length ?? 0) !== teamIds.length) {
+      return jsonResponse(400, { error: 'One or more selected teams do not belong to this sprint' }, corsHeaders)
+    }
   }
 
   const [{ data: callerProfile, error: callerProfileError }, { data: callerMember, error: callerMemberError }] = await Promise.all([
