@@ -57,8 +57,11 @@ export function InboxCountProvider({ children }) {
     }
   }, [user?.id])
 
-  const inboxCount = assignedCommentCount + (notificationCount ?? 0)
-  const value = useMemo(() => ({ inboxCount }), [assignedCommentCount, notificationCount])
+  // Notifications are already surfaced by the bell icon (NotificationsContext).
+  // Adding them here double-counted @mentions (one mention = +1 notification + +1 assigned comment).
+  // The inbox badge tracks only unresolved assigned comments that need explicit action.
+  const inboxCount = assignedCommentCount
+  const value = useMemo(() => ({ inboxCount }), [assignedCommentCount])
 
   return <InboxCountContext.Provider value={value}>{children}</InboxCountContext.Provider>
 }

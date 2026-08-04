@@ -831,7 +831,7 @@ export async function createComment(taskId, body, authorId, actorId = null, auth
       author_id: authorId,
       assigned_to: assignedUserId,
       assigned_at: assignedAt,
-      mentions: mentions?.map((m) => m.id) ?? null,
+      mentions: mentions?.map((m) => m.id) ?? [],
     })
     .select(TASK_COMMENT_SELECT)
     .single()

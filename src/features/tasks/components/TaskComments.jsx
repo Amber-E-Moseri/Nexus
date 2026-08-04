@@ -270,6 +270,8 @@ export default function TaskComments({ taskId, subtaskId, onMentionAssigned }) {
       setMentions([])
       setPickerOpen(false)
       inputRef.current?.focus()
+    } catch (err) {
+      showToast(err?.message ?? 'Failed to post comment', { tone: 'error' })
     } finally {
       setSaving(false)
     }
@@ -504,7 +506,7 @@ export default function TaskComments({ taskId, subtaskId, onMentionAssigned }) {
               border: '1px solid var(--border)', borderRadius: 8, outline: 'none',
               lineHeight: 1.5, color: 'var(--text-primary)', background: 'white',
               position: 'relative',
-              zIndex: 1,
+              zIndex: 0,
             }}
             onFocus={(event) => { event.target.style.borderColor = 'var(--accent)' }}
             onBlur={(event) => { event.target.style.borderColor = 'var(--border)' }}
@@ -523,7 +525,7 @@ export default function TaskComments({ taskId, subtaskId, onMentionAssigned }) {
                 border: '1px solid var(--border)',
                 borderRadius: 10,
                 boxShadow: '0 10px 30px rgba(14,14,30,0.12)',
-                zIndex: 0,
+                zIndex: 10,
                 overflow: 'auto',
               }}
             >

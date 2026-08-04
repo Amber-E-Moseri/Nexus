@@ -375,6 +375,7 @@ export default function Inbox() {
         if (!active) return
 
         if (notifResult.error) throw notifResult.error
+        if (commentResult.error) throw commentResult.error
 
         const mapped = (notifResult.data ?? []).map((n) => ({
           ...n,
@@ -392,7 +393,22 @@ export default function Inbox() {
     }
 
     loadInbox()
-    return () => { active = false }
+
+    // Keep the list live — new @mentions and resolved comments appear without a reload.
+    const channel = supabase
+      .channel(`inbox-live-${profile.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_comments', filter: `assigned_to=eq.${profile.id}` }, () => {
+        if (active) loadInbox()
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${profile.id}` }, () => {
+        if (active) loadInbox()
+      })
+      .subscribe()
+
+    return () => {
+      active = false
+      supabase.removeChannel(channel)
+    }
   }, [profile?.id])
 
   const unreadCount = notifications.filter((n) => !n.read).length
