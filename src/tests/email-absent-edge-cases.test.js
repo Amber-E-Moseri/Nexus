@@ -5,7 +5,8 @@ import { describe, test, expect } from 'vitest'
  * Matches the implementation in MeetingReportTab.jsx normalizeNameKey()
  */
 function normalizeNameKey(name) {
-  return (name ?? '')
+  const withoutTitle = (name ?? '').replace(/^\s*(?:pastor|pst\.?)\s+/i, '')
+  return withoutTitle
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
@@ -39,6 +40,11 @@ describe('Email Absent - Name Matching Edge Cases', () => {
 
     test('does not match different names', () => {
       expect(namesMatch('John Doe', 'Jane Smith')).toBe(false)
+    })
+
+    test('matches CMP names to roster names prefixed with Pastor', () => {
+      expect(namesMatch('Nigel Dara', 'Pastor Nigel Dara')).toBe(true)
+      expect(namesMatch('Nigel Dara', 'Pst. Nigel Dara')).toBe(true)
     })
   })
 

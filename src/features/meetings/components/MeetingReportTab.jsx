@@ -108,7 +108,8 @@ function normalizeNameKey(name) {
   // Strip diacritics (José -> Jose) before the alphanumeric filter, which
   // would otherwise delete accented letters outright instead of matching
   // their unaccented roster equivalent.
-  return (name ?? '')
+  const withoutTitle = (name ?? '').replace(/^\s*(?:pastor|pst\.?)\s+/i, '')
+  return withoutTitle
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
@@ -1511,6 +1512,21 @@ export default function MeetingReportTab() {
     setAttendedError(null)
   }
 
+  function openCmpRerun(service = null, names = []) {
+    if (!report?.id) return
+    setSyncingReport({ id: report.id, share_token: report.share_token, cmpService: service })
+    setCmpSelected(service)
+    setInputMode('cmp')
+    setAttendedNames(names)
+    setAttendedRawCount(names.length)
+    setAttendedFile(null)
+    setAttendedError(null)
+    setMeetingLabel(report.label)
+    setUnexpectedPreview([])
+    setPhase('input')
+    setReport(null)
+  }
+
   async function handleSyncCmpReport() {
     if (!report?.cmpService || cmpLoadingAttendees) return
     const service = report.cmpService
@@ -1526,17 +1542,12 @@ export default function MeetingReportTab() {
     }
 
     const names = data?.names ?? []
-    setSyncingReport({ id: report.id, share_token: report.share_token, cmpService: service })
-    setCmpSelected(service)
-    setInputMode('cmp')
-    setAttendedNames(names)
-    setAttendedRawCount(names.length)
-    setAttendedFile(null)
-    setAttendedError(null)
-    setMeetingLabel(report.label)
-    setPhase('input')
-    setReport(null)
+    openCmpRerun(service, names)
     setCmpLoadingAttendees(false)
+  }
+
+  function handleRerunFromCmp() {
+    openCmpRerun()
   }
 
   async function fetchReportRoster() {
@@ -1635,7 +1646,7 @@ export default function MeetingReportTab() {
             .eq('id', syncingReport.id)
           if (error) { setSaveError(error.message); return }
 
-          const nextReport = { ...result, id: syncingReport.id, share_token: syncingReport.share_token, cmpService: syncingReport.cmpService }
+          const nextReport = { ...result, id: syncingReport.id, share_token: syncingReport.share_token, cmpService: cmpSelected ?? syncingReport.cmpService }
           setReport(nextReport)
           setSyncingReport(null)
           setSearchParams({ report: syncingReport.id })
@@ -2090,12 +2101,12 @@ export default function MeetingReportTab() {
               </div>
 
               <div className="report-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {report.cmpService && (
+                {report.id && (
                   <button
                     type="button"
-                    onClick={handleSyncCmpReport}
+                    onClick={report.cmpService ? handleSyncCmpReport : handleRerunFromCmp}
                     disabled={cmpLoadingAttendees}
-                    title="Reload CMP attendees and update this report"
+                    title={report.cmpService ? 'Reload CMP attendees and update this report' : 'Choose a CMP service and rerun this report'}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 6,
                       background: 'rgba(255,255,255,0.10)', color: '#DCE9F8',
@@ -2103,7 +2114,7 @@ export default function MeetingReportTab() {
                       borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: cmpLoadingAttendees ? 'wait' : 'pointer', opacity: cmpLoadingAttendees ? 0.6 : 1,
                     }}
                   >
-                    <RefreshCw size={13} /> {cmpLoadingAttendees ? 'Syncing...' : 'Sync from CMP'}
+                    <RefreshCw size={13} /> {cmpLoadingAttendees ? 'Syncing...' : report.cmpService ? 'Sync from CMP' : 'Rerun from CMP'}
                   </button>
                 )}
                 {report.id && report.share_token ? (
