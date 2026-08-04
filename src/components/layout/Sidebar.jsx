@@ -1393,25 +1393,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
                 to="/meetings/wizard"
               />
             ) : null}
-            <SidebarItem
-              active={isPathActive(location.pathname, '/meetings/expected-attendees')}
-              label="Attendee Roster"
-              to="/meetings/expected-attendees"
-            />
-            {(showAdminPlatform || role === 'pastor') ? (
-              <SidebarItem
-                active={isPathActive(location.pathname, '/meetings/attendance-trends')}
-                label="Attendance Trends"
-                to="/meetings/attendance-trends"
-              />
-            ) : null}
-            {!['member', 'group_member'].includes(role) ? (
-              <SidebarItem
-                active={isPathActive(location.pathname, '/meetings/absence-email-log')}
-                label="Absence Email Send Log"
-                to="/meetings/absence-email-log"
-              />
-            ) : null}
           </>
         ) : null}
         {(INSTAGRAM_GRADING_ENABLED && (['super_admin', 'regional_secretary'].includes(role) || hasSpaceRole(profile, null, 'media'))) && (

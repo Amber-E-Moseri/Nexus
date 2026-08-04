@@ -230,6 +230,7 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
   const [quickAddSaving, setQuickAddSaving] = useState(false)
   const [voiceLogSuccess, setVoiceLogSuccess] = useState(false)
   const [summarizing, setSummarizing] = useState(false)
+  const [prevInteractions, setPrevInteractions] = useState([])
 
   const { listening, supported, start, stop } = useVoiceInput((transcript) => {
     setText(transcript)
@@ -245,6 +246,14 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
   }, [user?.id])
 
   useEffect(() => { saveDraft(text) }, [text])
+
+  // Load previous interactions when person is selected
+  useEffect(() => {
+    if (!forPerson?.id) { setPrevInteractions([]); return }
+    callFlockAPI('getInteractions', { personId: forPerson.id })
+      .then((list) => setPrevInteractions((Array.isArray(list) ? list : []).slice(0, 5)))
+      .catch(() => setPrevInteractions([]))
+  }, [forPerson?.id])
 
   const runParse = () => {
     const desc = text.trim()
@@ -359,14 +368,17 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
       const keptTodos = (parsed.todos || []).filter((t) => t.keep && t.text.trim())
       if (keptTodos.length) {
         try {
-          await callFlockAPI('saveTodos', {
-            payload: JSON.stringify({
-              interactionId: res.interactionId || 'log-' + Date.now(),
-              personId: parsed.personId,
-              personName: parsed.personName,
-              todos: keptTodos.map((t) => ({ text: t.text.trim(), dueDate: '' })),
-            }),
-          })
+          // Create tasks in My Tasks (personal list)
+          await Promise.all(keptTodos.map((t) =>
+            supabase.from('tasks').insert({
+              title: `[Flock – ${parsed.personName}] ${t.text.trim()}`,
+              is_personal: true,
+              created_by: profile.id,
+              assignee_id: profile.id,
+              task_type: 'task',
+              source: 'flock_crm',
+            })
+          ))
         } catch { /* non-fatal */ }
       }
       saveDraft('')
@@ -507,6 +519,32 @@ export default function FlockAiLogPanel({ preselect = null, onOpenPerson }) {
             <button type="button" onClick={() => setForPerson(null)} title="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: FLOCK.purple, display: 'grid', placeItems: 'center', padding: 0 }}>
               <X size={13} />
             </button>
+          </div>
+        )}
+
+        {/* Previous interactions for selected person */}
+        {forPerson && !parsed && prevInteractions.length > 0 && (
+          <div style={{ borderTop: `1px solid ${FLOCK.border}`, paddingTop: '12px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: FLOCK.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+              Previous entries
+            </div>
+            <div style={{ display: 'grid', gap: '6px' }}>
+              {prevInteractions.map((ix) => (
+                <div key={ix.id} style={{ padding: '8px 12px', background: FLOCK.surface, borderRadius: '8px', fontSize: '12px', fontFamily: FLOCK.fontBody }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: ix.summary ? '4px' : 0 }}>
+                    <span style={{ color: FLOCK.muted, fontFamily: FLOCK.fontMono }}>{ix.timestamp}</span>
+                    {ix.result && (
+                      <span style={{ padding: '1px 7px', borderRadius: '999px', fontSize: '11px', fontWeight: 700,
+                        background: ix.result === 'Reached' ? FLOCK.greenTint : FLOCK.amberTint,
+                        color: ix.result === 'Reached' ? FLOCK.green : FLOCK.amber }}>
+                        {ix.result}
+                      </span>
+                    )}
+                  </div>
+                  {ix.summary && <div style={{ color: FLOCK.text, lineHeight: 1.4 }}>{ix.summary}</div>}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

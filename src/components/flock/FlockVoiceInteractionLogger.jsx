@@ -22,6 +22,7 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
   const [transcript, setTranscript] = useState('')
   const [extractedData, setExtractedData] = useState(null)
   const [selectedTodos, setSelectedTodos] = useState(new Set())
+  const [saveMode, setSaveMode] = useState('summary') // 'summary' | 'transcript' | 'both'
   const [saving, setSaving] = useState(false)
 
   const mediaRecorder = useRef(null)
@@ -186,12 +187,17 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
       // transcript, not just keyword-matched it) — fall back to the local
       // heuristic only if extraction didn't return one.
       const callResult = extractedData?.result || detectResult(transcript.toLowerCase())
+      const savedSummary = saveMode === 'transcript'
+        ? transcript
+        : saveMode === 'both'
+          ? `${extractedData.summary || transcript}\n\n---\n\n${transcript}`
+          : (extractedData.summary || transcript)
       const interactionRes = await callFlockCRM('saveInteraction', {
         payload: JSON.stringify({
           personId: contactId,
           fullName: contactName,
           result: callResult,
-          summary: transcript,
+          summary: savedSummary,
           nextAction: selectedList.length ? 'Follow-up' : 'None',
           nextActionDateTime: '',
           loggedBy: profile?.name || profile?.email || 'Regional Secretary',
@@ -201,22 +207,22 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
         throw new Error((interactionRes && interactionRes.error) || 'Save failed')
       }
 
-      // Step 2: save todos (non-critical — show partial-success if this fails)
+      // Step 2: create todos as personal My Tasks entries
       if (selectedList.length) {
         try {
-          await callFlockCRM('saveTodos', {
-            payload: JSON.stringify({
-              interactionId: interactionRes.interactionId,
-              personId: contactId,
-              personName: contactName,
-              todos: selectedList.map((t) => ({
-                text: t.text.trim(),
-                dueDate: t.due_date_hint || '',
-              })),
-            }),
-          })
+          await Promise.all(selectedList.map((t) =>
+            supabase.from('tasks').insert({
+              title: `[Flock – ${contactName}] ${t.text.trim()}`,
+              is_personal: true,
+              created_by: profile.id,
+              assignee_id: profile.id,
+              task_type: 'task',
+              source: 'flock_crm',
+              due_date: t.due_date_hint ? new Date(t.due_date_hint).toISOString().split('T')[0] : null,
+            })
+          ))
         } catch {
-          setError('Interaction logged, but follow-up todos couldn\'t be saved. Add them manually in the Todos tab.')
+          setError('Interaction logged, but follow-up tasks couldn\'t be added to My Tasks.')
           setSaving(false)
           return
         }
@@ -309,6 +315,30 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
             {error}
           </div>
         )}
+
+        <div>
+          <label style={{ fontSize: '12px', fontWeight: 700, color: FLOCK.muted, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '8px' }}>Save as</label>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {[
+              { id: 'summary', label: 'AI Summary' },
+              { id: 'transcript', label: 'Full Transcript' },
+              { id: 'both', label: 'Both' },
+            ].map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSaveMode(id)}
+                style={{
+                  padding: '6px 14px', borderRadius: '999px', fontSize: '12px', fontWeight: 600,
+                  border: `1px solid ${saveMode === id ? FLOCK.purple : FLOCK.border}`,
+                  background: saveMode === id ? FLOCK.purpleTint : FLOCK.card,
+                  color: saveMode === id ? FLOCK.purple : FLOCK.muted,
+                  cursor: 'pointer', fontFamily: FLOCK.fontBody,
+                }}
+              >{label}</button>
+            ))}
+          </div>
+        </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
           <button

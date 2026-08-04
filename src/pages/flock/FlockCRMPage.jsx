@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckSquare, ChevronDown, ChevronRight, Home, Mail, Mic, Phone, Plus, RefreshCw, Settings as SettingsIcon, Trash2, UserPlus, Users } from 'lucide-react'
+import { AlertCircle, ChevronDown, ChevronRight, Home, Mail, Mic, Phone, Plus, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { FLOCK_CRM_CONFIG } from '../../lib/permissions'
 import { supabase } from '../../lib/supabase'
 import { callFlockCRM as callFlockAPI, flockCard, formatTimeAgo, initials, FLOCK } from '../../lib/flockSupabase'
 import { createNotification } from '../../features/notifications'
-import FlockTodosPanel from '../../components/flock/FlockTodosPanel'
 import FlockPeoplePanel from '../../components/flock/FlockPeoplePanel'
 import FlockAiLogPanel from '../../components/flock/FlockAiLogPanel'
-import FlockSettingsPanel from '../../components/flock/FlockSettingsPanel'
 
 function StatTile({ label, value, tone, note }) {
   const tones = {
@@ -524,8 +522,6 @@ const TABS = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'ai-log', label: 'Log a Call', icon: Mic },
   { id: 'people', label: 'People', icon: Users },
-  { id: 'todos', label: 'To-Dos', icon: CheckSquare },
-  { id: 'settings', label: 'Preferences', icon: SettingsIcon },
 ]
 
 export default function FlockCRMPage() {
@@ -566,10 +562,6 @@ export default function FlockCRMPage() {
         return <FlockAiLogPanel preselect={aiPreselect} onOpenPerson={openPersonNotes} />
       case 'people':
         return <FlockPeoplePanel preselectId={peoplePreselect} startAdding={peopleStartAdd} onLogCall={openLogCall} />
-      case 'todos':
-        return <FlockTodosPanel />
-      case 'settings':
-        return <FlockSettingsPanel />
       case 'home':
       default:
         return <HomePanel onLogCall={openLogCall} onAddPerson={openAddPerson} onOpenPerson={openPersonNotes} isMobile={isMobile} />

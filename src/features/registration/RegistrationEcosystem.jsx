@@ -419,10 +419,9 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       // Always fetch roster from Supabase (authoritative source)
       let finalRoster = r;
       try {
-        const { data: dbRoster } = await supabase
-          .from('roster')
-          .select('*')
-          .order('last_name', { ascending: true });
+        let rosterQ = supabase.from('roster').select('*').order('last_name', { ascending: true });
+        if (limitedToSubgroups?.length) rosterQ = rosterQ.in('subgroup', limitedToSubgroups);
+        const { data: dbRoster } = await rosterQ;
         if (dbRoster?.length) {
           finalRoster = dbRoster.map(m => ({
             email: m.email,
@@ -437,14 +436,13 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         console.error('Failed to fetch roster from Supabase:', e);
       }
 
-      // Fetch registrations from Supabase if not already loaded from localStorage
+      // Fetch registrations from Supabase; always re-fetch for scoped users to prevent stale cache leaking out-of-scope rows
       let finalReg = reg;
-      if (!reg || reg.length === 0) {
+      if (!reg || reg.length === 0 || limitedToSubgroups?.length) {
         try {
-          const { data: dbRegs } = await supabase
-            .from('registrations')
-            .select('*')
-            .order('submitted_at', { ascending: false });
+          let regsQ = supabase.from('registrations').select('*').order('submitted_at', { ascending: false });
+          if (limitedToSubgroups?.length) regsQ = regsQ.in('subgroup', limitedToSubgroups);
+          const { data: dbRegs } = await regsQ;
           // Rename snake_case columns to camelCase for compatibility
           finalReg = (dbRegs || []).map(r => ({
             id: r.id,
@@ -478,10 +476,9 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
 
       // Fetch working list from Supabase
       try {
-        const { data: dbWl } = await supabase
-          .from('working_list')
-          .select('*')
-          .order('subgroup', { ascending: true });
+        let wlQ = supabase.from('working_list').select('*').order('subgroup', { ascending: true });
+        if (limitedToSubgroups?.length) wlQ = wlQ.in('subgroup', limitedToSubgroups);
+        const { data: dbWl } = await wlQ;
         if (dbWl?.length) setWorkingListDb(dbWl);
       } catch (e) {
         console.error('Failed to fetch working list from Supabase:', e);

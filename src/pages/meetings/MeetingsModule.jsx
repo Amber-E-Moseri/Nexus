@@ -137,14 +137,8 @@ function MeetingsModuleFallback() {
 }
 
 const TABS = [
-  { key: 'meetings', label: 'Meetings' },
-  // Report tab is open to everyone — meeting_attendance_reports RLS already
-  // scopes select/insert/delete to `created_by = auth.uid()`, so anyone can
-  // already generate and manage their own reports; the tab was previously
-  // gated shut behind the same flag as Roster, which blocked ordinary
-  // members from ever reaching their own report history to delete one.
   { key: 'report', label: 'Report' },
-  { key: 'roster', label: '⚙ Roster', restricted: true },
+  { key: 'roster', label: 'Roster', restricted: true },
 ]
 
 // ORS identity is a space_roles grant (Phase 3) — the old department-name
@@ -183,7 +177,6 @@ function TabBar({ active, onChange, visibleTabs }) {
 
 export default function MeetingsModule() {
   const { role, profile } = useAuth()
-  const meetingOsUrl = import.meta.env.VITE_MEETING_OS_URL
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -200,109 +193,53 @@ export default function MeetingsModule() {
   const visibleTabs = TABS.filter(tab => !tab.restricted || canViewRoster)
 
   const [activeTab, setActiveTab] = useState(() => {
-    const initial = searchParams.get('report') ? 'report' : searchParams.get('tab') === 'roster' ? 'roster' : 'meetings'
-    // If user doesn't have access to the requested tab, default to meetings
-    return visibleTabs.some(t => t.key === initial) ? initial : 'meetings'
+    const initial = searchParams.get('tab') === 'roster' ? 'roster' : 'report'
+    return visibleTabs.some(t => t.key === initial) ? initial : 'report'
   })
 
   useEffect(() => {
-    const requestedTab = searchParams.get('report') ? 'report' : searchParams.get('tab') === 'roster' ? 'roster' : 'meetings'
-    // If the requested tab is not visible to user, redirect to meetings
+    const requestedTab = searchParams.get('tab') === 'roster' ? 'roster' : 'report'
     if (!visibleTabs.some(t => t.key === requestedTab)) {
-      setActiveTab('meetings')
+      setActiveTab('report')
       return
     }
     setActiveTab(requestedTab)
   }, [searchParams, visibleTabs])
 
   function handleTabChange(nextTab) {
-    // Prevent navigation to restricted tabs
-    if (!visibleTabs.some(t => t.key === nextTab)) {
-      setActiveTab('meetings')
-      return
-    }
+    if (!visibleTabs.some(t => t.key === nextTab)) return
     setActiveTab(nextTab)
     const nextParams = new URLSearchParams(searchParams)
-
     if (nextTab === 'roster') {
       nextParams.delete('report')
       nextParams.set('tab', 'roster')
-    } else if (nextTab === 'report') {
-      nextParams.delete('tab')
-      nextParams.set('report', '1')
     } else {
       nextParams.delete('tab')
-      nextParams.delete('report')
+      nextParams.set('report', '1')
     }
-
     setSearchParams(nextParams)
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0, background: '#F7F5F0' }}>
-      {/* Module header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: isMobile ? '10px 16px 0' : '16px 24px 0',
-          background: '#FBF8F2',
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ paddingBottom: isMobile ? 8 : 12 }}>
-          <h1 style={{ fontSize: isMobile ? 17 : 20, fontWeight: 700, color: '#18122E', margin: 0, letterSpacing: '-0.3px' }}>
-            Meetings
+      {/* Compact header + tabs in one bar */}
+      <div style={{ background: '#FBF8F2', borderBottom: '1px solid #EDE8DC', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: isMobile ? '10px 16px 0' : '14px 24px 0' }}>
+          <h1 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 700, color: '#18122E', margin: 0, letterSpacing: '-0.3px', flex: 1 }}>
+            Attendance Report
           </h1>
-          {!isMobile && (
-            <p style={{ fontSize: 12, color: '#7A6F5E', margin: '2px 0 0' }}>
-              Agenda · Minutes · Actions · Audio
-            </p>
-          )}
         </div>
-        {meetingOsUrl && activeTab === 'meetings' && !isMobile ? (
-          <a
-            href={meetingOsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: 12,
-              color: '#4C2A92',
-              textDecoration: 'none',
-              padding: '6px 12px',
-              border: '1px solid #D6CEBE',
-              borderRadius: 8,
-              fontWeight: 600,
-              background: 'white',
-              marginBottom: 12,
-            }}
-          >
-            Open in new tab ↗
-          </a>
-        ) : null}
+        <TabBar active={activeTab} onChange={handleTabChange} visibleTabs={visibleTabs} />
       </div>
-
-      <div style={{ borderBottom: '1px solid #EDE8DC', flexShrink: 0 }} />
-      <TabBar active={activeTab} onChange={handleTabChange} visibleTabs={visibleTabs} />
 
       {activeTab === 'report' ? (
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '1.5rem', background: '#FBF8F2' }}>
           <MeetingReportTab />
         </div>
-      ) : activeTab === 'roster' ? (
+      ) : (
         <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', background: '#FBF8F2' }}>
           <ExpectedAttendeesPage />
         </div>
-      ) : meetingOsUrl ? (
-        <iframe
-          src={meetingOsUrl}
-          style={{ flex: 1, width: '100%', border: 'none', background: 'var(--surface-secondary)' }}
-          title="Meeting OS"
-          allow="microphone; camera"
-        />
-      ) : (
-        <MeetingsModuleFallback />
       )}
     </div>
   )
