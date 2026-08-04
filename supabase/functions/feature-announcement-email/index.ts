@@ -31,11 +31,8 @@ async function verifyAccess(req: Request): Promise<boolean> {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return false
   const token = authHeader.replace('Bearer ', '')
+  if (!token) return false
 
-  // Service role key — cron/CLI access
-  if (token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) return true
-
-  // User JWT — must be super_admin
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',

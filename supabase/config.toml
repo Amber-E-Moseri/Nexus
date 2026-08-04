@@ -3,6 +3,15 @@
 [functions."task-overdue-trigger"]
 verify_jwt = false
 
+[functions."feature-announcement-email"]
+verify_jwt = false
+
+[functions."weekly-recap-email"]
+verify_jwt = false
+
+[functions."reengagement-email"]
+verify_jwt = false
+
 [functions."calendar-task-feed"]
 verify_jwt = false
 
