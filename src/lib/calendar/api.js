@@ -3,6 +3,14 @@
 
 import { supabase } from '../supabase.js';
 
+const CALENDAR_EVENT_FIELDS = [
+  'id', 'title', 'description', 'event_type', 'start_date', 'end_date',
+  'all_day', 'location', 'zoom_join_url', 'space_id', 'sprint_id',
+  'department_id', 'status', 'priority', 'is_org_wide', 'created_by',
+  'created_at', 'updated_at', 'recurrence_rule', 'rejection_note',
+  'synced_to_google', 'deleted_at', 'source_id', 'color',
+].join(', ');
+
 // ─── Calendar Events CRUD ────────────────────────────────────────
 
 /**
@@ -11,7 +19,7 @@ import { supabase } from '../supabase.js';
 export async function fetchCalendarEvents(filters = {}) {
   let query = supabase
     .from('calendar_events')
-    .select('*')
+    .select(CALENDAR_EVENT_FIELDS)
     .is('deleted_at', null);
 
   if (filters.space_id) {
@@ -50,7 +58,7 @@ export async function fetchCalendarEvents(filters = {}) {
 export async function fetchCalendarEvent(id) {
   const { data, error } = await supabase
     .from('calendar_events')
-    .select('*')
+    .select(CALENDAR_EVENT_FIELDS)
     .eq('id', id)
     .single();
 
@@ -70,7 +78,7 @@ export async function createCalendarEvent(event) {
       status: 'pending', // Default to pending for approval workflow
       created_at: new Date().toISOString(),
     }])
-    .select()
+    .select(CALENDAR_EVENT_FIELDS)
     .single();
 
   if (error) throw error;
@@ -88,7 +96,7 @@ export async function updateCalendarEvent(id, updates) {
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
-    .select()
+    .select(CALENDAR_EVENT_FIELDS)
     .single();
 
   if (error) throw error;

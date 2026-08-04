@@ -2,6 +2,33 @@
 
 [![CI/CD Pipeline](https://github.com/blwcanada/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/blwcanada/nexus/actions/workflows/ci.yml)
 
+## Claude Cowork MCP connector
+
+Nexus exposes a remote, stateless MCP endpoint for Claude Cowork at:
+
+```
+https://nexus.lwcanada.org/api/mcp
+```
+
+### Create and rotate a key
+
+1. In Nexus, open **Settings → API** and create an API key in the department or sprint that Claude should be limited to.
+2. Select `mcp:access` plus only the required tool scopes: `tasks:read`, `tasks:write`, `wins:read`, and/or `meetings:write`.
+3. Copy the key when it is shown. Nexus stores only its SHA-256 hash, so the full value is not available again.
+4. In Claude Cowork, create a custom connector with the URL above and the header `Authorization: Bearer <your Nexus API key>`.
+
+Use **Regenerate** in Settings → API to rotate a key; the prior value stops working immediately. Use **Revoke** or **Disable** to remove Cowork access. MCP calls are additionally restricted by the key's original department/sprint scope and the key owner's Nexus role, space membership, meeting access, and RLS-equivalent checks.
+
+### Deployment configuration
+
+Set these Vercel environment variables for Production, Preview, and Development as appropriate:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- Optional: `MCP_RATE_LIMIT_PER_MINUTE` (defaults to `60` per API key)
+
+Apply `supabase/migrations/20270806000000_mcp_connector_audit.sql` and `supabase/migrations/20270806000001_mcp_atomic_meeting_note_append.sql` before enabling the connector. They provide the MCP audit/rate-limit source and atomic meeting-note appends.
+
 **Internal operations platform for BLW Canada Sub-Region** — centralized task, meeting, sprint, and communication hub replacing ClickUp for 30 members across 5 departments.
 
 ## Project Overview

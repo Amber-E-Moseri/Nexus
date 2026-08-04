@@ -451,6 +451,9 @@ export default function ApiKeyManager({
                       {[
                         ['tasks:read', 'Can read tasks'],
                         ['tasks:write', 'Can create and update tasks'],
+                        ['wins:read', 'Can read weekly wins'],
+                        ['meetings:write', 'Can add meeting notes'],
+                        ['mcp:access', 'Can connect Claude Cowork to Nexus'],
                       ].map(([value, label]) => (
                         <label key={value} className="flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-primary)]">
                           <input
