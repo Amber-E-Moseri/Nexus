@@ -27,11 +27,31 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   })
 }
 
-async function verifyServiceRole(req: Request): Promise<boolean> {
+async function verifyAccess(req: Request): Promise<boolean> {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return false
   const token = authHeader.replace('Bearer ', '')
-  return token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+
+  // Service role key — cron/CLI access
+  if (token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) return true
+
+  // User JWT — must be super_admin
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    )
+    const { data: { user }, error } = await supabase.auth.getUser(token)
+    if (error || !user) return false
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    return profile?.role === 'super_admin'
+  } catch {
+    return false
+  }
 }
 
 function buildAnnouncementHtml(
@@ -107,7 +127,7 @@ function buildAnnouncementHtml(
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed' })
-  if (!(await verifyServiceRole(req))) return jsonResponse(401, { error: 'Unauthorized' })
+  if (!(await verifyAccess(req))) return jsonResponse(401, { error: 'Unauthorized' })
 
   const body = await req.json().catch(() => null)
   if (!body?.feature_name || !body?.description || !body?.cta_url || !body?.cta_label) {

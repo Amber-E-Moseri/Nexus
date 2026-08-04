@@ -96,6 +96,7 @@ const PersonalIntegrationsPage = lazy(() => import('./pages/settings/PersonalInt
 const CampusEditsPage = lazy(() => import('./pages/admin/CampusEditsPage'))
 const CampusPhotosSettings = lazy(() => import('./pages/settings/CampusPhotosSettings'))
 const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
+const EmailAdminPage = lazy(() => import('./pages/admin/EmailAdminPage'))
 const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
 const RegistrationPublicPage = lazy(() => import('./pages/events/RegistrationPublicPage'))
 const SubscribePage = lazy(() => import('./pages/communications/SubscribePage'))
@@ -237,6 +238,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['super_admin']}>
                 <AdminPermissionsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/emails"
+            element={
+              <ProtectedRoute roles={['super_admin']}>
+                <EmailAdminPage />
               </ProtectedRoute>
             }
           />

@@ -769,6 +769,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
                   { label: 'Calendar Management', to: '/calendar-management', icon: CalendarDays },
                   { label: 'Campus Photos', to: '/settings/campus-photos', icon: Image },
                   { label: 'Support Tickets', to: '/admin/tickets', icon: HeadphonesIcon },
+                  { label: 'Email Management', to: '/admin/emails', icon: Mail },
                 ] : []),
                 // Settings
                 { label: 'Settings', to: '/settings', icon: Settings },
@@ -1645,6 +1646,14 @@ export default function Sidebar({ isMobileDrawer = false }) {
                 icon={Ticket}
                 label="Support Tickets"
                 to="/admin/tickets"
+              />
+            )}
+            {role === 'super_admin' && (
+              <SidebarItem
+                active={isPathActive(location.pathname, '/admin/emails')}
+                icon={Mail}
+                label="Email Management"
+                to="/admin/emails"
               />
             )}
           </>
