@@ -66,6 +66,13 @@ function todayIso() {
   return new Date().toISOString().split('T')[0]
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function validContactId(value) {
+  const id = String(value || '').trim()
+  return UUID_PATTERN.test(id) ? id : null
+}
+
 // ── Contacts ──────────────────────────────────────────────────────────────────
 
 // phone/email columns ship in migration 20261221000000. Until it's applied
@@ -185,12 +192,14 @@ async function setContactActive({ personId, active }) {
 // ── Interactions ──────────────────────────────────────────────────────────────
 
 async function getInteractions({ personId }) {
+  const contactId = validContactId(personId)
+  if (!contactId) return []
   const pid = await myPastorId()
   const { data, error } = await supabase
     .from('flock_interactions')
     .select('id, interacted_at, result, outcome_type, summary, next_action, next_action_datetime, meeting_id')
     .eq('pastor_id', pid)
-    .eq('contact_id', personId)
+    .eq('contact_id', contactId)
     .order('interacted_at', { ascending: false })
   if (error) throw new Error(error.message)
   return (data || []).map(i => ({
@@ -207,10 +216,11 @@ async function getInteractions({ personId }) {
 }
 
 async function saveInteraction({ personId, fullName, result, summary, nextAction, nextActionDateTime, meetingId, interactedAt }) {
+  const contactId = validContactId(personId)
   const { data: interaction, error: intErr } = await supabase
     .from('flock_interactions')
     .insert({
-      contact_id: personId || null,
+      contact_id: contactId,
       contact_name: fullName || '',
       result: result || '',
       summary: summary || '',
@@ -224,7 +234,7 @@ async function saveInteraction({ personId, fullName, result, summary, nextAction
   if (intErr) throw new Error(intErr.message)
 
   // Update contact's cadence tracking fields
-  if (personId) {
+  if (contactId) {
     const now = new Date().toISOString()
     const isReached = result === 'Reached'
     let patch = { last_attempt: now }
@@ -232,14 +242,14 @@ async function saveInteraction({ personId, fullName, result, summary, nextAction
       const { data: contact } = await supabase
         .from('flock_contacts')
         .select('cadence_days')
-        .eq('id', personId)
+        .eq('id', contactId)
         .single()
       const cadence = contact?.cadence_days || 28
       const nextDue = new Date(Date.now() + cadence * 86400000)
       const nextIso = nextDue.toISOString().split('T')[0]
       patch = { last_attempt: now, last_successful_contact: now, next_due_date: nextIso, due_status: 'On Track' }
     }
-    await supabase.from('flock_contacts').update(patch).eq('id', personId)
+    await supabase.from('flock_contacts').update(patch).eq('id', contactId)
   }
 
   return { success: true, interactionId: interaction.id }
@@ -313,8 +323,9 @@ async function getTodos() {
 
 async function saveTodos({ interactionId, personId, personName, todos }) {
   if (!todos || !todos.length) return { success: true }
+  const contactId = validContactId(personId)
   const rows = todos.map(t => ({
-    contact_id: !personId || personId === 'manual' ? null : personId,
+    contact_id: contactId,
     contact_name: personName || 'My Tasks',
     interaction_id: interactionId && !String(interactionId).startsWith('manual') ? interactionId : null,
     text: t.text || '',
@@ -346,10 +357,11 @@ async function updateTodoDueDate({ todoId, dueDate }) {
 }
 
 async function updateTodoAssignee({ todoId, personId, personName }) {
+  const contactId = validContactId(personId)
   const { error } = await supabase
     .from('flock_todos')
     .update({
-      contact_id: !personId || personId === 'manual' ? null : personId,
+      contact_id: contactId,
       contact_name: personName || 'My Tasks',
     })
     .eq('id', todoId)
