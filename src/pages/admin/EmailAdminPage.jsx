@@ -53,7 +53,7 @@ function StatCard({ label, value, sub }) {
   )
 }
 
-function buildPreviewHtml(form, frontendUrl = 'https://blwcannexus.org') {
+function buildPreviewHtml(form, frontendUrl = 'https://nexus.lwcanada.org') {
   const year = new Date().getFullYear()
   const benefits = form.benefits
     .split('\n')
@@ -117,8 +117,8 @@ export default function EmailAdminPage() {
     tagline: '',
     description: '',
     benefits: '',
-    cta_label: 'Try it now',
-    cta_url: '',
+    cta_label: 'Go to Dashboard',
+    cta_url: 'https://nexus.lwcanada.org',
   })
 
   // Audience targeting

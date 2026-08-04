@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
 
   const resendApiKey = Deno.env.get('RESEND_API_KEY')
   const fromEmail = Deno.env.get('FROM_EMAIL') ?? 'Nexus <noreply@blwcannexus.ca>'
-  const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://blwcannexus.org'
+  const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://nexus.lwcanada.org'
   const year = new Date().getFullYear()
 
   if (!resendApiKey) return jsonResponse(500, { error: 'Missing RESEND_API_KEY' })

@@ -17,11 +17,17 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   })
 }
 
-async function verifyServiceRole(req: Request): Promise<boolean> {
+async function verifyAccess(req: Request, supabaseAdmin: ReturnType<typeof createClient>): Promise<boolean> {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return false
   const token = authHeader.replace('Bearer ', '')
-  return token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!token) return false
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
+    if (error || !user) return false
+    const { data: profile } = await supabaseAdmin.from('users').select('role').eq('id', user.id).single()
+    return profile?.role === 'super_admin'
+  } catch { return false }
 }
 
 type TopTask = { title: string; due_date: string | null; department: string | null }
@@ -174,16 +180,22 @@ function buildDigestHtml(
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed' })
-  if (!(await verifyServiceRole(req))) return jsonResponse(401, { error: 'Unauthorized' })
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   )
 
+  if (!(await verifyAccess(req, supabase))) return jsonResponse(401, { error: 'Unauthorized' })
+
+  const body = await req.json().catch(() => ({}))
+  const testUserIds: string[] | undefined = Array.isArray(body?.user_ids) && body.user_ids.length
+    ? body.user_ids
+    : undefined
+
   const resendApiKey = Deno.env.get('RESEND_API_KEY')
   const fromEmail = Deno.env.get('FROM_EMAIL') ?? 'Nexus <noreply@blwcannexus.ca>'
-  const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://blwcannexus.org'
+  const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://nexus.lwcanada.org'
 
   if (!resendApiKey) return jsonResponse(500, { error: 'Missing RESEND_API_KEY' })
 
@@ -196,11 +208,13 @@ Deno.serve(async (req) => {
   const year = now.getFullYear()
 
   // ── 1. All active users ──────────────────────────────────────────────────────
-  const { data: users, error: usersError } = await supabase
+  let usersQuery = supabase
     .from('users')
     .select('id, name, email, role, department_id, last_active_at')
     .eq('status', 'active')
     .not('email', 'is', null)
+  if (testUserIds) usersQuery = usersQuery.in('id', testUserIds)
+  const { data: users, error: usersError } = await usersQuery
 
   if (usersError) return jsonResponse(500, { error: usersError.message })
   if (!users?.length) return jsonResponse(200, { sent: 0, message: 'No active users' })
