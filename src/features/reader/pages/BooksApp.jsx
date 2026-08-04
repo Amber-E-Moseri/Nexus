@@ -10,11 +10,12 @@ import { useAnnotations } from '../hooks/useAnnotations'
 import { useAudioPlayer } from '../hooks/useAudioPlayer'
 import { usePdfSave } from '../hooks/usePdfSave'
 import { clearTTSCache } from '../services/openai-tts'
-import { listStoredBooks, saveStoredBook } from '../services/library-storage'
+import { listStoredBooks, saveStoredBook, uploadBookPdf, hydrateBook } from '../services/library-storage'
 
 export default function BooksApp() {
   const [page, setPage] = useState('home')
   const [book, setBook] = useState(null)
+  const [bookLoading, setBookLoading] = useState(false)
   const [voice, setVoice] = useState(() => localStorage.getItem('immerse-voice') || 'Nova')
   const [speed, setSpeed] = useState(() => Number(localStorage.getItem('immerse-speed')) || 1.0)
   const [library, setLibrary] = useState([])
@@ -30,40 +31,51 @@ export default function BooksApp() {
   const { currentIdx, isPlaying, elapsedTime, totalTime, play, pause, seekToIdx, setSpeed: setPlayerSpeed, setVoice: setPlayerVoice } = useAudioPlayer(sentences, voice, speed, book?.progressIndex ?? 0)
   const { saveState, saveError, saveHighlights } = usePdfSave()
 
+  // Load library from Supabase on mount
   useEffect(() => {
     let active = true
     listStoredBooks()
-      .then((books) => {
-        if (!active) return
-        setLibrary(books)
-        setBook((currentBook) => currentBook || books[0] || null)
-      })
-      .catch((error) => console.error('Unable to load Immerse library', error))
+      .then((books) => { if (active) setLibrary(books) })
+      .catch((err) => console.error('Unable to load Immerse library', err))
     return () => { active = false }
   }, [])
 
+  // Persist preferences
   useEffect(() => { localStorage.setItem('immerse-voice', voice) }, [voice])
   useEffect(() => { localStorage.setItem('immerse-speed', String(speed)) }, [speed])
   useEffect(() => { localStorage.setItem('immerse-font-size', String(fontSize)) }, [fontSize])
   useEffect(() => { localStorage.setItem('immerse-line-height', String(lineHeight)) }, [lineHeight])
 
+  // Sync reading progress to Supabase (debounced)
   useEffect(() => {
     if (!book?.id || !sentences.length) return
-    const updatedBook = { ...book, progressIndex: currentIdx, lastReadAt: new Date().toISOString() }
+    const updated = { ...book, progressIndex: currentIdx, lastReadAt: new Date().toISOString() }
     const timer = setTimeout(() => {
-      setLibrary((previous) => previous.map((item) => item.id === book.id ? updatedBook : item))
-      saveStoredBook(updatedBook).catch((error) => console.error('Unable to save reading progress', error))
-    }, 350)
+      setLibrary((prev) => prev.map((b) => b.id === book.id ? { ...b, progressIndex: currentIdx } : b))
+      saveStoredBook(updated).catch((err) => console.error('Progress sync failed', err))
+    }, 3000)
     return () => clearTimeout(timer)
-  }, [book, currentIdx, sentences.length])
+  }, [book?.id, currentIdx, sentences.length])
 
-  function openBook(b) {
+  async function openBook(b) {
+    // If the book has no sentences (loaded from Supabase on a new device),
+    // fetch the PDF from Storage and re-extract text before opening.
+    if (!b.sentences?.length) {
+      setBookLoading(true)
+      try {
+        b = await hydrateBook(b)
+      } catch (err) {
+        console.error('Failed to load book content', err)
+      } finally {
+        setBookLoading(false)
+      }
+    }
     setBook(b)
     setLibrary((prev) => prev.some((x) => x.id === b.id) ? prev : [...prev, b])
     setPage('reader')
   }
 
-  function handleImport(bookData) {
+  async function handleImport(bookData) {
     const b = {
       id: crypto.randomUUID(),
       progressIndex: 0,
@@ -71,7 +83,11 @@ export default function BooksApp() {
       ...bookData,
     }
     setShowImport(false)
-    saveStoredBook(b).catch((error) => console.error('Unable to save imported book', error))
+    // Save metadata + local cache, then upload PDF to Storage in background
+    saveStoredBook(b).catch((err) => console.error('Unable to save imported book', err))
+    if (b.pdfBuffer) {
+      uploadBookPdf(b.id, b.pdfBuffer).catch((err) => console.error('PDF upload failed', err))
+    }
     openBook(b)
   }
 
@@ -97,7 +113,15 @@ export default function BooksApp() {
 
   return (
     <div className="immerse-app">
-      {page === 'home' && (
+      {bookLoading && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--im-bg)', zIndex: 50, gap: 14 }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid var(--im-border)', borderTopColor: 'var(--im-blue)', animation: 'spin 0.7s linear infinite' }} />
+          <span style={{ fontSize: 13, color: 'var(--im-text-dim)', fontWeight: 500 }}>Loading book…</span>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+
+      {!bookLoading && page === 'home' && (
         <ReaderHomePage
           currentBook={book}
           library={library}
@@ -107,7 +131,7 @@ export default function BooksApp() {
           onImport={() => setShowImport(true)}
         />
       )}
-      {page === 'library' && (
+      {!bookLoading && page === 'library' && (
         <ReaderLibraryPage
           library={library}
           onOpenBook={openBook}
@@ -115,7 +139,7 @@ export default function BooksApp() {
           onImport={() => setShowImport(true)}
         />
       )}
-      {page === 'reader' && book && (
+      {!bookLoading && page === 'reader' && book && (
         <ReaderPage
           book={book}
           sentences={sentences}
@@ -144,11 +168,6 @@ export default function BooksApp() {
           onOpenSettings={() => setShowSettings(true)}
           onEndSession={handleEndSession}
         />
-      )}
-
-      {!book && page === 'home' && library.length === 0 && !showImport && (
-        <div style={{ position: 'absolute', bottom: 80, right: 20 }}>
-        </div>
       )}
 
       {showImport && <ImportModal onClose={() => setShowImport(false)} onImport={handleImport} />}
