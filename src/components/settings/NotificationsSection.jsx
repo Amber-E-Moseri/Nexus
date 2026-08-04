@@ -302,13 +302,10 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
                         padding: '12px 8px'
                       }}
                     >
-                      {channel.alwaysOn ? (
-                        <div style={{
-                          fontSize: '20px',
-                          opacity: 0.5
-                        }}>
-                          ✓
-                        </div>
+                      {channel.alwaysOn && !notificationType.emailOnly ? (
+                        <div style={{ fontSize: '20px', opacity: 0.5 }}>✓</div>
+                      ) : notificationType.emailOnly && channel.id !== 'email' ? (
+                        <span style={{ opacity: 0.2, fontSize: 14 }}>—</span>
                       ) : (
                         <label style={{
                           display: 'inline-flex',
@@ -317,7 +314,7 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
                         }}>
                           <input
                             type="checkbox"
-                            checked={preferences[notificationType.key]?.[channel.id] ?? false}
+                            checked={preferences[notificationType.key]?.[channel.id] ?? (notificationType.emailOnly && channel.id === 'email' ? true : false)}
                             onChange={() => handleChannelToggle(notificationType.key, channel.id)}
                             disabled={saving[`${notificationType.key}-${channel.id}`]}
                             style={{
@@ -344,7 +341,7 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
           backgroundColor: 'var(--surface-secondary)',
           borderTop: '1px solid var(--border)'
         }}>
-          ✓ = Always enabled | Unchecked = Disabled
+          ✓ = Always enabled | — = Not applicable | Unchecked = Disabled
         </div>
       </div>
 
