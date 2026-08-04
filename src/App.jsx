@@ -70,6 +70,7 @@ const UsersPage = lazyRoute('/people', () => import('./pages/people/UsersPage'))
 const AutomationsPage = lazy(() => import('./pages/platform/AutomationsPage'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const ConfirmInvite = lazy(() => import('./pages/auth/ConfirmInvite'))
+const McpAuthorize = lazy(() => import('./pages/auth/McpAuthorize'))
 const SetPassword = lazy(() => import('./pages/auth/SetPassword'))
 const SignupInvite = lazy(() => import('./pages/auth/SignupInvite'))
 const SpacesList = lazy(() => import('./pages/spaces/SpacesList'))
@@ -150,6 +151,7 @@ export default function App() {
       <Route path="/subscribe" element={<SubscribePage />} />
       <Route path="/confirm-subscription/:token" element={<ConfirmSubscriptionPage />} />
       <Route element={<ProtectedRoute />}>
+        <Route path="/mcp/authorize" element={<McpAuthorize />} />
         <Route path="/demo/glow-card" element={<GlowCardDemo />} />
         <Route
           path="/books"

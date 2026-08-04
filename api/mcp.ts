@@ -19,12 +19,13 @@ const UUID = z.string().uuid()
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD.')
 
 type ApiKey = {
-  id: string
+  id: string | null
   key_hash: string
   created_by: string
   department_id: string | null
   sprint_id: string | null
   permissions: string[]
+  auth_type?: 'api_key' | 'oauth'
 }
 
 type Actor = {
@@ -93,12 +94,19 @@ async function authenticate(supabase: SupabaseClient, authorization: string | un
   const token = authorization?.replace(/^Bearer\s+/i, '').trim()
   if (!token) throw new ToolError('AUTHENTICATION_FAILED', 'Provide an API key in the Authorization: Bearer header.')
 
-  const { data: key, error: keyError } = await supabase
+  const { data: oauthToken } = await supabase
+    .from('mcp_oauth_tokens')
+    .select('id, token_hash, user_id, scopes, expires_at, revoked')
+    .eq('token_hash', hashKey(token)).maybeSingle()
+  const { data: apiKey, error: keyError } = oauthToken ? { data: null, error: null } : await supabase
     .from('api_keys')
     .select('id, key_hash, created_by, department_id, sprint_id, permissions, expires_at, revoked, disabled')
     .eq('key_hash', hashKey(token))
     .maybeSingle()
 
+  const key = oauthToken
+    ? { id: null, key_hash: oauthToken.token_hash, created_by: oauthToken.user_id, department_id: null, sprint_id: null, permissions: oauthToken.scopes, auth_type: 'oauth' as const, revoked: oauthToken.revoked, disabled: false, expires_at: oauthToken.expires_at }
+    : apiKey
   if (keyError || !key || !key.created_by || key.revoked || key.disabled || (key.expires_at && new Date(key.expires_at) <= new Date())) {
     throw new ToolError('AUTHENTICATION_FAILED', 'The API key is invalid, disabled, revoked, or expired.')
   }
@@ -169,7 +177,7 @@ function currentWeek() {
 
 async function audit(supabase: SupabaseClient, actor: Actor, toolName: string, success: boolean, errorCode?: string) {
   await supabase.from('mcp_tool_audit_log').insert({
-    api_key_id: actor.apiKey.id,
+    api_key_id: actor.apiKey.auth_type === 'oauth' ? null : actor.apiKey.id,
     user_id: actor.id,
     tool_name: toolName,
     success,
@@ -181,6 +189,11 @@ async function enforceRateLimit(supabase: SupabaseClient, actor: Actor) {
   // Recheck the exact key hash immediately before a tool executes. This makes
   // regeneration/revocation effective even if it happens after HTTP auth but
   // before MCP dispatches the JSON-RPC tool call.
+  if (actor.apiKey.auth_type === 'oauth') {
+    const { data: oauth } = await supabase.from('mcp_oauth_tokens').select('id, expires_at, revoked').eq('token_hash', actor.apiKey.key_hash).maybeSingle()
+    if (!oauth || oauth.revoked || (oauth.expires_at && new Date(oauth.expires_at) <= new Date())) throw new ToolError('AUTHENTICATION_FAILED', 'This OAuth connection is revoked or expired.')
+    return
+  }
   const { data: currentKey } = await supabase
     .from('api_keys')
     .select('id, expires_at, revoked, disabled')
@@ -369,7 +382,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     sendJsonRpcError(res, 405, 'METHOD_NOT_ALLOWED', 'Use POST for MCP requests.')
     return
   }
-  const url = process.env.SUPABASE_URL
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !serviceRoleKey) {
     sendJsonRpcError(res, 500, 'SERVER_NOT_CONFIGURED', 'The Nexus MCP connector is not configured.')
@@ -386,6 +399,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     const safe = safeError(error)
     const status = safe.code === 'AUTHENTICATION_FAILED' || safe.code === 'KEY_SCOPE_DENIED' ? 401 : 500
+    if (status === 401) {
+      res.setHeader('WWW-Authenticate', 'Bearer resource_metadata="https://nexus.lwcanada.org/.well-known/oauth-protected-resource"')
+    }
     if (!res.headersSent) sendJsonRpcError(res, status, safe.code, safe.message)
   }
 }
