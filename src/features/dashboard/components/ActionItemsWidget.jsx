@@ -45,7 +45,14 @@ export default function ActionItemsWidget({ userId }) {
       old.map((item) => (item.task_id === taskId ? { ...item, status: newStatus } : item)),
     )
     try {
-      await updateTask(taskId, { statusCategory })
+      const updatedTask = await updateTask(taskId, { statusCategory })
+      queryClient.setQueryData(queryKey, (old = []) =>
+        old.map((item) => (item.task_id === taskId ? {
+          ...item,
+          status: updatedTask.status,
+          status_id: updatedTask.status_id,
+        } : item)),
+      )
     } catch (error) {
       console.error('Failed to update task status:', error)
       refetch()

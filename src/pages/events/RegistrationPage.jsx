@@ -66,17 +66,18 @@ export default function RegistrationPage() {
         return
       }
 
-      // Pastors are always scoped to their own subgroup regardless of sprint team
+      // Pastors with an explicit subgroup assignment are scoped to those subgroups.
+      // Pastors without one fall through to the sprint team check so that being
+      // added to a sprint team (e.g. Foundation School) still grants access.
       if (role === 'pastor') {
         const subgroups = await getPastorSubgroups()
         if (subgroups.length) {
           setLimitedToSubgroups(subgroups)
           setCanAccess('limited')
-        } else {
-          setCanAccess(false)
+          setLoading(false)
+          return
         }
-        setLoading(false)
-        return
+        // No explicit assignment — fall through to sprint team membership check below
       }
 
       // Look up "This Is It 2.0" sprint

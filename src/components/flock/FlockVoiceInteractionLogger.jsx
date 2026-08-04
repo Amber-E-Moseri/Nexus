@@ -243,7 +243,12 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
       <div style={{ display: 'grid', gap: '16px' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Transcript</h3>
-          <p style={{ margin: '8px 0 0', fontSize: '13px', color: FLOCK.muted, lineHeight: 1.5 }}>{transcript}</p>
+          <textarea
+            value={transcript}
+            onChange={(e) => setTranscript(e.target.value)}
+            rows={5}
+            style={{ marginTop: '8px', width: '100%', fontSize: '13px', color: FLOCK.text, lineHeight: 1.5, resize: 'vertical', border: `1px solid ${FLOCK.border}`, borderRadius: '8px', padding: '10px 12px', fontFamily: FLOCK.fontBody, background: FLOCK.surface, boxSizing: 'border-box' }}
+          />
         </div>
 
         {extractedData.summary && (
@@ -309,10 +314,10 @@ export default function FlockVoiceInteractionLogger({ contactId, contactName, on
           <button
             type="button"
             onClick={saveInteractionAndTodos}
-            disabled={saving || !selectedTodos.size}
-            style={{ padding: '11px 20px', background: FLOCK.purple, color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: saving ? 'wait' : 'pointer', opacity: saving || !selectedTodos.size ? 0.7 : 1, fontFamily: FLOCK.fontBody }}
+            disabled={saving}
+            style={{ padding: '11px 20px', background: FLOCK.purple, color: '#FFFFFF', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 700, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1, fontFamily: FLOCK.fontBody }}
           >
-            {saving ? 'Saving…' : 'Save selected'}
+            {saving ? 'Saving…' : selectedTodos.size ? 'Save selected' : 'Save interaction'}
           </button>
           <button
             type="button"

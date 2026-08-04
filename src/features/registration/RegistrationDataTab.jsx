@@ -175,6 +175,13 @@ export default function RegistrationDataTab({
   const [statusFilter,    setStatusFilter]    = useState('all');
   const [subgroupFilter,  setSubgroupFilter]  = useState('All');
   const [fellowshipFilter,setFellowshipFilter] = useState('All');
+
+  // For scoped users, auto-select their subgroup once data loads
+  useEffect(() => {
+    if (isLimited && subgroups.length > 0 && subgroupFilter === 'All') {
+      setSubgroupFilter(subgroups[0])
+    }
+  }, [isLimited, subgroups]);
   const [search,          setSearch]           = useState('');
   const [sortField,       setSortField]        = useState('name');
   const [sortDir,         setSortDir]          = useState('asc');
@@ -208,7 +215,7 @@ export default function RegistrationDataTab({
   const [copyLabel,       setCopyLabel]        = useState('Copy link');
   const [tokenLoading,    setTokenLoading]     = useState(false);
 
-  const showFees = hasFinanceAccess || isLimited;
+  const showFees = hasFinanceAccess || role === 'pastor';
 
   // bulk email sender
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -404,16 +411,20 @@ export default function RegistrationDataTab({
     return [...s].sort();
   }, [allPeople]);
 
-  // ── stats (always from full list, not filtered) ───────────────────────────
+  // ── stats scoped to active subgroup filter ────────────────────────────────
+  const statsSource = useMemo(() =>
+    subgroupFilter === 'All' ? allPeople : allPeople.filter(p => p.subgroup === subgroupFilter),
+    [allPeople, subgroupFilter]);
+
   const stats = useMemo(() => {
     const s = { total: 0, not_registered: 0, registered_outstanding: 0, confirmed: 0, absent: 0 };
-    allPeople.forEach(p => { s.total++; s[p.registrationStatus] = (s[p.registrationStatus] || 0) + 1; });
+    statsSource.forEach(p => { s.total++; s[p.registrationStatus] = (s[p.registrationStatus] || 0) + 1; });
     return s;
-  }, [allPeople]);
+  }, [statsSource]);
 
-  const not_registered = useMemo(() => allPeople.filter(r => r.registrationStatus === 'not_registered').length, [allPeople]);
-  const registered_outstanding = useMemo(() => allPeople.filter(r => r.registrationStatus === 'registered_outstanding').length, [allPeople]);
-  const confirmed = useMemo(() => allPeople.filter(r => r.registrationStatus === 'confirmed').length, [allPeople]);
+  const not_registered = useMemo(() => statsSource.filter(r => r.registrationStatus === 'not_registered').length, [statsSource]);
+  const registered_outstanding = useMemo(() => statsSource.filter(r => r.registrationStatus === 'registered_outstanding').length, [statsSource]);
+  const confirmed = useMemo(() => statsSource.filter(r => r.registrationStatus === 'confirmed').length, [statsSource]);
   const statusCounts = { not_registered, registered_outstanding, confirmed };
   const totalToEmail = Object.entries(selectedStatuses).reduce((sum, [status, selected]) => sum + (selected ? statusCounts[status] : 0), 0);
 
@@ -553,7 +564,7 @@ export default function RegistrationDataTab({
       {/* ── Subgroup pill filters ────────────────────────────────────── */}
       {subgroups.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-          {['All', ...subgroups].map(sg => {
+          {(isLimited ? subgroups : ['All', ...subgroups]).map(sg => {
             const active = subgroupFilter === sg;
             return (
               <button
@@ -606,8 +617,8 @@ export default function RegistrationDataTab({
         <div style={{ fontSize: 12, color: C.mute, whiteSpace: 'nowrap' }}>
           {filtered.length} of {stats.total}
         </div>
-        <Btn tone="ghost" small onClick={() => downloadCSV('registration-data.csv', filtered, exportCols)}>
-          <Download size={13} /> Export
+        <Btn tone="ghost" small onClick={() => downloadCSV('registration-data.csv', filtered.map((r, i) => ({ ...r, _rowNum: i + 1 })), exportCols)}>
+          <Download size={13} /> Export ({filtered.length})
         </Btn>
         <Btn tone="ghost" small onClick={() => setShowShareModal(true)}>
           <Link2 size={13} /> Share
@@ -648,7 +659,7 @@ export default function RegistrationDataTab({
                     <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Dietary</th>
                   </>
                 )}
-                {canEdit && <th style={{ borderBottom: `1px solid ${C.line}`, minWidth: 100 }} />}
+                <th style={{ borderBottom: `1px solid ${C.line}`, minWidth: 100 }} />
                 <th style={{ width: 40, borderBottom: `1px solid ${C.line}` }} />
               </tr>
             </thead>
@@ -661,7 +672,7 @@ export default function RegistrationDataTab({
                   || (p.linked_registration_email ? mergedByEmail[p.linked_registration_email] : null)
                   || null;
                 const isAbsentExpanded = absentExpandedEmail === p.email;
-                const colCount = (showFees ? 10 : 9) + (canEdit ? 1 : 0) + 1 + (showFullView ? 6 : 0);
+                const colCount = (showFees ? 10 : 9) + 1 + 1 + (showFullView ? 6 : 0);
                 return (
                   <React.Fragment key={p.email}>
                   <tr
@@ -716,12 +727,11 @@ export default function RegistrationDataTab({
                     <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}` }}>
                       <Pill tone={st.tone}>{st.label}</Pill>
                     </td>
-                    {/* Actions (canEdit only) */}
-                    {canEdit && (
-                      <td style={{ padding: '6px 10px', borderBottom: `1px solid ${C.line}` }}>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                          {/* Confirm button + flight flag */}
-                          {p.isRegistered && onConfirm && (
+                    {/* Actions */}
+                    <td style={{ padding: '6px 10px', borderBottom: `1px solid ${C.line}` }}>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                          {/* Confirm button + flight flag — pastors and above */}
+                          {p.isRegistered && onConfirm && (canEdit || role === 'pastor' || role === 'super_admin' || role === 'regional_secretary') && (
                             p.isConfirmed ? (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <button
@@ -762,7 +772,7 @@ export default function RegistrationDataTab({
                               undo absent
                             </button>
                           )}
-                          {p._fuzzyMatched && p._fuzzyMatchedEmail && !p.linked_registration_email && (
+                          {canEdit && p._fuzzyMatched && p._fuzzyMatchedEmail && !p.linked_registration_email && (
                             <button
                               onClick={() => onEditPerson?.(p.email, { linked_registration_email: p._fuzzyMatchedEmail })}
                               style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.green}`, background: C.greenBg, color: C.green, cursor: 'pointer', fontFamily: 'Inter', fontWeight: 600, whiteSpace: 'nowrap' }}
@@ -770,7 +780,7 @@ export default function RegistrationDataTab({
                               ✓ Validate match
                             </button>
                           )}
-                          {p.manually_added && (
+                          {canEdit && p.manually_added && (
                             <button
                               onClick={() => { if (confirm(`Remove ${p.full_name} from the working list?`)) onRemove?.(p.email); }}
                               style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: '1px solid #F44', background: 'transparent', color: '#D00', cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
@@ -780,7 +790,6 @@ export default function RegistrationDataTab({
                           )}
                         </div>
                       </td>
-                    )}
                     {/* Toggle button */}
                     <td style={{ padding: '6px 8px', borderBottom: `1px solid ${C.line}`, width: 36, textAlign: 'center', color: C.mute, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                       —

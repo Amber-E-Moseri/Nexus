@@ -230,7 +230,7 @@ function Btn({ children, onClick, tone = 'primary', small, disabled }) {
 const ALL_TABS = [
   { key: 'overview', label: 'Overview', icon: Home },
   { key: 'central',  label: 'Registration Data', icon: Users },
-  { key: 'confirm', label: 'Delegates', icon: CheckCircle2 },
+  { key: 'confirm', label: 'Delegates', icon: CheckCircle2, hidden: true },
   { key: 'discipleship', label: 'Foundation & Baptism', icon: Church },
   { key: 'compliance', label: 'Hospitality', icon: AlertCircle },
   { key: 'rooms', label: 'Room Assignments', icon: DoorOpen },
@@ -582,6 +582,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
 
   const visibleTabs = useMemo(() => {
     const allowed = ALL_TABS.filter(t => {
+      if (t.hidden) return false;
       // Finance: visible to super_admin (restricted msg on click), hidden to others without access
       if (t.restricted && !hasFinanceAccess && role !== 'super_admin') return false;
       // Rooms: Accommodation/Programs teams, reg sec, super admin only
@@ -869,7 +870,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
 
       <div style={{ padding: 28, maxWidth: 1280, margin: '0 auto' }}>
         {tab === 'overview' && (
-          <OverviewTab {...{ totalRegs, totalRegTarget, subgroups, bySubgroup, targets, setTarget, merged, isLimited }} />
+          <OverviewTab {...{ totalRegs, totalRegTarget, subgroups, bySubgroup, targets, setTarget, merged, isLimited,
+            canSetTargets: role === 'super_admin' || role === 'regional_secretary' || (role === 'pastor' && !isGloballyScoped) }} />
         )}
         {tab === 'central' && (
           <RegistrationDataTab
@@ -912,7 +914,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
 }
 
 // ============ OVERVIEW ============
-function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets, setTarget, merged, isLimited }) {
+function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets, setTarget, merged, isLimited, canSetTargets }) {
   const regPct = totalRegTarget ? Math.round((totalRegs / totalRegTarget) * 100) : 0;
   const confirmedCount = useMemo(() => merged.filter(r => r.fullyConfirmed).length, [merged]);
   const totalFlightsNeeded = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.flightsNeeded || 0), 0), [bySubgroup]);
@@ -955,8 +957,10 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets
                 <tr key={sg}>
                   <td style={{ fontWeight: 600 }}>{sg}</td>
                   <td>
-                    <input type="number" style={{ width: 60 }} value={t.reg ?? ''} placeholder="0"
-                      onChange={e => setTarget(sg, 'reg', e.target.value)} />
+                    {canSetTargets
+                      ? <input type="number" style={{ width: 60 }} value={t.reg ?? ''} placeholder="0"
+                          onChange={e => setTarget(sg, 'reg', e.target.value)} />
+                      : <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{t.reg || '—'}</span>}
                   </td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 110 }}>
