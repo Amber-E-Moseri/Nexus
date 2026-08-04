@@ -47,7 +47,7 @@ function buildNudgeHtml(
 <div style="max-width:600px;margin:0 auto;background:#fff;">
 
   <div style="background:#4c2a92;padding:24px;text-align:center;">
-    <h1 style="margin:0 0 4px;font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.3px;">BLW CAN NEXUS</h1>
+    <h1 style="margin:0 0 4px;font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.3px;">Nexus</h1>
   </div>
 
   <div style="padding:28px;">
@@ -75,7 +75,7 @@ function buildNudgeHtml(
       <a href="${frontendUrl}/feedback" style="color:#4c2a92;text-decoration:none;font-weight:500;">let us know</a>
       so we can improve it, or
       <a href="${frontendUrl}/settings/notifications" style="color:#4c2a92;text-decoration:none;font-weight:500;">unsubscribe from these reminders</a>.
-      &nbsp;·&nbsp; © ${year} BLW CAN NEXUS
+      &nbsp;·&nbsp; © ${year} Nexus
     </p>
   </div>
 
@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
   )
 
   const resendApiKey = Deno.env.get('RESEND_API_KEY')
-  const fromEmail = Deno.env.get('FROM_EMAIL') ?? 'BLW CAN NEXUS <noreply@blwcannexus.ca>'
+  const fromEmail = Deno.env.get('FROM_EMAIL') ?? 'Nexus <noreply@blwcannexus.ca>'
   const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://blwcannexus.org'
 
   if (!resendApiKey) return jsonResponse(500, { error: 'Missing RESEND_API_KEY' })
@@ -207,7 +207,7 @@ Deno.serve(async (req) => {
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: fromEmail, to: [user.email], subject, html }),
+      body: JSON.stringify({ from: fromEmail, reply_to: ['info@lwcanada.org'], to: [user.email], subject, html }),
     })
 
     const emailResult = await emailRes.json().catch(() => ({}))
