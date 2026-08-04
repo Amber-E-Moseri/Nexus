@@ -233,27 +233,54 @@ Deno.serve(async (req) => {
   if (!eligible.length) return jsonResponse(200, { sent: 0, message: 'All users opted out' })
 
   // Task queries run over ALL active users so team data covers opted-out members too
-  // ── 3. Open tasks (not completed/cancelled) for all users ────────────────────
-  const { data: openTasks } = await supabase
-    .from('tasks')
-    .select('id, title, assignee_id, due_date, status_definition:status_id(category), spaces(name)')
-    .in('assignee_id', allUserIds)
-    .not('due_date', 'is', null)  // we still load null-due tasks via a second query below
+  // ── 3. Open tasks — check both task_assignees (multi) and assignee_id (legacy) ─
+  const isOpenCategory = (category: string | null) =>
+    !['completed', 'cancelled'].includes(category ?? '')
 
-  // Also load tasks without due dates for open count
-  const { data: allOpenTasks } = await supabase
-    .from('tasks')
-    .select('id, title, assignee_id, due_date, status_definition:status_id(category), spaces(name)')
-    .in('assignee_id', allUserIds)
+  // 3a. task_assignees table (current multi-assignee pattern)
+  const { data: assigneeRows } = await supabase
+    .from('task_assignees')
+    .select('user_id, task:task_id(id, title, due_date, status_definition:status_id(category))')
+    .in('user_id', allUserIds)
 
-  const isOpen = (t: { status_definition?: { category?: string } | null }) =>
-    !['completed', 'cancelled'].includes(t.status_definition?.category ?? '')
+  // 3b. Legacy assignee_id column (personal tasks + older tasks)
+  const { data: legacyTasks } = await supabase
+    .from('tasks')
+    .select('id, title, assignee_id, due_date, status_definition:status_id(category)')
+    .in('assignee_id', allUserIds)
+    .not('assignee_id', 'is', null)
+
+  // Merge both sources into user → taskMap (deduplicated by task ID)
+  type TaskEntry = { title: string; due_date: string | null; category: string | null }
+  const userTaskMaps: Record<string, Map<string, TaskEntry>> = {}
+
+  for (const row of assigneeRows ?? []) {
+    const t = row.task as { id: string; title: string; due_date: string | null; status_definition?: { category?: string } | null } | null
+    if (!t || !row.user_id) continue
+    const map = (userTaskMaps[row.user_id] ??= new Map())
+    map.set(t.id, {
+      title: t.title,
+      due_date: t.due_date ?? null,
+      category: (t.status_definition as { category?: string } | null)?.category ?? null,
+    })
+  }
+
+  for (const t of legacyTasks ?? []) {
+    if (!t.assignee_id) continue
+    const map = (userTaskMaps[t.assignee_id] ??= new Map())
+    if (!map.has(t.id)) {
+      map.set(t.id, {
+        title: t.title,
+        due_date: t.due_date ?? null,
+        category: (t.status_definition as { category?: string } | null)?.category ?? null,
+      })
+    }
+  }
 
   const openByUser: Record<string, { title: string; due_date: string | null; department: string | null }[]> = {}
-  for (const t of allOpenTasks ?? []) {
-    if (!isOpen(t)) continue
-    const dept = (t.spaces as { name?: string } | null)?.name ?? null
-    ;(openByUser[t.assignee_id] ??= []).push({ title: t.title, due_date: t.due_date ?? null, department: dept })
+  for (const [userId, taskMap] of Object.entries(userTaskMaps)) {
+    const open = [...taskMap.values()].filter((t) => isOpenCategory(t.category))
+    if (open.length) openByUser[userId] = open.map((t) => ({ title: t.title, due_date: t.due_date, department: null }))
   }
 
   // ── 4. Sprint memberships for eligible users ─────────────────────────────────
