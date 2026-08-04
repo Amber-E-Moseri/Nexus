@@ -461,6 +461,40 @@ const FAQ_SECTIONS = [
     ],
   },
   {
+    id: 'claude-cowork',
+    title: 'Claude Cowork',
+    items: [
+      {
+        q: 'What is Claude Cowork?',
+        a: 'Claude Cowork is the official integration that lets you use Claude AI to interact with your Nexus workspace. Once connected, you can ask Claude to list your tasks, create sprint tasks, check sprint progress, view weekly wins, and log meeting notes — all from the Claude interface on any device.',
+      },
+      {
+        q: 'How do I connect Claude to Nexus?',
+        a: 'Open Claude.ai and sign in. Go to Settings → Connectors and find the Nexus connector (nexus.lwcanada.org/api/mcp). Click Connect — Claude will open a Nexus authorization page. Sign in to Nexus if prompted, then click "Approve Nexus access." Claude will confirm the connection and you\'re ready to go.',
+      },
+      {
+        q: 'What can Claude do once it\'s connected to Nexus?',
+        a: 'With Nexus connected, Claude can: list all tasks assigned to you across spaces and sprints, create tasks in any sprint you have permission to manage, check the status and task-count breakdown of a sprint, view weekly wins for your department (or org-wide if you\'re an admin), and log meeting minutes to any meeting you can edit.',
+      },
+      {
+        q: 'Who can connect Claude to Nexus?',
+        a: 'Any active Nexus user can connect — no special role is required. Claude\'s access is scoped to your own account, so it can only see and do what you can do yourself in Nexus.',
+      },
+      {
+        q: 'How do I disconnect Claude from Nexus?',
+        a: 'In Claude.ai, go to Settings → Connectors → find the Nexus connector → click Disconnect. The token is revoked immediately and Claude can no longer access Nexus. You can reconnect at any time by following the connection steps again.',
+      },
+      {
+        q: 'Is my Nexus data safe when using Claude?',
+        a: 'Yes. The connection uses a short-lived OAuth token (8-hour sessions) scoped to your own account. No passwords or credentials are shared with Claude. Claude can only access the data and tools your Nexus role permits, and every tool call is logged in the Nexus MCP audit log.',
+      },
+      {
+        q: 'Why does the connector show "Connection issue" or fail to connect?',
+        a: 'Click "Try again" in the Claude connector settings — most connection issues are temporary and resolve on retry. If you see "add an OAuth Client ID," the registration step failed; clicking "Try again" restarts the full flow. If it keeps failing, make sure you\'re signed in to Nexus and that your account is active. Contact your admin if the problem persists.',
+      },
+    ],
+  },
+  {
     id: 'support',
     title: 'Support & Tickets',
     items: [
