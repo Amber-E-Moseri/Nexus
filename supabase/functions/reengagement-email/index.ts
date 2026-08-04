@@ -1,5 +1,5 @@
 // Scheduled: Daily 14:00 UTC (10 am Eastern) via pg_cron.
-// Fires for users inactive 14+ days. Max one dormant_nudge per 30 days per user.
+// Fires for users inactive 3+ days. Max one dormant_nudge per 30 days per user.
 // Spam guard checks email_delivery_log by recipient_email (no user_id column).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -101,8 +101,8 @@ Deno.serve(async (req) => {
   if (!resendApiKey) return jsonResponse(500, { error: 'Missing RESEND_API_KEY' })
 
   const now = new Date()
-  const fourteenDaysAgo = new Date(now)
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+  const threeDaysAgo = new Date(now)
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
   const thirtyDaysAgo = new Date(now)
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
   const today = now.toISOString().split('T')[0]
@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
     .select('id, name, email, last_active_at')
     .eq('status', 'active')
     .not('email', 'is', null)
-    .lt('last_active_at', fourteenDaysAgo.toISOString())
+    .lt('last_active_at', threeDaysAgo.toISOString())
 
   if (usersError) return jsonResponse(500, { error: usersError.message })
   if (!inactiveUsers?.length) return jsonResponse(200, { sent: 0, message: 'No inactive users' })
