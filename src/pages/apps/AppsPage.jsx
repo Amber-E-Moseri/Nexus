@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
-import { TrendingUp, Trophy, Map, Library, Send, BookOpen, FileText } from 'lucide-react'
+import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, UsersRound } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import { hasSpaceRole } from '../../lib/permissions'
 
 const PRIMARY = '#4C2A92'
 const BORDER = '#EDE8DC'
@@ -103,6 +104,9 @@ export default function AppsPage() {
   const canSeeMap = ['super_admin', 'dept_lead', 'regional_secretary', 'pastor'].includes(role)
   const canSeeLibrary = ['super_admin', 'regional_secretary'].includes(role)
   const canSeeCommunications = ['super_admin', 'regional_secretary', 'ors', 'dept_lead', 'programs'].includes(role)
+  const canMaintainRoster = ['super_admin', 'regional_secretary', 'dept_lead'].includes(role)
+    || hasSpaceRole(profile, null, 'ors')
+    || hasSpaceRole(profile, null, 'programs')
   const navigate = useNavigate()
 
   return (
@@ -132,6 +136,24 @@ export default function AppsPage() {
             description="Published meeting notes"
             onClick={() => navigate('/meetings/minutes')}
           />
+          <AppIcon
+            icon={ClipboardCheck}
+            label="Meeting Reports"
+            color="#4C2A92"
+            bg="#F1EEF6"
+            description="Attendance and report history"
+            onClick={() => navigate('/meetings?report=1')}
+          />
+          {canMaintainRoster && (
+            <AppIcon
+              icon={UsersRound}
+              label="Meeting Roster"
+              color="#2A5FA5"
+              bg="#E9F0FA"
+              description="Expected attendees"
+              onClick={() => navigate('/meetings?tab=roster')}
+            />
+          )}
           {isSuperAdmin && (
             <AppIcon
               icon={TrendingUp}

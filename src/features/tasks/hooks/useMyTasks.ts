@@ -123,30 +123,42 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
     setError(null)
 
     try {
-      // Fetch task IDs where user is a multi-assignee (via task_assignees table)
-      const { data: assignedTasks } = await supabase
-        .from('task_assignees')
-        .select('task_id')
-        .eq('user_id', userId)
+      // Parallel fetch: multi-assignee task IDs + sprint memberships.
+      // Sprint memberships let us pull tasks from custom sprints (department_id = null)
+      // that task_assignees RLS might not surface if the user is only a secondary assignee.
+      const [assignedTasksResult, sprintMembershipsResult] = await Promise.all([
+        supabase.from('task_assignees').select('task_id').eq('user_id', userId),
+        supabase.from('sprint_members').select('sprint_id').eq('user_id', userId),
+      ])
 
-      const assignedTaskIds = (assignedTasks ?? []).map((a) => a.task_id)
+      const assignedTaskIds = (assignedTasksResult.data ?? []).map((a: any) => a.task_id)
+      const memberSprintIds = (sprintMembershipsResult.data ?? []).map((m: any) => m.sprint_id)
 
-      // Build base query: created_by OR assigned_to OR multi-assigned
+      // Build base query: created_by OR assigned_to OR multi-assigned OR sprint member.
+      // Sprint IDs are included so tasks from custom sprints (no department_id) reach
+      // this hook. The myTasks memo in MyTasks.jsx then trims to assignee_id/task_assignees,
+      // so only tasks actually assigned to the user surface in the Mine tab.
       let query = supabase.from('tasks').select(TASK_SELECT).is('deleted_at', null)
 
       // Filter by user. Quick-view scopes are assignee-only; the default view
       // also includes tasks the user created (for the Delegated tab).
+      const sprintClause = memberSprintIds.length > 0
+        ? `,sprint_id.in.(${memberSprintIds.join(',')})`
+        : ''
+
       if (filters?.scope) {
         if (assignedTaskIds.length > 0) {
-          query = query.or(`assignee_id.eq.${userId},id.in.(${assignedTaskIds.join(',')})`)
+          query = query.or(`assignee_id.eq.${userId},id.in.(${assignedTaskIds.join(',')})${sprintClause}`)
         } else {
-          query = query.eq('assignee_id', userId)
+          query = memberSprintIds.length > 0
+            ? query.or(`assignee_id.eq.${userId}${sprintClause}`)
+            : query.eq('assignee_id', userId)
         }
       } else {
         if (assignedTaskIds.length > 0) {
-          query = query.or(`created_by.eq.${userId},assignee_id.eq.${userId},id.in.(${assignedTaskIds.join(',')})`)
+          query = query.or(`created_by.eq.${userId},assignee_id.eq.${userId},id.in.(${assignedTaskIds.join(',')})${sprintClause}`)
         } else {
-          query = query.or(`created_by.eq.${userId},assignee_id.eq.${userId}`)
+          query = query.or(`created_by.eq.${userId},assignee_id.eq.${userId}${sprintClause}`)
         }
       }
 
