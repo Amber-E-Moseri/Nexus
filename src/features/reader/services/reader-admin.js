@@ -4,9 +4,8 @@ import { downloadBookPdf, uploadBookPdfForUser } from './library-storage'
 export async function listUsersForAdmin() {
   const { data, error } = await supabase
     .from('users')
-    .select('id, full_name, email, role')
-    .eq('status', 'active')
-    .order('full_name')
+    .select('id, name, email, role')
+    .order('name')
   if (error) throw error
   return data ?? []
 }

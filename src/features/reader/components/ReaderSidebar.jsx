@@ -1,10 +1,39 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import NoteCard from './NoteCard'
 import { IconHighlight, IconNote } from '../icons'
 
-export default function ReaderSidebar({ book, highlights, notes, annotations, currentIdx, totalSentences, onAddHighlight, onAddNote, onRemoveAnnotation }) {
+function isChapterHeading(s) {
+  return /^(chapter|part|prologue|epilogue|introduction|preface|afterword)\b/i.test(s.trim()) ||
+    /^[A-Z\s\d]{4,40}$/.test(s.trim())
+}
+
+export default function ReaderSidebar({ book, sentences = [], highlights, notes, annotations, currentIdx, totalSentences, onAddHighlight, onAddNote, onRemoveAnnotation, onSeek }) {
   const [noteInput, setNoteInput] = useState('')
+  const [tab, setTab] = useState('chapters')
   const progress = totalSentences > 0 ? Math.round((currentIdx / totalSentences) * 100) : 0
+
+  const chapters = useMemo(() => {
+    const list = []
+    sentences.forEach((s, idx) => {
+      if (isChapterHeading(s) && s.trim().length < 50) {
+        list.push({ title: s.trim(), idx })
+      }
+    })
+    // If no headings detected, treat first sentence as chapter 1
+    if (list.length === 0 && sentences.length > 0) {
+      list.push({ title: 'Start', idx: 0 })
+    }
+    return list
+  }, [sentences])
+
+  const currentChapterIdx = useMemo(() => {
+    let ci = 0
+    for (let i = 0; i < chapters.length; i++) {
+      if (chapters[i].idx <= currentIdx) ci = i
+      else break
+    }
+    return ci
+  }, [chapters, currentIdx])
 
   function handleHighlight() {
     const sel = window.getSelection()
@@ -39,19 +68,56 @@ export default function ReaderSidebar({ book, highlights, notes, annotations, cu
         </div>
       </div>
 
-      {/* Annotations list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '1.2px', color: 'var(--im-blue)', textTransform: 'uppercase' }}>Highlights & Notes</span>
-          <span style={{ fontSize: 10, color: 'var(--im-text-dim)', background: 'var(--im-border)', borderRadius: 10, padding: '1px 7px' }}>{annotations.length}</span>
-        </div>
-        {annotations.length === 0 && (
-          <div style={{ fontSize: 12, color: 'var(--im-text-dim)', textAlign: 'center', marginTop: 24 }}>Select text to highlight or add a note</div>
-        )}
-        {annotations.map((a) => (
-          <NoteCard key={a.id} annotation={a} onRemove={onRemoveAnnotation} />
+      {/* Tabs */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--im-border)', flexShrink: 0 }}>
+        {[['chapters', 'Chapters'], ['notes', 'Notes']].map(([t, label]) => (
+          <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '9px 0', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', color: tab === t ? 'var(--im-blue)' : 'var(--im-text-dim)', borderBottom: tab === t ? '2px solid var(--im-blue)' : '2px solid transparent', marginBottom: -1 }}>
+            {label}
+          </button>
         ))}
       </div>
+
+      {/* Chapters tab */}
+      {tab === 'chapters' && (
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {chapters.map((ch, i) => {
+            const isActive = i === currentChapterIdx
+            const nextIdx = chapters[i + 1]?.idx ?? totalSentences
+            const chProgress = currentIdx >= ch.idx
+              ? Math.min(100, Math.round(((currentIdx - ch.idx) / Math.max(1, nextIdx - ch.idx)) * 100))
+              : 0
+            return (
+              <button key={ch.idx} onClick={() => onSeek?.(ch.idx)}
+                style={{ width: '100%', textAlign: 'left', padding: '10px 14px', background: isActive ? 'var(--im-blue-bg)' : 'none', border: 'none', borderBottom: '1px solid var(--im-border-lt)', cursor: 'pointer', display: 'block' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isActive ? 5 : 0 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? 'var(--im-blue)' : 'var(--im-text-dim)', minWidth: 20, fontFamily: 'Inter, sans-serif' }}>{i + 1}</span>
+                  <span style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, color: isActive ? 'var(--im-blue)' : 'var(--im-text)', fontFamily: 'Inter, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{ch.title}</span>
+                  {currentIdx >= ch.idx && currentIdx < nextIdx && (
+                    <span style={{ fontSize: 9, color: 'var(--im-blue)', fontWeight: 700, fontFamily: 'Inter, sans-serif', flexShrink: 0 }}>{chProgress}%</span>
+                  )}
+                </div>
+                {isActive && (
+                  <div style={{ height: 2, background: 'var(--im-border)', borderRadius: 1, marginLeft: 28, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${chProgress}%`, background: 'var(--im-blue)', transition: 'width 0.4s' }} />
+                  </div>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Notes tab */}
+      {tab === 'notes' && (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
+          {annotations.length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--im-text-dim)', textAlign: 'center', marginTop: 24 }}>Select text to highlight or add a note</div>
+          )}
+          {annotations.map((a) => (
+            <NoteCard key={a.id} annotation={a} onRemove={onRemoveAnnotation} />
+          ))}
+        </div>
+      )}
 
       {/* Note input */}
       <div style={{ padding: '0.75rem', borderTop: '1px solid var(--im-border)', background: 'var(--im-card)', flexShrink: 0 }}>

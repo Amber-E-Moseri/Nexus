@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { IconHome, IconLibrary, IconPlus, IconChevronDown } from '../icons'
 import BookCover from '../components/BookCover'
 
-export default function ReaderHomePage({ currentBook, library, currentProgress, onOpenBook, onGoLibrary, onImport }) {
+export default function ReaderHomePage({ currentBook, library, currentProgress, isAdmin, onOpenBook, onGoLibrary, onImport, onOpenAdmin }) {
   const navigate = useNavigate()
   const progress = currentBook
     ? Math.round((currentProgress / Math.max(1, (currentBook.sentences?.length ?? 1) - 1)) * 100)
@@ -28,12 +28,22 @@ export default function ReaderHomePage({ currentBook, library, currentProgress, 
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--im-text)', letterSpacing: '0.1px' }}>immerse</span>
           </div>
         </div>
-        <button
-          onClick={onImport}
-          style={{ minHeight: 32, padding: '0 12px', borderRadius: 6, background: 'var(--im-blue)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'Inter, sans-serif' }}
-        >
-          <IconPlus size={14} color="#fff" /> Import PDF
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {isAdmin && (
+            <button
+              onClick={onOpenAdmin}
+              style={{ minHeight: 32, padding: '0 12px', borderRadius: 6, background: 'var(--im-card)', border: '1px solid var(--im-border)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--im-text)', fontSize: 12, fontWeight: 700, fontFamily: 'Inter, sans-serif' }}
+            >
+              Admin
+            </button>
+          )}
+          <button
+            onClick={onImport}
+            style={{ minHeight: 32, padding: '0 12px', borderRadius: 6, background: 'var(--im-blue)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'Inter, sans-serif' }}
+          >
+            <IconPlus size={14} color="#fff" /> Import PDF
+          </button>
+        </div>
       </div>
 
       {/* Scrollable content */}

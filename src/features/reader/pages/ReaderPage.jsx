@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReadingPanel from '../components/ReadingPanel'
 import MobilePlayer from '../components/MobilePlayer'
@@ -16,8 +16,16 @@ export default function ReaderPage({
 }) {
   const navigate = useNavigate()
   const [playerVisible, setPlayerVisible] = useState(true)
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('immerse-view-mode') || 'scroll')
+  const [showChapters, setShowChapters] = useState(false)
   const lastScrollY = useRef(0)
   const isDesktop = window.innerWidth >= 768
+
+  function toggleViewMode() {
+    const next = viewMode === 'scroll' ? 'pages' : 'scroll'
+    setViewMode(next)
+    localStorage.setItem('immerse-view-mode', next)
+  }
 
   const annotations = [
     ...highlights.map((h) => ({ ...h })),
@@ -59,6 +67,9 @@ export default function ReaderPage({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={() => navigate('/dashboard')} style={{ ...hdrBtn, color: 'var(--im-text-dim)' }}>← Nexus</button>
             <div style={{ width: 1, height: 16, background: 'var(--im-border)' }} />
+            <button onClick={toggleViewMode} style={hdrBtn}>
+              {viewMode === 'scroll' ? '⇕ Scroll' : '⧉ Pages'}
+            </button>
             <button onClick={onOpenSettings} style={hdrBtn}><IconSettings size={14} /> Settings</button>
             <button onClick={onBack} style={hdrBtn}><IconBack size={14} /> Library</button>
             <button onClick={onEndSession} style={{ ...hdrBtn, background: 'var(--im-blue)', color: '#fff', borderRadius: 6, padding: '5px 12px' }}>
@@ -92,13 +103,16 @@ export default function ReaderPage({
                 currentIdx={currentIdx}
                 highlights={highlights}
                 onSelectionChange={onSelectionChange}
+                onSeek={onSeek}
                 fontSize={fontSize}
                 lineHeight={lineHeight}
+                viewMode={viewMode}
               />
             </div>
           </div>
           <ReaderSidebar
             book={book}
+            sentences={sentences}
             highlights={highlights}
             notes={notes}
             annotations={annotations}
@@ -107,6 +121,7 @@ export default function ReaderPage({
             onAddHighlight={(idx, text) => onAddHighlight(idx, text)}
             onAddNote={(idx, content) => onAddNote(idx, content)}
             onRemoveAnnotation={onRemoveAnnotation}
+            onSeek={onSeek}
           />
         </div>
 
@@ -132,20 +147,30 @@ export default function ReaderPage({
         <span style={{ fontSize: 12, color: 'var(--im-text-muted)', fontWeight: 600 }}>
           {Math.round((currentIdx / Math.max(1, sentences.length - 1)) * 100)}%
         </span>
-        <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 18, fontWeight: 700, minWidth: 72, justifyContent: 'flex-end' }}>
-          ···
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 72, justifyContent: 'flex-end' }}>
+          <button onClick={() => setShowChapters(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-blue)', fontSize: 11, fontWeight: 700, fontFamily: 'Inter, sans-serif', padding: '4px 6px', borderRadius: 6, background: 'var(--im-blue-bg)' }}>
+            Ch
+          </button>
+          <button onClick={toggleViewMode} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-muted)', fontSize: 11, fontWeight: 700, fontFamily: 'Inter, sans-serif', padding: '4px 6px', borderRadius: 6 }}>
+            {viewMode === 'scroll' ? '≡' : '⧉'}
+          </button>
+          <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 18, fontWeight: 700 }}>
+            ···
+          </button>
+        </div>
       </div>
 
       {/* Reading area */}
-      <div style={{ flex: 1, overflowY: 'auto', background: '#FAFAFA' }} onScroll={handleScroll}>
+      <div style={{ flex: 1, overflowY: viewMode === 'scroll' ? 'auto' : 'hidden', overflowX: 'hidden', background: '#FAFAFA', display: 'flex', flexDirection: 'column', minWidth: 0 }} onScroll={handleScroll}>
         <ReadingPanel
           sentences={sentences}
           currentIdx={currentIdx}
           highlights={highlights}
           onSelectionChange={onSelectionChange}
+          onSeek={onSeek}
           fontSize={fontSize}
           lineHeight={lineHeight}
+          viewMode={viewMode}
         />
       </div>
 
@@ -170,7 +195,77 @@ export default function ReaderPage({
           onClose={() => onSelectionChange(null)}
         />
       )}
+
+      {/* Chapters drawer (mobile) */}
+      {showChapters && (
+        <ChaptersDrawer
+          sentences={sentences}
+          currentIdx={currentIdx}
+          onSeek={(idx) => { onSeek(idx); setShowChapters(false) }}
+          onClose={() => setShowChapters(false)}
+        />
+      )}
     </>
+  )
+}
+
+function isChapterHeading(s) {
+  return /^(chapter|part|prologue|epilogue|introduction|preface|afterword)\b/i.test(s.trim()) ||
+    /^[A-Z\s\d]{4,40}$/.test(s.trim())
+}
+
+function ChaptersDrawer({ sentences, currentIdx, onSeek, onClose }) {
+  const chapters = useMemo(() => {
+    const list = []
+    sentences.forEach((s, idx) => {
+      if (isChapterHeading(s) && s.trim().length < 50) list.push({ title: s.trim(), idx })
+    })
+    if (list.length === 0 && sentences.length > 0) list.push({ title: 'Start', idx: 0 })
+    return list
+  }, [sentences])
+
+  const currentChapterIdx = useMemo(() => {
+    let ci = 0
+    for (let i = 0; i < chapters.length; i++) {
+      if (chapters[i].idx <= currentIdx) ci = i; else break
+    }
+    return ci
+  }, [chapters, currentIdx])
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 150 }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} />
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'var(--im-card)', borderRadius: '16px 16px 0 0', maxHeight: '75vh', display: 'flex', flexDirection: 'column', animation: 'im-slide-up 0.25s ease-out' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 10px', borderBottom: '1px solid var(--im-border)', flexShrink: 0 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--im-text)', fontFamily: 'Inter, sans-serif' }}>Chapters</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--im-text-dim)', lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {chapters.map((ch, i) => {
+            const isActive = i === currentChapterIdx
+            const nextIdx = chapters[i + 1]?.idx ?? sentences.length
+            const done = currentIdx >= nextIdx
+            const inProgress = currentIdx >= ch.idx && currentIdx < nextIdx
+            return (
+              <button key={ch.idx} onClick={() => onSeek(ch.idx)}
+                style={{ width: '100%', textAlign: 'left', padding: '13px 20px', background: isActive ? 'var(--im-blue-bg)' : 'none', border: 'none', borderBottom: '1px solid var(--im-border-lt)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: isActive ? 'var(--im-blue)' : 'var(--im-text-dim)', minWidth: 24, fontFamily: 'Inter, sans-serif' }}>{i + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? 'var(--im-blue)' : done ? 'var(--im-text-dim)' : 'var(--im-text)', fontFamily: 'Inter, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.title}</div>
+                  {inProgress && (
+                    <div style={{ height: 2, background: 'var(--im-border)', borderRadius: 1, marginTop: 4, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.min(100, Math.round(((currentIdx - ch.idx) / Math.max(1, nextIdx - ch.idx)) * 100))}%`, background: 'var(--im-blue)' }} />
+                    </div>
+                  )}
+                </div>
+                {done && <span style={{ fontSize: 11, color: 'var(--im-blue)', fontWeight: 700, fontFamily: 'Inter, sans-serif' }}>✓</span>}
+                {isActive && !done && <span style={{ fontSize: 18, color: 'var(--im-blue)' }}>›</span>}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
   )
 }
 

@@ -33,6 +33,7 @@ export default function AdminPanel({ myBooks, onBack }) {
   useEffect(() => {
     Promise.all([listUsersForAdmin(), getAllCredits(), listShareHistory()])
       .then(([u, c, h]) => { setUsers(u); setCredits(c); setHistory(h) })
+      .catch((err) => console.error('AdminPanel load failed:', err?.message ?? err))
       .finally(() => setLoading(false))
   }, [])
 
@@ -73,7 +74,7 @@ export default function AdminPanel({ myBooks, onBack }) {
   }
 
   const filtered = users.filter((u) =>
-    !search || u.full_name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase())
+    !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase())
   )
 
   const isAlreadyShared = (bookId, userId) => history.some((h) => h.source_book_id === bookId && h.shared_with === userId)
@@ -109,10 +110,10 @@ export default function AdminPanel({ myBooks, onBack }) {
               {filtered.map((u) => (
                 <div key={u.id} style={{ background: 'var(--im-card)', border: '1px solid var(--im-border)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--im-blue-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: 'var(--im-blue)', flexShrink: 0 }}>
-                    {(u.full_name ?? u.email ?? '?')[0].toUpperCase()}
+                    {(u.name ?? u.email ?? '?')[0].toUpperCase()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--im-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.full_name ?? u.email}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--im-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name ?? u.email}</div>
                     <div style={{ fontSize: 11, color: 'var(--im-text-dim)', marginTop: 1 }}>{u.role} · {fmtHrs(credits[u.id])} remaining</div>
                   </div>
                   <button onClick={() => setGiftTarget(u)} style={{ padding: '5px 12px', background: 'var(--im-blue)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', flexShrink: 0 }}>
@@ -158,7 +159,7 @@ export default function AdminPanel({ myBooks, onBack }) {
                     return (
                       <div key={u.id} style={{ background: 'var(--im-card)', border: '1px solid var(--im-border)', borderRadius: 8, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--im-text)' }}>{u.full_name ?? u.email}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--im-text)' }}>{u.name ?? u.email}</div>
                           <div style={{ fontSize: 11, color: 'var(--im-text-dim)', marginTop: 1 }}>{u.role}</div>
                         </div>
                         {already ? (
@@ -227,7 +228,7 @@ export default function AdminPanel({ myBooks, onBack }) {
     try {
       await shareBook(selectedBook, u.id, selectedTag || null)
       setHistory((prev) => [...prev, { source_book_id: selectedBook.id, shared_with: u.id }])
-      showToast(`"${selectedBook.title}" shared with ${u.full_name}`)
+      showToast(`"${selectedBook.title}" shared with ${u.name}`)
     } catch (err) {
       showToast(err?.message ?? 'Failed to share book', false)
     } finally {
