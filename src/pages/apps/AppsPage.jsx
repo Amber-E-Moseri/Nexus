@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText } from 'lucide-react'
+import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, MailCheck } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
 const PRIMARY = '#4C2A92'
@@ -188,6 +188,16 @@ export default function AppsPage() {
               bg="linear-gradient(135deg, #E3F4F8 0%, #C8EBF3 100%)"
               description="Campaigns & emails"
               onClick={() => navigate('/communications')}
+            />
+          )}
+          {isSuperAdmin && (
+            <AppIcon
+              icon={MailCheck}
+              label="Email Services"
+              color="#6D3A9C"
+              bg="linear-gradient(135deg, #F3EEF9 0%, #E8DCFF 100%)"
+              description="Announcements & delivery log"
+              onClick={() => navigate('/admin/emails')}
             />
           )}
         </div>

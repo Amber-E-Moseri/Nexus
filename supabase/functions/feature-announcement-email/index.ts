@@ -139,6 +139,8 @@ Deno.serve(async (req) => {
     cta_label,
     cta_url,
     user_ids,
+    department_ids,
+    roles,
   } = body
 
   const supabase = createClient(
@@ -162,6 +164,10 @@ Deno.serve(async (req) => {
 
   if (Array.isArray(user_ids) && user_ids.length) {
     userQuery = userQuery.in('id', user_ids)
+  } else if (Array.isArray(department_ids) && department_ids.length) {
+    userQuery = userQuery.in('department_id', department_ids)
+  } else if (Array.isArray(roles) && roles.length) {
+    userQuery = userQuery.in('role', roles)
   }
 
   const { data: users, error: usersError } = await userQuery
