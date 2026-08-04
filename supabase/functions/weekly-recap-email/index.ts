@@ -1,5 +1,6 @@
 // Scheduled: Monday 13:00 UTC (9 am Eastern) via pg_cron.
 // Supersedes email-digest/index.ts (plain text, never formally scheduled).
+// dept_lead and super_admin users also receive a team engagement section.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -24,6 +25,23 @@ async function verifyServiceRole(req: Request): Promise<boolean> {
   return token === expectedToken
 }
 
+type TeamMember = {
+  name: string
+  completedCount: number
+  overdueCount: number
+  lastActiveAt: string | null
+}
+
+function lastSeenLabel(lastActiveAt: string | null): { text: string; color: string } {
+  if (!lastActiveAt) return { text: 'Never', color: '#c0392b' }
+  const days = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 86400000)
+  if (days === 0) return { text: 'Today', color: '#2d8653' }
+  if (days === 1) return { text: 'Yesterday', color: '#5a5248' }
+  if (days < 4) return { text: `${days} days ago`, color: '#5a5248' }
+  if (days < 7) return { text: `${days} days ago`, color: '#b8620a' }
+  return { text: `${days}+ days ago`, color: '#c0392b' }
+}
+
 function buildRecapHtml(
   userName: string,
   frontendUrl: string,
@@ -32,6 +50,7 @@ function buildRecapHtml(
   overdue: { title: string; due_date: string }[],
   unreadCount: number,
   year: number,
+  teamMembers: TeamMember[],
 ): string {
   function listItems(items: { title: string; due_date?: string }[]) {
     return items
@@ -48,7 +67,6 @@ function buildRecapHtml(
   }
 
   function section(
-    emoji: string,
     title: string,
     items: { title: string; due_date?: string }[],
     emptyMsg: string,
@@ -57,7 +75,6 @@ function buildRecapHtml(
     return `
       <div style="margin-bottom:20px;background:#fff;border-radius:10px;border:1px solid #e8dedd;overflow:hidden;">
         <div style="background:${headerColor};padding:10px 16px;display:flex;align-items:center;gap:8px;">
-          <span style="font-size:15px;">${emoji}</span>
           <span style="font-size:13px;font-weight:700;color:#fff;">${title}</span>
           <span style="margin-left:auto;background:rgba(255,255,255,0.22);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;">${items.length}</span>
         </div>
@@ -68,6 +85,41 @@ function buildRecapHtml(
               : `<p style="margin:0;font-size:12px;color:#b0a696;font-style:italic;">${emptyMsg}</p>`
           }
         </div>
+      </div>`
+  }
+
+  function teamSection(members: TeamMember[]) {
+    if (!members.length) return ''
+    const rows = members
+      .map((m) => {
+        const seen = lastSeenLabel(m.lastActiveAt)
+        return `
+          <tr style="border-bottom:1px solid #f4f0e8;">
+            <td style="padding:9px 16px;font-size:13px;color:#2d2a22;font-weight:500;">${m.name}</td>
+            <td style="padding:9px 12px;text-align:center;font-size:13px;font-weight:700;color:${m.completedCount > 0 ? '#2d8653' : '#b0a696'};">${m.completedCount}</td>
+            <td style="padding:9px 12px;text-align:center;font-size:13px;font-weight:700;color:${m.overdueCount > 0 ? '#c0392b' : '#b0a696'};">${m.overdueCount}</td>
+            <td style="padding:9px 16px;text-align:right;font-size:12px;color:${seen.color};font-weight:500;">${seen.text}</td>
+          </tr>`
+      })
+      .join('')
+
+    return `
+      <div style="margin-bottom:28px;background:#fff;border-radius:10px;border:1px solid #e8dedd;overflow:hidden;">
+        <div style="background:#3b2070;padding:10px 16px;display:flex;align-items:center;gap:8px;">
+          <span style="font-size:13px;font-weight:700;color:#fff;">Team Activity This Week</span>
+          <span style="margin-left:auto;background:rgba(255,255,255,0.22);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;">${members.length} members</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="background:#faf8f5;border-bottom:1px solid #ede8dc;">
+              <th style="padding:7px 16px;text-align:left;font-size:11px;font-weight:600;color:#9e9488;text-transform:uppercase;letter-spacing:0.06em;">Member</th>
+              <th style="padding:7px 12px;text-align:center;font-size:11px;font-weight:600;color:#9e9488;text-transform:uppercase;letter-spacing:0.06em;">Done</th>
+              <th style="padding:7px 12px;text-align:center;font-size:11px;font-weight:600;color:#9e9488;text-transform:uppercase;letter-spacing:0.06em;">Overdue</th>
+              <th style="padding:7px 16px;text-align:right;font-size:11px;font-weight:600;color:#9e9488;text-transform:uppercase;letter-spacing:0.06em;">Last Seen</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>`
   }
 
@@ -85,13 +137,14 @@ function buildRecapHtml(
   <div style="padding:28px 28px 0;">
     <p style="margin:0 0 24px;font-size:15px;">Hi <strong>${userName}</strong>, here's what happened in your workspace this past week.</p>
 
-    ${section('✅', 'Completed', completed, 'Nothing completed this week.', '#2d8653')}
-    ${section('📋', 'Newly Assigned', assigned, 'No new tasks assigned this week.', '#2a5fa5')}
-    ${section('⚠️', 'Overdue', overdue, 'No overdue tasks — great work!', '#c0392b')}
+    ${teamSection(teamMembers)}
+
+    ${section('Completed', completed, 'Nothing completed this week.', '#2d8653')}
+    ${section('Newly Assigned', assigned, 'No new tasks assigned this week.', '#2a5fa5')}
+    ${section('Overdue', overdue, 'No overdue tasks — great work!', '#c0392b')}
 
     <div style="margin-bottom:20px;background:#fff;border-radius:10px;border:1px solid #e8dedd;overflow:hidden;">
       <div style="background:#6b4bbe;padding:10px 16px;display:flex;align-items:center;gap:8px;">
-        <span style="font-size:15px;">🔔</span>
         <span style="font-size:13px;font-weight:700;color:#fff;">Unread Notifications</span>
         <span style="margin-left:auto;background:rgba(255,255,255,0.22);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;">${unreadCount}</span>
       </div>
@@ -106,7 +159,7 @@ function buildRecapHtml(
   </div>
 
   <div style="padding:8px 28px 28px;text-align:center;">
-    <a href="${frontendUrl}/dashboard" style="display:inline-block;padding:12px 28px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Go to Dashboard →</a>
+    <a href="${frontendUrl}/dashboard" style="display:inline-block;padding:12px 28px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Go to Dashboard</a>
   </div>
 
   <div style="background:#f9f7f5;border-top:1px solid #e8dedd;padding:16px 28px;text-align:center;">
@@ -137,10 +190,10 @@ Deno.serve(async (req) => {
 
   if (!resendApiKey) return jsonResponse(500, { error: 'Missing RESEND_API_KEY' })
 
-  // ── 1. Active users ──────────────────────────────────────────────────────────
+  // ── 1. All active users (role + dept needed for team section) ────────────────
   const { data: users, error: usersError } = await supabase
     .from('users')
-    .select('id, name, email')
+    .select('id, name, email, role, department_id, last_active_at')
     .eq('status', 'active')
     .not('email', 'is', null)
 
@@ -148,6 +201,8 @@ Deno.serve(async (req) => {
   if (!users?.length) return jsonResponse(200, { sent: 0, message: 'No active users' })
 
   // ── 2. Opted-out users ───────────────────────────────────────────────────────
+  const allUserIds = users.map((u) => u.id)
+
   const { data: optedOut } = await supabase
     .from('user_notification_prefs')
     .select('user_id')
@@ -159,17 +214,19 @@ Deno.serve(async (req) => {
 
   if (!eligible.length) return jsonResponse(200, { sent: 0, message: 'All users opted out' })
 
-  const userIds = eligible.map((u) => u.id)
   const sevenDaysAgo = new Date()
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
   const sevenDaysAgoIso = sevenDaysAgo.toISOString()
   const today = new Date().toISOString().split('T')[0]
 
+  // Task queries run over ALL active users so team-section data is available
+  // even for members who have opted out of their own recap email.
+
   // ── 3. Completed tasks this week ─────────────────────────────────────────────
   const { data: completedTasks } = await supabase
     .from('tasks')
     .select('id, title, assignee_id')
-    .in('assignee_id', userIds)
+    .in('assignee_id', allUserIds)
     .gte('completed_at', sevenDaysAgoIso)
     .not('completed_at', 'is', null)
 
@@ -177,14 +234,14 @@ Deno.serve(async (req) => {
   const { data: newAssignments } = await supabase
     .from('task_assignees')
     .select('user_id, tasks(title)')
-    .in('user_id', userIds)
+    .in('user_id', allUserIds)
     .gte('assigned_at', sevenDaysAgoIso)
 
-  // ── 5. Overdue tasks (load all, filter by status category in JS) ─────────────
+  // ── 5. Overdue tasks (filter status category in JS) ──────────────────────────
   const { data: potentialOverdue } = await supabase
     .from('tasks')
     .select('id, title, assignee_id, due_date, status_definition:status_id(category)')
-    .in('assignee_id', userIds)
+    .in('assignee_id', allUserIds)
     .lt('due_date', today)
     .not('due_date', 'is', null)
 
@@ -197,7 +254,7 @@ Deno.serve(async (req) => {
   const { data: unreadNotifs } = await supabase
     .from('notifications')
     .select('user_id')
-    .in('user_id', userIds)
+    .in('user_id', allUserIds)
     .eq('read', false)
 
   const unreadByUser: Record<string, number> = {}
@@ -205,7 +262,7 @@ Deno.serve(async (req) => {
     unreadByUser[n.user_id] = (unreadByUser[n.user_id] ?? 0) + 1
   }
 
-  // ── 7. Group data by user ────────────────────────────────────────────────────
+  // ── 7. Group task data by user ───────────────────────────────────────────────
   const completedByUser: Record<string, { title: string }[]> = {}
   for (const t of completedTasks ?? []) {
     ;(completedByUser[t.assignee_id] ??= []).push({ title: t.title })
@@ -224,7 +281,15 @@ Deno.serve(async (req) => {
     ;(overdueByUser[t.assignee_id] ??= []).push({ title: t.title, due_date: t.due_date })
   }
 
-  // ── 8. Send emails ───────────────────────────────────────────────────────────
+  // ── 8. Group all users by department for team-section lookups ────────────────
+  const membersByDept: Record<string, typeof users> = {}
+  for (const u of users) {
+    if (u.department_id) {
+      ;(membersByDept[u.department_id] ??= []).push(u)
+    }
+  }
+
+  // ── 9. Send emails ───────────────────────────────────────────────────────────
   const year = new Date().getFullYear()
   let sent = 0
   let skipped = 0
@@ -236,8 +301,33 @@ Deno.serve(async (req) => {
     const userOverdue = overdueByUser[user.id] ?? []
     const userUnread = unreadByUser[user.id] ?? 0
 
-    // Skip if nothing to recap
-    if (!userCompleted.length && !userAssigned.length && !userOverdue.length && userUnread === 0) {
+    // Build team section for dept_lead / super_admin with a department
+    let teamMembers: TeamMember[] = []
+    const isLead = ['dept_lead', 'super_admin'].includes(user.role) && user.department_id
+    if (isLead) {
+      teamMembers = (membersByDept[user.department_id] ?? [])
+        .filter((m) => m.id !== user.id)
+        .map((m) => ({
+          name: m.name ?? 'Team Member',
+          completedCount: (completedByUser[m.id] ?? []).length,
+          overdueCount: (overdueByUser[m.id] ?? []).length,
+          lastActiveAt: m.last_active_at ?? null,
+        }))
+        .sort(
+          (a, b) =>
+            b.completedCount - a.completedCount ||
+            a.name.localeCompare(b.name),
+        )
+    }
+
+    // Skip if nothing at all to show (no personal activity and no team)
+    if (
+      !userCompleted.length &&
+      !userAssigned.length &&
+      !userOverdue.length &&
+      userUnread === 0 &&
+      !teamMembers.length
+    ) {
       skipped++
       continue
     }
@@ -250,6 +340,7 @@ Deno.serve(async (req) => {
       userOverdue,
       userUnread,
       year,
+      teamMembers,
     )
 
     const emailRes = await fetch('https://api.resend.com/emails', {
@@ -261,14 +352,13 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         from: fromEmail,
         to: [user.email],
-        subject: `Your BLW CAN NEXUS weekly recap`,
+        subject: 'Your BLW CAN NEXUS weekly recap',
         html,
       }),
     })
 
     const emailResult = await emailRes.json().catch(() => ({}))
 
-    // Log delivery (email_delivery_log.user_id doesn't exist — log by email)
     await supabase.from('email_delivery_log').insert({
       recipient_email: user.email,
       sender_email: fromEmail,

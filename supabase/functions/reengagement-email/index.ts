@@ -34,11 +34,11 @@ function buildReengagementHtml(
   newlyAssignedCount: number,
   year: number,
 ): string {
-  function statRow(emoji: string, label: string, count: number, danger: boolean) {
+  function statRow(label: string, count: number, danger: boolean) {
     const color = danger && count > 0 ? '#c0392b' : '#4c2a92'
     return `
       <tr>
-        <td style="padding:10px 16px;font-size:13px;color:#2d2a22;border-bottom:1px solid #f4f0e8;">${emoji} ${label}</td>
+        <td style="padding:10px 16px;font-size:13px;color:#2d2a22;border-bottom:1px solid #f4f0e8;">${label}</td>
         <td style="padding:10px 16px;text-align:right;font-weight:700;font-size:14px;color:${color};border-bottom:1px solid #f4f0e8;">${count}</td>
       </tr>`
   }
@@ -63,9 +63,9 @@ function buildReengagementHtml(
 
     <div style="background:#fff;border-radius:10px;border:1px solid #e8dedd;overflow:hidden;margin-bottom:24px;">
       <table style="width:100%;border-collapse:collapse;">
-        ${statRow('🔔', 'Unread notifications', unreadCount, false)}
-        ${statRow('📋', 'Tasks assigned since your last visit', newlyAssignedCount, false)}
-        ${statRow('⚠️', 'Overdue tasks', overdueCount, true)}
+        ${statRow('Unread notifications', unreadCount, false)}
+        ${statRow('Tasks assigned since your last visit', newlyAssignedCount, false)}
+        ${statRow('Overdue tasks', overdueCount, true)}
       </table>
     </div>
 
