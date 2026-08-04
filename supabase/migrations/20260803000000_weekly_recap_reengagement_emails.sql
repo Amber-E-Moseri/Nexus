@@ -22,6 +22,11 @@ EXCEPTION WHEN others THEN NULL;
 END $$;
 
 -- 3. Schedule weekly-recap-email — every Monday at 13:00 UTC (9 am Eastern)
+DO $$ BEGIN
+  PERFORM cron.unschedule('weekly-recap-email');
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
 SELECT cron.schedule(
   'weekly-recap-email',
   '0 13 * * 1',
@@ -35,11 +40,16 @@ SELECT cron.schedule(
     body      := '{}'::jsonb
   );
   $$
-) ON CONFLICT DO NOTHING;
+);
 
 -- 4. Schedule reengagement-email — every day at 14:00 UTC (10 am Eastern)
 --    Runs after weekly-recap (13:00) so the recap's email_delivery_log row is
 --    visible when the spam guard queries it.
+DO $$ BEGIN
+  PERFORM cron.unschedule('reengagement-email');
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
 SELECT cron.schedule(
   'reengagement-email',
   '0 14 * * *',
@@ -53,4 +63,4 @@ SELECT cron.schedule(
     body      := '{}'::jsonb
   );
   $$
-) ON CONFLICT DO NOTHING;
+);
