@@ -1,36 +1,61 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import '../reader.css'
 import ReaderHomePage from './ReaderHomePage'
 import ReaderLibraryPage from './ReaderLibraryPage'
 import ReaderPage from './ReaderPage'
 import ImportModal from '../components/ImportModal'
-import PurchaseCreditsModal from '../components/PurchaseCreditsModal'
 import SettingsModal from '../components/SettingsModal'
 import SessionEndModal from '../components/SessionEndModal'
 import { useAnnotations } from '../hooks/useAnnotations'
 import { useAudioPlayer } from '../hooks/useAudioPlayer'
 import { usePdfSave } from '../hooks/usePdfSave'
 import { clearTTSCache } from '../services/openai-tts'
+import { listStoredBooks, saveStoredBook } from '../services/library-storage'
 
 export default function BooksApp() {
   const [page, setPage] = useState('home')
   const [book, setBook] = useState(null)
-  const [voice, setVoice] = useState('Nova')
-  const [speed, setSpeed] = useState(1.0)
-  const [credits] = useState(12.5)
+  const [voice, setVoice] = useState(() => localStorage.getItem('immerse-voice') || 'Nova')
+  const [speed, setSpeed] = useState(() => Number(localStorage.getItem('immerse-speed')) || 1.0)
   const [library, setLibrary] = useState([])
   const [selectionInfo, setSelectionInfo] = useState(null)
   const [showImport, setShowImport] = useState(false)
-  const [showPurchaseCredits, setShowPurchaseCredits] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showEndModal, setShowEndModal] = useState(false)
-  const [fontSize, setFontSize] = useState(24)
-  const [lineHeight, setLineHeight] = useState(1.8)
+  const [fontSize, setFontSize] = useState(() => Number(localStorage.getItem('immerse-font-size')) || 24)
+  const [lineHeight, setLineHeight] = useState(() => Number(localStorage.getItem('immerse-line-height')) || 1.8)
 
   const sentences = book?.sentences ?? []
   const { highlights, notes, addHighlight, addNote, removeAnnotation } = useAnnotations(book?.id)
-  const { currentIdx, isPlaying, progress, elapsedTime, totalTime, play, pause, seekToIdx, setSpeed: setPlayerSpeed, setVoice: setPlayerVoice } = useAudioPlayer(sentences, voice, speed)
+  const { currentIdx, isPlaying, elapsedTime, totalTime, play, pause, seekToIdx, setSpeed: setPlayerSpeed, setVoice: setPlayerVoice } = useAudioPlayer(sentences, voice, speed, book?.progressIndex ?? 0)
   const { saveState, saveError, saveHighlights } = usePdfSave()
+
+  useEffect(() => {
+    let active = true
+    listStoredBooks()
+      .then((books) => {
+        if (!active) return
+        setLibrary(books)
+        setBook((currentBook) => currentBook || books[0] || null)
+      })
+      .catch((error) => console.error('Unable to load Immerse library', error))
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => { localStorage.setItem('immerse-voice', voice) }, [voice])
+  useEffect(() => { localStorage.setItem('immerse-speed', String(speed)) }, [speed])
+  useEffect(() => { localStorage.setItem('immerse-font-size', String(fontSize)) }, [fontSize])
+  useEffect(() => { localStorage.setItem('immerse-line-height', String(lineHeight)) }, [lineHeight])
+
+  useEffect(() => {
+    if (!book?.id || !sentences.length) return
+    const updatedBook = { ...book, progressIndex: currentIdx, lastReadAt: new Date().toISOString() }
+    const timer = setTimeout(() => {
+      setLibrary((previous) => previous.map((item) => item.id === book.id ? updatedBook : item))
+      saveStoredBook(updatedBook).catch((error) => console.error('Unable to save reading progress', error))
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [book, currentIdx, sentences.length])
 
   function openBook(b) {
     setBook(b)
@@ -41,9 +66,12 @@ export default function BooksApp() {
   function handleImport(bookData) {
     const b = {
       id: crypto.randomUUID(),
+      progressIndex: 0,
+      lastReadAt: new Date().toISOString(),
       ...bookData,
     }
     setShowImport(false)
+    saveStoredBook(b).catch((error) => console.error('Unable to save imported book', error))
     openBook(b)
   }
 
@@ -73,6 +101,7 @@ export default function BooksApp() {
         <ReaderHomePage
           currentBook={book}
           library={library}
+          currentProgress={currentIdx}
           onOpenBook={openBook}
           onGoLibrary={() => setPage('library')}
           onImport={() => setShowImport(true)}
@@ -81,20 +110,19 @@ export default function BooksApp() {
       {page === 'library' && (
         <ReaderLibraryPage
           library={library}
-          credits={credits}
           onOpenBook={openBook}
           onGoHome={() => setPage('home')}
           onImport={() => setShowImport(true)}
-          onBuyCredits={() => setShowPurchaseCredits(true)}
         />
       )}
       {page === 'reader' && book && (
         <ReaderPage
           book={book}
-          credits={credits}
           sentences={sentences}
           currentIdx={currentIdx}
           isPlaying={isPlaying}
+          elapsedTime={elapsedTime}
+          totalTime={totalTime}
           voice={voice}
           speed={speed}
           highlights={highlights}
@@ -113,7 +141,6 @@ export default function BooksApp() {
           onRemoveAnnotation={removeAnnotation}
           onSelectionChange={setSelectionInfo}
           onBack={() => setPage('home')}
-          onBuyCredits={() => setShowPurchaseCredits(true)}
           onOpenSettings={() => setShowSettings(true)}
           onEndSession={handleEndSession}
         />
@@ -125,7 +152,6 @@ export default function BooksApp() {
       )}
 
       {showImport && <ImportModal onClose={() => setShowImport(false)} onImport={handleImport} />}
-      {showPurchaseCredits && <PurchaseCreditsModal onClose={() => setShowPurchaseCredits(false)} onPurchase={() => {}} />}
       {showSettings && (
         <SettingsModal
           onClose={() => setShowSettings(false)}

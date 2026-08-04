@@ -1,37 +1,37 @@
-import { useRef } from 'react'
-import { IconDocument, IconLibrary, IconGlobe, IconX } from '../icons'
+import { useRef, useState } from 'react'
+import { IconDocument, IconX } from '../icons'
 import { hasFileSystemAccess, openPdfWithHandle } from '../services/file-system'
 import { extractPdfText } from '../services/pdf-export'
 import { splitSentences, countWords, estimateMinutes } from '../services/text-processor'
 
 export default function ImportModal({ onClose, onImport }) {
   const fileInputRef = useRef(null)
+  const [error, setError] = useState('')
+  const [isImporting, setIsImporting] = useState(false)
 
-  async function handlePdfFile(file, handle) {
-    const buffer = await file.arrayBuffer()
-    const { text, textItems, pageSizes } = await extractPdfText(buffer)
-    const title = file.name.replace(/\.pdf$/i, '')
-    const words = countWords(text)
-    onImport({
-      title,
-      text,
-      source: 'pdf',
-      file,
-      handle,
-      pdfBuffer: buffer,
-      pdfTextItems: textItems,
-      pdfPageSizes: pageSizes,
-      sentences: splitSentences(text),
-      wordCount: words,
-      estimatedMinutes: estimateMinutes(words),
-    })
+  async function handlePdfFile(file) {
+    setIsImporting(true)
+    setError('')
+    try {
+      const buffer = await file.arrayBuffer()
+      const { text, textItems, pageSizes } = await extractPdfText(buffer)
+      const sentences = splitSentences(text)
+      if (!sentences.length) throw new Error('This PDF does not contain readable text.')
+      const title = file.name.replace(/\.pdf$/i, '')
+      const words = countWords(text)
+      onImport({ title, text, source: 'pdf', pdfBuffer: buffer, pdfTextItems: textItems, pdfPageSizes: pageSizes, sentences, wordCount: words, estimatedMinutes: estimateMinutes(words) })
+    } catch (importError) {
+      setError(importError.message || 'Unable to import this PDF.')
+    } finally {
+      setIsImporting(false)
+    }
   }
 
   async function handleBrowse() {
     if (hasFileSystemAccess) {
       try {
-        const { file, handle } = await openPdfWithHandle()
-        await handlePdfFile(file, handle)
+        const { file } = await openPdfWithHandle()
+        await handlePdfFile(file)
       } catch (err) {
         if (err?.name !== 'AbortError') console.error(err)
       }
@@ -43,7 +43,7 @@ export default function ImportModal({ onClose, onImport }) {
   async function handleFileInput(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    await handlePdfFile(file, undefined)
+    await handlePdfFile(file)
   }
 
   return (
@@ -59,23 +59,13 @@ export default function ImportModal({ onClose, onImport }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button
             onClick={handleBrowse}
-            style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 16px', border: '1px solid var(--im-border)', borderRadius: 8, background: 'var(--im-sidebar-bg)', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--im-text)', fontFamily: 'Inter, sans-serif', textAlign: 'left' }}
+            disabled={isImporting}
+            style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 16px', border: '1px solid var(--im-border)', borderRadius: 8, background: 'var(--im-sidebar-bg)', cursor: isImporting ? 'wait' : 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--im-text)', fontFamily: 'Inter, sans-serif', textAlign: 'left', opacity: isImporting ? 0.65 : 1 }}
           >
-            <IconDocument size={18} color="var(--im-blue)" /> Upload PDF
-          </button>
-          <button
-            onClick={() => alert('EPUB support coming soon')}
-            style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 16px', border: '1px solid var(--im-border)', borderRadius: 8, background: 'var(--im-sidebar-bg)', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--im-text-muted)', fontFamily: 'Inter, sans-serif', textAlign: 'left' }}
-          >
-            <IconLibrary size={18} color="var(--im-text-dim)" /> Upload EPUB
-          </button>
-          <button
-            onClick={() => alert('Paste URL coming soon')}
-            style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 16px', border: '1px solid var(--im-border)', borderRadius: 8, background: 'var(--im-sidebar-bg)', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--im-text-muted)', fontFamily: 'Inter, sans-serif', textAlign: 'left' }}
-          >
-            <IconGlobe size={18} color="var(--im-text-dim)" /> Paste Article URL
+            <IconDocument size={18} color="var(--im-blue)" /> {isImporting ? 'Importing PDF...' : 'Upload PDF'}
           </button>
         </div>
+        {error && <p style={{ margin: '12px 0 0', color: '#B42318', fontSize: 13 }}>{error}</p>}
 
         <input
           ref={fileInputRef}

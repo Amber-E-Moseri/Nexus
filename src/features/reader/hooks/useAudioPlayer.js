@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { fetchSentenceAudio } from '../services/openai-tts'
 
-export function useAudioPlayer(sentences, voice, speed) {
-  const [currentIdx, setCurrentIdx] = useState(0)
+export function useAudioPlayer(sentences, voice, speed, initialIdx = 0) {
+  const [currentIdx, setCurrentIdx] = useState(initialIdx)
   const [isPlaying, setIsPlaying] = useState(false)
 
   const r = useRef({
@@ -102,8 +102,15 @@ export function useAudioPlayer(sentences, voice, speed) {
   }, [speed])
 
   useEffect(() => {
+    const nextIdx = Math.min(Math.max(initialIdx, 0), Math.max(sentences.length - 1, 0))
+    r.current.currentIdx = nextIdx
+    setCurrentIdx(nextIdx)
+  }, [sentences, initialIdx])
+
+  useEffect(() => {
+    const player = r.current
     return () => {
-      if (r.current.currentAudio) r.current.currentAudio.pause()
+      if (player.currentAudio) player.currentAudio.pause()
     }
   }, [])
 

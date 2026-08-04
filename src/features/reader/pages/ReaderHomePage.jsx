@@ -1,7 +1,7 @@
 import { IconHome, IconLibrary, IconPlus, IconChevronDown } from '../icons'
 
-export default function ReaderHomePage({ currentBook, library, onOpenBook, onGoLibrary, onImport }) {
-  const progress = currentBook ? Math.round(((currentBook.sentences?.length ?? 0) / Math.max(1, currentBook.sentences?.length ?? 1)) * 10) : 0
+export default function ReaderHomePage({ currentBook, library, currentProgress, onOpenBook, onGoLibrary, onImport }) {
+  const progress = currentBook ? Math.round((currentProgress / Math.max(1, (currentBook.sentences?.length ?? 1) - 1)) * 100) : 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
@@ -34,9 +34,9 @@ export default function ReaderHomePage({ currentBook, library, onOpenBook, onGoL
               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--im-text)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentBook.title}</div>
               {currentBook.author && <div style={{ fontSize: 12, color: 'var(--im-text-dim)', marginBottom: 8 }}>{currentBook.author}</div>}
               <div style={{ height: 4, background: 'var(--im-border)', borderRadius: 2, marginBottom: 6, overflow: 'hidden' }}>
-                <div style={{ height: '100%', background: 'linear-gradient(90deg, var(--im-blue), var(--im-blue-lt))', width: '10%' }} />
+                <div style={{ height: '100%', background: 'linear-gradient(90deg, var(--im-blue), var(--im-blue-lt))', width: `${progress}%` }} />
               </div>
-              <div style={{ fontSize: 11, color: 'var(--im-text-muted)' }}>{currentBook.estimatedMinutes} min read</div>
+              <div style={{ fontSize: 11, color: 'var(--im-text-muted)' }}>{progress}% complete · {currentBook.estimatedMinutes} min read</div>
             </div>
             <IconChevronDown size={16} color="var(--im-text-dim)" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }} />
           </div>

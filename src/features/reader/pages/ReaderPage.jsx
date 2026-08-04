@@ -7,11 +7,11 @@ import HighlightPopup from '../components/HighlightPopup'
 import { IconBack, IconSettings } from '../icons'
 
 export default function ReaderPage({
-  book, credits, sentences, currentIdx, isPlaying, voice, speed,
+  book, sentences, currentIdx, isPlaying, elapsedTime, totalTime, voice, speed,
   highlights, notes, selectionInfo, fontSize, lineHeight,
   onPlay, onPause, onSeek, onSkip, onSpeedChange, onVoiceChange,
   onAddHighlight, onAddNote, onRemoveAnnotation, onSelectionChange,
-  onBack, onBuyCredits, onOpenSettings, onEndSession,
+  onBack, onOpenSettings, onEndSession,
 }) {
   const [playerVisible, setPlayerVisible] = useState(true)
   const lastScrollY = useRef(0)
@@ -55,9 +55,6 @@ export default function ReaderPage({
             {book.author && <><span style={{ color: 'var(--im-text-xdim)' }}>·</span><span style={{ fontSize: 12, color: 'var(--im-text-dim)' }}>{book.author}</span></>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, padding: '4px 10px', background: 'var(--im-border-lt)', borderRadius: 20, color: 'var(--im-text-dim)', fontWeight: 600 }}>
-              Credits: {credits} hrs
-            </span>
             <button onClick={onOpenSettings} style={hdrBtn}><IconSettings size={14} /> Settings</button>
             <button onClick={onBack} style={hdrBtn}><IconBack size={14} /> Library</button>
             <button onClick={onEndSession} style={{ ...hdrBtn, background: 'var(--im-blue)', color: '#fff', borderRadius: 6, padding: '5px 12px' }}>
@@ -72,8 +69,8 @@ export default function ReaderPage({
             <PlayerControls
               isPlaying={isPlaying}
               progress={currentIdx / Math.max(1, sentences.length - 1)}
-              elapsedTime={`${Math.floor(currentIdx / 2)}:${String((currentIdx * 30) % 60).padStart(2, '0')}`}
-              totalTime={`${Math.floor(sentences.length / 2)}:${String((sentences.length * 30) % 60).padStart(2, '0')}`}
+              elapsedTime={elapsedTime}
+              totalTime={totalTime}
               voice={voice}
               speed={speed}
               currentIdx={currentIdx}
@@ -128,8 +125,8 @@ export default function ReaderPage({
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text)', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'Inter, sans-serif', minWidth: 72 }}>
           <IconBack size={15} /> Library
         </button>
-        <span style={{ fontSize: 12, padding: '4px 12px', background: '#F3F4F6', borderRadius: 20, color: 'var(--im-text-muted)', fontWeight: 600, letterSpacing: '0.2px' }}>
-          Credits: <span style={{ color: 'var(--im-blue)' }}>{credits} hrs</span>
+        <span style={{ fontSize: 12, color: 'var(--im-text-muted)', fontWeight: 600 }}>
+          {Math.round((currentIdx / Math.max(1, sentences.length - 1)) * 100)}%
         </span>
         <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 18, fontWeight: 700, minWidth: 72, justifyContent: 'flex-end' }}>
           ···
@@ -151,7 +148,7 @@ export default function ReaderPage({
       <MobilePlayer
         isPlaying={isPlaying}
         progress={currentIdx / Math.max(1, sentences.length - 1)}
-        elapsedTime={`${Math.floor(currentIdx / 2)}:${String((currentIdx * 30) % 60).padStart(2, '0')}`}
+        elapsedTime={elapsedTime}
         voice={voice}
         speed={speed}
         visible={playerVisible}
