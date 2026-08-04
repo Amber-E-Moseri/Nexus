@@ -23,6 +23,7 @@ interface CampaignRow {
   recipient_filters: RecipientPill[] | null
   status: string
   attachments: CampaignAttachment[] | null
+  created_by?: string | null
 }
 
 interface RecipientPill {
@@ -424,7 +425,13 @@ Deno.serve(async (request) => {
       .eq('id', authData.user.id)
       .single()
 
-    if (!profile || !['super_admin', 'dept_lead', 'regional_secretary'].includes(profile.role ?? '')) {
+    const { data: commsRoles } = await supabase
+      .from('space_roles')
+      .select('role')
+      .eq('user_id', authData.user.id)
+      .in('role', ['ors', 'programs', 'dept_lead'])
+
+    if (!profile || (!['super_admin', 'regional_secretary'].includes(profile.role ?? '') && !(commsRoles?.length))) {
       return respond(403, { error: 'You do not have permission to send campaigns.' })
     }
 
@@ -461,7 +468,7 @@ Deno.serve(async (request) => {
   if (campaignId) {
     const { data: campaign, error: campaignError } = await supabase
       .from('communication_campaigns')
-      .select('id, name, subject, preview_text, body, body_html, body_text, from_name, reply_to_email, segment_id, recipient_filters, status, attachments')
+      .select('id, name, subject, preview_text, body, body_html, body_text, from_name, reply_to_email, segment_id, recipient_filters, status, attachments, created_by')
       .eq('id', campaignId)
       .single()
 
@@ -470,18 +477,30 @@ Deno.serve(async (request) => {
     }
 
     const typedCampaign = campaign as CampaignRow
+    const canSendAnyCampaign = isInternalServiceCall || ['super_admin', 'regional_secretary'].includes(senderProfile?.role ?? '')
+      || (await supabase.from('space_roles').select('id').eq('user_id', callerUserId ?? '').in('role', ['ors', 'programs']).limit(1)).data?.length
+    if (!canSendAnyCampaign && typedCampaign.created_by !== callerUserId) {
+      return respond(403, { error: 'You can only send campaigns you created.' })
+    }
     subject = subject || typedCampaign.subject
     body = body || typedCampaign.body || typedCampaign.body_text || ''
     bodyHtml = bodyHtml || typedCampaign.body_html || typedCampaign.body || ''
     bodyText = bodyText || typedCampaign.body_text || typedCampaign.body || stripHtmlToText(bodyHtml)
     previewText = previewText || typedCampaign.preview_text || ''
     replyTo = replyTo || typedCampaign.reply_to_email || callerEmail || undefined
-    to = to.length > 0 ? to : await fetchCampaignRecipients(typedCampaign, supabase)
+    to = await fetchCampaignRecipients(typedCampaign, supabase)
     campaignAttachments = typedCampaign.attachments ?? null
   }
 
   if (testEmail?.trim()) {
+    if (!callerEmail || normalizeEmail(testEmail) !== normalizeEmail(callerEmail)) {
+      return respond(403, { error: 'Test emails can only be sent to the signed-in sender.' })
+    }
     to = [{ name: 'Test Recipient', email: testEmail.trim() }]
+  }
+
+  if (!campaignId && !testEmail?.trim()) {
+    return respond(400, { error: 'campaign_id is required for a campaign send.' })
   }
 
   if (!Array.isArray(to) || to.length === 0) {
@@ -625,16 +644,16 @@ Deno.serve(async (request) => {
 
       const renderedHtml = renderHtmlShell(personalizedHtmlTemplate, previewText, unsubscribeToken)
 
-      // Store the unsubscribe token in the database (upsert to handle existing records)
+      // Tokens are not opt-outs. They live separately from the suppression table.
       const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
       await supabase
-        .from('communication_unsubscribes')
+        .from('communication_unsubscribe_tokens')
         .upsert(
           {
             email: normalizeEmail(recipient.email),
-            unsubscribe_token: unsubscribeTokenHash,
-            token_created_at: new Date().toISOString(),
-            token_expires_at: tokenExpiresAt,
+            token: unsubscribeTokenHash,
+            token_hash: unsubscribeTokenHash,
+            expires_at: tokenExpiresAt,
           },
           { onConflict: 'email' }
         )

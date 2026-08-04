@@ -78,17 +78,17 @@ Deno.serve(async (request) => {
   // Try new random token system first
   const tokenHash = await hashToken(token)
   const { data: record } = await supabase
-    .from('communication_unsubscribes')
-    .select('email, token_expires_at')
-    .eq('unsubscribe_token', tokenHash)
+    .from('communication_unsubscribe_tokens')
+    .select('email, expires_at')
+    .eq('token_hash', tokenHash)
     .maybeSingle()
 
   if (record) {
     // Check if token is not expired
-    if (record.token_expires_at && new Date(record.token_expires_at) > new Date()) {
+    if (record.expires_at && new Date(record.expires_at) > new Date()) {
       tokenValid = true
-      storedRecord = record
-    } else if (!record.token_expires_at) {
+      storedRecord = { email: record.email, token_expires_at: record.expires_at }
+    } else if (!record.expires_at) {
       // Expired or no expiration set (migrate from old system)
       return json(401, { error: 'Token expired. Request a new unsubscribe link.' })
     }

@@ -236,24 +236,17 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       })
     }
 
-    // If send now, resolve recipients and call edge function
+    // The edge function resolves the stored campaign audience. Keeping that
+    // resolution server-side prevents a browser from marking a campaign sent
+    // when a segment has a recipient type it does not understand.
     if (scheduleMode === 'now') {
-      let recipients = []
-
-      if (segmentId) {
-        const { data: seg } = await supabase.from('communication_segments').select('filters').eq('id', segmentId).single()
-        if (seg?.filters?.include_roster) {
-          const { data: rosterRows } = await supabase.from('expected_attendees').select('full_name, email, subgroup, leadership_category').eq('active', true).not('email', 'is', null)
-          recipients = (rosterRows ?? []).map((r) => ({ name: r.full_name ?? r.email, email: r.email, subgroup: r.subgroup, leadership_category: r.leadership_category }))
-        }
-      }
-
-      if (recipients.length > 0) {
-        await supabase.functions.invoke('send-communication-email', {
-          body: { to: recipients, subject: subject.trim(), body: body.trim(), campaign_id: campaignId, context: { sender_name: profile?.name ?? '' } },
-        })
-      } else {
-        await supabase.from('communication_campaigns').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', campaignId)
+      const { error: sendError } = await supabase.functions.invoke('send-communication-email', {
+        body: { campaign_id: campaignId, context: { sender_name: profile?.name ?? '' } },
+      })
+      if (sendError) {
+        setError(await getFunctionErrorMessage(sendError))
+        setSaving(false)
+        return
       }
     }
 
@@ -265,7 +258,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   async function handleSendTest(testEmail) {
     const finalBody = useOrgSignature && orgSignature ? `${body}\n\n${orgSignature}` : body
     const { error: sendError } = await supabase.functions.invoke('send-communication-email', {
-      body: { to: [{ name: 'Test Recipient', email: testEmail }], subject: `[TEST] ${subject}`, body: finalBody },
+      body: { test_email: testEmail, subject: `[TEST] ${subject}`, body: finalBody },
     })
     if (sendError) {
       const message = await getFunctionErrorMessage(sendError)
@@ -886,7 +879,6 @@ export default function CampaignPage() {
 
   useEffect(() => {
     loadCampaigns()
-    fireScheduledCampaigns()
     const draftId = sessionStorage.getItem('comm_draft_campaign_id')
     setDraftCampaignId(draftId)
   }, [statusFilter, sortBy, sortAsc, view])
