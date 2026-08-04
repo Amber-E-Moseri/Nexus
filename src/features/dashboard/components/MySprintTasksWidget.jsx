@@ -49,16 +49,17 @@ export default function MySprintTasksWidget({ userId }) {
           return
         }
 
-        // Step 2: Fetch all open tasks in those sprints (for any assignee)
+        // Step 2: Fetch open tasks in those sprints assigned to this user
         const { data } = await supabase
           .from('tasks')
           .select(`
-            id, title, due_date, assignee_id,
+            id, title, due_date,
             sprint_id,
             sprint:sprints!sprint_id(id, name, status),
             status_definition:task_status_definitions!status_id(category, color, name)
           `)
           .in('sprint_id', activeSprints)
+          .eq('assignee_id', userId)
           .limit(200)
 
         if (!active) return
@@ -70,22 +71,17 @@ export default function MySprintTasksWidget({ userId }) {
             t.status_definition?.category !== 'cancelled',
         )
 
-        // Group by sprint, with user's tasks first
+        // Group by sprint
         const sprintMap = new Map()
         for (const task of open) {
           const sid = task.sprint_id
           if (!sprintMap.has(sid)) {
-            sprintMap.set(sid, { sprint: task.sprint, userTasks: [], otherTasks: [] })
+            sprintMap.set(sid, { sprint: task.sprint, tasks: [] })
           }
-          const group = sprintMap.get(sid)
-          if (task.assignee_id === userId) {
-            group.userTasks.push(task)
-          } else {
-            group.otherTasks.push(task)
-          }
+          sprintMap.get(sid).tasks.push(task)
         }
 
-        // Sort each sprint's tasks by due date (nulls last)
+        // Sort by due date (nulls last)
         const sortTasks = (tasks) =>
           tasks.sort((a, b) => {
             if (!a.due_date && !b.due_date) return 0
@@ -96,8 +92,7 @@ export default function MySprintTasksWidget({ userId }) {
 
         const grouped = [...sprintMap.values()].map((g) => ({
           sprint: g.sprint,
-          userTasks: sortTasks(g.userTasks),
-          otherTasks: sortTasks(g.otherTasks),
+          tasks: sortTasks(g.tasks),
         }))
 
         setGroups(grouped)
@@ -117,7 +112,7 @@ export default function MySprintTasksWidget({ userId }) {
     </div>
   )
 
-  const hasAnyTasks = groups.some(g => g.userTasks.length > 0 || g.otherTasks.length > 0)
+  const hasAnyTasks = groups.some(g => g.tasks.length > 0)
   if (!hasAnyTasks) {
     return (
       <div style={{ fontSize: 13, color: 'var(--ink-3)', padding: '16px 0', textAlign: 'center' }}>
@@ -173,11 +168,10 @@ export default function MySprintTasksWidget({ userId }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {groups.map(({ sprint, userTasks, otherTasks }) => {
+      {groups.map(({ sprint, tasks }) => {
         const col = SPRINT_STATUS_COLORS[sprint?.status] ?? SPRINT_STATUS_COLORS.active
         return (
           <div key={sprint?.id}>
-            {/* Sprint header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
               <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-1)' }}>
                 {sprint?.name}
@@ -186,26 +180,12 @@ export default function MySprintTasksWidget({ userId }) {
                 {sprint?.status}
               </span>
             </div>
-
-            {/* Your tasks */}
-            {userTasks.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, paddingLeft: 4, marginBottom: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-3)', marginBottom: 3 }}>Your tasks</div>
-                {userTasks.map((task) => <TaskRow key={task.id} task={task} />)}
-              </div>
-            )}
-
-            {/* Other team members' tasks */}
-            {otherTasks.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, paddingLeft: 4, opacity: 0.7 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-3)', marginBottom: 3 }}>Team</div>
-                {otherTasks.map((task) => <TaskRow key={task.id} task={task} />)}
-              </div>
-            )}
-
-            {userTasks.length === 0 && otherTasks.length === 0 && (
-              <div style={{ fontSize: 12, color: 'var(--ink-4)', paddingLeft: 4 }}>No open tasks</div>
-            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, paddingLeft: 4 }}>
+              {tasks.length > 0
+                ? tasks.map((task) => <TaskRow key={task.id} task={task} />)
+                : <div style={{ fontSize: 12, color: 'var(--ink-4)' }}>No open tasks assigned to you</div>
+              }
+            </div>
           </div>
         )
       })}
