@@ -23,6 +23,7 @@ import SpaceStatusSettings from '../../features/spaces/components/SpaceStatusSet
 import SprintModal from '../../features/sprints/components/SprintModal'
 import KanbanBoard from '../../features/tasks/components/KanbanBoard'
 import TaskFilters from '../../features/tasks/components/TaskFilters'
+import TaskSearchInput, { filterTasksBySearch } from '../../features/tasks/components/TaskSearchInput'
 import TaskListView from '../../features/tasks/components/TaskListView'
 import TaskModal from '../../features/tasks/components/TaskModal'
 import { TasksProvider, useTasks } from '../../features/tasks/TasksContext'
@@ -1369,6 +1370,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
   const [modal, setModal] = useState(null)
   const [boardFiltersOpen, setBoardFiltersOpen] = useState(false)
   const [calFeedOpen, setCalFeedOpen] = useState(false)
+  const [taskSearch, setTaskSearch] = useState('')
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks, {
     defaultDateClosedRangeDays: STALE_COMPLETED_TASK_DAYS.SPACE,
     persistKey: `blw_date_closed_filter_${spaceId}`,
@@ -1392,6 +1394,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
     if (folderListIds) return filtered.filter((task) => folderListIds.has(task.list_id))
     return filtered
   }, [filtered, selectedListId, folderListIds])
+  const searchedTasks = useMemo(() => filterTasksBySearch(visibleTasks, taskSearch), [visibleTasks, taskSearch])
   const activeFilterCount = useMemo(() => (
     filters.status.length
     + filters.priority.length
@@ -1481,6 +1484,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
 
           {/* Controls */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            <TaskSearchInput value={taskSearch} onChange={setTaskSearch} />
             <button
               type="button"
               title="Sync tasks to calendar"
@@ -1518,7 +1522,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
 
               {boardFiltersOpen ? (
                 <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[640px] max-w-[80vw] rounded-[16px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-lg)]">
-                  <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={members} statuses={visibleStatuses} tasks={visibleTasks} forceExpanded showDateClosedFilter />
+                  <TaskFilters filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={members} statuses={visibleStatuses} tasks={searchedTasks} forceExpanded showDateClosedFilter />
                 </div>
               ) : null}
             </div>
@@ -1528,7 +1532,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
         {viewMode === 'kanban' ? (
           <div className="min-h-[520px]">
             <KanbanBoard
-              filteredTasks={visibleTasks}
+              filteredTasks={searchedTasks}
               statusesOverride={visibleStatuses}
               departmentId={spaceId}
               listId={selectedListId}
@@ -1544,7 +1548,7 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
         ) : (
           <div className="min-h-[520px] rounded-[24px] border border-[var(--border)] bg-white p-4 shadow-[var(--card-shadow)]">
             <TaskListView
-              tasks={visibleTasks}
+              tasks={searchedTasks}
               statuses={visibleStatuses}
               departments={departmentOptions}
               defaultDepartmentId={spaceId}

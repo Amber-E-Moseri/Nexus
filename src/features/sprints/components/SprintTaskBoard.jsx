@@ -10,6 +10,7 @@ import SprintReviewView from './SprintReviewView'
 import AllTeamsBoard from './AllTeamsBoard'
 import { TasksProvider, useTasks } from '../../tasks/TasksContext'
 import { useTaskFilters } from '../../tasks/hooks/useTaskFilters'
+import TaskSearchInput, { filterTasksBySearch } from '../../tasks/components/TaskSearchInput'
 
 function SprintTasksInner({ sprintId, sprint, canEdit }) {
   const { profile, role } = useAuth()
@@ -40,7 +41,9 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
   const [view, setView] = useState('kanban')
   const [teamView, setTeamView] = useState('my')
   const [modal, setModal] = useState(null)
+  const [taskSearch, setTaskSearch] = useState('')
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
+  const searchedTasks = useMemo(() => filterTasksBySearch(filtered, taskSearch), [filtered, taskSearch])
   const assignedToMe = Boolean(profile?.id) && filters.assigneeId === profile.id
   const toggleAssignedToMe = () => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))
 
@@ -79,11 +82,11 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
   }, [teamsWithMembers, profile?.id])
 
   const getMyTeamTasks = useCallback(() => {
-    if (!filtered) return []
+    if (!searchedTasks) return []
     const myTeams = getMyTeams()
     const myTeamIds = myTeams.map((t) => t.id)
 
-    return filtered.filter((task) => {
+    return searchedTasks.filter((task) => {
       if (task.sprint_team_id) return myTeamIds.includes(task.sprint_team_id)
       return (
         task.assignee_id === profile?.id ||
@@ -93,7 +96,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
         )
       )
     })
-  }, [filtered, teamsWithMembers, profile?.id, getMyTeams])
+  }, [searchedTasks, teamsWithMembers, profile?.id, getMyTeams])
 
   // "My Team" merges every team the viewer belongs to into one flat list
   // with no team attribution — confusing when the viewer is in more than
@@ -116,13 +119,13 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
 
   // Group tasks by team for "All Teams" view
   const getTasksByTeam = useMemo(() => {
-    if (!filtered || !teamsWithMembers) return {}
+    if (!searchedTasks || !teamsWithMembers) return {}
 
     const grouped = {}
     const assignedTaskIds = new Set()
 
     teamsWithMembers.forEach((team) => {
-      const teamTasks = filtered.filter((task) =>
+      const teamTasks = searchedTasks.filter((task) =>
         !assignedTaskIds.has(task.id) && (
           task.sprint_team_id === team.id ||
           (!task.sprint_team_id && team.sprint_team_members?.some((m) => m.user_id === task.assignee_id))
@@ -132,7 +135,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
       teamTasks.forEach((t) => assignedTaskIds.add(t.id))
     })
 
-    const unassigned = filtered.filter((t) => !assignedTaskIds.has(t.id))
+    const unassigned = searchedTasks.filter((t) => !assignedTaskIds.has(t.id))
     if (unassigned.length > 0) {
       grouped['__unassigned__'] = {
         team: { id: '__unassigned__', name: 'Unassigned' },
@@ -141,7 +144,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
     }
 
     return grouped
-  }, [filtered, teamsWithMembers])
+  }, [searchedTasks, teamsWithMembers])
 
   const resolveDeptId = useCallback((assigneeId) => {
     if (sprint?.sprint?.department_id) return sprint.sprint.department_id
@@ -189,6 +192,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
         </div>
 
         <div className="flex items-center gap-2">
+          {view !== 'review' && <TaskSearchInput value={taskSearch} onChange={setTaskSearch} />}
           {hasTeams && view !== 'review' ? (
             <div className="flex items-center gap-1 rounded-[10px] bg-[var(--surface-secondary)] p-[3px]">
               <button
@@ -255,7 +259,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
       <div className="flex-1 overflow-hidden px-5 pb-5 pt-4">
         {view === 'kanban' && hasTeams && teamView === 'all' ? (
           <AllTeamsBoard
-            tasks={filtered}
+            tasks={searchedTasks}
             tasksByTeam={getTasksByTeam}
             sprint={sprint}
             currentUser={profile}
@@ -268,7 +272,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
         ) : view === 'kanban' ? (
           <div className="h-full overflow-x-auto">
             <KanbanBoard
-              filteredTasks={hasTeams && teamView === 'my' ? getMyTeamTasks() : filtered}
+              filteredTasks={hasTeams && teamView === 'my' ? getMyTeamTasks() : searchedTasks}
               onTaskClick={(task) => setModal({ mode: 'edit', task })}
               onCreateTask={canEdit ? (draft) => addTask({ title: draft.title, statusId: draft.statusId, priority: draft.priority, dueDate: draft.dueDate, assignee_id: draft.assigneeId || null, department_id: resolveDeptId(draft.assigneeId), sprint_team_id: draft.sprintTeamId ?? null, subtasks: draft.subtasks }) : undefined}
               readOnly={!canEdit}

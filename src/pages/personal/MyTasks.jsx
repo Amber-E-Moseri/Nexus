@@ -14,6 +14,7 @@ import TaskModal from '../../features/tasks/components/TaskModal'
 import KanbanBoard from '../../features/tasks/components/KanbanBoard'
 import TaskListView from '../../features/tasks/components/TaskListView'
 import TaskFilters from '../../features/tasks/components/TaskFilters'
+import TaskSearchInput, { filterTasksBySearch } from '../../features/tasks/components/TaskSearchInput'
 import { EMPTY_FILTERS, applyTaskFilters } from '../../features/tasks/hooks/useTaskFilters'
 import { getTaskTypeInfo } from '../../features/tasks/lib/task-types'
 import { isDelegatedTask, updateTask } from '../../features/tasks/lib/tasks'
@@ -74,6 +75,7 @@ export default function MyTasks() {
     return { ...EMPTY_FILTERS, dateClosedOperator: operator, dateClosedRangeDays: rangeDays }
   })
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [taskSearch, setTaskSearch] = useState('')
   const isMobileView = useWindowWidth() < 640
 
   useEffect(() => {
@@ -166,6 +168,7 @@ export default function MyTasks() {
     ? { ...filters, status: [...new Set(filters.status.flatMap((id) => statusGroups.idToGroup[id] ?? [id]))] }
     : filters
   const visibleTasks = applyTaskFilters(tabTasks, expandedFilters)
+  const searchedTasks = useMemo(() => filterTasksBySearch(visibleTasks, taskSearch), [visibleTasks, taskSearch])
 
   // Tab counts always reflect the active filters so they stay in sync with
   // what's visible — both when the user adjusts filters and when the cron/
@@ -334,6 +337,8 @@ export default function MyTasks() {
         </div>
         )}
 
+          <div className="flex items-center gap-2">
+          <TaskSearchInput value={taskSearch} onChange={setTaskSearch} />
           <div className="relative">
             <button
               type="button"
@@ -354,6 +359,7 @@ export default function MyTasks() {
               </div>
             ) : null}
           </div>
+          </div>
         </div>
 
         {isLoading || (effectiveTab === 'watching' && watchedLoading) ? (
@@ -364,7 +370,7 @@ export default function MyTasks() {
           <div className="min-h-[520px]">
             <TasksProvider>
               <KanbanBoard
-                filteredTasks={visibleTasks}
+                filteredTasks={searchedTasks}
                 departmentId={null}
                 spaceName="My Tasks"
                 departments={departmentOptions}
@@ -380,7 +386,7 @@ export default function MyTasks() {
         ) : (
           <div className="min-h-[520px] rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--card-shadow)]">
             <TaskListView
-              tasks={visibleTasks}
+              tasks={searchedTasks}
               statuses={statuses}
               departments={departmentOptions}
               canAddTask={effectiveTab === 'mine'}
