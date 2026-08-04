@@ -1,140 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
-import { getAllDepartments } from '../../features/automations'
 import { hasSpaceRole } from '../../lib/permissions.js'
-import MeetingModal from '../../features/meetings/components/MeetingModal'
-import UnifiedMeetingsView from '../../features/meetings/components/UnifiedMeetingsView'
-import LiveMinutesMode from '../../features/meetings/components/LiveMinutesMode'
-import { MeetingsProvider } from '../../features/meetings/MeetingsContext'
 import MeetingReportTab from '../../features/meetings/components/MeetingReportTab'
 import ExpectedAttendeesPage from './ExpectedAttendeesPage'
-
-function MeetingsModuleFallback() {
-  const navigate = useNavigate()
-  const { profile, role } = useAuth()
-  const isMobile = useMediaQuery('(max-width: 640px)')
-  const [departments, setDepartments] = useState([])
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState(profile?.department_id ?? '')
-  const [showModal, setShowModal] = useState(false)
-  const [liveSession, setLiveSession] = useState(null)
-  // Named isSuperAdmin historically, but gates "see/filter all departments" —
-  // regional_secretary is near-super_admin and needs the same org-wide view
-  // (RLS already grants them unconditional meeting access; this was the one
-  // place the frontend still locked them to their own department).
-  const isSuperAdmin = role === 'super_admin' || role === 'regional_secretary'
-  const canManage = ['super_admin', 'dept_lead'].includes((role ?? '').toLowerCase()) ||
-                    hasSpaceRole(profile, null, 'ors') ||
-                    hasSpaceRole(profile, null, 'dept_lead')
-  const canLog = canManage || role === 'media'
-
-  useEffect(() => {
-    let active = true
-
-    getAllDepartments()
-      .then((data) => {
-        if (active) {
-          setDepartments(data ?? [])
-        }
-      })
-      .catch(() => {
-        if (active) setDepartments([])
-      })
-
-    return () => {
-      active = false
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!isSuperAdmin) {
-      setSelectedDepartmentId(profile?.department_id ?? '')
-      return
-    }
-
-    if (!selectedDepartmentId && departments.length > 0) {
-      setSelectedDepartmentId('all')
-    }
-  }, [departments, isSuperAdmin, profile?.department_id, selectedDepartmentId])
-
-  if (!selectedDepartmentId) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 14 }}>
-        No department is assigned to this account yet, so there is no meeting history to load.
-      </div>
-    )
-  }
-
-  if (liveSession) {
-    return (
-      <MeetingsProvider key={selectedDepartmentId} departmentId={selectedDepartmentId}>
-        <LiveMinutesMode meeting={liveSession} onClose={() => setLiveSession(null)} />
-        {showModal ? <MeetingModal departmentId={selectedDepartmentId} onClose={() => setShowModal(false)} /> : null}
-      </MeetingsProvider>
-    )
-  }
-
-  return (
-    <MeetingsProvider key={selectedDepartmentId} departmentId={selectedDepartmentId}>
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'auto', gap: 0 }}>
-        {canLog && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: isMobile ? '8px 16px' : '10px 24px', borderBottom: '1px solid #EDE8DC', background: '#FBF8F2', flexShrink: 0 }}>
-            <button
-              type="button"
-              onClick={() => setShowModal(true)}
-              style={{
-                borderRadius: 10,
-                border: 'none',
-                background: '#4C2A92',
-                padding: '9px 16px',
-                fontSize: 13,
-                fontWeight: 600,
-                color: 'white',
-                cursor: 'pointer',
-                transition: 'all 0.12s',
-              }}
-              onMouseOver={(e) => { e.currentTarget.style.background = '#6B3FAF' }}
-              onMouseOut={(e) => { e.currentTarget.style.background = '#4C2A92' }}
-            >
-              + Log meeting
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/meetings/wizard')}
-              style={{
-                borderRadius: 10,
-                border: '1px solid #C4B8E8',
-                background: 'white',
-                padding: '9px 16px',
-                fontSize: 13,
-                fontWeight: 600,
-                color: '#4C2A92',
-                cursor: 'pointer',
-                transition: 'all 0.12s',
-              }}
-              onMouseOver={(e) => { e.currentTarget.style.background = '#F3EEFF' }}
-              onMouseOut={(e) => { e.currentTarget.style.background = 'white' }}
-            >
-              Plan a meeting
-            </button>
-          </div>
-        )}
-
-        <UnifiedMeetingsView
-          isSuperAdmin={isSuperAdmin}
-          departments={departments}
-          selectedDeptId={selectedDepartmentId}
-          onDeptChange={setSelectedDepartmentId}
-          canManage={canManage}
-          onStartLive={(meeting) => setLiveSession(meeting)}
-        />
-
-        {showModal ? <MeetingModal departmentId={selectedDepartmentId} onClose={() => setShowModal(false)} /> : null}
-      </div>
-    </MeetingsProvider>
-  )
-}
 
 const TABS = [
   { key: 'report', label: 'Report' },
@@ -148,7 +18,7 @@ const TABS = [
 function TabBar({ active, onChange, visibleTabs }) {
   const isMobile = useMediaQuery('(max-width: 640px)')
   return (
-    <div style={{ display: 'flex', gap: 0, padding: isMobile ? '0 12px' : '0 20px', background: '#FBF8F2', flexShrink: 0 }}>
+    <div style={{ display: 'flex', gap: 4, padding: isMobile ? '0 12px' : '0 20px', background: '#FBF8F2' }}>
       {visibleTabs.map((tab) => (
         <button
           key={tab.key}
@@ -157,15 +27,15 @@ function TabBar({ active, onChange, visibleTabs }) {
           style={{
             border: 'none',
             background: 'none',
-            padding: '10px 16px',
-            fontSize: 13,
-            fontWeight: 700,
+            padding: '8px 12px',
+            fontSize: 12.5,
+            fontWeight: 600,
             cursor: 'pointer',
-            color: active === tab.key ? '#4C2A92' : '#B0A89A',
+            color: active === tab.key ? '#4C2A92' : '#9E9488',
             borderBottom: active === tab.key ? '2px solid #4C2A92' : '2px solid transparent',
             marginBottom: -1,
             transition: 'color .12s',
-            letterSpacing: '-0.1px',
+            letterSpacing: '0',
           }}
         >
           {tab.label}
