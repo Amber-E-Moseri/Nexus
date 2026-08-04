@@ -63,7 +63,10 @@ export default function KanbanBoard({
   // departmentId/sprintId scope.
   // Subtasks are excluded from board view — they belong nested inside their
   // parent in list/modal views only.
-  const tasks = (filteredTasks ?? contextTasks).filter((t) => !t.parent_task_id)
+  const tasks = useMemo(
+    () => (filteredTasks ?? contextTasks).filter((t) => !t.parent_task_id),
+    [filteredTasks, contextTasks],
+  )
 
   // Batch-load all subtasks for this board in one query so every card that
   // has children gets them without firing N individual requests.

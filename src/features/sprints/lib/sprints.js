@@ -448,7 +448,7 @@ export async function listAllTeams() {
     (teams || []).map(async (team) => {
       const { data: members } = await supabase
         .from('sprint_team_members')
-        .select('id, user_id, users:user_id(id, name, email, department_id)')
+        .select('user_id, users:user_id(id, name, email, department_id)')
         .eq('team_id', team.id)
 
       return { ...team, sprint_team_members: members || [] }
@@ -473,7 +473,7 @@ export async function listSprintTeamsIndependent(sprintId) {
     (data || []).map(async (team) => {
       const { data: members } = await supabase
         .from('sprint_team_members')
-        .select('id, user_id, users:user_id(id, name, email)')
+        .select('user_id, users:user_id(id, name, email)')
         .eq('team_id', team.id)
 
       return { ...team, sprint_team_members: members || [] }
@@ -484,9 +484,18 @@ export async function listSprintTeamsIndependent(sprintId) {
 }
 
 export async function addTeamMember(teamId, userId, role = null) {
+  // sprint_team_members.sprint_id is NOT NULL — look it up from the team
+  const { data: team, error: teamError } = await supabase
+    .from('sprint_teams')
+    .select('sprint_id')
+    .eq('id', teamId)
+    .single()
+  if (teamError) throw teamError
+
   const { data, error } = await supabase
     .from('sprint_team_members')
     .insert({
+      sprint_id: team.sprint_id,
       team_id: teamId,
       user_id: userId,
       role,
@@ -513,7 +522,7 @@ export async function assignTeamToSprint(teamId, sprintId) {
     .from('sprint_teams')
     .update({ sprint_id: sprintId })
     .eq('id', teamId)
-    .select('id, name, sprint_id, is_archived, created_at, sprint_team_members (id, user_id)')
+    .select('id, name, sprint_id, is_archived, created_at, sprint_team_members (user_id)')
     .single()
 
   if (error) throw error

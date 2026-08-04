@@ -239,10 +239,13 @@ const ALL_TABS = [
   { key: 'import', label: 'Import Data', icon: Upload },
 ];
 
-export default function App({ limitedToSubgroups = null }) {
+export default function App({ limitedToSubgroups = null, sprintEditAccess = false, financeAccess = false, limitedToRegistrationDataOnly = false }) {
   const { profile, role } = useAuth();
-  const isLimited = limitedToSubgroups && limitedToSubgroups.length > 0;
   const [tab, setTab] = useState('overview');
+  // isGloballyScoped: user has a subgroup scope — controls tab visibility
+  const isGloballyScoped = !!(limitedToSubgroups?.length);
+  // isLimited: filters displayed data — only applies to Registration Data tab when limitedToRegistrationDataOnly
+  const isLimited = isGloballyScoped && (!limitedToRegistrationDataOnly || tab === 'central');
   const [highlightEmail, setHighlightEmail] = useState(null);
   const [roster, setRoster] = useState([]);
   const [registrations, setRegistrations] = useState([]);
@@ -256,13 +259,43 @@ export default function App({ limitedToSubgroups = null }) {
   const [peoplePerRoom, setPeoplePerRoom] = useState(2);
   const [workingListDb, setWorkingListDb] = useState([]);
   const [workingListLoading, setWorkingListLoading] = useState(false);
-  const [hasFinanceAccess, setHasFinanceAccess] = useState(false);
+  const [hasFinanceAccess, setHasFinanceAccess] = useState(financeAccess);
   const [hasRoomsAccess, setHasRoomsAccess] = useState(false);
   const [payments, setPayments] = useState([]); // from event_payments table
   const [editingReg, setEditingReg] = useState(null);
+  // Track emails edited locally so refetches don't stomp on in-flight or recent saves
+  const dirtyEmails = React.useRef(new Set());
+
+  const handleDeleteReg = useCallback(async (regId, regEmail) => {
+    try {
+      let deleteError;
+      if (regId) {
+        ({ error: deleteError } = await supabase.from('registrations').delete().eq('id', regId));
+      } else if (regEmail) {
+        ({ error: deleteError } = await supabase.from('registrations').delete().eq('email', regEmail));
+      }
+      if (deleteError) throw deleteError;
+      dirtyEmails.current.delete(regEmail);
+      setRegistrations(prev => prev.filter(r => r.id !== regId && r.email !== regEmail));
+    } catch (e) {
+      alert(`Failed to delete registration: ${e.message}`);
+    }
+  }, []);
 
   const handleSaveReg = useCallback((updated) => {
-    setRegistrations(prev => prev.map(r => r.email === updated.email ? { ...r, ...updated } : r));
+    // Mark as dirty so the next refetch won't overwrite this record while the
+    // DB write is still propagating. Auto-clears after 10 s (well past any write latency).
+    dirtyEmails.current.add(updated.email);
+    setTimeout(() => dirtyEmails.current.delete(updated.email), 10_000);
+
+    setRegistrations(prev => prev.map(r => {
+      if (r.email !== updated.email) return r;
+      const merged = { ...r, ...updated };
+      if (updated.firstName !== undefined || updated.lastName !== undefined) {
+        merged.fullName = updated.fullName || [updated.firstName, updated.lastName].filter(Boolean).join(' ') || r.fullName;
+      }
+      return merged;
+    }));
   }, []);
 
   const refetchRegistrations = useCallback(async () => {
@@ -280,7 +313,17 @@ export default function App({ limitedToSubgroups = null }) {
         arrivalDate: r.arrival_date, arrivalTime: r.arrival_time, arrivalFlight: r.arrival_flight,
         departureDate: r.departure_date, departureTime: r.departure_time, departureFlight: r.departure_flight,
       }));
-      setRegistrations(mapped);
+      // Merge: keep local version for any record edited in the last 10 s
+      setRegistrations(prev => {
+        const prevByEmail = new Map(prev.map(r => [r.email, r]));
+        const merged = mapped.map(fetched =>
+          dirtyEmails.current.has(fetched.email) ? (prevByEmail.get(fetched.email) ?? fetched) : fetched
+        );
+        // Preserve locally-added rows not yet returned by the DB
+        const fetchedEmails = new Set(mapped.map(r => r.email));
+        const localOnly = prev.filter(r => !fetchedEmails.has(r.email));
+        return [...merged, ...localOnly];
+      });
     } catch (e) {
       console.error('Failed to refetch registrations:', e);
     }
@@ -318,8 +361,9 @@ export default function App({ limitedToSubgroups = null }) {
     }
   }, [refetchRegistrations]);
 
-  // Finance access: regional_secretary only (unless granted via user_grants); super_admin sees tab but is restricted
+  // Finance access: sprint Finance team, regional_secretary, or explicit grant
   useEffect(() => {
+    if (financeAccess) { setHasFinanceAccess(true); return; }
     if (!profile?.id) return;
     if (role === 'regional_secretary') { setHasFinanceAccess(true); return; }
     supabase.from('user_grants')
@@ -329,7 +373,7 @@ export default function App({ limitedToSubgroups = null }) {
       .maybeSingle()
       .then(({ data }) => { if (data) setHasFinanceAccess(true); })
       .catch(() => {});
-  }, [profile?.id, role]);
+  }, [profile?.id, role, financeAccess]);
 
   // Rooms access: super_admin, regional_secretary, Programs space members,
   // explicit rooms_access grant, or Accommodation sprint team member
@@ -544,11 +588,11 @@ export default function App({ limitedToSubgroups = null }) {
       if (t.key === 'rooms' && !hasRoomsAccess) return false;
       // Import Data: super admin only
       if (t.key === 'import' && role !== 'super_admin') return false;
-      if (isLimited && ['import', 'rooms', 'finance'].includes(t.key)) return false;
+      if (isGloballyScoped && ['import', 'rooms', 'finance'].includes(t.key)) return false;
       return true;
     });
     return allowed;
-  }, [hasFinanceAccess, hasRoomsAccess, isLimited, role]);
+  }, [hasFinanceAccess, hasRoomsAccess, isGloballyScoped, role]);
 
   // ---------- persistence actions ----------
   const setTarget = useCallback((sg, field, val) => {
@@ -837,6 +881,8 @@ export default function App({ limitedToSubgroups = null }) {
             isLimited={isLimited}
             role={role}
             onSaveReg={handleSaveReg}
+            onDeleteReg={handleDeleteReg}
+            sprintEditAccess={sprintEditAccess}
             onMarkAbsent={handleMarkAbsent}
             onAddPerson={handleAddToWorkingList}
             onEditPerson={handleEditWorkingListPerson}

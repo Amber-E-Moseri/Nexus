@@ -87,30 +87,28 @@ export async function getDeptMeetings(departmentId, { limit = MEETINGS_PAGE_SIZE
 
   const sharedIds = (sharedRowsRes.data ?? []).map((r) => r.meeting_id)
 
-  // Fetch shared meetings if any exist
-  let sharedRes = { data: [] }
-  if (sharedIds.length > 0) {
-    sharedRes = await supabase
-      .from('meetings')
-      .select(selectString)
-      .in('id', sharedIds)
-      .order('date', { ascending: false })
-      .limit(maxFetch)
+  // Fetch shared meetings + total count in parallel (both depend only on sharedIds)
+  const [sharedRes, countRes] = await Promise.all([
+    sharedIds.length > 0
+      ? supabase
+          .from('meetings')
+          .select(selectString)
+          .in('id', sharedIds)
+          .order('date', { ascending: false })
+          .limit(maxFetch)
+      : Promise.resolve({ data: [], error: null }),
+    sharedIds.length === 0
+      ? supabase
+          .from('meetings')
+          .select('id', { count: 'exact', head: true })
+          .eq('department_id', departmentId)
+      : supabase
+          .from('meetings')
+          .select('id', { count: 'exact', head: true })
+          .or(`department_id.eq.${departmentId},id.in.(${sharedIds.join(',')})`),
+  ])
 
-    if (sharedRes.error) throw sharedRes.error
-  }
-
-  // Count query for totalCount (includes both sources)
-  const countRes = sharedIds.length === 0
-    ? await supabase
-        .from('meetings')
-        .select('id', { count: 'exact', head: true })
-        .eq('department_id', departmentId)
-    : await supabase
-        .from('meetings')
-        .select('id', { count: 'exact', head: true })
-        .or(`department_id.eq.${departmentId},id.in.(${sharedIds.join(',')})`)
-
+  if (sharedRes.error) throw sharedRes.error
   if (countRes.error) throw countRes.error
 
   // Merge, dedupe by ID, sort by date

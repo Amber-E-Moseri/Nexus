@@ -142,22 +142,13 @@ export async function getTeamAvailability(deptId: string): Promise<TeamAvailabil
 export async function getPersonalReminders(userId: string): Promise<PersonalReminder[]> {
   const { data, error } = await supabase
     .from('personal_reminders')
-    .select('id, note, remind_at, task_id')
+    .select('id, note, remind_at, task_id, task:tasks(id, title)')
     .eq('user_id', userId)
     .order('remind_at', { ascending: true, nullsFirst: false })
 
   if (error) throw error
 
-  const reminders = (data ?? []) as PersonalReminder[]
-  const withTaskIds = reminders.filter(r => r.task_id)
-  if (withTaskIds.length > 0) {
-    const taskIds = [...new Set(withTaskIds.map(r => r.task_id as string))]
-    const { data: tasks } = await supabase.from('tasks').select('id, title').in('id', taskIds)
-    const taskMap = new Map((tasks ?? []).map(t => [t.id, t.title]))
-    return reminders.map(r => ({ ...r, task_title: r.task_id ? taskMap.get(r.task_id) ?? null : null }))
-  }
-
-  return reminders.map(r => ({ ...r, task_title: null }))
+  return (data ?? []).map((r: any) => ({ ...r, task_title: r.task?.title ?? null }))
 }
 
 export async function createPersonalReminder(userId: string, note: string, remindAt: string | null, taskId?: string | null): Promise<PersonalReminder> {

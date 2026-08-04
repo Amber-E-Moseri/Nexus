@@ -165,30 +165,38 @@ serve(async (req) => {
     const tokensUsed = Math.ceil(transcript.length / 4);
 
     // Extract meeting ID from path: private/{uuid}-{timestamp}.{ext}
+    // Flock audio paths (flock-{user-uuid}-{timestamp}.webm) won't match —
+    // skip the meeting_transcriptions insert when no valid UUID is found.
     const fileName = audioPath.split("/").pop() || "";
     const fileNameWithoutExt = fileName.split(".")[0];
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const uuidMatch = fileNameWithoutExt.match(/^([a-f0-9-]+)-\d+$/);
-    const meetingId = uuidMatch?.[1] || "unknown";
+    const rawMeetingId = uuidMatch?.[1];
+    const meetingId = rawMeetingId && UUID_RE.test(rawMeetingId) ? rawMeetingId : null;
 
-    const { data, error: dbError } = await supabase
-      .from("meeting_transcriptions")
-      .insert([
-        {
-          meeting_id: meetingId,
-          input_type: "audio",
-          input_file_name: fileName,
-          summary: transcript.substring(0, 500),
-          status: "complete",
-          tokens_used: tokensUsed,
-          created_by: userId,
-          processed_at: new Date().toISOString(),
-        },
-      ])
-      .select()
-      .single();
+    let transcriptionRecord = null;
+    if (meetingId) {
+      const { data, error: dbError } = await supabase
+        .from("meeting_transcriptions")
+        .insert([
+          {
+            meeting_id: meetingId,
+            input_type: "audio",
+            input_file_name: fileName,
+            summary: transcript.substring(0, 500),
+            status: "complete",
+            tokens_used: tokensUsed,
+            created_by: userId,
+            processed_at: new Date().toISOString(),
+          },
+        ])
+        .select()
+        .single();
 
-    if (dbError) {
-      throw dbError;
+      if (dbError) {
+        throw dbError;
+      }
+      transcriptionRecord = data;
     }
 
     // Return transcript + stored record
@@ -196,7 +204,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         transcript,
-        transcriptionRecord: data,
+        transcriptionRecord,
         tokensUsed,
         debug: {
           audioBufferSize: audioBuffer.byteLength,

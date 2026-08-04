@@ -14,6 +14,10 @@ const C = {
 
 export default function RegistrationEditModal({ registration, onClose, onSave }) {
   const [formData, setFormData] = useState({
+    firstName: registration.firstName || '',
+    lastName: registration.lastName || '',
+    phone: registration.phone || '',
+    gender: registration.gender || '',
     subgroup: registration.subgroup || '',
     fellowship: registration.fellowship || '',
     team: registration.team || '',
@@ -42,7 +46,15 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
     setSaving(true);
     setError(null);
     try {
+      const fullName = [formData.firstName, formData.lastName].filter(Boolean).join(' ')
+        || registration.fullName || '';
+
       const dbPayload = {
+        first_name: formData.firstName || null,
+        last_name: formData.lastName || null,
+        full_name: fullName || null,
+        phone: formData.phone || null,
+        gender: formData.gender || null,
         subgroup: formData.subgroup,
         fellowship: formData.fellowship,
         team: formData.team,
@@ -75,7 +87,7 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
 
       if (updateError) throw updateError;
 
-      onSave?.({ ...registration, ...formData });
+      onSave?.({ ...registration, ...formData, fullName });
       onClose();
     } catch (err) {
       setError(err.message || 'Failed to save changes');
@@ -161,6 +173,27 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
             </div>
           )}
 
+          {/* Personal details */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.ink, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Personal Details</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <FormField label="First Name" value={formData.firstName} onChange={(v) => handleChange('firstName', v)} />
+              <FormField label="Last Name" value={formData.lastName} onChange={(v) => handleChange('lastName', v)} />
+              <FormField label="Phone" value={formData.phone} onChange={(v) => handleChange('phone', v)} />
+              <FormField label="Gender" value={formData.gender} onChange={(v) => handleChange('gender', v)} type="select" options={['', 'Male', 'Female', 'Other']} />
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.mute, marginBottom: 4, textTransform: 'uppercase' }}>Email</label>
+                <div style={{ padding: '8px 10px', border: `1px solid ${C.line}`, borderRadius: 6, fontSize: 13, color: C.mute, background: '#FAFAFA' }}>
+                  {registration.email || '—'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 20, marginBottom: 4 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.ink, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Registration Info</div>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <FormField label="Subgroup" value={formData.subgroup} onChange={(v) => handleChange('subgroup', v)} />
             <FormField label="Team" value={formData.team} onChange={(v) => handleChange('team', v)} />
@@ -239,7 +272,18 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
   );
 }
 
-function FormField({ label, value, onChange, type = 'text', multiline = false }) {
+function FormField({ label, value, onChange, type = 'text', multiline = false, options }) {
+  const inputStyle = {
+    width: '100%',
+    padding: '8px 10px',
+    border: `1px solid ${C.line}`,
+    borderRadius: 6,
+    fontSize: 13,
+    fontFamily: 'Inter',
+    color: C.ink,
+    boxSizing: 'border-box',
+    background: '#fff',
+  };
   return (
     <div>
       <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.mute, marginBottom: 6, textTransform: 'uppercase' }}>
@@ -249,33 +293,20 @@ function FormField({ label, value, onChange, type = 'text', multiline = false })
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          style={{
-            width: '100%',
-            minHeight: 60,
-            padding: '8px 10px',
-            border: `1px solid ${C.line}`,
-            borderRadius: 6,
-            fontSize: 13,
-            fontFamily: 'Inter',
-            color: C.ink,
-            boxSizing: 'border-box',
-          }}
+          style={{ ...inputStyle, minHeight: 60 }}
         />
+      ) : type === 'select' ? (
+        <select value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle}>
+          {(options || []).map((o) => (
+            <option key={o} value={o}>{o || '— select —'}</option>
+          ))}
+        </select>
       ) : (
         <input
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '8px 10px',
-            border: `1px solid ${C.line}`,
-            borderRadius: 6,
-            fontSize: 13,
-            fontFamily: 'Inter',
-            color: C.ink,
-            boxSizing: 'border-box',
-          }}
+          style={inputStyle}
         />
       )}
     </div>

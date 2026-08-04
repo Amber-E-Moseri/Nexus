@@ -560,21 +560,29 @@ export async function updateTask(taskId, updates, actorId = null, existingTask =
       `)
       .eq('depends_on_id', taskId)
 
-    // For each blocked task, notify its assignees
-    for (const dep of blockedTasks ?? []) {
-      if (!dep.task) continue
-      const { data: assignees } = await supabase
+    // Batch-fetch assignees for all blocked tasks in one query instead of N+1
+    const deps = (blockedTasks ?? []).filter((d) => d.task)
+    if (deps.length > 0) {
+      const depTaskIds = deps.map((d) => d.task.id)
+      const { data: allAssignees } = await supabase
         .from('task_assignees')
-        .select('user_id')
-        .eq('task_id', dep.task.id)
-      for (const row of assignees ?? []) {
-        if (row.user_id !== actorId) {
-          createNotification(row.user_id, 'dependency_cleared', {
-            taskId: dep.task.id,
-            blockerTaskId: taskId,
-            blockedTaskTitle: dep.task.title,
-            blockerTaskTitle: data?.title ?? existingTask.title,
-          }).catch(() => {})
+        .select('user_id, task_id')
+        .in('task_id', depTaskIds)
+      const assigneesByTask = new Map()
+      for (const row of allAssignees ?? []) {
+        if (!assigneesByTask.has(row.task_id)) assigneesByTask.set(row.task_id, [])
+        assigneesByTask.get(row.task_id).push(row)
+      }
+      for (const dep of deps) {
+        for (const row of assigneesByTask.get(dep.task.id) ?? []) {
+          if (row.user_id !== actorId) {
+            createNotification(row.user_id, 'dependency_cleared', {
+              taskId: dep.task.id,
+              blockerTaskId: taskId,
+              blockedTaskTitle: dep.task.title,
+              blockerTaskTitle: data?.title ?? existingTask.title,
+            }).catch(() => {})
+          }
         }
       }
     }
@@ -733,12 +741,13 @@ export async function updateSubtask(subtaskId, fields = {}, actorId = null) {
 
 export async function reorderSubtasks(orderedIds = []) {
   if (!orderedIds.length) return
-  const updates = orderedIds.map((id, index) =>
-    supabase.from('tasks').update({ sort_order: index }).eq('id', id),
-  )
-  const results = await Promise.all(updates)
-  const failure = results.find((result) => result.error)
-  if (failure?.error) throw failure.error
+  const { error } = await supabase
+    .from('tasks')
+    .upsert(
+      orderedIds.map((id, index) => ({ id, sort_order: index })),
+      { onConflict: 'id' },
+    )
+  if (error) throw error
 }
 
 export async function getDeptMembers(departmentId) {

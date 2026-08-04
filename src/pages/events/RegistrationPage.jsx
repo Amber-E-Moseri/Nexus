@@ -4,11 +4,33 @@ import { supabase } from '../../lib/supabase'
 import PageSpinner from '../../components/ui/PageSpinner'
 import RegistrationEcosystem from '../../features/registration/RegistrationEcosystem'
 
+// Full view + edit, no subgroup scope
+const UNSCOPED_EDIT_TEAMS = ['Programs', 'Secretariat']
+
+// Full view + finance tab only, no edit, no subgroup scope
+const FINANCE_TEAMS = ['Finance']
+
+// Scoped to own subgroup on ALL tabs + edit
+const SCOPED_EDIT_ALL_TABS = ['Registration']
+
+// Scoped to own subgroup on Registration Data tab only + edit (see all on their own team tab)
+const SCOPED_EDIT_REG_ONLY = ['Accommodation', 'Hospitality']
+
+// Scoped to own subgroup on Registration Data tab only, view only
+const SCOPED_VIEW_REG_ONLY = [
+  'Transportation',
+  'Foundation School Graduation and Baptism',
+  'Delegates Compliance',
+]
+
 export default function RegistrationPage() {
   const { profile, role } = useAuth()
   const [canAccess, setCanAccess] = useState(null)
   const [loading, setLoading] = useState(true)
   const [limitedToSubgroups, setLimitedToSubgroups] = useState(null)
+  const [sprintEditAccess, setSprintEditAccess] = useState(false)
+  const [financeAccess, setFinanceAccess] = useState(false)
+  const [limitedToRegistrationDataOnly, setLimitedToRegistrationDataOnly] = useState(false)
 
   useEffect(() => {
     checkAccess()
@@ -16,152 +38,192 @@ export default function RegistrationPage() {
 
   async function checkAccess() {
     if (!profile?.id) {
-      setCanAccess(false)
-      setLoading(false)
-      return
+      setCanAccess(false); setLoading(false); return
     }
 
     try {
-      // Super admin always has access
-      if (role === 'super_admin') {
+      // Role-based full access
+      if (role === 'super_admin' || role === 'regional_secretary') {
+        setSprintEditAccess(true)
+        setFinanceAccess(true)
         setCanAccess(true)
         setLoading(false)
         return
       }
 
-      // Regional secretary has access
-      if (role === 'regional_secretary') {
+      // Explicit full-access grant (e.g. Pastor Nigel) — checked before pastor-role scoping
+      const { data: fullGrant } = await supabase
+        .from('user_grants')
+        .select('id')
+        .eq('user_id', profile.id)
+        .eq('grant_type', 'registration_full_access')
+        .maybeSingle()
+
+      if (fullGrant) {
+        setSprintEditAccess(true)
         setCanAccess(true)
         setLoading(false)
         return
       }
 
-      // Allowed team names (case-insensitive substring matching)
-      const allowedTeams = [
-        'Foundation School Graduation and Baptism',
-        'Secretariat and Planning',
-        'Registration',
-        'Secretariat Programs',
-        'Finance',
-        'Transportation',
-        'Delegates Compliance',
-        'Accommodation and Room Coordination',
-        'Hospitality — Delegates',
-      ]
+      // Pastors are always scoped to their own subgroup regardless of sprint team
+      if (role === 'pastor') {
+        const subgroups = await getPastorSubgroups()
+        if (subgroups.length) {
+          setLimitedToSubgroups(subgroups)
+          setCanAccess('limited')
+        } else {
+          setCanAccess(false)
+        }
+        setLoading(false)
+        return
+      }
 
-      // Check if user is in "This Is It 2.0" sprint
-      const { data: sprint, error: sprintError } = await supabase
+      // Look up "This Is It 2.0" sprint
+      const { data: sprint } = await supabase
         .from('sprints')
         .select('id')
         .ilike('name', '%This Is It 2.0%')
         .limit(1)
         .maybeSingle()
 
-      if (sprintError || !sprint?.id) {
-        setCanAccess(false)
-        setLoading(false)
-        return
+      if (!sprint?.id) {
+        setCanAccess(false); setLoading(false); return
       }
 
-      // Get all teams in the sprint
-      const { data: teams, error: teamsError } = await supabase
+      const { data: teams } = await supabase
         .from('sprint_teams')
         .select('id, name')
         .eq('sprint_id', sprint.id)
 
-      if (teamsError || !teams?.length) {
-        setCanAccess(false)
-        setLoading(false)
-        return
+      if (!teams?.length) {
+        setCanAccess(false); setLoading(false); return
       }
 
-      const teamIds = teams.map(t => t.id)
-
-      // Check if user is in any of the allowed teams
-      const { data: userTeams, error: userTeamsError } = await supabase
+      const { data: memberRows } = await supabase
         .from('sprint_team_members')
-        .select('team_id, sprint_teams:team_id(name)')
-        .in('team_id', teamIds)
+        .select('team_id')
+        .in('team_id', teams.map(t => t.id))
         .eq('user_id', profile.id)
 
-      if (userTeamsError || !userTeams?.length) {
-        // Pastor not in any team → limited view (own subgroups only)
-        if (role === 'pastor') {
-          // Fetch pastor's subgroup assignments
-          const { data: subgroupData, error: subgroupError } = await supabase
-            .from('pastor_subgroup_assignments')
-            .select('subgroup')
-            .eq('user_id', profile.id)
-            .eq('status', 'active')
-
-          if (!subgroupError && subgroupData?.length > 0) {
-            const subgroups = subgroupData.map(s => s.subgroup)
-            setLimitedToSubgroups(subgroups)
-            setCanAccess('limited')
-          } else {
-            setCanAccess(false)
-          }
-        } else {
-          setCanAccess(false)
-        }
+      if (!memberRows?.length) {
+        setCanAccess(false)
         setLoading(false)
         return
       }
 
-      // Check if user is on Programs or Secretariat team (full access)
-      const fullAccessTeams = ['Programs', 'Secretariat']
-      const hasFullAccessTeam = userTeams.some(ut => {
-        const teamName = ut.sprint_teams?.name || ''
-        return fullAccessTeams.some(team =>
-          teamName.toLowerCase().includes(team.toLowerCase())
-        )
-      })
+      // Resolve team names from the already-fetched teams list (avoids join issues)
+      const userTeamNames = memberRows
+        .map(r => teams.find(t => t.id === r.team_id)?.name || '')
+        .filter(Boolean)
+      const matchesAny = (list) => userTeamNames.some(name =>
+        list.some(t => name.toLowerCase().includes(t.toLowerCase()))
+      )
 
-      if (hasFullAccessTeam) {
+      // Full view + edit, no scope (Programs, Secretariat)
+      if (matchesAny(UNSCOPED_EDIT_TEAMS)) {
+        setSprintEditAccess(true)
         setCanAccess(true)
         setLoading(false)
         return
       }
 
-      // Check if any of user's teams match allowed team names
-      const userHasAccess = userTeams.some(ut => {
-        const teamName = ut.sprint_teams?.name || ''
-        return allowedTeams.some(allowed =>
-          teamName.toLowerCase().includes(allowed.toLowerCase())
-        )
-      })
-
-      if (userHasAccess) {
+      // Finance tab only, no edit, no scope
+      if (matchesAny(FINANCE_TEAMS)) {
+        setFinanceAccess(true)
         setCanAccess(true)
-      } else if (role === 'pastor') {
-        // Pastor in sprint but not in an allowed team → limited view (own subgroups only)
-        const { data: subgroupData, error: subgroupError } = await supabase
-          .from('pastor_subgroup_assignments')
-          .select('subgroup')
-          .eq('user_id', profile.id)
-          .eq('status', 'active')
+        setLoading(false)
+        return
+      }
 
-        if (!subgroupError && subgroupData?.length > 0) {
-          const subgroups = subgroupData.map(s => s.subgroup)
+      // Scoped on ALL tabs + edit (Registration team)
+      if (matchesAny(SCOPED_EDIT_ALL_TABS)) {
+        const subgroups = await getOwnSubgroups()
+        if (subgroups.length) {
           setLimitedToSubgroups(subgroups)
+          setSprintEditAccess(true)
           setCanAccess('limited')
         } else {
-          setCanAccess(false)
+          setSprintEditAccess(true)
+          setCanAccess(true)
         }
-      } else {
-        setCanAccess(false)
+        setLoading(false)
+        return
       }
+
+      // Scoped on Registration Data tab only + edit; see all on their own team tab (Accommodation, Hospitality)
+      if (matchesAny(SCOPED_EDIT_REG_ONLY)) {
+        const subgroups = await getOwnSubgroups()
+        if (subgroups.length) {
+          setLimitedToSubgroups(subgroups)
+          setLimitedToRegistrationDataOnly(true)
+          setSprintEditAccess(true)
+          setCanAccess('limited')
+        } else {
+          setSprintEditAccess(true)
+          setCanAccess(true)
+        }
+        setLoading(false)
+        return
+      }
+
+      // Scoped on Registration Data tab only, view only; see all on their own team tab
+      if (matchesAny(SCOPED_VIEW_REG_ONLY)) {
+        const subgroups = await getOwnSubgroups()
+        if (subgroups.length) {
+          setLimitedToSubgroups(subgroups)
+          setLimitedToRegistrationDataOnly(true)
+          setCanAccess('limited')
+        } else {
+          setCanAccess(true)
+        }
+        setLoading(false)
+        return
+      }
+
+
+      setCanAccess(false)
       setLoading(false)
     } catch (error) {
-      console.error('Error checking access:', error)
+      console.error('Error checking registration access:', error)
       setCanAccess(false)
       setLoading(false)
     }
   }
 
-  if (loading) {
-    return <PageSpinner />
+  async function getPastorSubgroups() {
+    const { data } = await supabase
+      .from('pastor_subgroup_assignments')
+      .select('subgroup')
+      .eq('user_id', profile.id)
+      .eq('status', 'active')
+    return (data || []).map(s => s.subgroup).filter(Boolean)
   }
+
+  async function getOwnSubgroups() {
+    // Check explicit subgroup assignments first (works for any user, not just pastors)
+    const { data: assigned } = await supabase
+      .from('pastor_subgroup_assignments')
+      .select('subgroup')
+      .eq('user_id', profile.id)
+      .eq('status', 'active')
+
+    if (assigned?.length) return assigned.map(s => s.subgroup).filter(Boolean)
+
+    // Fall back: look up their own entry in the working list or registrations
+    const email = profile.email?.toLowerCase()
+    if (!email) return []
+
+    const [{ data: wlEntry }, { data: regEntry }] = await Promise.all([
+      supabase.from('working_list').select('subgroup').ilike('email', email).maybeSingle(),
+      supabase.from('registrations').select('subgroup').ilike('email', email).maybeSingle(),
+    ])
+
+    const subgroup = wlEntry?.subgroup || regEntry?.subgroup
+    return subgroup ? [subgroup] : []
+  }
+
+  if (loading) return <PageSpinner />
 
   if (!canAccess) {
     return (
@@ -172,5 +234,12 @@ export default function RegistrationPage() {
     )
   }
 
-  return <RegistrationEcosystem limitedToSubgroups={canAccess === 'limited' ? limitedToSubgroups : null} />
+  return (
+    <RegistrationEcosystem
+      limitedToSubgroups={canAccess === 'limited' ? limitedToSubgroups : null}
+      sprintEditAccess={sprintEditAccess}
+      financeAccess={financeAccess}
+      limitedToRegistrationDataOnly={limitedToRegistrationDataOnly}
+    />
+  )
 }

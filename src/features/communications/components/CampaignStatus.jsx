@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Clock, AlertTriangle, RotateCcw, X } from 'lucide-react'
 import { getScheduledCampaigns, getFailedCampaigns, retryCampaign, cancelScheduledCampaign } from '..'
 
@@ -19,13 +19,7 @@ export default function CampaignStatus({ supabase, isMobile = false }) {
   const [loading, setLoading] = useState(true)
   const [retrying, setRetrying] = useState(new Set())
 
-  useEffect(() => {
-    loadCampaigns()
-    const interval = setInterval(loadCampaigns, 30000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const loadCampaigns = async () => {
+  const loadCampaigns = useCallback(async () => {
     try {
       const [scheduledData, failedData] = await Promise.all([
         getScheduledCampaigns(supabase),
@@ -36,7 +30,16 @@ export default function CampaignStatus({ supabase, isMobile = false }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    loadCampaigns()
+    const channel = supabase
+      .channel('campaign-status-watch')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'communication_campaigns' }, loadCampaigns)
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [supabase, loadCampaigns])
 
   const handleRetry = async (campaignId) => {
     setRetrying(prev => new Set([...prev, campaignId]))

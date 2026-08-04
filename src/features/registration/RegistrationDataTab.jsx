@@ -157,6 +157,7 @@ export default function RegistrationDataTab({
   isLimited,
   role,
   onSaveReg,
+  onDeleteReg,
   onMarkAbsent,
   onAddPerson,
   onEditPerson,
@@ -164,8 +165,12 @@ export default function RegistrationDataTab({
   onConfirm,
   highlightEmail,
   onClearHighlight,
+  sprintEditAccess = false,
 }) {
-  const canEdit = !isLimited && (role === 'super_admin' || role === 'regional_secretary' || role === 'dept_lead' || role === 'pastor');
+  // sprintEditAccess = Registration team members can edit even when scoped
+  const canEdit = sprintEditAccess || (
+    !isLimited && (role === 'super_admin' || role === 'regional_secretary' || role === 'dept_lead' || role === 'pastor')
+  );
 
   const [statusFilter,    setStatusFilter]    = useState('all');
   const [subgroupFilter,  setSubgroupFilter]  = useState('All');
@@ -650,7 +655,11 @@ export default function RegistrationDataTab({
             <tbody>
               {filtered.map(p => {
                 const st = STATUS[p.registrationStatus] || STATUS.not_registered;
-                const regObj = mergedByEmail[p.email] || null;
+                // For fuzzy/linked matches the WL email ≠ registration email — fall back to the real reg email
+                const regObj = mergedByEmail[p.email]
+                  || (p._fuzzyMatchedEmail ? mergedByEmail[p._fuzzyMatchedEmail] : null)
+                  || (p.linked_registration_email ? mergedByEmail[p.linked_registration_email] : null)
+                  || null;
                 const isAbsentExpanded = absentExpandedEmail === p.email;
                 const colCount = (showFees ? 10 : 9) + (canEdit ? 1 : 0) + 1 + (showFullView ? 6 : 0);
                 return (
@@ -798,23 +807,40 @@ export default function RegistrationDataTab({
                         </td>
                       </>
                     )}
-                    {/* Edit pencil */}
-                    <td style={{ padding: '6px 8px', borderBottom: `1px solid ${C.line}`, width: 40 }}>
-                      <button
-                        onClick={() => setEditingReg(regObj || {
-                          email: p.email,
-                          fullName: p.full_name,
-                          subgroup: p.subgroup,
-                          fellowship: p.fellowship,
-                          phone: p.phone,
-                        })}
-                        title="Edit record"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6 }}
-                        onMouseEnter={e => e.currentTarget.style.color = C.purple}
-                        onMouseLeave={e => e.currentTarget.style.color = C.mute}
-                      >
-                        <Pencil size={14} />
-                      </button>
+                    {/* Edit pencil + delete */}
+                    <td style={{ padding: '6px 8px', borderBottom: `1px solid ${C.line}`, width: 64 }}>
+                      <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                        {canEdit && p.isRegistered && regObj && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Delete ${p.full_name || 'this person'}'s registration? This cannot be undone.`)) {
+                                onDeleteReg?.(regObj.id, regObj.email);
+                              }
+                            }}
+                            title="Delete registration"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DDB8B8', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6 }}
+                            onMouseEnter={e => e.currentTarget.style.color = C.red}
+                            onMouseLeave={e => e.currentTarget.style.color = '#DDB8B8'}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setEditingReg(regObj || {
+                            email: p.email,
+                            fullName: p.full_name,
+                            subgroup: p.subgroup,
+                            fellowship: p.fellowship,
+                            phone: p.phone,
+                          })}
+                          title="Edit record"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6 }}
+                          onMouseEnter={e => e.currentTarget.style.color = C.purple}
+                          onMouseLeave={e => e.currentTarget.style.color = C.mute}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   {/* Inline absent reason row */}
