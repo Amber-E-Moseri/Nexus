@@ -1,99 +1,85 @@
 import { useState, lazy, Suspense } from 'react'
+import { Building2, CalendarDays, FileText, Search } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth'
 import PageSpinner from '../../../components/ui/PageSpinner'
 
 const MinutesTimelinePage = lazy(() => import('./MinutesTimelinePage'))
 const MinutesCalendarPage = lazy(() => import('./MinutesCalendarPage'))
-const MinutesSearchPage   = lazy(() => import('./MinutesSearchPage'))
+const MinutesSearchPage = lazy(() => import('./MinutesSearchPage'))
 
 const TABS = [
-  { id: 'timeline', label: '📋 Timeline' },
-  { id: 'calendar', label: '📅 Calendar' },
-  { id: 'search',   label: '🔍 Search'   },
+  { id: 'timeline', label: 'Timeline', Icon: FileText },
+  { id: 'calendar', label: 'Calendar', Icon: CalendarDays },
+  { id: 'search', label: 'Search', Icon: Search },
 ]
 
 export default function MinutesHubPage() {
   const { role, profile } = useAuth()
   const [activeTab, setActiveTab] = useState('timeline')
-
   const isAdmin = ['super_admin', 'regional_secretary'].includes(role)
   const userDeptId = profile?.department_id
-
-  // Super admin / regional_secretary start on 'all' and can switch.
-  // Regular users are always pinned to their own dept.
   const [selectedDept, setSelectedDept] = useState(isAdmin ? 'all' : userDeptId)
-
-  // departmentId passed to sub-pages
   const departmentId = isAdmin ? selectedDept : (userDeptId ?? 'all')
+  const departmentName = profile?.departments?.find((department) => department.id === departmentId)?.name
+  const scopeLabel = departmentId === 'all' ? 'All accessible departments' : (departmentName || 'Your department and shared notes')
 
   return (
-    <div style={{ maxWidth: 820, margin: '0 auto', padding: '28px 20px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--text-primary, #1C1610)' }}>
-            Meeting Minutes
-          </h1>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary, #7A6F5E)', marginTop: 3 }}>
-            Browse, search, and explore published notes
+    <div style={{ minHeight: '100vh', background: '#FAFAF8' }}>
+      <div style={{ background: '#FFFFFF', borderBottom: '1px solid var(--border, #E9E4D8)' }}>
+        <div style={{ maxWidth: 960, margin: '0 auto', padding: '26px 20px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 22 }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <div style={{ width: 40, height: 40, borderRadius: 8, background: '#F1EEF6', color: '#4C2A92', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                <FileText size={20} />
+              </div>
+              <div>
+                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--text-primary, #1C1610)' }}>Meeting Minutes</h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary, #7A6F5E)', marginTop: 5 }}>
+                  <Building2 size={13} />
+                  <span>{scopeLabel}</span>
+                </div>
+              </div>
+            </div>
+
+            {isAdmin && (
+              <label style={{ display: 'grid', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--text-secondary, #7A6F5E)' }}>
+                View minutes for
+                <select
+                  aria-label="Department scope"
+                  value={selectedDept}
+                  onChange={(event) => setSelectedDept(event.target.value)}
+                  style={{ minWidth: 190, padding: '8px 10px', border: '1px solid var(--border, #E9E4D8)', borderRadius: 7, fontSize: 13, fontFamily: 'inherit', color: 'var(--text-primary, #1C1610)', background: '#FFFFFF', cursor: 'pointer' }}
+                >
+                  <option value="all">All departments</option>
+                  {(profile?.departments ?? []).map((department) => (
+                    <option key={department.id} value={department.id}>{department.name}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 4, overflowX: 'auto' }}>
+            {TABS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 15px', border: 'none', borderBottom: activeTab === id ? '2px solid #4C2A92' : '2px solid transparent', background: 'none', fontFamily: 'inherit', fontSize: 13, fontWeight: activeTab === id ? 700 : 500, color: activeTab === id ? '#4C2A92' : 'var(--text-secondary, #7A6F5E)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                <Icon size={15} /> {label}
+              </button>
+            ))}
           </div>
         </div>
-
-        {/* Department filter — admins only */}
-        {isAdmin && profile?.departments && (
-          <select
-            value={selectedDept}
-            onChange={e => setSelectedDept(e.target.value)}
-            style={{
-              padding: '7px 10px',
-              border: '1px solid var(--border, #E9E4D8)',
-              borderRadius: 7,
-              fontSize: 12,
-              fontFamily: 'inherit',
-              color: 'var(--text-primary, #1C1610)',
-              background: 'var(--surface, #FFFFFF)',
-              cursor: 'pointer',
-            }}
-          >
-            <option value="all">All departments</option>
-            {(profile.departments ?? []).map(d => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-        )}
       </div>
 
-      {/* Tab bar */}
-      <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--border, #E9E4D8)', marginBottom: 24 }}>
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              padding: '9px 16px',
-              border: 'none',
-              borderBottom: activeTab === tab.id ? '2px solid var(--color-primary, #4C2A92)' : '2px solid transparent',
-              background: 'none',
-              fontFamily: 'inherit',
-              fontSize: 13,
-              fontWeight: activeTab === tab.id ? 700 : 500,
-              color: activeTab === tab.id ? 'var(--color-primary, #4C2A92)' : 'var(--text-secondary, #7A6F5E)',
-              cursor: 'pointer',
-              marginBottom: -1,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      <Suspense fallback={<PageSpinner />}>
-        {activeTab === 'timeline' && <MinutesTimelinePage departmentId={departmentId} />}
-        {activeTab === 'calendar' && <MinutesCalendarPage departmentId={departmentId} />}
-        {activeTab === 'search'   && <MinutesSearchPage   departmentId={departmentId} />}
-      </Suspense>
+      <main style={{ maxWidth: 960, margin: '0 auto', padding: '24px 20px 56px' }}>
+        <Suspense fallback={<PageSpinner />}>
+          {activeTab === 'timeline' && <MinutesTimelinePage departmentId={departmentId} />}
+          {activeTab === 'calendar' && <MinutesCalendarPage departmentId={departmentId} />}
+          {activeTab === 'search' && <MinutesSearchPage departmentId={departmentId} />}
+        </Suspense>
+      </main>
     </div>
   )
 }

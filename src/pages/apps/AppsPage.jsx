@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { TrendingUp, Trophy, Map, Library, Send, BookOpen } from 'lucide-react'
+import { TrendingUp, Trophy, Map, Library, Send, BookOpen, FileText } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
 const PRIMARY = '#4C2A92'
@@ -123,6 +123,14 @@ export default function AppsPage() {
             bg="linear-gradient(135deg, #F1EEF6 0%, #E8E0FF 100%)"
             description="Weekly testimonies"
             onClick={() => navigate('/wins')}
+          />
+          <AppIcon
+            icon={FileText}
+            label="Minutes Hub"
+            color="#4C2A92"
+            bg="#F1EEF6"
+            description="Published meeting notes"
+            onClick={() => navigate('/meetings/minutes')}
           />
           {isSuperAdmin && (
             <AppIcon

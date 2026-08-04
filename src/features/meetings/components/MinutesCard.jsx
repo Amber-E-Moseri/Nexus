@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { CalendarDays, Users } from 'lucide-react'
 
 const DEPT_COLORS = {
   admin:    '#4C2A92',
@@ -79,8 +80,8 @@ export default function MinutesCard({ meeting, snippet, onClick }) {
         )}
       </div>
 
-      {/* Date */}
-      <div style={{ fontSize: 11, color: 'var(--text-secondary, #7A6F5E)', fontWeight: 500 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-secondary, #7A6F5E)', fontWeight: 500 }}>
+        <CalendarDays size={13} />
         {formatDate(meeting.date)}
       </div>
 
@@ -101,7 +102,9 @@ export default function MinutesCard({ meeting, snippet, onClick }) {
 
       {/* Attendee avatars */}
       {attendees.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginTop: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 2 }}>
+          <Users size={13} color="var(--text-secondary, #7A6F5E)" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
           {attendees.slice(0, 5).map((a, i) => {
             const name = a.attendee?.name || a.name || '?'
             const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
@@ -132,6 +135,7 @@ export default function MinutesCard({ meeting, snippet, onClick }) {
               +{attendees.length - 5}
             </span>
           )}
+          </div>
         </div>
       )}
     </div>
