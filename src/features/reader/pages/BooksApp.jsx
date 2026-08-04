@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import '../reader.css'
 import ReaderHomePage from './ReaderHomePage'
 import ReaderLibraryPage from './ReaderLibraryPage'
@@ -6,19 +6,27 @@ import ReaderPage from './ReaderPage'
 import ImportModal from '../components/ImportModal'
 import SettingsModal from '../components/SettingsModal'
 import SessionEndModal from '../components/SessionEndModal'
+import AdminPanel from '../components/AdminPanel'
 import { useAnnotations } from '../hooks/useAnnotations'
 import { useAudioPlayer } from '../hooks/useAudioPlayer'
 import { usePdfSave } from '../hooks/usePdfSave'
 import { clearTTSCache } from '../services/openai-tts'
 import { listStoredBooks, saveStoredBook, uploadBookPdf, hydrateBook } from '../services/library-storage'
+import { getMyCredits, recordUsage, listSharedBooksForMe, markSharedBookOpened } from '../services/reader-admin'
+import { useAuth } from '../../../hooks/useAuth'
 
 export default function BooksApp() {
+  const { profile, effectiveRole } = useAuth()
+  const isAdmin = effectiveRole === 'super_admin'
+
   const [page, setPage] = useState('home')
   const [book, setBook] = useState(null)
   const [bookLoading, setBookLoading] = useState(false)
   const [voice, setVoice] = useState(() => localStorage.getItem('immerse-voice') || 'Nova')
   const [speed, setSpeed] = useState(() => Number(localStorage.getItem('immerse-speed')) || 1.0)
   const [library, setLibrary] = useState([])
+  const [sharedLibrary, setSharedLibrary] = useState([])
+  const [credits, setCredits] = useState(0)
   const [selectionInfo, setSelectionInfo] = useState(null)
   const [showImport, setShowImport] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -26,17 +34,27 @@ export default function BooksApp() {
   const [fontSize, setFontSize] = useState(() => Number(localStorage.getItem('immerse-font-size')) || 24)
   const [lineHeight, setLineHeight] = useState(() => Number(localStorage.getItem('immerse-line-height')) || 1.8)
 
+  // Track sentences played this session for usage deduction
+  const sessionSentencesRef = useRef(0)
+
   const sentences = book?.sentences ?? []
-  const { highlights, notes, addHighlight, addNote, removeAnnotation } = useAnnotations(book?.id)
+  const { highlights, notes, addHighlight, addNote, removeAnnotation } = useAnnotations(book?.isShared ? null : book?.id)
   const { currentIdx, isPlaying, elapsedTime, totalTime, play, pause, seekToIdx, setSpeed: setPlayerSpeed, setVoice: setPlayerVoice } = useAudioPlayer(sentences, voice, speed, book?.progressIndex ?? 0)
   const { saveState, saveError, saveHighlights } = usePdfSave()
 
-  // Load library from Supabase on mount
+  // Load library + credits on mount
   useEffect(() => {
     let active = true
-    listStoredBooks()
-      .then((books) => { if (active) setLibrary(books) })
-      .catch((err) => console.error('Unable to load Immerse library', err))
+    Promise.all([
+      listStoredBooks(),
+      listSharedBooksForMe(),
+      getMyCredits(),
+    ]).then(([books, shared, bal]) => {
+      if (!active) return
+      setLibrary(books)
+      setSharedLibrary(shared)
+      setCredits(bal)
+    }).catch((err) => console.error('Unable to load Immerse library', err))
     return () => { active = false }
   }, [])
 
@@ -46,20 +64,28 @@ export default function BooksApp() {
   useEffect(() => { localStorage.setItem('immerse-font-size', String(fontSize)) }, [fontSize])
   useEffect(() => { localStorage.setItem('immerse-line-height', String(lineHeight)) }, [lineHeight])
 
-  // Sync reading progress to Supabase (debounced)
+  // Track sentences played for usage metering
   useEffect(() => {
-    if (!book?.id || !sentences.length) return
+    sessionSentencesRef.current = currentIdx
+  }, [currentIdx])
+
+  // Progress sync (debounced, own books only)
+  useEffect(() => {
+    if (!book?.id || !sentences.length || book?.isShared) return
     const updated = { ...book, progressIndex: currentIdx, lastReadAt: new Date().toISOString() }
     const timer = setTimeout(() => {
       setLibrary((prev) => prev.map((b) => b.id === book.id ? { ...b, progressIndex: currentIdx } : b))
       saveStoredBook(updated).catch((err) => console.error('Progress sync failed', err))
     }, 3000)
     return () => clearTimeout(timer)
-  }, [book?.id, currentIdx, sentences.length])
+  }, [book?.id, currentIdx, sentences.length, book?.isShared])
 
   async function openBook(b) {
-    // If the book has no sentences (loaded from Supabase on a new device),
-    // fetch the PDF from Storage and re-extract text before opening.
+    // Mark shared book as opened
+    if (b.isShared && b.sharedRecordId && !b.openedAt) {
+      markSharedBookOpened(b.sharedRecordId).catch(() => {})
+    }
+
     if (!b.sentences?.length) {
       setBookLoading(true)
       try {
@@ -70,8 +96,9 @@ export default function BooksApp() {
         setBookLoading(false)
       }
     }
+    sessionSentencesRef.current = 0
     setBook(b)
-    setLibrary((prev) => prev.some((x) => x.id === b.id) ? prev : [...prev, b])
+    setLibrary((prev) => !b.isShared && !prev.some((x) => x.id === b.id) ? [...prev, b] : prev)
     setPage('reader')
   }
 
@@ -83,12 +110,24 @@ export default function BooksApp() {
       ...bookData,
     }
     setShowImport(false)
-    // Save metadata + local cache, then upload PDF to Storage in background
     saveStoredBook(b).catch((err) => console.error('Unable to save imported book', err))
-    if (b.pdfBuffer) {
-      uploadBookPdf(b.id, b.pdfBuffer).catch((err) => console.error('PDF upload failed', err))
-    }
+    if (b.pdfBuffer) uploadBookPdf(b.id, b.pdfBuffer).catch(() => {})
     openBook(b)
+  }
+
+  // Deduct credits when session ends
+  async function deductUsage() {
+    if (!profile?.id) return
+    const sentencesPlayed = sessionSentencesRef.current
+    if (!sentencesPlayed) return
+    // Estimate: avg sentence ~12 words, ~60 wpm TTS → 0.2 min per sentence
+    const minsUsed = sentencesPlayed * 0.2
+    try {
+      await recordUsage(profile.id, minsUsed)
+      setCredits((prev) => Math.max(0, prev - minsUsed))
+    } catch (err) {
+      console.error('Usage record failed', err)
+    }
   }
 
   function skip(seconds) {
@@ -109,7 +148,12 @@ export default function BooksApp() {
 
   function handleEndSession() { pause(); setShowEndModal(true) }
   function handleSessionSave() { saveHighlights(book, highlights) }
-  function handleNewBook() { setBook(null); setPage('home'); clearTTSCache(); setShowEndModal(false) }
+  function handleNewBook() {
+    deductUsage()
+    setBook(null); setPage('home'); clearTTSCache(); setShowEndModal(false)
+  }
+
+  const creditsHrs = (credits / 60).toFixed(1)
 
   return (
     <div className="immerse-app">
@@ -125,15 +169,21 @@ export default function BooksApp() {
         <ReaderHomePage
           currentBook={book}
           library={library}
+          sharedLibrary={sharedLibrary}
+          credits={creditsHrs}
           currentProgress={currentIdx}
+          isAdmin={isAdmin}
           onOpenBook={openBook}
           onGoLibrary={() => setPage('library')}
           onImport={() => setShowImport(true)}
+          onOpenAdmin={() => setPage('admin')}
         />
       )}
       {!bookLoading && page === 'library' && (
         <ReaderLibraryPage
           library={library}
+          sharedLibrary={sharedLibrary}
+          credits={creditsHrs}
           onOpenBook={openBook}
           onGoHome={() => setPage('home')}
           onImport={() => setShowImport(true)}
@@ -154,19 +204,27 @@ export default function BooksApp() {
           selectionInfo={selectionInfo}
           fontSize={fontSize}
           lineHeight={lineHeight}
+          credits={creditsHrs}
+          readOnly={!!book?.isShared}
           onPlay={play}
           onPause={pause}
           onSeek={seekToIdx}
           onSkip={skip}
           onSpeedChange={handleSpeedChange}
           onVoiceChange={handleVoiceChange}
-          onAddHighlight={addHighlight}
-          onAddNote={addNote}
-          onRemoveAnnotation={removeAnnotation}
+          onAddHighlight={book?.isShared ? undefined : addHighlight}
+          onAddNote={book?.isShared ? undefined : addNote}
+          onRemoveAnnotation={book?.isShared ? undefined : removeAnnotation}
           onSelectionChange={setSelectionInfo}
           onBack={() => setPage('home')}
           onOpenSettings={() => setShowSettings(true)}
           onEndSession={handleEndSession}
+        />
+      )}
+      {!bookLoading && page === 'admin' && isAdmin && (
+        <AdminPanel
+          myBooks={library}
+          onBack={() => setPage('home')}
         />
       )}
 

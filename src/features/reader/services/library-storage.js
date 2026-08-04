@@ -59,6 +59,7 @@ function fromRow(row) {
     title: row.title,
     author: row.author,
     source: row.source,
+    tag: row.tag ?? null,
     wordCount: row.word_count,
     estimatedMinutes: row.estimated_minutes,
     progressIndex: row.progress_index ?? 0,
@@ -82,7 +83,7 @@ export async function uploadBookPdf(bookId, buffer) {
   if (error) console.error('PDF upload failed', error)
 }
 
-async function downloadBookPdf(bookId) {
+export async function downloadBookPdf(bookId) {
   const uid = await currentUserId()
   if (!uid) return null
   const { data, error } = await supabase.storage
@@ -90,6 +91,14 @@ async function downloadBookPdf(bookId) {
     .download(`${uid}/${bookId}.pdf`)
   if (error || !data) return null
   return data.arrayBuffer()
+}
+
+// Admin-only: upload a PDF to another user's Storage folder (requires admin Storage policy)
+export async function uploadBookPdfForUser(recipientId, bookId, buffer) {
+  const { error } = await supabase.storage
+    .from('reader-pdfs')
+    .upload(`${recipientId}/${bookId}.pdf`, buffer, { contentType: 'application/pdf', upsert: true })
+  if (error) throw error
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
