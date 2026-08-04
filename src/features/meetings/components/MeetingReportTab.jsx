@@ -1616,25 +1616,27 @@ export default function MeetingReportTab() {
     }
 
     const result = await buildReport(label, rosterRows ?? [], attendedNames, subgroupFilter)
-    setPhase('report')
-    setReport(result)
-    setActiveSubgroup('')
-    setActiveCategory(null)
-    setPrintingSubgroup(null)
-    setUnexpectedPreview([])
-    sessionStorage.setItem(
-      'meeting_report_state',
-      JSON.stringify({
+    const showSavedReport = (nextReport) => {
+      setPhase('report')
+      setReport(nextReport)
+      setActiveSubgroup('')
+      setActiveCategory(null)
+      setPrintingSubgroup(null)
+      setUnexpectedPreview([])
+      sessionStorage.setItem(
+        'meeting_report_state',
+        JSON.stringify({
         phase: 'report',
-        report: result,
+        report: nextReport,
         reportMode,
         selectedSubgroups,
         selectedCategories,
         attendedRawCount,
         label,
         savedAt: new Date().toISOString(),
-      }),
-    )
+        }),
+      )
+    }
 
     if (!restoredFromSession) {
       if (!profile?.id) {
@@ -1678,7 +1680,7 @@ export default function MeetingReportTab() {
           }
 
           const nextReport = { ...result, id: rerunTarget.id, share_token: rerunTarget.share_token, cmpService: cmpSelected ?? rerunTarget.cmpService }
-          setReport(nextReport)
+          showSavedReport(nextReport)
           setSyncingReport(null)
           sessionStorage.removeItem('meeting_report_rerun_target')
           setSearchParams({ report: rerunTarget.id })
@@ -1718,20 +1720,7 @@ export default function MeetingReportTab() {
         if (error) setSaveError(error.message)
         else {
           const nextReport = { ...result, id: data.id, share_token: data.share_token, cmpService: inputMode === 'cmp' ? cmpSelected : null }
-          setReport(nextReport)
-          sessionStorage.setItem(
-            'meeting_report_state',
-            JSON.stringify({
-              phase: 'report',
-              report: nextReport,
-              reportMode,
-              selectedSubgroups,
-              selectedCategories,
-              attendedRawCount,
-              label,
-              savedAt: new Date().toISOString(),
-            }),
-          )
+          showSavedReport(nextReport)
           setSearchParams({ report: data.id })
           loadHistory()
         }
@@ -1740,6 +1729,8 @@ export default function MeetingReportTab() {
       } finally {
         setSaving(false)
       }
+    } else {
+      showSavedReport(result)
     }
   }
 
