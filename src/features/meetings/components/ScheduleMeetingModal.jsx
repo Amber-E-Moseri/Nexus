@@ -8,7 +8,7 @@ import MeetingAgendaEditor from './MeetingAgendaEditor'
 import FlockContactPicker from './FlockContactPicker'
 import { saveAgendaItemsForMeeting } from '../lib/agendaSync'
 
-const MEETING_TYPES = ['general', 'direction_meeting', 'team', 'department', 'media', '1_on_1_meeting']
+const MEETING_TYPES = ['general', 'manager_meeting', 'regional', 'group', 'team', 'department', 'media', '1_on_1_meeting']
 
 function formatMeetingTypeLabel(type) {
   return type.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')

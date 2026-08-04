@@ -3,6 +3,9 @@ import GlowCard from '../ui/GlowCard'
 
 const TYPE_COLORS = {
   general: { bg: 'var(--purple-tint)', text: 'var(--purple-700)', border: '#DDD6FE' },
+  manager_meeting: { bg: '#F3E8FF', text: '#7E22CE', border: '#E9D5FF' },
+  regional: { bg: '#E6FFFB', text: '#0F766E', border: '#99F6E4' },
+  group: { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
   team: { bg: 'var(--accent-blue-tint)', text: 'var(--accent-blue-text)', border: '#BFDBFE' },
   media: { bg: 'var(--accent-yellow-tint)', text: 'var(--accent-yellow-text)', border: '#FEE4A8' },
   department: { bg: 'var(--accent-green-tint)', text: 'var(--accent-green-text)', border: '#BBF7D0' },

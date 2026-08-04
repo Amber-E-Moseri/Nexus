@@ -10,7 +10,9 @@ import ViewToggle from '../../../components/meetings/ViewToggle'
 
 const TYPE_CHIP_COLORS = {
   general: '#4C2A92',
-  direction_meeting: '#C2410C',
+  manager_meeting: '#9333EA',
+  regional: '#0F766E',
+  group: '#2563EB',
   team: '#1B72E8',
   media: '#E8A020',
   department: '#16A34A',
