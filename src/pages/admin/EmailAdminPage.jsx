@@ -99,7 +99,7 @@ function buildPreviewHtml(form, frontendUrl = 'https://nexus.lwcanada.org') {
     <p style="margin:0;font-size:11px;color:#9e9488;">
       You're receiving this as an active Nexus user.
       &nbsp;·&nbsp;
-      <a href="${frontendUrl}/settings/notifications" style="color:#4c2a92;text-decoration:none;font-weight:500;">Unsubscribe from announcements</a>
+      <a href="${frontendUrl}/settings" style="color:#4c2a92;text-decoration:none;font-weight:500;">Unsubscribe from announcements</a>
       &nbsp;·&nbsp; © ${year} Nexus
     </p>
   </div>

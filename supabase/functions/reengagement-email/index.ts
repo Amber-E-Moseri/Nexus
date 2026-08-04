@@ -74,7 +74,7 @@ function buildNudgeHtml(
       If Nexus isn't a fit for your workflow right now, no worries —
       <a href="${frontendUrl}/feedback" style="color:#4c2a92;text-decoration:none;font-weight:500;">let us know</a>
       so we can improve it, or
-      <a href="${frontendUrl}/settings/notifications" style="color:#4c2a92;text-decoration:none;font-weight:500;">unsubscribe from these reminders</a>.
+      <a href="${frontendUrl}/settings" style="color:#4c2a92;text-decoration:none;font-weight:500;">unsubscribe from these reminders</a>.
       &nbsp;·&nbsp; © ${year} Nexus
     </p>
   </div>
