@@ -31,6 +31,7 @@ export default function RegistrationPage() {
   const [sprintEditAccess, setSprintEditAccess] = useState(false)
   const [financeAccess, setFinanceAccess] = useState(false)
   const [limitedToRegistrationDataOnly, setLimitedToRegistrationDataOnly] = useState(false)
+  const [needsSubgroupAssignment, setNeedsSubgroupAssignment] = useState(false)
 
   useEffect(() => {
     checkAccess()
@@ -94,7 +95,7 @@ export default function RegistrationPage() {
 
       const { data: teams } = await supabase
         .from('sprint_teams')
-        .select('id, name')
+        .select('id, name, lead_user_id')
         .eq('sprint_id', sprint.id)
 
       if (!teams?.length) {
@@ -120,6 +121,9 @@ export default function RegistrationPage() {
       const matchesAny = (list) => userTeamNames.some(name =>
         list.some(t => name.toLowerCase().includes(t.toLowerCase()))
       )
+      const isLeadOf = (teamName) => teams.some(t =>
+        t.lead_user_id === profile.id && t.name.toLowerCase().includes(teamName.toLowerCase())
+      )
 
       // Full view + edit, no scope (Programs, Secretariat)
       if (matchesAny(UNSCOPED_EDIT_TEAMS)) {
@@ -139,14 +143,21 @@ export default function RegistrationPage() {
 
       // Scoped on ALL tabs + edit (Registration team)
       if (matchesAny(SCOPED_EDIT_ALL_TABS)) {
+        // Team lead of the Registration team gets full unscoped access
+        if (isLeadOf('Registration')) {
+          setSprintEditAccess(true)
+          setCanAccess(true)
+          setLoading(false)
+          return
+        }
         const subgroups = await getOwnSubgroups()
         if (subgroups.length) {
           setLimitedToSubgroups(subgroups)
           setSprintEditAccess(true)
           setCanAccess('limited')
         } else {
-          setSprintEditAccess(true)
-          setCanAccess(true)
+          setNeedsSubgroupAssignment(true)
+          setCanAccess(false)
         }
         setLoading(false)
         return
@@ -161,8 +172,8 @@ export default function RegistrationPage() {
           setSprintEditAccess(true)
           setCanAccess('limited')
         } else {
-          setSprintEditAccess(true)
-          setCanAccess(true)
+          setNeedsSubgroupAssignment(true)
+          setCanAccess(false)
         }
         setLoading(false)
         return
@@ -176,7 +187,8 @@ export default function RegistrationPage() {
           setLimitedToRegistrationDataOnly(true)
           setCanAccess('limited')
         } else {
-          setCanAccess(true)
+          setNeedsSubgroupAssignment(true)
+          setCanAccess(false)
         }
         setLoading(false)
         return
@@ -227,6 +239,26 @@ export default function RegistrationPage() {
   if (loading) return <PageSpinner />
 
   if (!canAccess) {
+    if (needsSubgroupAssignment) {
+      return (
+        <div style={{ padding: 40, maxWidth: 520, margin: '0 auto' }}>
+          <h1 style={{ marginBottom: 12, fontSize: 20 }}>Subgroup Assignment Needed</h1>
+          <p style={{ color: '#444', marginBottom: 16, lineHeight: 1.6 }}>
+            You're on a sprint team for This Is It 2.0, but no subgroup has been assigned to you yet.
+            A super admin needs to assign your subgroup before you can access registration data.
+          </p>
+          <div style={{
+            background: '#FFF8E1', border: '1px solid #F59E0B', borderRadius: 8,
+            padding: '14px 18px', fontSize: 14, color: '#92400E'
+          }}>
+            <strong>Action required (super admin):</strong> Add a subgroup assignment for{' '}
+            <strong>{profile?.full_name || profile?.email}</strong> in{' '}
+            <code style={{ background: '#FEF3C7', padding: '1px 5px', borderRadius: 4 }}>pastor_subgroup_assignments</code>{' '}
+            or ensure their email is listed in the Working List with a subgroup.
+          </div>
+        </div>
+      )
+    }
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
         <h1 style={{ marginBottom: 12 }}>Access Denied</h1>
