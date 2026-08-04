@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import ReadingPanel from '../components/ReadingPanel'
 import MobilePlayer from '../components/MobilePlayer'
 import PlayerControls from '../components/PlayerControls'
@@ -13,6 +14,7 @@ export default function ReaderPage({
   onAddHighlight, onAddNote, onRemoveAnnotation, onSelectionChange,
   onBack, onOpenSettings, onEndSession,
 }) {
+  const navigate = useNavigate()
   const [playerVisible, setPlayerVisible] = useState(true)
   const lastScrollY = useRef(0)
   const isDesktop = window.innerWidth >= 768
@@ -55,6 +57,8 @@ export default function ReaderPage({
             {book.author && <><span style={{ color: 'var(--im-text-xdim)' }}>·</span><span style={{ fontSize: 12, color: 'var(--im-text-dim)' }}>{book.author}</span></>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => navigate('/dashboard')} style={{ ...hdrBtn, color: 'var(--im-text-dim)' }}>← Nexus</button>
+            <div style={{ width: 1, height: 16, background: 'var(--im-border)' }} />
             <button onClick={onOpenSettings} style={hdrBtn}><IconSettings size={14} /> Settings</button>
             <button onClick={onBack} style={hdrBtn}><IconBack size={14} /> Library</button>
             <button onClick={onEndSession} style={{ ...hdrBtn, background: 'var(--im-blue)', color: '#fff', borderRadius: 6, padding: '5px 12px' }}>

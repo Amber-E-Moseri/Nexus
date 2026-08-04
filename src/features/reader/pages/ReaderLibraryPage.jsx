@@ -1,39 +1,45 @@
 import { useState } from 'react'
 import { IconHome, IconLibrary, IconDocument, IconSearch, IconPlus } from '../icons'
+import BookCover from '../components/BookCover'
 
 export default function ReaderLibraryPage({ library, onOpenBook, onGoHome, onImport }) {
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState('all')
 
-  const filtered = library.filter((b) => b.title.toLowerCase().includes(search.toLowerCase()) && (tab === 'all' || b.source === 'pdf'))
+  const filtered = library.filter((b) =>
+    b.title.toLowerCase().includes(search.toLowerCase()) &&
+    (tab === 'all' || b.source === 'pdf')
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ padding: '20px 20px 12px', flexShrink: 0, borderBottom: '1px solid var(--im-border)', background: 'var(--im-card)' }}>
+      <div style={{ padding: '14px 20px 12px', flexShrink: 0, borderBottom: '1px solid var(--im-border)', background: 'var(--im-card)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--im-text)' }}>Books</div>
-            <button onClick={onGoHome} style={{ marginTop: 3, padding: 0, background: 'none', border: 'none', color: 'var(--im-blue)', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12 }}>Immerse reader</button>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button
-              onClick={onImport}
-              title="Import PDF"
-              style={{ width: 36, height: 36, borderRadius: 6, background: 'var(--im-blue)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <IconPlus size={16} color="#fff" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={onGoHome} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', fontSize: 12, fontWeight: 600, fontFamily: 'Inter, sans-serif', padding: '4px 0' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+              Home
             </button>
+            <span style={{ color: 'var(--im-border)', fontSize: 14 }}>·</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--im-text)' }}>Library</span>
           </div>
+          <button
+            onClick={onImport}
+            title="Import PDF"
+            style={{ width: 34, height: 34, borderRadius: 6, background: 'var(--im-blue)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <IconPlus size={15} color="#fff" />
+          </button>
         </div>
 
         {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--im-border)', marginBottom: 12 }}>
-          {[['all', 'My Books', <IconLibrary size={13} />], ['pdfs', 'PDFs', <IconDocument size={13} />]].map(([key, label, icon]) => (
+          {[['all', 'All Books', <IconLibrary size={13} />], ['pdfs', 'PDFs', <IconDocument size={13} />]].map(([key, label, icon]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: tab === key ? 'var(--im-blue)' : 'var(--im-text-dim)', borderBottom: tab === key ? '2px solid var(--im-blue)' : '2px solid transparent', marginBottom: -1 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: tab === key ? 'var(--im-blue)' : 'var(--im-text-dim)', borderBottom: tab === key ? '2px solid var(--im-blue)' : '2px solid transparent', marginBottom: -1, transition: 'color 0.15s' }}
             >
               {icon} {label}
             </button>
@@ -41,45 +47,78 @@ export default function ReaderLibraryPage({ library, onOpenBook, onGoHome, onImp
         </div>
 
         {/* Search */}
-        <div style={{ position: 'relative', marginBottom: 10 }}>
-          <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+        <div style={{ position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', display: 'flex' }}>
             <IconSearch size={14} color="var(--im-text-dim)" />
           </span>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search your library..."
-            style={{ width: '100%', padding: '9px 12px 9px 32px', border: '1px solid var(--im-border)', borderRadius: 8, fontSize: 13, fontFamily: 'Inter, sans-serif', color: 'var(--im-text)', outline: 'none' }}
-            onFocus={(e) => { e.target.style.borderColor = 'var(--im-blue)' }}
-            onBlur={(e) => { e.target.style.borderColor = 'var(--im-border)' }}
+            placeholder="Search your library…"
+            style={{ width: '100%', padding: '8px 12px 8px 32px', border: '1px solid var(--im-border)', borderRadius: 8, fontSize: 13, fontFamily: 'Inter, sans-serif', color: 'var(--im-text)', outline: 'none', background: 'var(--im-bg)' }}
+            onFocus={(e) => { e.target.style.borderColor = 'var(--im-blue)'; e.target.style.background = 'var(--im-card)' }}
+            onBlur={(e) => { e.target.style.borderColor = 'var(--im-border)'; e.target.style.background = 'var(--im-bg)' }}
           />
         </div>
       </div>
 
       {/* Book list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 12px' }}>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
         {filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--im-text-dim)', fontSize: 14 }}>
-            No books yet. Import a PDF to begin reading.
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '56px 20px', color: 'var(--im-text-dim)', gap: 12 }}>
+            <div style={{ width: 56, height: 56, borderRadius: 14, background: 'var(--im-border-lt)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--im-text-dim)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+              </svg>
+            </div>
+            {search ? (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--im-text)', marginBottom: 4 }}>No results</div>
+                <div style={{ fontSize: 13 }}>No books match "{search}"</div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--im-text)', marginBottom: 4 }}>Library is empty</div>
+                <div style={{ fontSize: 13 }}>Import a PDF to get started</div>
+              </div>
+            )}
+            {!search && (
+              <button
+                onClick={onImport}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 8, background: 'var(--im-blue)', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'Inter, sans-serif', marginTop: 4 }}
+              >
+                <IconPlus size={14} color="#fff" /> Import PDF
+              </button>
+            )}
           </div>
         ) : (
-          filtered.map((book) => (
-            <div
-              key={book.id}
-              onClick={() => onOpenBook(book)}
-              style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--im-border-lt)', cursor: 'pointer' }}
-            >
-              <div style={{ width: 50, height: 70, background: '#E5E7EB', borderRadius: 6, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--im-text)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{book.title}</div>
-                {book.author && <div style={{ fontSize: 12, color: 'var(--im-text-dim)', marginBottom: 6 }}>{book.author}</div>}
-                <div style={{ height: 3, background: 'var(--im-border)', borderRadius: 2, marginBottom: 4, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', background: 'linear-gradient(90deg, var(--im-blue), var(--im-blue-lt))', width: `${Math.round(((book.progressIndex ?? 0) / Math.max(1, (book.sentences?.length ?? 1) - 1)) * 100)}%` }} />
+          <div style={{ padding: '0 20px 12px' }}>
+            {filtered.map((book) => {
+              const prog = Math.round(((book.progressIndex ?? 0) / Math.max(1, (book.sentences?.length ?? 1) - 1)) * 100)
+              return (
+                <div
+                  key={book.id}
+                  onClick={() => onOpenBook(book)}
+                  style={{ display: 'flex', gap: 14, padding: '14px 0', borderBottom: '1px solid var(--im-border-lt)', cursor: 'pointer' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.marginLeft = '2px' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.marginLeft = '0' }}
+                >
+                  <BookCover title={book.title} width={52} height={74} />
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 3 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--im-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{book.title}</div>
+                    {book.author && <div style={{ fontSize: 12, color: 'var(--im-text-dim)' }}>{book.author}</div>}
+                    <div style={{ height: 3, background: 'var(--im-border)', borderRadius: 2, overflow: 'hidden', marginTop: 4 }}>
+                      <div style={{ height: '100%', background: 'linear-gradient(90deg, var(--im-blue), #7B5BB6)', width: `${prog}%` }} />
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--im-text-dim)' }}>{book.estimatedMinutes} min · {prog}% complete</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', color: 'var(--im-text-dim)' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                  </div>
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--im-text-dim)' }}>{book.estimatedMinutes} min · {Math.round(((book.progressIndex ?? 0) / Math.max(1, (book.sentences?.length ?? 1) - 1)) * 100)}% complete</div>
-              </div>
-            </div>
-          ))
+              )
+            })}
+          </div>
         )}
       </div>
 
