@@ -1,8 +1,9 @@
 ﻿import { useEffect, useMemo, useState, useRef } from 'react'
-import { CalendarRange, Filter, Link2, Printer, Users } from 'lucide-react'
+import { CalendarRange, Filter, Printer, Users } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { formatRelativeDate } from '../../lib/dateUtils'
 import { supabase } from '../../lib/supabase'
+import { useMediaQuery } from '../../hooks/useMediaQuery'
 
 function normalizeNameKey(name) {
   return (name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').trim()
@@ -113,12 +114,11 @@ export default function MeetingReportPublicPage() {
   const { share_token } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
+  const isMobile = useMediaQuery('(max-width: 640px)')
 
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [copiedLink, setCopiedLink] = useState(false)
-  const [showLinkModal, setShowLinkModal] = useState(false)
   const [activeSubgroup, setActiveSubgroup] = useState('')
   const isInitialMount = useRef(true)
   const isSharedLink = !!share_token
@@ -393,41 +393,13 @@ export default function MeetingReportPublicPage() {
     <div className="public-report-page" style={{ minHeight: '100vh', background: PAGE_BG }}>
       <style>{PRINT_STYLES_FULL}</style>
 
-      <header className="public-report-header" style={{ background: HEADER_GRADIENT, padding: '40px 28px' }}>
+      <header className="public-report-header" style={{ background: HEADER_GRADIENT, padding: isMobile ? '20px 16px' : '40px 28px' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: isMobile ? 14 : 24, flexWrap: 'wrap', marginBottom: isMobile ? 14 : 24 }}>
             <div style={{ flex: 1 }}>
-              <h1 style={{ fontSize: 32, fontWeight: 800, color: '#FFFFFF', margin: 0, marginBottom: 12, letterSpacing: '-0.01em' }}>{meetingTitle}</h1>
-              <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>{meetingDate ? dateStamp(meetingDate) : '-'}</div>
+              <h1 style={{ fontSize: isMobile ? 22 : 32, fontWeight: 800, color: '#FFFFFF', margin: 0, marginBottom: 7, lineHeight: 1.18, overflowWrap: 'anywhere' }}>{meetingTitle}</h1>
+              <div style={{ fontSize: isMobile ? 13 : 15, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>{meetingDate ? dateStamp(meetingDate) : '-'}</div>
             </div>
-            {!isGroupView && (
-              <button
-                type="button"
-                onClick={() => setShowLinkModal(true)}
-                className="public-report-actions"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  background: 'rgba(255,255,255,0.12)',
-                  color: '#FFFFFF',
-                  border: '1px solid rgba(255,255,255,0.25)',
-                  borderRadius: 10,
-                  padding: '10px 16px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  whiteSpace: 'nowrap',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                }}
-                onMouseEnter={(e) => { e.target.style.background = 'rgba(255,255,255,0.18)'; e.target.style.borderColor = 'rgba(255,255,255,0.35)' }}
-                onMouseLeave={(e) => { e.target.style.background = 'rgba(255,255,255,0.12)'; e.target.style.borderColor = 'rgba(255,255,255,0.25)' }}
-              >
-                <Link2 size={16} />
-                Share
-              </button>
-            )}
           </div>
           {meetingDescription && (
             <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', marginBottom: 16, lineHeight: 1.6, maxWidth: 600 }}>
@@ -683,103 +655,6 @@ export default function MeetingReportPublicPage() {
           )}
         </div>
       </main>
-
-      {showLinkModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16, backdropFilter: 'blur(4px)' }}>
-          <div style={{ background: '#FFFFFF', borderRadius: 16, padding: '32px', maxWidth: 520, boxShadow: '0 25px 80px rgba(0,0,0,0.15), 0 10px 32px rgba(0,0,0,0.1)', border: '1px solid rgba(0,0,0,0.05)' }}>
-            {/* Header */}
-            <div style={{ marginBottom: 28 }}>
-              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#1C1C1C', letterSpacing: '-0.01em' }}>Share Report</h2>
-              <p style={{ margin: '8px 0 0 0', fontSize: 14, color: '#8B8680', lineHeight: 1.5 }}>Anyone with this link can view the report</p>
-            </div>
-
-            {/* Link Display */}
-            <div style={{ background: '#F9F8F6', border: '1px solid #E8DFD5', borderRadius: 12, padding: '16px 14px', marginBottom: 24, cursor: 'text' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#A89A8E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Report Link</div>
-              <div style={{ fontSize: 13, fontFamily: 'Monaco, monospace', color: '#2C2C2A', lineHeight: 1.6, wordBreak: 'break-all', userSelect: 'all', background: '#FFFFFF', padding: '12px', borderRadius: 8, border: '1px solid #EDE8DC', fontWeight: 500 }}>
-                {window.location.href}
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={() => setShowLinkModal(false)}
-                style={{
-                  padding: '11px 20px',
-                  borderRadius: 10,
-                  border: '1px solid #DDD7C8',
-                  background: '#FFFFFF',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  color: '#2C2C2A',
-                  transition: 'all 0.2s',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
-                }}
-                onMouseEnter={(e) => { e.target.style.background = '#F9F8F6'; e.target.style.borderColor = '#C8BFB3' }}
-                onMouseLeave={(e) => { e.target.style.background = '#FFFFFF'; e.target.style.borderColor = '#DDD7C8' }}
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const text = window.location.href
-
-                  function onCopied() {
-                    setCopiedLink(true)
-                    setTimeout(() => setCopiedLink(false), 2000)
-                    setTimeout(() => setShowLinkModal(false), 800)
-                  }
-
-                  function fallbackCopy(str) {
-                    try {
-                      const el = document.createElement('textarea')
-                      el.value = str
-                      el.style.position = 'absolute'
-                      el.style.left = '-9999px'
-                      el.style.opacity = '0'
-                      document.body.appendChild(el)
-                      el.select()
-                      el.setSelectionRange(0, 99999)
-                      const result = document.execCommand('copy')
-                      document.body.removeChild(el)
-                      if (result) onCopied()
-                      else throw new Error('execCommand returned false')
-                    } catch {
-                      alert('Copy failed. Please select the link above and use Ctrl+C (or Cmd+C on Mac) to copy.')
-                    }
-                  }
-
-                  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-                    navigator.clipboard.writeText(text).then(onCopied).catch(() => fallbackCopy(text))
-                  } else {
-                    fallbackCopy(text)
-                  }
-                }}
-                style={{
-                  padding: '11px 20px',
-                  borderRadius: 10,
-                  border: 'none',
-                  background: copiedLink ? '#E8DFC8' : '#4C2A92',
-                  color: copiedLink ? '#7A5A00' : 'white',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.3s',
-                  boxShadow: copiedLink ? '0 1px 2px rgba(122,90,0,0.1)' : '0 4px 12px rgba(76,42,146,0.25)'
-                }}
-                onMouseEnter={(e) => { if (!copiedLink) { e.target.style.background = '#5D3BA3'; e.target.style.boxShadow = '0 6px 16px rgba(76,42,146,0.35)' } }}
-                onMouseLeave={(e) => { if (!copiedLink) { e.target.style.background = '#4C2A92'; e.target.style.boxShadow = '0 4px 12px rgba(76,42,146,0.25)' } }}
-              >
-                {copiedLink ? '✓ Copied!' : 'Copy Link'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <footer style={{ padding: '32px 28px 28px', textAlign: 'center', background: 'rgba(0,0,0,0.02)', borderTop: '1px solid #EDE8DC' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>

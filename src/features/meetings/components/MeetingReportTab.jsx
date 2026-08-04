@@ -666,8 +666,8 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
   }
 
   return (
-    <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 12, padding: '16px', marginTop: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+    <div style={{ background: 'white', border: '1px solid #EDE8DC', borderRadius: 12, padding: 'clamp(12px, 4vw, 16px)', marginTop: 0, maxWidth: '100%', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#2D2A22' }}>Share Report</div>
         <button
           type="button"
@@ -692,10 +692,10 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {/* Full Report */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px', background: '#F9F7F3', borderRadius: 10, border: '1px solid #EDE8DC' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: 12, background: '#F9F7F3', borderRadius: 10, border: '1px solid #EDE8DC' }}>
+          <div style={{ flex: '1 1 180px', minWidth: 0, width: '100%' }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#2D2A22', marginBottom: 4 }}>Full Report</div>
-            <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all', fontFamily: 'monospace', background: 'white', padding: '6px', borderRadius: 4, border: '1px solid #EDE8DC' }}>
+            <div style={{ fontSize: 10.5, lineHeight: 1.45, color: '#9E9488', overflowWrap: 'anywhere', fontFamily: 'monospace', background: 'white', padding: '6px', borderRadius: 4, border: '1px solid #EDE8DC' }}>
               {fullReportUrl}
             </div>
           </div>
@@ -724,10 +724,10 @@ function SubgroupShareLinksPanel({ report, onClose, expandedByDefault = false })
         {report.subgroups.map((subgroup) => {
           const linkUrl = `${baseUrl}?subgroup=${encodeURIComponent(subgroup)}`
           return (
-            <div key={subgroup} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px', background: 'white', borderRadius: 10, border: '1px solid #EDE8DC' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
+            <div key={subgroup} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: 12, background: 'white', borderRadius: 10, border: '1px solid #EDE8DC' }}>
+              <div style={{ flex: '1 1 180px', minWidth: 0, width: '100%' }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#2D2A22', marginBottom: 4 }}>{subgroup}</div>
-                <div style={{ fontSize: 11, color: '#9E9488', wordBreak: 'break-all', fontFamily: 'monospace', background: '#F9F7F3', padding: '6px', borderRadius: 4, border: '1px solid #EDE8DC' }}>
+                <div style={{ fontSize: 10.5, lineHeight: 1.45, color: '#9E9488', overflowWrap: 'anywhere', fontFamily: 'monospace', background: '#F9F7F3', padding: '6px', borderRadius: 4, border: '1px solid #EDE8DC' }}>
                   {linkUrl}
                 </div>
               </div>
@@ -1514,8 +1514,15 @@ export default function MeetingReportTab() {
 
   function openCmpRerun(service = null, names = []) {
     if (!report?.id) return
-    setSyncingReport({ id: report.id, share_token: report.share_token, cmpService: service })
+    const rerunTarget = { id: report.id, share_token: report.share_token, cmpService: service }
+    // Clearing the URL would otherwise restore this report from the session cache.
+    sessionStorage.removeItem('meeting_report_state')
+    // Keep the original record across any route remount while the CMP selection is open.
+    sessionStorage.setItem('meeting_report_rerun_target', JSON.stringify(rerunTarget))
+    setSyncingReport(rerunTarget)
     setCmpSelected(service)
+    setCmpServices([])
+    setCmpError(null)
     setInputMode('cmp')
     setAttendedNames(names)
     setAttendedRawCount(names.length)
@@ -1525,6 +1532,8 @@ export default function MeetingReportTab() {
     setUnexpectedPreview([])
     setPhase('input')
     setReport(null)
+    setRestoredFromSession(false)
+    setSearchParams({})
   }
 
   async function handleSyncCmpReport() {
@@ -1629,10 +1638,21 @@ export default function MeetingReportTab() {
       }
       setSaving(true)
       try {
-        if (syncingReport) {
-          const { error } = await supabase
+        let rerunTarget = syncingReport
+        if (!rerunTarget) {
+          try {
+            rerunTarget = JSON.parse(sessionStorage.getItem('meeting_report_rerun_target') || 'null')
+          } catch {
+            sessionStorage.removeItem('meeting_report_rerun_target')
+          }
+        }
+
+        if (rerunTarget?.id) {
+          const { data, error } = await supabase
             .from('meeting_attendance_reports')
             .update({
+              label: result.label,
+              report_date: new Date().toISOString().slice(0, 10),
               expected_count: result.expectedCount,
               attended_count: result.attendedCount,
               absent_count: result.absentCount,
@@ -1641,15 +1661,22 @@ export default function MeetingReportTab() {
               present_names: result.present.map((person) => person.name),
               absent_names: result.absent.map((person) => person.name),
               unexpected_names: result.unexpected.map((person) => person.name),
+              subgroup_filter: result.subgroupFilter,
               by_subgroup: result.bySubgroup || null,
             })
-            .eq('id', syncingReport.id)
-          if (error) { setSaveError(error.message); return }
+            .eq('id', rerunTarget.id)
+            .select('id')
+            .maybeSingle()
+          if (error || !data) {
+            setSaveError(error?.message || 'The original report could not be updated. No new report was created.')
+            return
+          }
 
-          const nextReport = { ...result, id: syncingReport.id, share_token: syncingReport.share_token, cmpService: cmpSelected ?? syncingReport.cmpService }
+          const nextReport = { ...result, id: rerunTarget.id, share_token: rerunTarget.share_token, cmpService: cmpSelected ?? rerunTarget.cmpService }
           setReport(nextReport)
           setSyncingReport(null)
-          setSearchParams({ report: syncingReport.id })
+          sessionStorage.removeItem('meeting_report_rerun_target')
+          setSearchParams({ report: rerunTarget.id })
           loadHistory()
           return
         }
@@ -1847,6 +1874,7 @@ export default function MeetingReportTab() {
 
   function handleReset() {
     sessionStorage.removeItem('meeting_report_state')
+    sessionStorage.removeItem('meeting_report_rerun_target')
     setSearchParams({})
     setPhase('input')
     setReport(null)
@@ -3019,6 +3047,7 @@ export default function MeetingReportTab() {
               borderRadius: 12,
               boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
               zIndex: 1000,
+              width: 'calc(100vw - 24px)',
               maxWidth: 700,
               maxHeight: '85vh',
               overflowY: 'auto',
@@ -3027,8 +3056,8 @@ export default function MeetingReportTab() {
               flexDirection: 'column'
             }}>
               {/* Header */}
-              <div style={{ padding: '20px', borderBottom: '1px solid #EDE8DC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1C1C1C' }}>Share Report Links</h2>
+              <div style={{ padding: '10px 14px', borderBottom: '1px solid #EDE8DC', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
+                <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1C1C1C', lineHeight: 1.2 }}>Share Report Links</h2>
                 <button
                   type="button"
                   onClick={() => setShowShareModal(false)}
@@ -3039,7 +3068,7 @@ export default function MeetingReportTab() {
               </div>
 
               {/* Content */}
-              <div style={{ padding: '20px', flex: 1, overflowY: 'auto' }}>
+              <div style={{ padding: 'clamp(12px, 4vw, 20px)', flex: 1, overflowY: 'auto', minWidth: 0 }}>
                 <SubgroupShareLinksPanel report={report} expandedByDefault={true} />
               </div>
             </div>
