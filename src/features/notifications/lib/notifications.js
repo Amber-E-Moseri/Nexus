@@ -115,7 +115,8 @@ export const NOTIFICATION_TYPES = {
   support_ticket_reply: { label: 'Reply on your support ticket', icon: '💬', description: 'When admin replies to your support request' },
   task_completed: { label: 'Task completed', icon: '✅', description: 'When a task you are watching is marked complete' },
   weekly_digest: { label: 'Weekly Digest', icon: '📊', description: 'Monday summary of your open tasks, priorities, and sprint progress', emailOnly: true },
-  dormant_nudge: { label: 'Dormant Nudge', icon: '👋', description: "Reminder email when you haven't visited in 14+ days (max once per month)", emailOnly: true },
+  dormant_nudge: { label: 'Dormant Nudge', icon: '👋', description: "Nudge email when you haven't visited in 3+ days (max once per month)", emailOnly: true },
+  feature_announcement: { label: 'Feature Announcements', icon: '🚀', description: 'Email when a new feature launches on Nexus', emailOnly: true },
 }
 
 export async function sendBrowserPushNotification(title, options = {}) {
