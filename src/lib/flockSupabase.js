@@ -66,11 +66,19 @@ function todayIso() {
   return new Date().toISOString().split('T')[0]
 }
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-function validContactId(value) {
+function validUuid(value) {
   const id = String(value || '').trim()
   return UUID_PATTERN.test(id) ? id : null
+}
+
+const validContactId = validUuid
+
+function requiredUuid(value, label) {
+  const id = validUuid(value)
+  if (!id) throw new Error(`Invalid ${label}`)
+  return id
 }
 
 // ── Contacts ──────────────────────────────────────────────────────────────────
@@ -138,7 +146,7 @@ async function addContact({ name, role, fellowship, priority, cadenceDays, phone
 }
 
 async function updateContact({ personId, name, role, fellowship, phone, email }) {
-  if (!personId) throw new Error('Missing person id')
+  const contactId = requiredUuid(personId, 'person id')
   if (!String(name || '').trim()) throw new Error('Name is required')
   const patch = {
     full_name: String(name).trim(),
@@ -146,11 +154,11 @@ async function updateContact({ personId, name, role, fellowship, phone, email })
     fellowship: (fellowship || '').trim() || null,
     ...contactDetailFields({ phone, email }),
   }
-  let res = await supabase.from('flock_contacts').update(patch).eq('id', personId)
+  let res = await supabase.from('flock_contacts').update(patch).eq('id', contactId)
   if (res.error && missingDetailCols(res.error)) {
     hasContactDetailCols = false
     const { phone: _p, email: _e, ...legacy } = patch
-    res = await supabase.from('flock_contacts').update(legacy).eq('id', personId)
+    res = await supabase.from('flock_contacts').update(legacy).eq('id', contactId)
   }
   if (res.error) throw new Error(res.error.message)
   return { success: true }
@@ -159,13 +167,14 @@ async function updateContact({ personId, name, role, fellowship, phone, email })
 async function updateCadence({ personId, cadenceDays }) {
   const n = parseInt(cadenceDays, 10)
   if (!n || n < 1) throw new Error('Invalid cadence value')
+  const contactId = requiredUuid(personId, 'person id')
   const pid = await myPastorId()
 
   const { data: contact } = await supabase
     .from('flock_contacts')
     .select('last_successful_contact')
     .eq('pastor_id', pid)
-    .eq('id', personId)
+    .eq('id', contactId)
     .single()
 
   const patch = { cadence_days: n }
@@ -177,14 +186,15 @@ async function updateCadence({ personId, cadenceDays }) {
     patch.due_status = nextIso < todayIso() ? 'Overdue' : 'On Track'
   }
 
-  const { error } = await supabase.from('flock_contacts').update(patch).eq('id', personId)
+  const { error } = await supabase.from('flock_contacts').update(patch).eq('id', contactId)
   if (error) throw new Error(error.message)
   return { success: true }
 }
 
 async function setContactActive({ personId, active }) {
   const isActive = active === true || active === 'true'
-  const { error } = await supabase.from('flock_contacts').update({ active: isActive }).eq('id', personId)
+  const contactId = requiredUuid(personId, 'person id')
+  const { error } = await supabase.from('flock_contacts').update({ active: isActive }).eq('id', contactId)
   if (error) throw new Error(error.message)
   return { success: true }
 }
@@ -227,7 +237,7 @@ async function saveInteraction({ personId, fullName, result, summary, nextAction
       next_action: nextAction || 'None',
       next_action_datetime: nextActionDateTime || null,
       interacted_at: interactedAt || new Date().toISOString(),
-      meeting_id: meetingId || null,
+      meeting_id: validUuid(meetingId),
     })
     .select('id')
     .single()
@@ -256,7 +266,7 @@ async function saveInteraction({ personId, fullName, result, summary, nextAction
 }
 
 async function updateInteraction({ interactionId, result, summary, nextAction, nextActionDateTime }) {
-  if (!interactionId) throw new Error('interactionId is required')
+  const id = requiredUuid(interactionId, 'interaction id')
   const patch = {}
   if (result !== undefined) patch.result = result || ''
   if (summary !== undefined) patch.summary = summary || ''
@@ -266,7 +276,7 @@ async function updateInteraction({ interactionId, result, summary, nextAction, n
   const { error } = await supabase
     .from('flock_interactions')
     .update(patch)
-    .eq('id', interactionId)
+    .eq('id', id)
   if (error) throw new Error(error.message)
   return { success: true }
 }
@@ -327,7 +337,7 @@ async function saveTodos({ interactionId, personId, personName, todos }) {
   const rows = todos.map(t => ({
     contact_id: contactId,
     contact_name: personName || 'My Tasks',
-    interaction_id: interactionId && !String(interactionId).startsWith('manual') ? interactionId : null,
+    interaction_id: validUuid(interactionId),
     text: t.text || '',
     due_date: toIso(t.dueDate) || null,
   }))
@@ -337,26 +347,30 @@ async function saveTodos({ interactionId, personId, personName, todos }) {
 }
 
 async function updateTodo({ todoId, done }) {
+  const id = requiredUuid(todoId, 'todo id')
   const isDone = done === true || done === 'true'
   const patch = { done: isDone, completed_at: isDone ? new Date().toISOString() : null }
-  const { error } = await supabase.from('flock_todos').update(patch).eq('id', todoId)
+  const { error } = await supabase.from('flock_todos').update(patch).eq('id', id)
   if (error) throw new Error(error.message)
   return { success: true }
 }
 
 async function updateTodoText({ todoId, text }) {
-  const { error } = await supabase.from('flock_todos').update({ text }).eq('id', todoId)
+  const id = requiredUuid(todoId, 'todo id')
+  const { error } = await supabase.from('flock_todos').update({ text }).eq('id', id)
   if (error) throw new Error(error.message)
   return { success: true }
 }
 
 async function updateTodoDueDate({ todoId, dueDate }) {
-  const { error } = await supabase.from('flock_todos').update({ due_date: toIso(dueDate) || null }).eq('id', todoId)
+  const id = requiredUuid(todoId, 'todo id')
+  const { error } = await supabase.from('flock_todos').update({ due_date: toIso(dueDate) || null }).eq('id', id)
   if (error) throw new Error(error.message)
   return { success: true }
 }
 
 async function updateTodoAssignee({ todoId, personId, personName }) {
+  const id = requiredUuid(todoId, 'todo id')
   const contactId = validContactId(personId)
   const { error } = await supabase
     .from('flock_todos')
@@ -364,14 +378,15 @@ async function updateTodoAssignee({ todoId, personId, personName }) {
       contact_id: contactId,
       contact_name: personName || 'My Tasks',
     })
-    .eq('id', todoId)
+    .eq('id', id)
   if (error) throw new Error(error.message)
   return { success: true }
 }
 
 async function deleteTodo({ todoId }) {
   const pid = await myPastorId()
-  const { error } = await supabase.from('flock_todos').delete().eq('pastor_id', pid).eq('id', todoId)
+  const id = requiredUuid(todoId, 'todo id')
+  const { error } = await supabase.from('flock_todos').delete().eq('pastor_id', pid).eq('id', id)
   if (error) throw new Error(error.message)
   return { success: true }
 }
