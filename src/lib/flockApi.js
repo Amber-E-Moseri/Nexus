@@ -19,10 +19,10 @@ export const FLOCK = {
   // Surfaces / neutrals tuned to the purple system
   surface: '#FAFAF8',
   card: '#FFFFFF',
-  border: '#ECE7F5',
-  borderStrong: '#DDD5EC',
-  text: '#1E1633',
-  muted: '#6B6480',
+  border: '#EDE8DC',
+  borderStrong: '#DDD6C9',
+  text: '#2D2A22',
+  muted: '#756E62',
   // Tint fills for chips / stat tiles
   purpleTint: '#F3EEFF',
   redTint: '#FDEEEA',
@@ -41,8 +41,8 @@ export function flockCard(extra = {}) {
   return {
     background: FLOCK.card,
     border: `1px solid ${FLOCK.border}`,
-    borderRadius: '18px',
-    boxShadow: '0 14px 34px rgba(30, 22, 51, 0.05)',
+    borderRadius: '8px',
+    boxShadow: '0 1px 4px rgba(45, 42, 34, 0.05)',
     ...extra,
   }
 }

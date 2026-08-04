@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckSquare, ChevronDown, ChevronRight, Home, Mail, Mic, Phone, Plus, RefreshCw, Settings as SettingsIcon, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
+import { AlertCircle, CheckSquare, ChevronDown, ChevronRight, Home, Mail, Mic, Phone, Plus, RefreshCw, Settings as SettingsIcon, Trash2, UserPlus, Users } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { FLOCK_CRM_CONFIG } from '../../lib/permissions'
 import { supabase } from '../../lib/supabase'
@@ -20,11 +20,11 @@ function StatTile({ label, value, tone, note }) {
   const palette = tones[tone] ?? tones.violet
 
   return (
-    <div className="flock-stat-tile" style={{ ...flockCard({ padding: '18px', background: palette.bg, borderColor: 'transparent' }), transition: 'transform 0.15s ease, box-shadow 0.15s ease' }}>
+    <div className="flock-stat-tile" style={{ ...flockCard({ padding: '16px' }), transition: 'border-color 0.15s ease, box-shadow 0.15s ease' }}>
       <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
         {label}
       </div>
-      <div className="flock-stat-value" style={{ marginTop: '8px', fontSize: '40px', lineHeight: 1, fontWeight: 700, color: palette.fg, fontFamily: FLOCK.fontHead }}>
+      <div className="flock-stat-value" style={{ marginTop: '8px', fontSize: '32px', lineHeight: 1, fontWeight: 700, color: palette.fg, fontFamily: FLOCK.fontHead }}>
         {value}
       </div>
       <div style={{ marginTop: '10px', fontSize: '12px', lineHeight: 1.5, color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
@@ -140,7 +140,7 @@ function DuePersonCard({ person, expanded, onExpand, onRefresh, onOpenPerson, to
       </div>
 
       {expanded && (
-        <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: `1px solid ${FLOCK.border}`, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ padding: '16px', borderTop: `1px solid ${FLOCK.border}`, display: 'flex', flexDirection: 'column', gap: '12px', background: FLOCK.surface }}>
           <div style={{ display: 'flex', gap: '8px' }}>
             <input
               type="text"
@@ -374,7 +374,7 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson, isMobile }) {
           onClick={() => onLogCall()}
           style={{
             border: 'none',
-            borderRadius: '10px',
+            borderRadius: '6px',
             padding: '10px 14px',
             background: FLOCK.purple,
             color: '#FFFFFF',
@@ -399,7 +399,7 @@ function HomePanel({ onLogCall, onAddPerson, onOpenPerson, isMobile }) {
           onClick={onAddPerson}
           style={{
             border: `1px solid ${FLOCK.borderStrong}`,
-            borderRadius: '10px',
+            borderRadius: '6px',
             padding: '10px 14px',
             background: FLOCK.card,
             color: FLOCK.text,
@@ -587,28 +587,22 @@ export default function FlockCRMPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minHeight: '100%', fontFamily: FLOCK.fontBody }}>
-      <section
-        style={flockCard({
-          padding: isMobile ? '16px' : '24px',
-          background: `radial-gradient(circle at top left, ${FLOCK.purpleTint} 0%, ${FLOCK.surface} 45%, ${FLOCK.card} 100%)`,
-        })}
-      >
+      <section style={flockCard({ padding: 0, overflow: 'hidden' })}>
+        <div style={{ padding: isMobile ? '16px' : '20px 24px', background: FLOCK.card }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: isMobile ? '34px' : '44px', height: isMobile ? '34px' : '44px', borderRadius: '14px', background: FLOCK.purple, display: 'grid', placeItems: 'center', color: '#FFFFFF', flexShrink: 0 }}>
+            <div style={{ width: isMobile ? '34px' : '40px', height: isMobile ? '34px' : '40px', borderRadius: '8px', background: FLOCK.purpleTint, display: 'grid', placeItems: 'center', color: FLOCK.purple, flexShrink: 0 }}>
               <Phone size={isMobile ? 16 : 20} />
             </div>
-            <h1 style={{ margin: 0, fontSize: isMobile ? '22px' : '30px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Flock CRM</h1>
-          </div>
-          {!isMobile && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 10px', borderRadius: '999px', background: FLOCK.purpleTint, color: FLOCK.purple, fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              <ShieldCheck size={12} />
-              Pastoral Operations
+            <div>
+              <h1 style={{ margin: 0, fontSize: isMobile ? '22px' : '24px', fontWeight: 700, color: FLOCK.text, fontFamily: FLOCK.fontHead }}>Flock CRM</h1>
+              {!isMobile && <div style={{ marginTop: 3, color: FLOCK.muted, fontSize: 12 }}>Private pastoral care workspace</div>}
             </div>
-          )}
+          </div>
+        </div>
         </div>
 
-        <nav style={{ display: 'flex', gap: '6px', marginTop: isMobile ? '12px' : '20px', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: isMobile ? '2px' : 0 }}>
+        <nav style={{ display: 'flex', gap: isMobile ? '4px' : '16px', padding: isMobile ? '0 12px' : '0 24px', borderTop: `1px solid ${FLOCK.border}`, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {TABS.map((tab) => {
             const Icon = tab.icon
             const isActive = tab.id === activeTab
@@ -622,11 +616,12 @@ export default function FlockCRMPage() {
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: isMobile ? '5px' : '7px',
-                  padding: isMobile ? '7px 11px' : '9px 15px',
-                  borderRadius: '999px',
-                  border: `1px solid ${isActive ? 'transparent' : FLOCK.border}`,
-                  background: isActive ? FLOCK.purple : FLOCK.card,
-                  color: isActive ? '#FFFFFF' : FLOCK.muted,
+                  padding: isMobile ? '11px 8px 9px' : '13px 2px 11px',
+                  borderRadius: 0,
+                  border: 'none',
+                  borderBottom: `2px solid ${isActive ? FLOCK.purple : 'transparent'}`,
+                  background: 'transparent',
+                  color: isActive ? FLOCK.purple : FLOCK.muted,
                   fontSize: isMobile ? '12px' : '13px',
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -645,11 +640,11 @@ export default function FlockCRMPage() {
       <div>{renderPanel()}</div>
 
       <style>{`
-        .flock-stat-tile:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.08); }
+        .flock-stat-tile:hover { border-color: ${FLOCK.borderStrong}; box-shadow: 0 3px 10px rgba(45,42,34,0.08); }
         .flock-due-row:hover { background: ${FLOCK.surface}; }
         .flock-btn-primary:hover { box-shadow: 0 4px 12px ${FLOCK.purple}44; transform: translateY(-1px); }
         .flock-btn-secondary:hover { background: ${FLOCK.surface}; border-color: ${FLOCK.purple}; }
-        .flock-tab:hover { background: ${FLOCK.surface}; border-color: ${FLOCK.purple}; color: ${FLOCK.text}; }
+        .flock-tab:hover { color: ${FLOCK.text}; }
         nav::-webkit-scrollbar { display: none; }
         nav { scrollbar-width: none; }
         @media (max-width: 639px) {
