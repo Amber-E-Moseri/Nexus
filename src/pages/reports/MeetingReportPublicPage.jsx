@@ -44,13 +44,13 @@ function reachBand(pct) {
   return { bg: '#F8D7DA', fg: '#7A1C24', border: '#F0B0B6' }
 }
 
-function KpiTile({ label, value, detail, bg, bd, circle, labelColor, valueColor }) {
+function KpiTile({ label, value, detail, bg, bd, circle, labelColor, valueColor, compact = false }) {
   return (
-    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 12, padding: '20px 18px', background: bg, border: `1px solid ${bd}`, transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 12, padding: compact ? '14px 12px' : '20px 18px', background: bg, border: `1px solid ${bd}`, transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
       <div style={{ position: 'absolute', right: -20, bottom: -28, width: 80, height: 80, borderRadius: 999, background: circle, opacity: 0.6 }} />
-      <div style={{ position: 'relative', fontSize: 11, fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: labelColor, marginBottom: 8 }}>{label}</div>
-      <div style={{ position: 'relative', fontSize: 32, fontWeight: 800, color: valueColor, lineHeight: 1 }}>{value}</div>
-      {detail ? <div style={{ position: 'relative', marginTop: 8, fontSize: 13, color: labelColor, fontWeight: 600 }}>{detail}</div> : null}
+      <div style={{ position: 'relative', fontSize: compact ? 10 : 11, fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: labelColor, marginBottom: compact ? 6 : 8 }}>{label}</div>
+      <div style={{ position: 'relative', fontSize: compact ? 28 : 32, fontWeight: 800, color: valueColor, lineHeight: 1 }}>{value}</div>
+      {detail ? <div style={{ position: 'relative', marginTop: compact ? 6 : 8, fontSize: compact ? 11 : 13, color: labelColor, fontWeight: 600 }}>{detail}</div> : null}
     </div>
   )
 }
@@ -423,14 +423,14 @@ export default function MeetingReportPublicPage() {
         </div>
       </header>
 
-      <main style={{ padding: '40px 28px' }}>
+      <main style={{ padding: isMobile ? '20px 16px 28px' : '40px 28px' }}>
         <div className="public-report-shell" style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
           {/* Overall KPIs */}
-          <div className="report-kpi-section" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14 }}>
-            <KpiTile label="Expected" value={expectedTotal} bg="#F4F1EA" bd="#EDE8DC" circle="rgba(76,42,146,.12)" labelColor="#9E9488" valueColor="#2D2A22" />
-            <KpiTile label="Present" value={presentTotal} bg="#EEF6F1" bd="#C3E0CC" circle="rgba(45,134,83,.15)" labelColor="#2D8653" valueColor="#1B5E3C" />
-            <KpiTile label="Absent" value={absentTotal} bg="#FEF0ED" bd="#F5C4B8" circle="rgba(201,72,48,.15)" labelColor="#C94830" valueColor="#7A1C24" />
-            <KpiTile label="Reach" value={`${reachPct}%`} bg={band.bg} bd={band.border} circle={`${band.fg}22`} labelColor={band.fg} valueColor={band.fg} />
+          <div className="report-kpi-section" style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: isMobile ? 10 : 14 }}>
+            <KpiTile label="Expected" value={expectedTotal} bg="#F4F1EA" bd="#EDE8DC" circle="rgba(76,42,146,.12)" labelColor="#9E9488" valueColor="#2D2A22" compact={isMobile} />
+            <KpiTile label="Present" value={presentTotal} bg="#EEF6F1" bd="#C3E0CC" circle="rgba(45,134,83,.15)" labelColor="#2D8653" valueColor="#1B5E3C" compact={isMobile} />
+            <KpiTile label="Absent" value={absentTotal} bg="#FEF0ED" bd="#F5C4B8" circle="rgba(201,72,48,.15)" labelColor="#C94830" valueColor="#7A1C24" compact={isMobile} />
+            <KpiTile label="Reach" value={`${reachPct}%`} bg={band.bg} bd={band.border} circle={`${band.fg}22`} labelColor={band.fg} valueColor={band.fg} compact={isMobile} />
           </div>
 
           {/* ── SUBGROUP VIEW (full report, no active subgroup filter) ── */}
@@ -441,13 +441,14 @@ export default function MeetingReportPublicPage() {
                 <div style={{ background: '#3D1A78', color: 'white', padding: '12px 18px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                   Subgroup Overview
                 </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: isMobile ? 'fixed' : 'auto' }}>
                   <thead>
                     <tr>
-                      {['Subgroup', 'Expected', 'Present', 'Absent', 'Reach'].map((h) => (
+                      {(isMobile ? ['Subgroup', 'Exp.', 'Here', 'Away', '%'] : ['Subgroup', 'Expected', 'Present', 'Absent', 'Reach']).map((h, index) => (
                         <th key={h} style={{
-                          padding: '10px 16px', textAlign: h === 'Reach' ? 'right' : 'left',
-                          fontSize: 11, color: MUTED, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                          padding: isMobile ? '9px 5px' : '10px 16px', textAlign: h === 'Reach' || h === '%' ? 'right' : 'left',
+                          fontSize: isMobile ? 9 : 11, color: MUTED, fontWeight: 700, textTransform: 'uppercase', letterSpacing: isMobile ? '0.02em' : '0.06em',
+                          width: isMobile ? (index === 0 ? '36%' : '16%') : undefined,
                           borderBottom: `1px solid ${PANEL_BORDER}`, background: '#FAFAF7',
                         }}>{h}</th>
                       ))}
@@ -464,14 +465,14 @@ export default function MeetingReportPublicPage() {
                       const sgBand = reachBand(sgExp > 0 ? sgPres / sgExp : 0)
                       return (
                         <tr key={sg} style={{ background: i % 2 === 0 ? 'transparent' : '#FAFAF7' }}>
-                          <td style={{ padding: '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, fontSize: 13, fontWeight: 700, color: TEXT }}>{sg}</td>
-                          <td style={{ padding: '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, fontSize: 13, color: '#4A4A4A' }}>{sgExp}</td>
-                          <td style={{ padding: '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, fontSize: 13, color: '#085041', fontWeight: 600 }}>{sgPres}</td>
-                          <td style={{ padding: '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, fontSize: 13, color: sgAbs > 0 ? '#712B13' : '#4A4A4A', fontWeight: sgAbs > 0 ? 600 : 400 }}>{sgAbs}</td>
-                          <td style={{ padding: '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, textAlign: 'right' }}>
+                          <td style={{ padding: isMobile ? '10px 5px' : '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, fontSize: isMobile ? 12 : 13, lineHeight: 1.35, overflowWrap: 'anywhere', fontWeight: 700, color: TEXT }}>{sg}</td>
+                          <td style={{ padding: isMobile ? '10px 5px' : '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, fontSize: isMobile ? 12 : 13, color: '#4A4A4A' }}>{sgExp}</td>
+                          <td style={{ padding: isMobile ? '10px 5px' : '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, fontSize: isMobile ? 12 : 13, color: '#085041', fontWeight: 600 }}>{sgPres}</td>
+                          <td style={{ padding: isMobile ? '10px 5px' : '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, fontSize: isMobile ? 12 : 13, color: sgAbs > 0 ? '#712B13' : '#4A4A4A', fontWeight: sgAbs > 0 ? 600 : 400 }}>{sgAbs}</td>
+                          <td style={{ padding: isMobile ? '10px 5px' : '11px 16px', borderBottom: `0.5px solid ${PANEL_BORDER}`, textAlign: 'right' }}>
                             <span style={{
-                              display: 'inline-block', minWidth: 44, textAlign: 'center',
-                              borderRadius: 999, padding: '3px 10px', fontSize: 11,
+                              display: 'inline-block', minWidth: isMobile ? 0 : 44, textAlign: 'center',
+                              borderRadius: 999, padding: isMobile ? '3px 4px' : '3px 10px', fontSize: isMobile ? 9 : 11,
                               color: sgBand.fg, background: sgBand.bg, border: `1px solid ${sgBand.border}`, fontWeight: 700,
                             }}>{sgPct}%</span>
                           </td>
