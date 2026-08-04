@@ -91,6 +91,11 @@ export default function SprintMemberPanel({
   const [reactivating, setReactivating] = useState(null)
   const [loadingPending, setLoadingPending] = useState(false)
   const [addingGroup, setAddingGroup] = useState(false)
+  const existingUserIds = useMemo(() => new Set(members.map((member) => member.user?.id)), [members])
+  const pendingAccessRequests = useMemo(
+    () => accessRequests.filter((request) => request.status === 'pending' && !existingUserIds.has(request.user_id)),
+    [accessRequests, existingUserIds],
+  )
 
   useEffect(() => {
     if (!isSuperAdmin || isArchived) return
@@ -109,7 +114,7 @@ export default function SprintMemberPanel({
   useEffect(() => {
     if (!canEdit || isArchived) return
     getSprintAccessRequests(sprintId)
-      .then((requests) => setAccessRequests(requests.filter((request) => request.status === 'pending')))
+      .then(setAccessRequests)
       .catch(() => setAccessRequests([]))
   }, [sprintId, canEdit, isArchived, onChanged])
 
@@ -151,7 +156,6 @@ export default function SprintMemberPanel({
     }
   }
 
-  const existingUserIds = useMemo(() => new Set(members.map((member) => member.user?.id)), [members])
   const addableUsers = orgUsers.filter((user) => !existingUserIds.has(user.id))
 
   async function handleAdd() {
@@ -236,7 +240,7 @@ export default function SprintMemberPanel({
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       {/* Access Requests Section */}
-      {canEdit && accessRequests.length > 0 && (
+      {canEdit && pendingAccessRequests.length > 0 && (
         <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>
           <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div>
@@ -245,11 +249,11 @@ export default function SprintMemberPanel({
                 People asking to join this sprint.
               </div>
             </div>
-            <Badge tone="planning">{accessRequests.length} pending</Badge>
+            <Badge tone="planning">{pendingAccessRequests.length} pending</Badge>
           </div>
 
           <div style={{ display: 'grid', gap: 12 }}>
-            {accessRequests.map((request) => (
+            {pendingAccessRequests.map((request) => (
               <div
                 key={request.id}
                 style={{
