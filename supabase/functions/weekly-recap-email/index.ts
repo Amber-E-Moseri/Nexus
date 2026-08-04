@@ -1,6 +1,6 @@
 // Scheduled: Monday 13:00 UTC (9 am Eastern) via pg_cron.
-// Supersedes email-digest/index.ts (plain text, never formally scheduled).
-// dept_lead and super_admin users also receive a team engagement section.
+// Forward-looking digest: open tasks, due this week, overdue, top priorities, sprint %.
+// dept_lead / super_admin also get a team engagement table at the top.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -21,20 +21,15 @@ async function verifyServiceRole(req: Request): Promise<boolean> {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return false
   const token = authHeader.replace('Bearer ', '')
-  const expectedToken = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  return token === expectedToken
+  return token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 }
 
-type TeamMember = {
-  name: string
-  completedCount: number
-  overdueCount: number
-  lastActiveAt: string | null
-}
+type TopTask = { title: string; due_date: string | null; department: string | null }
+type TeamMember = { name: string; openCount: number; overdueCount: number; lastActiveAt: string | null }
 
-function lastSeenLabel(lastActiveAt: string | null): { text: string; color: string } {
-  if (!lastActiveAt) return { text: 'Never', color: '#c0392b' }
-  const days = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 86400000)
+function lastSeenLabel(iso: string | null): { text: string; color: string } {
+  if (!iso) return { text: 'Never', color: '#c0392b' }
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
   if (days === 0) return { text: 'Today', color: '#2d8653' }
   if (days === 1) return { text: 'Yesterday', color: '#5a5248' }
   if (days < 4) return { text: `${days} days ago`, color: '#5a5248' }
@@ -42,78 +37,41 @@ function lastSeenLabel(lastActiveAt: string | null): { text: string; color: stri
   return { text: `${days}+ days ago`, color: '#c0392b' }
 }
 
-function buildRecapHtml(
-  userName: string,
+function buildDigestHtml(
+  firstName: string,
   frontendUrl: string,
-  completed: { title: string }[],
-  assigned: { title: string }[],
-  overdue: { title: string; due_date: string }[],
-  unreadCount: number,
+  openCount: number,
+  dueThisWeekCount: number,
+  overdueCount: number,
+  topTasks: TopTask[],
+  sprintName: string | null,
+  sprintPercent: number | null,
   year: number,
   teamMembers: TeamMember[],
 ): string {
-  function listItems(items: { title: string; due_date?: string }[]) {
-    return items
-      .map(
-        (t) =>
-          `<li style="margin:0;padding:7px 0;border-bottom:1px solid #f4f0e8;font-size:13px;color:#2d2a22;list-style:none;">` +
-          t.title +
-          (t.due_date
-            ? ` <span style="color:#c0392b;font-size:11px;font-weight:600;">(due ${t.due_date})</span>`
-            : '') +
-          `</li>`,
-      )
-      .join('')
-  }
-
-  function section(
-    title: string,
-    items: { title: string; due_date?: string }[],
-    emptyMsg: string,
-    headerColor: string,
-  ) {
-    return `
-      <div style="margin-bottom:20px;background:#fff;border-radius:10px;border:1px solid #e8dedd;overflow:hidden;">
-        <div style="background:${headerColor};padding:10px 16px;display:flex;align-items:center;gap:8px;">
-          <span style="font-size:13px;font-weight:700;color:#fff;">${title}</span>
-          <span style="margin-left:auto;background:rgba(255,255,255,0.22);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;">${items.length}</span>
-        </div>
-        <div style="padding:10px 16px;">
-          ${
-            items.length > 0
-              ? `<ul style="margin:0;padding:0;">${listItems(items)}</ul>`
-              : `<p style="margin:0;font-size:12px;color:#b0a696;font-style:italic;">${emptyMsg}</p>`
-          }
-        </div>
-      </div>`
-  }
-
-  function teamSection(members: TeamMember[]) {
-    if (!members.length) return ''
-    const rows = members
-      .map((m) => {
-        const seen = lastSeenLabel(m.lastActiveAt)
-        return `
-          <tr style="border-bottom:1px solid #f4f0e8;">
-            <td style="padding:9px 16px;font-size:13px;color:#2d2a22;font-weight:500;">${m.name}</td>
-            <td style="padding:9px 12px;text-align:center;font-size:13px;font-weight:700;color:${m.completedCount > 0 ? '#2d8653' : '#b0a696'};">${m.completedCount}</td>
-            <td style="padding:9px 12px;text-align:center;font-size:13px;font-weight:700;color:${m.overdueCount > 0 ? '#c0392b' : '#b0a696'};">${m.overdueCount}</td>
-            <td style="padding:9px 16px;text-align:right;font-size:12px;color:${seen.color};font-weight:500;">${seen.text}</td>
-          </tr>`
-      })
-      .join('')
-
+  function teamSection() {
+    if (!teamMembers.length) return ''
+    const rows = teamMembers.map((m) => {
+      const seen = lastSeenLabel(m.lastActiveAt)
+      return `
+        <tr style="border-bottom:1px solid #f4f0e8;">
+          <td style="padding:9px 16px;font-size:13px;color:#2d2a22;font-weight:500;">${m.name}</td>
+          <td style="padding:9px 12px;text-align:center;font-size:13px;font-weight:700;color:${m.openCount > 0 ? '#2a5fa5' : '#b0a696'};">${m.openCount}</td>
+          <td style="padding:9px 12px;text-align:center;font-size:13px;font-weight:700;color:${m.overdueCount > 0 ? '#c0392b' : '#b0a696'};">${m.overdueCount}</td>
+          <td style="padding:9px 16px;text-align:right;font-size:12px;color:${seen.color};font-weight:500;">${seen.text}</td>
+        </tr>`
+    }).join('')
     return `
       <div style="margin-bottom:28px;background:#fff;border-radius:10px;border:1px solid #e8dedd;overflow:hidden;">
         <div style="background:#3b2070;padding:10px 16px;display:flex;align-items:center;gap:8px;">
-          <span style="font-size:13px;font-weight:700;color:#fff;">Team Activity This Week</span>
-          <span style="margin-left:auto;background:rgba(255,255,255,0.22);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;">${members.length} members</span>
+          <span style="font-size:13px;font-weight:700;color:#fff;">Team This Week</span>
+          <span style="margin-left:auto;background:rgba(255,255,255,0.22);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;">${teamMembers.length} members</span>
         </div>
         <table style="width:100%;border-collapse:collapse;">
           <thead>
             <tr style="background:#faf8f5;border-bottom:1px solid #ede8dc;">
               <th style="padding:7px 16px;text-align:left;font-size:11px;font-weight:600;color:#9e9488;text-transform:uppercase;letter-spacing:0.06em;">Member</th>
-              <th style="padding:7px 12px;text-align:center;font-size:11px;font-weight:600;color:#9e9488;text-transform:uppercase;letter-spacing:0.06em;">Done</th>
+              <th style="padding:7px 12px;text-align:center;font-size:11px;font-weight:600;color:#9e9488;text-transform:uppercase;letter-spacing:0.06em;">Open</th>
               <th style="padding:7px 12px;text-align:center;font-size:11px;font-weight:600;color:#9e9488;text-transform:uppercase;letter-spacing:0.06em;">Overdue</th>
               <th style="padding:7px 16px;text-align:right;font-size:11px;font-weight:600;color:#9e9488;text-transform:uppercase;letter-spacing:0.06em;">Last Seen</th>
             </tr>
@@ -123,6 +81,30 @@ function buildRecapHtml(
       </div>`
   }
 
+  const topTaskRows = topTasks.map((t) => {
+    const duePart = t.due_date
+      ? ` — due ${t.due_date}${t.department ? ` (${t.department})` : ''}`
+      : t.department ? ` (${t.department})` : ''
+    return `<li style="margin:0;padding:7px 0;border-bottom:1px solid #f4f0e8;font-size:13px;color:#2d2a22;list-style:none;">
+      ${t.title}<span style="color:#9e9488;font-size:12px;">${duePart}</span>
+    </li>`
+  }).join('')
+
+  const sprintBlock = sprintName != null && sprintPercent != null ? `
+    <div style="margin-bottom:20px;background:#fff;border-radius:10px;border:1px solid #e8dedd;overflow:hidden;">
+      <div style="background:#5c3db8;padding:10px 16px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:13px;font-weight:700;color:#fff;">Active Sprint</span>
+      </div>
+      <div style="padding:12px 16px;">
+        <p style="margin:0 0 10px;font-size:13px;color:#2d2a22;">
+          Your sprint <strong>${sprintName}</strong> is <strong>${sprintPercent}%</strong> complete.
+        </p>
+        <div style="background:#f4f0e8;border-radius:99px;height:6px;overflow:hidden;">
+          <div style="background:#5c3db8;height:100%;width:${sprintPercent}%;border-radius:99px;"></div>
+        </div>
+      </div>
+    </div>` : ''
+
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
@@ -131,40 +113,55 @@ function buildRecapHtml(
 
   <div style="background:#4c2a92;padding:24px;text-align:center;">
     <h1 style="margin:0 0 4px;font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.3px;">BLW CAN NEXUS</h1>
-    <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.8);">Your Weekly Recap</p>
+    <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.8);">Your week ahead</p>
   </div>
 
   <div style="padding:28px 28px 0;">
-    <p style="margin:0 0 24px;font-size:15px;">Hi <strong>${userName}</strong>, here's what happened in your workspace this past week.</p>
+    <p style="margin:0 0 24px;font-size:15px;">Hi <strong>${firstName}</strong>, here's what's on your plate this week in Nexus:</p>
 
-    ${teamSection(teamMembers)}
-
-    ${section('Completed', completed, 'Nothing completed this week.', '#2d8653')}
-    ${section('Newly Assigned', assigned, 'No new tasks assigned this week.', '#2a5fa5')}
-    ${section('Overdue', overdue, 'No overdue tasks — great work!', '#c0392b')}
+    ${teamSection()}
 
     <div style="margin-bottom:20px;background:#fff;border-radius:10px;border:1px solid #e8dedd;overflow:hidden;">
-      <div style="background:#6b4bbe;padding:10px 16px;display:flex;align-items:center;gap:8px;">
-        <span style="font-size:13px;font-weight:700;color:#fff;">Unread Notifications</span>
-        <span style="margin-left:auto;background:rgba(255,255,255,0.22);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;">${unreadCount}</span>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr style="border-bottom:1px solid #f4f0e8;">
+          <td style="padding:12px 16px;font-size:13px;color:#2d2a22;font-weight:600;">Open tasks</td>
+          <td style="padding:12px 16px;text-align:right;font-size:18px;font-weight:800;color:#4c2a92;">${openCount}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f4f0e8;">
+          <td style="padding:12px 16px;font-size:13px;color:#2d2a22;font-weight:600;">Due this week</td>
+          <td style="padding:12px 16px;text-align:right;font-size:18px;font-weight:800;color:${dueThisWeekCount > 0 ? '#2a5fa5' : '#b0a696'};">${dueThisWeekCount}</td>
+        </tr>
+        ${overdueCount > 0 ? `
+        <tr>
+          <td style="padding:12px 16px;font-size:13px;color:#c0392b;font-weight:600;">Overdue</td>
+          <td style="padding:12px 16px;text-align:right;font-size:18px;font-weight:800;color:#c0392b;">${overdueCount}</td>
+        </tr>` : ''}
+      </table>
+    </div>
+
+    ${topTasks.length > 0 ? `
+    <div style="margin-bottom:20px;background:#fff;border-radius:10px;border:1px solid #e8dedd;overflow:hidden;">
+      <div style="background:#2a5fa5;padding:10px 16px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:13px;font-weight:700;color:#fff;">Top Priorities</span>
+        <span style="margin-left:auto;background:rgba(255,255,255,0.22);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;">${topTasks.length}</span>
       </div>
       <div style="padding:10px 16px;">
-        ${
-          unreadCount > 0
-            ? `<p style="margin:0;font-size:13px;color:#2d2a22;">You have <strong>${unreadCount}</strong> unread notification${unreadCount !== 1 ? 's' : ''} waiting in your inbox.</p>`
-            : `<p style="margin:0;font-size:12px;color:#b0a696;font-style:italic;">All caught up!</p>`
-        }
+        <ul style="margin:0;padding:0;">${topTaskRows}</ul>
       </div>
-    </div>
+    </div>` : ''}
+
+    ${sprintBlock}
   </div>
 
-  <div style="padding:8px 28px 28px;text-align:center;">
-    <a href="${frontendUrl}/dashboard" style="display:inline-block;padding:12px 28px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Go to Dashboard</a>
+  <div style="padding:12px 28px 28px;text-align:center;">
+    <a href="${frontendUrl}/my-tasks" style="display:inline-block;padding:12px 28px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Open My Tasks</a>
   </div>
 
   <div style="background:#f9f7f5;border-top:1px solid #e8dedd;padding:16px 28px;text-align:center;">
     <p style="margin:0;font-size:11px;color:#9e9488;">
-      <a href="${frontendUrl}/settings/notifications" style="color:#4c2a92;text-decoration:none;font-weight:500;">Manage notification preferences</a>
+      You're receiving this because you're an active Nexus user.
+      &nbsp;·&nbsp;
+      <a href="${frontendUrl}/settings/notifications" style="color:#4c2a92;text-decoration:none;font-weight:500;">Adjust email preferences</a>
       &nbsp;·&nbsp; © ${year} BLW CAN NEXUS
     </p>
   </div>
@@ -190,7 +187,15 @@ Deno.serve(async (req) => {
 
   if (!resendApiKey) return jsonResponse(500, { error: 'Missing RESEND_API_KEY' })
 
-  // ── 1. All active users (role + dept needed for team section) ────────────────
+  const now = new Date()
+  const today = now.toISOString().split('T')[0]
+  // "due this week" = due within the next 7 days
+  const endOfWeek = new Date(now)
+  endOfWeek.setDate(endOfWeek.getDate() + 6)
+  const endOfWeekStr = endOfWeek.toISOString().split('T')[0]
+  const year = now.getFullYear()
+
+  // ── 1. All active users ──────────────────────────────────────────────────────
   const { data: users, error: usersError } = await supabase
     .from('users')
     .select('id, name, email, role, department_id, last_active_at')
@@ -200,161 +205,161 @@ Deno.serve(async (req) => {
   if (usersError) return jsonResponse(500, { error: usersError.message })
   if (!users?.length) return jsonResponse(200, { sent: 0, message: 'No active users' })
 
-  // ── 2. Opted-out users ───────────────────────────────────────────────────────
   const allUserIds = users.map((u) => u.id)
 
+  // ── 2. Opted-out users ───────────────────────────────────────────────────────
   const { data: optedOut } = await supabase
     .from('user_notification_prefs')
     .select('user_id')
-    .eq('notification_type', 'weekly_recap')
+    .eq('notification_type', 'weekly_digest')
     .eq('email', false)
 
   const optedOutIds = new Set((optedOut ?? []).map((p: { user_id: string }) => p.user_id))
   const eligible = users.filter((u) => u.email && !optedOutIds.has(u.id))
-
   if (!eligible.length) return jsonResponse(200, { sent: 0, message: 'All users opted out' })
 
-  const sevenDaysAgo = new Date()
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-  const sevenDaysAgoIso = sevenDaysAgo.toISOString()
-  const today = new Date().toISOString().split('T')[0]
-
-  // Task queries run over ALL active users so team-section data is available
-  // even for members who have opted out of their own recap email.
-
-  // ── 3. Completed tasks this week ─────────────────────────────────────────────
-  const { data: completedTasks } = await supabase
+  // Task queries run over ALL active users so team data covers opted-out members too
+  // ── 3. Open tasks (not completed/cancelled) for all users ────────────────────
+  const { data: openTasks } = await supabase
     .from('tasks')
-    .select('id, title, assignee_id')
+    .select('id, title, assignee_id, due_date, status_definition:status_id(category), spaces(name)')
     .in('assignee_id', allUserIds)
-    .gte('completed_at', sevenDaysAgoIso)
-    .not('completed_at', 'is', null)
+    .not('due_date', 'is', null)  // we still load null-due tasks via a second query below
 
-  // ── 4. Newly assigned tasks this week (via task_assignees) ───────────────────
-  const { data: newAssignments } = await supabase
-    .from('task_assignees')
-    .select('user_id, tasks(title)')
-    .in('user_id', allUserIds)
-    .gte('assigned_at', sevenDaysAgoIso)
-
-  // ── 5. Overdue tasks (filter status category in JS) ──────────────────────────
-  const { data: potentialOverdue } = await supabase
+  // Also load tasks without due dates for open count
+  const { data: allOpenTasks } = await supabase
     .from('tasks')
-    .select('id, title, assignee_id, due_date, status_definition:status_id(category)')
+    .select('id, title, assignee_id, due_date, status_definition:status_id(category), spaces(name)')
     .in('assignee_id', allUserIds)
-    .lt('due_date', today)
-    .not('due_date', 'is', null)
 
-  const overdueTasks = (potentialOverdue ?? []).filter(
-    (t: { status_definition?: { category?: string } }) =>
-      !['completed', 'cancelled'].includes(t.status_definition?.category ?? ''),
-  )
+  const isOpen = (t: { status_definition?: { category?: string } | null }) =>
+    !['completed', 'cancelled'].includes(t.status_definition?.category ?? '')
 
-  // ── 6. Unread notification counts per user ───────────────────────────────────
-  const { data: unreadNotifs } = await supabase
-    .from('notifications')
-    .select('user_id')
-    .in('user_id', allUserIds)
-    .eq('read', false)
-
-  const unreadByUser: Record<string, number> = {}
-  for (const n of unreadNotifs ?? []) {
-    unreadByUser[n.user_id] = (unreadByUser[n.user_id] ?? 0) + 1
+  const openByUser: Record<string, { title: string; due_date: string | null; department: string | null }[]> = {}
+  for (const t of allOpenTasks ?? []) {
+    if (!isOpen(t)) continue
+    const dept = (t.spaces as { name?: string } | null)?.name ?? null
+    ;(openByUser[t.assignee_id] ??= []).push({ title: t.title, due_date: t.due_date ?? null, department: dept })
   }
 
-  // ── 7. Group task data by user ───────────────────────────────────────────────
-  const completedByUser: Record<string, { title: string }[]> = {}
-  for (const t of completedTasks ?? []) {
-    ;(completedByUser[t.assignee_id] ??= []).push({ title: t.title })
+  // ── 4. Sprint memberships for eligible users ─────────────────────────────────
+  const eligibleIds = eligible.map((u) => u.id)
+
+  const { data: sprintMemberships } = await supabase
+    .from('sprint_members')
+    .select('user_id, sprint_id')
+    .in('user_id', eligibleIds)
+
+  const sprintIdsByUser: Record<string, string[]> = {}
+  const allSprintIds: string[] = []
+  for (const m of sprintMemberships ?? []) {
+    ;(sprintIdsByUser[m.user_id] ??= []).push(m.sprint_id)
+    if (!allSprintIds.includes(m.sprint_id)) allSprintIds.push(m.sprint_id)
   }
 
-  const assignedByUser: Record<string, { title: string }[]> = {}
-  for (const a of newAssignments ?? []) {
-    const title = (a.tasks as { title?: string } | null)?.title
-    if (title) {
-      ;(assignedByUser[a.user_id] ??= []).push({ title })
-    }
+  // ── 5. Active sprints ────────────────────────────────────────────────────────
+  const { data: activeSprints } = allSprintIds.length
+    ? await supabase
+        .from('sprints')
+        .select('id, name, status')
+        .in('id', allSprintIds)
+        .eq('status', 'active')
+    : { data: [] }
+
+  const activeSprintMap: Record<string, string> = {} // sprint_id → name
+  for (const s of activeSprints ?? []) activeSprintMap[s.id] = s.name
+  const activeSprintIds = Object.keys(activeSprintMap)
+
+  // ── 6. Tasks in active sprints (for % complete) ───────────────────────────────
+  const { data: sprintTasksRaw } = activeSprintIds.length
+    ? await supabase
+        .from('tasks')
+        .select('id, sprint_id, status_definition:status_id(category)')
+        .in('sprint_id', activeSprintIds)
+    : { data: [] }
+
+  // sprint_id → { total, completed }
+  const sprintStats: Record<string, { total: number; completed: number }> = {}
+  for (const t of sprintTasksRaw ?? []) {
+    const s = (sprintStats[t.sprint_id] ??= { total: 0, completed: 0 })
+    s.total++
+    if ((t.status_definition as { category?: string } | null)?.category === 'completed') s.completed++
   }
 
-  const overdueByUser: Record<string, { title: string; due_date: string }[]> = {}
-  for (const t of overdueTasks) {
-    ;(overdueByUser[t.assignee_id] ??= []).push({ title: t.title, due_date: t.due_date })
-  }
-
-  // ── 8. Group all users by department for team-section lookups ────────────────
+  // ── 7. Group all users by department for team-section lookups ────────────────
   const membersByDept: Record<string, typeof users> = {}
   for (const u of users) {
-    if (u.department_id) {
-      ;(membersByDept[u.department_id] ??= []).push(u)
-    }
+    if (u.department_id) ;(membersByDept[u.department_id] ??= []).push(u)
   }
 
-  // ── 9. Send emails ───────────────────────────────────────────────────────────
-  const year = new Date().getFullYear()
+  // ── 8. Send emails ───────────────────────────────────────────────────────────
   let sent = 0
   let skipped = 0
   const errors: string[] = []
 
   for (const user of eligible) {
-    const userCompleted = completedByUser[user.id] ?? []
-    const userAssigned = assignedByUser[user.id] ?? []
-    const userOverdue = overdueByUser[user.id] ?? []
-    const userUnread = unreadByUser[user.id] ?? 0
+    const firstName = (user.name ?? 'Team Member').split(' ')[0]
+    const userTasks = openByUser[user.id] ?? []
+    const openCount = userTasks.length
+    const overdueCount = userTasks.filter((t) => t.due_date && t.due_date < today).length
+    const dueThisWeekCount = userTasks.filter(
+      (t) => t.due_date && t.due_date >= today && t.due_date <= endOfWeekStr,
+    ).length
+    const topTasks: TopTask[] = userTasks
+      .filter((t) => t.due_date)
+      .sort((a, b) => (a.due_date! < b.due_date! ? -1 : 1))
+      .slice(0, 5)
+      .map((t) => ({ title: t.title, due_date: t.due_date, department: t.department }))
 
-    // Build team section for dept_lead / super_admin with a department
-    let teamMembers: TeamMember[] = []
+    // Sprint info: find one active sprint this user belongs to
+    const userActiveSprintId = (sprintIdsByUser[user.id] ?? []).find((id) => id in activeSprintMap)
+    const sprintName = userActiveSprintId ? activeSprintMap[userActiveSprintId] : null
+    const sprintPercent = userActiveSprintId && sprintStats[userActiveSprintId]
+      ? Math.round((sprintStats[userActiveSprintId].completed / sprintStats[userActiveSprintId].total) * 100)
+      : null
+
+    // Team section for dept_lead / super_admin
     const isLead = ['dept_lead', 'super_admin'].includes(user.role) && user.department_id
-    if (isLead) {
-      teamMembers = (membersByDept[user.department_id] ?? [])
-        .filter((m) => m.id !== user.id)
-        .map((m) => ({
-          name: m.name ?? 'Team Member',
-          completedCount: (completedByUser[m.id] ?? []).length,
-          overdueCount: (overdueByUser[m.id] ?? []).length,
-          lastActiveAt: m.last_active_at ?? null,
-        }))
-        .sort(
-          (a, b) =>
-            b.completedCount - a.completedCount ||
-            a.name.localeCompare(b.name),
-        )
-    }
+    const teamMembers: TeamMember[] = isLead
+      ? (membersByDept[user.department_id] ?? [])
+          .filter((m) => m.id !== user.id)
+          .map((m) => {
+            const mt = openByUser[m.id] ?? []
+            return {
+              name: m.name ?? 'Team Member',
+              openCount: mt.length,
+              overdueCount: mt.filter((t) => t.due_date && t.due_date < today).length,
+              lastActiveAt: m.last_active_at ?? null,
+            }
+          })
+          .sort((a, b) => b.openCount - a.openCount || a.name.localeCompare(b.name))
+      : []
 
-    // Skip if nothing at all to show (no personal activity and no team)
-    if (
-      !userCompleted.length &&
-      !userAssigned.length &&
-      !userOverdue.length &&
-      userUnread === 0 &&
-      !teamMembers.length
-    ) {
+    // Skip if nothing to show: no open tasks and no active sprint and not a lead
+    if (openCount === 0 && !sprintName && !teamMembers.length) {
       skipped++
       continue
     }
 
-    const html = buildRecapHtml(
-      user.name ?? 'Team Member',
+    const html = buildDigestHtml(
+      firstName,
       frontendUrl,
-      userCompleted,
-      userAssigned,
-      userOverdue,
-      userUnread,
+      openCount,
+      dueThisWeekCount,
+      overdueCount,
+      topTasks,
+      sprintName,
+      sprintPercent,
       year,
       teamMembers,
     )
 
+    const subject = `Your Nexus week ahead — ${openCount} task${openCount !== 1 ? 's' : ''}${dueThisWeekCount > 0 ? `, ${dueThisWeekCount} due` : ''}`
+
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [user.email],
-        subject: 'Your BLW CAN NEXUS weekly recap',
-        html,
-      }),
+      headers: { Authorization: `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: fromEmail, to: [user.email], subject, html }),
     })
 
     const emailResult = await emailRes.json().catch(() => ({}))
@@ -362,19 +367,16 @@ Deno.serve(async (req) => {
     await supabase.from('email_delivery_log').insert({
       recipient_email: user.email,
       sender_email: fromEmail,
-      subject: 'Your BLW CAN NEXUS weekly recap',
-      email_type: 'weekly_recap',
+      subject,
+      email_type: 'weekly_digest',
       resend_email_id: emailResult.id ?? null,
       status: emailRes.ok ? 'sent' : 'failed',
       http_status: emailRes.status,
       error_message: emailRes.ok ? null : JSON.stringify(emailResult),
     })
 
-    if (emailRes.ok) {
-      sent++
-    } else {
-      errors.push(`${user.email}: ${emailRes.status}`)
-    }
+    if (emailRes.ok) sent++
+    else errors.push(`${user.email}: ${emailRes.status}`)
 
     await new Promise((r) => setTimeout(r, 100))
   }

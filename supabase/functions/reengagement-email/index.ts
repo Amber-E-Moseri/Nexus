@@ -1,6 +1,6 @@
 // Scheduled: Daily 14:00 UTC (10 am Eastern) via pg_cron.
-// Fires for users inactive 3+ days. Max one email per 7-day window per user
-// (spam guard checks email_delivery_log by recipient_email — no user_id column).
+// Fires for users inactive 14+ days. Max one dormant_nudge per 30 days per user.
+// Spam guard checks email_delivery_log by recipient_email (no user_id column).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -21,27 +21,24 @@ async function verifyServiceRole(req: Request): Promise<boolean> {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return false
   const token = authHeader.replace('Bearer ', '')
-  const expectedToken = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  return token === expectedToken
+  return token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 }
 
-function buildReengagementHtml(
-  userName: string,
+function buildNudgeHtml(
+  firstName: string,
   frontendUrl: string,
-  daysAway: number,
-  unreadCount: number,
-  overdueCount: number,
-  newlyAssignedCount: number,
+  pendingCount: number,
+  unreadMentions: number,
   year: number,
 ): string {
-  function statRow(label: string, count: number, danger: boolean) {
-    const color = danger && count > 0 ? '#c0392b' : '#4c2a92'
-    return `
-      <tr>
-        <td style="padding:10px 16px;font-size:13px;color:#2d2a22;border-bottom:1px solid #f4f0e8;">${label}</td>
-        <td style="padding:10px 16px;text-align:right;font-weight:700;font-size:14px;color:${color};border-bottom:1px solid #f4f0e8;">${count}</td>
-      </tr>`
-  }
+  const itemLines = [
+    pendingCount > 0
+      ? `<li style="margin:0;padding:7px 0;border-bottom:1px solid #f4f0e8;font-size:13px;color:#2d2a22;list-style:none;">${pendingCount} task${pendingCount !== 1 ? 's' : ''} assigned to you</li>`
+      : '',
+    unreadMentions > 0
+      ? `<li style="margin:0;padding:7px 0;font-size:13px;color:#2d2a22;list-style:none;">${unreadMentions} mention${unreadMentions !== 1 ? 's' : ''} in meeting minutes / comments</li>`
+      : '',
+  ].filter(Boolean).join('')
 
   return `<!DOCTYPE html>
 <html>
@@ -51,32 +48,33 @@ function buildReengagementHtml(
 
   <div style="background:#4c2a92;padding:24px;text-align:center;">
     <h1 style="margin:0 0 4px;font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.3px;">BLW CAN NEXUS</h1>
-    <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.8);">We miss you!</p>
   </div>
 
   <div style="padding:28px;">
-    <p style="margin:0 0 14px;font-size:15px;">Hi <strong>${userName}</strong>,</p>
-    <p style="margin:0 0 24px;font-size:14px;color:#5a5248;">
-      You haven't visited BLW CAN NEXUS in <strong>${daysAway} day${daysAway !== 1 ? 's' : ''}</strong>.
-      Here's what's waiting for you:
+    <p style="margin:0 0 14px;font-size:15px;color:#2d2a22;">Hi <strong>${firstName}</strong>,</p>
+    <p style="margin:0 0 20px;font-size:14px;color:#5a5248;">
+      It's been a bit since you've checked Nexus — here's what's waiting for you:
     </p>
 
-    <div style="background:#fff;border-radius:10px;border:1px solid #e8dedd;overflow:hidden;margin-bottom:24px;">
-      <table style="width:100%;border-collapse:collapse;">
-        ${statRow('Unread notifications', unreadCount, false)}
-        ${statRow('Tasks assigned since your last visit', newlyAssignedCount, false)}
-        ${statRow('Overdue tasks', overdueCount, true)}
-      </table>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e8dedd;overflow:hidden;margin-bottom:20px;">
+      <ul style="margin:0;padding:0 16px;">${itemLines}</ul>
     </div>
 
+    <p style="margin:0 0 20px;font-size:13px;color:#9e9488;">
+      No pressure — just didn't want these to slip through the cracks.
+    </p>
+
     <div style="text-align:center;margin-bottom:8px;">
-      <a href="${frontendUrl}/dashboard" style="display:inline-block;padding:14px 36px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Return to BLW CAN NEXUS →</a>
+      <a href="${frontendUrl}/my-tasks" style="display:inline-block;padding:14px 36px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Take a look</a>
     </div>
   </div>
 
   <div style="background:#f9f7f5;border-top:1px solid #e8dedd;padding:16px 28px;text-align:center;">
     <p style="margin:0;font-size:11px;color:#9e9488;">
-      <a href="${frontendUrl}/settings/notifications" style="color:#4c2a92;text-decoration:none;font-weight:500;">Manage notification preferences</a>
+      If Nexus isn't a fit for your workflow right now, no worries —
+      <a href="${frontendUrl}/feedback" style="color:#4c2a92;text-decoration:none;font-weight:500;">let us know</a>
+      so we can improve it, or
+      <a href="${frontendUrl}/settings/notifications" style="color:#4c2a92;text-decoration:none;font-weight:500;">unsubscribe from these reminders</a>.
       &nbsp;·&nbsp; © ${year} BLW CAN NEXUS
     </p>
   </div>
@@ -103,157 +101,113 @@ Deno.serve(async (req) => {
   if (!resendApiKey) return jsonResponse(500, { error: 'Missing RESEND_API_KEY' })
 
   const now = new Date()
-  const threeDaysAgo = new Date(now)
-  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
-  const sevenDaysAgo = new Date(now)
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+  const fourteenDaysAgo = new Date(now)
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+  const thirtyDaysAgo = new Date(now)
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
   const today = now.toISOString().split('T')[0]
   const year = now.getFullYear()
 
-  // ── 1. Users inactive 3+ days ────────────────────────────────────────────────
+  // ── 1. Users inactive 14+ days ───────────────────────────────────────────────
   const { data: inactiveUsers, error: usersError } = await supabase
     .from('users')
     .select('id, name, email, last_active_at')
     .eq('status', 'active')
     .not('email', 'is', null)
-    .lt('last_active_at', threeDaysAgo.toISOString())
+    .lt('last_active_at', fourteenDaysAgo.toISOString())
 
   if (usersError) return jsonResponse(500, { error: usersError.message })
   if (!inactiveUsers?.length) return jsonResponse(200, { sent: 0, message: 'No inactive users' })
 
-  // ── 2. Spam guard: skip users emailed within the last 7 days ────────────────
-  // email_delivery_log has no user_id column — guard by recipient_email
+  // ── 2. Spam guard: 30-day cap per user ──────────────────────────────────────
+  // email_delivery_log has no user_id — guard by recipient_email
   const inactiveEmails = inactiveUsers.map((u) => u.email)
 
   const { data: recentLogs } = await supabase
     .from('email_delivery_log')
     .select('recipient_email')
     .in('recipient_email', inactiveEmails)
-    .in('email_type', ['weekly_recap', 'reengagement'])
-    .gte('sent_at', sevenDaysAgo.toISOString())
+    .eq('email_type', 'dormant_nudge')
+    .gte('sent_at', thirtyDaysAgo.toISOString())
     .eq('status', 'sent')
 
-  const recentlyEmailed = new Set((recentLogs ?? []).map((r: { recipient_email: string }) => r.recipient_email))
+  const recentlyNudged = new Set((recentLogs ?? []).map((r: { recipient_email: string }) => r.recipient_email))
 
   // ── 3. Opted-out users ───────────────────────────────────────────────────────
   const candidateIds = inactiveUsers
-    .filter((u) => !recentlyEmailed.has(u.email))
+    .filter((u) => !recentlyNudged.has(u.email))
     .map((u) => u.id)
 
-  if (!candidateIds.length) return jsonResponse(200, { sent: 0, message: 'All users recently emailed' })
+  if (!candidateIds.length) return jsonResponse(200, { sent: 0, message: 'All users recently nudged' })
 
   const { data: optedOut } = await supabase
     .from('user_notification_prefs')
     .select('user_id')
     .in('user_id', candidateIds)
-    .eq('notification_type', 'reengagement_reminder')
+    .eq('notification_type', 'dormant_nudge')
     .eq('email', false)
 
   const optedOutIds = new Set((optedOut ?? []).map((p: { user_id: string }) => p.user_id))
   const eligible = inactiveUsers.filter(
-    (u) => !recentlyEmailed.has(u.email) && !optedOutIds.has(u.id),
+    (u) => !recentlyNudged.has(u.email) && !optedOutIds.has(u.id),
   )
 
   if (!eligible.length) return jsonResponse(200, { sent: 0, message: 'No eligible users' })
 
   const eligibleIds = eligible.map((u) => u.id)
 
-  // ── 4. Bulk data for eligible users ─────────────────────────────────────────
-
-  // Unread notifications
-  const { data: unreadNotifs } = await supabase
-    .from('notifications')
-    .select('user_id')
-    .in('user_id', eligibleIds)
-    .eq('read', false)
-
-  const unreadByUser: Record<string, number> = {}
-  for (const n of unreadNotifs ?? []) {
-    unreadByUser[n.user_id] = (unreadByUser[n.user_id] ?? 0) + 1
-  }
-
-  // Overdue tasks (filter completed/cancelled in JS to avoid PostgREST join filter gotcha)
-  const { data: potentialOverdue } = await supabase
+  // ── 4. Open (pending) task counts ────────────────────────────────────────────
+  const { data: allTasks } = await supabase
     .from('tasks')
     .select('id, assignee_id, status_definition:status_id(category)')
     .in('assignee_id', eligibleIds)
-    .lt('due_date', today)
-    .not('due_date', 'is', null)
 
-  const overdueCountByUser: Record<string, number> = {}
-  for (const t of potentialOverdue ?? []) {
-    if (!['completed', 'cancelled'].includes((t.status_definition as { category?: string } | null)?.category ?? '')) {
-      overdueCountByUser[t.assignee_id] = (overdueCountByUser[t.assignee_id] ?? 0) + 1
+  const pendingByUser: Record<string, number> = {}
+  for (const t of allTasks ?? []) {
+    const cat = (t.status_definition as { category?: string } | null)?.category ?? ''
+    if (!['completed', 'cancelled'].includes(cat)) {
+      pendingByUser[t.assignee_id] = (pendingByUser[t.assignee_id] ?? 0) + 1
     }
   }
 
-  // Tasks assigned since each user's last_active_at (grouped by user)
-  // Load in bulk using the earliest last_active_at as the lower bound
-  const earliestActive = eligible.reduce(
-    (min, u) => (u.last_active_at < min ? u.last_active_at : min),
-    eligible[0].last_active_at,
-  )
-
-  const { data: assignmentsSince } = await supabase
-    .from('task_assignees')
-    .select('user_id, assigned_at')
+  // ── 5. Unread mentions ────────────────────────────────────────────────────────
+  const { data: mentionNotifs } = await supabase
+    .from('notifications')
+    .select('user_id')
     .in('user_id', eligibleIds)
-    .gte('assigned_at', earliestActive)
+    .eq('type', 'mention')
+    .eq('read', false)
 
-  // Map per user: count assignments after their personal last_active_at
-  const userLastActive: Record<string, string> = {}
-  for (const u of eligible) {
-    userLastActive[u.id] = u.last_active_at
+  const mentionsByUser: Record<string, number> = {}
+  for (const n of mentionNotifs ?? []) {
+    mentionsByUser[n.user_id] = (mentionsByUser[n.user_id] ?? 0) + 1
   }
 
-  const newlyAssignedByUser: Record<string, number> = {}
-  for (const a of assignmentsSince ?? []) {
-    if (a.assigned_at > (userLastActive[a.user_id] ?? '')) {
-      newlyAssignedByUser[a.user_id] = (newlyAssignedByUser[a.user_id] ?? 0) + 1
-    }
-  }
-
-  // ── 5. Send emails ───────────────────────────────────────────────────────────
+  // ── 6. Send emails ───────────────────────────────────────────────────────────
   let sent = 0
   let skipped = 0
   const errors: string[] = []
 
   for (const user of eligible) {
-    const daysAway = Math.floor(
-      (now.getTime() - new Date(user.last_active_at).getTime()) / (1000 * 60 * 60 * 24),
-    )
-    const unreadCount = unreadByUser[user.id] ?? 0
-    const overdueCount = overdueCountByUser[user.id] ?? 0
-    const newlyAssignedCount = newlyAssignedByUser[user.id] ?? 0
+    const firstName = (user.name ?? 'Team Member').split(' ')[0]
+    const pendingCount = pendingByUser[user.id] ?? 0
+    const unreadMentions = mentionsByUser[user.id] ?? 0
 
-    // Skip if there's genuinely nothing to show
-    if (unreadCount === 0 && overdueCount === 0 && newlyAssignedCount === 0) {
+    // Skip if nothing waiting
+    if (pendingCount === 0 && unreadMentions === 0) {
       skipped++
       continue
     }
 
-    const html = buildReengagementHtml(
-      user.name ?? 'Team Member',
-      frontendUrl,
-      daysAway,
-      unreadCount,
-      overdueCount,
-      newlyAssignedCount,
-      year,
-    )
+    const totalWaiting = pendingCount + unreadMentions
+    const subject = `${firstName}, you have ${totalWaiting} thing${totalWaiting !== 1 ? 's' : ''} waiting in Nexus`
+
+    const html = buildNudgeHtml(firstName, frontendUrl, pendingCount, unreadMentions, year)
 
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [user.email],
-        subject: `You have ${overdueCount > 0 ? `${overdueCount} overdue task${overdueCount !== 1 ? 's' : ''} and ` : ''}${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''} on BLW CAN NEXUS`,
-        html,
-      }),
+      headers: { Authorization: `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: fromEmail, to: [user.email], subject, html }),
     })
 
     const emailResult = await emailRes.json().catch(() => ({}))
@@ -261,19 +215,16 @@ Deno.serve(async (req) => {
     await supabase.from('email_delivery_log').insert({
       recipient_email: user.email,
       sender_email: fromEmail,
-      subject: `Re-engagement nudge for ${user.email}`,
-      email_type: 'reengagement',
+      subject,
+      email_type: 'dormant_nudge',
       resend_email_id: emailResult.id ?? null,
       status: emailRes.ok ? 'sent' : 'failed',
       http_status: emailRes.status,
       error_message: emailRes.ok ? null : JSON.stringify(emailResult),
     })
 
-    if (emailRes.ok) {
-      sent++
-    } else {
-      errors.push(`${user.email}: ${emailRes.status}`)
-    }
+    if (emailRes.ok) sent++
+    else errors.push(`${user.email}: ${emailRes.status}`)
 
     await new Promise((r) => setTimeout(r, 100))
   }
