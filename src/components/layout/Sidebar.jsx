@@ -294,7 +294,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const [showSpaceModal, setShowSpaceModal] = useState(false)
   const [showSprintModal, setShowSprintModal] = useState(false)
   const [myTasksExpanded, setMyTasksExpanded] = useState(false)
-  const [meetingsExpanded, setMeetingsExpanded] = useState(false)
   const [platformExpanded, setPlatformExpanded] = useState(false)
   const [editingSpace, setEditingSpace] = useState(null)
   const [hoveredSpaceId, setHoveredSpaceId] = useState(null)
@@ -1338,63 +1337,19 @@ export default function Sidebar({ isMobileDrawer = false }) {
             }}
           />
         ) : (
-        <div
-          style={{
-            ...ITEM_BASE_STYLE,
-            borderLeft: isPathActive(location.pathname, '/meetings') ? '3px solid #4C2A92' : '3px solid transparent',
-            background: isPathActive(location.pathname, '/meetings') ? '#EDE8F8' : 'transparent',
-            color: isPathActive(location.pathname, '/meetings') ? '#4C2A92' : '#1C1610',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}
-          onMouseEnter={(e) => {
-            if (!isPathActive(location.pathname, '/meetings')) e.currentTarget.style.background = '#F2EEE6'
-          }}
-          onMouseLeave={(e) => {
-            if (!isPathActive(location.pathname, '/meetings')) e.currentTarget.style.background = 'transparent'
-          }}
-        >
-          <button
-            type="button"
+          <SidebarItem
+            active={isPathActive(location.pathname, '/meetings')}
+            icon={Video}
+            label="Meetings"
             onClick={() => {
-              // Plain members reach meetings via their own space's Meetings
-              // tab, not the global list (which is blocked for them in
-              // App.jsx) — everything else about the Meetings nav (sub-items
-              // below) is unchanged for them.
               if (role === 'member' && profile?.department_id) {
                 go(`/spaces/${profile.department_id}?action=meetings`)
               } else {
                 go('/meetings')
               }
             }}
-            style={{ flex: 1, border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'inherit', fontSize: 'inherit' }}
-          >
-            Meetings
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              setMeetingsExpanded(!meetingsExpanded)
-            }}
-            style={{ border: 'none', background: 'none', padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'inherit' }}
-          >
-            <ChevronDown size={15} style={{ opacity: 0.85, transform: meetingsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
-          </button>
-        </div>
+          />
         )}
-        {!collapsed && meetingsExpanded ? (
-          <>
-            {showAdminPlatform ? (
-              <SidebarItem
-                active={isPathActive(location.pathname, '/meetings/wizard')}
-                label="Plan meeting"
-                to="/meetings/wizard"
-              />
-            ) : null}
-          </>
-        ) : null}
         {(INSTAGRAM_GRADING_ENABLED && (['super_admin', 'regional_secretary'].includes(role) || hasSpaceRole(profile, null, 'media'))) && (
           <SidebarItem
             active={isPathActive(location.pathname, '/instagram')}
