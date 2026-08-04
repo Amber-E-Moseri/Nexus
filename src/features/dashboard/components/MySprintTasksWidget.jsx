@@ -30,18 +30,33 @@ export default function MySprintTasksWidget({ userId }) {
     async function load() {
       setLoading(true)
       try {
-        // Step 1: Find all active sprints the user is a member of
-        const { data: sprintMembers } = await supabase
+        const ACTIVE_SPRINT_STATUSES = new Set(['planning', 'active', 'review'])
+
+        // Step 1a: Direct sprint membership
+        const { data: directMembers } = await supabase
           .from('sprint_members')
           .select('sprint_id, sprints!sprint_id(id, name, status)')
           .eq('user_id', userId)
 
+        // Step 1b: Team-based sprint membership (sprint_team_members → sprint_teams → sprint)
+        const { data: teamMembers } = await supabase
+          .from('sprint_team_members')
+          .select('team_id, sprint_teams!team_id(sprint_id, sprints!sprint_id(id, name, status))')
+          .eq('user_id', userId)
+
         if (!active) return
 
-        const ACTIVE_SPRINT_STATUSES = new Set(['planning', 'active', 'review'])
-        const activeSprints = (sprintMembers ?? [])
+        const directSprintIds = (directMembers ?? [])
           .filter(sm => ACTIVE_SPRINT_STATUSES.has(sm.sprints?.status))
           .map(sm => sm.sprint_id)
+
+        const teamSprintIds = (teamMembers ?? [])
+          .map(tm => tm.sprint_teams)
+          .filter(Boolean)
+          .filter(st => ACTIVE_SPRINT_STATUSES.has(st.sprints?.status))
+          .map(st => st.sprint_id)
+
+        const activeSprints = [...new Set([...directSprintIds, ...teamSprintIds])]
 
         if (activeSprints.length === 0) {
           setGroups([])
