@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Trophy, ChevronLeft, ChevronRight, Search, X, TrendingUp } from 'lucide-react'
+import { Trophy, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import WinsSheet from '../../features/wins/components/WinsSheet'
 import { searchWins } from '../../features/wins/lib/wins'
-import GrowthTrackingPage from '../growth/GrowthTrackingPage'
 
 const PRIMARY = '#4C2A92'
 const BORDER = '#EDE8DC'
@@ -74,7 +73,6 @@ function SearchResults({ results, isLoading, query }) {
 export default function WinsPage() {
   const { profile } = useAuth()
   const departmentId = profile?.department_id
-  const isSuperAdmin = profile?.role === 'super_admin'
 
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
   const [searchRaw, setSearchRaw] = useState('')
@@ -131,7 +129,7 @@ export default function WinsPage() {
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '28px 24px 64px' }}>
 
         {/* Wins card */}
-        <div style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden', marginBottom: isSuperAdmin ? 40 : 0 }}>
+        <div style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
           {/* Card header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 20px', borderBottom: `1px solid ${BORDER}` }}>
             <span style={{ fontSize: 16 }}>🙌</span>
@@ -169,18 +167,6 @@ export default function WinsPage() {
           </div>
         </div>
 
-        {/* Growth Tracking section — super_admin only */}
-        {isSuperAdmin && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-              <TrendingUp size={16} color={PRIMARY} />
-              <span style={{ fontWeight: 700, fontSize: 15, color: TEXT }}>Growth Tracking</span>
-            </div>
-            <div style={{ border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
-              <GrowthTrackingPage embedded />
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )
