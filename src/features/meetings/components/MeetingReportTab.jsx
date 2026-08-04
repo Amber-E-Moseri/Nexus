@@ -1215,7 +1215,7 @@ export default function MeetingReportTab() {
 
   useEffect(() => {
     const reportId = searchParams.get('report')
-    if (!reportId || rosterLoading) return
+    if (!reportId || rosterLoading || searchParams.get('rerun') === 'cmp') return
 
     let cancelled = false
 
@@ -1533,7 +1533,12 @@ export default function MeetingReportTab() {
     setPhase('input')
     setReport(null)
     setRestoredFromSession(false)
-    setSearchParams({})
+    // `report` is also the parent Meetings module's active-tab selector.
+    // Keep it in place so rerun stays on Report while the picker is open.
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.set('report', report.id)
+    nextParams.set('rerun', 'cmp')
+    setSearchParams(nextParams)
   }
 
   async function handleSyncCmpReport() {
