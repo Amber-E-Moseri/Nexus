@@ -6,17 +6,17 @@ export default function ReaderHomePage({ currentBook, library, currentProgress, 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ padding: '20px 20px 0', flexShrink: 0 }}>
+      <div style={{ padding: '20px 20px 16px', flexShrink: 0, borderBottom: '1px solid var(--im-border)', background: 'var(--im-card)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--im-text)', lineHeight: 1.1 }}>Immerse</div>
-            <div style={{ fontSize: 13, color: 'var(--im-text-dim)', marginTop: 2 }}>Resume your reading</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--im-text)', lineHeight: 1.2 }}>Books</div>
+            <div style={{ fontSize: 13, color: 'var(--im-text-dim)', marginTop: 3 }}>Immerse reader</div>
           </div>
           <button
             onClick={onImport}
-            style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--im-blue)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(14,165,233,0.35)' }}
+            style={{ minHeight: 36, padding: '0 12px', borderRadius: 6, background: 'var(--im-blue)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'Inter, sans-serif' }}
           >
-            <IconPlus size={18} color="#fff" />
+            <IconPlus size={16} color="#fff" /> Import PDF
           </button>
         </div>
       </div>
@@ -50,7 +50,7 @@ export default function ReaderHomePage({ currentBook, library, currentProgress, 
 
         {library.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--im-text-dim)', fontSize: 14 }}>
-            No books yet. Tap + to import a PDF.
+            No books yet. Import a PDF to begin reading.
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 12 }}>

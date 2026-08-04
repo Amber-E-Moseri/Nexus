@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap');
 
 .immerse-app {
-  --im-bg: #F7F5F0;
+  --im-bg: #FAFAF8;
   --im-card: #FFFFFF;
   --im-sidebar-bg: #F9F7F3;
   --im-border: #E9E4D8;
@@ -27,15 +27,18 @@
   --im-purple-bg-2: rgba(76,42,146,0.16);
   --im-purple-border: rgba(76,42,146,0.32);
 
-  position: fixed;
-  inset: 0;
+  position: relative;
+  width: 100%;
+  height: min(820px, calc(100vh - 108px));
+  min-height: 580px;
   background: var(--im-bg);
   font-family: 'Inter', system-ui, sans-serif;
   color: var(--im-text);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  z-index: 100;
+  border: 1px solid var(--im-border);
+  border-radius: 8px;
   box-sizing: border-box;
 }
 
@@ -282,6 +285,7 @@
 
 /* Desktop layout */
 @media (min-width: 768px) {
+  .im-bottom-nav { display: none; }
   .im-reader-layout {
     display: flex;
     flex: 1;
@@ -322,6 +326,16 @@
     flex-shrink: 0;
     border: 1px solid var(--im-border);
     box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+}
+
+@media (max-width: 767px) {
+  .immerse-app {
+    height: calc(100vh - 84px);
+    min-height: 520px;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
   }
 }
 

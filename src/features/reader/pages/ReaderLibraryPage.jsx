@@ -10,13 +10,17 @@ export default function ReaderLibraryPage({ library, onOpenBook, onGoHome, onImp
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ padding: '20px 20px 12px', flexShrink: 0 }}>
+      <div style={{ padding: '20px 20px 12px', flexShrink: 0, borderBottom: '1px solid var(--im-border)', background: 'var(--im-card)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <span style={{ fontSize: 24, fontWeight: 700, color: 'var(--im-text)' }}>Library</span>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--im-text)' }}>Books</div>
+            <button onClick={onGoHome} style={{ marginTop: 3, padding: 0, background: 'none', border: 'none', color: 'var(--im-blue)', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 600, fontSize: 12 }}>Immerse reader</button>
+          </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
               onClick={onImport}
-              style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--im-blue)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title="Import PDF"
+              style={{ width: 36, height: 36, borderRadius: 6, background: 'var(--im-blue)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
               <IconPlus size={16} color="#fff" />
             </button>
@@ -56,7 +60,7 @@ export default function ReaderLibraryPage({ library, onOpenBook, onGoHome, onImp
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 12px' }}>
         {filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--im-text-dim)', fontSize: 14 }}>
-            No books yet. Tap + to import a PDF.
+            No books yet. Import a PDF to begin reading.
           </div>
         ) : (
           filtered.map((book) => (
