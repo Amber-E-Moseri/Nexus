@@ -1655,9 +1655,11 @@ export default function MeetingReportTab() {
         }
 
         if (rerunTarget?.id) {
-          const { data, error } = await supabase
-            .from('meeting_attendance_reports')
-            .update({
+          const { data, error } = await supabase.functions.invoke('service-attendees', {
+            body: {
+              action: 'update_report',
+              report_id: rerunTarget.id,
+              updates: {
               label: result.label,
               report_date: new Date().toISOString().slice(0, 10),
               expected_count: result.expectedCount,
@@ -1670,12 +1672,11 @@ export default function MeetingReportTab() {
               unexpected_names: result.unexpected.map((person) => person.name),
               subgroup_filter: result.subgroupFilter,
               by_subgroup: result.bySubgroup || null,
-            })
-            .eq('id', rerunTarget.id)
-            .select('id')
-            .maybeSingle()
+              },
+            },
+          })
           if (error || !data) {
-            setSaveError(error?.message || 'The original report could not be updated. No new report was created.')
+            setSaveError(await edgeFunctionErrorMessage(data, error, 'The original report could not be updated. No new report was created.'))
             return
           }
 

@@ -101,14 +101,21 @@ serve(async (req) => {
   const { data: { user }, error: userError } = await supabase.auth.getUser()
   if (userError || !user) return json(401, { error: 'Invalid authentication token' })
 
-  const apiToken = Deno.env.get('REPORTS_API_TOKEN')
-  if (!apiToken) return json(500, { error: 'REPORTS_API_TOKEN secret not configured' })
-
-  let body: { action?: string; days?: number; date?: string; service_name?: string; host_unit?: string }
+  let body: {
+    action?: string
+    days?: number
+    date?: string
+    service_name?: string
+    host_unit?: string
+    report_id?: string
+    updates?: Record<string, unknown>
+  }
   try { body = await req.json() } catch { return json(400, { error: 'Invalid request body' }) }
 
   try {
     if (body.action === 'list') {
+      const apiToken = Deno.env.get('REPORTS_API_TOKEN')
+      if (!apiToken) return json(500, { error: 'REPORTS_API_TOKEN secret not configured' })
       const days = Math.min(Math.max(Number(body.days) || 60, 1), 365)
       const to = new Date()
       const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000)
@@ -137,6 +144,8 @@ serve(async (req) => {
 
     if (body.action === 'attendees') {
       if (!body.date || !body.service_name || !body.host_unit) return json(400, { error: 'date, service_name, and host_unit are required' })
+      const apiToken = Deno.env.get('REPORTS_API_TOKEN')
+      if (!apiToken) return json(500, { error: 'REPORTS_API_TOKEN secret not configured' })
       const range = monthRange(body.date)
       if (!range) return json(400, { error: 'date must be a valid ISO date' })
       const rows = await fetchCheckins(apiToken, range.from, range.to)
@@ -156,7 +165,45 @@ serve(async (req) => {
       return json(200, { names, name_col: nameCol, count: names.length })
     }
 
-    return json(400, { error: "action must be 'list' or 'attendees'" })
+    if (body.action === 'update_report') {
+      if (!body.report_id || !body.updates) return json(400, { error: 'report_id and updates are required' })
+
+      const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+      const [{ data: existing, error: reportError }, { data: requester, error: requesterError }] = await Promise.all([
+        admin.from('meeting_attendance_reports').select('id, created_by').eq('id', body.report_id).maybeSingle(),
+        admin.from('users').select('role').eq('id', user.id).maybeSingle(),
+      ])
+      if (reportError || !existing) return json(404, { error: 'Report not found' })
+      if (requesterError || !requester) return json(403, { error: 'User profile not found' })
+
+      const canUpdate = existing.created_by === user.id || ['super_admin', 'regional_secretary'].includes(requester.role)
+      if (!canUpdate) return json(403, { error: 'You do not have permission to update this report' })
+
+      const allowedUpdates = {
+        label: body.updates.label,
+        report_date: body.updates.report_date,
+        expected_count: body.updates.expected_count,
+        attended_count: body.updates.attended_count,
+        absent_count: body.updates.absent_count,
+        unexpected_count: body.updates.unexpected_count,
+        reach_pct: body.updates.reach_pct,
+        present_names: body.updates.present_names,
+        absent_names: body.updates.absent_names,
+        unexpected_names: body.updates.unexpected_names,
+        subgroup_filter: body.updates.subgroup_filter,
+        by_subgroup: body.updates.by_subgroup,
+      }
+      const { data, error } = await admin
+        .from('meeting_attendance_reports')
+        .update(allowedUpdates)
+        .eq('id', body.report_id)
+        .select('id')
+        .maybeSingle()
+      if (error || !data) return json(500, { error: error?.message || 'Report update failed' })
+      return json(200, { id: data.id })
+    }
+
+    return json(400, { error: "action must be 'list', 'attendees', or 'update_report'" })
   } catch (error) {
     return json(502, { error: error instanceof Error ? error.message : 'Unable to fetch CMP service data' })
   }
