@@ -1373,7 +1373,9 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
   const [taskSearch, setTaskSearch] = useState('')
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks, {
     defaultDateClosedRangeDays: STALE_COMPLETED_TASK_DAYS.SPACE,
-    persistKey: `blw_date_closed_filter_${spaceId}`,
+    // v2 resets the legacy "Any date" preference so every space starts with
+    // the current product default: completed tasks from the last seven days.
+    persistKey: `blw_date_closed_filter_${spaceId}_v2`,
   })
 
   const selectedList = useMemo(() => lists.find((list) => list.id === selectedListId) ?? null, [lists, selectedListId])
