@@ -1,8 +1,9 @@
 import * as Dialog from '@radix-ui/react-dialog'
+import { Crown, UsersRound } from 'lucide-react'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { useDeptMembers } from '../../../hooks/useDeptMembers'
-import { canAssignOrgWide as checkCanAssignOrgWide } from '../../../lib/permissions'
+import { canAssignOrgWide as checkCanAssignOrgWide, hasSpaceRole } from '../../../lib/permissions'
 import { PRIORITIES } from '../../../lib/constants'
 import { getMySpaces, SPACE_TYPE_ICONS } from '../../spaces'
 import { getSprintMembers, SprintPicker } from '../../sprints'
@@ -247,6 +248,8 @@ export default function TaskModal({
   const [selectedSprintId, setSelectedSprintId] = useState(sprintId ?? task?.sprint_id ?? '')
   const [selectedSprintTeamId, setSelectedSprintTeamId] = useState(task?.sprint_team_id ?? null)
   const sprintTeamAutoSelected = useRef(false)
+  const activeSprintId = sprintId || selectedSprintId || null
+  const [activeSprintTeams, setActiveSprintTeams] = useState(sprintTeams ?? [])
 
   function resolveDeptFromTeams(userId) {
     if (!userId || !sprintTeams?.length) return null
@@ -256,6 +259,15 @@ export default function TaskModal({
     return match?.department_id ?? null
   }
 
+  function resolveSprintTeamForAssignee(userId) {
+    if (!userId || !sprintTeams?.length) return null
+    const matchingTeams = sprintTeams.filter((team) =>
+      team.sprint_team_members?.some((member) => member.user_id === userId),
+    )
+    if (matchingTeams.length === 1) return matchingTeams[0]
+    return matchingTeams.find((team) => team.id === selectedSprintTeamId) ?? matchingTeams[0] ?? null
+  }
+
   // Space-scoped members react to the in-modal space picker (selectedSpaceId),
   // not just the fixed departmentId prop — otherwise a modal opened without a
   // department (e.g. the header "New Task" button) never populates members
@@ -263,6 +275,10 @@ export default function TaskModal({
   const deptMembers = useDeptMembers(selectedSpaceId || departmentId)
   // Org-wide roles can assign to anyone, regardless of the selected space.
   const canAssignOrgWide = checkCanAssignOrgWide(profile, role)
+  const canUseBulkAssignments = role === 'super_admin'
+    || role === 'regional_secretary'
+    || hasSpaceRole(profile, null, 'ors')
+    || hasSpaceRole(profile, null, 'programs')
   // UX-only guard (RLS is the real gate — 20270724000103_pastors_space_privacy.sql):
   // avoid a confusing silent-reject by not even offering other pastors as
   // assignees within the Pastors space. Deliberately NOT reusing
@@ -272,7 +288,7 @@ export default function TaskModal({
   // to normal behavior and relies on RLS.
   const isPastorsSpace = spaces.find((s) => s.id === (selectedSpaceId || departmentId))?.name === 'Pastors'
   const [orgMembers, setOrgMembers] = useState([])
-  const [members, setMembers] = useState(sprintId ? [] : deptMembers)
+  const [members, setMembers] = useState(activeSprintId ? [] : deptMembers)
   const [pendingWatchers, setPendingWatchers] = useState([])
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -293,15 +309,40 @@ export default function TaskModal({
   }, [canAssignOrgWide])
 
   useEffect(() => {
-    if (sprintId) {
-      getSprintMembers(sprintId)
+    if (activeSprintId) {
+      getSprintMembers(activeSprintId)
         .then(setMembers)
         .catch((error) => {
           console.error('Failed to load sprint members', error)
           setMembers([])
         })
     }
-  }, [sprintId])
+  }, [activeSprintId])
+
+  useEffect(() => {
+    if (!activeSprintId) {
+      setActiveSprintTeams([])
+      return
+    }
+
+    if (sprintId === activeSprintId && sprintTeams?.length) {
+      setActiveSprintTeams(sprintTeams)
+      return
+    }
+
+    supabase
+      .from('sprint_teams')
+      .select('id, name, lead_user_id')
+      .eq('sprint_id', activeSprintId)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('Failed to load sprint teams', error)
+          setActiveSprintTeams([])
+          return
+        }
+        setActiveSprintTeams(data ?? [])
+      })
+  }, [activeSprintId, sprintId, sprintTeams])
 
   // Auto-select the current user's sprint team so external members (who have
   // no department) get a meaningful department context without manual picking.
@@ -316,15 +357,25 @@ export default function TaskModal({
     if (myTeam) setSelectedSprintTeamId(myTeam.id)
   }, [sprintId, sprintTeams, profile?.id])
 
+  // A person may be assigned from any of the creator's teams. Route the task
+  // to the assignee's unique team instead of retaining the creator's default.
   useEffect(() => {
-    if (!sprintId) {
+    if (!sprintId || assigneeIds.length !== 1) return
+    const assigneeTeam = resolveSprintTeamForAssignee(assigneeIds[0])
+    if (assigneeTeam && assigneeTeam.id !== selectedSprintTeamId) {
+      setSelectedSprintTeamId(assigneeTeam.id)
+    }
+  }, [sprintId, assigneeIds, sprintTeams, selectedSprintTeamId])
+
+  useEffect(() => {
+    if (!activeSprintId) {
       if (isPastorsSpace && role !== 'regional_secretary') {
         setMembers(profile?.id ? deptMembers.filter((m) => m.id === profile.id) : [])
       } else {
         setMembers(canAssignOrgWide ? orgMembers : deptMembers)
       }
     }
-  }, [deptMembers, orgMembers, canAssignOrgWide, sprintId, isPastorsSpace, role, profile?.id])
+  }, [deptMembers, orgMembers, canAssignOrgWide, activeSprintId, isPastorsSpace, role, profile?.id])
 
   useEffect(() => {
     if (contextStatuses.length > 0) {
@@ -399,6 +450,19 @@ export default function TaskModal({
     }
   }, [defaultDueDate, mode, task])
 
+  // Space-wide tasks deliberately use the members of the selected space, even
+  // for org-wide roles. Sprint-wide tasks use the sprint roster.
+  const assignmentScopeMembers = activeSprintId ? members : deptMembers
+  const assignmentScopeIds = [...new Set(assignmentScopeMembers.map((member) => member.id).filter(Boolean))]
+  const isAssignedToEveryone = assignmentScopeIds.length > 1
+    && assignmentScopeIds.every((memberId) => assigneeIds.includes(memberId))
+  const sprintLeadIds = [...new Set(
+    activeSprintId ? activeSprintTeams.map((team) => team.lead_user_id).filter(Boolean) : [],
+  )]
+  const isAssignedToTeamLeads = sprintLeadIds.length > 0
+    && sprintLeadIds.length === assigneeIds.length
+    && sprintLeadIds.every((leadId) => assigneeIds.includes(leadId))
+
   useEffect(() => {
     if (mode === 'create' && profile?.id && role) {
       getMySpaces(profile.id, role, profile.department_id)
@@ -463,6 +527,19 @@ export default function TaskModal({
       // sprint passed in via props / the existing task). A sprint-linked task is
       // task_type='sprint' with no department, matching the sprint boards + RLS.
       const effectiveSprintId = personal ? null : (selectedSprintId || null)
+      const assigneeSprintTeam = effectiveSprintId
+        ? resolveSprintTeamForAssignee(assigneeIds[0])
+        : null
+      // A task for every sprint member is shared sprint-wide. Routing it to
+      // one person's team would hide it from the other teams.
+      const isSprintWideAssignment = isAssignedToEveryone || (isAssignedToTeamLeads && sprintLeadIds.length > 1)
+      const isBulkAssigned = isAssignedToEveryone || isAssignedToTeamLeads
+      const effectiveSprintTeamId = isSprintWideAssignment
+        ? null
+        : assigneeSprintTeam?.id ?? selectedSprintTeamId ?? null
+      const shouldWatchAssignedSprintTask = Boolean(
+        effectiveSprintId && effectiveSprintTeamId && profile?.id && assigneeIds[0] && assigneeIds[0] !== profile.id,
+      )
 
       const payload = {
         title: title.trim(),
@@ -478,7 +555,8 @@ export default function TaskModal({
         source: 'manual',
         department_id: effectiveSprintId ? null : (personal ? departmentId ?? null : (selectedSpaceId || departmentId || resolveDeptFromTeams(assigneeIds[0])) ?? null),
         sprint_id: effectiveSprintId,
-        sprint_team_id: effectiveSprintId && selectedSprintTeamId ? selectedSprintTeamId : null,
+        sprint_team_id: effectiveSprintId ? effectiveSprintTeamId : null,
+        is_bulk_assigned: isBulkAssigned,
         list_id: personal || effectiveSprintId ? null : listId ?? task?.list_id ?? null,
         task_type: personal ? 'personal' : effectiveSprintId ? 'sprint' : 'space',
         ...(parentTaskId ? { parent_task_id: parentTaskId } : {}),
@@ -488,31 +566,52 @@ export default function TaskModal({
         payload.created_by = profile?.id
         const created = ctx ? await ctx.addTask(payload) : await createTask(payload)
 
-        if (assigneeIds[0] && assigneeIds[0] !== profile?.id) {
+        const assigneesToNotify = assigneeIds.filter((assigneeId) => assigneeId && assigneeId !== profile?.id)
+        await Promise.allSettled(assigneesToNotify.map(async (assigneeId) => {
           const { error: notifyError } = await supabase.rpc('create_task_notification', {
-            p_user_id: assigneeIds[0],
+            p_user_id: assigneeId,
             p_type: 'task_assigned',
             p_task_id: created.id,
           })
-          if (notifyError) console.error(notifyError)
-        }
+          if (notifyError) throw notifyError
+        }))
 
-        if (pendingWatchers.length > 0) {
+        const watchersToAdd = [
+          ...pendingWatchers,
+          ...(shouldWatchAssignedSprintTask ? [{ id: profile.id }] : []),
+        ].filter((watcher, index, all) => watcher?.id && all.findIndex((candidate) => candidate?.id === watcher.id) === index)
+        if (watchersToAdd.length > 0) {
           const { followTask } = await import('../lib/followers')
-          await Promise.allSettled(pendingWatchers.map((u) => followTask(created.id, u.id)))
+          await Promise.allSettled(watchersToAdd.map((watcher) => followTask(created.id, watcher.id, profile?.id)))
         }
 
         onSaved?.(created)
       } else {
         const updated = ctx ? await ctx.editTask(task.id, payload) : await updateTask(task.id, payload)
 
-        if (assigneeIds[0] && assigneeIds[0] !== previousAssigneeId && assigneeIds[0] !== profile?.id) {
+        const previousAssigneeIds = task?.assignees?.length
+          ? task.assignees.map((assignee) => assignee.user_id ?? assignee.id ?? assignee)
+          : previousAssigneeId ? [previousAssigneeId] : []
+        const assigneesToNotify = assigneeIds.filter((assigneeId) => (
+          assigneeId && assigneeId !== profile?.id && !previousAssigneeIds.includes(assigneeId)
+        ))
+        await Promise.allSettled(assigneesToNotify.map(async (assigneeId) => {
           const { error: notifyError } = await supabase.rpc('create_task_notification', {
-            p_user_id: assigneeIds[0],
+            p_user_id: assigneeId,
             p_type: 'task_assigned',
             p_task_id: updated.id,
           })
-          if (notifyError) console.error(notifyError)
+          if (notifyError) throw notifyError
+        }))
+
+        if (shouldWatchAssignedSprintTask) {
+          const { followTask } = await import('../lib/followers')
+          try {
+            await followTask(updated.id, profile.id, profile.id)
+          } catch (watcherError) {
+            // The task update has already succeeded; watcher setup is best effort.
+            console.warn('Could not add the assigning user as a watcher:', watcherError)
+          }
         }
 
         // Notify assignee on meaningful status transitions (completed only).
@@ -866,6 +965,82 @@ export default function TaskModal({
 
             <div style={{ marginBottom: 18, pointerEvents: isReadOnly ? 'none' : 'auto', opacity: isReadOnly ? 0.6 : 1 }}>
               <label style={labelStyle}>Assignees</label>
+              {canUseBulkAssignments && assignmentScopeIds.length > 1 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    padding: '9px 10px',
+                    marginBottom: 8,
+                    border: '1px solid var(--purple-200, var(--border))',
+                    borderRadius: 8,
+                    background: 'var(--purple-tint, #F7F4FD)',
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                    <UsersRound size={16} aria-hidden="true" />
+                    Everyone in this {activeSprintId ? 'sprint' : 'space'} ({assignmentScopeIds.length})
+                  </span>
+                  <button
+                    type="button"
+                    disabled={isReadOnly || isAssignedToEveryone}
+                    onClick={() => setAssigneeIds(assignmentScopeIds)}
+                    style={{
+                      flexShrink: 0,
+                      border: 'none',
+                      borderRadius: 6,
+                      padding: '6px 9px',
+                      background: isAssignedToEveryone ? 'transparent' : 'var(--accent)',
+                      color: isAssignedToEveryone ? 'var(--text-secondary)' : 'white',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: isAssignedToEveryone ? 'default' : 'pointer',
+                    }}
+                  >
+                    {isAssignedToEveryone ? 'Everyone assigned' : 'Assign all'}
+                  </button>
+                </div>
+              )}
+              {canUseBulkAssignments && activeSprintId && sprintLeadIds.length > 0 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    padding: '9px 10px',
+                    marginBottom: 8,
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    background: 'var(--surface-sub, #FAF9F7)',
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                    <Crown size={16} aria-hidden="true" />
+                    Team leads ({sprintLeadIds.length})
+                  </span>
+                  <button
+                    type="button"
+                    disabled={isReadOnly || isAssignedToTeamLeads}
+                    onClick={() => setAssigneeIds(sprintLeadIds)}
+                    style={{
+                      flexShrink: 0,
+                      border: '1px solid var(--accent)',
+                      borderRadius: 6,
+                      padding: '6px 9px',
+                      background: isAssignedToTeamLeads ? 'transparent' : 'white',
+                      color: isAssignedToTeamLeads ? 'var(--text-secondary)' : 'var(--accent)',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: isAssignedToTeamLeads ? 'default' : 'pointer',
+                    }}
+                  >
+                    {isAssignedToTeamLeads ? 'Leads assigned' : 'Assign leads'}
+                  </button>
+                </div>
+              )}
               <AssigneeSelector
                 members={members}
                 selectedIds={assigneeIds}

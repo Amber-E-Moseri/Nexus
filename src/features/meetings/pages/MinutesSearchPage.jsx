@@ -3,7 +3,7 @@ import { FileSearch, Search } from 'lucide-react'
 import MinutesCard from '../components/MinutesCard'
 import { searchMinutesBlocks } from '../lib/meetings'
 
-export default function MinutesSearchPage({ departmentId }) {
+export default function MinutesSearchPage({ departmentId, meetingType, readOnly = false }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
@@ -11,12 +11,12 @@ export default function MinutesSearchPage({ departmentId }) {
   const [searched, setSearched] = useState(false)
   const debounceRef = useRef(null)
 
-  const search = useCallback(async (value, scope) => {
+  const search = useCallback(async (value, scope, nextMeetingType) => {
     if (!value.trim()) { setResults([]); setSearched(false); return }
     setLoading(true)
     setError(null)
     try {
-      setResults(await searchMinutesBlocks(value, scope))
+      setResults(await searchMinutesBlocks(value, scope, nextMeetingType))
       setSearched(true)
     } catch (searchError) {
       setError(searchError.message)
@@ -27,9 +27,9 @@ export default function MinutesSearchPage({ departmentId }) {
 
   useEffect(() => {
     if (!query.trim()) { setResults([]); setSearched(false); return undefined }
-    debounceRef.current = setTimeout(() => search(query, departmentId), 300)
+    debounceRef.current = setTimeout(() => search(query, departmentId, meetingType), 300)
     return () => clearTimeout(debounceRef.current)
-  }, [query, departmentId, search])
+  }, [query, departmentId, meetingType, search])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -58,11 +58,11 @@ export default function MinutesSearchPage({ departmentId }) {
         <>
           <div style={{ fontSize: 12, color: 'var(--text-secondary, #7A6F5E)', fontWeight: 600 }}>{results.length} result{results.length === 1 ? '' : 's'}{results.length === 30 ? ' (showing top 30)' : ''}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {results.map((result) => <MinutesCard key={result.id} meeting={result} snippet={(result.notes_text || '').substring(0, 120)} />)}
+            {results.map((result) => <MinutesCard key={result.id} meeting={result} snippet={(result.notes_text || '').substring(0, 120)} readOnly={readOnly} />)}
           </div>
         </>
       )}
-      {!searched && !loading && <div style={{ padding: '36px 0', textAlign: 'center', color: 'var(--text-secondary, #7A6F5E)', fontSize: 13 }}>Search the published notes available to you.</div>}
+      {!searched && !loading && <div style={{ padding: '36px 0', textAlign: 'center', color: 'var(--text-secondary, #7A6F5E)', fontSize: 13 }}>Search the meeting notes available to you.</div>}
     </div>
   )
 }

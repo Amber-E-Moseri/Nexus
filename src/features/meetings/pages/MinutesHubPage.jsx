@@ -1,7 +1,9 @@
 import { useState, lazy, Suspense } from 'react'
-import { Building2, CalendarDays, FileText, Search } from 'lucide-react'
+import { Building2, CalendarDays, FileText, Plus, Search } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth'
 import PageSpinner from '../../../components/ui/PageSpinner'
+import MeetingModal from '../components/MeetingModal'
+import { MeetingsProvider } from '../MeetingsContext'
 
 const MinutesTimelinePage = lazy(() => import('./MinutesTimelinePage'))
 const MinutesCalendarPage = lazy(() => import('./MinutesCalendarPage'))
@@ -13,15 +15,35 @@ const TABS = [
   { id: 'search', label: 'Search', Icon: Search },
 ]
 
+const MEETING_TYPES = [
+  { value: 'general', label: 'General' },
+  { value: 'manager_meeting', label: 'Managers Meeting' },
+  { value: 'regional', label: 'Regional' },
+  { value: 'group', label: 'Group' },
+  { value: 'team', label: 'Team' },
+  { value: 'department', label: 'Department' },
+  { value: 'media', label: 'Media' },
+  { value: 'staff_meeting', label: 'Staff Meeting' },
+  { value: '1_on_1_meeting', label: '1:1 Meeting' },
+]
+
 export default function MinutesHubPage() {
   const { role, profile } = useAuth()
+  const isExternalMember = Boolean(profile?.is_temporary)
+  const tabs = isExternalMember ? TABS.filter((tab) => tab.id !== 'calendar') : TABS
   const [activeTab, setActiveTab] = useState('timeline')
   const isAdmin = ['super_admin', 'regional_secretary'].includes(role)
-  const userDeptId = profile?.department_id
-  const [selectedDept, setSelectedDept] = useState(isAdmin ? 'all' : userDeptId)
-  const departmentId = isAdmin ? selectedDept : (userDeptId ?? 'all')
+  const [selectedDept, setSelectedDept] = useState('all')
+  const [meetingType, setMeetingType] = useState('all')
+  const [showLogMeeting, setShowLogMeeting] = useState(false)
+  const [minutesVersion, setMinutesVersion] = useState(0)
+  // The meeting query runs as the signed-in user. "all" therefore means every
+  // meeting that user can read under RLS, including private meetings they own
+  // or were explicitly invited to.
+  const departmentId = isAdmin ? selectedDept : 'all'
+  const logDepartmentId = departmentId === 'all' ? profile?.department_id ?? null : departmentId
   const departmentName = profile?.departments?.find((department) => department.id === departmentId)?.name
-  const scopeLabel = departmentId === 'all' ? 'All accessible departments' : (departmentName || 'Your department and shared notes')
+  const scopeLabel = departmentId === 'all' ? 'All meetings you can access' : (departmentName || 'Accessible meetings in this department')
 
   return (
     <div style={{ minHeight: '100vh', background: '#FAFAF8' }}>
@@ -41,26 +63,49 @@ export default function MinutesHubPage() {
               </div>
             </div>
 
-            {isAdmin && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+              {isAdmin && (
+                <label style={{ display: 'grid', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--text-secondary, #7A6F5E)' }}>
+                  View minutes for
+                  <select
+                    aria-label="Department scope"
+                    value={selectedDept}
+                    onChange={(event) => setSelectedDept(event.target.value)}
+                    style={{ minWidth: 190, padding: '8px 10px', border: '1px solid var(--border, #E9E4D8)', borderRadius: 7, fontSize: 13, fontFamily: 'inherit', color: 'var(--text-primary, #1C1610)', background: '#FFFFFF', cursor: 'pointer' }}
+                  >
+                    <option value="all">All departments</option>
+                    {(profile?.departments ?? []).map((department) => (
+                      <option key={department.id} value={department.id}>{department.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label style={{ display: 'grid', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--text-secondary, #7A6F5E)' }}>
-                View minutes for
+                Meeting type
                 <select
-                  aria-label="Department scope"
-                  value={selectedDept}
-                  onChange={(event) => setSelectedDept(event.target.value)}
-                  style={{ minWidth: 190, padding: '8px 10px', border: '1px solid var(--border, #E9E4D8)', borderRadius: 7, fontSize: 13, fontFamily: 'inherit', color: 'var(--text-primary, #1C1610)', background: '#FFFFFF', cursor: 'pointer' }}
+                  aria-label="Meeting type"
+                  value={meetingType}
+                  onChange={(event) => setMeetingType(event.target.value)}
+                  style={{ minWidth: 170, padding: '8px 10px', border: '1px solid var(--border, #E9E4D8)', borderRadius: 7, fontSize: 13, fontFamily: 'inherit', color: 'var(--text-primary, #1C1610)', background: '#FFFFFF', cursor: 'pointer' }}
                 >
-                  <option value="all">All departments</option>
-                  {(profile?.departments ?? []).map((department) => (
-                    <option key={department.id} value={department.id}>{department.name}</option>
-                  ))}
+                  <option value="all">All meeting types</option>
+                  {MEETING_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
                 </select>
               </label>
+            </div>
+            {!isExternalMember && (
+              <button
+                type="button"
+                onClick={() => setShowLogMeeting(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', borderRadius: 7, padding: '9px 13px', background: '#4C2A92', color: '#FFFFFF', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                <Plus size={16} /> Log meeting
+              </button>
             )}
           </div>
 
           <div style={{ display: 'flex', gap: 4, overflowX: 'auto' }}>
-            {TABS.map(({ id, label, Icon }) => (
+            {tabs.map(({ id, label, Icon }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
@@ -75,11 +120,22 @@ export default function MinutesHubPage() {
 
       <main style={{ maxWidth: 960, margin: '0 auto', padding: '24px 20px 56px' }}>
         <Suspense fallback={<PageSpinner />}>
-          {activeTab === 'timeline' && <MinutesTimelinePage departmentId={departmentId} />}
-          {activeTab === 'calendar' && <MinutesCalendarPage departmentId={departmentId} />}
-          {activeTab === 'search' && <MinutesSearchPage departmentId={departmentId} />}
+          {activeTab === 'timeline' && <MinutesTimelinePage key={`timeline:${minutesVersion}`} departmentId={departmentId} meetingType={meetingType} readOnly={isExternalMember} />}
+          {activeTab === 'calendar' && <MinutesCalendarPage key={`calendar:${minutesVersion}`} departmentId={departmentId} meetingType={meetingType} readOnly={isExternalMember} />}
+          {activeTab === 'search' && <MinutesSearchPage key={`search:${minutesVersion}`} departmentId={departmentId} meetingType={meetingType} readOnly={isExternalMember} />}
         </Suspense>
       </main>
+      {showLogMeeting && (
+        <MeetingsProvider departmentId={logDepartmentId}>
+          <MeetingModal
+            departmentId={logDepartmentId}
+            onClose={() => {
+              setShowLogMeeting(false)
+              setMinutesVersion((version) => version + 1)
+            }}
+          />
+        </MeetingsProvider>
+      )}
     </div>
   )
 }

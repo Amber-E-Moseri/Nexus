@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
+import { Plus, Target } from 'lucide-react'
 import { createSprintGoal, getSprintGoals, updateSprintGoal, deleteSprintGoal } from '../lib/sprints'
 import { useAuth } from '../../../hooks/useAuth'
 
@@ -50,7 +51,7 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA)
   const [saving, setSaving] = useState(false)
   const [editingGoalId, setEditingGoalId] = useState(null)
-  const [collapsed, setCollapsed] = useState(true)
+  const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
     loadGoals()
@@ -160,7 +161,7 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
   }
 
   const progressPercent = goals.reduce(
-    (sum, goal) => sum + (goal.current_value / goal.target_value) * 100,
+    (sum, goal) => sum + (goal.target_value > 0 ? (goal.current_value / goal.target_value) * 100 : 0),
     0,
   ) / (goals.length || 1)
 
@@ -181,11 +182,17 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
           }}>
             ▼
           </span>
-          <h3 style={styles.title}>Sprint Goals</h3>
+          <span style={styles.headingGroup}>
+            <Target size={18} aria-hidden="true" />
+            <span>
+              <h3 style={styles.title}>Sprint goals</h3>
+              <span style={styles.subtitle}>{goals.length ? `${goals.length} goal${goals.length === 1 ? '' : 's'} in this sprint` : 'Set the outcomes this sprint should deliver'}</span>
+            </span>
+          </span>
         </button>
         {!collapsed && (
           <button onClick={openCreateForm} style={{ ...styles.button, backgroundColor: '#4C2A92' }}>
-            + Add Goal
+            <Plus size={16} aria-hidden="true" /> Add goal
           </button>
         )}
       </div>
@@ -370,22 +377,37 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
           {loading && <div style={styles.loading}>Loading goals...</div>}
 
           {!loading && goals.length === 0 && !showForm && (
-            <div style={styles.empty}>No goals yet. Click "Add Goal" to create one.</div>
+            <div style={styles.empty}>
+              <span style={styles.emptyIcon}><Target size={22} aria-hidden="true" /></span>
+              <div>
+                <div style={styles.emptyTitle}>No sprint goals yet</div>
+                <div>Define the outcomes the team should deliver before this sprint closes.</div>
+              </div>
+              <button type="button" onClick={openCreateForm} style={styles.emptyAction}>Add first goal</button>
+            </div>
           )}
 
           {goals.length > 0 && (
             <div style={styles.goalsList}>
-              <div style={styles.progressBar}>
-                <div
-                  style={{
-                    width: `${Math.min(progressPercent, 100)}%`,
-                    height: '4px',
-                    backgroundColor: '#4C2A92',
-                    transition: 'width 0.3s ease',
-                  }}
-                />
+              <div style={styles.overallProgress}>
+                <div>
+                  <div style={styles.overallLabel}>Overall progress</div>
+                  <div style={styles.overallValue}>{Math.round(progressPercent)}%</div>
+                </div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={styles.progressBar}>
+                    <div
+                      style={{
+                        width: `${Math.min(progressPercent, 100)}%`,
+                        height: '100%',
+                        backgroundColor: '#4C2A92',
+                        transition: 'width 0.3s ease',
+                      }}
+                    />
+                  </div>
+                  <div style={styles.progressText}>{goals.filter((goal) => goal.status === 'completed').length} of {goals.length} goals completed</div>
+                </div>
               </div>
-              <div style={styles.progressText}>{Math.round(progressPercent)}% Overall Progress</div>
 
               {goals.map((goal) => (
                 <div key={goal.id} style={styles.goalCard}>
@@ -398,8 +420,16 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
 
                   {goal.description && <p style={styles.goalDescription}>{goal.description}</p>}
 
+                  <div style={styles.goalProgressBar}>
+                    <div
+                      style={{
+                        ...styles.goalProgressFill,
+                        width: `${Math.min(goal.target_value > 0 ? (goal.current_value / goal.target_value) * 100 : 0, 100)}%`,
+                      }}
+                    />
+                  </div>
                   <div style={styles.goalMeta}>
-                    <div>Progress: {goal.current_value} / {goal.target_value}</div>
+                    <div><strong>{goal.current_value}</strong> of {goal.target_value}</div>
                     {goal.due_date && <div>Due: {new Date(goal.due_date + 'T00:00:00').toLocaleDateString()}</div>}
                     {teams.length > 0 && <div>{goal.team?.name ? `Team: ${goal.team.name}` : 'Collective'}</div>}
                   </div>
@@ -432,10 +462,9 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
 
 const styles = {
   container: {
-    padding: '20px',
+    padding: '4px 0 0',
     backgroundColor: 'transparent',
-    borderRadius: '20px',
-    marginBottom: '20px',
+    marginBottom: 0,
     border: 'none',
   },
   header: {
@@ -445,14 +474,30 @@ const styles = {
     marginBottom: '16px',
   },
   title: {
-    fontSize: '16px',
+    fontSize: '17px',
     fontWeight: '700',
     margin: 0,
     color: 'var(--text-primary, #2D2A22)',
     fontFamily: 'DM Sans, system-ui, sans-serif',
   },
+  headingGroup: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 10,
+    color: 'var(--accent)',
+  },
+  subtitle: {
+    display: 'block',
+    marginTop: 2,
+    fontSize: '12px',
+    fontWeight: 500,
+    color: 'var(--text-tertiary)',
+  },
   button: {
-    padding: '8px 16px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '8px 13px',
     borderRadius: '8px',
     border: 'none',
     color: 'white',
@@ -477,22 +522,81 @@ const styles = {
     fontSize: '14px',
   },
   empty: {
-    padding: '16px',
-    textAlign: 'center',
+    minHeight: 132,
+    padding: '18px 20px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
     color: 'var(--text-tertiary, #9E9488)',
+    fontSize: '13px',
+    lineHeight: 1.5,
+    border: '1px dashed var(--border)',
+    borderRadius: 8,
+    background: 'var(--surface-sub, #FAF9F7)',
+  },
+  emptyIcon: {
+    width: 42,
+    height: 42,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    borderRadius: 8,
+    color: 'var(--accent)',
+    background: 'var(--purple-tint, #F4F0FC)',
+  },
+  emptyTitle: {
     fontSize: '14px',
+    fontWeight: 700,
+    color: 'var(--text-primary)',
+    marginBottom: 3,
+  },
+  emptyAction: {
+    marginLeft: 'auto',
+    flexShrink: 0,
+    border: '1px solid var(--accent)',
+    borderRadius: 6,
+    background: 'white',
+    color: 'var(--accent)',
+    padding: '7px 10px',
+    fontSize: '12px',
+    fontWeight: 700,
+    cursor: 'pointer',
   },
   goalsList: {
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
   },
+  overallProgress: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 18,
+    padding: '12px 14px',
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    background: 'var(--surface-sub, #FAF9F7)',
+  },
+  overallLabel: {
+    fontSize: '11px',
+    fontWeight: 700,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    color: 'var(--text-secondary)',
+  },
+  overallValue: {
+    marginTop: 2,
+    fontSize: '22px',
+    lineHeight: 1,
+    fontWeight: 800,
+    color: 'var(--text-primary)',
+  },
   progressBar: {
-    height: '4px',
+    height: '7px',
     backgroundColor: 'var(--border, #EDE8DC)',
     borderRadius: '2px',
     overflow: 'hidden',
-    marginBottom: '8px',
+    marginBottom: '7px',
   },
   progressText: {
     fontSize: '12px',
@@ -500,9 +604,9 @@ const styles = {
     marginBottom: '12px',
   },
   goalCard: {
-    padding: '12px',
+    padding: '14px',
     backgroundColor: 'white',
-    borderRadius: '12px',
+    borderRadius: '8px',
     border: '1px solid var(--border, #EDE8DC)',
   },
   goalHeader: {
@@ -514,7 +618,7 @@ const styles = {
   goalTitle: {
     margin: 0,
     fontSize: '14px',
-    fontWeight: '500',
+    fontWeight: '700',
     flex: 1,
   },
   statusBadge: {
@@ -534,10 +638,24 @@ const styles = {
   },
   goalMeta: {
     display: 'flex',
+    flexWrap: 'wrap',
     gap: '16px',
     fontSize: '12px',
     color: 'var(--text-tertiary, #9E9488)',
     marginBottom: '8px',
+  },
+  goalProgressBar: {
+    height: 5,
+    overflow: 'hidden',
+    borderRadius: 4,
+    background: 'var(--border)',
+    margin: '12px 0 8px',
+  },
+  goalProgressFill: {
+    height: '100%',
+    borderRadius: 4,
+    background: 'var(--accent)',
+    transition: 'width 0.2s ease',
   },
   goalActions: {
     display: 'flex',

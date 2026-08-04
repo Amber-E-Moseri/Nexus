@@ -2,14 +2,14 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { SlidersHorizontal, Settings, GripVertical, CalendarDays } from 'lucide-react'
+import { SlidersHorizontal, Settings, GripVertical, CalendarDays, Folder, ListTodo, Lock, Unlock, Pencil, Trash2, Users, CircleHelp, Search, CircleAlert, Scale, Lightbulb, Pin } from 'lucide-react'
 import { DndContext, closestCenter, useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../../hooks/useAuth'
 import { getMonthEvents } from '../../features/calendar'
 import { hasPermission } from '../../lib/permissions'
-import { archiveSpace, canManageSpace, createFolder, createList, deleteFolder, deleteList, getFolders, getLists, getSpaceDetail, getSpaceListsCount, getSpaceMembers, getSpaceMeetings, getSpaceSprints, getSpaceTasks, restoreSpace, SPACE_TYPE_LABELS, updateFolder, updateList, updateSpace, updateTaskDueDate } from '../../features/spaces'
+import { archiveSpace, canManageSpace, createFolder, createList, deleteFolder, deleteList, getFolders, getLists, getSpaceActivity, getSpaceDetail, getSpaceListsCount, getSpaceMembers, getSpaceMeetings, getSpaceSprints, getSpaceTasks, restoreSpace, SPACE_TYPE_LABELS, updateFolder, updateList, updateSpace, updateTaskDueDate } from '../../features/spaces'
 import { updateFolderVisibility, updateListVisibility, getFolderShares, getListShares, shareFolderWithUser, shareListWithUser, removeFolderShare, removeListShare } from '../../features/spaces/lib/spaces.js'
 import { getTaskById } from '../../features/tasks'
 import Badge from '../../components/ui/Badge'
@@ -30,6 +30,7 @@ import { TasksProvider, useTasks } from '../../features/tasks/TasksContext'
 import { useTaskFilters } from '../../features/tasks/hooks/useTaskFilters'
 import { mergeTaskFieldSettings, normalizeTaskFieldSettings, TASK_FIELD_OPTIONS } from '../../lib/taskFieldSettings'
 import { STALE_COMPLETED_TASK_DAYS } from '../../lib/taskStatuses'
+import { getActivityActionLabel } from '../../lib/activityLog'
 import FileList from '../../components/files/FileList'
 import { supabase } from '../../lib/supabase'
 import SpaceSopModal, { sopIcon } from '../../components/layout/SpaceSopModal'
@@ -390,6 +391,19 @@ const WIDGET_LABELS = {
 }
 const DEFAULT_WIDGETS = { glance: true, metrics: true, organizer: true, activity: true, openItems: true, sops: true }
 
+const OPEN_ITEM_ICON_BY_TYPE = {
+  question: CircleHelp,
+  exploration: Search,
+  blocker: CircleAlert,
+  decision_point: Scale,
+  future_consideration: Lightbulb,
+}
+
+function OpenItemTypeIcon({ type, size = 14 }) {
+  const Icon = OPEN_ITEM_ICON_BY_TYPE[type] ?? Pin
+  return <Icon size={size} strokeWidth={1.8} aria-hidden="true" />
+}
+
 function OpenItemsWidget({ spaceId, onViewAll }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -441,10 +455,9 @@ function OpenItemsWidget({ spaceId, onViewAll }) {
       {recent.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {recent.map(item => {
-            const typeIcons = { question: '❓', exploration: '🔍', blocker: '🚫', decision_point: '⚖️', future_consideration: '💡' }
             return (
               <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6, background: '#fff', border: '1px solid #EDE8DC', fontSize: 13 }}>
-                <span style={{ fontSize: 12, flexShrink: 0 }}>{typeIcons[item.item_type] || '📌'}</span>
+                <span style={{ display: 'inline-flex', color: '#4C2A92', flexShrink: 0 }}><OpenItemTypeIcon type={item.item_type} size={14} /></span>
                 <span style={{ flex: 1, color: '#1C1C1C', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.item_text}</span>
                 {item.last_mentioned && (
                   <span style={{ fontSize: 11, color: '#B0A89A', flexShrink: 0 }}>
@@ -460,7 +473,7 @@ function OpenItemsWidget({ spaceId, onViewAll }) {
   )
 }
 
-function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings, selectedFolder, selectedList, canManage, canCreate, onSelectList, onTreeDataChange }) {
+function SpaceOverviewTab({ space, listsCount, members, tasks, activity, sprints, meetings, selectedFolder, selectedList, canManage, canCreate, onSelectList, onTreeDataChange }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const [calFeedOpen, setCalFeedOpen] = useState(false)
@@ -490,10 +503,18 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
     return acc
   }, {})
 
-  const recentActivity = [...tasks]
-    .sort((left, right) => new Date(right.updated_at ?? right.created_at ?? 0) - new Date(left.updated_at ?? left.created_at ?? 0))
+  const taskById = new Map(tasks.map((task) => [task.id, task]))
+  const recentActivity = activity
+    .map((entry) => ({ ...entry, task: taskById.get(entry.entity_id) }))
+    .filter((entry) => entry.task)
     .slice(0, 4)
-  const visibleMeetings = meetings.slice(0, 3)
+  const visibleMeetings = meetings
+    .filter((meeting) => {
+      const meetingTime = new Date(meeting.date).getTime()
+      return Number.isFinite(meetingTime) && meetingTime >= Date.now()
+    })
+    .sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime())
+    .slice(0, 3)
 
   const statusSummary = [
     { key: 'to_do', label: 'To Do', count: tasksByStatus['to_do'] ?? 0 },
@@ -611,21 +632,21 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, sprints, meetings
           <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
             <div className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Recent Activity</div>
             <div className="space-y-4">
-              {recentActivity.map((task, index) => {
-                const member = members.find((item) => item.id === task.assignee_id) ?? members[index % Math.max(members.length, 1)]
+              {recentActivity.map((entry) => {
+                const member = entry.user
                 return (
-                  <div key={task.id} className="flex items-start gap-3">
+                  <div key={entry.id} className="flex items-start gap-3">
                     <div
                       className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
                       style={{ background: member?.avatar_color ?? '#5B34C7' }}
                     >
-                      {getInitials(member?.name ?? task.title)}
+                      {getInitials(member?.name ?? 'Unknown')}
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm text-[var(--text-primary)]">
-                        <span className="font-semibold">{member?.name ?? 'Team member'}</span> updated <span className="font-medium">"{task.title}"</span>
+                        <span className="font-semibold">{member?.name ?? 'Unknown'}</span> {getActivityActionLabel(entry.action)} <span className="font-medium">"{entry.task.title}"</span>
                       </div>
-                      <div className="mt-1 text-xs text-[var(--text-tertiary)]">{formatRelativeTime(task.updated_at ?? task.created_at)}</div>
+                      <div className="mt-1 text-xs text-[var(--text-tertiary)]">{formatRelativeTime(entry.timestamp)}</div>
                     </div>
                   </div>
                 )
@@ -696,9 +717,9 @@ function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, on
         onClick={() => onSelect(list.id)}
         className={['flex min-w-0 flex-1 items-center gap-2 text-left text-sm', isSelected ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'].join(' ')}
       >
-        <span>📋</span>
+        <ListTodo size={16} aria-hidden="true" />
         <span className="truncate">{list.name}</span>
-        {isPrivate ? <span title="Private list" className="text-xs text-[var(--text-tertiary)]">🔒</span> : null}
+        {isPrivate ? <Lock size={13} aria-label="Private list" className="text-[var(--text-tertiary)]" /> : null}
       </button>
       {canEditList(list) ? (
         <div className="relative">
@@ -709,7 +730,7 @@ function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, on
             aria-label={`Menu for ${list.name}`}
             title="List options"
           >
-            <span aria-hidden="true">⚙️</span>
+            <Settings size={14} aria-hidden="true" />
           </button>
           {menuOpen ? (
             <DropdownMenu.Root open={true} onOpenChange={setMenuOpen}>
@@ -725,7 +746,7 @@ function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, on
                     onSelect={() => { onEdit(list); setMenuOpen(false) }}
                     className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none"
                   >
-                    <span>✏️</span>
+                    <Pencil size={14} aria-hidden="true" />
                     <span>Edit</span>
                   </DropdownMenu.Item>
                   {onToggleVisibility ? (
@@ -738,7 +759,7 @@ function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, on
                       disabled={updating}
                       className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none disabled:opacity-50"
                     >
-                      <span>{isPrivate ? '🔓' : '🔒'}</span>
+                      {isPrivate ? <Unlock size={14} aria-hidden="true" /> : <Lock size={14} aria-hidden="true" />}
                       <span>{isPrivate ? 'Make Public' : 'Make Private'}</span>
                     </DropdownMenu.Item>
                   ) : null}
@@ -747,7 +768,7 @@ function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, on
                       onSelect={() => { onShare(list); setMenuOpen(false) }}
                       className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none"
                     >
-                      <span>👥</span>
+                      <Users size={14} aria-hidden="true" />
                       <span>Share</span>
                     </DropdownMenu.Item>
                   ) : null}
@@ -755,7 +776,7 @@ function DraggableListItem({ list, isSelected, onSelect, onEdit, canEditList, on
                     onSelect={() => { onDelete?.(list); setMenuOpen(false) }}
                     className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[#DC2626] hover:bg-[#FEE2E2] focus:outline-none"
                   >
-                    <span>🗑️</span>
+                    <Trash2 size={14} aria-hidden="true" />
                     <span>Delete</span>
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>
@@ -805,7 +826,7 @@ function DroppableFolder({ folder, isOpen, onToggle, onEdit, onDelete, canEditFo
     >
       <div className="flex items-center justify-between gap-2">
         <button type="button" onClick={onToggle} className="flex min-w-0 items-center gap-2 text-left text-sm font-medium text-[var(--text-primary)]">
-          <span>📁</span>
+          <Folder size={17} aria-hidden="true" />
           <span className="truncate">{folder.name}</span>
         </button>
         {(canEditFolder(folder) || canManage || canCreate) ? (
@@ -817,7 +838,7 @@ function DroppableFolder({ folder, isOpen, onToggle, onEdit, onDelete, canEditFo
               aria-label={`Menu for ${folder.name}`}
               title="Folder options"
             >
-              <span aria-hidden="true">⚙️</span>
+              <Settings size={14} aria-hidden="true" />
             </button>
             {menuOpen ? (
               <DropdownMenu.Root open={true} onOpenChange={setMenuOpen}>
@@ -835,7 +856,7 @@ function DroppableFolder({ folder, isOpen, onToggle, onEdit, onDelete, canEditFo
                           onSelect={() => { onEdit(folder); setMenuOpen(false) }}
                           className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none"
                         >
-                          <span>✏️</span>
+                          <Pencil size={14} aria-hidden="true" />
                           <span>Edit</span>
                         </DropdownMenu.Item>
                         <DropdownMenu.Item
@@ -852,7 +873,7 @@ function DroppableFolder({ folder, isOpen, onToggle, onEdit, onDelete, canEditFo
                           disabled={updating}
                           className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none disabled:opacity-50"
                         >
-                          <span>{folder.visibility === 'public' ? '🔓' : '🔒'}</span>
+                          {folder.visibility === 'public' ? <Unlock size={14} aria-hidden="true" /> : <Lock size={14} aria-hidden="true" />}
                           <span>{folder.visibility === 'public' ? 'Make Private' : 'Make Public'}</span>
                         </DropdownMenu.Item>
                         {folder.visibility === 'private' ? (
@@ -860,7 +881,7 @@ function DroppableFolder({ folder, isOpen, onToggle, onEdit, onDelete, canEditFo
                             onSelect={() => { onShare?.(folder); setMenuOpen(false) }}
                             className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:outline-none"
                           >
-                            <span>👥</span>
+                            <Users size={14} aria-hidden="true" />
                             <span>Share</span>
                           </DropdownMenu.Item>
                         ) : null}
@@ -868,7 +889,7 @@ function DroppableFolder({ folder, isOpen, onToggle, onEdit, onDelete, canEditFo
                           onSelect={() => { onDelete?.(folder); setMenuOpen(false) }}
                           className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[#DC2626] hover:bg-[#FEE2E2] focus:outline-none"
                         >
-                          <span>🗑️</span>
+                          <Trash2 size={14} aria-hidden="true" />
                           <span>Delete</span>
                         </DropdownMenu.Item>
                       </>
@@ -1759,6 +1780,7 @@ export default function SpaceOverview() {
   const [spaceSprints, setSpaceSprints] = useState([])
   const [spaceMeetings, setSpaceMeetings] = useState([])
   const [spaceTasks, setSpaceTasks] = useState([])
+  const [spaceActivity, setSpaceActivity] = useState([])
   const [listsCount, setListsCount] = useState(0)
   const [canEditCalendar, setCanEditCalendar] = useState(false)
   const [showSpaceModal, setShowSpaceModal] = useState(false)
@@ -1857,7 +1879,15 @@ export default function SpaceOverview() {
     getSpaceMembers(detail.space).then(setSpaceMembers).catch(() => setSpaceMembers([]))
     getSpaceSprints(spaceId).then(setSpaceSprints).catch(() => setSpaceSprints([]))
     getSpaceMeetings(spaceId).then(setSpaceMeetings).catch(() => setSpaceMeetings([]))
-    getSpaceTasks(spaceId).then(setSpaceTasks).catch(() => setSpaceTasks([]))
+    getSpaceTasks(spaceId)
+      .then(async (tasks) => {
+        setSpaceTasks(tasks)
+        setSpaceActivity(await getSpaceActivity(tasks.map((task) => task.id)))
+      })
+      .catch(() => {
+        setSpaceTasks([])
+        setSpaceActivity([])
+      })
     getSpaceListsCount(spaceId).then(setListsCount).catch(() => setListsCount(0))
     // Load the folder/list tree at the parent so Board/List tabs have it even
     // when the Overview tab (which hosts the organizer) hasn't mounted yet.
@@ -1920,7 +1950,7 @@ export default function SpaceOverview() {
 
   const tabContent = (
     <>
-      {activeTab === 'Overview' ? <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}><SpaceOverviewTab space={space} listsCount={listsCount} members={spaceMembers} tasks={overviewTasks} sprints={spaceSprints} meetings={spaceMeetings} selectedFolder={selectedFolder} selectedList={selectedList} canManage={canManage} canCreate={canCreate} onSelectList={(id) => { setSelectedListId(id); setSelectedFolderId(null); setActiveTab('List'); navigate(`/spaces/${spaceId}?list=${id}`) }} onTreeDataChange={(next) => { setTreeData(next); setListsCount(next.lists.length) }} /></div> : null}
+      {activeTab === 'Overview' ? <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}><SpaceOverviewTab space={space} listsCount={listsCount} members={spaceMembers} tasks={overviewTasks} activity={spaceActivity} sprints={spaceSprints} meetings={spaceMeetings} selectedFolder={selectedFolder} selectedList={selectedList} canManage={canManage} canCreate={canCreate} onSelectList={(id) => { setSelectedListId(id); setSelectedFolderId(null); setActiveTab('List'); navigate(`/spaces/${spaceId}?list=${id}`) }} onTreeDataChange={(next) => { setTreeData(next); setListsCount(next.lists.length) }} /></div> : null}
       {activeTab === 'Board' ? <div role="tabpanel" id="tabpanel-board" aria-labelledby="tab-board" tabIndex={0}><TasksProvider key={statusVersion} departmentId={spaceId}>{canManage === null ? <div style={{ padding: '2rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading board…</div> : <SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="kanban" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} />}</TasksProvider></div> : null}
       {activeTab === 'List' ? <div role="tabpanel" id="tabpanel-list" aria-labelledby="tab-list" tabIndex={0}><TasksProvider key={statusVersion} departmentId={spaceId}>{canManage === null ? <div style={{ padding: '2rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading…</div> : <SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="list" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} />}</TasksProvider></div> : null}
       {activeTab === 'Calendar' ? (

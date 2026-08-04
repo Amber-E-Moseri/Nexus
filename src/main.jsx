@@ -8,7 +8,10 @@ import { NotificationsProvider } from './context/NotificationsContext'
 import { InboxCountProvider } from './context/InboxCountContext'
 import { ToastProvider } from './context/ToastContext'
 import { queryClient } from './lib/queryClient'
+import { applyUiTheme } from './lib/uiTheme'
 import './styles/index.css'
+
+applyUiTheme()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

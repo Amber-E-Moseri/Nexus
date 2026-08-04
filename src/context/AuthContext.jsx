@@ -14,7 +14,7 @@ function getJwtRole(session) {
 async function fetchProfile(userId) {
   const { data, error } = await supabase
     .from('users')
-    .select('id, name, email, role, department_id, avatar_url, status, first_name, last_name, group_name, last_active_at')
+    .select('id, name, email, role, department_id, avatar_url, status, first_name, last_name, group_name, is_temporary, last_active_at')
     .eq('id', userId)
     .single()
 

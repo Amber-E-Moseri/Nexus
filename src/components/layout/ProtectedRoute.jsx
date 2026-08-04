@@ -3,7 +3,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { hasSpaceRole, hasGrant, isProgramsMember, SPACE_ROLES } from '../../lib/permissions.js'
 import LoadingSpinner from '../ui/LoadingSpinner'
 
-export default function ProtectedRoute({ children, roles, allowFeatureRoles, allowGrant, blockRoles }) {
+export default function ProtectedRoute({ children, roles, allowFeatureRoles, allowGrant, blockRoles, allowTemporary = false, blockTemporary = false }) {
   const { loading, user, profile, effectiveRole, isRecoveryMode } = useAuth()
   const location = useLocation()
 
@@ -26,7 +26,17 @@ export default function ProtectedRoute({ children, roles, allowFeatureRoles, all
 
   // Denylist guard: block specific roles outright (e.g. group_member from the
   // Sprints browse list / Meetings). Applied before the roles allowlist.
-  if (blockRoles && blockRoles.includes(effectiveRole)) {
+  if (blockTemporary && profile?.is_temporary) {
+    return (
+      <Navigate
+        to="/meetings/minutes"
+        replace
+        state={{ authError: 'External members can read shared minutes in Minutes Hub.' }}
+      />
+    )
+  }
+
+  if (blockRoles && blockRoles.includes(effectiveRole) && !(allowTemporary && profile?.is_temporary)) {
     return (
       <Navigate
         to="/dashboard"

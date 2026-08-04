@@ -18,10 +18,11 @@ function formatDate(dateStr) {
 // MinutesCard — used by both the timeline and search results.
 // snippet is a pre-computed plain-text string (max 120 chars); callers
 // derive it from meeting.notes_text so no tree-walking happens here.
-export default function MinutesCard({ meeting, snippet, onClick }) {
+export default function MinutesCard({ meeting, snippet, onClick, readOnly = false }) {
   const navigate = useNavigate()
 
   function handleClick() {
+    if (readOnly) return
     if (onClick) {
       onClick(meeting)
     } else {
@@ -35,29 +36,29 @@ export default function MinutesCard({ meeting, snippet, onClick }) {
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={handleClick}
-      onKeyDown={e => e.key === 'Enter' && handleClick()}
+      role={readOnly ? undefined : 'button'}
+      tabIndex={readOnly ? undefined : 0}
+      onClick={readOnly ? undefined : handleClick}
+      onKeyDown={readOnly ? undefined : (e => e.key === 'Enter' && handleClick())}
       style={{
         background: 'var(--surface, #FFFFFF)',
         border: '1px solid var(--border, #E9E4D8)',
         borderRadius: 10,
         padding: '14px 16px',
-        cursor: 'pointer',
-        transition: 'box-shadow 0.15s, border-color 0.15s',
+        cursor: readOnly ? 'default' : 'pointer',
+        transition: readOnly ? undefined : 'box-shadow 0.15s, border-color 0.15s',
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
       }}
-      onMouseEnter={e => {
+      onMouseEnter={readOnly ? undefined : (e => {
         e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.09)'
         e.currentTarget.style.borderColor = 'var(--color-primary, #4C2A92)'
-      }}
-      onMouseLeave={e => {
+      })}
+      onMouseLeave={readOnly ? undefined : (e => {
         e.currentTarget.style.boxShadow = ''
         e.currentTarget.style.borderColor = 'var(--border, #E9E4D8)'
-      }}
+      })}
     >
       {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>

@@ -16,8 +16,9 @@ import ApiPermissionsSection from './ApiPermissionsSection'
 import ApiKeyManager from '../../features/automations/components/ApiKeyManager'
 import AutomationPreferencesSection from '../../components/settings/AutomationPreferencesSection'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
+import { applyUiTheme, getUiTheme, UI_THEMES } from '../../lib/uiTheme'
 
-const TABS = ['Profile', 'Notifications', 'My Automations', 'Integrations', 'Automations', 'Members', 'Activity Log', 'API Permissions', 'Organisation', 'API', 'Danger Zone']
+const TABS = ['Profile', 'Notifications', 'Appearance', 'My Automations', 'Integrations', 'Automations', 'Members', 'Activity Log', 'API Permissions', 'Organisation', 'API', 'Danger Zone']
 const EXPORT_TABLE_SELECT = {
   profiles: 'id, full_name, email, department_id, role, status, created_at',
   tasks: 'id, title, description, status, status_id, priority, assignee_id, department_id, sprint_id, due_date, completed_at, created_by, created_at',
@@ -59,6 +60,7 @@ export default function Settings() {
   const [deleteAccountInput, setDeleteAccountInput] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [uiTheme, setUiTheme] = useState(getUiTheme)
 
   const departmentName = useMemo(
     () => departments.find((department) => department.id === profile?.department_id)?.name ?? 'Unassigned',
@@ -383,6 +385,19 @@ export default function Settings() {
       {activeTab === 'Notifications' ? (
         <div role="tabpanel" id="tabpanel-notifications" aria-labelledby="tab-notifications" tabIndex={0}>
           <NotificationsSection prefs={prefs} role={role} onTogglePref={handleToggleNotification} />
+        </div>
+      ) : null}
+
+      {activeTab === 'Appearance' ? (
+        <div role="tabpanel" id="tabpanel-appearance" aria-labelledby="tab-appearance" tabIndex={0}>
+          <h2 style={{ fontFamily: FONT_HEADING, fontSize: 16, fontWeight: 700, color: 'var(--ink-1)', marginBottom: 6 }}>Nexus appearance</h2>
+          <p style={{ fontSize: 13, color: 'var(--ink-2)', margin: '0 0 16px' }}>Choose the accent treatment used across your Nexus workspace.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            {UI_THEMES.map(({ value, title, detail }) => {
+              const selected = uiTheme === value
+              return <button key={value} type="button" onClick={() => setUiTheme(applyUiTheme(value))} style={{ textAlign: 'left', padding: 16, borderRadius: 8, border: `2px solid ${selected ? 'var(--accent)' : 'var(--border-1)'}`, background: 'var(--surface-card)', cursor: 'pointer' }}><div style={{ fontWeight: 700, color: 'var(--ink-1)', marginBottom: 5 }}>{title}</div><div style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>{detail}</div></button>
+            })}
+          </div>
         </div>
       ) : null}
 

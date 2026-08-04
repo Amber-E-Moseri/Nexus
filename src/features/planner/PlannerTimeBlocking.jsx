@@ -58,10 +58,10 @@ export default function PlannerTimeBlocking() {
     useTimeBlocks(userId, weekStartISO, weekEndISO)
 
   const [priorityFilter, setPriorityFilter] = useState(() => new Set())
-  // 'all' | 'mine' | 'delegated' -- unscoped useMyTasks blends tasks the user
-  // is assigned (mine) with tasks they created for someone else (delegated),
-  // same distinction as the My Tasks page's Mine/Delegated tabs.
-  const [ownershipFilter, setOwnershipFilter] = useState('all')
+  // 'all' | 'mine' | 'delegated' -- unscoped useMyTasks also includes tasks
+  // from sprints the user belongs to. Planner should start as a personal view;
+  // shared sprint work remains available through the explicit All filter.
+  const [ownershipFilter, setOwnershipFilter] = useState('mine')
   const [expandedTaskIds, setExpandedTaskIds] = useState(() => new Set())
   const [subtasksByParentId, setSubtasksByParentId] = useState({})
   const [modalTask, setModalTask] = useState(null)
@@ -91,7 +91,9 @@ export default function PlannerTimeBlocking() {
 
   const matchesOwnership = useCallback(
     (t) => {
-      if (ownershipFilter === 'mine') return t.assignee_id === userId
+      if (ownershipFilter === 'mine') {
+        return t.assignee_id === userId || (t.assignees ?? []).some((assignee) => (assignee.user_id ?? assignee.id) === userId)
+      }
       if (ownershipFilter === 'delegated') return isDelegatedTask(t, userId)
       return true
     },

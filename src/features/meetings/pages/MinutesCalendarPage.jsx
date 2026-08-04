@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import CalendarGrid from '../../calendar/components/CalendarGrid'
 import { getMeetingsWithMinutes } from '../lib/meetings'
 
-export default function MinutesCalendarPage({ departmentId }) {
+export default function MinutesCalendarPage({ departmentId, meetingType, readOnly = false }) {
   const navigate = useNavigate()
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
@@ -12,10 +12,10 @@ export default function MinutesCalendarPage({ departmentId }) {
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async (nextYear, nextMonth, scope) => {
+  const load = useCallback(async (nextYear, nextMonth, scope, nextMeetingType) => {
     setLoading(true)
     try {
-      const result = await getMeetingsWithMinutes(scope, { month: nextMonth, year: nextYear, pageSize: 200 })
+      const result = await getMeetingsWithMinutes(scope, { month: nextMonth, year: nextYear, pageSize: 200, meetingType: nextMeetingType })
       setEvents(result.meetings.map((meeting) => ({ id: meeting.id, start_date: meeting.date, event_type: 'meeting', title: meeting.title })))
     } catch (error) {
       console.warn('Minutes calendar load error:', error)
@@ -25,7 +25,7 @@ export default function MinutesCalendarPage({ departmentId }) {
     }
   }, [])
 
-  useEffect(() => { load(year, month, departmentId) }, [year, month, departmentId, load])
+  useEffect(() => { load(year, month, departmentId, meetingType) }, [year, month, departmentId, meetingType, load])
   function prevMonth() { if (month === 0) { setYear((value) => value - 1); setMonth(11) } else setMonth((value) => value - 1) }
   function nextMonth() { if (month === 11) { setYear((value) => value + 1); setMonth(0) } else setMonth((value) => value + 1) }
   function goToday() { setYear(today.getFullYear()); setMonth(today.getMonth()) }
@@ -37,7 +37,7 @@ export default function MinutesCalendarPage({ departmentId }) {
         year={year}
         month={month}
         events={events}
-        onEventClick={(event) => navigate(`/meetings/${event.id}?tab=minutes`)}
+        onEventClick={readOnly ? () => {} : (event) => navigate(`/meetings/${event.id}?tab=minutes`)}
         onDayClick={() => {}}
         canEdit={false}
         onPrevMonth={prevMonth}

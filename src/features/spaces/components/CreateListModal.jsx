@@ -2,7 +2,7 @@
 // location picker (space root or a folder inside the space), private toggle.
 // Lists at space root are "unfolded" (lists.folder_id null, migration 20260803).
 import * as Dialog from '@radix-ui/react-dialog'
-import { Check, ChevronDown, ChevronUp, Folder, Search, Star } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, FileText, Folder, Search, Star } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { createList, getFolders } from '../lib/spaces'
@@ -30,7 +30,7 @@ const labelStyle = {
 
 const NAME_PRESETS = [
   { label: 'Backlog', icon: <Folder size={12} /> },
-  { label: 'Notes', icon: <span style={{ fontSize: 12 }}>📋</span> },
+  { label: 'Notes', icon: <FileText size={12} /> },
   { label: 'Quick Wins', icon: <Star size={12} /> },
 ]
 

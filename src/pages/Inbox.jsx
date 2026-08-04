@@ -8,7 +8,15 @@ import TaskModal from '../features/tasks/components/TaskModal'
 import { useAuth } from '../hooks/useAuth'
 import { FONT_BODY, FONT_HEADING, FONT_MONO } from '../lib/fonts'
 
-const FILTERS = ['All', 'Unread']
+const FILTERS = ['All', 'Unread', 'Mentions', 'Comments', 'Approvals']
+
+function matchesFilter(item, filter) {
+  if (filter === 'Unread') return !item.read
+  if (filter === 'Mentions') return item.type === 'mention'
+  if (filter === 'Comments') return item.type === 'task_comment' || item.type === 'comment_added'
+  if (filter === 'Approvals') return item.type === 'event_approval_pending' || item.type === 'event_approved' || item.type === 'event_rejected'
+  return true
+}
 
 const listStagger = {
   hidden: {},
@@ -336,7 +344,6 @@ export default function Inbox() {
   const [selected, setSelected] = useState(null)
   const [checkedIds, setCheckedIds] = useState(() => new Set())
   const [commentToTask, setCommentToTask] = useState(null)
-
   useEffect(() => {
     if (!profile?.id) return
     let active = true
@@ -389,7 +396,7 @@ export default function Inbox() {
   }, [profile?.id])
 
   const unreadCount = notifications.filter((n) => !n.read).length
-  const filteredFeed = filter === 'Unread' ? notifications.filter((n) => !n.read) : notifications
+  const filteredFeed = notifications.filter((item) => matchesFilter(item, filter))
   const groups = groupByRecency(filteredFeed)
   const checkedCount = checkedIds.size
   const allVisibleChecked = filteredFeed.length > 0 && filteredFeed.every((n) => checkedIds.has(n.id))
@@ -508,9 +515,9 @@ export default function Inbox() {
               whileTap={unreadCount > 0 ? { scale: 0.96 } : undefined}
               style={{
                 padding: '8px 14px',
-                borderRadius: 10,
-                border: '1px solid var(--border-1)',
-                background: 'var(--surface-card)',
+                borderRadius: 6,
+                border: 'none',
+                background: 'transparent',
                 color: 'var(--purple-700)',
                 fontFamily: FONT_BODY,
                 fontSize: 12.5,
@@ -525,7 +532,7 @@ export default function Inbox() {
         </div>
 
         {/* Filter pills */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
           {FILTERS.map((option) => {
             const isActive = filter === option
             return (
@@ -534,8 +541,8 @@ export default function Inbox() {
                 type="button"
                 onClick={() => setFilter(option)}
                 style={{
-                  padding: '5px 14px',
-                  borderRadius: 999,
+                  padding: '8px 18px',
+                  borderRadius: 8,
                   border: `1px solid ${isActive ? 'var(--purple-700)' : 'var(--border-1)'}`,
                   background: isActive ? 'var(--purple-700)' : 'var(--surface-card)',
                   color: isActive ? '#FFFFFF' : 'var(--ink-2)',
@@ -549,6 +556,7 @@ export default function Inbox() {
               </button>
             )
           })}
+          <button type="button" onClick={() => setFilter('All')} style={{ marginLeft: 'auto', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-1)', background: filter === 'All' ? 'var(--surface-sub)' : 'transparent', color: 'var(--ink-2)', fontFamily: FONT_BODY, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Full activity</button>
         </div>
 
         {/* Select-all / bulk actions bar */}
@@ -632,7 +640,7 @@ export default function Inbox() {
             {!loading && assignedComments.length > 0 && (
               <div style={{ marginBottom: 24 }}>
                 <GroupHeader>Assigned to you</GroupHeader>
-                <div style={{ borderRadius: 14, border: '1px solid var(--border-1)', background: 'var(--surface-card)', boxShadow: '0 1px 3px rgba(28,22,16,.04)', overflow: 'hidden' }}>
+                <div style={{ borderRadius: 0, borderTop: '1px solid var(--border-1)', borderBottom: '1px solid var(--border-1)', background: 'var(--surface-card)', overflow: 'hidden' }}>
                   {assignedComments.map((c, idx) => (
                     <div
                       key={c.id}

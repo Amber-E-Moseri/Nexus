@@ -280,6 +280,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const myTaskCounts = useMyTaskCounts(profile?.id)
   const navigate = useNavigate()
   const location = useLocation()
+  const isExternalMember = Boolean(profile?.is_temporary)
 
   const [spaceGroups, setSpaceGroups] = useState({
     department: [],
@@ -711,18 +712,20 @@ export default function Sidebar({ isMobileDrawer = false }) {
                 { label: 'Activity Log', to: '/activity-log', icon: Zap },
                 { label: 'Trash', to: '/trash', icon: Trash2 },
                 // Apps (not in main sidebar nav)
-                { label: 'Apps', to: '/apps', icon: Trophy },
+                ...(!isExternalMember ? [{ label: 'Apps', to: '/apps', icon: Trophy }] : []),
                 { label: 'Wins', to: '/wins', icon: Trophy },
                 ...(['super_admin'].includes(role) ? [{ label: 'Growth Tracking', to: '/growth-tracking', icon: TrendingUp }] : []),
                 // Sprints
                 { label: 'All Sprints', to: '/sprints', icon: Zap },
                 // Meetings
-                { label: 'Meetings', to: '/meetings', icon: Video },
-                { label: 'Attendee Roster', to: '/meetings/expected-attendees', icon: Users },
-                ...(isMeetingsRole ? [
-                  { label: 'Attendance Trends', to: '/meetings/attendance-trends', icon: TrendingUp },
-                  { label: 'Absence Email Log', to: '/meetings/absence-email-log', icon: Mail },
-                  { label: 'Meeting Minutes', to: '/meetings/minutes', icon: MailPlus },
+                ...(!isExternalMember ? [
+                  { label: 'Meetings', to: '/meetings', icon: Video },
+                  { label: 'Attendee Roster', to: '/meetings/expected-attendees', icon: Users },
+                  ...(isMeetingsRole ? [
+                    { label: 'Attendance Trends', to: '/meetings/attendance-trends', icon: TrendingUp },
+                    { label: 'Absence Email Log', to: '/meetings/absence-email-log', icon: Mail },
+                    { label: 'Meeting Minutes', to: '/meetings/minutes', icon: MailPlus },
+                  ] : []),
                 ] : []),
                 // Communications
                 ...(isMeetingsRole ? [
@@ -883,12 +886,14 @@ export default function Sidebar({ isMobileDrawer = false }) {
           label="Planner"
           to="/planner"
         />
-        <SidebarItem
-          active={isPathActive(location.pathname, '/apps')}
-          icon={Trophy}
-          label="Apps"
-          to="/apps"
-        />
+        {!isExternalMember ? (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/apps')}
+            icon={Trophy}
+            label="Apps"
+            to="/apps"
+          />
+        ) : null}
         <SidebarItem
           active={isPathActive(location.pathname, '/calendar')}
           icon={CalendarDays}
@@ -1321,7 +1326,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
         {!isGroupMember ? (
         <>
         {!collapsed && <SidebarSectionLabel>Tools</SidebarSectionLabel>}
-        {(
+        {!isExternalMember && (
         <>
         {collapsed ? (
           <SidebarItem

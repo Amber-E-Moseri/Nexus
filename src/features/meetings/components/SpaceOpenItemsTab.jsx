@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
+import { CircleAlert, CircleHelp, Lightbulb, Pin, Search, Scale } from 'lucide-react'
 import { getOpenItemsBySpace, deleteOpenItem } from '../lib/openItems'
 import { useAuth } from '../../../hooks/useAuth'
 
-const TYPE_EMOJI = {
-  question: '❓',
-  exploration: '🔍',
-  blocker: '🚫',
-  decision_point: '⚖️',
-  future_consideration: '💡',
+const TYPE_ICON = {
+  question: CircleHelp,
+  exploration: Search,
+  blocker: CircleAlert,
+  decision_point: Scale,
+  future_consideration: Lightbulb,
 }
 
 export default function SpaceOpenItemsTab({ spaceId, canManage }) {
@@ -133,6 +134,7 @@ function MeetingGroup({ meeting, items, canManage, onDelete }) {
 
 function ItemRow({ item, canManage, onDelete }) {
   const [expanded, setExpanded] = useState(false)
+  const Icon = TYPE_ICON[item.item_type] ?? Pin
 
   return (
     <div
@@ -147,7 +149,7 @@ function ItemRow({ item, canManage, onDelete }) {
         style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: item.transcript_excerpt ? 'pointer' : 'default' }}
         onClick={() => item.transcript_excerpt && setExpanded((v) => !v)}
       >
-        <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{TYPE_EMOJI[item.item_type] ?? '📌'}</span>
+        <span style={{ display: 'inline-flex', flexShrink: 0, marginTop: 1, color: 'var(--accent)' }}><Icon size={16} strokeWidth={1.8} aria-hidden="true" /></span>
         <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.45 }}>{item.item_text}</span>
         {canManage && (
           <button

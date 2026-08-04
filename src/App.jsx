@@ -284,7 +284,7 @@ export default function App() {
           <Route
             path="/meetings/minutes"
             element={
-              <ProtectedRoute blockRoles={['group_member', 'member']}>
+              <ProtectedRoute blockRoles={['group_member', 'member']} allowTemporary>
                 <MinutesHubPage />
               </ProtectedRoute>
             }
@@ -292,7 +292,7 @@ export default function App() {
           <Route
             path="/meetings/:meetingId"
             element={
-              <ProtectedRoute blockRoles={['group_member']}>
+              <ProtectedRoute blockRoles={['group_member']} blockTemporary>
                 <MeetingDetailView />
               </ProtectedRoute>
             }

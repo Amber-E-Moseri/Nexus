@@ -653,13 +653,12 @@ export async function getMeetingTasks(meetingId) {
 
 // ── Minutes Hub data functions ──────────────────────────────────────────────
 
-// Fetch published meetings with notes for the timeline and calendar views.
-// Scoped to departmentId (+ cross-dept shares) using the same pattern as
-// getDeptMeetings. Returns lightweight rows — notes_blocks not included so
-// the network payload stays small; callers derive snippet from notes_text.
-export async function getMeetingsWithMinutes(departmentId, { page = 0, pageSize = 20, month, year } = {}) {
-  if (!departmentId) return { meetings: [], totalCount: 0 }
-
+// Fetch meetings with notes for the timeline and calendar views. The query
+// uses the caller's authenticated Supabase client, so RLS is the source of
+// truth for private access. Returns lightweight rows — notes_blocks not
+// included so the network payload stays small; callers derive snippet from
+// notes_text.
+export async function getMeetingsWithMinutes(departmentId, { page = 0, pageSize = 20, month, year, meetingType = 'all' } = {}) {
   const selectString = `
     id,
     title,
@@ -674,9 +673,9 @@ export async function getMeetingsWithMinutes(departmentId, { page = 0, pageSize 
   `
 
   const baseFilter = (q) => {
-    q = q.eq('visibility', 'published')
     q = q.not('notes_text', 'is', null)
     q = q.neq('notes_text', '')
+    if (meetingType !== 'all') q = q.eq('meeting_type', meetingType)
     if (month != null && year != null) {
       const from = new Date(year, month, 1).toISOString()
       const to   = new Date(year, month + 1, 1).toISOString()
@@ -738,14 +737,13 @@ export async function getMeetingsWithMinutes(departmentId, { page = 0, pageSize 
   }
 }
 
-// Full-text search across meeting minutes using the search_meeting_notes RPC.
-// RPC enforces dept scoping server-side — p_dept_id is only honored to
-// narrow scope for admins; regular users are pinned to their own dept.
-export async function searchMinutesBlocks(query, departmentId) {
+// Full-text search across meeting minutes using an RLS-respecting RPC.
+export async function searchMinutesBlocks(query, departmentId, meetingType = 'all') {
   if (!query || !query.trim()) return []
   const { data, error } = await supabase.rpc('search_meeting_notes', {
     p_query: query.trim(),
     p_dept_id: departmentId === 'all' ? null : (departmentId ?? null),
+    p_meeting_type: meetingType === 'all' ? null : meetingType,
   })
   if (error) throw error
   return data ?? []
