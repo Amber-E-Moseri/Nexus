@@ -53,6 +53,7 @@ import CreateListModal from '../../features/spaces/components/CreateListModal'
 import CreateFolderModal from '../../features/spaces/components/CreateFolderModal'
 import SprintModal from '../../features/sprints/components/SprintModal'
 import { useSprints } from '../../features/sprints/SprintsContext'
+import { useEventConfig } from '../../features/registration/EventConfigContext'
 import { useMyTaskCounts } from '../../features/tasks/hooks/useMyTaskCounts'
 import { CACHE_KEYS, getItemSafe, setItemSafe } from '../../lib/cacheUtils'
 import { preloadRoute } from '../../lib/routePreload'
@@ -320,37 +321,36 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const [featureSearch, setFeatureSearch] = useState('')
 
   const [hasRegistrationAccess, setHasRegistrationAccess] = useState(false)
+  const { config: eventConfig } = useEventConfig()
   useEffect(() => {
-    if (!profile?.id) return
-    if (['pastor', 'super_admin', 'regional_secretary'].includes(role)) {
+    let cancelled = false
+    setHasRegistrationAccess(false)
+    if (!profile?.id) return undefined
+    const legacyTii = !eventConfig
+    if ((legacyTii && ['pastor', 'super_admin', 'regional_secretary'].includes(role)) || (!legacyTii && ['super_admin', 'regional_secretary'].includes(role))) {
       setHasRegistrationAccess(true)
-      return
+      return undefined
     }
-    const REGISTRATION_TEAMS = [
-      'Foundation School Graduation and Baptism',
-      'Secretariat and Planning',
-      'Registration',
-      'Secretariat Programs',
-      'Finance',
-      'Transportation',
-      'Delegates Compliance',
-      'Accommodation and Room Coordination',
-      'Hospitality — Delegates',
+    const sprintPattern = eventConfig?.sprint_pattern || '%This Is It 2.0%'
+    const sidebarTeams = eventConfig?.sidebar_teams || [
+      'Foundation School Graduation and Baptism', 'Secretariat and Planning', 'Registration', 'Secretariat Programs',
+      'Finance', 'Transportation', 'Delegates Compliance', 'Accommodation and Room Coordination', 'Hospitality — Delegates',
     ]
     ;(async () => {
       const { data: sprint } = await supabase
-        .from('sprints').select('id').ilike('name', '%This Is It 2.0%').limit(1).maybeSingle()
+        .from('sprints').select('id').ilike('name', sprintPattern).limit(1).maybeSingle()
       if (!sprint?.id) return
       const { data: teams } = await supabase
         .from('sprint_teams').select('id, name').eq('sprint_id', sprint.id)
       if (!teams?.length) return
-      const allowed = teams.filter(t => REGISTRATION_TEAMS.some(a => t.name.toLowerCase().includes(a.toLowerCase()))).map(t => t.id)
+      const allowed = teams.filter(t => sidebarTeams.some(a => t.name.toLowerCase().includes(a.toLowerCase()))).map(t => t.id)
       if (!allowed.length) return
       const { data: membership } = await supabase
         .from('sprint_team_members').select('team_id').in('team_id', allowed).eq('user_id', profile.id).limit(1)
-      if (membership?.length) setHasRegistrationAccess(true)
+      if (!cancelled && membership?.length) setHasRegistrationAccess(true)
     })()
-  }, [profile?.id, role])
+    return () => { cancelled = true }
+  }, [profile?.id, role, eventConfig])
   const sidebarRef = useRef(null)
 
   // ors/programs/media/dept_lead authority comes from space_roles rows
@@ -456,11 +456,18 @@ export default function Sidebar({ isMobileDrawer = false }) {
     }
   }, [profile?.id, profile?.department_id])
 
+  const hideUnassignedExternalSpaces = isExternalMember && !profile?.department_id
   const displaySpaces = useMemo(
-    () => SPACE_GROUPS.flatMap((groupKey) => spaceGroups[groupKey] ?? []).filter((space) => !hiddenSpaceIds.includes(space.id)),
-    [hiddenSpaceIds, spaceGroups],
+    () => SPACE_GROUPS
+      .flatMap((groupKey) => spaceGroups[groupKey] ?? [])
+      .filter((space) => !hiddenSpaceIds.includes(space.id))
+      .filter((space) => !hideUnassignedExternalSpaces || ['group', 'personal'].includes(space.space_type)),
+    [hiddenSpaceIds, hideUnassignedExternalSpaces, spaceGroups],
   )
-  const archivedSpaces = (spaceGroups.archived ?? []).filter((space) => !hiddenSpaceIds.includes(space.id))
+  const archivedSpaces = (spaceGroups.archived ?? [])
+    .filter((space) => !hiddenSpaceIds.includes(space.id))
+    .filter((space) => !hideUnassignedExternalSpaces || ['group', 'personal'].includes(space.space_type))
+  const shouldShowSpaces = displaySpaces.length > 0 || archivedSpaces.length > 0 || !hideUnassignedExternalSpaces
   const displayedSprints = useMemo(
     () => [...activeSprints, ...planningSprints].slice(0, 8),
     [activeSprints, planningSprints],
@@ -916,7 +923,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
             to="/registration"
           />
         )}
-        {!collapsed && <SidebarSectionLabel onAdd={canCreateSpace ? () => setShowSpaceModal(true) : undefined}>Spaces</SidebarSectionLabel>}
+        {!collapsed && shouldShowSpaces && <SidebarSectionLabel onAdd={canCreateSpace ? () => setShowSpaceModal(true) : undefined}>Spaces</SidebarSectionLabel>}
         {displaySpaces.map((space) => (
           <div
             key={space.id}

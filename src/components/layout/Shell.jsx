@@ -1,6 +1,7 @@
 import { Suspense, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { SprintsProvider } from '../../features/sprints/SprintsContext'
+import { EventConfigProvider } from '../../features/registration/EventConfigContext'
 import { usePrefetchRoutes } from '../../hooks/usePrefetchRoutes'
 import PageSpinner from '../ui/PageSpinner'
 import NotificationPermissionPrompt from '../notifications/NotificationPermissionPrompt'
@@ -13,6 +14,7 @@ export default function Shell() {
 
   return (
     <SprintsProvider>
+      <EventConfigProvider>
         <div className="flex h-screen overflow-hidden bg-[var(--bg-app)]">
           {/* Desktop Sidebar */}
           <div className="hidden md:flex">
@@ -44,6 +46,7 @@ export default function Shell() {
             </main>
           </div>
         </div>
+      </EventConfigProvider>
     </SprintsProvider>
   )
 }

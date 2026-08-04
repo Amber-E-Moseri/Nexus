@@ -29,6 +29,9 @@ begin
     raise exception 'Template not found: %', p_template_id;
   end if;
 
+  -- Every activation locks template first and active second to avoid deadlocks.
+  perform id from event_configs where is_active = true for update;
+
   -- Deactivate the current active config (safe before insert because unique index is partial)
   update event_configs
   set is_active = false

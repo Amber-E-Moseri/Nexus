@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane } from 'lucide-react';
+import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import RegistrationEditModal from './RegistrationEditModal';
 import RegistrationDataTab from './RegistrationDataTab';
+import SettingsTab from './SettingsTab';
+import { useEventConfig } from './EventConfigContext';
 
 // ---------- brand tokens ----------
 const C = {
@@ -26,8 +28,6 @@ const C = {
 };
 
 const FONT_LINK = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap';
-
-const EXEMPT_FELLOWSHIPS = new Set(['BLW University of Manitoba', 'BLW University of Winnipeg']);;
 
 
 // Convert any raw time value to "h:mm AM/PM" for display
@@ -227,7 +227,7 @@ function Btn({ children, onClick, tone = 'primary', small, disabled }) {
   );
 }
 
-const ALL_TABS = [
+const DEFAULT_TABS = [
   { key: 'overview', label: 'Overview', icon: Home },
   { key: 'central',  label: 'Registration Data', icon: Users },
   { key: 'confirm', label: 'Delegates', icon: CheckCircle2, hidden: true },
@@ -239,9 +239,18 @@ const ALL_TABS = [
   { key: 'import', label: 'Import Data', icon: Upload },
 ];
 
-export default function App({ limitedToSubgroups = null, sprintEditAccess = false, financeAccess = false, limitedToRegistrationDataOnly = false }) {
+export default function App({ limitedToSubgroups = null, sprintEditAccess = false, financeAccess = false, limitedToRegistrationDataOnly = false, userTeamNames = [] }) {
   const { profile, role } = useAuth();
+  const { config, reload: reloadConfig } = useEventConfig();
+  const eventConfig = config || {
+    event_name: 'This Is It 2.0', sprint_pattern: '%This Is It 2.0%',
+    early_cutoff_at: '2026-08-06T00:00:00Z', early_fee: 250, standard_fee: 350,
+    local_detection_regex: 'manitoba|winnipeg',
+    exempt_fellowships: ['BLW University of Manitoba', 'BLW University of Winnipeg'],
+    public_token_key: 'tii2_public_token', tab_config: [],
+  };
   const [tab, setTab] = useState('overview');
+  const exemptFellowships = useMemo(() => new Set(eventConfig.exempt_fellowships || []), [eventConfig]);
   // isGloballyScoped: user has a subgroup scope — controls tab visibility
   const isGloballyScoped = !!(limitedToSubgroups?.length);
   // isLimited: filters displayed data — only applies to Registration Data tab when limitedToRegistrationDataOnly
@@ -391,7 +400,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       .then(({ data: grant }) => {
         if (grant) { setHasRoomsAccess(true); return; }
         // Accommodation team members in the active event sprint also get access
-        return supabase.from('sprints').select('id').ilike('name', '%This Is It 2.0%').limit(1).maybeSingle()
+        return supabase.from('sprints').select('id').ilike('name', eventConfig.sprint_pattern).limit(1).maybeSingle()
           .then(({ data: sprint }) => {
             if (!sprint?.id) return;
             return supabase.from('sprint_team_members')
@@ -406,7 +415,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
           });
       })
       .catch(() => {});
-  }, [profile?.id, profile?.is_programs_member, role]);
+  }, [profile?.id, profile?.is_programs_member, role, eventConfig.sprint_pattern]);
 
   useEffect(() => {
     (async () => {
@@ -563,12 +572,12 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       if (r.arrivalFlight || r.departureFlight) out[r.subgroup].flights++;
 
       // Count out-of-state people (excluding exempt fellowships) as flights needed
-      if (!r.inStateConfirmed && !EXEMPT_FELLOWSHIPS.has(r.fellowship)) {
+      if (!r.inStateConfirmed && !exemptFellowships.has(r.fellowship)) {
         out[r.subgroup].flightsNeeded++;
       }
     });
     return out;
-  }, [merged, subgroups]);
+  }, [merged, subgroups, exemptFellowships]);
 
   const totalRegs = registrationsFiltered.length;
   const totalRegTarget = Object.values(targets).reduce((s, t) => s + (Number(t.reg) || 0), 0);
@@ -578,10 +587,17 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   }, [rosterFiltered, regByEmail]);
 
   const visibleTabs = useMemo(() => {
-    const allowed = ALL_TABS.filter(t => {
+    const overrides = Object.fromEntries((eventConfig.tab_config || []).map((item) => [item.key, item]));
+    let tabs = DEFAULT_TABS.map((item) => ({ ...item, ...(config ? { hidden: false } : {}), ...(overrides[item.key] || {}) }));
+    if (role === 'super_admin') tabs = [...tabs, { key: 'settings', label: 'Settings', icon: Settings }];
+    const privileged = role === 'super_admin' || role === 'regional_secretary';
+    const allowed = tabs.filter(t => {
       if (t.hidden) return false;
-      // Finance: visible to super_admin (restricted msg on click), hidden to others without access
-      if (t.restricted && !hasFinanceAccess && role !== 'super_admin') return false;
+      if (t.key === 'settings') return role === 'super_admin';
+      if (t.team_whitelist?.length) {
+        return privileged || t.team_whitelist.some((allowedTeam) => userTeamNames.some((team) => team.toLowerCase().includes(allowedTeam.toLowerCase())));
+      }
+      if (t.restricted && !hasFinanceAccess && !privileged) return false;
       // Rooms: Accommodation/Programs teams, reg sec, super admin only
       if (t.key === 'rooms' && !hasRoomsAccess) return false;
       // Import Data: super admin only
@@ -590,7 +606,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       return true;
     });
     return allowed;
-  }, [hasFinanceAccess, hasRoomsAccess, isGloballyScoped, role]);
+  }, [config, eventConfig, hasFinanceAccess, hasRoomsAccess, isGloballyScoped, role, userTeamNames]);
 
   // ---------- persistence actions ----------
   const setTarget = useCallback((sg, field, val) => {
@@ -831,7 +847,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       <div style={{ background: C.purple, padding: '22px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 20, color: '#fff', letterSpacing: -0.3 }}>
-            This Is It 2.0{isLimited && <span style={{ fontSize: 14, fontWeight: 500, marginLeft: 12, opacity: 0.9 }}>• Viewing: {limitedToSubgroups.join(', ')}</span>}
+            {eventConfig.event_name}{isLimited && <span style={{ fontSize: 14, fontWeight: 500, marginLeft: 12, opacity: 0.9 }}>• Viewing: {limitedToSubgroups.join(', ')}</span>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 18, fontFamily: 'JetBrains Mono', fontSize: 11, color: '#D8CCF0' }}>
@@ -889,15 +905,16 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
             onConfirm={toggleConfirm}
             highlightEmail={highlightEmail}
             onClearHighlight={() => setHighlightEmail(null)}
+            publicTokenKey={eventConfig.public_token_key}
           />
         )}
         {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onEditReg: setEditingReg }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.inStateConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom, isLimited }} />}
-        {tab === 'transport' && <TransportTab {...{ merged, isLimited, onApplied: refetchRegistrations, onClearFlight: handleClearFlight }} />}
+        {tab === 'transport' && <TransportTab {...{ merged, isLimited, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, exemptFellowships }} />}
         {tab === 'finance' && (hasFinanceAccess
-          ? <FinanceTab {...{ registrations: registrationsFiltered, payments, setPayments, userId: profile?.id }} />
+          ? <FinanceTab {...{ registrations: registrationsFiltered, payments, setPayments, userId: profile?.id, earlyCutoffAt: eventConfig.early_cutoff_at, earlyFee: eventConfig.early_fee, standardFee: eventConfig.standard_fee }} />
           : <div style={{ padding: 48, textAlign: 'center' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
               <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>Access Restricted</div>
@@ -905,6 +922,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
             </div>
         )}
         {tab === 'import' && <ImportTab {...{ handleImport, handleImportWorkingList, roster: rosterFiltered, registrations: registrationsFiltered, workingListDb, lastImport, isLimited, onApiSyncApplied: refetchRegistrations }} />}
+        {tab === 'settings' && role === 'super_admin' && <SettingsTab config={config} onSaved={reloadConfig} />}
       </div>
     </div>
   );
@@ -1494,11 +1512,10 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
 
 // ============ FINANCE TAB ============
 // Early-bird cutoff: $250 until Aug 5, $350 after
-const EARLY_CUTOFF = new Date('2026-08-06T00:00:00');
-function getDefaultFee() { return new Date() < EARLY_CUTOFF ? 250 : 350; }
-
-function FinanceTab({ registrations, payments, setPayments, userId }) {
-  const defaultFee = getDefaultFee();
+function FinanceTab({ registrations, payments, setPayments, userId, earlyCutoffAt, earlyFee = 250, standardFee = 350 }) {
+  const earlyCutoff = earlyCutoffAt ? new Date(earlyCutoffAt) : null;
+  const earlyBirdActive = !earlyCutoff || new Date() < earlyCutoff;
+  const defaultFee = earlyBirdActive ? Number(earlyFee) : Number(standardFee);
   const payByEmail = useMemo(() => Object.fromEntries(payments.map(p => [p.email, p])), [payments]);
 
   const rows = useMemo(() => registrations.map(r => {
@@ -1567,7 +1584,6 @@ function FinanceTab({ registrations, payments, setPayments, userId }) {
   }
 
   const fmt = n => `$${Number(n).toFixed(2)}`;
-  const earlyBirdActive = new Date() < EARLY_CUTOFF;
 
   return (
     <div>
@@ -2067,7 +2083,7 @@ function FlightsSyncBlock({ onApplied }) {
   );
 }
 
-function TransportTab({ merged, isLimited, onApplied, onClearFlight }) {
+function TransportTab({ merged, isLimited, onApplied, onClearFlight, exemptFellowships }) {
   const [subgroupFilter, setSubgroupFilter] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
   const [clearingEmail, setClearingEmail] = useState(null);
@@ -2100,7 +2116,7 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight }) {
 
   // Out-of-state delegates = not inStateConfirmed, not from exempt fellowships
   const outOfState = useMemo(() =>
-    merged.filter(r => !r.inStateConfirmed && !EXEMPT_FELLOWSHIPS.has(r.fellowship)),
+    merged.filter(r => !r.inStateConfirmed && !exemptFellowships.has(r.fellowship)),
     [merged]);
 
   const filtered = useMemo(() =>

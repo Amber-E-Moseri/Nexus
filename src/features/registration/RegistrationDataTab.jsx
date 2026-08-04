@@ -166,6 +166,7 @@ export default function RegistrationDataTab({
   highlightEmail,
   onClearHighlight,
   sprintEditAccess = false,
+  publicTokenKey = 'tii2_public_token',
 }) {
   // sprintEditAccess = Registration team members can edit even when scoped
   const canEdit = sprintEditAccess || (
@@ -228,22 +229,22 @@ export default function RegistrationDataTab({
   // Load existing share token on mount
   useEffect(() => {
     supabase.from('registration_config')
-      .select('value').eq('key', 'tii2_public_token').maybeSingle()
+      .select('value').eq('key', publicTokenKey).maybeSingle()
       .then(({ data }) => { if (data?.value) setPublicToken(data.value); });
-  }, []);
+  }, [publicTokenKey]);
 
   async function handleGenerateToken() {
     setTokenLoading(true);
     const token = crypto.randomUUID();
     await supabase.from('registration_config')
-      .upsert({ key: 'tii2_public_token', value: token, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+      .upsert({ key: publicTokenKey, value: token, updated_at: new Date().toISOString() }, { onConflict: 'key' });
     setPublicToken(token);
     setTokenLoading(false);
   }
 
   async function handleRemoveToken() {
     setTokenLoading(true);
-    await supabase.from('registration_config').delete().eq('key', 'tii2_public_token');
+    await supabase.from('registration_config').delete().eq('key', publicTokenKey);
     setPublicToken(null);
     setTokenLoading(false);
   }

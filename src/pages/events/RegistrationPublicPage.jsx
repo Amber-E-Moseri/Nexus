@@ -45,6 +45,12 @@ export default function RegistrationPublicPage() {
   const [subgroupFilter,setSubgroupFilter] = useState('All');
   const [fellowshipFilter, setFellowshipFilter] = useState('All');
   const [statusFilter,  setStatusFilter]  = useState('all');
+  const [eventName, setEventName] = useState('This Is It 2.0');
+
+  useEffect(() => {
+    supabase.from('event_configs').select('event_name').eq('is_active', true).maybeSingle()
+      .then(({ data }) => { if (data?.event_name) setEventName(data.event_name); });
+  }, []);
 
   useEffect(() => {
     if (!token) { setInvalid(true); return; }
@@ -128,7 +134,7 @@ export default function RegistrationPublicPage() {
       {/* Header */}
       <div style={{ background: C.purple, padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 700, fontSize: 18, color: '#fff' }}>This Is It 2.0</div>
+          <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 700, fontSize: 18, color: '#fff' }}>{eventName}</div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Registration Overview — Read Only</div>
         </div>
         <div style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 20 }}>
@@ -300,7 +306,7 @@ export default function RegistrationPublicPage() {
         </div>
 
         <div style={{ marginTop: 20, textAlign: 'center', fontSize: 11, color: C.mute }}>
-          BLW Canada Nexus · This Is It 2.0 · Shared registration view
+          BLW Canada Nexus · {eventName} · Shared registration view
         </div>
       </div>
     </div>

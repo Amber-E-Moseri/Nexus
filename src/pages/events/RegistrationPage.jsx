@@ -3,28 +3,25 @@ import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import PageSpinner from '../../components/ui/PageSpinner'
 import RegistrationEcosystem from '../../features/registration/RegistrationEcosystem'
+import { useEventConfig } from '../../features/registration/EventConfigContext'
 
-// Full view + edit, no subgroup scope
-const UNSCOPED_EDIT_TEAMS = ['Programs', 'Secretariat']
-
-// Full view + finance tab only, no edit, no subgroup scope
-const FINANCE_TEAMS = ['Finance']
-
-// Scoped to own subgroup on ALL tabs + edit
-const SCOPED_EDIT_ALL_TABS = ['Registration']
-
-// Scoped to own subgroup on Registration Data tab only + edit (see all on their own team tab)
-const SCOPED_EDIT_REG_ONLY = ['Accommodation', 'Hospitality']
-
-// Scoped to own subgroup on Registration Data tab only, view only
-const SCOPED_VIEW_REG_ONLY = [
-  'Transportation',
-  'Foundation School Graduation and Baptism',
-  'Delegates Compliance',
-]
+// Preserve the live TII 2.0 behaviour until an administrator deliberately
+// activates a configuration for a subsequent event.
+const LEGACY_TII_CONFIG = {
+  sprint_pattern: '%This Is It 2.0%',
+  team_permissions: {
+    unscoped_edit: ['Programs', 'Secretariat'],
+    finance_only: ['Finance'],
+    scoped_edit_all: ['Registration'],
+    scoped_edit_reg: ['Accommodation', 'Hospitality'],
+    scoped_view_reg: ['Transportation', 'Foundation School Graduation and Baptism', 'Delegates Compliance'],
+  },
+}
 
 export default function RegistrationPage() {
   const { profile, role } = useAuth()
+  const { config, loading: configLoading } = useEventConfig()
+  const eventConfig = config || LEGACY_TII_CONFIG
   const [canAccess, setCanAccess] = useState(null)
   const [loading, setLoading] = useState(true)
   const [limitedToSubgroups, setLimitedToSubgroups] = useState(null)
@@ -32,12 +29,18 @@ export default function RegistrationPage() {
   const [financeAccess, setFinanceAccess] = useState(false)
   const [limitedToRegistrationDataOnly, setLimitedToRegistrationDataOnly] = useState(false)
   const [needsSubgroupAssignment, setNeedsSubgroupAssignment] = useState(false)
+  const [userTeamNames, setUserTeamNames] = useState([])
 
   useEffect(() => {
+    if (configLoading) return
     checkAccess()
-  }, [profile?.id, role])
+  }, [profile?.id, role, configLoading, config])
 
   async function checkAccess() {
+    setLoading(true)
+    setNeedsSubgroupAssignment(false)
+    setLimitedToSubgroups(null)
+    setUserTeamNames([])
     if (!profile?.id) {
       setCanAccess(false); setLoading(false); return
     }
@@ -81,11 +84,18 @@ export default function RegistrationPage() {
         // No explicit assignment — fall through to sprint team membership check below
       }
 
-      // Look up "This Is It 2.0" sprint
+      const permissions = eventConfig.team_permissions || {}
+      const UNSCOPED_EDIT_TEAMS = permissions.unscoped_edit || []
+      const FINANCE_TEAMS = permissions.finance_only || []
+      const SCOPED_EDIT_ALL_TABS = permissions.scoped_edit_all || []
+      const SCOPED_EDIT_REG_ONLY = permissions.scoped_edit_reg || []
+      const SCOPED_VIEW_REG_ONLY = permissions.scoped_view_reg || []
+
+      // Look up the configured event sprint. An empty pattern intentionally grants no access.
       const { data: sprint } = await supabase
         .from('sprints')
         .select('id')
-        .ilike('name', '%This Is It 2.0%')
+        .ilike('name', eventConfig.sprint_pattern || '')
         .limit(1)
         .maybeSingle()
 
@@ -118,6 +128,7 @@ export default function RegistrationPage() {
       const userTeamNames = memberRows
         .map(r => teams.find(t => t.id === r.team_id)?.name || '')
         .filter(Boolean)
+      setUserTeamNames(userTeamNames)
       const matchesAny = (list) => userTeamNames.some(name =>
         list.some(t => name.toLowerCase().includes(t.toLowerCase()))
       )
@@ -238,13 +249,20 @@ export default function RegistrationPage() {
 
   if (loading) return <PageSpinner />
 
+  if (canAccess === 'no_event') return (
+    <div style={{ padding: 40, textAlign: 'center', color: '#8A7F99' }}>
+      <p>Registration has not been configured yet.</p>
+      <p>Please contact an administrator.</p>
+    </div>
+  )
+
   if (!canAccess) {
     if (needsSubgroupAssignment) {
       return (
         <div style={{ padding: 40, maxWidth: 520, margin: '0 auto' }}>
           <h1 style={{ marginBottom: 12, fontSize: 20 }}>Subgroup Assignment Needed</h1>
           <p style={{ color: '#444', marginBottom: 16, lineHeight: 1.6 }}>
-            You're on a sprint team for This Is It 2.0, but no subgroup has been assigned to you yet.
+            You're on an event sprint team, but no subgroup has been assigned to you yet.
             A super admin needs to assign your subgroup before you can access registration data.
           </p>
           <div style={{
@@ -273,6 +291,7 @@ export default function RegistrationPage() {
       sprintEditAccess={sprintEditAccess}
       financeAccess={financeAccess}
       limitedToRegistrationDataOnly={limitedToRegistrationDataOnly}
+      userTeamNames={userTeamNames}
     />
   )
 }

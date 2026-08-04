@@ -11,8 +11,8 @@ const STEPS = [
   },
   {
     num: 2,
-    title: 'Update the Code',
-    time: '20 min',
+    title: 'Configure the Event',
+    time: '10 min',
     description: '6 files — make all edits in one PR',
     content: 'Update sprint name, event name, team lists, and form URLs across: Sidebar.jsx, RegistrationPage.jsx, RegistrationEcosystem.jsx, RegistrationPublicPage.jsx, and the two edge functions.'
   },
