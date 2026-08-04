@@ -287,7 +287,7 @@ export default function MeetingsModule() {
       <TabBar active={activeTab} onChange={handleTabChange} visibleTabs={visibleTabs} />
 
       {activeTab === 'report' ? (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', background: '#FBF8F2' }}>
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '1.5rem', background: '#FBF8F2' }}>
           <MeetingReportTab />
         </div>
       ) : activeTab === 'roster' ? (

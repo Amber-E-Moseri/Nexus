@@ -390,7 +390,7 @@ export default function MeetingReportPublicPage() {
 `
 
   return (
-    <div className="public-report-page" style={{ minHeight: '100vh', background: PAGE_BG }}>
+    <div className="public-report-page" style={{ minHeight: '100vh', background: PAGE_BG, overflowX: 'hidden' }}>
       <style>{PRINT_STYLES_FULL}</style>
 
       <header className="public-report-header" style={{ background: HEADER_GRADIENT, padding: isMobile ? '20px 16px' : '40px 28px' }}>

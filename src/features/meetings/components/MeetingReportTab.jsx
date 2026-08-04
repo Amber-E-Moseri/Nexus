@@ -2044,7 +2044,7 @@ export default function MeetingReportTab() {
     return (
       <>
         <style>{PRINT_STYLES}</style>
-        <div className="screen-report-root" style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', margin: '-1.5rem', background: '#F2EFF8' }}>
+        <div className="screen-report-root" style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', margin: '-1.5rem', background: '#F2EFF8', maxWidth: 'calc(100% + 3rem)', overflowX: 'hidden' }}>
           <header
             className="report-header screen-only"
             style={{
