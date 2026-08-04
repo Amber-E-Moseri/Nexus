@@ -17,11 +17,28 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   })
 }
 
-async function verifyServiceRole(req: Request): Promise<boolean> {
+async function verifyAccess(req: Request): Promise<boolean> {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return false
   const token = authHeader.replace('Bearer ', '')
-  return token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!token) return false
+
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    )
+    const { data: { user }, error } = await supabase.auth.getUser(token)
+    if (error || !user) return false
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    return profile?.role === 'super_admin'
+  } catch {
+    return false
+  }
 }
 
 function buildNudgeHtml(
@@ -87,7 +104,7 @@ function buildNudgeHtml(
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed' })
-  if (!(await verifyServiceRole(req))) return jsonResponse(401, { error: 'Unauthorized' })
+  if (!(await verifyAccess(req))) return jsonResponse(401, { error: 'Unauthorized' })
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
@@ -183,12 +200,28 @@ Deno.serve(async (req) => {
     mentionsByUser[n.user_id] = (mentionsByUser[n.user_id] ?? 0) + 1
   }
 
-  // ── 6. Send emails ───────────────────────────────────────────────────────────
+  // ── 6. Weekly send cap (max 2 emails per person per 7 days) ─────────────────
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const eligibleEmails = eligible.map((u) => u.email).filter(Boolean)
+  const { data: weeklyLogs } = await supabase
+    .from('email_delivery_log')
+    .select('recipient_email')
+    .in('recipient_email', eligibleEmails)
+    .eq('status', 'sent')
+    .gte('sent_at', sevenDaysAgo)
+
+  const weeklyCount: Record<string, number> = {}
+  for (const row of weeklyLogs ?? []) {
+    weeklyCount[row.recipient_email] = (weeklyCount[row.recipient_email] ?? 0) + 1
+  }
+
+  // ── 7. Send emails ───────────────────────────────────────────────────────────
   let sent = 0
   let skipped = 0
   const errors: string[] = []
 
   for (const user of eligible) {
+    if ((weeklyCount[user.email] ?? 0) >= 2) { skipped++; continue }
     const firstName = (user.name ?? 'Team Member').split(' ')[0]
     const pendingCount = pendingByUser[user.id] ?? 0
     const unreadMentions = mentionsByUser[user.id] ?? 0

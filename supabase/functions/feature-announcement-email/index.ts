@@ -187,11 +187,28 @@ Deno.serve(async (req) => {
 
   if (!eligible.length) return jsonResponse(200, { sent: 0, message: 'All users opted out' })
 
-  // ── 3. Send ──────────────────────────────────────────────────────────────────
+  // ── 3. Weekly send cap (max 2 emails per person per 7 days) ─────────────────
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const eligibleEmails = eligible.map((u) => u.email).filter(Boolean)
+  const { data: recentLogs } = await supabase
+    .from('email_delivery_log')
+    .select('recipient_email')
+    .in('recipient_email', eligibleEmails)
+    .eq('status', 'sent')
+    .gte('sent_at', sevenDaysAgo)
+
+  const weeklyCount: Record<string, number> = {}
+  for (const row of recentLogs ?? []) {
+    weeklyCount[row.recipient_email] = (weeklyCount[row.recipient_email] ?? 0) + 1
+  }
+
+  // ── 4. Send ──────────────────────────────────────────────────────────────────
   let sent = 0
+  let skipped = 0
   const errors: string[] = []
 
   for (const user of eligible) {
+    if ((weeklyCount[user.email] ?? 0) >= 2) { skipped++; continue }
     const firstName = (user.name ?? 'there').split(' ')[0]
 
     const html = buildAnnouncementHtml(
@@ -237,5 +254,5 @@ Deno.serve(async (req) => {
     await new Promise((r) => setTimeout(r, 100))
   }
 
-  return jsonResponse(200, { sent, skipped: eligible.length - sent, errors: errors.length ? errors : undefined })
+  return jsonResponse(200, { sent, skipped, errors: errors.length ? errors : undefined })
 })

@@ -100,8 +100,9 @@ describe('Personal List Sublists', () => {
     it('should prevent deletion of default sublist', async () => {
       vi.spyOn(supabase, 'from').mockReturnValueOnce({
         delete: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        mockResolvedValueOnce({ error: { message: 'Cannot delete the default sublist' } }),
+        eq: vi.fn().mockReturnValueOnce({
+          eq: vi.fn().mockResolvedValueOnce({ error: { message: 'Cannot delete the default sublist' } }),
+        }),
       })
 
       await expect(deletePersonalSublist(testUserId, testListId)).rejects.toThrow(

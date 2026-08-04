@@ -333,12 +333,28 @@ Deno.serve(async (req) => {
     if (u.department_id) ;(membersByDept[u.department_id] ??= []).push(u)
   }
 
-  // ── 8. Send emails ───────────────────────────────────────────────────────────
+  // ── 8. Weekly send cap (max 2 emails per person per 7 days) ─────────────────
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const eligibleEmails = eligible.map((u) => u.email).filter(Boolean)
+  const { data: recentLogs } = await supabase
+    .from('email_delivery_log')
+    .select('recipient_email')
+    .in('recipient_email', eligibleEmails)
+    .eq('status', 'sent')
+    .gte('sent_at', sevenDaysAgo)
+
+  const weeklyCount: Record<string, number> = {}
+  for (const row of recentLogs ?? []) {
+    weeklyCount[row.recipient_email] = (weeklyCount[row.recipient_email] ?? 0) + 1
+  }
+
+  // ── 9. Send emails ───────────────────────────────────────────────────────────
   let sent = 0
   let skipped = 0
   const errors: string[] = []
 
   for (const user of eligible) {
+    if ((weeklyCount[user.email] ?? 0) >= 2) { skipped++; continue }
     const firstName = (user.name ?? 'Team Member').split(' ')[0]
     const userTasks = openByUser[user.id] ?? []
     const openCount = userTasks.length
