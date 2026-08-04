@@ -582,11 +582,14 @@ function MeetingDetailViewInner() {
       // Fall back to minutes for legacy rows that haven't been edited via the
       // rich editor yet (notes_blocks null).
       const notesPlainText = meeting?.notes_text || meeting?.minutes || ''
+      // The AI review panel keeps a separate detailed summary until it is
+      // copied into Minutes. Include that reviewed detail in the PDF now.
+      const detailedSummary = editableDetailedNotes.trim() || notesPlainText
       const blob = await generateMinutesPDF({
-        summary: meeting?.meeting_notes || notesPlainText,
+        summary: editableSummary.trim() || meeting?.meeting_notes || notesPlainText,
         decisions: splitLines(decisionsText),
         nextSteps: splitLines(meeting?.next_steps || ''),
-        detailedNotes: notesPlainText,
+        detailedNotes: detailedSummary,
         actionItems: actionItems.map((t) => ({
           action: t.title,
           owner: t.assignee?.name || 'Unassigned',
