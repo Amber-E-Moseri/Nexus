@@ -1,6 +1,8 @@
 # Nexus — BLW Canada Operations Platform
 
-**Internal operations platform for BLW Canada Sub-Region** — a ~50-person team across 5 departments. Replaces ClickUp ($600/month) with a purpose-built workspace for task management, meetings, sprints, communications, calendar coordination, CRM, event registration, and automations. **Saves $550/month · $6,600/year.**
+**Built by one person. Designed for many.**
+
+A production operations platform serving 50 users daily — built to replace ClickUp ($600/month) and architected from day one for volunteer stewardship and organizational handoff. Not just a feature-rich platform, but a demonstration that solo devs can ship systems robust enough for business-critical use.
 
 **Live:** [nexus.lwcanada.org](https://nexus.lwcanada.org)
 
@@ -8,6 +10,15 @@
 
 ## Quick Links
 
+- **[Maintainer Runbooks](docs/RUNBOOKS.md)** — deployments, incidents, emergency access, and recovery
+- **[Architecture Diagram](docs/architecture/NEXUS_ARCHITECTURE.md)** — data flow, relationships, dependencies, and secret boundaries
+- **[Features by Team](docs/FEATURES_BY_TEAM.md)** — ownership and escalation map
+- **[Local Development Checklist](docs/LOCAL_DEV_SETUP.md)** — verified setup and first-run checks
+- **[Code Tour](docs/CODE_TOUR.md)** — 30-minute maintainer walkthrough
+- **[Permission Matrix](docs/PERMISSION_MATRIX.md)** — least-privilege access model
+- **[Staging and Onboarding](docs/STAGING_AND_ONBOARDING.md)** — volunteer progression and staging baseline
+- **[Incident Log](docs/INCIDENTS.md)** — production incident record
+- **[Weekly Maintenance Template](docs/WEEKLY_MAINTENANCE_TEMPLATE.md)** — async maintenance update format
 - **[Full Feature Catalog](docs/FEATURES.md)** — Complete breakdown of every feature
 - **[Architecture Decisions](docs/architecture/decision-catalog.md)** — 35+ design rationales
 - **[Security Guidelines](docs/SECURITY.md)** — RLS, JWT, auth patterns
@@ -25,6 +36,24 @@
 | **Saving** | | **$6,600/year** |
 
 Beyond cost, ClickUp couldn't model BLW Canada's workflows: ministry-scoped meetings, pastor contact management, delegate registration with compliance tracking, or absence notifications. Nexus is purpose-built for each.
+
+---
+
+## How It's Built to Last
+
+This codebase is architected for maintainability by volunteers, not just for launch:
+
+**RLS-First Security** — Access control baked into the database layer, not bolted on. Role-based policies resolve at query time; no leaky authorization logic in the frontend.
+
+**Documented Decisions** — [35+ architecture decisions](docs/architecture/decision-catalog.md) explain the *why* behind every major choice. The next maintainer won't reverse decisions blindly.
+
+**Scoped Code** — Feature modules with clear boundaries. No god components. Dependencies are explicit and documented in [CLAUDE.md](CLAUDE.md).
+
+**Volunteer Onboarding** — [Runbooks](docs/RUNBOOKS.md), [architecture diagrams](docs/architecture/NEXUS_ARCHITECTURE.md), [code tour](docs/CODE_TOUR.md), and a [staging environment](docs/STAGING_AND_ONBOARDING.md) ready for knowledge transfer.
+
+**Production Incident Log** — [Every incident](docs/INCIDENTS.md) is recorded with root cause and fix. Future maintainers learn from past fires.
+
+**Weekly Maintenance Template** — Async format for distributed team updates. Sustainability doesn't mean heroic commits; it means async, written communication.
 
 ---
 
@@ -48,14 +77,28 @@ Beyond cost, ClickUp couldn't model BLW Canada's workflows: ministry-scoped meet
 
 ## Key Features
 
-**Task Management** — Kanban/List/Table/Calendar views, two-tier statuses, subtasks, followers, @mentions, dependencies, archive/trash  
-**Meetings** — Agenda builder, Live Minutes Mode, AI transcription (Whisper WASM), Meeting Docs, PDF export, attendance tracking  
+**Task Management** — Kanban/List/Table/Calendar views, two-tier statuses, subtasks, followers, @mentions, dependencies, archive/trash
+
+![Task Kanban Board](docs/images/tasks-kanban-board.png)
+
+**Meetings** — Agenda builder, Live Minutes Mode, AI transcription (Whisper WASM), Meeting Docs, PDF export, attendance tracking
+
+![Meeting Live Minutes Mode](docs/images/meetings-live-minutes-mode.png)
+
 **Sprints** — Sprint board, teams, temporary membership, auto-expiration, sprint review  
 **Calendar** — Google/Outlook sync, RSVP system, approval queue, event subscriptions  
 **Communications** — Email campaigns, advanced segments, A/B testing, bounce tracking, RSVP invitations, analytics  
-**Personal Planning** — Today/Tomorrow views, time-blocking planner, Personal List with sublists, Wins tracker  
+
+**Personal Planning** — Today/Tomorrow views, time-blocking planner, Personal List with sublists, Wins tracker
+
+![Time-Blocking Planner](docs/images/planner-time-blocking-timeline.png)
+
 **Flock CRM** — Pastor contact management with role-scoped visibility  
-**Registration** — Delegate registration (6 tabs), room assignment, compliance tracking, public sign-up  
+
+**Registration** — Delegate registration (6 tabs), room assignment, compliance tracking, public sign-up
+
+![Room Assignment](docs/images/registration-room-assignment.png)
+
 **Organization** — Org chart (editable), pastoral assignments, department directory, support tickets  
 **Dashboard** — Customizable widgets: activity feed, progress, workload, attendance, charts  
 **Automations & API** — Rule engine, task REST API (60 req/min), scoped keys  
@@ -137,7 +180,30 @@ Core tables: `users` · `spaces` · `folders` · `lists` · `tasks` · `task_com
 
 ---
 
-## Contributing
+## What Makes This Uncommon
+
+**1. Solo Dev + Production System + Real Users**  
+Most students don't ship. Most who ship don't have 50 people using it daily. This has all three. That alone is rare.
+
+**2. Architectural Responsibility**  
+This isn't just coded features—it's deliberately architected for RLS-first security, state management clarity, and future maintenance. Principal-engineer thinking from day one.
+
+**3. Knowledge Transfer Mindset**  
+Most devs ship and ghost. This project is being intentionally designed for volunteer handoff: documented decisions, runbooks, staged onboarding, incident logs. That's maturity and rare in young projects.
+
+---
+
+## Maintenance & Knowledge Transfer
+
+This codebase is designed to be maintained by volunteers. Start here if you're new.
+
+**Getting Oriented**
+- [Code Tour](docs/CODE_TOUR.md) — 30-minute walkthrough of core systems
+- [Architecture Diagram](docs/architecture/NEXUS_ARCHITECTURE.md) — data flow and relationships
+- [Local Development Checklist](docs/LOCAL_DEV_SETUP.md) — verified first-run setup
+- [Staging & Onboarding](docs/STAGING_AND_ONBOARDING.md) — how volunteers progress from read-only to commit access
+
+**Making Changes**
 
 **Branch naming:** `feature/*` · `fix/*` · `docs/*` · `refactor/*`
 
@@ -155,8 +221,11 @@ Core tables: `users` · `spaces` · `folders` · `lists` · `tasks` · `task_com
 - Smoke test checklist: sign-in, create task, invite user, trigger automation
 - RLS policy review if touching auth/permissions
 - No breaking changes to public API without deprecation
+- Update [INCIDENTS.md](docs/INCIDENTS.md) if this fixes a known bug
 
 **Testing:** Unit tests for utilities and hooks; end-to-end manual testing on preview.
+
+**Running into a Problem?** Check [Common Issues](#common-issues) or [docs/INCIDENTS.md](docs/INCIDENTS.md) for past fires.
 
 ---
 
@@ -190,13 +259,23 @@ Keys are SHA-256 hashed (shown once). **Regenerate** to rotate; old key stops im
 
 ## Documentation
 
+**For Maintainers & Volunteers:**
+- **[Maintainer Runbooks](docs/RUNBOOKS.md)** — Deployments, incidents, emergency access, recovery procedures
+- **[Code Tour](docs/CODE_TOUR.md)** — 30-minute guided walkthrough of core systems
+- **[Local Development Checklist](docs/LOCAL_DEV_SETUP.md)** — Verified setup and first-run checks
+- **[Architecture Diagram](docs/architecture/NEXUS_ARCHITECTURE.md)** — Data flow, relationships, dependencies
+- **[Staging & Onboarding](docs/STAGING_AND_ONBOARDING.md)** — Volunteer progression and baseline environment
+- **[Incident Log](docs/INCIDENTS.md)** — Production incident record with root causes
+- **[Weekly Maintenance Template](docs/WEEKLY_MAINTENANCE_TEMPLATE.md)** — Async maintenance update format
+- **[Permission Matrix](docs/PERMISSION_MATRIX.md)** — Least-privilege access model
+
+**For Developers & Contributors:**
 - **[DECISIONS.md](DECISIONS.md)** — Recent feature decisions (August 2026+)
-- **[docs/README.md](docs/README.md)** — Master documentation index
-- **[docs/FEATURES.md](docs/FEATURES.md)** — Exhaustive feature catalog
-- **[docs/architecture/](docs/architecture/)** — Architecture decisions + patterns
+- **[docs/FEATURES.md](docs/FEATURES.md)** — Exhaustive feature catalog with every setting, widget, integration
+- **[docs/architecture/decision-catalog.md](docs/architecture/decision-catalog.md)** — 35+ design rationales and trade-offs
+- **[docs/SECURITY.md](docs/SECURITY.md)** — RLS, JWT, auth patterns
 - **[docs/deployment/](docs/deployment/)** — Production setup + checklists
 - **[docs/guides/](docs/guides/)** — Testing, troubleshooting, verification
-- **[docs/SECURITY.md](docs/SECURITY.md)** — Security guidelines
 
 ---
 
