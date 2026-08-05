@@ -354,7 +354,8 @@ Deno.serve(async (req) => {
   const errors: string[] = []
 
   for (const user of eligible) {
-    if ((weeklyCount[user.email] ?? 0) >= 2) { skipped++; continue }
+    const cap = user.role === 'dept_lead' ? 1 : 2
+    if ((weeklyCount[user.email] ?? 0) >= cap) { skipped++; continue }
     const firstName = (user.name ?? 'Team Member').split(' ')[0]
     const userTasks = openByUser[user.id] ?? []
     const openCount = userTasks.length

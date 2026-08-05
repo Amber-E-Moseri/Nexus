@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
   // ── 1. Users inactive 14+ days ───────────────────────────────────────────────
   const { data: inactiveUsers, error: usersError } = await supabase
     .from('users')
-    .select('id, name, email, last_active_at')
+    .select('id, name, email, role, last_active_at')
     .eq('status', 'active')
     .not('email', 'is', null)
     .lt('last_active_at', threeDaysAgo.toISOString())
@@ -221,7 +221,8 @@ Deno.serve(async (req) => {
   const errors: string[] = []
 
   for (const user of eligible) {
-    if ((weeklyCount[user.email] ?? 0) >= 2) { skipped++; continue }
+    const cap = user.role === 'dept_lead' ? 1 : 2
+    if ((weeklyCount[user.email] ?? 0) >= cap) { skipped++; continue }
     const firstName = (user.name ?? 'Team Member').split(' ')[0]
     const pendingCount = pendingByUser[user.id] ?? 0
     const unreadMentions = mentionsByUser[user.id] ?? 0
