@@ -48,9 +48,6 @@ export default function Login() {
           <h1 className="mt-6 text-[40px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
             Welcome back!
           </h1>
-          <p className="mt-2 text-base text-[var(--text-secondary)]">
-            Sign in to access BLW CAN NEXUS.
-          </p>
           {resetMessage ? (
             <div className="mt-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--sage-border)', background: 'var(--sage-light)', color: 'var(--sage)' }}>
               {resetMessage}

@@ -201,16 +201,6 @@ export default function NovaChat() {
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
-            {messages.length === 0 ? (
-              <div className="flex flex-col items-start">
-                <div
-                  className="max-w-[92%] rounded-[12px] rounded-bl-[4px] px-3 py-2"
-                  style={{ background: 'var(--surface-secondary)', color: 'var(--text-primary)' }}
-                >
-                  <span className="text-[12.5px]">Hi, I&apos;m Nova, your Nexus assistant.</span>
-                </div>
-              </div>
-            ) : null}
             {messages.map((m) =>
                 m.role === 'user' ? (
                   <div key={m.id} className="flex justify-end">
