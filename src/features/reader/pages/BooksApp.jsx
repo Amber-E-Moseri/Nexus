@@ -33,6 +33,11 @@ export default function BooksApp() {
   const [showEndModal, setShowEndModal] = useState(false)
   const [fontSize, setFontSize] = useState(() => Number(localStorage.getItem('immerse-font-size')) || 24)
   const [lineHeight, setLineHeight] = useState(() => Number(localStorage.getItem('immerse-line-height')) || 1.8)
+  const [bookmarks, setBookmarks] = useState(() => {
+    if (!book?.id) return []
+    const stored = localStorage.getItem(`immerse-bookmarks-${book.id}`)
+    return stored ? JSON.parse(stored) : []
+  })
 
   // Track sentences played this session for usage deduction
   const sessionSentencesRef = useRef(0)
@@ -98,6 +103,9 @@ export default function BooksApp() {
     }
     sessionSentencesRef.current = 0
     setBook(b)
+    // Load bookmarks for this book
+    const stored = localStorage.getItem(`immerse-bookmarks-${b.id}`)
+    setBookmarks(stored ? JSON.parse(stored) : [])
     setLibrary((prev) => !b.isShared && !prev.some((x) => x.id === b.id) ? [...prev, b] : prev)
     setPage('reader')
   }
@@ -145,6 +153,31 @@ export default function BooksApp() {
       if (accumulated >= targetOffset) { seekToIdx(i); return }
     }
     seekToIdx(seconds > 0 ? sentences.length - 1 : 0)
+  }
+
+  function addBookmark() {
+    if (!book?.id) return
+    const bookmark = {
+      id: crypto.randomUUID(),
+      bookId: book.id,
+      sentenceIdx: currentIdx,
+      text: sentences[currentIdx],
+      timestamp: new Date().toISOString(),
+    }
+    const updated = [...bookmarks, bookmark]
+    setBookmarks(updated)
+    localStorage.setItem(`immerse-bookmarks-${book.id}`, JSON.stringify(updated))
+  }
+
+  function removeBookmark(bookmarkId) {
+    if (!book?.id) return
+    const updated = bookmarks.filter(b => b.id !== bookmarkId)
+    setBookmarks(updated)
+    localStorage.setItem(`immerse-bookmarks-${book.id}`, JSON.stringify(updated))
+  }
+
+  function jumpToBookmark(sentenceIdx) {
+    seekToIdx(sentenceIdx)
   }
 
   function handleSpeedChange(s) { setSpeed(s); setPlayerSpeed(s) }
@@ -214,6 +247,7 @@ export default function BooksApp() {
           speed={speed}
           highlights={highlights}
           notes={notes}
+          bookmarks={bookmarks}
           selectionInfo={selectionInfo}
           fontSize={fontSize}
           lineHeight={lineHeight}
@@ -228,6 +262,9 @@ export default function BooksApp() {
           onAddHighlight={book?.isShared ? undefined : addHighlight}
           onAddNote={book?.isShared ? undefined : addNote}
           onRemoveAnnotation={book?.isShared ? undefined : removeAnnotation}
+          onAddBookmark={book?.isShared ? undefined : addBookmark}
+          onRemoveBookmark={book?.isShared ? undefined : removeBookmark}
+          onJumpToBookmark={jumpToBookmark}
           onSelectionChange={setSelectionInfo}
           onBack={() => setPage('home')}
           onOpenSettings={() => setShowSettings(true)}

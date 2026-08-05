@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Maximize2, Book, ChevronLeft } from 'lucide-react'
+import { Maximize2, Book, ChevronLeft, Bookmark } from 'lucide-react'
 import ReadingPanel from '../components/ReadingPanel'
 import MobilePlayer from '../components/MobilePlayer'
 import PlayerControls from '../components/PlayerControls'
@@ -11,10 +11,10 @@ import { IconBack, IconSettings } from '../icons'
 
 export default function ReaderPage({
   book, sentences, currentIdx, isPlaying, elapsedTime, totalTime, voice, speed,
-  highlights, notes, selectionInfo, fontSize, lineHeight, credits,
+  highlights, notes, bookmarks, selectionInfo, fontSize, lineHeight, credits,
   onPlay, onPause, onSeek, onSkip, onSpeedChange, onVoiceChange,
-  onAddHighlight, onAddNote, onRemoveAnnotation, onSelectionChange,
-  onBack, onOpenSettings, onEndSession,
+  onAddHighlight, onAddNote, onRemoveAnnotation, onAddBookmark, onRemoveBookmark, onJumpToBookmark,
+  onSelectionChange, onBack, onOpenSettings, onEndSession,
 }) {
   const navigate = useNavigate()
   const [playerVisible, setPlayerVisible] = useState(true)
@@ -40,6 +40,11 @@ export default function ReaderPage({
     ...highlights.map((h) => ({ ...h })),
     ...notes.map((n) => ({ ...n })),
   ].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+
+  // Check if current sentence is bookmarked
+  const isCurrentBookmarked = useMemo(() => {
+    return bookmarks?.some(b => b.sentenceIdx === currentIdx) ?? false
+  }, [bookmarks, currentIdx])
 
   // Real-time credit tracking (0.2 mins per sentence = 0.0033 hrs per sentence)
   const creditMetrics = useMemo(() => {
@@ -146,6 +151,10 @@ export default function ReaderPage({
             </button>
             <button onClick={toggleSidebar} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: sidebarVisible ? 'var(--im-text)' : 'var(--im-text-dim)' }}>
               <ChevronLeft size={12} /> {sidebarVisible ? 'Hide' : 'Show'}
+            </button>
+            <button onClick={() => isCurrentBookmarked ? onRemoveBookmark?.(bookmarks.find(b => b.sentenceIdx === currentIdx)?.id) : onAddBookmark?.()}
+              style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: isCurrentBookmarked ? 'var(--im-blue)' : 'var(--im-text-dim)' }}>
+              <Bookmark size={12} fill={isCurrentBookmarked ? 'currentColor' : 'none'} /> Bookmark
             </button>
             <button onClick={onOpenSettings} style={hdrBtn}><IconSettings size={14} /> Settings</button>
             <button onClick={onEndSession} style={{ ...hdrBtn, background: 'var(--im-blue)', color: '#fff', borderRadius: 6, padding: '5px 12px' }}>
