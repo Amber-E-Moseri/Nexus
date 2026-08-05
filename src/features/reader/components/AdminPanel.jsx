@@ -48,8 +48,9 @@ export default function AdminPanel({ myBooks, onBack }) {
     setGifting(true)
     try {
       await giftCredits(giftTarget.id, h, giftNote, giftRecurring)
-      setCredits((prev) => ({ ...prev, [giftTarget.id]: (prev[giftTarget.id] ?? 0) + h * 60 }))
-      showToast(`Gifted ${h}h to ${giftTarget.full_name}`)
+      const newBalance = (credits[giftTarget.id] ?? 0) + h * 60
+      setCredits((prev) => ({ ...prev, [giftTarget.id]: newBalance }))
+      showToast(`✓ Gifted ${h}h to ${giftTarget.name}${giftRecurring ? ' (recurring)' : ''}`, true)
       setGiftTarget(null); setGiftHours(''); setGiftNote(''); setGiftRecurring(false)
     } catch (err) {
       showToast(err?.message ?? 'Failed to gift credits', false)

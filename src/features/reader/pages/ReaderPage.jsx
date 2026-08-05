@@ -152,6 +152,13 @@ export default function ReaderPage({
         </button>
       </div>
 
+      {/* Low credit warning */}
+      {credits < 60 && (
+        <div style={{ background: '#FEF3C7', borderBottom: '1px solid #FBBF24', padding: '10px 16px', textAlign: 'center', fontSize: 12, color: '#92400E', fontFamily: 'Inter, sans-serif', fontWeight: 500 }}>
+          Low on credits: {(credits / 60).toFixed(1)} hrs remaining
+        </div>
+      )}
+
       {/* Reading area — centered, full flex */}
       <div style={{ flex: 1, overflowY: viewMode === 'scroll' ? 'auto' : 'hidden', overflowX: 'hidden', background: 'var(--im-bg)', display: 'flex', flexDirection: 'column', minWidth: 0, justifyContent: 'center', alignItems: 'center', padding: '20px 16px' }} onScroll={handleScroll}>
         <ReadingPanel
