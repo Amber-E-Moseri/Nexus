@@ -140,28 +140,20 @@ export default function ReaderPage({
   return (
     <>
       {/* Mobile header */}
-      <div className="im-header">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--im-border)', background: 'var(--im-card)', flexShrink: 0 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text)', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'Inter, sans-serif', minWidth: 72 }}>
           <IconBack size={15} /> Library
         </button>
-        <span style={{ fontSize: 12, color: 'var(--im-text-muted)', fontWeight: 600 }}>
-          {Math.round((currentIdx / Math.max(1, sentences.length - 1)) * 100)}%
+        <span style={{ fontSize: 12, color: 'var(--im-blue)', fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>
+          Credits: {(credits / 60).toFixed(1)} hrs
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 72, justifyContent: 'flex-end' }}>
-          <button onClick={() => setShowChapters(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-blue)', fontSize: 11, fontWeight: 700, fontFamily: 'Inter, sans-serif', padding: '4px 6px', borderRadius: 6, background: 'var(--im-blue-bg)' }}>
-            Ch
-          </button>
-          <button onClick={toggleViewMode} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-muted)', fontSize: 11, fontWeight: 700, fontFamily: 'Inter, sans-serif', padding: '4px 6px', borderRadius: 6 }}>
-            {viewMode === 'scroll' ? '≡' : '⧉'}
-          </button>
-          <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 18, fontWeight: 700 }}>
-            ···
-          </button>
-        </div>
+        <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 16, fontWeight: 700, minWidth: 32, justifyContent: 'flex-end' }}>
+          ···
+        </button>
       </div>
 
-      {/* Reading area */}
-      <div style={{ flex: 1, overflowY: viewMode === 'scroll' ? 'auto' : 'hidden', overflowX: 'hidden', background: '#FAFAFA', display: 'flex', flexDirection: 'column', minWidth: 0 }} onScroll={handleScroll}>
+      {/* Reading area — centered, full flex */}
+      <div style={{ flex: 1, overflowY: viewMode === 'scroll' ? 'auto' : 'hidden', overflowX: 'hidden', background: 'var(--im-bg)', display: 'flex', flexDirection: 'column', minWidth: 0, justifyContent: 'center', alignItems: 'center', padding: '20px 16px' }} onScroll={handleScroll}>
         <ReadingPanel
           sentences={sentences}
           currentIdx={currentIdx}
@@ -174,18 +166,21 @@ export default function ReaderPage({
         />
       </div>
 
-      <MobilePlayer
-        isPlaying={isPlaying}
-        progress={currentIdx / Math.max(1, sentences.length - 1)}
-        elapsedTime={elapsedTime}
-        voice={voice}
-        speed={speed}
-        visible={playerVisible}
-        onPlay={() => onPlay(currentIdx)}
-        onPause={onPause}
-        onVoiceChange={onVoiceChange}
-        onSpeedChange={onSpeedChange}
-      />
+      {/* Player at bottom */}
+      <div style={{ background: 'var(--im-card)', borderTop: '1px solid var(--im-border)', padding: '12px 16px', flexShrink: 0 }}>
+        <MobilePlayer
+          isPlaying={isPlaying}
+          progress={currentIdx / Math.max(1, sentences.length - 1)}
+          elapsedTime={elapsedTime}
+          voice={voice}
+          speed={speed}
+          visible={true}
+          onPlay={() => onPlay(currentIdx)}
+          onPause={onPause}
+          onVoiceChange={onVoiceChange}
+          onSpeedChange={onSpeedChange}
+        />
+      </div>
 
       {selectionInfo && (
         <HighlightPopup
