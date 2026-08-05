@@ -41,6 +41,24 @@ export default function ReaderPage({
     ...notes.map((n) => ({ ...n })),
   ].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
 
+  // Real-time credit tracking (0.2 mins per sentence = 0.0033 hrs per sentence)
+  const creditMetrics = useMemo(() => {
+    const MINS_PER_SENTENCE = 0.2
+    const creditsUsedMins = currentIdx * MINS_PER_SENTENCE
+    const creditsUsedHrs = creditsUsedMins / 60
+    const creditsRemaining = Math.max(0, parseFloat(credits) - creditsUsedHrs)
+    const totalSentences = sentences.length
+    const estimatedTotalHrs = (totalSentences * MINS_PER_SENTENCE) / 60
+    const costPerSentence = (MINS_PER_SENTENCE / 60).toFixed(4)
+    return {
+      usedHrs: creditsUsedHrs.toFixed(2),
+      remainingHrs: creditsRemaining.toFixed(2),
+      totalHrs: estimatedTotalHrs.toFixed(2),
+      costPerSentence,
+      progress: totalSentences > 0 ? Math.round((currentIdx / totalSentences) * 100) : 0,
+    }
+  }, [currentIdx, credits, sentences.length])
+
   function handleScroll(e) {
     const y = e.currentTarget.scrollTop
     setPlayerVisible(y <= lastScrollY.current || y < 50)
@@ -102,9 +120,14 @@ export default function ReaderPage({
           )}
         </div>
 
-        <span style={{ fontSize: isDesktop ? 'auto' : 12, color: 'var(--im-blue)', fontWeight: 600, fontFamily: 'Inter, sans-serif', background: isDesktop ? 'none' : 'var(--im-blue-bg)', border: isDesktop ? 'none' : '1px solid var(--im-blue-bg-2)', borderRadius: isDesktop ? 0 : 20, padding: isDesktop ? 0 : '3px 10px' }}>
-          Credits: {credits} hrs
-        </span>
+        <div style={{ fontSize: isDesktop ? 'auto' : 12, color: 'var(--im-blue)', fontWeight: 600, fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: isDesktop ? 12 : 6, background: isDesktop ? 'none' : 'var(--im-blue-bg)', border: isDesktop ? 'none' : '1px solid var(--im-blue-bg-2)', borderRadius: isDesktop ? 0 : 20, padding: isDesktop ? 0 : '3px 10px' }}>
+          <span>{creditMetrics.remainingHrs} hrs</span>
+          {isDesktop && (
+            <span style={{ fontSize: 11, color: 'var(--im-text-dim)', fontWeight: 400 }}>
+              ({creditMetrics.usedHrs} used • {creditMetrics.progress}%)
+            </span>
+          )}
+        </div>
 
         {isDesktop && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -138,10 +161,14 @@ export default function ReaderPage({
         )}
       </div>
 
-      {/* Low credit warning */}
-      {parseFloat(credits) < 1 && (
-        <div style={{ background: '#FEF3C7', borderBottom: '1px solid #FBBF24', padding: '10px 16px', textAlign: 'center', fontSize: 12, color: '#92400E', fontFamily: 'Inter, sans-serif', fontWeight: 500 }}>
-          Low on credits: {credits} hrs remaining
+      {/* Low credit warning with detailed breakdown */}
+      {parseFloat(creditMetrics.remainingHrs) < 1 && (
+        <div style={{ background: '#FEF3C7', borderBottom: '1px solid #FBBF24', padding: '10px 16px', fontSize: 12, color: '#92400E', fontFamily: 'Inter, sans-serif', fontWeight: 500 }}>
+          <div style={{ marginBottom: 6 }}>Low on credits: {creditMetrics.remainingHrs} hrs remaining</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 11, opacity: 0.85 }}>
+            <div>Cost per sentence: {creditMetrics.costPerSentence} hrs</div>
+            <div>Used this session: {creditMetrics.usedHrs} hrs</div>
+          </div>
         </div>
       )}
 
