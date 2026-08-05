@@ -25,6 +25,7 @@ export interface NovaKbEntry {
   answer: string
   feature_area: string
   applicable_roles: string[]
+  related_slugs?: string[]
 }
 
 export interface NovaSystemBlock {
@@ -72,17 +73,31 @@ correct response to those.
 Never merge knowledge base content across roles. Only use the entries provided to
 you below — they have already been filtered to the asking user's role.
 
-Each knowledge base entry below is tagged with a [slug] identifier. End every
-response with a final line, on its own, in exactly this machine-readable form
-(the caller strips this line before showing your answer to the user, so it does
-not need to read naturally):
+Each knowledge base entry below is tagged with a [slug] identifier. Some entries
+also have a RELATED line listing slugs of foundational or related entries.
+
+After giving your full answer, if any KB entry you used has a RELATED list, look
+up each listed slug in the knowledge base and briefly suggest those questions at
+the end of your answer — for example: "**You might also want to know:** [question
+text from that entry]." Only include entries that actually appear in this KB and
+are genuinely relevant to what was asked. List at most 3 suggestions; omit
+entirely if none are relevant. Keep each suggestion to one short line. Place
+these before the KB_USED line.
+
+End every response with a final line, on its own, in exactly this machine-readable
+form (the caller strips this line before showing your answer to the user, so it
+does not need to read naturally):
 KB_USED: slug-one,slug-two
 List every entry slug you actually drew on to answer. If you answered using a
 tool instead of the knowledge base, or you gave the "I don't know" fallback, or
 you declined an out-of-scope request, write exactly: KB_USED: none`
 
 function formatKbEntry(entry: NovaKbEntry): string {
-  return `[${entry.slug}] Q: ${entry.question}\nA: ${entry.answer}`
+  let text = `[${entry.slug}] Q: ${entry.question}\nA: ${entry.answer}`
+  if (entry.related_slugs && entry.related_slugs.length > 0) {
+    text += `\nRELATED: ${entry.related_slugs.join(',')}`
+  }
+  return text
 }
 
 // Grouped by feature_area so the model has topical locality when scanning —

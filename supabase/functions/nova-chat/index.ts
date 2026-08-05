@@ -378,7 +378,7 @@ serve(async (req) => {
     // rows — no client-side filtering needed or trusted.
     const { data: kbEntries, error: kbErr } = await userClient
       .from('nova_kb_entries')
-      .select('id, slug, question, answer, feature_area, applicable_roles')
+      .select('id, slug, question, answer, feature_area, applicable_roles, related_slugs')
       .order('feature_area', { ascending: true })
     if (kbErr) throw new Error('Could not load the knowledge base.')
 

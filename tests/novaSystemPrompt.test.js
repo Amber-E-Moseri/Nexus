@@ -25,6 +25,33 @@ const SAMPLE_ENTRIES = [
   },
 ]
 
+const SAMPLE_ENTRIES_WITH_RELATED = [
+  {
+    slug: 'sprints-what',
+    question: 'What is a sprint?',
+    answer: 'A sprint is a focused work period...',
+    feature_area: 'sprints',
+    applicable_roles: ['member'],
+    related_slugs: [],
+  },
+  {
+    slug: 'sprints-create',
+    question: 'How do I create a sprint?',
+    answer: 'Go to Sprints in the sidebar...',
+    feature_area: 'sprints',
+    applicable_roles: ['member'],
+    related_slugs: [],
+  },
+  {
+    slug: 'sprints-custom-vs-multi-dept',
+    question: 'Should I create a custom sprint or a multi-department sprint?',
+    answer: 'Both have no department owner...',
+    feature_area: 'sprints',
+    applicable_roles: ['member'],
+    related_slugs: ['sprints-what', 'sprints-create'],
+  },
+]
+
 describe('isNovaRole', () => {
   it('accepts every canonical role', () => {
     for (const role of NOVA_ROLES) expect(isNovaRole(role)).toBe(true)
@@ -138,6 +165,37 @@ describe('parseKbUsedTrailer', () => {
   it('collapses leftover blank lines after removing the marker so the answer has no dangling whitespace', () => {
     const { text } = parseKbUsedTrailer('answer text\n\nKB_USED: slug1,slug2\n\n')
     expect(text).toBe('answer text')
+  })
+})
+
+describe('related_slugs support in KB formatting', () => {
+  it('emits a RELATED line for entries that have related_slugs', () => {
+    const block = formatKbBlock(SAMPLE_ENTRIES_WITH_RELATED)
+    expect(block).toContain('RELATED: sprints-what,sprints-create')
+  })
+
+  it('does not emit a RELATED line for entries with an empty related_slugs array', () => {
+    const block = formatKbBlock(SAMPLE_ENTRIES_WITH_RELATED)
+    // sprints-what and sprints-create both have empty related_slugs
+    const sprintsWhatSection = block.split('[sprints-what]')[1]?.split('\n\n')[0] ?? ''
+    expect(sprintsWhatSection).not.toContain('RELATED:')
+  })
+
+  it('does not emit a RELATED line when related_slugs is absent (entries without the field)', () => {
+    const block = formatKbBlock(SAMPLE_ENTRIES)
+    expect(block).not.toContain('RELATED:')
+  })
+
+  it('embeds the RELATED hint inside the cached system block so the model sees it', () => {
+    const blocks = buildNovaSystemBlocks('member', SAMPLE_ENTRIES_WITH_RELATED)
+    expect(blocks[0].text).toContain('RELATED: sprints-what,sprints-create')
+  })
+
+  it('instructs the model to suggest related questions after the main answer', () => {
+    const blocks = buildNovaSystemBlocks('member', SAMPLE_ENTRIES_WITH_RELATED)
+    // The guardrail should mention related questions / RELATED list behaviour
+    expect(blocks[0].text).toMatch(/RELATED/i)
+    expect(blocks[0].text).toMatch(/you might also want to know|related.*question|suggest/i)
   })
 })
 
