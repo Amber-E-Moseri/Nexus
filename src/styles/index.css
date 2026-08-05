@@ -508,3 +508,17 @@ code, kbd { font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospa
 .rich-editor-content hr { border: none; border-top: 1px solid var(--border, #E9E4D8); margin: 12px 0; }
 .rich-editor-content a { color: var(--color-primary, #4C2A92); text-decoration: underline; }
 .rich-editor-content .ProseMirror-selectednode { outline: 2px solid var(--color-primary, #4C2A92); }
+
+/* ── Z-index scale ─────────────────────────────────────────────────────────
+   Named tiers so stacking contexts have a shared vocabulary. Nova's chat
+   widget is the first consumer; other fixed/sticky elements should migrate
+   to these tokens rather than inventing new one-off values.
+   Current ad-hoc values in the codebase (not yet migrated):
+     content dropdowns ~z-8 to z-30, modal overlays z-40, modal content z-50 */
+:root {
+  --z-dropdown:      20;
+  --z-chat-widget:   30;
+  --z-modal-overlay: 40;
+  --z-modal:         50;
+  --z-toast:         60;
+}
