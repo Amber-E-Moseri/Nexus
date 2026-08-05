@@ -47,6 +47,7 @@ import { archiveSpace, getSpacesByType, restoreSpace, updateSpace } from '../../
 import { supabase } from '../../lib/supabase'
 import { FLOCK_CRM_CONFIG, hasSpaceRole, hasGrant, isProgramsMember } from '../../lib/permissions.js'
 import { INSTAGRAM_GRADING_ENABLED } from '../../config/features.js'
+import QuickFeedbackModal from '../ui/QuickFeedbackModal'
 import SidebarSpaceTree from './SidebarSpaceTree'
 import SpaceModal from '../../features/spaces/components/SpaceModal'
 import CreateListModal from '../../features/spaces/components/CreateListModal'
@@ -311,6 +312,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const [toolsExpanded, setToolsExpanded] = useState(false)
   const [adminExpanded, setAdminExpanded] = useState(false)
   const [helpExpanded, setHelpExpanded] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [regionalUpdatesExpanded, setRegionalUpdatesExpanded] = useState(false)
   const [hiddenSpaceIds, setHiddenSpaceIds] = useState(() => {
     // Defer to profile load, will initialize after
@@ -1635,10 +1637,9 @@ export default function Sidebar({ isMobileDrawer = false }) {
               to="/help"
             />
             <SidebarItem
-              active={isPathActive(location.pathname, '/support')}
               icon={HeadphonesIcon}
               label="Get Support"
-              to="/support"
+              onClick={() => setFeedbackOpen(true)}
             />
             {role === 'super_admin' && (
               <SidebarItem
@@ -1786,6 +1787,13 @@ export default function Sidebar({ isMobileDrawer = false }) {
           onClose={() => setShowSprintModal(false)}
         />
       ) : null}
+      {feedbackOpen && (
+        <QuickFeedbackModal
+          userId={profile?.id}
+          userName={profile?.name ?? 'A team member'}
+          onClose={() => setFeedbackOpen(false)}
+        />
+      )}
     </aside>
   )
 }
