@@ -65,8 +65,21 @@ export default function AdminPanel({ myBooks, onBack }) {
     try {
       await shareBook(selectedBook, shareTarget.id, selectedTag || null)
       setHistory((prev) => [...prev, { source_book_id: selectedBook.id, shared_with: shareTarget.id }])
-      showToast(`"${selectedBook.title}" shared with ${shareTarget.full_name}`)
+      showToast(`"${selectedBook.title}" shared with ${shareTarget.name ?? shareTarget.email}`)
       setShareTarget(null); setSelectedTag('')
+    } catch (err) {
+      showToast(err?.message ?? 'Failed to share book', false)
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  async function handleShareToUser(book, user, tag) {
+    setSharing(true)
+    try {
+      await shareBook(book, user.id, tag || null)
+      setHistory((prev) => [...prev, { source_book_id: book.id, shared_with: user.id }])
+      showToast(`"${book.title}" shared with ${user.name ?? user.email}`)
     } catch (err) {
       showToast(err?.message ?? 'Failed to share book', false)
     } finally {
@@ -168,7 +181,7 @@ export default function AdminPanel({ myBooks, onBack }) {
                         ) : shareTarget?.id === u.id && sharing ? (
                           <span style={{ fontSize: 11, color: 'var(--im-text-dim)' }}>Sharing…</span>
                         ) : (
-                          <button onClick={() => { setShareTarget(u); handleShareTo(u) }} disabled={sharing}
+                          <button onClick={() => handleShareToUser(selectedBook, u, selectedTag)} disabled={sharing}
                             style={{ padding: '4px 10px', background: 'var(--im-blue)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', opacity: sharing ? 0.5 : 1 }}>
                             Share
                           </button>
@@ -192,7 +205,7 @@ export default function AdminPanel({ myBooks, onBack }) {
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--im-card)', borderRadius: 16, padding: 28, width: 340, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--im-text)', marginBottom: 4 }}>Gift Credits</div>
-            <div style={{ fontSize: 12, color: 'var(--im-text-dim)', marginBottom: 20 }}>To: {giftTarget.full_name} · {fmtHrs(credits[giftTarget.id])} remaining</div>
+            <div style={{ fontSize: 12, color: 'var(--im-text-dim)', marginBottom: 20 }}>To: {giftTarget.name ?? giftTarget.email} · {fmtHrs(credits[giftTarget.id])} remaining</div>
 
             <label style={labelStyle}>Hours to gift</label>
             <input type="number" min="0.5" step="0.5" value={giftHours} onChange={(e) => setGiftHours(e.target.value)} placeholder="e.g. 5" style={inputStyle} autoFocus />
