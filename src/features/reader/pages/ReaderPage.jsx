@@ -147,9 +147,19 @@ export default function ReaderPage({
         <span style={{ fontSize: 12, color: 'var(--im-blue)', fontWeight: 600, fontFamily: 'Inter, sans-serif', background: 'var(--im-blue-bg)', border: '1px solid var(--im-blue-bg-2)', borderRadius: 20, padding: '3px 10px' }}>
           Credits: {credits} hrs
         </span>
-        <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 16, fontWeight: 700, minWidth: 32, justifyContent: 'flex-end' }}>
-          ···
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={toggleViewMode} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', fontSize: 12, fontWeight: 600, fontFamily: 'Inter, sans-serif', padding: '4px 6px' }}>
+            {viewMode === 'scroll' ? '⇕' : '⧉'}
+          </button>
+          {sentences.length > 0 && (
+            <button onClick={() => setShowChapters(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', fontSize: 12, fontWeight: 600, fontFamily: 'Inter, sans-serif', padding: '4px 6px' }}>
+              ☰
+            </button>
+          )}
+          <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 16, fontWeight: 700, minWidth: 32, justifyContent: 'flex-end' }}>
+            ···
+          </button>
+        </div>
       </div>
 
       {/* Low credit warning — credits prop is already in hours */}
