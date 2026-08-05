@@ -9,7 +9,7 @@ import { IconBack, IconSettings } from '../icons'
 
 export default function ReaderPage({
   book, sentences, currentIdx, isPlaying, elapsedTime, totalTime, voice, speed,
-  highlights, notes, selectionInfo, fontSize, lineHeight,
+  highlights, notes, selectionInfo, fontSize, lineHeight, credits,
   onPlay, onPause, onSeek, onSkip, onSpeedChange, onVoiceChange,
   onAddHighlight, onAddNote, onRemoveAnnotation, onSelectionChange,
   onBack, onOpenSettings, onEndSession,
