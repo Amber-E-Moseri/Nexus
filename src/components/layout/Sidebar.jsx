@@ -1649,14 +1649,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
                 to="/admin/tickets"
               />
             )}
-            {role === 'super_admin' && (
-              <SidebarItem
-                active={isPathActive(location.pathname, '/admin/emails')}
-                icon={Mail}
-                label="Email Management"
-                to="/admin/emails"
-              />
-            )}
           </>
         )}
       </div>
