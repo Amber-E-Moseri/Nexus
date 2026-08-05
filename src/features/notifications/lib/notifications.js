@@ -113,6 +113,7 @@ export const NOTIFICATION_TYPES = {
   calendar_sync_failure: { label: 'Calendar sync failed', icon: '⚠️', description: 'When the Google Calendar sync fails for a space you manage' },
   support_ticket_submitted: { label: 'New support ticket', icon: '🎫', description: 'When a team member submits a support request' },
   support_ticket_reply: { label: 'Reply on your support ticket', icon: '💬', description: 'When admin replies to your support request' },
+  support_ticket_status_changed: { label: 'Support ticket resolved', icon: '✅', description: 'When your support request is marked resolved or closed' },
   task_completed: { label: 'Task completed', icon: '✅', description: 'When a task you are watching is marked complete' },
   weekly_digest: { label: 'Weekly Digest', icon: '📊', description: 'Monday summary of your open tasks, priorities, and sprint progress', emailOnly: true },
   dormant_nudge: { label: 'Dormant Nudge', icon: '👋', description: "Nudge email when you haven't visited in 3+ days (max once per month)", emailOnly: true },
@@ -268,6 +269,8 @@ export function formatNotificationMessage(notification) {
       return `${payload.submitter_name ?? 'Someone'} submitted a ${payload.category?.replace('_', ' ') ?? 'support'} request: "${payload.title ?? 'Untitled'}"`
     case 'support_ticket_reply':
       return `Admin replied to your request: "${payload.title ?? 'Untitled'}"`
+    case 'support_ticket_status_changed':
+      return `Your request "${payload.title ?? 'Untitled'}" has been marked ${payload.status ?? 'resolved'}`
     case 'task_completed':
       return `"${payload.task_title ?? 'A task'}" you were watching has been completed`
     case 'system':

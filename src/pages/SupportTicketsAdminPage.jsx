@@ -82,6 +82,14 @@ function TicketThread({ ticket, currentUserId, onUpdate }) {
   async function setStatus(status) {
     await supabase.from('support_tickets').update({ status }).eq('id', ticket.id)
     onUpdate()
+    if (['resolved', 'closed'].includes(status) && ticket.submitted_by !== currentUserId) {
+      createNotification(ticket.submitted_by, 'support_ticket_status_changed', {
+        title: ticket.title,
+        status,
+        ticket_id: ticket.id,
+        link: '/support',
+      }).catch(() => {})
+    }
   }
 
   const allMessages = [
