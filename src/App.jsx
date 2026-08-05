@@ -97,6 +97,7 @@ const CampusEditsPage = lazy(() => import('./pages/admin/CampusEditsPage'))
 const CampusPhotosSettings = lazy(() => import('./pages/settings/CampusPhotosSettings'))
 const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
 const EmailAdminPage = lazy(() => import('./pages/admin/EmailAdminPage'))
+const NovaReview = lazy(() => import('./pages/admin/NovaReview'))
 const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
 const RegistrationPublicPage = lazy(() => import('./pages/events/RegistrationPublicPage'))
 const SubscribePage = lazy(() => import('./pages/communications/SubscribePage'))
@@ -157,7 +158,7 @@ export default function App() {
         <Route
           path="/books"
           element={
-            <ProtectedRoute roles={['super_admin', 'regional_secretary']}>
+            <ProtectedRoute roles={['super_admin']}>
               <BooksApp />
             </ProtectedRoute>
           }
@@ -246,6 +247,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['super_admin']}>
                 <EmailAdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/nova-review"
+            element={
+              <ProtectedRoute roles={['super_admin', 'regional_secretary']}>
+                <NovaReview />
               </ProtectedRoute>
             }
           />
