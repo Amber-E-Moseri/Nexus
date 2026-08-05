@@ -142,9 +142,9 @@ export default function ReaderPage({
       {/* Mobile header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--im-border)', background: 'var(--im-card)', flexShrink: 0 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text)', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'Inter, sans-serif', minWidth: 72 }}>
-          <IconBack size={15} /> Home
+          <IconBack size={15} /> Library
         </button>
-        <span style={{ fontSize: 12, color: 'var(--im-blue)', fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>
+        <span style={{ fontSize: 12, color: 'var(--im-blue)', fontWeight: 600, fontFamily: 'Inter, sans-serif', background: 'var(--im-blue-bg)', border: '1px solid var(--im-blue-bg-2)', borderRadius: 20, padding: '3px 10px' }}>
           Credits: {credits} hrs
         </span>
         <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 16, fontWeight: 700, minWidth: 32, justifyContent: 'flex-end' }}>

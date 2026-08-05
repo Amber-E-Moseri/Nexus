@@ -14,22 +14,22 @@ export default function MobilePlayer({ isPlaying, progress, elapsedTime, voice, 
       bottom: 0,
       background: 'var(--im-card)',
       borderTop: '1px solid var(--im-border)',
-      padding: '12px 20px 20px',
+      padding: '14px 20px 22px',
       opacity: visible ? 1 : 0,
       pointerEvents: visible ? 'auto' : 'none',
       transition: 'opacity 0.2s',
       flexShrink: 0,
     }}>
       {/* Row 1: play + progress + time */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}>
         <button
           className="im-player-btn"
-          style={{ width: 42, height: 42, flexShrink: 0 }}
+          style={{ width: 46, height: 46, flexShrink: 0 }}
           onClick={isPlaying ? onPause : () => onPlay()}
         >
-          {isPlaying ? <IconPause size={18} color="#fff" /> : <IconPlay size={18} color="#fff" />}
+          {isPlaying ? <IconPause size={20} color="#fff" /> : <IconPlay size={20} color="#fff" />}
         </button>
-        <div className="im-progress-bar" style={{ flex: 1, height: 4 }}>
+        <div className="im-progress-bar" style={{ flex: 1, height: 3 }}>
           <div className="im-progress-fill" style={{ width: `${progress * 100}%` }} />
         </div>
         <span style={{ fontSize: 12, color: 'var(--im-text-dim)', minWidth: 34, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{elapsedTime}</span>

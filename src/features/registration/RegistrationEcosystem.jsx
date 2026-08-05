@@ -597,7 +597,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       if (t.team_whitelist?.length) {
         return privileged || t.team_whitelist.some((allowedTeam) => userTeamNames.some((team) => team.toLowerCase().includes(allowedTeam.toLowerCase())));
       }
-      if (t.restricted && !hasFinanceAccess && !privileged) return false;
+      if (t.restricted && !hasFinanceAccess && role !== 'regional_secretary') return false;
       // Rooms: Accommodation/Programs teams, reg sec, super admin only
       if (t.key === 'rooms' && !hasRoomsAccess) return false;
       // Import Data: super admin only

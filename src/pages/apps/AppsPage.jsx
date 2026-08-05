@@ -101,7 +101,7 @@ export default function AppsPage() {
   const role = profile?.role
   const isSuperAdmin = role === 'super_admin'
   const canSeeMap = ['super_admin', 'dept_lead', 'regional_secretary', 'pastor'].includes(role)
-  const canSeeLibrary = ['super_admin', 'regional_secretary'].includes(role)
+  const canSeeLibrary = role === 'super_admin'
   const canSeeCommunications = ['super_admin', 'regional_secretary', 'ors', 'dept_lead', 'programs'].includes(role)
   const navigate = useNavigate()
 
