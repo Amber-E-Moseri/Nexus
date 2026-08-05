@@ -65,10 +65,11 @@ This codebase is architected for maintainability by volunteers, not just for lau
 | UI & Animations | Radix UI, dnd-kit, Framer Motion, Recharts |
 | Rich Text | Tiptap (comments, meeting notes) |
 | State | React Query (server) + Context (auth, notifications, UI) |
-| Backend | Supabase (PostgreSQL + RLS + 20+ Edge Functions) |
+| Backend | Supabase (PostgreSQL + RLS + 25+ Edge Functions) |
 | Auth | Supabase Auth + custom token-based invite flow |
 | Real-time | Supabase Realtime (`postgres_changes` subscriptions) |
-| AI | Anthropic Claude API, Whisper WASM (in-browser transcription) |
+| AI | Anthropic Claude API, Whisper WASM (in-browser transcription), OpenAI TTS (audiobook narration via edge function) |
+| Storage | Supabase Storage (PDFs, documents with RLS + IndexedDB caching) |
 | Email | Resend (transactional + campaigns with webhooks) |
 | External Sync | Google Calendar OAuth, Google Drive, Slack, Outlook, Teams |
 | Hosting | Vercel (frontend) + Supabase (backend) |
@@ -102,7 +103,15 @@ This codebase is architected for maintainability by volunteers, not just for lau
 **Organization** — Org chart (editable), pastoral assignments, department directory, support tickets  
 **Dashboard** — Customizable widgets: activity feed, progress, workload, attendance, charts  
 **Automations & API** — Rule engine, task REST API (60 req/min), scoped keys  
-**Other** — Immerse e-reader, Regional Updates, BLW CAN Map, Files browser, Growth Tracking  
+
+**Immerse Reader** (`/books`) — AI-powered audiobook reader with:
+  - PDF import, AI narration (OpenAI TTS via secure edge function), playback controls
+  - Scroll or page-flip viewing modes (swipe navigation, persistent preference)
+  - Chapter detection & navigation (Audible-style drawer, desktop sidebar tabs)
+  - Highlights, notes, cross-device sync (Supabase metadata + IndexedDB cache)
+  - Admin gifting: TTS credit hours (stored as minutes), book sharing with custom tags
+
+**Other** — Regional Updates, BLW CAN Map, Files browser, Growth Tracking  
 
 **→ [Full feature breakdown](docs/FEATURES.md)**
 
@@ -129,6 +138,14 @@ VITE_SUPABASE_URL=             # Supabase project URL
 VITE_SUPABASE_ANON_KEY=        # Public anon key
 VITE_MEETING_OS_URL=           # Embedded Meeting OS URL
 ```
+
+### Immerse Reader (AI Audiobook)
+To enable TTS narration:
+1. Get an OpenAI API key from [platform.openai.com](https://platform.openai.com)
+2. Set it in Supabase dashboard: **Project Settings → Edge Functions → Secrets**
+   - Name: `OPENAI_API_KEY`
+   - Value: `sk-...`
+3. Edge function `immerse-tts` is auto-deployed; it proxies calls securely (key never exposed to browser)
 
 ### Database Setup
 1. Create a Supabase project
