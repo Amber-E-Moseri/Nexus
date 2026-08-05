@@ -180,19 +180,6 @@ Core tables: `users` · `spaces` · `folders` · `lists` · `tasks` · `task_com
 
 ---
 
-## What Makes This Uncommon
-
-**1. Solo Dev + Production System + Real Users**  
-Most students don't ship. Most who ship don't have 50 people using it daily. This has all three. That alone is rare.
-
-**2. Architectural Responsibility**  
-This isn't just coded features—it's deliberately architected for RLS-first security, state management clarity, and future maintenance. Principal-engineer thinking from day one.
-
-**3. Knowledge Transfer Mindset**  
-Most devs ship and ghost. This project is being intentionally designed for volunteer handoff: documented decisions, runbooks, staged onboarding, incident logs. That's maturity and rare in young projects.
-
----
-
 ## Maintenance & Knowledge Transfer
 
 This codebase is designed to be maintained by volunteers. Start here if you're new.

@@ -30,7 +30,7 @@ function TaskCard({ task, onClick, isDragging = false, onTaskUpdate, showSubtask
   const { profile, role } = useAuth()
   const { showToast } = useToast()
 
-  const [subtasksExpanded, setSubtasksExpanded] = useState(true)
+  const [subtasksExpanded, setSubtasksExpanded] = useState(false)
   const [dueDateOpen, setDueDateOpen] = useState(false)
   const [priorityOpen, setPriorityOpen] = useState(false)
   const [assigneeOpen, setAssigneeOpen] = useState(false)
