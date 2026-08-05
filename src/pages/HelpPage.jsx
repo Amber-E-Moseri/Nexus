@@ -1,7 +1,177 @@
 import { useMemo, useState } from 'react'
-import { Search, Headphones } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Search, Headphones, X } from 'lucide-react'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../hooks/useAuth'
+import { createNotification } from '../features/notifications/lib/notifications'
+
+const TICKET_CATEGORIES = [
+  { value: 'support', label: 'General Support', color: '#6366f1', bg: '#eef2ff' },
+  { value: 'task_request', label: 'Task Request', color: '#0891b2', bg: '#ecfeff' },
+  { value: 'bug', label: 'Bug Report', color: '#dc2626', bg: '#fef2f2' },
+  { value: 'feature_request', label: 'Feature Request', color: '#16a34a', bg: '#f0fdf4' },
+]
+
+async function notifySuperAdmins(type, payload) {
+  const { data: admins } = await supabase.from('users').select('id').eq('role', 'super_admin')
+  for (const admin of admins ?? []) {
+    createNotification(admin.id, type, payload).catch(() => {})
+  }
+}
+
+function SupportModal({ onClose, userId, userName }) {
+  const [form, setForm] = useState({ title: '', description: '', category: 'support', priority: 'normal' })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const [done, setDone] = useState(false)
+
+  async function submit(e) {
+    e.preventDefault()
+    if (!form.title.trim() || !form.description.trim()) return
+    setSaving(true)
+    setError(null)
+    const { error: err } = await supabase.from('support_tickets').insert({
+      title: form.title.trim(),
+      description: form.description.trim(),
+      category: form.category,
+      priority: form.priority,
+      submitted_by: userId,
+    })
+    if (err) { setError(err.message); setSaving(false); return }
+    notifySuperAdmins('support_ticket_submitted', {
+      title: form.title.trim(),
+      category: form.category,
+      submitter_name: userName,
+      link: '/admin/tickets',
+    })
+    setDone(true)
+    setSaving(false)
+  }
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(14,14,30,.35)', zIndex: 400 }}
+      />
+      <div style={{
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: 'min(520px, 92vw)',
+        background: 'var(--surface-card)',
+        border: '1px solid var(--border-1)',
+        borderRadius: 20,
+        boxShadow: '0 20px 60px rgba(28,22,16,.18)',
+        zIndex: 401,
+        fontFamily: FONT_BODY,
+        overflow: 'hidden',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--border-1)' }}>
+          <span style={{ fontFamily: FONT_HEADING, fontWeight: 700, fontSize: 15, color: 'var(--ink-1)' }}>Submit a Support Request</span>
+          <button type="button" onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 4, display: 'flex' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ padding: '20px 22px' }}>
+          {done ? (
+            <div style={{ textAlign: 'center', padding: '24px 0' }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
+              <p style={{ fontFamily: FONT_HEADING, fontWeight: 700, fontSize: 15, color: 'var(--ink-1)', marginBottom: 6 }}>Request submitted!</p>
+              <p style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 20 }}>Your admin has been notified and will respond in-app.</p>
+              <button type="button" onClick={onClose} style={{ padding: '9px 22px', borderRadius: 10, border: 'none', background: 'var(--purple-700)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                Close
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>Type of request</label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {TICKET_CATEGORIES.map((c) => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, category: c.value }))}
+                      style={{
+                        padding: '5px 12px', borderRadius: 99, border: '2px solid',
+                        borderColor: form.category === c.value ? c.color : 'transparent',
+                        background: form.category === c.value ? c.bg : 'var(--surface-sub)',
+                        color: form.category === c.value ? c.color : 'var(--ink-2)',
+                        fontFamily: FONT_BODY, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 5 }}>
+                  Title <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <input
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="Brief summary of your request"
+                  required
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid var(--border-1)', fontFamily: FONT_BODY, fontSize: 13, color: 'var(--ink-1)', outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 5 }}>
+                  Description <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="Describe the issue or request in detail."
+                  required
+                  rows={4}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid var(--border-1)', fontFamily: FONT_BODY, fontSize: 13, color: 'var(--ink-1)', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 5 }}>Priority</label>
+                  <select
+                    value={form.priority}
+                    onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
+                    style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border-1)', fontFamily: FONT_BODY, fontSize: 13, color: 'var(--ink-1)', background: 'var(--surface-card)', cursor: 'pointer' }}
+                  >
+                    {['low', 'normal', 'high', 'urgent'].map((p) => (
+                      <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }} />
+                {error && <p style={{ fontSize: 12, color: '#dc2626', margin: 0 }}>{error}</p>}
+                <button
+                  type="submit"
+                  disabled={saving || !form.title.trim() || !form.description.trim()}
+                  style={{
+                    padding: '9px 20px', borderRadius: 10, border: 'none', alignSelf: 'flex-end',
+                    background: (saving || !form.title.trim() || !form.description.trim()) ? 'var(--surface-sub)' : 'var(--purple-700)',
+                    color: (saving || !form.title.trim() || !form.description.trim()) ? 'var(--ink-3)' : '#fff',
+                    fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700,
+                    cursor: (saving || !form.title.trim() || !form.description.trim()) ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {saving ? 'Submitting…' : 'Submit Request'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
 
 const FAQ_SECTIONS = [
   {
@@ -559,7 +729,8 @@ function normalize(text) {
 export default function HelpPage() {
   const [query, setQuery] = useState('')
   const [openId, setOpenId] = useState(null)
-  const navigate = useNavigate()
+  const [showSupport, setShowSupport] = useState(false)
+  const { user, profile } = useAuth()
 
   const filteredSections = useMemo(() => {
     const q = normalize(query.trim())
@@ -698,12 +869,20 @@ export default function HelpPage() {
           </div>
           <button
             type="button"
-            onClick={() => navigate('/support')}
+            onClick={() => setShowSupport(true)}
             style={{ padding: '9px 18px', background: '#4C2A92', color: '#fff', border: 'none', borderRadius: 10, fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
           >
             Get Support
           </button>
         </div>
+
+      {showSupport && (
+        <SupportModal
+          onClose={() => setShowSupport(false)}
+          userId={user?.id}
+          userName={profile?.name ?? 'Unknown'}
+        />
+      )}
       </main>
     </div>
   )

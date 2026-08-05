@@ -1148,9 +1148,9 @@ export default function Dashboard() {
             ))}
           </div>
         ) : (
-          <div className="dash-stagger" style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
             {[visibleWidgets.filter((_, i) => i % 2 === 0), visibleWidgets.filter((_, i) => i % 2 !== 0)].map((col, ci) => (
-              <div key={ci} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div key={ci} className="dash-stagger" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {col.map((pref) => (
                   <WidgetCard
                     key={pref.widget_key}
