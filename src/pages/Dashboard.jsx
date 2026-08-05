@@ -1131,8 +1131,8 @@ export default function Dashboard() {
             </button>{' '}
             to add some.
           </div>
-        ) : (
-          <div className="grid gap-4 dash-stagger" style={{ gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))' }}>
+        ) : isMobile ? (
+          <div className="dash-stagger" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {visibleWidgets.map((pref) => (
               <WidgetCard
                 key={pref.widget_key}
@@ -1145,6 +1145,26 @@ export default function Dashboard() {
                 onUnpin={handleUnpin}
                 data={dashboardData?.[pref.widget_key]}
               />
+            ))}
+          </div>
+        ) : (
+          <div className="dash-stagger" style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+            {[visibleWidgets.filter((_, i) => i % 2 === 0), visibleWidgets.filter((_, i) => i % 2 !== 0)].map((col, ci) => (
+              <div key={ci} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {col.map((pref) => (
+                  <WidgetCard
+                    key={pref.widget_key}
+                    widgetKey={pref.widget_key}
+                    role={role}
+                    userId={profile?.id}
+                    departmentId={profile?.department_id}
+                    config={pref.config}
+                    onConfigChange={(config) => handleConfigChange(pref.widget_key, config)}
+                    onUnpin={handleUnpin}
+                    data={dashboardData?.[pref.widget_key]}
+                  />
+                ))}
+              </div>
             ))}
           </div>
         )}
