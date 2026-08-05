@@ -1118,7 +1118,7 @@ You can:
 - Zoom in/out to navigate the chart
 - Filter by department to see just one team''s structure
 
-The org chart is read-only for most users — only admins can update it.',
+The org chart is read-only for most users — only super_admin and regional_secretary can edit node and edge text. All other authenticated users (every role, every department) can view the full org chart with no restriction.',
   'org_directory',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member']
 ),
