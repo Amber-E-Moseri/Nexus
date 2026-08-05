@@ -110,8 +110,12 @@ export default function BooksApp() {
       ...bookData,
     }
     setShowImport(false)
-    saveStoredBook(b).catch((err) => console.error('Unable to save imported book', err))
-    if (b.pdfBuffer) uploadBookPdf(b.id, b.pdfBuffer).catch((err) => console.error('[reader] PDF upload failed in handleImport', err))
+    try {
+      await saveStoredBook(b)
+      if (b.pdfBuffer) await uploadBookPdf(b.id, b.pdfBuffer)
+    } catch (err) {
+      console.error('[reader] Import workflow failed', err)
+    }
     openBook(b)
   }
 
