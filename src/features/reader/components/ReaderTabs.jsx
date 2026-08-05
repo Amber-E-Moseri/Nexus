@@ -3,7 +3,7 @@ import ReadingPanel from './ReadingPanel'
 import PlayerControls from './PlayerControls'
 import MobilePlayer from './MobilePlayer'
 
-const TABS = ['Stream', 'PDF', 'Book', 'Listen', 'Read', 'Tandem']
+const TABS = ['Read', 'Listen', 'Tandem', 'Navigate']
 
 export default function ReaderTabs({
   book, sentences, currentIdx, isPlaying, elapsedTime, totalTime, voice, speed,
@@ -23,95 +23,64 @@ export default function ReaderTabs({
   const progress = sentences.length > 1 ? currentIdx / (sentences.length - 1) : 0
   const progressPercent = Math.round(progress * 100)
 
-  // Stream tab: highlights overview synchronized with audio
-  function StreamView() {
-    const streamHighlights = highlights.slice(0, 10)
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '16px', height: '100%', overflowY: 'auto' }}>
-        <div style={{ fontSize: 14, color: 'var(--im-text-dim)', fontWeight: 500 }}>Highlights & Notes</div>
-        {streamHighlights.length > 0 ? (
-          streamHighlights.map((h, i) => (
-            <div key={h.id || i} style={{ padding: '12px', background: 'var(--im-sidebar-bg)', borderRadius: 8, borderLeft: '3px solid var(--im-blue)' }}>
-              <div style={{ fontSize: 13, color: 'var(--im-text)', fontStyle: 'italic', marginBottom: 6 }}>{h.text}</div>
-              <div style={{ fontSize: 11, color: 'var(--im-text-dim)' }}>Sentence {h.sentenceIdx}</div>
-            </div>
-          ))
-        ) : (
-          <div style={{ fontSize: 12, color: 'var(--im-text-dim)', textAlign: 'center', paddingTop: 40 }}>No highlights yet</div>
-        )}
-      </div>
-    )
-  }
+  // Navigation tab: chapters + headers table of contents
+  function NavigationView() {
+    const headers = useMemo(() => {
+      const list = []
+      sentences.forEach((s, idx) => {
+        const isHeading = /^(chapter|part|prologue|epilogue|introduction|preface|afterword)\b/i.test(s.trim()) || /^[A-Z\s\d]{4,40}$/.test(s.trim())
+        if (isHeading && s.trim().length < 50) {
+          list.push({ title: s.trim(), idx, type: 'header' })
+        }
+      })
+      if (list.length === 0 && sentences.length > 0) list.push({ title: 'Start', idx: 0, type: 'start' })
+      return list
+    }, [sentences])
 
-  // PDF tab: page-flip view
-  function PDFView() {
-    const totalPages = Math.ceil(sentences.length / 6)
-    const currentPage = Math.floor(currentIdx / 6) + 1
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-        <ReadingPanel
-          sentences={sentences}
-          currentIdx={currentIdx}
-          highlights={highlights}
-          onSelectionChange={onSelectionChange}
-          onSeek={onSeek}
-          fontSize={Math.min(fontSize, 20)}
-          lineHeight={lineHeight}
-          viewMode="pages"
-        />
-        <div style={{ fontSize: 12, color: 'var(--im-text-dim)', marginTop: 12 }}>
-          Page {currentPage} / {totalPages} ({progressPercent}%)
-        </div>
-      </div>
-    )
-  }
+    const currentHeaderIdx = useMemo(() => {
+      let ci = 0
+      for (let i = 0; i < headers.length; i++) {
+        if (headers[i].idx <= currentIdx) ci = i; else break
+      }
+      return ci
+    }, [headers, currentIdx])
 
-  // Book tab: cover + metadata
-  function BookView() {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24, padding: '32px 16px', height: '100%' }}>
-        <div style={{ width: 120, height: 160, background: 'var(--im-sidebar-bg)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--im-text-dim)', fontSize: 48 }}>
-          📖
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', background: 'var(--im-bg)' }}>
+        <div style={{ padding: '16px', borderBottom: '1px solid var(--im-border)', background: 'var(--im-card)', flexShrink: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--im-text-dim)' }}>Chapters & Sections</div>
         </div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--im-text)', marginBottom: 4 }}>{book.title}</div>
-          {book.author && <div style={{ fontSize: 14, color: 'var(--im-text-dim)', marginBottom: 12 }}>{book.author}</div>}
-          <div style={{ fontSize: 13, color: 'var(--im-text-dim)' }}>
-            {book.wordCount} words · {book.estimatedMinutes} min
-          </div>
-        </div>
-        <div style={{ width: '100%', maxWidth: 300 }}>
-          {isDesktop ? (
-            <PlayerControls
-              isPlaying={isPlaying}
-              progress={progress}
-              elapsedTime={elapsedTime}
-              totalTime={totalTime}
-              voice={voice}
-              speed={speed}
-              currentIdx={currentIdx}
-              totalSentences={sentences.length}
-              onPlay={() => onPlay(currentIdx)}
-              onPause={onPause}
-              onSeek={onSeek}
-              onSkip={onSkip}
-              onVoiceChange={onVoiceChange}
-              onSpeedChange={onSpeedChange}
-            />
-          ) : (
-            <MobilePlayer
-              isPlaying={isPlaying}
-              progress={progress}
-              elapsedTime={elapsedTime}
-              voice={voice}
-              speed={speed}
-              visible={true}
-              onPlay={() => onPlay(currentIdx)}
-              onPause={onPause}
-              onVoiceChange={onVoiceChange}
-              onSpeedChange={onSpeedChange}
-            />
-          )}
+        <div style={{ flex: 1 }}>
+          {headers.map((h, i) => {
+            const isActive = i === currentHeaderIdx
+            const nextIdx = headers[i + 1]?.idx ?? sentences.length
+            const done = currentIdx >= nextIdx
+            return (
+              <button
+                key={h.idx}
+                onClick={() => onSeek(h.idx)}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '12px 16px',
+                  background: isActive ? 'var(--im-blue-bg)' : 'transparent',
+                  border: 'none',
+                  borderBottom: '1px solid var(--im-border)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                }}
+              >
+                <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? 'var(--im-blue)' : 'var(--im-text-dim)', minWidth: 24 }}>
+                  {done && '✓'}{!done && isActive && '›'}
+                </span>
+                <span style={{ fontSize: 13, color: isActive ? 'var(--im-blue)' : done ? 'var(--im-text-dim)' : 'var(--im-text)', fontWeight: isActive ? 600 : 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {h.title}
+                </span>
+              </button>
+            )
+          })}
         </div>
       </div>
     )
@@ -168,11 +137,15 @@ export default function ReaderTabs({
     )
   }
 
-  // Read tab: text-only, no audio player
+  // Read tab: clean text view with minimal highlighting/notes (Apple Notes style)
   function ReadView() {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1 }}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--im-bg)' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: isDesktop ? '40px 120px' : '20px 16px', maxWidth: isDesktop ? 800 : '100%', margin: '0 auto', width: '100%' }}>
+          <div style={{ marginBottom: 40 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--im-text)', marginBottom: 8 }}>{book.title}</div>
+            {book.author && <div style={{ fontSize: 14, color: 'var(--im-text-dim)' }}>{book.author}</div>}
+          </div>
           <ReadingPanel
             sentences={sentences}
             currentIdx={currentIdx}
@@ -242,12 +215,10 @@ export default function ReaderTabs({
   }
 
   const tabViews = {
-    Stream: <StreamView />,
-    PDF: <PDFView />,
-    Book: <BookView />,
-    Listen: <ListenView />,
     Read: <ReadView />,
+    Listen: <ListenView />,
     Tandem: <TandemView />,
+    Navigate: <NavigationView />,
   }
 
   return (
