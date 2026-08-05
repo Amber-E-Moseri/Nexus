@@ -183,9 +183,22 @@ export default function AudioTranscriptionPanel({
         .from('meeting_transcriptions')
         .select('id, input_type, input_file_name, summary, sequence_number, created_at')
         .eq('meeting_id', meetingId)
-        .order('sequence_number', { ascending: true })
+        .order('created_at', { ascending: false })
       if (!error && data) {
-        setTranscriptions(data)
+        const storagePathRe = /^[0-9a-f]{8}-[0-9a-f-]{27,}-\d+\.[a-z0-9]+$/i
+        const isStoragePath = (fn) => fn && storagePathRe.test(fn)
+        const seen = new Set()
+        const deduped = []
+        for (const row of data) {
+          const humanName = !isStoragePath(row.input_file_name) ? row.input_file_name : null
+          const key = humanName || (row.summary || '').slice(0, 120) || row.id
+          if (!seen.has(key)) {
+            seen.add(key)
+            deduped.push(row)
+          }
+        }
+        deduped.sort((a, b) => (a.sequence_number ?? 0) - (b.sequence_number ?? 0))
+        setTranscriptions(deduped)
       }
     } catch (err) {
       console.warn('Failed to load transcriptions:', err)
