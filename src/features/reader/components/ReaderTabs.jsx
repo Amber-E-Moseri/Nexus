@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { Headphones, ChevronRight, CheckCircle } from 'lucide-react'
 import ReadingPanel from './ReadingPanel'
 import PlayerControls from './PlayerControls'
 import MobilePlayer from './MobilePlayer'
@@ -72,8 +73,9 @@ export default function ReaderTabs({
                   gap: 12,
                 }}
               >
-                <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? 'var(--im-blue)' : 'var(--im-text-dim)', minWidth: 24 }}>
-                  {done && '✓'}{!done && isActive && '›'}
+                <span style={{ display: 'flex', alignItems: 'center', color: isActive ? 'var(--im-blue)' : 'var(--im-text-dim)', minWidth: 24 }}>
+                  {done && <CheckCircle size={16} />}
+                  {!done && isActive && <ChevronRight size={16} />}
                 </span>
                 <span style={{ fontSize: 13, color: isActive ? 'var(--im-blue)' : done ? 'var(--im-text-dim)' : 'var(--im-text)', fontWeight: isActive ? 600 : 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {h.title}
@@ -91,7 +93,7 @@ export default function ReaderTabs({
     const currentChapter = sentences.length > 0 ? Math.floor(currentIdx / 50) + 1 : 1
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 32, padding: '32px 16px', height: '100%' }}>
-        <div style={{ fontSize: 48 }}>🎧</div>
+        <Headphones size={48} color="var(--im-blue)" />
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--im-text)', marginBottom: 4 }}>Now Playing</div>
           <div style={{ fontSize: 14, color: 'var(--im-text-dim)', marginBottom: 8 }}>{book.title}</div>

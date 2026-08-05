@@ -1,5 +1,6 @@
 import { useRef, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Maximize2, Book } from 'lucide-react'
 import ReadingPanel from '../components/ReadingPanel'
 import MobilePlayer from '../components/MobilePlayer'
 import PlayerControls from '../components/PlayerControls'
@@ -102,8 +103,16 @@ export default function ReaderPage({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={() => navigate('/dashboard')} style={{ ...hdrBtn, color: 'var(--im-text-dim)' }}>← Nexus</button>
             <div style={{ width: 1, height: 16, background: 'var(--im-border)' }} />
-            <button onClick={toggleViewMode} style={hdrBtn}>
-              {viewMode === 'scroll' ? '⇕ Scroll' : '⧉ Pages'}
+            <button onClick={toggleViewMode} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5 }}>
+              {viewMode === 'scroll' ? (
+                <>
+                  <Maximize2 size={12} /> Scroll
+                </>
+              ) : (
+                <>
+                  <Book size={12} /> Pages
+                </>
+              )}
             </button>
             <button onClick={onOpenSettings} style={hdrBtn}><IconSettings size={14} /> Settings</button>
             <button onClick={onEndSession} style={{ ...hdrBtn, background: 'var(--im-blue)', color: '#fff', borderRadius: 6, padding: '5px 12px' }}>
