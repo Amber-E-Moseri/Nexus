@@ -473,7 +473,7 @@ export default function TopBar({ onOpenMobileMenu }) {
               >
                 <div
                   className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
-                  style={{ background: 'var(--accent)', color: 'var(--amber)' }}
+                  style={{ background: 'var(--accent)', color: '#FFFFFF' }}
                 >
                   {initials}
                 </div>
