@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, Search, ChevronDown } from 'lucide-react'
+import { Sparkles, Search, ChevronDown, Plus, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../hooks/useAuth'
+import { useToast } from '../context/ToastContext'
 
 const FEATURE_COLORS = {
   tasks: '#4C2A92',
@@ -12,16 +14,21 @@ const FEATURE_COLORS = {
   roles_permissions: '#4C2A92',
   spaces_folders: '#8B5A3C',
   registration: '#5A7C0F',
-  // fallback for others
   default: '#9E9488',
 }
 
 export default function NovaKnowledgeBase() {
+  const { profile } = useAuth()
+  const { showToast } = useToast()
+  const isSuperAdmin = profile?.role === 'super_admin'
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState(null)
   const [selectedFeature, setSelectedFeature] = useState(null)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [formData, setFormData] = useState({ question: '', answer: '', feature_area: 'tasks', slug: '' })
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     load()
@@ -39,6 +46,34 @@ export default function NovaKnowledgeBase() {
     setLoading(false)
   }
 
+  async function handleAddEntry() {
+    if (!formData.question.trim() || !formData.answer.trim() || !formData.slug.trim()) {
+      showToast('Please fill in all fields', 'error')
+      return
+    }
+
+    setSubmitting(true)
+    const { error } = await supabase.from('nova_kb_entries').insert({
+      slug: formData.slug.toLowerCase().replace(/\s+/g, '-'),
+      question: formData.question,
+      answer: formData.answer,
+      feature_area: formData.feature_area,
+      status: 'active',
+      applicable_roles: ['super_admin', 'regional_secretary', 'dept_lead', 'pastor', 'member'],
+    })
+
+    setSubmitting(false)
+    if (error) {
+      showToast('Failed to add entry: ' + error.message, 'error')
+      return
+    }
+
+    showToast('Entry added successfully', 'success')
+    setFormData({ question: '', answer: '', feature_area: 'tasks', slug: '' })
+    setShowAddForm(false)
+    load()
+  }
+
   const features = [...new Set(entries.map((e) => e.feature_area))].sort()
   const filtered = entries.filter((e) => {
     const matchesSearch =
@@ -52,12 +87,24 @@ export default function NovaKnowledgeBase() {
     <div className="min-h-screen bg-white">
       <div className="border-b px-6 py-8" style={{ borderColor: 'var(--border)' }}>
         <div className="mx-auto max-w-4xl">
-          <div className="flex items-center gap-3 mb-4">
-            <Sparkles size={32} style={{ color: 'var(--accent)' }} />
-            <div>
-              <h1 className="text-[32px] font-bold text-[var(--text-primary)]">Nova Knowledge Base</h1>
-              <p className="text-[14px] text-[var(--text-secondary)]">Browse {entries.length} how-to guides and FAQs</p>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Sparkles size={32} style={{ color: 'var(--accent)' }} />
+              <div>
+                <h1 className="text-[32px] font-bold text-[var(--text-primary)]">Nova Knowledge Base</h1>
+                <p className="text-[14px] text-[var(--text-secondary)]">Browse {entries.length} how-to guides and FAQs</p>
+              </div>
             </div>
+            {isSuperAdmin && (
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="flex items-center gap-2 rounded-[8px] px-4 py-2 font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: 'var(--accent)' }}
+              >
+                <Plus size={18} />
+                Add Entry
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -152,6 +199,97 @@ export default function NovaKnowledgeBase() {
           </div>
         )}
       </div>
+
+      {/* Add Entry Modal */}
+      {showAddForm && isSuperAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-auto w-full max-w-[500px] rounded-[16px] bg-white p-6 shadow-lg" style={{ margin: '20px' }}>
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-[20px] font-bold text-[var(--text-primary)]">Add KB Entry</h2>
+              <button
+                onClick={() => setShowAddForm(false)}
+                className="text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-primary)]"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-[12px] font-semibold text-[var(--text-primary)]">Slug</span>
+                <input
+                  type="text"
+                  value={formData.slug}
+                  onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                  placeholder="tasks-create"
+                  className="mt-1 w-full rounded-[8px] border bg-white px-3 py-2 text-[14px] text-[var(--text-primary)] outline-none"
+                  style={{ borderColor: 'var(--border)' }}
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-[12px] font-semibold text-[var(--text-primary)]">Question</span>
+                <input
+                  type="text"
+                  value={formData.question}
+                  onChange={(e) => setFormData({ ...formData, question: e.target.value })}
+                  placeholder="How do I create a task?"
+                  className="mt-1 w-full rounded-[8px] border bg-white px-3 py-2 text-[14px] text-[var(--text-primary)] outline-none"
+                  style={{ borderColor: 'var(--border)' }}
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-[12px] font-semibold text-[var(--text-primary)]">Feature Area</span>
+                <select
+                  value={formData.feature_area}
+                  onChange={(e) => setFormData({ ...formData, feature_area: e.target.value })}
+                  className="mt-1 w-full rounded-[8px] border bg-white px-3 py-2 text-[14px] text-[var(--text-primary)] outline-none"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  {Object.keys(FEATURE_COLORS)
+                    .filter((k) => k !== 'default')
+                    .map((f) => (
+                      <option key={f} value={f}>
+                        {f.replace(/_/g, ' ')}
+                      </option>
+                    ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="text-[12px] font-semibold text-[var(--text-primary)]">Answer</span>
+                <textarea
+                  value={formData.answer}
+                  onChange={(e) => setFormData({ ...formData, answer: e.target.value })}
+                  placeholder="Full markdown answer..."
+                  rows={6}
+                  className="mt-1 w-full rounded-[8px] border bg-white px-3 py-2 text-[14px] text-[var(--text-primary)] outline-none resize-none"
+                  style={{ borderColor: 'var(--border)' }}
+                />
+              </label>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddEntry}
+                  disabled={submitting}
+                  className="flex-1 rounded-[8px] py-2 font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{ background: 'var(--accent)' }}
+                >
+                  {submitting ? 'Adding...' : 'Add Entry'}
+                </button>
+                <button
+                  onClick={() => setShowAddForm(false)}
+                  className="flex-1 rounded-[8px] border py-2 font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-secondary)]"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
