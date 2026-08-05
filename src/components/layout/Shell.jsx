@@ -5,6 +5,8 @@ import { EventConfigProvider } from '../../features/registration/EventConfigCont
 import { usePrefetchRoutes } from '../../hooks/usePrefetchRoutes'
 import PageSpinner from '../ui/PageSpinner'
 import NotificationPermissionPrompt from '../notifications/NotificationPermissionPrompt'
+import { NovaChat } from '../../features/nova'
+import BirthdayOverlay from '../ui/BirthdayOverlay'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
 
@@ -46,6 +48,8 @@ export default function Shell() {
             </main>
           </div>
         </div>
+        <NovaChat />
+        <BirthdayOverlay />
       </EventConfigProvider>
     </SprintsProvider>
   )
