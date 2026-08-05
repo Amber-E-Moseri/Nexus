@@ -31,7 +31,7 @@ export default function NovaKnowledgeBase() {
     const { data, error } = await supabase
       .from('nova_kb_entries')
       .select('id, slug, question, answer, feature_area, status')
-      .eq('active', true)
+      .eq('status', 'active')
       .order('feature_area, question')
 
     if (error) console.warn('Failed to load KB:', error)

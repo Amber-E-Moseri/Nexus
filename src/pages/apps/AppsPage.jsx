@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, MailCheck, MessageCircle } from 'lucide-react'
+import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, MailCheck, MessageCircle, HelpCircle } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
 const PRIMARY = '#4C2A92'
@@ -139,6 +139,14 @@ export default function AppsPage() {
             bg="#F1EEF6"
             description="Attendance and report history"
             onClick={() => navigate('/meetings?report=1')}
+          />
+          <AppIcon
+            icon={HelpCircle}
+            label="Help & FAQ"
+            color="#4C2A92"
+            bg="linear-gradient(135deg, #F1EEF6 0%, #E8E0FF 100%)"
+            description="Nova knowledge base"
+            onClick={() => navigate('/nova/kb')}
           />
           {isSuperAdmin && (
             <AppIcon
