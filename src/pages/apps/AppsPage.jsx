@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, MailCheck } from 'lucide-react'
+import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, MailCheck, MessageCircle } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
 const PRIMARY = '#4C2A92'
@@ -198,6 +198,16 @@ export default function AppsPage() {
               bg="linear-gradient(135deg, #F3EEF9 0%, #E8DCFF 100%)"
               description="Announcements & delivery log"
               onClick={() => navigate('/admin/emails')}
+            />
+          )}
+          {isSuperAdmin && (
+            <AppIcon
+              icon={MessageCircle}
+              label="Nova Review"
+              color="#4C2A92"
+              bg="linear-gradient(135deg, #F1EEF6 0%, #E8E0FF 100%)"
+              description="AI assistant quality queue"
+              onClick={() => navigate('/admin/nova-review')}
             />
           )}
         </div>
