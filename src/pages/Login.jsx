@@ -1,4 +1,4 @@
-﻿import { ArrowRight, LockKeyhole, Mail } from 'lucide-react'
+﻿import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
@@ -12,6 +12,7 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const resetMessage = location.state?.message ?? ''
 
   if (!loading && user) {
@@ -60,7 +61,7 @@ export default function Login() {
         <div className="mt-8 rounded-[20px] border border-[var(--border)] bg-white p-6 shadow-[0_8px_28px_rgba(28,22,16,0.10)] sm:p-8">
           <form className="space-y-4" onSubmit={handleSubmit}>
             <label className="block space-y-1.5">
-              <span className="text-sm font-medium text-[var(--text-primary)]">Work email</span>
+              <span className="text-sm font-medium text-[var(--text-primary)]">Email</span>
               <div className="flex items-center gap-3 rounded-md border border-(--border) bg-white px-4 py-3 transition focus-within:border-(--accent) focus-within:shadow-[0_0_0_3px_rgba(76,42,146,.09)]">
                 <Mail size={18} className="text-[var(--text-tertiary)]" />
                 <input
@@ -69,7 +70,7 @@ export default function Login() {
                   autoComplete="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@blwcannexus.org"
+                  placeholder="you@gmail.com"
                   className="w-full border-0 bg-transparent p-0 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-placeholder)]"
                 />
               </div>
@@ -80,7 +81,7 @@ export default function Login() {
               <div className="flex items-center gap-3 rounded-md border border-(--border) bg-white px-4 py-3 transition focus-within:border-(--accent) focus-within:shadow-[0_0_0_3px_rgba(76,42,146,.09)]">
                 <LockKeyhole size={18} className="text-[var(--text-tertiary)]" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   autoComplete="current-password"
                   value={password}
@@ -88,6 +89,14 @@ export default function Login() {
                   placeholder="Password"
                   className="w-full border-0 bg-transparent p-0 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-placeholder)]"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </label>
 
@@ -115,7 +124,9 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="mt-12 text-center text-sm text-[var(--text-secondary)]">Need help?</div>
+        <div className="mt-12 text-center text-sm text-[var(--text-secondary)]">
+          <Link to="/need-help" className="text-[var(--accent)] hover:underline">Need help?</Link>
+        </div>
       </div>
     </div>
   )

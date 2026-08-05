@@ -47,6 +47,7 @@ const DeptSpace = lazy(() => import('./pages/dept/DeptSpace'))
 const FlockView = lazyRoute('/flock', () => import('./pages/flock/FlockView'))
 const FlockCRMPage = lazyRoute('/flock-crm', () => import('./pages/flock/FlockCRMPage'))
 const Login = lazy(() => import('./pages/Login'))
+const PublicHelpPage = lazy(() => import('./pages/PublicHelpPage'))
 const CanMapPage = lazyRoute('/map', () => import('./pages/map/CanMapPage'))
 const MeetingsModule = lazyRoute('/meetings', () => import('./pages/meetings/MeetingsModule'))
 const MeetingDetailView = lazy(() => import('./pages/meetings/MeetingDetailView'))
@@ -152,6 +153,7 @@ export default function App() {
       <Route path="/rsvp" element={<RSVPPage />} />
       <Route path="/subscribe" element={<SubscribePage />} />
       <Route path="/confirm-subscription/:token" element={<ConfirmSubscriptionPage />} />
+      <Route path="/need-help" element={<PublicHelpPage />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/mcp/authorize" element={<McpAuthorize />} />
         <Route path="/demo/glow-card" element={<GlowCardDemo />} />
