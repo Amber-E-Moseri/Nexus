@@ -161,16 +161,23 @@ export default function ReaderPage({
 
       {/* Reading area — centered, full flex */}
       <div style={{ flex: 1, overflowY: viewMode === 'scroll' ? 'auto' : 'hidden', overflowX: 'hidden', background: 'var(--im-bg)', display: 'flex', flexDirection: 'column', minWidth: 0, justifyContent: 'center', alignItems: 'center', padding: '20px 16px' }} onScroll={handleScroll}>
-        <ReadingPanel
-          sentences={sentences}
-          currentIdx={currentIdx}
-          highlights={highlights}
-          onSelectionChange={onSelectionChange}
-          onSeek={onSeek}
-          fontSize={fontSize}
-          lineHeight={lineHeight}
-          viewMode={viewMode}
-        />
+        {sentences.length > 0 ? (
+          <ReadingPanel
+            sentences={sentences}
+            currentIdx={currentIdx}
+            highlights={highlights}
+            onSelectionChange={onSelectionChange}
+            onSeek={onSeek}
+            fontSize={fontSize}
+            lineHeight={lineHeight}
+            viewMode={viewMode}
+          />
+        ) : (
+          <div style={{ textAlign: 'center', color: 'var(--im-text-dim)', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
+            <p style={{ marginBottom: 8 }}>No text content loaded</p>
+            <p style={{ fontSize: 12 }}>Go back to your library and try importing a different PDF</p>
+          </div>
+        )}
       </div>
 
       {/* Player at bottom */}
