@@ -158,7 +158,7 @@ Deno.serve(async (req) => {
   // ── 1. Target users ──────────────────────────────────────────────────────────
   let userQuery = supabase
     .from('users')
-    .select('id, name, email')
+    .select('id, name, email, role')
     .eq('status', 'active')
     .not('email', 'is', null)
 
@@ -208,7 +208,8 @@ Deno.serve(async (req) => {
   const errors: string[] = []
 
   for (const user of eligible) {
-    if ((weeklyCount[user.email] ?? 0) >= 2) { skipped++; continue }
+    const cap = user.role === 'dept_lead' ? 1 : 2
+    if ((weeklyCount[user.email] ?? 0) >= cap) { skipped++; continue }
     const firstName = (user.name ?? 'there').split(' ')[0]
 
     const html = buildAnnouncementHtml(
