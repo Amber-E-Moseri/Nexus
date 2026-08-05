@@ -76,20 +76,22 @@ async function currentUserId() {
 
 export async function uploadBookPdf(bookId, buffer) {
   const uid = await currentUserId()
-  if (!uid) return
+  if (!uid) { console.warn('[reader] uploadBookPdf: no user'); return }
+  const path = `${uid}/${bookId}.pdf`
   const { error } = await supabase.storage
     .from('reader-pdfs')
-    .upload(`${uid}/${bookId}.pdf`, buffer, { contentType: 'application/pdf', upsert: true })
-  if (error) console.error('PDF upload failed', error)
+    .upload(path, buffer, { contentType: 'application/pdf', upsert: true })
+  if (error) console.error('[reader] PDF upload failed', path, error)
+  else console.log('[reader] PDF uploaded OK', path)
 }
 
 export async function downloadBookPdf(bookId) {
   const uid = await currentUserId()
-  if (!uid) return null
-  const { data, error } = await supabase.storage
-    .from('reader-pdfs')
-    .download(`${uid}/${bookId}.pdf`)
-  if (error || !data) return null
+  if (!uid) { console.warn('[reader] downloadBookPdf: no user'); return null }
+  const path = `${uid}/${bookId}.pdf`
+  const { data, error } = await supabase.storage.from('reader-pdfs').download(path)
+  if (error) { console.error('[reader] Storage download failed', path, error); return null }
+  if (!data) { console.warn('[reader] Storage returned no data for', path); return null }
   return data.arrayBuffer()
 }
 
@@ -136,19 +138,26 @@ export async function hydrateBook(book) {
   // 1. Local IndexedDB hit
   const local = await idbGet(book.id)
   if (local?.sentences?.length) {
+    console.log('[reader] hydrateBook: IndexedDB hit', book.id, local.sentences.length, 'sentences')
     return { ...book, ...local }
   }
+  console.log('[reader] hydrateBook: IndexedDB miss, fetching from Storage', book.id)
 
   // 2. Download PDF from Storage
   const buffer = await downloadBookPdf(book.id)
-  if (!buffer) return book // no PDF available; reader will show empty
+  if (!buffer) {
+    console.error('[reader] hydrateBook: Storage download returned nothing for', book.id)
+    return book // reader will show "PDF not available"
+  }
+  console.log('[reader] hydrateBook: Storage download OK, buffer size', buffer.byteLength)
 
-  // 3. Re-extract sentences (same as import pipeline)
+  // 3. Re-extract sentences
   const { text, textItems, pageSizes } = await extractPdfText(buffer)
   const sentences = splitSentences(text)
+  console.log('[reader] hydrateBook: extracted', sentences.length, 'sentences')
 
-  // 4. Cache locally for next time
-  await idbPut({ id: book.id, pdfBuffer: buffer, sentences, textItems, pageSizes }).catch(() => {})
+  // 4. Cache locally
+  await idbPut({ id: book.id, pdfBuffer: buffer, sentences, textItems, pageSizes }).catch((e) => console.warn('[reader] IndexedDB write failed', e))
 
   return { ...book, pdfBuffer: buffer, sentences, textItems, pageSizes }
 }
