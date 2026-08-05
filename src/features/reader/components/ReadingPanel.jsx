@@ -51,32 +51,34 @@ function ScrollView({ sentences, currentIdx, highlights, onSelectionChange, font
 }
 
 // ── Page-flip mode ─────────────────────────────────────────────────────────
-const PAGE_SIZE = 6 // sentences per page
+const PAGE_SIZE = 6
 
 function PageView({ sentences, currentIdx, highlights, onSelectionChange, onSeek, fontSize, lineHeight }) {
   const highlighted = new Set(highlights.map((h) => h.sentenceIdx))
   const totalPages = Math.ceil(sentences.length / PAGE_SIZE)
   const [page, setPage] = useState(() => Math.floor(currentIdx / PAGE_SIZE))
-  const [direction, setDirection] = useState(null) // 'forward' | 'back'
-  const [animating, setAnimating] = useState(false)
+  const [flipping, setFlipping] = useState(false)
+  const [flipDir, setFlipDir] = useState(null) // 'forward' | 'back'
+  const [displayPage, setDisplayPage] = useState(() => Math.floor(currentIdx / PAGE_SIZE))
   const startX = useRef(null)
 
-  // Follow currentIdx as audio plays
+  // Follow audio playback — auto-flip when sentence advances past page boundary
   useEffect(() => {
     const targetPage = Math.floor(currentIdx / PAGE_SIZE)
-    if (targetPage !== page) {
-      setDirection(targetPage > page ? 'forward' : 'back')
-      setAnimating(true)
-      setTimeout(() => { setPage(targetPage); setAnimating(false) }, 220)
-    }
+    if (targetPage !== page && !flipping) triggerFlip(targetPage)
   }, [currentIdx])
 
-  function goPage(next) {
-    if (next < 0 || next >= totalPages || animating) return
-    setDirection(next > page ? 'forward' : 'back')
-    setAnimating(true)
-    setTimeout(() => { setPage(next); setAnimating(false) }, 220)
+  function triggerFlip(next) {
+    if (next < 0 || next >= totalPages || flipping) return
+    const dir = next > page ? 'forward' : 'back'
+    setFlipDir(dir)
+    setFlipping(true)
+    // Halfway through, swap the displayed page
+    setTimeout(() => setDisplayPage(next), 200)
+    setTimeout(() => { setPage(next); setFlipping(false) }, 420)
   }
+
+  function goPage(next) { triggerFlip(next) }
 
   function handleMouseUp() {
     const sel = window.getSelection()
@@ -99,67 +101,70 @@ function PageView({ sentences, currentIdx, highlights, onSelectionChange, onSeek
     dx < 0 ? goPage(page + 1) : goPage(page - 1)
   }
 
-  const start = page * PAGE_SIZE
+  const start = displayPage * PAGE_SIZE
   const pageSentences = sentences.slice(start, start + PAGE_SIZE)
 
-  const slideStyle = animating ? {
-    animation: `im-page-${direction === 'forward' ? 'out-left' : 'out-right'} 0.22s ease forwards`,
-  } : {}
+  // 3D book flip: page rotates around vertical axis (like turning a book page)
+  const flipAngle = flipping
+    ? (flipDir === 'forward' ? 'rotateY(-180deg)' : 'rotateY(180deg)')
+    : 'rotateY(0deg)'
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
       onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
 
-      {/* Tap zones — left/right half to flip */}
-      <div onClick={() => goPage(page - 1)} style={{ position: 'absolute', left: 0, top: 0, width: '20%', height: '100%', zIndex: 1, cursor: page > 0 ? 'w-resize' : 'default' }} />
-      <div onClick={() => goPage(page + 1)} style={{ position: 'absolute', right: 0, top: 0, width: '20%', height: '100%', zIndex: 1, cursor: page < totalPages - 1 ? 'e-resize' : 'default' }} />
+      {/* Tap zones */}
+      <div onClick={() => goPage(page - 1)} style={{ position: 'absolute', left: 0, top: 0, width: '18%', height: '100%', zIndex: 2, cursor: page > 0 ? 'w-resize' : 'default' }} />
+      <div onClick={() => goPage(page + 1)} style={{ position: 'absolute', right: 0, top: 0, width: '18%', height: '100%', zIndex: 2, cursor: page < totalPages - 1 ? 'e-resize' : 'default' }} />
 
-      {/* Page content */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '0 4px' }}>
-      <div className="im-reading-text" style={{ fontSize, lineHeight, width: '100%', ...slideStyle }}
-        onMouseUp={handleMouseUp}>
-        {pageSentences.map((s, i) => {
-          const idx = start + i
-          if (isHeading(s) && s.trim().length < 50) {
-            return (
-              <div key={idx} data-idx={idx}
-                style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--im-text-dim)', margin: '1.5rem 0 1rem', fontFamily: 'Inter, sans-serif' }}>
-                {s.trim()}
-              </div>
-            )
-          }
-          let cls = 'im-sentence'
-          if (idx < currentIdx) cls += ' im-sentence--heard'
-          else if (idx === currentIdx) cls += ' im-sentence--active'
-          if (highlighted.has(idx)) cls += ' im-sentence--highlighted'
-          return (
-            <span key={idx} className={cls} data-idx={idx} onClick={() => onSeek?.(idx)} style={{ cursor: 'pointer' }}>
-              {s}{' '}
-            </span>
-          )
-        })}
-      </div>
+      {/* Book page with 3D flip */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '4px 12px', perspective: '1200px' }}>
+        <div style={{
+          width: '100%', maxWidth: 640,
+          transform: flipAngle,
+          transformOrigin: flipDir === 'forward' ? 'left center' : 'right center',
+          transition: flipping ? 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
+          backfaceVisibility: 'hidden',
+        }}>
+          <div className="im-reading-text" style={{ fontSize, lineHeight }} onMouseUp={handleMouseUp}>
+            {pageSentences.map((s, i) => {
+              const idx = start + i
+              if (isHeading(s) && s.trim().length < 50) {
+                return (
+                  <div key={idx} data-idx={idx}
+                    style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--im-text-dim)', margin: '1.5rem 0 1rem', fontFamily: 'Inter, sans-serif' }}>
+                    {s.trim()}
+                  </div>
+                )
+              }
+              let cls = 'im-sentence'
+              if (idx < currentIdx) cls += ' im-sentence--heard'
+              else if (idx === currentIdx) cls += ' im-sentence--active'
+              if (highlighted.has(idx)) cls += ' im-sentence--highlighted'
+              return (
+                <span key={idx} className={cls} data-idx={idx} onClick={() => onSeek?.(idx)} style={{ cursor: 'pointer' }}>
+                  {s}{' '}
+                </span>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Page indicator */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '10px 0 6px', flexShrink: 0 }}>
-        <button onClick={() => goPage(page - 1)} disabled={page === 0 || animating}
-          style={{ background: 'none', border: 'none', cursor: page > 0 ? 'pointer' : 'default', color: page > 0 ? 'var(--im-blue)' : 'var(--im-border)', fontSize: 18, lineHeight: 1, padding: '0 8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '10px 0 6px', flexShrink: 0 }}>
+        <button onClick={() => goPage(page - 1)} disabled={page === 0 || flipping}
+          style={{ background: 'none', border: 'none', cursor: page > 0 ? 'pointer' : 'default', color: page > 0 ? 'var(--im-blue)' : 'var(--im-border)', fontSize: 22, lineHeight: 1, padding: '0 4px' }}>
           ‹
         </button>
-        <span style={{ fontSize: 11, color: 'var(--im-text-dim)', fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>
-          {page + 1} / {totalPages}
+        <span style={{ fontSize: 11, color: 'var(--im-text-dim)', fontWeight: 600, fontFamily: 'Inter, sans-serif', minWidth: 60, textAlign: 'center' }}>
+          {displayPage + 1} / {totalPages}
         </span>
-        <button onClick={() => goPage(page + 1)} disabled={page >= totalPages - 1 || animating}
-          style={{ background: 'none', border: 'none', cursor: page < totalPages - 1 ? 'pointer' : 'default', color: page < totalPages - 1 ? 'var(--im-blue)' : 'var(--im-border)', fontSize: 18, lineHeight: 1, padding: '0 8px' }}>
+        <button onClick={() => goPage(page + 1)} disabled={page >= totalPages - 1 || flipping}
+          style={{ background: 'none', border: 'none', cursor: page < totalPages - 1 ? 'pointer' : 'default', color: page < totalPages - 1 ? 'var(--im-blue)' : 'var(--im-border)', fontSize: 22, lineHeight: 1, padding: '0 4px' }}>
           ›
         </button>
       </div>
-
-      <style>{`
-        @keyframes im-page-out-left { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(-40px); } }
-        @keyframes im-page-out-right { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(40px); } }
-      `}</style>
     </div>
   )
 }

@@ -163,8 +163,13 @@ export default function BooksApp() {
     setSharedLibrary((prev) => prev.filter((b) => b.id !== bookId))
     if (book?.id === bookId) {
       setBook(null)
-      setPage('library')
+      setPage('home')
     }
+  }
+
+  async function refreshCredits() {
+    const bal = await getMyCredits().catch(() => 0)
+    setCredits(bal)
   }
 
   const creditsHrs = (credits / 60).toFixed(1)
@@ -183,24 +188,12 @@ export default function BooksApp() {
         <ReaderHomePage
           currentBook={book}
           library={library}
-          sharedLibrary={sharedLibrary}
           credits={creditsHrs}
           currentProgress={currentIdx}
           isAdmin={isAdmin}
           onOpenBook={openBook}
-          onGoLibrary={() => setPage('library')}
           onImport={() => setShowImport(true)}
           onOpenAdmin={() => setPage('admin')}
-        />
-      )}
-      {!bookLoading && page === 'library' && (
-        <ReaderLibraryPage
-          library={library}
-          sharedLibrary={sharedLibrary}
-          credits={creditsHrs}
-          onOpenBook={openBook}
-          onGoHome={() => setPage('home')}
-          onImport={() => setShowImport(true)}
           onDeleteBook={handleDeleteBook}
           onRenameBook={handleRenameBook}
         />
@@ -240,7 +233,7 @@ export default function BooksApp() {
       {!bookLoading && page === 'admin' && isAdmin && (
         <AdminPanel
           myBooks={library}
-          onBack={() => setPage('home')}
+          onBack={() => { refreshCredits(); setPage('home') }}
         />
       )}
 
