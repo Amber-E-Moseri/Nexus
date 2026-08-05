@@ -36,6 +36,7 @@ export default function ReaderPage({
       .filter(item => item.text.toLowerCase().includes(query))
   }, [searchQuery, sentences])
 
+
   function toggleSidebar() {
     const next = !sidebarVisible
     setSidebarVisible(next)
@@ -164,6 +165,7 @@ export default function ReaderPage({
             <button onClick={toggleSidebar} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: sidebarVisible ? 'var(--im-text)' : 'var(--im-text-dim)' }}>
               <ChevronLeft size={12} /> {sidebarVisible ? 'Hide' : 'Show'}
             </button>
+<<<<<<< HEAD
             <button onClick={() => isCurrentBookmarked ? onRemoveBookmark?.(bookmarks.find(b => b.sentenceIdx === currentIdx)?.id) : onAddBookmark?.()}
               style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: isCurrentBookmarked ? 'var(--im-blue)' : 'var(--im-text-dim)' }}>
               <Bookmark size={12} fill={isCurrentBookmarked ? 'currentColor' : 'none'} /> Bookmark
@@ -174,6 +176,8 @@ export default function ReaderPage({
             <button onClick={() => setShowStats(!showStats)} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: showStats ? 'var(--im-blue)' : 'var(--im-text-dim)' }}>
               <BarChart3 size={12} /> Stats
             </button>
+=======
+>>>>>>> f62d33c (fix(reader): UI/UX improvements for Immerse reader - remove Navigate tab, add sidebar toggle, improve chapter fallback)
             <button onClick={onOpenSettings} style={hdrBtn}><IconSettings size={14} /> Settings</button>
             <button onClick={onEndSession} style={{ ...hdrBtn, background: 'var(--im-blue)', color: '#fff', borderRadius: 6, padding: '5px 12px' }}>
               End Reading
