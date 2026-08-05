@@ -153,6 +153,20 @@ export default function BooksApp() {
     setBook(null); setPage('home'); clearTTSCache(); setShowEndModal(false)
   }
 
+  async function handleRenameBook(bookId, newTitle) {
+    setLibrary((prev) => prev.map((b) => b.id === bookId ? { ...b, title: newTitle } : b))
+    if (book?.id === bookId) setBook({ ...book, title: newTitle })
+  }
+
+  async function handleDeleteBook(bookId) {
+    setLibrary((prev) => prev.filter((b) => b.id !== bookId))
+    setSharedLibrary((prev) => prev.filter((b) => b.id !== bookId))
+    if (book?.id === bookId) {
+      setBook(null)
+      setPage('library')
+    }
+  }
+
   const creditsHrs = (credits / 60).toFixed(1)
 
   return (
@@ -187,6 +201,8 @@ export default function BooksApp() {
           onOpenBook={openBook}
           onGoHome={() => setPage('home')}
           onImport={() => setShowImport(true)}
+          onDeleteBook={handleDeleteBook}
+          onRenameBook={handleRenameBook}
         />
       )}
       {!bookLoading && page === 'reader' && book && (

@@ -152,3 +152,21 @@ export async function hydrateBook(book) {
 
   return { ...book, pdfBuffer: buffer, sentences, textItems, pageSizes }
 }
+
+export async function deleteStoredBook(bookId) {
+  const uid = await currentUserId()
+  if (!uid) throw new Error('Not authenticated')
+
+  // Delete from Supabase metadata table
+  const { error: dbError } = await supabase.from('reader_books').delete().eq('id', bookId)
+  if (dbError) throw dbError
+
+  // Delete PDF from Storage (best effort)
+  await supabase.storage.from('reader-pdfs').remove([`${uid}/${bookId}.pdf`]).catch(() => {})
+
+  // Delete local IndexedDB cache (best effort)
+  const db = await openDb()
+  const tx = db.transaction(STORE_NAME, 'readwrite')
+  tx.objectStore(STORE_NAME).delete(bookId)
+  db.close()
+}
