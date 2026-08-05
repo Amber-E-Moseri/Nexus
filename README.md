@@ -84,7 +84,7 @@ This codebase is architected for maintainability by volunteers, not just for lau
 
 **Meetings** — Agenda builder, Live Minutes Mode, AI transcription (Whisper WASM), Meeting Docs, PDF export, attendance tracking
 
-![Meeting Live Minutes Mode](docs/images/meetings-live-minutes-mode.png)
+![Meeting Live Minutes Mode](docs/images/meetings-live-minutes-mode1.png)
 
 **Sprints** — Sprint board, teams, temporary membership, auto-expiration, sprint review  
 **Calendar** — Google/Outlook sync, RSVP system, approval queue, event subscriptions  
@@ -96,12 +96,14 @@ This codebase is architected for maintainability by volunteers, not just for lau
 
 **Flock CRM** — Pastor contact management with role-scoped visibility  
 
-**Registration** — Delegate registration (6 tabs), room assignment, compliance tracking, public sign-up
-
-![Room Assignment](docs/images/registration-room-assignment.png)
-
+**Registration** — Delegate registration (6 tabs), room assignment, compliance tracking, public sign-up  
 **Organization** — Org chart (editable), pastoral assignments, department directory, support tickets  
-**Dashboard** — Customizable widgets: activity feed, progress, workload, attendance, charts  
+
+**Dashboard** — Customizable widgets: activity feed, progress, workload, attendance, charts (drag to reorder)
+
+![Dashboard Customizable Widgets](docs/images/dashboard-customizable-widgets.png)
+
+
 **Automations & API** — Rule engine, task REST API (60 req/min), scoped keys  
 
 **Immerse Reader** (`/books`) — AI-powered audiobook reader with:
