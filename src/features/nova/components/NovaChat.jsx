@@ -260,7 +260,7 @@ export default function NovaChat() {
                     ) : null}
                   </div>
                 ),
-              })
+              )
             )}
           </div>
 
