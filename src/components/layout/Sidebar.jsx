@@ -1686,7 +1686,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
               height: 30,
               borderRadius: 999,
               background: '#4C2A92',
-              color: '#E8A020',
+              color: '#FFFFFF',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
