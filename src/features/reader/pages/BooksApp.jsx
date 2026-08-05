@@ -41,6 +41,8 @@ export default function BooksApp() {
 
   // Track sentences played this session for usage deduction
   const sessionSentencesRef = useRef(0)
+  const sessionStartTimeRef = useRef(Date.now())
+  const sessionStartIdxRef = useRef(0)
 
   const sentences = book?.sentences ?? []
   const { highlights, notes, addHighlight, addNote, removeAnnotation } = useAnnotations(book?.isShared ? null : book?.id)
@@ -102,6 +104,8 @@ export default function BooksApp() {
       }
     }
     sessionSentencesRef.current = 0
+    sessionStartTimeRef.current = Date.now()
+    sessionStartIdxRef.current = b.progressIndex ?? 0
     setBook(b)
     // Load bookmarks for this book
     const stored = localStorage.getItem(`immerse-bookmarks-${b.id}`)
@@ -180,6 +184,26 @@ export default function BooksApp() {
     seekToIdx(sentenceIdx)
   }
 
+  function getReadingStats() {
+    const elapsedMs = Date.now() - sessionStartTimeRef.current
+    const elapsedMins = elapsedMs / 60000
+    const elapsedHours = (elapsedMins / 60).toFixed(2)
+    const sentencesRead = currentIdx - sessionStartIdxRef.current
+    const sentencesPerMin = elapsedMins > 0 ? (sentencesRead / elapsedMins).toFixed(1) : 0
+    const remainingSentences = Math.max(0, sentences.length - currentIdx)
+    const estimatedMinsRemaining = remainingSentences > 0 ? (remainingSentences / sentencesPerMin).toFixed(0) : 0
+    const estimatedHoursRemaining = (estimatedMinsRemaining / 60).toFixed(1)
+    return {
+      elapsedHours,
+      elapsedMins: Math.round(elapsedMins),
+      sentencesRead,
+      sentencesPerMin,
+      remainingSentences,
+      estimatedHoursRemaining,
+      completionPercent: sentences.length > 0 ? Math.round((currentIdx / sentences.length) * 100) : 0,
+    }
+  }
+
   function handleSpeedChange(s) { setSpeed(s); setPlayerSpeed(s) }
   function handleVoiceChange(v) { setVoice(v); setPlayerVoice(v) }
 
@@ -248,6 +272,7 @@ export default function BooksApp() {
           highlights={highlights}
           notes={notes}
           bookmarks={bookmarks}
+          readingStats={getReadingStats()}
           selectionInfo={selectionInfo}
           fontSize={fontSize}
           lineHeight={lineHeight}

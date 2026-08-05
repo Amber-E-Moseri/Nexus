@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Maximize2, Book, ChevronLeft, Bookmark, Search } from 'lucide-react'
+import { Maximize2, Book, ChevronLeft, Bookmark, Search, BarChart3 } from 'lucide-react'
 import ReadingPanel from '../components/ReadingPanel'
 import MobilePlayer from '../components/MobilePlayer'
 import PlayerControls from '../components/PlayerControls'
@@ -11,7 +11,7 @@ import { IconBack, IconSettings } from '../icons'
 
 export default function ReaderPage({
   book, sentences, currentIdx, isPlaying, elapsedTime, totalTime, voice, speed,
-  highlights, notes, bookmarks, selectionInfo, fontSize, lineHeight, credits,
+  highlights, notes, bookmarks, readingStats, selectionInfo, fontSize, lineHeight, credits,
   onPlay, onPause, onSeek, onSkip, onSpeedChange, onVoiceChange,
   onAddHighlight, onAddNote, onRemoveAnnotation, onAddBookmark, onRemoveBookmark, onJumpToBookmark,
   onSelectionChange, onBack, onOpenSettings, onEndSession,
@@ -23,6 +23,7 @@ export default function ReaderPage({
   const [sidebarVisible, setSidebarVisible] = useState(() => localStorage.getItem('immerse-sidebar-visible') !== 'false')
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [showStats, setShowStats] = useState(false)
   const lastScrollY = useRef(0)
   const isDesktop = window.innerWidth >= 768
 
@@ -170,6 +171,9 @@ export default function ReaderPage({
             <button onClick={() => setShowSearch(!showSearch)} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: showSearch ? 'var(--im-blue)' : 'var(--im-text-dim)' }}>
               <Search size={12} /> Search
             </button>
+            <button onClick={() => setShowStats(!showStats)} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: showStats ? 'var(--im-blue)' : 'var(--im-text-dim)' }}>
+              <BarChart3 size={12} /> Stats
+            </button>
             <button onClick={onOpenSettings} style={hdrBtn}><IconSettings size={14} /> Settings</button>
             <button onClick={onEndSession} style={{ ...hdrBtn, background: 'var(--im-blue)', color: '#fff', borderRadius: 6, padding: '5px 12px' }}>
               End Reading
@@ -255,6 +259,38 @@ export default function ReaderPage({
           onAddNote={handleAddNote}
           onClose={() => onSelectionChange(null)}
         />
+      )}
+
+      {/* Statistics panel */}
+      {showStats && readingStats && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={() => setShowStats(false)}>
+          <div style={{ background: 'var(--im-card)', borderRadius: 12, padding: '24px', maxWidth: 420, border: '1px solid var(--im-border)' }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--im-text)', marginBottom: 20, fontFamily: 'Inter, sans-serif' }}>Reading Statistics</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+              <div style={{ background: 'var(--im-blue-bg)', borderRadius: 8, padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif', marginBottom: 6 }}>Time Spent</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--im-blue)', fontFamily: 'monospace' }}>{readingStats.elapsedHours}h</div>
+                <div style={{ fontSize: 10, color: 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif' }}>{readingStats.elapsedMins}m</div>
+              </div>
+              <div style={{ background: 'var(--im-blue-bg)', borderRadius: 8, padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif', marginBottom: 6 }}>Completion</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--im-blue)', fontFamily: 'monospace' }}>{readingStats.completionPercent}%</div>
+                <div style={{ fontSize: 10, color: 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif' }}>{currentIdx} / {sentences.length}</div>
+              </div>
+              <div style={{ background: 'var(--im-blue-bg)', borderRadius: 8, padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif', marginBottom: 6 }}>Reading Speed</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--im-blue)', fontFamily: 'monospace' }}>{readingStats.sentencesPerMin}</div>
+                <div style={{ fontSize: 10, color: 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif' }}>sent/min</div>
+              </div>
+              <div style={{ background: 'var(--im-blue-bg)', borderRadius: 8, padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif', marginBottom: 6 }}>Est. Time Left</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--im-blue)', fontFamily: 'monospace' }}>{readingStats.estimatedHoursRemaining}h</div>
+                <div style={{ fontSize: 10, color: 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif' }}>{readingStats.remainingSentences} sent</div>
+              </div>
+            </div>
+            <button onClick={() => setShowStats(false)} style={{ width: '100%', padding: '10px', background: 'var(--im-border)', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 12, fontFamily: 'Inter, sans-serif', color: 'var(--im-text)' }}>Close</button>
+          </div>
+        </div>
       )}
 
       {/* Search panel */}
