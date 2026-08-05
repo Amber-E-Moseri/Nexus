@@ -164,16 +164,16 @@ export default function NovaChat() {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? 'Close Nova' : 'Ask Nova'}
-        className="fixed bottom-5 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full shadow-[var(--shadow-lg)] transition-transform hover:scale-105"
-        style={{ background: 'var(--accent)', color: 'var(--amber)' }}
+        className="fixed bottom-5 right-5 flex h-12 w-12 items-center justify-center rounded-full shadow-[var(--shadow-lg)] transition-transform hover:scale-105"
+        style={{ background: 'var(--accent)', color: 'var(--amber)', zIndex: 'var(--z-chat-widget)' }}
       >
         {open ? <X size={20} /> : <Sparkles size={20} />}
       </button>
 
       {open ? (
         <div
-          className="fixed bottom-[76px] right-5 z-40 flex h-[580px] w-[380px] max-w-[calc(100vw-40px)] max-h-[calc(100vh-96px)] flex-col overflow-hidden rounded-[16px] border shadow-[var(--shadow-lg)]"
-          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+          className="fixed bottom-[76px] right-5 flex h-[580px] w-[380px] max-w-[calc(100vw-40px)] max-h-[calc(100vh-96px)] flex-col overflow-hidden rounded-[16px] border shadow-[var(--shadow-lg)]"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)', zIndex: 'var(--z-chat-widget)' }}
         >
           <div
             className="flex items-center gap-2 border-b px-4 py-3"
