@@ -247,7 +247,7 @@ export default function SidebarSpaceTree({ spaceId, spaceName, spaceColor, isAct
   return (
     <div style={{ marginLeft: 12, marginTop: 4, marginBottom: 6 }}>
       {folders.map((folder) => {
-        const isOpen = expanded[folder.id] ?? false
+        const isOpen = expanded[folder.id] ?? true
         const folderLists = listsByFolder[folder.id] ?? []
 
         return (
