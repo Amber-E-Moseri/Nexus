@@ -9,7 +9,7 @@ function isChapterHeading(s) {
     /^[A-Z\s\d]{4,40}$/.test(s.trim())
 }
 
-export default function ReaderSidebar({ book, sentences = [], highlights, notes, annotations, currentIdx, totalSentences, onAddHighlight, onAddNote, onRemoveAnnotation, onSeek }) {
+export default function ReaderSidebar({ book, sentences = [], highlights, notes, bookmarks = [], annotations, currentIdx, totalSentences, onAddHighlight, onAddNote, onRemoveAnnotation, onRemoveBookmark, onSeek }) {
   const [noteInput, setNoteInput] = useState('')
   const [tab, setTab] = useState('chapters')
   const progress = totalSentences > 0 ? Math.round((currentIdx / totalSentences) * 100) : 0
@@ -76,7 +76,7 @@ export default function ReaderSidebar({ book, sentences = [], highlights, notes,
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--im-border)', flexShrink: 0 }}>
-        {[['chapters', 'Chapters'], ['notes', 'Notes']].map(([t, label]) => (
+        {[['chapters', 'Chapters'], ['bookmarks', 'Bookmarks'], ['notes', 'Notes']].map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '9px 0', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', color: tab === t ? 'var(--im-blue)' : 'var(--im-text-dim)', borderBottom: tab === t ? '2px solid var(--im-blue)' : '2px solid transparent', marginBottom: -1 }}>
             {label}
           </button>
@@ -110,6 +110,26 @@ export default function ReaderSidebar({ book, sentences = [], highlights, notes,
               </button>
             )
           })}
+        </div>
+      )}
+
+      {/* Bookmarks tab */}
+      {tab === 'bookmarks' && (
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {bookmarks.length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--im-text-dim)', textAlign: 'center', marginTop: 24 }}>No bookmarks yet. Click the bookmark icon to save passages.</div>
+          )}
+          {bookmarks.map((bm, idx) => (
+            <button key={bm.id} onClick={() => onSeek?.(bm.sentenceIdx)}
+              style={{ width: '100%', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none', borderBottom: '1px solid var(--im-border-lt)', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--im-blue)', fontFamily: 'Inter, sans-serif', marginBottom: 4 }}>Bookmark {bookmarks.length - idx}</div>
+                <div style={{ fontSize: 12, color: 'var(--im-text)', fontFamily: 'Inter, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bm.text}</div>
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); onRemoveBookmark?.(bm.id) }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', fontSize: 16, padding: '0 4px', flexShrink: 0 }}>×</button>
+            </button>
+          ))}
         </div>
       )}
 

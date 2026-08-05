@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Maximize2, Book, ChevronLeft, Bookmark } from 'lucide-react'
+import { Maximize2, Book, ChevronLeft, Bookmark, Search } from 'lucide-react'
 import ReadingPanel from '../components/ReadingPanel'
 import MobilePlayer from '../components/MobilePlayer'
 import PlayerControls from '../components/PlayerControls'
@@ -21,8 +21,19 @@ export default function ReaderPage({
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('immerse-view-mode') || 'scroll')
   const [showChapters, setShowChapters] = useState(false)
   const [sidebarVisible, setSidebarVisible] = useState(() => localStorage.getItem('immerse-sidebar-visible') !== 'false')
+  const [showSearch, setShowSearch] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const lastScrollY = useRef(0)
   const isDesktop = window.innerWidth >= 768
+
+  // Search results
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return []
+    const query = searchQuery.toLowerCase()
+    return sentences
+      .map((s, idx) => ({ text: s, idx }))
+      .filter(item => item.text.toLowerCase().includes(query))
+  }, [searchQuery, sentences])
 
   function toggleSidebar() {
     const next = !sidebarVisible
@@ -156,6 +167,9 @@ export default function ReaderPage({
               style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: isCurrentBookmarked ? 'var(--im-blue)' : 'var(--im-text-dim)' }}>
               <Bookmark size={12} fill={isCurrentBookmarked ? 'currentColor' : 'none'} /> Bookmark
             </button>
+            <button onClick={() => setShowSearch(!showSearch)} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: showSearch ? 'var(--im-blue)' : 'var(--im-text-dim)' }}>
+              <Search size={12} /> Search
+            </button>
             <button onClick={onOpenSettings} style={hdrBtn}><IconSettings size={14} /> Settings</button>
             <button onClick={onEndSession} style={{ ...hdrBtn, background: 'var(--im-blue)', color: '#fff', borderRadius: 6, padding: '5px 12px' }}>
               End Reading
@@ -221,12 +235,14 @@ export default function ReaderPage({
             sentences={sentences}
             highlights={highlights}
             notes={notes}
+            bookmarks={bookmarks}
             annotations={annotations}
             currentIdx={currentIdx}
             totalSentences={sentences.length}
             onAddHighlight={(idx, text) => onAddHighlight(idx, text)}
             onAddNote={(idx, content) => onAddNote(idx, content)}
             onRemoveAnnotation={onRemoveAnnotation}
+            onRemoveBookmark={onRemoveBookmark}
             onSeek={onSeek}
           />
         )}
@@ -239,6 +255,49 @@ export default function ReaderPage({
           onAddNote={handleAddNote}
           onClose={() => onSelectionChange(null)}
         />
+      )}
+
+      {/* Search panel */}
+      {showSearch && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={() => setShowSearch(false)}>
+          <div style={{ background: 'var(--im-card)', borderRadius: 12, padding: '24px', maxWidth: 500, maxHeight: '70vh', overflowY: 'auto', border: '1px solid var(--im-border)', display: 'flex', flexDirection: 'column', gap: 16 }} onClick={(e) => e.stopPropagation()}>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--im-text)', marginBottom: 12, fontFamily: 'Inter, sans-serif' }}>Search Book</h3>
+              <input
+                autoFocus
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search text..."
+                style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--im-border)', borderRadius: 6, fontSize: 14, fontFamily: 'Inter, sans-serif', color: 'var(--im-text)', background: 'var(--im-bg)', outline: 'none' }}
+                onKeyDown={(e) => { if (e.key === 'Escape') setShowSearch(false) }}
+              />
+            </div>
+            {searchQuery && (
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--im-text-dim)', marginBottom: 8, fontFamily: 'Inter, sans-serif' }}>
+                  {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '50vh', overflowY: 'auto' }}>
+                  {searchResults.slice(0, 20).map((result) => (
+                    <button key={result.idx} onClick={() => { onSeek(result.idx); setShowSearch(false) }}
+                      style={{ background: 'var(--im-blue-bg)', border: 'none', borderRadius: 6, padding: '10px', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s' }}>
+                      <div style={{ fontSize: 11, color: 'var(--im-blue)', fontWeight: 600, fontFamily: 'Inter, sans-serif', marginBottom: 4 }}>Sentence {result.idx + 1}</div>
+                      <div style={{ fontSize: 12, color: 'var(--im-text)', fontFamily: 'Inter, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{result.text}</div>
+                    </button>
+                  ))}
+                  {searchResults.length > 20 && (
+                    <div style={{ fontSize: 11, color: 'var(--im-text-dim)', textAlign: 'center', padding: '8px' }}>Showing 20 of {searchResults.length} results</div>
+                  )}
+                </div>
+              </div>
+            )}
+            {searchQuery && searchResults.length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--im-text-dim)', textAlign: 'center', padding: '20px' }}>No results found</div>
+            )}
+            <button onClick={() => setShowSearch(false)} style={{ width: '100%', padding: '10px', background: 'var(--im-border)', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 12, fontFamily: 'Inter, sans-serif', color: 'var(--im-text)' }}>Close</button>
+          </div>
+        </div>
       )}
     </>
   )
