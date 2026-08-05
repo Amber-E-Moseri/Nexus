@@ -5,6 +5,7 @@ import MobilePlayer from '../components/MobilePlayer'
 import PlayerControls from '../components/PlayerControls'
 import ReaderSidebar from '../components/ReaderSidebar'
 import HighlightPopup from '../components/HighlightPopup'
+import ReaderTabs from '../components/ReaderTabs'
 import { IconBack, IconSettings } from '../icons'
 
 export default function ReaderPage({
@@ -48,22 +49,56 @@ export default function ReaderPage({
     onSelectionChange(null)
   }
 
-  if (isDesktop) {
-    return (
-      <>
-        {/* Desktop header */}
-        <div className="im-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div className="im-logo-mark">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                <rect x="4" y="3" width="6" height="18" rx="2" /><rect x="14" y="3" width="6" height="18" rx="2" />
-              </svg>
-            </div>
-            <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.2px', color: 'var(--im-text)' }}>immerse</span>
-            <div style={{ width: 1, height: 18, background: 'var(--im-border)', margin: '0 4px' }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--im-text)' }}>{book.title}</span>
-            {book.author && <><span style={{ color: 'var(--im-text-xdim)' }}>·</span><span style={{ fontSize: 12, color: 'var(--im-text-dim)' }}>{book.author}</span></>}
-          </div>
+  // Desktop & Mobile unified with tabs
+  return (
+    <>
+      {/* Header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: isDesktop ? '0 20px' : '12px 16px',
+        borderBottom: '1px solid var(--im-border)',
+        background: 'var(--im-card)',
+        flexShrink: 0,
+        height: isDesktop ? 56 : 'auto',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isDesktop ? 10 : 0 }}>
+          <button onClick={onBack} style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--im-text)',
+            fontSize: isDesktop ? 14 : 14,
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 3,
+            fontFamily: 'Inter, sans-serif',
+            minWidth: isDesktop ? 'auto' : 72,
+          }}>
+            <IconBack size={15} /> {isDesktop ? '' : 'Library'}
+          </button>
+          {isDesktop && (
+            <>
+              <div className="im-logo-mark">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                  <rect x="4" y="3" width="6" height="18" rx="2" /><rect x="14" y="3" width="6" height="18" rx="2" />
+                </svg>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.2px', color: 'var(--im-text)' }}>immerse</span>
+              <div style={{ width: 1, height: 18, background: 'var(--im-border)', margin: '0 4px' }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--im-text)' }}>{book.title}</span>
+              {book.author && <><span style={{ color: 'var(--im-text-xdim)' }}>·</span><span style={{ fontSize: 12, color: 'var(--im-text-dim)' }}>{book.author}</span></>}
+            </>
+          )}
+        </div>
+
+        <span style={{ fontSize: isDesktop ? 'auto' : 12, color: 'var(--im-blue)', fontWeight: 600, fontFamily: 'Inter, sans-serif', background: isDesktop ? 'none' : 'var(--im-blue-bg)', border: isDesktop ? 'none' : '1px solid var(--im-blue-bg-2)', borderRadius: isDesktop ? 0 : 20, padding: isDesktop ? 0 : '3px 10px' }}>
+          Credits: {credits} hrs
+        </span>
+
+        {isDesktop && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={() => navigate('/dashboard')} style={{ ...hdrBtn, color: 'var(--im-text-dim)' }}>← Nexus</button>
             <div style={{ width: 1, height: 16, background: 'var(--im-border)' }} />
@@ -71,45 +106,61 @@ export default function ReaderPage({
               {viewMode === 'scroll' ? '⇕ Scroll' : '⧉ Pages'}
             </button>
             <button onClick={onOpenSettings} style={hdrBtn}><IconSettings size={14} /> Settings</button>
-            <button onClick={onBack} style={hdrBtn}><IconBack size={14} /> Library</button>
             <button onClick={onEndSession} style={{ ...hdrBtn, background: 'var(--im-blue)', color: '#fff', borderRadius: 6, padding: '5px 12px' }}>
               End Reading
             </button>
           </div>
-        </div>
+        )}
 
-        {/* Desktop 2-pane layout */}
-        <div className="im-reader-layout">
-          <div className="im-reader-main">
-            <PlayerControls
-              isPlaying={isPlaying}
-              progress={currentIdx / Math.max(1, sentences.length - 1)}
-              elapsedTime={elapsedTime}
-              totalTime={totalTime}
-              voice={voice}
-              speed={speed}
-              currentIdx={currentIdx}
-              totalSentences={sentences.length}
-              onPlay={() => onPlay(currentIdx)}
-              onPause={onPause}
-              onSeek={onSeek}
-              onSkip={onSkip}
-              onVoiceChange={onVoiceChange}
-              onSpeedChange={onSpeedChange}
-            />
-            <div className="im-reading-panel">
-              <ReadingPanel
-                sentences={sentences}
-                currentIdx={currentIdx}
-                highlights={highlights}
-                onSelectionChange={onSelectionChange}
-                onSeek={onSeek}
-                fontSize={fontSize}
-                lineHeight={lineHeight}
-                viewMode={viewMode}
-              />
-            </div>
-          </div>
+        {!isDesktop && (
+          <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 16, fontWeight: 700, minWidth: 32, justifyContent: 'flex-end' }}>
+            ···
+          </button>
+        )}
+      </div>
+
+      {/* Low credit warning */}
+      {parseFloat(credits) < 1 && (
+        <div style={{ background: '#FEF3C7', borderBottom: '1px solid #FBBF24', padding: '10px 16px', textAlign: 'center', fontSize: 12, color: '#92400E', fontFamily: 'Inter, sans-serif', fontWeight: 500 }}>
+          Low on credits: {credits} hrs remaining
+        </div>
+      )}
+
+      {/* Tab-based content */}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        <ReaderTabs
+          book={book}
+          sentences={sentences}
+          currentIdx={currentIdx}
+          isPlaying={isPlaying}
+          elapsedTime={elapsedTime}
+          totalTime={totalTime}
+          voice={voice}
+          speed={speed}
+          highlights={highlights}
+          notes={notes}
+          fontSize={fontSize}
+          lineHeight={lineHeight}
+          credits={credits}
+          onPlay={onPlay}
+          onPause={onPause}
+          onSeek={onSeek}
+          onSkip={onSkip}
+          onSpeedChange={onSpeedChange}
+          onVoiceChange={onVoiceChange}
+          onAddHighlight={onAddHighlight}
+          onAddNote={onAddNote}
+          onRemoveAnnotation={onRemoveAnnotation}
+          onSelectionChange={onSelectionChange}
+          onEndSession={onEndSession}
+          onOpenSettings={onOpenSettings}
+          viewMode={viewMode}
+          onToggleViewMode={toggleViewMode}
+          showChapters={showChapters}
+          onShowChapters={setShowChapters}
+        />
+
+        {isDesktop && (
           <ReaderSidebar
             book={book}
             sentences={sentences}
@@ -123,91 +174,7 @@ export default function ReaderPage({
             onRemoveAnnotation={onRemoveAnnotation}
             onSeek={onSeek}
           />
-        </div>
-
-        {selectionInfo && (
-          <HighlightPopup
-            info={selectionInfo}
-            onHighlight={handleHighlight}
-            onAddNote={handleAddNote}
-            onClose={() => onSelectionChange(null)}
-          />
         )}
-      </>
-    )
-  }
-
-  return (
-    <>
-      {/* Mobile header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--im-border)', background: 'var(--im-card)', flexShrink: 0 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text)', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'Inter, sans-serif', minWidth: 72 }}>
-          <IconBack size={15} /> Library
-        </button>
-        <span style={{ fontSize: 12, color: 'var(--im-blue)', fontWeight: 600, fontFamily: 'Inter, sans-serif', background: 'var(--im-blue-bg)', border: '1px solid var(--im-blue-bg-2)', borderRadius: 20, padding: '3px 10px' }}>
-          Credits: {credits} hrs
-        </span>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={toggleViewMode} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', fontSize: 12, fontWeight: 600, fontFamily: 'Inter, sans-serif', padding: '4px 6px' }}>
-            {viewMode === 'scroll' ? '⇕' : '⧉'}
-          </button>
-          {sentences.length > 0 && (
-            <button onClick={() => setShowChapters(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', fontSize: 12, fontWeight: 600, fontFamily: 'Inter, sans-serif', padding: '4px 6px' }}>
-              ☰
-            </button>
-          )}
-          <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 16, fontWeight: 700, minWidth: 32, justifyContent: 'flex-end' }}>
-            ···
-          </button>
-        </div>
-      </div>
-
-      {/* Low credit warning — credits prop is already in hours */}
-      {parseFloat(credits) < 1 && (
-        <div style={{ background: '#FEF3C7', borderBottom: '1px solid #FBBF24', padding: '10px 16px', textAlign: 'center', fontSize: 12, color: '#92400E', fontFamily: 'Inter, sans-serif', fontWeight: 500 }}>
-          Low on credits: {credits} hrs remaining
-        </div>
-      )}
-
-      {/* Reading area — centered, full flex */}
-      <div style={{ flex: 1, overflowY: viewMode === 'scroll' ? 'auto' : 'hidden', overflowX: 'hidden', background: 'var(--im-bg)', display: 'flex', flexDirection: 'column', minWidth: 0, justifyContent: 'center', alignItems: 'center', padding: '20px 16px' }} onScroll={handleScroll}>
-        {sentences.length > 0 ? (
-          <ReadingPanel
-            sentences={sentences}
-            currentIdx={currentIdx}
-            highlights={highlights}
-            onSelectionChange={onSelectionChange}
-            onSeek={onSeek}
-            fontSize={fontSize}
-            lineHeight={lineHeight}
-            viewMode={viewMode}
-          />
-        ) : (
-          <div style={{ textAlign: 'center', color: 'var(--im-text-dim)', fontSize: 13, fontFamily: 'Inter, sans-serif', maxWidth: 280 }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>📄</div>
-            <p style={{ marginBottom: 6, fontWeight: 600, color: 'var(--im-text)' }}>PDF not available</p>
-            <p style={{ fontSize: 12, lineHeight: 1.6, marginBottom: 16 }}>This book's PDF wasn't found on this device. Go back and re-import the PDF file to read it.</p>
-            <button onClick={onBack} style={{ padding: '8px 18px', background: 'var(--im-blue)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
-              Go back
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Player at bottom */}
-      <div style={{ background: 'var(--im-card)', borderTop: '1px solid var(--im-border)', padding: '12px 16px', flexShrink: 0 }}>
-        <MobilePlayer
-          isPlaying={isPlaying}
-          progress={currentIdx / Math.max(1, sentences.length - 1)}
-          elapsedTime={elapsedTime}
-          voice={voice}
-          speed={speed}
-          visible={true}
-          onPlay={() => onPlay(currentIdx)}
-          onPause={onPause}
-          onVoiceChange={onVoiceChange}
-          onSpeedChange={onSpeedChange}
-        />
       </div>
 
       {selectionInfo && (
@@ -218,18 +185,9 @@ export default function ReaderPage({
           onClose={() => onSelectionChange(null)}
         />
       )}
-
-      {/* Chapters drawer (mobile) */}
-      {showChapters && (
-        <ChaptersDrawer
-          sentences={sentences}
-          currentIdx={currentIdx}
-          onSeek={(idx) => { onSeek(idx); setShowChapters(false) }}
-          onClose={() => setShowChapters(false)}
-        />
-      )}
     </>
   )
+
 }
 
 function isChapterHeading(s) {
