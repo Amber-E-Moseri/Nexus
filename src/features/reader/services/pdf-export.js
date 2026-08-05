@@ -5,7 +5,10 @@ import { PDFDocument, PDFName, PDFNumber, PDFArray, PDFDict, PDFHexString } from
 GlobalWorkerOptions.workerSrc = workerUrl
 
 export async function extractPdfText(buffer) {
-  const pdf = await getDocument({ data: buffer }).promise
+  // pdf.js transfers `data.buffer` to its worker (detaching it in this thread),
+  // so hand it a copy — callers need the original buffer intact afterward
+  // (for uploading to Storage / caching in IndexedDB).
+  const pdf = await getDocument({ data: buffer.slice(0) }).promise
   let fullText = ''
   const textItems = []
   const pageSizes = []

@@ -59,6 +59,7 @@ export default function AudioTranscriptionPanel({
   const [error, setError] = useState('')
   const [transcript, setTranscript] = useState('')
   const [extractedData, setExtractedData] = useState(null)
+  const [extractError, setExtractError] = useState(null) // distinct from transcription errors
 
   // Multi-audio support
   const [transcriptions, setTranscriptions] = useState([]) // Array of {id, input_type, input_file_name, summary, sequence_number, created_at}
@@ -332,6 +333,7 @@ export default function AudioTranscriptionPanel({
   const streamExtractMeetingData = async (transcriptText) => {
     setExtracting(true)
     setExtractedData(null)
+    setExtractError(null)
     setActionAssignments([])
 
     // Org directory drives both the AI's space-suggestion context (linked_spaces/
@@ -356,6 +358,7 @@ export default function AudioTranscriptionPanel({
       return { name: u.name, spaces: space ? [space] : [], primary: space }
     })
 
+    let fetchAbort = null
     try {
       const session = (await supabase.auth.getSession()).data.session
       if (!session?.access_token) {
@@ -363,6 +366,7 @@ export default function AudioTranscriptionPanel({
       }
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+      fetchAbort = new AbortController()
       const response = await fetch(`${supabaseUrl}/functions/v1/extract-meeting-data`, {
         method: 'POST',
         headers: {
@@ -377,6 +381,7 @@ export default function AudioTranscriptionPanel({
           stream: true,
           meetingId,
         }),
+        signal: fetchAbort.signal,
       })
 
       if (!response.ok) {
@@ -433,13 +438,17 @@ export default function AudioTranscriptionPanel({
           }
         }
 
+        // Stream closed without a done event — server was cut short (wall-clock kill,
+        // network drop, etc.). Throw so the catch block runs the non-streaming fallback
+        // instead of silently returning with no results and no error shown to the user.
         if (!receivedDone) {
-          console.warn('[streamExtract] Stream closed without a done event — extraction may have failed')
+          throw new Error('Extraction stream ended without a completion event — falling back to non-streaming.')
         }
       }
 
-      await withTimeout(streamingLoop(), 120_000, 'streamExtractMeetingData')
+      await withTimeout(streamingLoop(), 300_000, 'streamExtractMeetingData')
     } catch (err) {
+      fetchAbort?.abort()
       const isTimeout = err.message?.includes('timed out')
       console.warn(
         isTimeout ? '[streamExtract] Timed out — falling back to non-streaming' : 'Streaming extraction failed, falling back to non-streaming:',
@@ -475,14 +484,13 @@ export default function AudioTranscriptionPanel({
             setSelectedOpenItems(autoSelected)
           }
           setOpenItemsMergeSuccess(false)
-          // Clear any timeout error if the fallback succeeded
           if (isTimeout) setError('')
         } else if (extractErr) {
-          setError('AI extraction failed. Please try again or extract manually.')
+          setExtractError('AI extraction failed. Your transcript was saved — click Retry to try again.')
         }
       } catch (fallbackErr) {
         console.warn('[streamExtract] Fallback also failed:', fallbackErr)
-        setError('AI extraction is unavailable right now. Your transcript was saved successfully.')
+        setExtractError('AI extraction is unavailable right now. Your transcript was saved — click Retry to try again.')
       }
     } finally {
       setExtracting(false)
@@ -807,6 +815,7 @@ export default function AudioTranscriptionPanel({
     setPastedText('')
     setTranscript('')
     setExtractedData(null)
+    setExtractError(null)
     setRecordingTime(0)
     setProgress(0)
     setChunkStatus('')
@@ -911,7 +920,7 @@ export default function AudioTranscriptionPanel({
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92'; e.currentTarget.style.background = '#F5F2ED' }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E9E4D8'; e.currentTarget.style.background = '#fff' }}
             >
-              <div style={{ marginBottom: 8 }}><FolderOpen size={25} aria-hidden="true" /></div>
+              <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#4C2A92' }}><FolderOpen size={25} aria-hidden="true" /></div>
               <div>Upload file</div>
               <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 4 }}>MP3, WAV, M4A • max 300 MB</div>
             </button>
@@ -922,7 +931,7 @@ export default function AudioTranscriptionPanel({
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92'; e.currentTarget.style.background = '#F5F2ED' }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E9E4D8'; e.currentTarget.style.background = '#fff' }}
               >
-                <div style={{ marginBottom: 8 }}><Mic size={25} aria-hidden="true" /></div>
+                <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#4C2A92' }}><Mic size={25} aria-hidden="true" /></div>
                 <div>Record live</div>
                 <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 4 }}>Capture audio now</div>
               </button>
@@ -933,7 +942,7 @@ export default function AudioTranscriptionPanel({
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92'; e.currentTarget.style.background = '#F5F2ED' }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E9E4D8'; e.currentTarget.style.background = '#fff' }}
             >
-              <div style={{ marginBottom: 8 }}><FileText size={25} aria-hidden="true" /></div>
+              <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#4C2A92' }}><FileText size={25} aria-hidden="true" /></div>
               <div>Paste transcript</div>
               <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 4 }}>Zoom, Teams, etc.</div>
             </button>
@@ -1037,7 +1046,7 @@ export default function AudioTranscriptionPanel({
           </div>
         )}
 
-        {transcript && !showAddMore && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
+        {transcript && !showAddMore && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} extractError={extractError} onRetryExtract={() => streamExtractMeetingData(transcript)} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} } @keyframes spin { to{transform:rotate(360deg)} }`}</style>
       </div>
     )
@@ -1165,7 +1174,7 @@ export default function AudioTranscriptionPanel({
           </div>
         )}
 
-        {transcript && !showAddMore && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
+        {transcript && !showAddMore && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} extractError={extractError} onRetryExtract={() => streamExtractMeetingData(transcript)} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
       </div>
     )
   }
@@ -1271,7 +1280,7 @@ export default function AudioTranscriptionPanel({
           </div>
         )}
 
-        {transcript && !showAddMore && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
+        {transcript && !showAddMore && <TranscriptCard transcript={transcript} extractedData={extractedData} extracting={extracting} extractError={extractError} onRetryExtract={() => streamExtractMeetingData(transcript)} selectedItems={selectedActionItems} toggleItem={toggleItem} onMerge={handleMerge} merging={merging} mergeSuccess={mergeSuccess} selectedOpenItems={selectedOpenItems} toggleOpenItem={toggleOpenItem} onMergeOpenItems={handleMergeOpenItems} mergingOpenItems={mergingOpenItems} openItemsMergeSuccess={openItemsMergeSuccess} error={error} s={s} orgDirectory={orgDirectory} departmentId={departmentId} assignments={actionAssignments} onAssignmentChange={handleAssignmentChange} canManage={canManage} />}
       </div>
     )
   }
@@ -1389,7 +1398,7 @@ function DetailedNotes({ notes, scriptureRefs = [], s }) {
 }
 
 // ── Transcript + extracted data card ─────────────────────────────────────────────
-function TranscriptCard({ transcript, extractedData, extracting, selectedItems, toggleItem, onMerge, merging, mergeSuccess, selectedOpenItems, toggleOpenItem, onMergeOpenItems, mergingOpenItems, openItemsMergeSuccess, error, s, orgDirectory, departmentId, assignments, onAssignmentChange, canManage = true }) {
+function TranscriptCard({ transcript, extractedData, extracting, extractError, onRetryExtract, selectedItems, toggleItem, onMerge, merging, mergeSuccess, selectedOpenItems, toggleOpenItem, onMergeOpenItems, mergingOpenItems, openItemsMergeSuccess, error, s, orgDirectory, departmentId, assignments, onAssignmentChange, canManage = true }) {
   return (
     <div style={s.card}>
       <h3 style={s.title}>Transcript</h3>
@@ -1402,11 +1411,28 @@ function TranscriptCard({ transcript, extractedData, extracting, selectedItems, 
         </div>
       )}
 
-      {/* WIN 3: spinner while streaming extraction runs */}
+      {/* Spinner while streaming extraction runs */}
       {extracting && (
         <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:'#F0EBF8', borderRadius:6, marginTop:12 }}>
           <div style={{ width:20, height:20, border:'3px solid #E0E0E0', borderTopColor:'#4C2A92', borderRadius:'50%', animation:'spin 0.8s linear infinite', flexShrink:0 }} />
           <p style={{ margin:0, fontSize:13, color:'#4C2A92', fontWeight:600 }}>Extracting action items…</p>
+        </div>
+      )}
+
+      {/* Extraction failed — visible failure state with retry */}
+      {!extracting && extractError && !extractedData && (
+        <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:'#FEE8E6', borderRadius:6, marginTop:12, border:'1px solid #F5C2BB' }}>
+          <span style={{ fontSize:18, flexShrink:0 }}>⚠️</span>
+          <div style={{ flex:1 }}>
+            <p style={{ margin:'0 0 6px', fontSize:13, color:'#C73B2B', fontWeight:600 }}>AI extraction failed</p>
+            <p style={{ margin:0, fontSize:12, color:'#8B2B1F' }}>{extractError}</p>
+          </div>
+          <button
+            onClick={onRetryExtract}
+            style={{ padding:'6px 14px', borderRadius:6, border:'none', background:'#C73B2B', color:'#fff', fontSize:12, fontWeight:600, cursor:'pointer', flexShrink:0 }}
+          >
+            Retry
+          </button>
         </div>
       )}
 

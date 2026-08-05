@@ -15,12 +15,26 @@ const DEV_ORIGINS = new Set([
   'https://app.blwcannexus.ca',
 ])
 
+// .claude/launch.json defines 10+ fallback dev ports (dev-alt through
+// dev-alt11) specifically so concurrent local sessions in this repo don't
+// collide on 5173 — but the fixed DEV_ORIGINS set above only ever covered
+// two hardcoded ports. Any request that landed on one of the other fallback
+// ports got silently CORS-blocked by the browser (fetch throws a generic
+// "Failed to fetch" with no distinguishing detail, so this was invisible
+// until traced from the actual origin). Matching any localhost/127.0.0.1
+// port here closes that gap for every current and future fallback port
+// without needing to hardcode each one — this only ever widens what's
+// already allowed for local dev; it has no effect on PRIMARY_ORIGIN or the
+// production domains above, which still require an exact match.
+const LOCAL_DEV_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
+
 export function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin') ?? ''
   const allowed =
     !PRIMARY_ORIGIN || // no restriction configured → wildcard
     origin === PRIMARY_ORIGIN ||
-    DEV_ORIGINS.has(origin)
+    DEV_ORIGINS.has(origin) ||
+    LOCAL_DEV_ORIGIN.test(origin)
 
   return {
     'Access-Control-Allow-Origin': allowed ? origin || '*' : PRIMARY_ORIGIN,

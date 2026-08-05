@@ -37,6 +37,7 @@ import {
   Send,
   Image,
   Zap,
+  Sparkles,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
@@ -772,13 +773,14 @@ export default function Sidebar({ isMobileDrawer = false }) {
                   { label: 'Campus Photos', to: '/settings/campus-photos', icon: Image },
                   { label: 'Support Tickets', to: '/admin/tickets', icon: HeadphonesIcon },
                   { label: 'Email Management', to: '/admin/emails', icon: Mail },
+                  { label: 'Nova Review', to: '/admin/nova-review', icon: Sparkles },
                 ] : []),
                 // Settings
                 { label: 'Settings', to: '/settings', icon: Settings },
                 { label: 'Integrations', to: '/settings/integrations', icon: Settings },
                 { label: 'Personal Integrations', to: '/settings/personal-integrations', icon: Settings },
                 // Learning
-                ...(['super_admin', 'regional_secretary'].includes(role) ? [{ label: 'Books / Library', to: '/books', icon: Library }] : []),
+                ...(role === 'super_admin' ? [{ label: 'Books / Library', to: '/books', icon: Library }] : []),
                 // Help
                 { label: 'Help & FAQ', to: '/help', icon: HelpCircle },
                 { label: 'Get Support', to: '/support', icon: HeadphonesIcon },

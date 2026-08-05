@@ -52,9 +52,9 @@ export default function MeetingSummaryEditor({ meetingId, initialSummary = '', i
     <div style={{ background: FS.surface, border: `1px solid ${FS.border}`, borderRadius: 10, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }}>
       <div style={{ padding: '12px 16px', borderBottom: `1px solid ${FS.borderL}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: FS.text }}>📋 Summary & Key Points</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: FS.text }}>Summary & Key Points</div>
           <div style={{ fontSize: 11, color: FS.muted, marginTop: 2 }}>
-            {initialNotes ? 'Edited summary' : 'AI-generated summary · click Edit to refine'}
+            {initialNotes ? 'Edited summary' : 'No summary generated yet · click Edit to add one'}
           </div>
         </div>
         {!isEditing && (

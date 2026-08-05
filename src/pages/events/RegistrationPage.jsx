@@ -46,10 +46,16 @@ export default function RegistrationPage() {
     }
 
     try {
-      // Role-based full access
-      if (role === 'super_admin' || role === 'regional_secretary') {
+      // Role-based full access — regional_secretary also gets finance; super_admin does not
+      if (role === 'regional_secretary') {
         setSprintEditAccess(true)
         setFinanceAccess(true)
+        setCanAccess(true)
+        setLoading(false)
+        return
+      }
+      if (role === 'super_admin') {
+        setSprintEditAccess(true)
         setCanAccess(true)
         setLoading(false)
         return

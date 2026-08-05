@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { ClipboardList, Download, FileText, FolderOpen, ListChecks, Mic, Play, Sparkles, Square } from 'lucide-react'
+import { Check, CheckCircle2, ClipboardList, Download, FileText, FolderOpen, ListChecks, Lock, Mic, RotateCw, Sparkles, Square, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
@@ -58,7 +58,6 @@ const TABS = [
   { id: 'actions', Icon: ListChecks, label: 'Actions', badge: 'actions' },
   { id: 'audio', Icon: Mic, label: 'Audio', badge: null },
   { id: 'ai', Icon: Sparkles, label: 'AI Extract', badge: 'ai' },
-  { id: 'docs', Icon: FileText, label: 'Docs', badge: 'docs' },
 ]
 
 // For a <input type="datetime-local"> value, which has no timezone —
@@ -1017,6 +1016,15 @@ function MeetingDetailViewInner() {
   const timeRange = meeting.meeting_type ? `${meeting.meeting_type} meeting` : 'Meeting'
   const currentItem = agenda[currentIdx] ?? null
 
+  // The edge function completes successfully but returns every field null/empty
+  // when it classifies the transcript as non-meeting content (content_type
+  // "list_data"/"other", or confidence < 0.6) — e.g. test audio, scripture
+  // readings, stray recordings. Without this check the AI Extract tab shows
+  // nothing at all after a "complete" run, which reads as broken rather than
+  // "nothing meeting-like was found."
+  const aiResultIsEmpty = !!aiResult && !aiResult.summary && !aiResult.detailed_notes &&
+    !aiResult.decisions?.length && !aiResult.action_items?.length && !aiResult.open_items?.length
+
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden', fontFamily:'inherit', background: FS.bg }}>
       <style>{`
@@ -1130,7 +1138,8 @@ function MeetingDetailViewInner() {
                     opacity: savingVisibility ? 0.7 : 1,
                   }}
                 >
-                  {meeting.visibility === 'private' ? '🔒 Private' : '🔓 Published'}
+                  <Lock size={13} strokeWidth={2} aria-hidden="true" />
+                  {meeting.visibility === 'private' ? 'Private' : 'Published'}
                 </button>
               )}
               {canEditVisibility && !isLive && meeting.visibility === 'private' && (
@@ -1153,14 +1162,21 @@ function MeetingDetailViewInner() {
                     cursor:'pointer',
                   }}
                 >
-                  👥 Share{meeting.allowed_viewers?.length ? ` (${meeting.allowed_viewers.length})` : ''}
+                  <Users size={13} strokeWidth={2} aria-hidden="true" />
+                  Share{meeting.allowed_viewers?.length ? ` (${meeting.allowed_viewers.length})` : ''}
                 </button>
               )}
             </div>
           )}
           <div style={{ fontSize:11, color: isLive ? 'rgba(255,255,255,.55)' : FS.muted, marginTop:1 }}>
             {isPost ? `Duration: ${fmt(elapsed)} · ` : ''}{dateLabel}
-            {meeting.recurrence_id && meeting.series_instance_num ? ` · 🔁 Meeting #${meeting.series_instance_num} in series` : ''}
+            {meeting.recurrence_id && meeting.series_instance_num ? (
+              <>
+                {' · '}
+                <RotateCw size={10} strokeWidth={2.5} style={{display:'inline', marginRight:3, position:'relative', top:1}} aria-hidden="true" />
+                {`Meeting #${meeting.series_instance_num} in series`}
+              </>
+            ) : ''}
           </div>
 
           {/* Shared with departments */}
@@ -1264,15 +1280,6 @@ function MeetingDetailViewInner() {
             </button>
           )}
 
-          {canManage && isPrep && (
-            <button
-              onClick={startLive}
-              style={{ padding:'7px 14px', border:'none', borderRadius:6, background: FS.coral, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}
-            >
-              <Play size={14} fill="currentColor" aria-hidden="true" />
-              Start meeting
-            </button>
-          )}
           {canManage && isLive && (
             <button
               onClick={endMeeting}
@@ -1497,7 +1504,7 @@ function MeetingDetailViewInner() {
                   onClick={() => setActiveTab(t.id)}
                   style={{ display:'flex', alignItems:'center', gap:5, padding: isMobile ? '10px 10px' : '11px 13px', border:'none', background:'none', borderBottom:`2px solid ${active ? FS.navy : 'transparent'}`, fontFamily:'inherit', fontSize: isMobile ? 12 : 12.5, fontWeight: active ? 700 : 500, color: active ? FS.navy : FS.muted, cursor:'pointer', whiteSpace:'nowrap', transition:'all .13s', marginBottom:-1, flexShrink:0 }}
                 >
-                  <TabIcon size={15} strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" />
+                  <TabIcon size={15} strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" color={FS.purple} />
                   {t.label}
                   {badge && (
                     <span style={{ minWidth:16, height:16, borderRadius:999, background: FS.navyGhost, color: FS.navy, fontSize:9, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 4px' }}>
@@ -1585,7 +1592,7 @@ function MeetingDetailViewInner() {
                 {/* Any private meeting: share notes with attendees (creator/managers only) */}
                 {meeting?.visibility !== 'published' && (canManage || isNotesCreator) && (
                   <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'14px 16px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
-                    <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8 }}>🔒 Notes hidden by default — share with</div>
+                    <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:8, display:'flex', alignItems:'center', gap:6 }}><Lock size={12} strokeWidth={2.5} aria-hidden="true" />Notes hidden by default — share with</div>
                     <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                       {(meeting.attendance ?? []).filter((a) => a.user_id !== profile?.id).map((a) => {
                         const shared = (meeting.notes_shared_with ?? []).includes(a.user_id)
@@ -1658,7 +1665,7 @@ function MeetingDetailViewInner() {
                   </>
                 ) : (
                   <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'24px 16px', textAlign:'center', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
-                    <div style={{ fontSize:24, marginBottom:8 }}>🔒</div>
+                    <div style={{ fontSize:24, marginBottom:8 }}><Lock size={24} strokeWidth={1.5} aria-hidden="true" /></div>
                     <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>Notes hidden by creator</div>
                     <div style={{ fontSize:12, color: FS.muted, marginTop:4 }}>The organizer hasn't shared notes from this meeting with you yet.</div>
                   </div>
@@ -1774,7 +1781,7 @@ function MeetingDetailViewInner() {
                 </>
                 ) : (
                   <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'24px 16px', textAlign:'center', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>
-                    <div style={{ fontSize:24, marginBottom:8 }}>🔒</div>
+                    <div style={{ fontSize:24, marginBottom:8 }}><Lock size={24} strokeWidth={1.5} aria-hidden="true" /></div>
                     <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>Action items hidden by creator</div>
                     <div style={{ fontSize:12, color: FS.muted, marginTop:4 }}>The organizer hasn't shared notes from this meeting with you yet.</div>
                   </div>
@@ -1962,7 +1969,7 @@ function MeetingDetailViewInner() {
                 </div>
                 ) : (
                   <div style={{ marginTop: 24, background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'24px 16px', textAlign:'center' }}>
-                    <div style={{ fontSize:24, marginBottom:8 }}>🔒</div>
+                    <div style={{ fontSize:24, marginBottom:8 }}><Lock size={24} strokeWidth={1.5} aria-hidden="true" /></div>
                     <div style={{ fontSize:13, fontWeight:700, color: FS.text }}>Open items hidden by creator</div>
                     <div style={{ fontSize:12, color: FS.muted, marginTop:4 }}>The organizer hasn't shared open items from this meeting with you yet.</div>
                   </div>
@@ -1986,8 +1993,14 @@ function MeetingDetailViewInner() {
                   meetingContext={context}
                   startImmediately={recording}
                   stopImmediately={!recording}
-                  onRecordingChange={(isRec) => { if (!isRec) setRecording(false) }}
-                  onTranscriptionComplete={({ transcript }) => setMeeting(m => ({ ...m, summary: transcript }))}
+                  onRecordingChange={(isRec) => {
+                    if (isRec) { if (!isLive) startLive() }
+                    else setRecording(false)
+                  }}
+                  onTranscriptionComplete={({ transcript }) => {
+                    setMeeting(m => ({ ...m, summary: transcript }))
+                    if (!isLive) startLive()
+                  }}
                   onActionItemsExtracted={() => { fetchActionItems(); setActiveTab('actions') }}
                 />
 
@@ -2045,14 +2058,14 @@ function MeetingDetailViewInner() {
                         {!editingTranscript && (
                           <button
                             onClick={() => { setEditedTranscript(meeting.summary); setEditingTranscript(true) }}
-                            style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.navy, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
+                            style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.navy, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}
                           >
                             ✏️ Edit
                           </button>
                         )}
                         <button
                           onClick={() => setActiveTab('ai')}
-                          style={{ padding:'7px 13px', border:'none', borderRadius:6, background: FS.purple, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
+                          style={{ padding:'7px 13px', border:'none', borderRadius:6, background: FS.purple, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}
                         >
                           ⚡ AI Extract →
                         </button>
@@ -2076,9 +2089,9 @@ function MeetingDetailViewInner() {
                               setEditingTranscript(false)
                               setSavingTranscript(false)
                             }}
-                            style={{ padding:'8px 16px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
+                            style={{ padding:'8px 16px', border:'none', borderRadius:6, background: FS.navy, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}
                           >
-                            {savingTranscript ? 'Saving…' : '💾 Save changes'}
+                            {savingTranscript ? '⏳ Saving…' : '💾 Save changes'}
                           </button>
                           <button
                             onClick={() => setEditingTranscript(false)}
@@ -2181,7 +2194,17 @@ function MeetingDetailViewInner() {
                 </div>
 
                 {/* Extraction results */}
-                {aiResult && (
+                {aiResultIsEmpty && (
+                  <div style={{ background:'#FFF8E8', border:'1px solid #F0DCA0', borderRadius:10, padding:'16px 18px' }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:'#8A6D1D' }}>No meeting content found</div>
+                    <div style={{ fontSize:12, color:'#8A6D1D', marginTop:4, lineHeight:1.6 }}>
+                      Claude read the transcript but didn't recognize it as meeting content (e.g. a test recording, scripture reading, or audio with no discussion) — so there's nothing to extract.
+                      {typeof aiResult.confidence === 'number' && ` Confidence: ${Math.round(aiResult.confidence * 100)}%.`}
+                      {' '}If this transcript should contain a real meeting, check the <button onClick={() => setActiveTab('audio')} style={{ background:'none', border:'none', color:'#8A6D1D', textDecoration:'underline', cursor:'pointer', padding:0, fontSize:12, fontWeight:700 }}>Audio tab</button> to confirm the transcript looks right, then try again.
+                    </div>
+                  </div>
+                )}
+                {aiResult && !aiResultIsEmpty && (
                   <>
                     {aiResult.summary && (
                       <div style={{ background: FS.surface, border:`1px solid ${FS.border}`, borderRadius:10, padding:'16px 18px', boxShadow:'0 1px 3px rgba(0,0,0,.06)' }}>

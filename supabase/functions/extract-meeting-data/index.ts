@@ -185,11 +185,18 @@ Determine content_type: "meeting" | "raw_note" | "list_data" | "other"
       content (a leader's guidance, teaching, or address to those present), not a
       private journal — extract it in full, same as "meeting".
 - If content_type is "list_data" or "other", OR confidence < 0.6:
-    → Only return cleaned_transcript, chapters, and content_type fields.
-    → Leave summary, decisions, action_items, key_topics, detailed_notes,
-      scripture_references as empty/null.
-    → This prevents forced meeting structure for content with no real substance
-      to summarize.
+    → Return cleaned_transcript, chapters, content_type, and a brief 2-3 sentence
+      summary describing what substantive content was found (e.g. "This appears to
+      be a staff meeting covering attendance targets and upcoming events.").
+    → NEVER describe the recording as "corrupted", "looped", "repeated", or
+      reference audio quality issues — that is a transcription artifact, not your
+      concern. Focus only on the content that IS present, however fragmented.
+    → If any action items, decisions, or scripture references are discernible even
+      partially, still extract them — do not leave them empty just because the
+      transcript is imperfect. A partial extraction is always better than none.
+    → Leave detailed_notes null for low-confidence content, but still populate
+      decisions, action_items, and scripture_references with anything recoverable.
+    → This gives context without forcing meeting structure onto non-meeting content.
 
 === DETAILED NOTES RULES (only apply if content_type = meeting or raw_note, confidence >= 0.6) ===
 - "detailed_notes" is the full-detail record layer — NOT a second summary.
