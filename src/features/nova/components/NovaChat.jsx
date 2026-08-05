@@ -172,7 +172,7 @@ export default function NovaChat() {
 
       {open ? (
         <div
-          className="fixed bottom-[76px] right-5 flex h-[580px] w-[380px] max-w-[calc(100vw-40px)] max-h-[calc(100vh-96px)] flex-col overflow-hidden rounded-[16px] border shadow-[var(--shadow-lg)]"
+          className="fixed bottom-[76px] right-5 flex h-[450px] w-[340px] max-w-[calc(100vw-40px)] max-h-[calc(100vh-96px)] flex-col overflow-hidden rounded-[16px] border shadow-[var(--shadow-lg)]"
           style={{ background: 'var(--surface)', borderColor: 'var(--border)', zIndex: 'var(--z-chat-widget)' }}
         >
           <div
@@ -201,7 +201,17 @@ export default function NovaChat() {
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
-            {messages.map((m) =>
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-start">
+                <div
+                  className="max-w-[92%] rounded-[12px] rounded-bl-[4px] px-3 py-2"
+                  style={{ background: 'var(--surface-secondary)', color: 'var(--text-primary)' }}
+                >
+                  <span className="text-[12.5px]">Hi I'm Nova your Nexus guide, How can i help you today</span>
+                </div>
+              </div>
+            ) : (
+              messages.map((m) =>
                 m.role === 'user' ? (
                   <div key={m.id} className="flex justify-end">
                     <div
@@ -250,7 +260,8 @@ export default function NovaChat() {
                     ) : null}
                   </div>
                 ),
-              )}
+              })
+            )}
           </div>
 
           <div className="border-t p-3" style={{ borderColor: 'var(--border-light)' }}>
