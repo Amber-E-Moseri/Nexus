@@ -565,6 +565,15 @@ export async function updateTask(taskId, updates, actorId = null, existingTask =
   applyCompletionMetadata(patch, updates.statusCategory, updates.completed_at)
   if (nextAssigneeIds !== null) delete patch.assignee_id
 
+  // When caller passes only statusCategory (no explicit statusId/status_id),
+  // resolve it to the department's canonical status for that category.
+  if (updates.statusCategory && !updates.statusId && !updates.status_id) {
+    patch.status_id = await getCategoryStatusId({
+      departmentId: existingTask.is_personal || existingTask.sprint_id ? null : existingTask.department_id ?? null,
+      category: updates.statusCategory,
+    })
+  }
+
   let data = null
   if (Object.keys(patch).length > 0) {
     const { data: updatedRow, error } = await supabase
