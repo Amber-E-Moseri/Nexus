@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, Search, ChevronDown, Plus, X } from 'lucide-react'
+import { Sparkles, Search, ChevronDown, Plus, X, ClipboardList } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../context/ToastContext'
@@ -18,6 +19,7 @@ const FEATURE_COLORS = {
 }
 
 export default function NovaKnowledgeBase() {
+  const navigate = useNavigate()
   const { profile } = useAuth()
   const { showToast } = useToast()
   const isSuperAdmin = profile?.role === 'super_admin'
@@ -95,16 +97,27 @@ export default function NovaKnowledgeBase() {
                 <p className="text-[14px] text-[var(--text-secondary)]">Browse {entries.length} how-to guides and FAQs</p>
               </div>
             </div>
-            {isSuperAdmin && (
-              <button
-                onClick={() => setShowAddForm(true)}
-                className="flex items-center gap-2 rounded-[8px] px-4 py-2 font-semibold text-white transition-opacity hover:opacity-90"
-                style={{ background: 'var(--accent)' }}
-              >
-                <Plus size={18} />
-                Add Entry
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {isSuperAdmin && (
+                <button
+                  onClick={() => navigate('/admin/nova-review')}
+                  className="flex items-center gap-2 rounded-[8px] px-4 py-2 font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-secondary)]"
+                >
+                  <ClipboardList size={18} />
+                  Review Queue
+                </button>
+              )}
+              {isSuperAdmin && (
+                <button
+                  onClick={() => setShowAddForm(true)}
+                  className="flex items-center gap-2 rounded-[8px] px-4 py-2 font-semibold text-white transition-opacity hover:opacity-90"
+                  style={{ background: 'var(--accent)' }}
+                >
+                  <Plus size={18} />
+                  Add Entry
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

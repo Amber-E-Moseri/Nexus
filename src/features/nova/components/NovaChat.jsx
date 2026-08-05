@@ -165,7 +165,7 @@ export default function NovaChat() {
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? 'Close Nova' : 'Ask Nova'}
         className="fixed bottom-5 right-5 flex h-12 w-12 items-center justify-center rounded-full shadow-[var(--shadow-lg)] transition-transform hover:scale-105"
-        style={{ background: 'var(--accent)', color: 'var(--amber)', zIndex: 'var(--z-chat-widget)' }}
+        style={{ background: 'var(--accent)', color: '#fff', zIndex: 'var(--z-chat-widget)' }}
       >
         {open ? <X size={20} /> : <Sparkles size={20} />}
       </button>
@@ -216,7 +216,7 @@ export default function NovaChat() {
                   <div key={m.id} className="flex justify-end">
                     <div
                       className="max-w-[85%] rounded-[12px] rounded-br-[4px] px-3 py-2 text-[12.5px]"
-                      style={{ background: 'var(--accent)', color: 'var(--amber)' }}
+                      style={{ background: 'var(--accent)', color: '#fff' }}
                     >
                       {m.text}
                     </div>
@@ -285,7 +285,7 @@ export default function NovaChat() {
                 disabled={sending || !input.trim()}
                 aria-label="Send"
                 className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-opacity disabled:opacity-40"
-                style={{ background: 'var(--accent)', color: 'var(--amber)' }}
+                style={{ background: 'var(--accent)', color: '#fff' }}
               >
                 {sending ? <LoaderCircle size={13} className="animate-spin" /> : <ArrowUp size={14} />}
               </button>

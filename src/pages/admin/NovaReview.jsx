@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Check, ThumbsDown, HelpCircle } from 'lucide-react'
+import { AlertTriangle, Check, ThumbsDown, HelpCircle, BookOpen } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../context/ToastContext'
 
@@ -11,6 +12,7 @@ function daysAgo(isoDate) {
 }
 
 export default function NovaReview() {
+  const navigate = useNavigate()
   const { showToast } = useToast()
   const [staleEntries, setStaleEntries] = useState([])
   const [flaggedLogs, setFlaggedLogs] = useState([])
@@ -68,7 +70,16 @@ export default function NovaReview() {
   return (
     <div className="mx-auto max-w-[900px] p-2">
       <div className="mb-6">
-        <h1 className="text-[19px] font-bold text-[var(--text-primary)]">Nova review queue</h1>
+        <div className="flex items-center justify-between gap-4 mb-2">
+          <h1 className="text-[19px] font-bold text-[var(--text-primary)]">Nova review queue</h1>
+          <button
+            onClick={() => navigate('/nova/kb')}
+            className="flex items-center gap-2 rounded-[8px] px-3 py-1.5 text-[13px] font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-secondary)]"
+          >
+            <BookOpen size={16} />
+            Knowledge base
+          </button>
+        </div>
         <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
           This is a to-do list, not a dashboard — every row here either has stale content or a
           real signal that Nova got something wrong. Work through it, don't just glance at it.
