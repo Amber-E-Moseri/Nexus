@@ -142,20 +142,20 @@ export default function ReaderPage({
       {/* Mobile header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--im-border)', background: 'var(--im-card)', flexShrink: 0 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text)', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'Inter, sans-serif', minWidth: 72 }}>
-          <IconBack size={15} /> Library
+          <IconBack size={15} /> Home
         </button>
         <span style={{ fontSize: 12, color: 'var(--im-blue)', fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>
-          Credits: {(credits / 60).toFixed(1)} hrs
+          Credits: {credits} hrs
         </span>
         <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 16, fontWeight: 700, minWidth: 32, justifyContent: 'flex-end' }}>
           ···
         </button>
       </div>
 
-      {/* Low credit warning */}
-      {credits < 60 && (
+      {/* Low credit warning — credits prop is already in hours */}
+      {parseFloat(credits) < 1 && (
         <div style={{ background: '#FEF3C7', borderBottom: '1px solid #FBBF24', padding: '10px 16px', textAlign: 'center', fontSize: 12, color: '#92400E', fontFamily: 'Inter, sans-serif', fontWeight: 500 }}>
-          Low on credits: {(credits / 60).toFixed(1)} hrs remaining
+          Low on credits: {credits} hrs remaining
         </div>
       )}
 
@@ -173,9 +173,13 @@ export default function ReaderPage({
             viewMode={viewMode}
           />
         ) : (
-          <div style={{ textAlign: 'center', color: 'var(--im-text-dim)', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
-            <p style={{ marginBottom: 8 }}>No text content loaded</p>
-            <p style={{ fontSize: 12 }}>Go back to your library and try importing a different PDF</p>
+          <div style={{ textAlign: 'center', color: 'var(--im-text-dim)', fontSize: 13, fontFamily: 'Inter, sans-serif', maxWidth: 280 }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>📄</div>
+            <p style={{ marginBottom: 6, fontWeight: 600, color: 'var(--im-text)' }}>PDF not available</p>
+            <p style={{ fontSize: 12, lineHeight: 1.6, marginBottom: 16 }}>This book's PDF wasn't found on this device. Go back and re-import the PDF file to read it.</p>
+            <button onClick={onBack} style={{ padding: '8px 18px', background: 'var(--im-blue)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+              Go back
+            </button>
           </div>
         )}
       </div>
