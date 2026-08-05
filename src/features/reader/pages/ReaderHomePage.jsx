@@ -10,6 +10,8 @@ export default function ReaderHomePage({ currentBook, currentProgress, library, 
   const [menuOpen, setMenuOpen] = useState(null)
   const [renameId, setRenameId] = useState(null)
   const [newName, setNewName] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null) // book to confirm-delete
+  const [deleteError, setDeleteError] = useState(null)
 
   const progress = currentBook
     ? Math.round((currentProgress / Math.max(1, (currentBook.sentences?.length ?? 1) - 1)) * 100)
@@ -30,14 +32,15 @@ export default function ReaderHomePage({ currentBook, currentProgress, library, 
   }
 
   async function handleDelete(book) {
-    if (!confirm(`Delete "${book.title}"? This cannot be undone.`)) return
+    setDeleteError(null)
     try {
       await deleteStoredBook(book.id)
       onDeleteBook?.(book.id)
+      setConfirmDelete(null)
       setMenuOpen(null)
     } catch (err) {
       console.error('Delete failed:', err)
-      alert('Failed to delete book.')
+      setDeleteError(err?.message ?? 'Failed to delete book.')
     }
   }
 
@@ -185,7 +188,7 @@ export default function ReaderHomePage({ currentBook, currentProgress, library, 
                           <button onClick={() => { setRenameId(book.id); setNewName(book.title); setMenuOpen(null) }} style={{ width: '100%', textAlign: 'left', padding: '10px 14px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--im-text)', fontFamily: 'Inter, sans-serif', borderBottom: '1px solid var(--im-border-lt)' }}>
                             Rename
                           </button>
-                          <button onClick={() => handleDelete(book)} style={{ width: '100%', textAlign: 'left', padding: '10px 14px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, color: '#EF4444', fontFamily: 'Inter, sans-serif' }}>
+                          <button onClick={() => { setConfirmDelete(book); setMenuOpen(null) }} style={{ width: '100%', textAlign: 'left', padding: '10px 14px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, color: '#EF4444', fontFamily: 'Inter, sans-serif' }}>
                             Delete
                           </button>
                         </div>
@@ -198,6 +201,29 @@ export default function ReaderHomePage({ currentBook, currentProgress, library, 
           </>
         )}
       </div>
+
+      {/* Delete confirmation modal — no confirm() which can be blocked on mobile */}
+      {confirmDelete && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 24 }}>
+          <div style={{ background: 'var(--im-card)', borderRadius: 14, padding: 24, width: '100%', maxWidth: 320, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--im-text)', marginBottom: 8 }}>Delete book?</div>
+            <div style={{ fontSize: 13, color: 'var(--im-text-dim)', marginBottom: 20, lineHeight: 1.5 }}>
+              "{confirmDelete.title}" will be permanently removed from your library.
+            </div>
+            {deleteError && (
+              <div style={{ fontSize: 12, color: '#EF4444', marginBottom: 12, padding: '8px 10px', background: '#FEF2F2', borderRadius: 6 }}>{deleteError}</div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => { setConfirmDelete(null); setDeleteError(null) }} style={{ flex: 1, padding: '9px 0', background: 'var(--im-border-lt)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', color: 'var(--im-text)' }}>
+                Cancel
+              </button>
+              <button onClick={() => handleDelete(confirmDelete)} style={{ flex: 1, padding: '9px 0', background: '#EF4444', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', color: '#fff' }}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
