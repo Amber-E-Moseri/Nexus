@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useDroppable } from '@dnd-kit/core'
 import { Link } from 'react-router-dom'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import TaskExpandable from './TaskExpandable'
@@ -28,6 +29,31 @@ function KpiTile({ label, value, accent }) {
     <div style={{ flex: '1 1 45%', background: 'white', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '8px 10px' }}>
       <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: MUTED }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 800, color: accent, marginTop: 2, lineHeight: 1 }}>{value}</div>
+    </div>
+  )
+}
+
+function UnscheduleDropZone({ isMobile }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'planner:unschedule' })
+
+  if (isMobile) return null
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        border: `1px dashed ${isOver ? 'var(--accent)' : BORDER}`,
+        background: isOver ? 'var(--purple-tint)' : 'transparent',
+        borderRadius: 8,
+        color: isOver ? 'var(--accent)' : MUTED,
+        fontSize: 11.5,
+        fontWeight: 600,
+        padding: '8px 10px',
+        textAlign: 'center',
+        transition: 'background .12s, border-color .12s, color .12s',
+      }}
+    >
+      {isOver ? 'Release to unschedule' : 'Drag a scheduled task here to unschedule'}
     </div>
   )
 }
@@ -168,6 +194,8 @@ export default function PlannerSidebar({
         <KpiTile label="Done this week" value={kpis.completedThisWeek} accent="#3E7C4F" />
         <KpiTile label="Unscheduled" value={kpis.unscheduled} accent="#E8A020" />
       </div>
+
+      <UnscheduleDropZone isMobile={isMobile} />
 
       {/* Weekly wins / testimonies (department-shared, follows visible week) */}
       <div style={{ background: 'white', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '8px 10px' }}>

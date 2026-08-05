@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { ClipboardList, Download, FileText, FolderOpen, ListChecks, Mic, Play, Sparkles, Square } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
@@ -53,11 +54,11 @@ const FS = {
 }
 
 const TABS = [
-  { id: 'minutes', icon: '📝', label: 'Minutes',    badge: null },
-  { id: 'actions', icon: '🎯', label: 'Actions',    badge: 'actions' },
-  { id: 'audio',   icon: '🎙️', label: 'Audio',      badge: null },
-  { id: 'ai',      icon: '⚡', label: 'AI Extract', badge: 'ai' },
-  { id: 'docs',    icon: '📎', label: 'Docs',       badge: 'docs' },
+  { id: 'minutes', Icon: ClipboardList, label: 'Minutes', badge: null },
+  { id: 'actions', Icon: ListChecks, label: 'Actions', badge: 'actions' },
+  { id: 'audio', Icon: Mic, label: 'Audio', badge: null },
+  { id: 'ai', Icon: Sparkles, label: 'AI Extract', badge: 'ai' },
+  { id: 'docs', Icon: FileText, label: 'Docs', badge: 'docs' },
 ]
 
 // For a <input type="datetime-local"> value, which has no timezone —
@@ -1244,9 +1245,10 @@ function MeetingDetailViewInner() {
           {!isMobile && (
             <Link
               to="/meetings/minutes"
-              style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', textDecoration:'none', display:'inline-flex', alignItems:'center' }}
+              style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', textDecoration:'none', display:'inline-flex', alignItems:'center', gap:6 }}
             >
-              📋 Minutes Hub
+              <FolderOpen size={15} aria-hidden="true" />
+              Minutes Hub
             </Link>
           )}
 
@@ -1255,26 +1257,29 @@ function MeetingDetailViewInner() {
             <button
               onClick={exportPdf}
               disabled={exportingPdf}
-              style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor: exportingPdf ? 'wait' : 'pointer', opacity: exportingPdf ? 0.7 : 1 }}
+              style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor: exportingPdf ? 'wait' : 'pointer', opacity: exportingPdf ? 0.7 : 1, display:'inline-flex', alignItems:'center', gap:6 }}
             >
-              {exportingPdf ? '⏳' : '📤'}{!isMobile && (exportingPdf ? ' Exporting…' : ' Export PDF')}
+              <Download size={15} aria-hidden="true" />
+              {!isMobile && (exportingPdf ? ' Exporting…' : ' Export PDF')}
             </button>
           )}
 
           {canManage && isPrep && (
             <button
               onClick={startLive}
-              style={{ padding:'7px 14px', border:'none', borderRadius:6, background: FS.coral, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
+              style={{ padding:'7px 14px', border:'none', borderRadius:6, background: FS.coral, color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}
             >
-              ● Start meeting
+              <Play size={14} fill="currentColor" aria-hidden="true" />
+              Start meeting
             </button>
           )}
           {canManage && isLive && (
             <button
               onClick={endMeeting}
-              style={{ padding:'7px 14px', border:`1px solid rgba(255,255,255,.3)`, borderRadius:6, background:'rgba(255,255,255,.12)', color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
+              style={{ padding:'7px 14px', border:`1px solid rgba(255,255,255,.3)`, borderRadius:6, background:'rgba(255,255,255,.12)', color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}
             >
-              ■ End meeting
+              <Square size={13} fill="currentColor" aria-hidden="true" />
+              End meeting
             </button>
           )}
         </div>
@@ -1481,6 +1486,7 @@ function MeetingDetailViewInner() {
           <div style={{ flexShrink:0, background: FS.surface, borderBottom:`1px solid ${FS.border}`, display:'flex', alignItems:'stretch', padding: isMobile ? '0 8px' : '0 18px', gap:2, overflowX:'auto', WebkitOverflowScrolling:'touch', scrollbarWidth:'none' }}>
             {TABS.map(t => {
               const active = activeTab === t.id
+              const TabIcon = t.Icon
               const badge  = t.badge === 'actions' && actionBadge > 0 ? actionBadge
                            : t.badge === 'docs' && docsBadge > 0 ? docsBadge
                            : t.badge === 'ai' && aiResultUnseen ? '●'
@@ -1491,7 +1497,8 @@ function MeetingDetailViewInner() {
                   onClick={() => setActiveTab(t.id)}
                   style={{ display:'flex', alignItems:'center', gap:5, padding: isMobile ? '10px 10px' : '11px 13px', border:'none', background:'none', borderBottom:`2px solid ${active ? FS.navy : 'transparent'}`, fontFamily:'inherit', fontSize: isMobile ? 12 : 12.5, fontWeight: active ? 700 : 500, color: active ? FS.navy : FS.muted, cursor:'pointer', whiteSpace:'nowrap', transition:'all .13s', marginBottom:-1, flexShrink:0 }}
                 >
-                  {t.icon} {t.label}
+                  <TabIcon size={15} strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" />
+                  {t.label}
                   {badge && (
                     <span style={{ minWidth:16, height:16, borderRadius:999, background: FS.navyGhost, color: FS.navy, fontSize:9, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 4px' }}>
                       {badge}

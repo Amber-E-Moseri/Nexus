@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**BLW CAN NEXUS** — Internal operations platform for BLW Canada Sub-Region (30-person team across 5 departments). Replaces ClickUp with a custom-built workspace for tasks, meetings, sprints, communications, calendar, and automations. All data is multi-tenant with RLS enforced at the database layer.
+**BLW CAN NEXUS** — Internal operations platform for BLW Canada Sub-Region (~50-person team across 5 departments). Replaces ClickUp with a custom-built workspace for tasks, meetings, sprints, communications, calendar, and automations. All data is multi-tenant with RLS enforced at the database layer.
 
 **Tech Stack:**
 - **Frontend:** React 18 + Vite + React Router + inline CSS (no Tailwind utility class bloat)

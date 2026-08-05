@@ -16,7 +16,7 @@ import {
 } from '../../../lib/activityLog'
 import { normalizeTaskFieldSettings } from '../../../lib/taskFieldSettings'
 import { FONT_BODY, FONT_HEADING } from '../../../lib/fonts'
-import { createTask, deleteTask, getAllOrgMembers, getSubtasks, getTaskBlockers, updateTask } from '../lib/tasks'
+import { createIndividuallyAssignedTasks, createTask, deleteTask, getAllOrgMembers, getSubtasks, getTaskBlockers, updateTask } from '../lib/tasks'
 import {
   getTaskStatusId,
   listTaskStatuses,
@@ -564,12 +564,15 @@ export default function TaskModal({
 
       if (mode === 'create') {
         payload.created_by = profile?.id
-        const created = ctx ? await ctx.addTask(payload) : await createTask(payload)
+        const isCollectiveAssignment = isBulkAssigned && assigneeIds.length > 1
+        const createdTasks = isCollectiveAssignment
+          ? await createIndividuallyAssignedTasks(payload, assigneeIds)
+          : [ctx ? await ctx.addTask(payload) : await createTask(payload)]
 
-        const assigneesToNotify = assigneeIds.filter((assigneeId) => assigneeId && assigneeId !== profile?.id)
-        await Promise.allSettled(assigneesToNotify.map(async (assigneeId) => {
+        const assigneesToNotify = createdTasks.filter((created) => created.assignee_id && created.assignee_id !== profile?.id)
+        await Promise.allSettled(assigneesToNotify.map(async (created) => {
           const { error: notifyError } = await supabase.rpc('create_task_notification', {
-            p_user_id: assigneeId,
+            p_user_id: created.assignee_id,
             p_type: 'task_assigned',
             p_task_id: created.id,
           })
@@ -579,13 +582,15 @@ export default function TaskModal({
         const watchersToAdd = [
           ...pendingWatchers,
           ...(shouldWatchAssignedSprintTask ? [{ id: profile.id }] : []),
+          ...(isCollectiveAssignment ? [{ id: profile.id }] : []),
         ].filter((watcher, index, all) => watcher?.id && all.findIndex((candidate) => candidate?.id === watcher.id) === index)
         if (watchersToAdd.length > 0) {
           const { followTask } = await import('../lib/followers')
-          await Promise.allSettled(watchersToAdd.map((watcher) => followTask(created.id, watcher.id, profile?.id)))
+          await Promise.allSettled(createdTasks.flatMap((created) => watchersToAdd.map((watcher) => followTask(created.id, watcher.id, profile?.id))))
         }
 
-        onSaved?.(created)
+        if (isCollectiveAssignment) await ctx?.reload()
+        onSaved?.(createdTasks[0])
       } else {
         const updated = ctx ? await ctx.editTask(task.id, payload) : await updateTask(task.id, payload)
 

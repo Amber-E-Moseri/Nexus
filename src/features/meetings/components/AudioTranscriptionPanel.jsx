@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { FileText, FolderOpen, LoaderCircle, Mic, Plus, Sparkles, Square } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../hooks/useAuth'
 import { createTasksFromActionItems } from '../lib/meetings'
@@ -12,6 +13,13 @@ import { autoSelectOpenItems } from '../lib/applyExtraction'
 // Accept any audio type — browser MIME strings vary (audio/x-m4a, audio/x-mpeg, etc.)
 const isAudioType = (type) => type.startsWith('audio/') || type === 'video/webm'
 const MAX_SIZE = 300 * 1024 * 1024
+function displayAudioUploadName(fileName, index) {
+  if (!fileName) return `Audio upload ${index + 1}`
+  if (/^[0-9a-f]{8}-[0-9a-f-]{27,}-\d+\.[a-z0-9]+$/i.test(fileName)) {
+    return `Audio upload ${index + 1}`
+  }
+  return fileName
+}
 const STORAGE_LIMIT = 49 * 1024 * 1024 // 49MB — just under Supabase Storage 50MB limit
 
 export default function AudioTranscriptionPanel({
@@ -55,6 +63,7 @@ export default function AudioTranscriptionPanel({
   // Multi-audio support
   const [transcriptions, setTranscriptions] = useState([]) // Array of {id, input_type, input_file_name, summary, sequence_number, created_at}
   const [showAddMore, setShowAddMore] = useState(false)
+  const [showUploadHistory, setShowUploadHistory] = useState(false)
 
   // confirm-before-merge state
   const [selectedActionItems, setSelectedActionItems] = useState(new Set())
@@ -831,7 +840,7 @@ export default function AudioTranscriptionPanel({
     dot: { width: 8, height: 8, borderRadius: '50%', background: '#fff', animation: 'pulse 1s infinite' },
     timer: { fontSize: 28, fontWeight: 700, textAlign: 'center', color: '#4C2A92', margin: '16px 0', fontFamily: 'DM Mono, monospace' },
     btnGroup: { display: 'flex', gap: 10, marginTop: 12 },
-    btn: { flex: 1, padding: '10px 16px', borderRadius: 6, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all .2s' },
+    btn: { flex: 1, padding: '10px 16px', borderRadius: 6, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all .2s', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 },
     btnPrimary: { background: '#4C2A92', color: '#fff' },
     btnSecondary: { background: '#EDE8DC', color: '#2D2A22' },
     btnDanger: { background: '#DC2626', color: '#fff' },
@@ -866,14 +875,23 @@ export default function AudioTranscriptionPanel({
     const gridCols = canRecord ? '1fr 1fr 1fr' : '1fr 1fr'
     return (
       <div style={s.container}>
-        {/* Show existing transcriptions so they're visible before picking a mode */}
         {transcriptions.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowUploadHistory((visible) => !visible)}
+            style={{ alignSelf: 'flex-start', border: 'none', background: 'transparent', padding: '0 2px', color: '#4C2A92', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}
+          >
+            {showUploadHistory ? 'Hide audio sources' : `View ${transcriptions.length} audio source${transcriptions.length === 1 ? '' : 's'}`}
+          </button>
+        )}
+        {/* Show existing transcriptions so they're visible before picking a mode */}
+        {transcriptions.length > 0 && showUploadHistory && (
           <div style={s.card}>
-            <h3 style={s.title}>📚 Audio Segments ({transcriptions.length})</h3>
+            <h3 style={s.title}>Audio uploads ({transcriptions.length})</h3>
             {transcriptions.map((t, idx) => (
               <div key={t.id} style={{ marginBottom: 12, padding: 10, background: '#fff', borderRadius: 6, border: '1px solid #E9E4D8' }}>
                 <div style={{ fontWeight: 600, fontSize: 13, color: '#2D2A22', marginBottom: 4 }}>
-                  Segment {idx + 1} {t.input_file_name && `• ${t.input_file_name}`}
+                  {displayAudioUploadName(t.input_file_name, idx)}
                 </div>
                 <div style={{ fontSize: 12, color: '#7A6F5E', marginBottom: 6 }}>
                   {new Date(t.created_at).toLocaleString()} • {t.input_type}
@@ -884,8 +902,8 @@ export default function AudioTranscriptionPanel({
           </div>
         )}
         <div style={s.card}>
-          <h3 style={s.title}>{transcriptions.length > 0 ? 'Add another segment' : 'Transcribe Meeting Audio'}</h3>
-          <p style={s.sub}>{transcriptions.length > 0 ? 'Upload, record, or paste an additional transcript segment' : 'Upload a recording, record live, or paste an existing transcript'}</p>
+          <h3 style={s.title}>{transcriptions.length > 0 ? 'Add another audio upload' : 'Transcribe Meeting Audio'}</h3>
+          <p style={s.sub}>{transcriptions.length > 0 ? 'Upload, record, or paste another meeting recording or transcript' : 'Upload a recording, record live, or paste an existing transcript'}</p>
           <div style={{ ...s.modeGrid, gridTemplateColumns: gridCols }}>
             <button
               style={s.modeBtn}
@@ -893,7 +911,7 @@ export default function AudioTranscriptionPanel({
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92'; e.currentTarget.style.background = '#F5F2ED' }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E9E4D8'; e.currentTarget.style.background = '#fff' }}
             >
-              <div style={{ fontSize: 28, marginBottom: 8 }}>📁</div>
+              <div style={{ marginBottom: 8 }}><FolderOpen size={25} aria-hidden="true" /></div>
               <div>Upload file</div>
               <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 4 }}>MP3, WAV, M4A • max 300 MB</div>
             </button>
@@ -904,7 +922,7 @@ export default function AudioTranscriptionPanel({
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92'; e.currentTarget.style.background = '#F5F2ED' }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E9E4D8'; e.currentTarget.style.background = '#fff' }}
               >
-                <div style={{ fontSize: 28, marginBottom: 8 }}>🎙️</div>
+                <div style={{ marginBottom: 8 }}><Mic size={25} aria-hidden="true" /></div>
                 <div>Record live</div>
                 <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 4 }}>Capture audio now</div>
               </button>
@@ -915,7 +933,7 @@ export default function AudioTranscriptionPanel({
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#4C2A92'; e.currentTarget.style.background = '#F5F2ED' }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E9E4D8'; e.currentTarget.style.background = '#fff' }}
             >
-              <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+              <div style={{ marginBottom: 8 }}><FileText size={25} aria-hidden="true" /></div>
               <div>Paste transcript</div>
               <div style={{ fontSize: 11, color: '#7A6F5E', marginTop: 4 }}>Zoom, Teams, etc.</div>
             </button>
@@ -934,13 +952,13 @@ export default function AudioTranscriptionPanel({
         {!recordOnly && !showAddMore && <button style={s.backBtn} onClick={reset}>← Back</button>}
 
         {/* Show existing transcriptions */}
-        {transcriptions.length > 0 && (
+        {transcriptions.length > 0 && showUploadHistory && (
           <div style={s.card}>
-            <h3 style={s.title}>📚 Uploaded Audio Segments ({transcriptions.length})</h3>
+            <h3 style={s.title}>Audio uploads ({transcriptions.length})</h3>
             {transcriptions.map((t, idx) => (
               <div key={t.id} style={{ marginBottom: 12, padding: 10, background: '#fff', borderRadius: 6, border: '1px solid #E9E4D8' }}>
                 <div style={{ fontWeight: 600, fontSize: 13, color: '#2D2A22', marginBottom: 4 }}>
-                  Segment {idx + 1} {t.input_file_name && `• ${t.input_file_name}`}
+                  {displayAudioUploadName(t.input_file_name, idx)}
                 </div>
                 <div style={{ fontSize: 12, color: '#7A6F5E', marginBottom: 6 }}>
                   {new Date(t.created_at).toLocaleString()} • {t.input_type}
@@ -952,14 +970,14 @@ export default function AudioTranscriptionPanel({
         )}
 
         <div style={s.card}>
-          <h3 style={s.title}>{showAddMore ? '🎙️ Record next segment' : 'Record live audio'}</h3>
+          <h3 style={s.title}>{showAddMore ? 'Record another audio upload' : 'Record live audio'}</h3>
           {isRecordingNow && (
             <div style={s.recIndicator}>
               <div style={s.dot} /> Recording in progress
             </div>
           )}
           {!isRecordingNow && !audioPreview && (
-            <p style={s.sub}>{showAddMore ? 'Add another audio segment to your meeting.' : 'Click start to record from your microphone.'}</p>
+            <p style={s.sub}>{showAddMore ? 'Add another audio upload to your meeting.' : 'Click start to record from your microphone.'}</p>
           )}
           {!isRecordingNow && audioPreview && (
             <p style={s.sub}>Preview your recording before transcribing.</p>
@@ -969,16 +987,16 @@ export default function AudioTranscriptionPanel({
           {error && <div style={s.error}>{error}</div>}
           <div style={s.btnGroup}>
             {isRecordingNow ? (
-              <button style={{ ...s.btn, ...s.btnDanger }} onClick={handleStopRecording}>⏹ Stop recording</button>
+              <button style={{ ...s.btn, ...s.btnDanger }} onClick={handleStopRecording}><Square size={14} fill="currentColor" aria-hidden="true" /> Stop recording</button>
             ) : audioPreview ? (
               <>
                 <button style={{ ...s.btn, ...s.btnPrimary }} onClick={handleTranscribe} disabled={transcribing}>
-                  {transcribing ? '🔄 Transcribing...' : '✨ Transcribe'}
+                  {transcribing ? <><LoaderCircle size={14} className="animate-spin" aria-hidden="true" /> Transcribing...</> : <><Sparkles size={14} aria-hidden="true" /> Transcribe</>}
                 </button>
                 <button style={{ ...s.btn, ...s.btnSecondary }} onClick={reset}>Clear</button>
               </>
             ) : (
-              <button style={{ ...s.btn, ...s.btnPrimary }} onClick={handleStartRecording}>🎙️ Start recording</button>
+              <button style={{ ...s.btn, ...s.btnPrimary }} onClick={handleStartRecording}><Mic size={14} aria-hidden="true" /> Start recording</button>
             )}
           </div>
           {transcribing && (
@@ -1001,7 +1019,7 @@ export default function AudioTranscriptionPanel({
                 style={{ ...s.btn, ...s.btnPrimary }}
                 onClick={() => setShowAddMore(true)}
               >
-                ➕ Add more audio
+                <Plus size={14} aria-hidden="true" /> Add more audio
               </button>
               <button
                 style={{ ...s.btn, ...s.btnSecondary }}
@@ -1015,7 +1033,7 @@ export default function AudioTranscriptionPanel({
 
         {transcript && showAddMore && (
           <div style={s.card}>
-            <p style={s.sub}>Record your next segment above, or click "Done adding" when finished.</p>
+            <p style={s.sub}>Record another upload above, or click "Done adding" when finished.</p>
           </div>
         )}
 
@@ -1033,13 +1051,13 @@ export default function AudioTranscriptionPanel({
         {canRecord && !showAddMore && <button style={s.backBtn} onClick={reset}>← Back</button>}
 
         {/* Show existing transcriptions */}
-        {transcriptions.length > 0 && (
+        {transcriptions.length > 0 && showUploadHistory && (
           <div style={s.card}>
-            <h3 style={s.title}>📚 Uploaded Audio Segments ({transcriptions.length})</h3>
+            <h3 style={s.title}>Audio uploads ({transcriptions.length})</h3>
             {transcriptions.map((t, idx) => (
               <div key={t.id} style={{ marginBottom: 12, padding: 10, background: '#fff', borderRadius: 6, border: '1px solid #E9E4D8' }}>
                 <div style={{ fontWeight: 600, fontSize: 13, color: '#2D2A22', marginBottom: 4 }}>
-                  Segment {idx + 1} {t.input_file_name && `• ${t.input_file_name}`}
+                  {displayAudioUploadName(t.input_file_name, idx)}
                 </div>
                 <div style={{ fontSize: 12, color: '#7A6F5E', marginBottom: 6 }}>
                   {new Date(t.created_at).toLocaleString()} • {t.input_type}
@@ -1118,7 +1136,7 @@ export default function AudioTranscriptionPanel({
           {audioFile && !transcribing && !transcript && (
             <div style={s.btnGroup}>
               <button style={{ ...s.btn, ...s.btnPrimary }} onClick={handleTranscribe}>
-                {audioQueue.length > 0 ? `✨ Transcribe all (${audioQueue.length + 1})` : '✨ Transcribe'}
+                <><Sparkles size={14} aria-hidden="true" /> {audioQueue.length > 0 ? `Transcribe all (${audioQueue.length + 1})` : 'Transcribe'}</>
               </button>
               <button style={{ ...s.btn, ...s.btnSecondary }} onClick={reset}>Clear</button>
             </div>
@@ -1135,7 +1153,7 @@ export default function AudioTranscriptionPanel({
                 style={{ ...s.btn, ...s.btnPrimary }}
                 onClick={() => setShowAddMore(true)}
               >
-                ➕ Add more audio
+                <Plus size={14} aria-hidden="true" /> Add more audio
               </button>
             </div>
           </div>
@@ -1160,7 +1178,7 @@ export default function AudioTranscriptionPanel({
         {!pasteOnly && !showAddMore && <button style={s.backBtn} onClick={reset}>← Back</button>}
 
         {/* Show existing transcriptions */}
-        {transcriptions.length > 0 && (
+        {transcriptions.length > 0 && showUploadHistory && (
           <div style={s.card}>
             <h3 style={s.title}>📚 Pasted Transcripts ({transcriptions.length})</h3>
             {transcriptions.map((t, idx) => (

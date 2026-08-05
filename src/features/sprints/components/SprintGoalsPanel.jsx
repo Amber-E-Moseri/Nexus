@@ -378,12 +378,10 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
 
           {!loading && goals.length === 0 && !showForm && (
             <div style={styles.empty}>
-              <span style={styles.emptyIcon}><Target size={22} aria-hidden="true" /></span>
               <div>
-                <div style={styles.emptyTitle}>No sprint goals yet</div>
-                <div>Define the outcomes the team should deliver before this sprint closes.</div>
+                <span style={styles.emptyTitle}>No goals added</span>
+                <span> Add an outcome when the team is ready to track one.</span>
               </div>
-              <button type="button" onClick={openCreateForm} style={styles.emptyAction}>Add first goal</button>
             </div>
           )}
 
@@ -471,10 +469,10 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '16px',
+    marginBottom: '8px',
   },
   title: {
-    fontSize: '17px',
+    fontSize: '16px',
     fontWeight: '700',
     margin: 0,
     color: 'var(--text-primary, #2D2A22)',
@@ -488,7 +486,7 @@ const styles = {
   },
   subtitle: {
     display: 'block',
-    marginTop: 2,
+    marginTop: 1,
     fontSize: '12px',
     fontWeight: 500,
     color: 'var(--text-tertiary)',
@@ -522,46 +520,16 @@ const styles = {
     fontSize: '14px',
   },
   empty: {
-    minHeight: 132,
-    padding: '18px 20px',
+    padding: '8px 0 4px 34px',
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
     color: 'var(--text-tertiary, #9E9488)',
-    fontSize: '13px',
+    fontSize: '12px',
     lineHeight: 1.5,
-    border: '1px dashed var(--border)',
-    borderRadius: 8,
-    background: 'var(--surface-sub, #FAF9F7)',
-  },
-  emptyIcon: {
-    width: 42,
-    height: 42,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    borderRadius: 8,
-    color: 'var(--accent)',
-    background: 'var(--purple-tint, #F4F0FC)',
   },
   emptyTitle: {
-    fontSize: '14px',
-    fontWeight: 700,
-    color: 'var(--text-primary)',
-    marginBottom: 3,
-  },
-  emptyAction: {
-    marginLeft: 'auto',
-    flexShrink: 0,
-    border: '1px solid var(--accent)',
-    borderRadius: 6,
-    background: 'white',
-    color: 'var(--accent)',
-    padding: '7px 10px',
-    fontSize: '12px',
-    fontWeight: 700,
-    cursor: 'pointer',
+    fontWeight: 600,
+    color: 'var(--text-secondary)',
   },
   goalsList: {
     display: 'flex',

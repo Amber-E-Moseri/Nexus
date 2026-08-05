@@ -692,6 +692,7 @@ export async function getSprintTasks(sprintId) {
     .eq('sprint_id', sprintId)
     .eq('task_type', 'sprint')
     .is('parent_task_id', null)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
 
   if (error) throw error

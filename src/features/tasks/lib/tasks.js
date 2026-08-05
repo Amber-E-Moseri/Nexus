@@ -454,6 +454,72 @@ export async function createTask(taskData) {
   return normalizeTaskResult(data)
 }
 
+// Collective sprint assignments are intentionally separate task records. Each
+// recipient can complete their own work without changing anyone else's status.
+export async function createIndividuallyAssignedTasks(taskData, assigneeIds = []) {
+  const recipients = [...new Set(assigneeIds.filter(Boolean))]
+  if (recipients.length === 0) return []
+
+  // Subtasks are uncommon for collective work. Keep their existing creation
+  // semantics intact rather than dropping them from an otherwise batched save.
+  if (taskData.subtasks?.length) {
+    return Promise.all(recipients.map((assigneeId) => createTask({
+      ...taskData,
+      assignee_id: assigneeId,
+      assigneeIds: [assigneeId],
+      is_bulk_assigned: true,
+    })))
+  }
+
+  const payload = buildTaskPayload(taskData)
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+  if (authError) throw authError
+  if (!user) throw new Error('You must be signed in to create a task.')
+
+  payload.created_by = payload.created_by ?? user.id
+  if (!payload.status_id) {
+    payload.status_id = await getCategoryStatusId({
+      departmentId: payload.is_personal || payload.sprint_id ? null : payload.department_id ?? null,
+      category: STATUS_CATEGORIES.OPEN,
+    })
+  }
+  applyCompletionMetadata(payload, taskData.statusCategory)
+
+  const rows = recipients.map((assigneeId) => ({
+    ...payload,
+    assignee_id: assigneeId,
+    is_bulk_assigned: true,
+  }))
+  const { data: inserted, error } = await supabase
+    .from('tasks')
+    .insert(rows)
+    .select('id')
+  if (error) throw error
+
+  const ids = (inserted ?? []).map((task) => task.id)
+  const { data, error: readError } = await supabase
+    .from('tasks')
+    .select(TASK_FULL_SELECT)
+    .in('id', ids)
+  if (readError) throw readError
+
+  const tasksByAssignee = new Map((data ?? []).map((task) => [task.assignee_id, normalizeTaskResult(task)]))
+  const tasks = recipients.map((assigneeId) => tasksByAssignee.get(assigneeId)).filter(Boolean)
+  for (const task of tasks) {
+    recordActivity('task_created', {
+      entity_type: 'task',
+      entity_id: task.id,
+      entity_title: task.title,
+      department_id: task.department_id,
+      sprint_id: task.sprint_id,
+    })
+  }
+  return tasks
+}
+
 export async function updateTask(taskId, updates, actorId = null, existingTask = null) {
   if (!existingTask) {
     const { data, error } = await supabase

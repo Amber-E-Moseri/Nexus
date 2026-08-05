@@ -202,7 +202,7 @@ export default function SprintOverview() {
   const canManage = role === 'super_admin' || role === 'regional_secretary' || hasSpaceRole(profile, null, 'dept_lead') || hasSpaceRole(profile, null, 'programs') || detail?.members?.some(
     (member) => member.user?.id === profile?.id && ['owner', 'manager'].includes(member.role),
   )
-  const isMember = detail?.members?.some((m) => m.user?.id === profile?.id)
+  const isMember = detail?.members?.some((member) => (member.user_id ?? member.user?.id) === profile?.id)
   const canCreateTask = canManage || isMember
   const canAssignPrivilegedSprintRoles = role === 'super_admin' || hasSpaceRole(profile, null, 'dept_lead') || hasSpaceRole(profile, null, 'programs') || detail?.members?.some(
     (member) => member.user?.id === profile?.id && member.role === 'owner',

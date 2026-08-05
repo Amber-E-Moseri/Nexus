@@ -26,7 +26,7 @@ function BulkTasksBanner({ tasks, statuses, canEdit, onStatusChange, onTaskClick
         <span className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-white text-[var(--accent)]"><UsersRound size={16} aria-hidden="true" /></span>
         <div>
           <div className="text-sm font-bold text-[var(--text-primary)]">Shared sprint tasks</div>
-          <div className="text-xs text-[var(--text-secondary)]">Assigned to everyone or all team leads</div>
+          <div className="text-xs text-[var(--text-secondary)]">Individual tasks created for everyone or all team leads</div>
         </div>
         <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-xs font-bold text-[var(--accent)]">{tasks.length}</span>
       </div>
@@ -90,7 +90,12 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
   const [taskSearch, setTaskSearch] = useState('')
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
   const searchedTasks = useMemo(() => filterTasksBySearch(filtered, taskSearch), [filtered, taskSearch])
-  const bulkTasks = useMemo(() => searchedTasks.filter((task) => task.is_bulk_assigned), [searchedTasks])
+  const bulkTasks = useMemo(
+    () => searchedTasks.filter((task) => task.is_bulk_assigned && (
+      task.assignee_id === profile?.id || task.created_by === profile?.id
+    )),
+    [profile?.id, searchedTasks],
+  )
   const boardTasks = useMemo(() => searchedTasks.filter((task) => !task.is_bulk_assigned), [searchedTasks])
   const assignedToMe = Boolean(profile?.id) && filters.assigneeId === profile.id
   const toggleAssignedToMe = () => setFilters((prev) => ({ ...prev, assigneeId: prev.assigneeId === profile?.id ? null : profile?.id }))
@@ -136,13 +141,10 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
 
     return boardTasks.filter((task) => {
       if (task.sprint_team_id) return myTeamIds.includes(task.sprint_team_id)
-      return (
-        task.assignee_id === profile?.id ||
-        task.created_by === profile?.id ||
-        myTeamIds.some((teamId) =>
-          teamsWithMembers.find((t) => t.id === teamId)?.sprint_team_members?.some((m) => m.user_id === task.assignee_id),
-        )
-      )
+      // A task without a team is personal only when it is directly assigned to
+      // the viewer. Creating a task must not make it appear in "My Team" for
+      // an administrator or sprint manager who can create work for every team.
+      return task.assignee_id === profile?.id
     })
   }, [boardTasks, teamsWithMembers, profile?.id, getMyTeams])
 

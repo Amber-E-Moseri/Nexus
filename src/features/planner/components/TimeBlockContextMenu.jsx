@@ -17,7 +17,7 @@ export default function TimeBlockContextMenu({
   x, y, block,
   childBlocksByParentBlockId = {},
   isSplitting = false,
-  onSetDuration, onDelete, onSplit, onClose,
+  onSetDuration, onAddSession, onDelete, onSplit, onClose,
 }) {
   const ref = useRef(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -109,6 +109,16 @@ export default function TimeBlockContextMenu({
             </button>
           ))}
           <div style={{ borderTop: `1px solid ${BORDER}`, margin: '5px 0' }} />
+          <button
+            type="button"
+            role="menuitem"
+            style={itemStyle}
+            onMouseEnter={(e) => { e.currentTarget.style.background = BG }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            onClick={() => { onAddSession(block); onClose() }}
+          >
+            Add another 1-hour session
+          </button>
           <button
             type="button"
             role="menuitem"

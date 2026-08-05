@@ -17,6 +17,7 @@ import { useTimeBlocks } from './hooks/useTimeBlocks'
 import { computeTimeBlockWarnings, worstSeverity } from './lib/warningEngine'
 import {
   addDays,
+  addDaysISO,
   canSplitBlock,
   minutesToTime,
   parseTimeToMinutes,
@@ -269,6 +270,16 @@ export default function PlannerTimeBlocking() {
       const data = active.data.current
       const overId = String(over.id)
 
+      if (overId === 'planner:unschedule') {
+        if (data?.type === 'block') {
+          runMutation(
+            () => deleteTimeBlock(data.block.id),
+            'Removed from schedule. The task stays in your list.',
+          )
+        }
+        return
+      }
+
       let targetDate = null
       let targetHour = null
       let allDay = false
@@ -349,7 +360,7 @@ export default function PlannerTimeBlocking() {
         )
       }
     },
-    [childBlocksByParentBlockId, createTimeBlock, updateTimeBlock, moveParentWithChildren, findRelinkTarget, runMutation, taskById],
+    [childBlocksByParentBlockId, createTimeBlock, deleteTimeBlock, updateTimeBlock, moveParentWithChildren, findRelinkTarget, runMutation, taskById],
   )
 
   // ---- Block interactions --------------------------------------------------
@@ -404,6 +415,23 @@ export default function PlannerTimeBlocking() {
       setSplittingBlockIds((prev) => { const next = new Set(prev); next.delete(block.id); return next })
     }
   }, [childBlocksByParentBlockId, splittingBlockIds, updateTimeBlock, createTimeBlock, showToast])
+
+  const handleAddSession = useCallback((block) => {
+    const endMinutes = parseTimeToMinutes(block.scheduled_end_time)
+    const rollsToNextDay = endMinutes + 60 > MINUTES_PER_DAY
+    const startMinutes = rollsToNextDay ? 9 * 60 : endMinutes
+
+    runMutation(
+      () => createTimeBlock({
+        taskId: block.task_id,
+        scheduledDate: rollsToNextDay ? addDaysISO(block.scheduled_date, 1) : block.scheduled_date,
+        scheduledStartTime: minutesToTime(startMinutes),
+        scheduledEndTime: minutesToTime(startMinutes + 60),
+        isAllDay: false,
+      }),
+      'Added another one-hour session. Drag it to the time you want.',
+    )
+  }, [createTimeBlock, runMutation])
 
   const handleBlockContextMenu = useCallback((e, block) => {
     setContextMenu({ x: e.clientX, y: e.clientY, block })
@@ -572,6 +600,7 @@ export default function PlannerTimeBlocking() {
           childBlocksByParentBlockId={childBlocksByParentBlockId}
           isSplitting={splittingBlockIds.has(contextMenu.block.id)}
           onSetDuration={(block, newEnd) => runMutation(() => updateTimeBlock(block.id, { scheduled_end_time: newEnd }))}
+          onAddSession={handleAddSession}
           onDelete={(block) => runMutation(() => deleteTimeBlock(block.id), 'Removed from schedule. The task stays in your list.')}
           onSplit={handleSplitBlock}
           onClose={() => setContextMenu(null)}
