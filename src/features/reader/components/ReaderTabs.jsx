@@ -4,7 +4,7 @@ import ReadingPanel from './ReadingPanel'
 import PlayerControls from './PlayerControls'
 import MobilePlayer from './MobilePlayer'
 
-const TABS = ['Read', 'Listen', 'Tandem', 'Navigate']
+const TABS = ['Read', 'Listen', 'Tandem']
 
 export default function ReaderTabs({
   book, sentences, currentIdx, isPlaying, elapsedTime, totalTime, voice, speed,
@@ -24,69 +24,6 @@ export default function ReaderTabs({
   const progress = sentences.length > 1 ? currentIdx / (sentences.length - 1) : 0
   const progressPercent = Math.round(progress * 100)
 
-  // Navigation tab: chapters + headers table of contents
-  function NavigationView() {
-    const headers = useMemo(() => {
-      const list = []
-      sentences.forEach((s, idx) => {
-        const isHeading = /^(chapter|part|prologue|epilogue|introduction|preface|afterword)\b/i.test(s.trim()) || /^[A-Z\s\d]{4,40}$/.test(s.trim())
-        if (isHeading && s.trim().length < 50) {
-          list.push({ title: s.trim(), idx, type: 'header' })
-        }
-      })
-      if (list.length === 0 && sentences.length > 0) list.push({ title: 'Start', idx: 0, type: 'start' })
-      return list
-    }, [sentences])
-
-    const currentHeaderIdx = useMemo(() => {
-      let ci = 0
-      for (let i = 0; i < headers.length; i++) {
-        if (headers[i].idx <= currentIdx) ci = i; else break
-      }
-      return ci
-    }, [headers, currentIdx])
-
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', background: 'var(--im-bg)' }}>
-        <div style={{ padding: '16px', borderBottom: '1px solid var(--im-border)', background: 'var(--im-card)', flexShrink: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--im-text-dim)' }}>Chapters & Sections</div>
-        </div>
-        <div style={{ flex: 1 }}>
-          {headers.map((h, i) => {
-            const isActive = i === currentHeaderIdx
-            const nextIdx = headers[i + 1]?.idx ?? sentences.length
-            const done = currentIdx >= nextIdx
-            return (
-              <button
-                key={h.idx}
-                onClick={() => onSeek(h.idx)}
-                style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: '12px 16px',
-                  background: isActive ? 'var(--im-blue-bg)' : 'transparent',
-                  border: 'none',
-                  borderBottom: '1px solid var(--im-border)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', color: isActive ? 'var(--im-blue)' : 'var(--im-text-dim)', minWidth: 24 }}>
-                  {done && <CheckCircle size={16} />}
-                  {!done && isActive && <ChevronRight size={16} />}
-                </span>
-                <span style={{ fontSize: 13, color: isActive ? 'var(--im-blue)' : done ? 'var(--im-text-dim)' : 'var(--im-text)', fontWeight: isActive ? 600 : 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {h.title}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
 
   // Listen tab: audio-focused playback
   function ListenView() {
@@ -220,7 +157,6 @@ export default function ReaderTabs({
     Read: <ReadView />,
     Listen: <ListenView />,
     Tandem: <TandemView />,
-    Navigate: <NavigationView />,
   }
 
   return (

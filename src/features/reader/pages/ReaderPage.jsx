@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Maximize2, Book } from 'lucide-react'
+import { Maximize2, Book, ChevronLeft } from 'lucide-react'
 import ReadingPanel from '../components/ReadingPanel'
 import MobilePlayer from '../components/MobilePlayer'
 import PlayerControls from '../components/PlayerControls'
@@ -20,8 +20,15 @@ export default function ReaderPage({
   const [playerVisible, setPlayerVisible] = useState(true)
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('immerse-view-mode') || 'scroll')
   const [showChapters, setShowChapters] = useState(false)
+  const [sidebarVisible, setSidebarVisible] = useState(() => localStorage.getItem('immerse-sidebar-visible') !== 'false')
   const lastScrollY = useRef(0)
   const isDesktop = window.innerWidth >= 768
+
+  function toggleSidebar() {
+    const next = !sidebarVisible
+    setSidebarVisible(next)
+    localStorage.setItem('immerse-sidebar-visible', String(next))
+  }
 
   function toggleViewMode() {
     const next = viewMode === 'scroll' ? 'pages' : 'scroll'
@@ -114,6 +121,9 @@ export default function ReaderPage({
                 </>
               )}
             </button>
+            <button onClick={toggleSidebar} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: sidebarVisible ? 'var(--im-text)' : 'var(--im-text-dim)' }}>
+              <ChevronLeft size={12} /> {sidebarVisible ? 'Hide' : 'Show'}
+            </button>
             <button onClick={onOpenSettings} style={hdrBtn}><IconSettings size={14} /> Settings</button>
             <button onClick={onEndSession} style={{ ...hdrBtn, background: 'var(--im-blue)', color: '#fff', borderRadius: 6, padding: '5px 12px' }}>
               End Reading
@@ -169,7 +179,7 @@ export default function ReaderPage({
           onShowChapters={setShowChapters}
         />
 
-        {isDesktop && (
+        {isDesktop && sidebarVisible && (
           <ReaderSidebar
             book={book}
             sentences={sentences}

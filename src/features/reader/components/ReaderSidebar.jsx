@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react'
 import NoteCard from './NoteCard'
 import { IconHighlight, IconNote } from '../icons'
 
+const SENTENCES_PER_PART = 100
+
 function isChapterHeading(s) {
   return /^(chapter|part|prologue|epilogue|introduction|preface|afterword)\b/i.test(s.trim()) ||
     /^[A-Z\s\d]{4,40}$/.test(s.trim())
@@ -19,9 +21,13 @@ export default function ReaderSidebar({ book, sentences = [], highlights, notes,
         list.push({ title: s.trim(), idx })
       }
     })
-    // If no headings detected, treat first sentence as chapter 1
+    // If no headings detected, create fixed-size "Part X" divisions
     if (list.length === 0 && sentences.length > 0) {
-      list.push({ title: 'Start', idx: 0 })
+      let partNum = 1
+      for (let idx = 0; idx < sentences.length; idx += SENTENCES_PER_PART) {
+        list.push({ title: `Part ${partNum}`, idx })
+        partNum++
+      }
     }
     return list
   }, [sentences])
