@@ -5,7 +5,7 @@ const isHeading = (s) =>
   /^[A-Z\s\d]{4,40}$/.test(s.trim())
 
 // ── Scroll mode ────────────────────────────────────────────────────────────
-function ScrollView({ sentences, currentIdx, highlights, onSelectionChange, fontSize, lineHeight }) {
+function ScrollView({ sentences, currentIdx, highlights, onSelectionChange, onSeek, fontSize, lineHeight }) {
   const activeRef = useRef(null)
   const highlighted = new Set(highlights.map((h) => h.sentenceIdx))
 
@@ -41,7 +41,7 @@ function ScrollView({ sentences, currentIdx, highlights, onSelectionChange, font
         else if (idx === currentIdx) cls += ' im-sentence--active'
         if (highlighted.has(idx)) cls += ' im-sentence--highlighted'
         return (
-          <span key={idx} ref={idx === currentIdx ? activeRef : null} className={cls} data-idx={idx}>
+          <span key={idx} ref={idx === currentIdx ? activeRef : null} className={cls} data-idx={idx} onClick={() => onSeek?.(idx)} style={{ cursor: 'pointer' }}>
             {s}{' '}
           </span>
         )

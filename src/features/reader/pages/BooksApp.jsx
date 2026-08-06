@@ -33,9 +33,16 @@ export default function BooksApp() {
   const [showEndModal, setShowEndModal] = useState(false)
   const [fontSize, setFontSize] = useState(() => Number(localStorage.getItem('immerse-font-size')) || 24)
   const [lineHeight, setLineHeight] = useState(() => Number(localStorage.getItem('immerse-line-height')) || 1.8)
+  const [bookmarks, setBookmarks] = useState(() => {
+    if (!book?.id) return []
+    const stored = localStorage.getItem(`immerse-bookmarks-${book.id}`)
+    return stored ? JSON.parse(stored) : []
+  })
 
   // Track sentences played this session for usage deduction
   const sessionSentencesRef = useRef(0)
+  const sessionStartTimeRef = useRef(Date.now())
+  const sessionStartIdxRef = useRef(0)
 
   const sentences = book?.sentences ?? []
   const { highlights, notes, addHighlight, addNote, removeAnnotation } = useAnnotations(book?.isShared ? null : book?.id)
@@ -97,7 +104,12 @@ export default function BooksApp() {
       }
     }
     sessionSentencesRef.current = 0
+    sessionStartTimeRef.current = Date.now()
+    sessionStartIdxRef.current = b.progressIndex ?? 0
     setBook(b)
+    // Load bookmarks for this book
+    const stored = localStorage.getItem(`immerse-bookmarks-${b.id}`)
+    setBookmarks(stored ? JSON.parse(stored) : [])
     setLibrary((prev) => !b.isShared && !prev.some((x) => x.id === b.id) ? [...prev, b] : prev)
     setPage('reader')
   }
@@ -145,6 +157,51 @@ export default function BooksApp() {
       if (accumulated >= targetOffset) { seekToIdx(i); return }
     }
     seekToIdx(seconds > 0 ? sentences.length - 1 : 0)
+  }
+
+  function addBookmark() {
+    if (!book?.id) return
+    const bookmark = {
+      id: crypto.randomUUID(),
+      bookId: book.id,
+      sentenceIdx: currentIdx,
+      text: sentences[currentIdx],
+      timestamp: new Date().toISOString(),
+    }
+    const updated = [...bookmarks, bookmark]
+    setBookmarks(updated)
+    localStorage.setItem(`immerse-bookmarks-${book.id}`, JSON.stringify(updated))
+  }
+
+  function removeBookmark(bookmarkId) {
+    if (!book?.id) return
+    const updated = bookmarks.filter(b => b.id !== bookmarkId)
+    setBookmarks(updated)
+    localStorage.setItem(`immerse-bookmarks-${book.id}`, JSON.stringify(updated))
+  }
+
+  function jumpToBookmark(sentenceIdx) {
+    seekToIdx(sentenceIdx)
+  }
+
+  function getReadingStats() {
+    const elapsedMs = Date.now() - sessionStartTimeRef.current
+    const elapsedMins = elapsedMs / 60000
+    const elapsedHours = (elapsedMins / 60).toFixed(2)
+    const sentencesRead = currentIdx - sessionStartIdxRef.current
+    const sentencesPerMin = elapsedMins > 0 ? (sentencesRead / elapsedMins).toFixed(1) : 0
+    const remainingSentences = Math.max(0, sentences.length - currentIdx)
+    const estimatedMinsRemaining = remainingSentences > 0 ? (remainingSentences / sentencesPerMin).toFixed(0) : 0
+    const estimatedHoursRemaining = (estimatedMinsRemaining / 60).toFixed(1)
+    return {
+      elapsedHours,
+      elapsedMins: Math.round(elapsedMins),
+      sentencesRead,
+      sentencesPerMin,
+      remainingSentences,
+      estimatedHoursRemaining,
+      completionPercent: sentences.length > 0 ? Math.round((currentIdx / sentences.length) * 100) : 0,
+    }
   }
 
   function handleSpeedChange(s) { setSpeed(s); setPlayerSpeed(s) }
@@ -214,6 +271,8 @@ export default function BooksApp() {
           speed={speed}
           highlights={highlights}
           notes={notes}
+          bookmarks={bookmarks}
+          readingStats={getReadingStats()}
           selectionInfo={selectionInfo}
           fontSize={fontSize}
           lineHeight={lineHeight}
@@ -228,6 +287,9 @@ export default function BooksApp() {
           onAddHighlight={book?.isShared ? undefined : addHighlight}
           onAddNote={book?.isShared ? undefined : addNote}
           onRemoveAnnotation={book?.isShared ? undefined : removeAnnotation}
+          onAddBookmark={book?.isShared ? undefined : addBookmark}
+          onRemoveBookmark={book?.isShared ? undefined : removeBookmark}
+          onJumpToBookmark={jumpToBookmark}
           onSelectionChange={setSelectionInfo}
           onBack={() => setPage('home')}
           onOpenSettings={() => setShowSettings(true)}
