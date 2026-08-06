@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../hooks/useAuth'
+import { getFunctionErrorMessage } from '../lib/communications'
 import EmailComposer from './EmailComposer'
 import EmailPreviewModal from './EmailPreviewModal'
 import SendConfirmationModal from './SendConfirmationModal'
@@ -172,9 +173,16 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       }
 
       if (recipients.length > 0) {
-        await supabase.functions.invoke('send-communication-email', {
+        const { error: invokeError } = await supabase.functions.invoke('send-communication-email', {
           body: { to: recipients, subject: subject.trim(), body: body.trim(), campaign_id: campaignId, context: { sender_name: profile?.name ?? '' } },
         })
+        if (invokeError) {
+          const message = await getFunctionErrorMessage(invokeError, 'Failed to send emails.')
+          console.error('send-communication-email error:', invokeError)
+          setError(message)
+          setSaving(false)
+          return
+        }
       } else {
         await supabase.from('communication_campaigns').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', campaignId)
       }
@@ -185,9 +193,12 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   }
 
   async function handleSendTest(testEmail) {
-    await supabase.functions.invoke('send-communication-email', {
+    const { error } = await supabase.functions.invoke('send-communication-email', {
       body: { to: [{ name: 'Test Recipient', email: testEmail }], subject: `[TEST] ${subject}`, body },
     })
+    if (error) {
+      console.error('Test email error:', error)
+    }
   }
 
   const stepLabels = ['Details', 'Recipients', 'Content', 'Schedule']

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Copy, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getFunctionErrorMessage } from '../../features/communications/lib/communications'
 import { FONT_HEADING } from '../../lib/fonts'
 
 const PRIMARY = 'var(--purple-700)'
@@ -296,14 +297,17 @@ export default function InvitationDetailPage() {
 
     setResending(true)
     try {
-      const res = await supabase.functions.invoke('send-invitations', {
+      const { error } = await supabase.functions.invoke('send-invitations', {
         body: { campaignId },
       })
-      if (res.error) throw res.error
+      if (error) {
+        const message = await getFunctionErrorMessage(error, 'Failed to resend invitations.')
+        throw new Error(message)
+      }
       setError(null)
       // Success message shown via toast in real app
     } catch (err) {
-      setError(err.message)
+      setError(err instanceof Error ? err.message : String(err))
     } finally {
       setResending(false)
     }

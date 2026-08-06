@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { FONT_HEADING } from '../../lib/fonts'
+import { getFunctionErrorMessage } from '../../features/communications/lib/communications'
 import {
   resolveAbsentRecipients,
   defaultAbsenceEmail,
@@ -104,10 +105,15 @@ export default function AbsenteeFollowUpPage() {
           meeting_label: selected.label,
         },
       })
-      if (error) throw error
+      if (error) {
+        const message = await getFunctionErrorMessage(error, 'Failed to send emails.')
+        throw new Error(message)
+      }
       setResult({ tone: 'success', ...data })
     } catch (err) {
-      setResult({ tone: 'error', message: err.message })
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      console.error('Send absence emails error:', err)
+      setResult({ tone: 'error', message: errorMessage })
     } finally {
       setSending(false)
     }

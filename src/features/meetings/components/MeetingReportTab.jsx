@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
 import { useToast } from '../../../context/ToastContext'
+import { getFunctionErrorMessage } from '../../../features/communications/lib/communications'
 import AbsenceBatchConfirmModal from '../../../components/meetings/AbsenceBatchConfirmModal'
 import { resolveAbsentRecipients, defaultAbsenceEmail } from '../lib/absentee-recipients'
 import { exportReportToGoogleDrive, checkGoogleDriveAuth } from '../lib/google-drive-service'
@@ -1969,7 +1970,10 @@ export default function MeetingReportTab() {
         },
       })
 
-      if (error) throw error
+      if (error) {
+        const message = await getFunctionErrorMessage(error, 'Failed to send emails.')
+        throw new Error(message)
+      }
 
       let message = `Sent to ${data.sent} member${data.sent !== 1 ? 's' : ''}`
       if (data.skipped > 0) {
@@ -1983,7 +1987,8 @@ export default function MeetingReportTab() {
       setShowEmailEditor(false)
       setEmailConfirmation(null)
     } catch (err) {
-      showToast(`Failed to send emails: ${err.message}`, { tone: 'error' })
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      showToast(`Failed to send emails: ${errorMsg}`, { tone: 'error' })
     } finally {
       setEmailSending(false)
     }
