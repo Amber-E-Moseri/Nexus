@@ -85,7 +85,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
     }))
   }, [statuses])
   const [view, setView] = useState('kanban')
-  const [teamView, setTeamView] = useState('my')
+  const [teamView, setTeamView] = useState(canEdit ? 'my' : 'all')
   const [modal, setModal] = useState(null)
   const [taskSearch, setTaskSearch] = useState('')
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
