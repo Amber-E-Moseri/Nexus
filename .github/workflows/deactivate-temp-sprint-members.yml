@@ -4,15 +4,11 @@ name: Deactivate Temporary Sprint Members
 on:
   schedule:
     - cron: '0 0 * * *'
-  # Allow manual triggering
   workflow_dispatch:
 
 jobs:
   deactivate:
     runs-on: ubuntu-latest
-    env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
     steps:
       - name: Checkout code
@@ -29,20 +25,30 @@ jobs:
       - name: Run deactivation task
         run: |
           node --input-type=module -e "
-            import('./src/lib/scheduled-tasks.js').then(module => {
-              const task = module.default || module.scheduleTemporaryMemberDeactivation;
-              task().then(result => {
-                console.log('Task result:', JSON.stringify(result, null, 2));
-                process.exit(result.success ? 0 : 1);
-              }).catch(err => {
-                console.error('Task error:', err);
-                process.exit(1);
-              });
-            });
+            import { createClient } from '@supabase/supabase-js';
+
+            const supabase = createClient(
+              process.env.SUPABASE_URL,
+              process.env.SUPABASE_SERVICE_ROLE_KEY
+            );
+
+            const now = new Date().toISOString();
+            const { data, error } = await supabase
+              .from('sprint_members')
+              .update({ is_active: false })
+              .eq('is_active', true)
+              .lt('expires_at', now)
+              .select('id');
+
+            if (error) {
+              console.error('Deactivation failed:', error.message);
+              process.exit(1);
+            }
+            console.log('Deactivated', data?.length ?? 0, 'expired sprint member(s)');
           "
         env:
-          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
       - name: Log completion
         if: success()
