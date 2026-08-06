@@ -15,11 +15,11 @@ export default function PublicHelpPage() {
     setSubmitting(true)
     setError('')
 
-    const { error: insertError } = await supabase.from('support_tickets').insert({
-      title: `Help request from ${name.trim()}`,
-      description: `Name: ${name.trim()}\nEmail: ${email.trim() || 'Not provided'}\n\n${message.trim()}`,
+    const { error: insertError } = await supabase.from('public_help_requests').insert({
+      name: name.trim(),
+      email: email.trim() || null,
+      message: message.trim(),
       category: 'support',
-      priority: 'normal',
     })
 
     setSubmitting(false)
