@@ -7,12 +7,15 @@ import EmailPreviewModal from './EmailPreviewModal'
 import SendConfirmationModal from './SendConfirmationModal'
 import AudiencePicker from './AudiencePicker'
 
-const PRIMARY = '#4C2A92'
-const BORDER = '#EDE8DC'
-const TEXT = '#2D2A22'
-const MUTED = '#9E9488'
-const BG = '#F4F1EA'
+const PRIMARY = '#C41E3A'
+const SECONDARY = '#4C2A92'
+const BORDER = '#E5DDD0'
+const TEXT = '#1C1610'
+const MUTED = '#8B7F72'
+const BG = '#FAFAF8'
 const SURFACE = '#FFFFFF'
+const SUCCESS = '#059669'
+const ERROR = '#C94830'
 
 const STATUS_STYLE = {
   draft: { bg: '#F4F1EA', color: '#9E9488' },
@@ -204,40 +207,76 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   const stepLabels = ['Details', 'Recipients', 'Content', 'Schedule']
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 800 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 900 }}>
       {error ? (
-        <div style={{ background: '#FEF0ED', border: '1px solid #F5C4B8', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#C94830' }}>{error}</div>
+        <div style={{ background: '#FEF0ED', border: `1px solid ${ERROR}20`, borderRadius: 12, padding: '12px 16px', fontSize: 13, color: ERROR, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 18 }}>⚠️</span>
+          {error}
+        </div>
       ) : null}
 
-      <div style={{ display: 'flex', gap: 0 }}>
+      <div style={{ display: 'flex', gap: 12, borderBottom: `1px solid ${BORDER}`, paddingBottom: 16 }}>
         {stepLabels.map((label, i) => {
           const n = i + 1
+          const isActive = step === n
+          const isCompleted = step > n
           return (
             <button
               key={label}
               type="button"
               onClick={() => setStep(n)}
               style={{
-                flex: 1, border: 'none', borderBottom: `2px solid ${step === n ? PRIMARY : BORDER}`,
-                background: 'transparent', padding: '8px 4px', fontSize: 12, fontWeight: step === n ? 700 : 500,
-                color: step === n ? PRIMARY : MUTED, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', border: 'none',
+                background: isActive ? `${PRIMARY}12` : 'transparent', borderRadius: 8,
+                fontSize: 12, fontWeight: isActive ? 700 : 500,
+                color: isActive ? PRIMARY : MUTED, cursor: 'pointer',
+                transition: 'all 0.2s ease',
               }}
             >
-              {n}. {label}
+              <span style={{
+                width: 20, height: 20, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: isActive ? PRIMARY : isCompleted ? SUCCESS : BORDER,
+                color: isActive || isCompleted ? 'white' : MUTED, fontSize: 11, fontWeight: 700,
+              }}>
+                {isCompleted ? '✓' : n}
+              </span>
+              {label}
             </button>
           )
         })}
       </div>
 
       {step === 1 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
-            Campaign name
-            <input value={name} onChange={(e) => setName(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, background: SURFACE, padding: 24, borderRadius: 14, border: `1px solid ${BORDER}` }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>Campaign name</span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., Summer Newsletter"
+              style={{
+                border: `1px solid ${BORDER}`, borderRadius: 10, padding: '11px 14px',
+                fontSize: 14, outline: 'none', fontFamily: 'inherit', background: BG,
+                transition: 'all 0.2s ease',
+              }}
+              onFocus={(e) => e.target.style.borderColor = PRIMARY}
+              onBlur={(e) => e.target.style.borderColor = BORDER}
+            />
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 13, fontWeight: 600, color: TEXT }}>
-            From name
-            <input value={fromName} onChange={(e) => setFromName(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>From name</span>
+            <input
+              value={fromName}
+              onChange={(e) => setFromName(e.target.value)}
+              placeholder="e.g., BLW CANADA"
+              style={{
+                border: `1px solid ${BORDER}`, borderRadius: 10, padding: '11px 14px',
+                fontSize: 14, outline: 'none', fontFamily: 'inherit', background: BG,
+                transition: 'all 0.2s ease',
+              }}
+              onFocus={(e) => e.target.style.borderColor = PRIMARY}
+              onBlur={(e) => e.target.style.borderColor = BORDER}
+            />
           </label>
         </div>
       ) : step === 2 ? (
@@ -296,35 +335,64 @@ function CampaignForm({ initial, onSaved, onCancel }) {
           </button>
         </div>
       ) : step === 4 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, background: SURFACE, padding: 24, borderRadius: 14, border: `1px solid ${BORDER}` }}>
+          <div style={{ display: 'flex', gap: 12 }}>
             <button
               type="button"
               onClick={() => setScheduleMode('now')}
-              style={{ flex: 1, padding: '9px 0', border: `2px solid ${scheduleMode === 'now' ? PRIMARY : BORDER}`, borderRadius: 9, background: scheduleMode === 'now' ? '#EDE8F8' : '#FFFFFF', color: scheduleMode === 'now' ? PRIMARY : MUTED, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              style={{
+                flex: 1, padding: '12px 16px', border: `2px solid ${scheduleMode === 'now' ? PRIMARY : BORDER}`,
+                borderRadius: 10, background: scheduleMode === 'now' ? `${PRIMARY}12` : SURFACE,
+                color: scheduleMode === 'now' ? PRIMARY : MUTED, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
             >
-              Send now
+              🚀 Send now
             </button>
             <button
               type="button"
               onClick={() => setScheduleMode('later')}
-              style={{ flex: 1, padding: '9px 0', border: `2px solid ${scheduleMode === 'later' ? PRIMARY : BORDER}`, borderRadius: 9, background: scheduleMode === 'later' ? '#EDE8F8' : '#FFFFFF', color: scheduleMode === 'later' ? PRIMARY : MUTED, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              style={{
+                flex: 1, padding: '12px 16px', border: `2px solid ${scheduleMode === 'later' ? PRIMARY : BORDER}`,
+                borderRadius: 10, background: scheduleMode === 'later' ? `${PRIMARY}12` : SURFACE,
+                color: scheduleMode === 'later' ? PRIMARY : MUTED, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
             >
-              Schedule for later
+              📅 Schedule
             </button>
           </div>
 
           {scheduleMode === 'later' && (
-            <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>Send on</span>
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+                style={{
+                  border: `1px solid ${BORDER}`, borderRadius: 10, padding: '11px 14px', fontSize: 14,
+                  fontFamily: 'inherit', outline: 'none', background: BG, transition: 'all 0.2s ease',
+                }}
+                onFocus={(e) => e.target.style.borderColor = PRIMARY}
+                onBlur={(e) => e.target.style.borderColor = BORDER}
+              />
+            </label>
           )}
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 16, borderTop: `1px solid ${BORDER}` }}>
         <button
           type="button"
           onClick={onCancel}
-          style={{ padding: '10px 16px', background: 'white', border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 13, fontWeight: 600, color: MUTED, cursor: 'pointer' }}
+          style={{
+            padding: '11px 20px', background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 10,
+            fontSize: 13, fontWeight: 600, color: MUTED, cursor: 'pointer',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={(e) => { e.target.style.background = BG; e.target.style.borderColor = MUTED }}
+          onMouseLeave={(e) => { e.target.style.background = SURFACE; e.target.style.borderColor = BORDER }}
         >
           Cancel
         </button>
@@ -332,7 +400,14 @@ function CampaignForm({ initial, onSaved, onCancel }) {
           type="button"
           onClick={handleSubmit}
           disabled={saving}
-          style={{ padding: '10px 16px', background: PRIMARY, border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: 'white', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}
+          style={{
+            padding: '11px 24px', background: PRIMARY, border: 'none', borderRadius: 10,
+            fontSize: 13, fontWeight: 600, color: 'white', cursor: saving ? 'not-allowed' : 'pointer',
+            opacity: saving ? 0.7 : 1, transition: 'all 0.2s ease',
+            boxShadow: `0 2px 8px ${PRIMARY}30`,
+          }}
+          onMouseEnter={(e) => !saving && (e.target.style.boxShadow = `0 4px 12px ${PRIMARY}50`)}
+          onMouseLeave={(e) => !saving && (e.target.style.boxShadow = `0 2px 8px ${PRIMARY}30`)}
         >
           {saving ? 'Saving...' : (initial?.id ? 'Update' : 'Create')} Campaign
         </button>
