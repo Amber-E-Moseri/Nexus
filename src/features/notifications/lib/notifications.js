@@ -50,26 +50,40 @@ export async function createNotification(userId, type, payload) {
     .single()
 
   if (error) throw error
-  dispatchPush(userId, data)
+
+  // Fetch user's mobile push preference for this notification type
+  const { data: pref } = await supabase
+    .from('user_notification_prefs')
+    .select('mobile')
+    .eq('user_id', userId)
+    .eq('notification_type', type)
+    .single()
+
+  // Only dispatch push if user has enabled mobile for this type (default to false)
+  const pushEnabled = pref?.mobile ?? false
+  if (pushEnabled) {
+    dispatchPush(userId, data)
+  }
+
   return data
 }
 
 export async function getNotificationPrefs(userId) {
   const { data, error } = await supabase
     .from('user_notification_prefs')
-    .select('notification_type, in_app, email')
+    .select('notification_type, in_app, email, mobile')
     .eq('user_id', userId)
 
   if (error) throw error
 
   const prefs = {}
   for (const row of data ?? []) {
-    prefs[row.notification_type] = { in_app: row.in_app, email: row.email }
+    prefs[row.notification_type] = { in_app: row.in_app, email: row.email, mobile: row.mobile }
   }
   return prefs
 }
 
-export async function setNotificationPref(userId, type, inApp, email) {
+export async function setNotificationPref(userId, type, inApp, email, mobile = false) {
   const { error } = await supabase
     .from('user_notification_prefs')
     .upsert(
@@ -78,6 +92,7 @@ export async function setNotificationPref(userId, type, inApp, email) {
         notification_type: type,
         in_app: inApp,
         email,
+        mobile,
       },
       { onConflict: 'user_id,notification_type' },
     )

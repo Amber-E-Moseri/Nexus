@@ -8,7 +8,7 @@ import { Bell, Mail, Smartphone, AlertCircle, Check, FlaskConical } from 'lucide
 const NOTIFICATION_CHANNELS = [
   { id: 'in_app', label: 'In-App', icon: Bell, alwaysOn: true, description: 'Bell icon notifications' },
   { id: 'email', label: 'Email', icon: Mail, description: 'Email notifications' },
-  { id: 'mobile', label: 'Mobile Push', icon: Smartphone, description: 'Push notifications on your phone' }
+  { id: 'mobile', label: 'Web Push', icon: Smartphone, description: 'Get notifications even when app is closed' }
 ]
 
 export default function NotificationsSection({ prefs = {}, role, onTogglePref }) {
@@ -178,7 +178,7 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
         </div>
       )}
 
-      {/* Mobile Push Notification Status */}
+      {/* Web Push Notification Status */}
       {pushStatus.supported && (
         <div className="rounded-xl border border-[var(--border)] bg-white p-5 mb-4">
           <div className="flex items-start justify-between gap-4">
@@ -186,16 +186,16 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
               <div className="flex items-center gap-2 mb-1">
                 <Smartphone size={18} style={{ color: 'var(--accent)' }} />
                 <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                  Mobile Push Notifications
+                  Web Push Notifications
                 </h3>
               </div>
               <p className="text-xs text-[var(--text-secondary)] mb-3">
                 {pushEnabled
-                  ? '✅ Enabled - You will receive notifications on this device'
-                  : '⭕ Disabled - Enable to get task notifications on your phone'}
+                  ? '✅ Enabled - Receive notifications even when the app is closed'
+                  : '⭕ Disabled - Enable to receive notifications on this device'}
               </p>
               <p style={{ fontSize: '11px', color: '#9e9488', margin: '8px 0 0 0' }}>
-                Works on Android Chrome, Firefox, Edge and iOS Safari
+                Works on Android Chrome, Firefox, Edge and iOS Safari (when installed as app)
               </p>
             </div>
             <button

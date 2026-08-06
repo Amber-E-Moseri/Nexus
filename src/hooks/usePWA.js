@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { requestPushPermission } from '../lib/webPush'
 
 export function usePWA() {
   const [isInstallable, setIsInstallable] = useState(false)
@@ -36,10 +37,19 @@ export function usePWA() {
       setIsInstallable(true)
     }
 
-    const handleAppInstalled = () => {
+    const handleAppInstalled = async () => {
       setIsInstallable(false)
       setIsInstalled(true)
       setDeferredPrompt(null)
+
+      // Auto-request push permission on PWA install if not already granted
+      if ('Notification' in window && Notification.permission === 'default') {
+        try {
+          await requestPushPermission()
+        } catch (err) {
+          console.warn('Failed to auto-subscribe to push on PWA install:', err)
+        }
+      }
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)

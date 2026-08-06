@@ -16,22 +16,29 @@ export default function NotificationPermissionPrompt() {
     if (permission === 'granted') return
 
     const dismissedAt = localStorage.getItem('notification-permission-dismissed-at')
+    const neverShowAgain = localStorage.getItem('notification-permission-never')
     // Re-prompt after 7 days so users who clicked "Not now" get another chance
     const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000
     const dismissed = dismissedAt && (Date.now() - parseInt(dismissedAt, 10)) < SEVEN_DAYS
 
     if (permission === 'denied') {
-      if (!dismissed) setDenied(true)
+      if (!dismissed && !neverShowAgain) setDenied(true)
       return
     }
 
-    if (!dismissed) {
-      setTimeout(() => setShow(true), 1500)
+    if (!dismissed && !neverShowAgain) {
+      setTimeout(() => setShow(true), 10000)
     }
   }, [user])
 
   const dismiss = () => {
     localStorage.setItem('notification-permission-dismissed-at', Date.now().toString())
+    setShow(false)
+    setDenied(false)
+  }
+
+  const dismissNever = () => {
+    localStorage.setItem('notification-permission-never', 'true')
     setShow(false)
     setDenied(false)
   }
@@ -116,7 +123,7 @@ export default function NotificationPermissionPrompt() {
           Get alerted for task assignments, @mentions, and comments
         </p>
       </div>
-      <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
         <button
           onClick={dismiss}
           style={{
@@ -131,6 +138,22 @@ export default function NotificationPermissionPrompt() {
           }}
         >
           Not now
+        </button>
+        <button
+          onClick={dismissNever}
+          style={{
+            padding: '6px 12px',
+            fontSize: '12px',
+            fontWeight: 500,
+            color: 'var(--text-tertiary)',
+            background: 'transparent',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+          }}
+        >
+          Don't show again
         </button>
         <button
           onClick={requestPermission}
