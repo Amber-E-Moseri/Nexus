@@ -487,7 +487,7 @@ Deno.serve(async (request) => {
     bodyHtml = bodyHtml || typedCampaign.body_html || typedCampaign.body || ''
     bodyText = bodyText || typedCampaign.body_text || typedCampaign.body || stripHtmlToText(bodyHtml)
     previewText = previewText || typedCampaign.preview_text || ''
-    replyTo = replyTo || typedCampaign.reply_to_email || callerEmail || undefined
+    replyTo = replyTo || typedCampaign.reply_to_email || callerEmail || 'info@lwcanada.org'
     to = await fetchCampaignRecipients(typedCampaign, supabase)
     campaignAttachments = typedCampaign.attachments ?? null
   }
