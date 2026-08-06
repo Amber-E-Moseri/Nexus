@@ -53,6 +53,18 @@ const FS = {
   sidebarBd:  '#EDE8DC',
 }
 
+const MEETING_TYPES = [
+  { value: 'general', label: 'General' },
+  { value: 'manager_meeting', label: 'Managers Meeting' },
+  { value: 'regional', label: 'Regional' },
+  { value: 'group', label: 'Group' },
+  { value: 'staff_meeting', label: 'Staff Meeting' },
+  { value: 'department_meeting', label: 'Department Meeting' },
+  { value: '1_on_1_meeting', label: '1-on-1 Meeting' },
+  { value: 'team', label: 'Team' },
+  { value: 'media', label: 'Media' },
+]
+
 const TABS = [
   { id: 'minutes', Icon: ClipboardList, label: 'Minutes', badge: null },
   { id: 'actions', Icon: ListChecks, label: 'Actions', badge: 'actions' },
@@ -114,12 +126,14 @@ function MeetingDetailViewInner() {
   const [savingTranscript, setSavingTranscript]   = useState(false)
   const [showRawTranscript, setShowRawTranscript] = useState(false)  // WIN 1: toggle polished/raw
   const [exportingPdf, setExportingPdf]           = useState(false)
+  const [confirmingEnd, setConfirmingEnd]         = useState(false)
   const [context, setContext]                     = useState('')      // WIN 2: meeting context
   const [contextChanged, setContextChanged]       = useState(false)
   const [contextExpanded, setContextExpanded]     = useState(true)
   const [editingTitle, setEditingTitle]           = useState(false)
   const [titleDraft, setTitleDraft]               = useState('')
   const [savingTitle, setSavingTitle]             = useState(false)
+  const [savingType, setSavingType]               = useState(false)
   const [editingDate, setEditingDate]             = useState(false)
   const [dateDraft, setDateDraft]                 = useState('')
   const [savingDate, setSavingDate]               = useState(false)
@@ -553,7 +567,7 @@ function MeetingDetailViewInner() {
   }
 
   async function endMeeting() {
-    if (!window.confirm('End this meeting and save progress?')) return
+    setConfirmingEnd(false)
     setRecording(false)
     const ended_at = new Date().toISOString()
     const { error } = await supabase
@@ -862,6 +876,16 @@ function MeetingDetailViewInner() {
     setTitleDraft(nextTitle)
     setEditingTitle(false)
     showToast('Meeting renamed.', { tone: 'success' })
+  }
+
+  async function saveType(newType) {
+    if (!newType || newType === meeting?.meeting_type) return
+    setSavingType(true)
+    const { error } = await supabase.from('meetings').update({ meeting_type: newType }).eq('id', meetingId)
+    setSavingType(false)
+    if (error) { showToast(`Couldn't update meeting type: ${error.message}`, { tone: 'error' }); return }
+    setMeeting((current) => ({ ...current, meeting_type: newType }))
+    showToast('Meeting type updated.', { tone: 'success' })
   }
 
   function startDateEdit() {
@@ -1280,14 +1304,31 @@ function MeetingDetailViewInner() {
             </button>
           )}
 
-          {canManage && isLive && (
+          {canManage && isLive && !confirmingEnd && (
             <button
-              onClick={endMeeting}
+              onClick={() => setConfirmingEnd(true)}
               style={{ padding:'7px 14px', border:`1px solid rgba(255,255,255,.3)`, borderRadius:6, background:'rgba(255,255,255,.12)', color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}
             >
               <Square size={13} fill="currentColor" aria-hidden="true" />
               End meeting
             </button>
+          )}
+          {canManage && isLive && confirmingEnd && (
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ fontSize:11, color:'rgba(255,255,255,.7)' }}>End &amp; save?</span>
+              <button
+                onClick={endMeeting}
+                style={{ padding:'5px 12px', border:'none', borderRadius:6, background:'#DC2626', color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => setConfirmingEnd(false)}
+                style={{ padding:'5px 12px', border:`1px solid rgba(255,255,255,.3)`, borderRadius:6, background:'transparent', color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -1355,7 +1396,20 @@ function MeetingDetailViewInner() {
                   )}
                 </div>
               )}
-              <div style={{ fontSize:11.5, color: FS.muted }}>{meeting.meeting_type ?? 'General'} meeting</div>
+              {canManage && !isLive ? (
+                <select
+                  value={meeting.meeting_type ?? 'general'}
+                  onChange={(e) => saveType(e.target.value)}
+                  disabled={savingType}
+                  style={{ fontSize:11.5, color: FS.muted, border:'none', background:'transparent', fontFamily:'inherit', cursor:'pointer', padding:0, opacity: savingType ? 0.5 : 1 }}
+                >
+                  {MEETING_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label} meeting</option>
+                  ))}
+                </select>
+              ) : (
+                <div style={{ fontSize:11.5, color: FS.muted }}>{meeting.meeting_type ?? 'General'} meeting</div>
+              )}
               {isLive && (
                 <>
                   <div style={{ marginTop:8, height:3, background: FS.borderL, borderRadius:999, overflow:'hidden' }}>
@@ -1999,7 +2053,6 @@ function MeetingDetailViewInner() {
                   }}
                   onTranscriptionComplete={({ transcript }) => {
                     setMeeting(m => ({ ...m, summary: transcript }))
-                    if (!isLive) startLive()
                   }}
                   onActionItemsExtracted={() => { fetchActionItems(); setActiveTab('actions') }}
                 />

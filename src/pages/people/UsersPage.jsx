@@ -140,6 +140,7 @@ export default function UsersPage() {
     pastorId: 'all',
     search: '',
   })
+  const [sort, setSort] = useState({ col: 'name', dir: 'asc' })
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [hoveredUserId, setHoveredUserId] = useState(null)
   const detailPanelRef = useRef(null)
@@ -239,7 +240,33 @@ export default function UsersPage() {
     })
   }, [filters, pastorByMemberId, scopedUsers])
 
-  const selectedUser = filteredUsers.find((user) => user.id === selectedUserId) ?? filteredUsers[0] ?? null
+  const sortedUsers = useMemo(() => {
+    const dir = sort.dir === 'asc' ? 1 : -1
+    return [...filteredUsers].sort((a, b) => {
+      switch (sort.col) {
+        case 'name': return dir * (a.name ?? '').localeCompare(b.name ?? '')
+        case 'role': return dir * (a.role ?? '').localeCompare(b.role ?? '')
+        case 'department': {
+          const da = departmentById.get(a.department_id)?.name ?? ''
+          const db = departmentById.get(b.department_id)?.name ?? ''
+          return dir * da.localeCompare(db)
+        }
+        case 'status': return dir * (a.status ?? '').localeCompare(b.status ?? '')
+        case 'last_active': {
+          const ta = a.last_active_at ? new Date(a.last_active_at).getTime() : 0
+          const tb = b.last_active_at ? new Date(b.last_active_at).getTime() : 0
+          return dir * (ta - tb)
+        }
+        default: return 0
+      }
+    })
+  }, [filteredUsers, sort, departmentById])
+
+  function toggleSort(col) {
+    setSort((prev) => prev.col === col && prev.dir === 'asc' ? { col, dir: 'desc' } : { col, dir: 'asc' })
+  }
+
+  const selectedUser = sortedUsers.find((user) => user.id === selectedUserId) ?? sortedUsers[0] ?? null
 
   useEffect(() => {
     setResetSent(false)
@@ -434,16 +461,32 @@ export default function UsersPage() {
           <table className="min-w-full text-left text-sm">
             <thead className="bg-[var(--surface-secondary)] text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
               <tr>
-                <th className="px-4 py-4">Member</th>
-                <th className="px-4 py-4">Role</th>
-                <th className="px-4 py-4">Department</th>
-                <th className="px-4 py-4">Status</th>
-                <th className="px-4 py-4">Last Active</th>
+                {[
+                  { col: 'name', label: 'Member' },
+                  { col: 'role', label: 'Role' },
+                  { col: 'department', label: 'Department' },
+                  { col: 'status', label: 'Status' },
+                  { col: 'last_active', label: 'Last Active' },
+                ].map(({ col, label }) => (
+                  <th key={col} className="px-4 py-4">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(col)}
+                      className="flex items-center gap-1 uppercase tracking-[0.08em] hover:text-[var(--text-primary)] transition-colors"
+                      style={{ fontWeight: 600, fontSize: 'inherit', background: 'none', border: 'none', cursor: 'pointer', color: sort.col === col ? 'var(--purple-700)' : 'inherit' }}
+                    >
+                      {label}
+                      <span style={{ fontSize: 10, opacity: sort.col === col ? 1 : 0.35 }}>
+                        {sort.col === col ? (sort.dir === 'asc' ? '↑' : '↓') : '↕'}
+                      </span>
+                    </button>
+                  </th>
+                ))}
                 <th className="px-4 py-4 text-right"> </th>
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.map((user) => {
+              {sortedUsers.map((user) => {
                 const department = departmentById.get(user.department_id)
                 const statusTone = toneForStatus(user.status)
                 const roleTone = toneForRole(user.role)
@@ -515,7 +558,7 @@ export default function UsersPage() {
                 )
               })}
 
-              {!loading && filteredUsers.length === 0 ? (
+              {!loading && sortedUsers.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-10 text-center text-[var(--text-secondary)]">
                     No users match the current filters.

@@ -84,6 +84,8 @@ export default function AudioTranscriptionPanel({
   const audioChunks = useRef([])
   const recordingInterval = useRef(null)
   const fileInputRef = useRef(null)
+  const handleTranscribeRef = useRef(null)
+  const isQueueContinuation = useRef(false)
   // Mirrors props into refs so the unmount-cleanup effect below (empty deps,
   // so it only fires once on true unmount) always sees the latest meetingId,
   // not whatever it was on first render.
@@ -515,6 +517,8 @@ export default function AudioTranscriptionPanel({
   // Appends a new segment to the meeting transcript — always reads the current
   // full text from the DB instead of rebuilding from meeting_transcriptions.summary,
   // which is capped at 500 chars and would truncate every segment except the last.
+  // NOTE: When adding multiple segments in "add more" mode, only return the new segment
+  // for extraction — don't re-process previously added segments.
   const appendSegmentToMeeting = async (inputType, fileName, transcript) => {
     let existingSummary = ''
     let existingCount = 0
@@ -555,20 +559,30 @@ export default function AudioTranscriptionPanel({
       : `${segHeader}\n${transcript}`
 
     await supabase.from('meetings').update({ summary: concatenatedTranscript }).eq('id', meetingId)
-    return { record, concatenatedTranscript }
+
+    // Return ONLY the new segment for extraction, not the concatenated full text.
+    // This prevents re-extraction of previously processed segments when adding more.
+    const newSegmentOnly = `${segHeader}\n${transcript}`
+    return { record, concatenatedTranscript, newSegmentOnly }
   }
 
   // ── Transcription ─────────────────────────────────────────────────────────────
 
   const handleTranscribe = async () => {
     if (!audioFile) { setError('No audio selected.'); return }
+    const continuingQueue = isQueueContinuation.current
+    isQueueContinuation.current = false
     setTranscribing(true)
     setProgress(0)
     setChunkStatus('')
     setError('')
-    setTranscript('')
-    setExtractedData(null)
-    setMergeSuccess(false)
+    // When continuing from a multi-file queue, keep the accumulated transcript visible
+    // instead of blanking it for the full duration of the next file's upload + transcription.
+    if (!continuingQueue) {
+      setTranscript('')
+      setExtractedData(null)
+      setMergeSuccess(false)
+    }
 
     try {
       const originalName = audioFile instanceof File ? audioFile.name : 'recording'
@@ -627,7 +641,7 @@ export default function AudioTranscriptionPanel({
       setChunkStatus('Saving transcript…')
       setProgress(85)
 
-      const { record, concatenatedTranscript } = await appendSegmentToMeeting(
+      const { record, concatenatedTranscript, newSegmentOnly } = await appendSegmentToMeeting(
         'audio', originalName, transcript,
       )
 
@@ -642,8 +656,9 @@ export default function AudioTranscriptionPanel({
         setAudioQueue(remaining)
         setTranscript(concatenatedTranscript)
         setTranscribing(false)
-        // Brief paint cycle before next file — uses updated state on next tick
-        setTimeout(() => handleTranscribe(), 100)
+        isQueueContinuation.current = true
+        // Use the ref so the next render's closure (with updated audioFile/audioQueue) runs, not this one's
+        setTimeout(() => handleTranscribeRef.current?.(), 100)
         return
       }
 
@@ -653,20 +668,23 @@ export default function AudioTranscriptionPanel({
 
       onTranscriptionComplete?.({ transcript: concatenatedTranscript, record, extracted: null })
 
-      // WIN 3: stream extraction asynchronously after transcription is saved
-      streamExtractMeetingData(concatenatedTranscript)
+      // WIN 3: stream extraction asynchronously using ONLY the new segment
+      // (avoid re-extracting previously added segments in "add more" mode)
+      streamExtractMeetingData(newSegmentOnly)
     } catch (err) {
       setError(err.message || 'Transcription failed.')
     } finally {
       setTranscribing(false)
     }
   }
+  // Keep ref current so the queue timer always calls the latest closure (avoids stale audioFile/audioQueue)
+  handleTranscribeRef.current = handleTranscribe
 
   const saveTranscriptText = async (transcriptText) => {
-    const { record, concatenatedTranscript } = await appendSegmentToMeeting(
+    const { record, concatenatedTranscript, newSegmentOnly } = await appendSegmentToMeeting(
       'text', 'pasted-transcript', transcriptText,
     )
-    return { record, concatenatedTranscript }
+    return { record, concatenatedTranscript, newSegmentOnly }
   }
 
   const handleSaveTranscript = async () => {
@@ -707,15 +725,16 @@ export default function AudioTranscriptionPanel({
 
       // Save first so AI Extract always has the text
       setProgress(60)
-      const { record, concatenatedTranscript } = await saveTranscriptText(transcriptText)
+      const { record, concatenatedTranscript, newSegmentOnly } = await saveTranscriptText(transcriptText)
 
       setProgress(100)
       setTranscript(concatenatedTranscript)
       setShowAddMore(false)
       onTranscriptionComplete?.({ transcript: concatenatedTranscript, record, extracted: null })
 
-      // WIN 3: stream extraction asynchronously using full concatenated transcript
-      streamExtractMeetingData(concatenatedTranscript)
+      // WIN 3: stream extraction asynchronously using ONLY the new segment
+      // (avoid re-extracting previously added segments in "add more" mode)
+      streamExtractMeetingData(newSegmentOnly)
     } catch (err) {
       setError(err.message || 'Extraction failed.')
     } finally {
@@ -1173,7 +1192,14 @@ export default function AudioTranscriptionPanel({
             <div style={s.btnGroup}>
               <button
                 style={{ ...s.btn, ...s.btnPrimary }}
-                onClick={() => setShowAddMore(true)}
+                onClick={() => {
+                  setShowAddMore(true)
+                  // Clear the previous file so the next upload becomes primary rather than queuing behind it
+                  setAudioFile(null)
+                  setAudioPreview(null)
+                  setAudioQueue([])
+                  if (fileInputRef.current) fileInputRef.current.value = ''
+                }}
               >
                 <Plus size={14} aria-hidden="true" /> Add more audio
               </button>
@@ -1183,7 +1209,7 @@ export default function AudioTranscriptionPanel({
 
         {transcript && showAddMore && (
           <div style={s.card}>
-            <p style={s.sub}>Upload your next audio file above. It will be queued and transcribed after the current file.</p>
+            <p style={s.sub}>Upload your next audio file above.</p>
           </div>
         )}
 

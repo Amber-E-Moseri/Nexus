@@ -149,6 +149,7 @@ export default function UnifiedMeetingsView({
   const [statsLoading, setStatsLoading] = useState(false)
   const [hoveredId, setHoveredId] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const [contentSearchResults, setContentSearchResults] = useState(null)
   const [contentSearchLoading, setContentSearchLoading] = useState(false)
   const searchDebounce = useRef(null)
@@ -289,15 +290,14 @@ export default function UnifiedMeetingsView({
     return result
   }, [grouped, activeType, filteredByDept, activeStatus, dateRange, search, contentSearchResults])
 
-  const handleDelete = async (event, meeting) => {
+  const handleDeleteConfirm = async (event, meeting) => {
     event.stopPropagation()
-    if (!window.confirm(`Delete "${meeting.title}"? This can't be undone.`)) return
+    setConfirmDeleteId(null)
     setDeletingId(meeting.id)
     try {
       await removeMeeting(meeting.id)
     } catch (err) {
       console.error('Failed to delete meeting:', err)
-      window.alert('Failed to delete meeting. Please try again.')
     } finally {
       setDeletingId(null)
     }
@@ -550,10 +550,29 @@ export default function UnifiedMeetingsView({
                           <AttendanceSummary attendance={meeting.attendance} />
                         </div>
                       </div>
-                      {(canManage || meeting.created_by === profile?.id) && (
+                      {(canManage || meeting.created_by === profile?.id) && confirmDeleteId === meeting.id ? (
+                        <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }} onClick={(e) => e.stopPropagation()}>
+                          <span style={{ fontSize:11, color:'var(--accent-red-text)', fontWeight:600 }}>Delete?</span>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteConfirm(e, meeting)}
+                            disabled={deletingId === meeting.id}
+                            style={{ padding:'3px 8px', border:'none', borderRadius:6, background:'var(--accent-red)', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}
+                          >
+                            {deletingId === meeting.id ? '...' : 'Yes'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null) }}
+                            style={{ padding:'3px 8px', border:'1px solid var(--border-1)', borderRadius:6, background:'white', color:'var(--ink-2)', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}
+                          >
+                            No
+                          </button>
+                        </div>
+                      ) : (canManage || meeting.created_by === profile?.id) && (
                         <button
                           type="button"
-                          onClick={(e) => handleDelete(e, meeting)}
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(meeting.id) }}
                           disabled={deletingId === meeting.id}
                           aria-label={`Delete ${meeting.title}`}
                           style={{
