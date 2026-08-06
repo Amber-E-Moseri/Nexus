@@ -170,23 +170,41 @@ function renderHtmlShell(bodyHtml: string, previewText: string, unsubscribeToken
   const unsubUrl = `${frontendUrl}/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`
   const safePreview = escapeHtml(previewText || ' ')
 
-  return `
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body { font-family: Arial, sans-serif; color: #2D2A22; line-height: 1.6; }
+  .email-container { max-width: 640px; margin: 0 auto; background: #ffffff; }
+  .email-header { padding: 24px; border-bottom: 1px solid #EDE8DC; text-align: center; }
+  .email-logo { max-width: 120px; height: auto; margin-bottom: 16px; }
+  .email-title { font-size: 24px; font-weight: 700; color: #C41E3A; margin: 0; }
+  .email-subtitle { font-size: 12px; color: #666; margin: 4px 0 0; }
+  .email-body { padding: 24px; color: #2D2A22; line-height: 1.7; font-size: 14px; }
+  .email-footer { padding: 16px 24px; border-top: 1px solid #EDE8DC; font-size: 11px; color: #9E9488; text-align: center; }
+  .email-footer a { color: #4C2A92; text-decoration: underline; }
+</style>
+</head>
+<body>
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
       ${safePreview}
     </div>
-    <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#ffffff;">
-      <div style="padding:28px 24px 16px;border-bottom:1px solid #EDE8DC;">
-        <div style="font-size:20px;font-weight:700;color:#4C2A92;">BLW CAN NEXUS</div>
-        <div style="margin-top:4px;font-size:12px;color:#9E9488;">Sent via BLW CAN NEXUS</div>
+    <div class="email-container">
+      <div class="email-header">
+        <div class="email-title">BLW CANADA</div>
+        <div class="email-subtitle">Sub-Region</div>
       </div>
-      <div style="padding:24px;color:#2D2A22;line-height:1.7;font-size:14px;">
+      <div class="email-body">
         ${bodyHtml}
       </div>
-      <div style="padding:16px 24px;border-top:1px solid #EDE8DC;font-size:11px;color:#9E9488;text-align:center;">
-        BLW CAN NEXUS |
-        <a href="${unsubUrl}" style="color:#9E9488;text-decoration:underline;">Unsubscribe</a>
+      <div class="email-footer">
+        <a href="${unsubUrl}">Unsubscribe</a>
       </div>
     </div>
+</body>
+</html>
   `
 }
 
