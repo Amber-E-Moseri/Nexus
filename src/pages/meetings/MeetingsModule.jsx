@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { FileText } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { getAllDepartments } from '../../features/automations'
@@ -186,10 +187,33 @@ export default function MeetingsModule() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0, background: '#F7F5F0' }}>
       <div style={{ background: '#FBF8F2', borderBottom: '1px solid #EDE8DC', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', padding: isMobile ? '10px 16px 0' : '14px 24px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '10px 16px 0' : '14px 24px 0', gap: 12 }}>
           <h1 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 700, color: '#18122E', margin: 0, letterSpacing: '-0.3px', flex: 1 }}>
             {pageTitle}
           </h1>
+          <button
+            type="button"
+            onClick={() => navigate('/meetings/minutes')}
+            title="View meeting minutes hub"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 14px',
+              borderRadius: 8,
+              border: '1px solid #EDE8DC',
+              background: '#FFFFFF',
+              color: '#4C2A92',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            <FileText size={14} />
+            Minutes Hub
+          </button>
         </div>
         <TabBar active={activeTab} onChange={handleTabChange} visibleTabs={visibleTabs} onClear={handleClearTab} />
       </div>
