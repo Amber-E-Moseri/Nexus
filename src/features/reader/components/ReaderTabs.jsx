@@ -1,10 +1,12 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Headphones, ChevronRight, CheckCircle } from 'lucide-react'
 import ReadingPanel from './ReadingPanel'
 import PlayerControls from './PlayerControls'
 import MobilePlayer from './MobilePlayer'
+import PdfPageView from './PdfPageView'
+import { sentenceIdxForPage } from '../services/page-map'
 
-const TABS = ['Read', 'Listen', 'Tandem']
+const TABS = ['Read', 'Listen', 'Tandem', 'Pages']
 
 export default function ReaderTabs({
   book, sentences, currentIdx, isPlaying, elapsedTime, totalTime, voice, speed,
@@ -12,11 +14,25 @@ export default function ReaderTabs({
   onPlay, onPause, onSeek, onSkip, onSpeedChange, onVoiceChange,
   onAddHighlight, onAddNote, onRemoveAnnotation, onSelectionChange,
   onEndSession, onOpenSettings, viewMode, onToggleViewMode, showChapters, onShowChapters,
+  pdfBuffer, totalPages, currentPage, sentencePageMap,
 }) {
-  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('immerse-tab') || 'Read')
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem('immerse-tab')
+    // Don't restore Pages tab if PDF not available
+    if (saved === 'Pages' && !pdfBuffer) return 'Read'
+    return saved || 'Read'
+  })
   const isDesktop = window.innerWidth >= 768
 
+  // Track which page Page View is showing so we can sync position when leaving
+  const pdfPageRef = useRef(currentPage)
+
   function handleTabChange(tab) {
+    // Sync Page View position back to sentence-based views when leaving
+    if (activeTab === 'Pages' && tab !== 'Pages' && sentencePageMap?.length) {
+      const sentIdx = sentenceIdxForPage(sentencePageMap, pdfPageRef.current)
+      onSeek(sentIdx)
+    }
     setActiveTab(tab)
     localStorage.setItem('immerse-tab', tab)
   }
@@ -220,10 +236,31 @@ export default function ReaderTabs({
     )
   }
 
+  // Pages tab: actual PDF canvas rendering with 3D page flip
+  function PagesView() {
+    if (!pdfBuffer) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8, color: 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
+          <span>Page view requires a PDF source.</span>
+          <span style={{ fontSize: 11 }}>Re-import the book as a PDF file to enable this view.</span>
+        </div>
+      )
+    }
+    return (
+      <PdfPageView
+        pdfBuffer={pdfBuffer}
+        totalPages={totalPages ?? 1}
+        initialPage={currentPage ?? 1}
+        onPageChange={(p) => { pdfPageRef.current = p }}
+      />
+    )
+  }
+
   const tabViews = {
     Read: <ReadView />,
     Listen: <ListenView />,
     Tandem: <TandemView />,
+    Pages: <PagesView />,
   }
 
   return (
@@ -238,7 +275,7 @@ export default function ReaderTabs({
         overflowX: 'auto',
         flexShrink: 0,
       }}>
-        {TABS.map(tab => (
+        {TABS.filter(tab => tab !== 'Pages' || (pdfBuffer && totalPages > 0)).map(tab => (
           <button
             key={tab}
             onClick={() => handleTabChange(tab)}

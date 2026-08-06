@@ -15,15 +15,15 @@ export default function ImportModal({ onClose, onImport }) {
     try {
       const buffer = await file.arrayBuffer()
       console.log('PDF buffer size:', buffer.byteLength)
-      const { text, textItems, pageSizes } = await extractPdfText(buffer)
-      console.log('Extracted text length:', text.length, 'items:', textItems.length)
+      const { text, textItems, pageSizes, outline } = await extractPdfText(buffer)
+      console.log('Extracted text length:', text.length, 'items:', textItems.length, 'pages:', pageSizes.length, 'outline:', outline.length)
       const sentences = splitSentences(text)
       console.log('Sentences:', sentences.length)
       if (!sentences.length) throw new Error('This PDF does not contain readable text. Check the PDF is not image-based or encrypted.')
       const title = file.name.replace(/\.pdf$/i, '')
       const words = countWords(text)
       console.log('Importing book:', title, 'words:', words, 'estimated:', estimateMinutes(words))
-      onImport({ title, text, source: 'pdf', pdfBuffer: buffer, pdfTextItems: textItems, pdfPageSizes: pageSizes, sentences, wordCount: words, estimatedMinutes: estimateMinutes(words) })
+      onImport({ title, text, source: 'pdf', pdfBuffer: buffer, pdfTextItems: textItems, pdfPageSizes: pageSizes, pdfOutline: outline, sentences, wordCount: words, estimatedMinutes: estimateMinutes(words) })
     } catch (importError) {
       console.error('Import error:', importError)
       setError(importError.message || 'Unable to import this PDF.')

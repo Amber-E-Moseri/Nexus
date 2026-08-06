@@ -25,14 +25,45 @@ export async function extractPdfText(buffer) {
         x: item.transform[4],
         y: item.transform[5],
         width: item.width,
-        height: Math.abs(item.transform[3]) || 12,
+        height: Math.abs(item.transform[3]) || item.height || 12,
+        fontName: item.fontName ?? '',
         text: item.str,
         charOffset: fullText.length,
       })
       fullText += item.str + ' '
     }
   }
-  return { text: fullText.trim(), textItems, pageSizes }
+
+  const outline = await extractOutline(pdf)
+  return { text: fullText.trim(), textItems, pageSizes, outline }
+}
+
+async function resolveDestPage(pdf, dest) {
+  if (!dest) return null
+  let resolved = dest
+  if (typeof dest === 'string') {
+    try { resolved = await pdf.getDestination(dest) } catch { return null }
+  }
+  if (!Array.isArray(resolved) || !resolved[0]) return null
+  try {
+    const idx = await pdf.getPageIndex(resolved[0])
+    return idx + 1 // 0-based → 1-based
+  } catch { return null }
+}
+
+async function extractOutline(pdf) {
+  try {
+    const raw = await pdf.getOutline()
+    if (!raw?.length) return []
+    const result = []
+    async function flatten(entry) {
+      const pageNum = await resolveDestPage(pdf, entry.dest)
+      if (pageNum !== null) result.push({ title: entry.title ?? '', pageNum })
+      for (const child of entry.items ?? []) await flatten(child)
+    }
+    for (const entry of raw) await flatten(entry)
+    return result
+  } catch { return [] }
 }
 
 export async function exportHighlightedPdf(book, highlights) {

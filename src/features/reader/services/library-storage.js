@@ -124,8 +124,9 @@ export async function saveStoredBook(book) {
   // Cache binary data locally — strip non-serialisable handles first
   const { file, handle, ...rest } = book
   const { pdfBuffer, sentences, textItems, pageSizes } = rest
+  const outline = rest.pdfOutline ?? rest.outline ?? []
   if (pdfBuffer || sentences) {
-    await idbPut({ id: book.id, pdfBuffer, sentences, textItems, pageSizes }).catch(() => {})
+    await idbPut({ id: book.id, pdfBuffer, sentences, textItems, pageSizes, outline }).catch(() => {})
   }
 }
 
@@ -139,7 +140,15 @@ export async function hydrateBook(book) {
   const local = await idbGet(book.id)
   if (local?.sentences?.length) {
     console.log('[reader] hydrateBook: IndexedDB hit', book.id, local.sentences.length, 'sentences')
-    return { ...book, ...local }
+    // Normalize field names: IDB stores textItems/pageSizes/outline; book API uses pdfTextItems/pdfPageSizes/pdfOutline
+    return {
+      ...book,
+      pdfBuffer: local.pdfBuffer,
+      sentences: local.sentences,
+      pdfTextItems: local.textItems ?? local.pdfTextItems,
+      pdfPageSizes: local.pageSizes ?? local.pdfPageSizes,
+      pdfOutline: local.outline ?? local.pdfOutline ?? [],
+    }
   }
   console.log('[reader] hydrateBook: IndexedDB miss, fetching from Storage', book.id)
 
@@ -152,14 +161,14 @@ export async function hydrateBook(book) {
   console.log('[reader] hydrateBook: Storage download OK, buffer size', buffer.byteLength)
 
   // 3. Re-extract sentences
-  const { text, textItems, pageSizes } = await extractPdfText(buffer)
+  const { text, textItems, pageSizes, outline } = await extractPdfText(buffer)
   const sentences = splitSentences(text)
-  console.log('[reader] hydrateBook: extracted', sentences.length, 'sentences')
+  console.log('[reader] hydrateBook: extracted', sentences.length, 'sentences, outline:', outline.length)
 
   // 4. Cache locally
-  await idbPut({ id: book.id, pdfBuffer: buffer, sentences, textItems, pageSizes }).catch((e) => console.warn('[reader] IndexedDB write failed', e))
+  await idbPut({ id: book.id, pdfBuffer: buffer, sentences, textItems, pageSizes, outline }).catch((e) => console.warn('[reader] IndexedDB write failed', e))
 
-  return { ...book, pdfBuffer: buffer, sentences, textItems, pageSizes }
+  return { ...book, pdfBuffer: buffer, sentences, pdfTextItems: textItems, pdfPageSizes: pageSizes, pdfOutline: outline }
 }
 
 export async function deleteStoredBook(bookId) {

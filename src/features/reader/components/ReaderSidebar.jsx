@@ -1,13 +1,7 @@
 import { useState, useMemo } from 'react'
 import NoteCard from './NoteCard'
 import { IconHighlight, IconNote } from '../icons'
-
-const SENTENCES_PER_PART = 100
-
-function isChapterHeading(s) {
-  return /^(chapter|part|prologue|epilogue|introduction|preface|afterword)\b/i.test(s.trim()) ||
-    /^[A-Z\s\d]{4,40}$/.test(s.trim())
-}
+import { detectChapters } from '../services/chapter-detector'
 
 export default function ReaderSidebar({ book, sentences = [], highlights, notes, bookmarks = [], annotations, currentIdx, totalSentences, onAddHighlight, onAddNote, onRemoveAnnotation, onRemoveBookmark, onSeek }) {
   const [noteInput, setNoteInput] = useState('')
@@ -15,22 +9,11 @@ export default function ReaderSidebar({ book, sentences = [], highlights, notes,
   const progress = totalSentences > 0 ? Math.round((currentIdx / totalSentences) * 100) : 0
 
   const chapters = useMemo(() => {
-    const list = []
-    sentences.forEach((s, idx) => {
-      if (isChapterHeading(s) && s.trim().length < 50) {
-        list.push({ title: s.trim(), idx })
-      }
-    })
-    // If no headings detected, create fixed-size "Part X" divisions
-    if (list.length === 0 && sentences.length > 0) {
-      let partNum = 1
-      for (let idx = 0; idx < sentences.length; idx += SENTENCES_PER_PART) {
-        list.push({ title: `Part ${partNum}`, idx })
-        partNum++
-      }
-    }
-    return list
-  }, [sentences])
+    const textItems = book?.pdfTextItems ?? book?.textItems
+    const pageSizes = book?.pdfPageSizes ?? book?.pageSizes
+    const outline = book?.pdfOutline ?? book?.outline
+    return detectChapters(sentences, textItems, pageSizes, outline)
+  }, [sentences, book?.pdfTextItems, book?.pdfPageSizes, book?.pdfOutline])
 
   const currentChapterIdx = useMemo(() => {
     let ci = 0

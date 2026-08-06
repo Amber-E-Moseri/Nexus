@@ -8,6 +8,8 @@ import ReaderSidebar from '../components/ReaderSidebar'
 import HighlightPopup from '../components/HighlightPopup'
 import ReaderTabs from '../components/ReaderTabs'
 import { IconBack, IconSettings } from '../icons'
+import { detectChapters } from '../services/chapter-detector'
+import { buildSentencePageMap, pageForSentence, sentenceIdxForPage } from '../services/page-map'
 
 export default function ReaderPage({
   book, sentences, currentIdx, isPlaying, elapsedTime, totalTime, voice, speed,
@@ -26,6 +28,30 @@ export default function ReaderPage({
   const [showStats, setShowStats] = useState(false)
   const lastScrollY = useRef(0)
   const isDesktop = window.innerWidth >= 768
+
+  // Chapter + page data derived from book metadata
+  const chapters = useMemo(() => {
+    const textItems = book?.pdfTextItems ?? book?.textItems
+    const pageSizes  = book?.pdfPageSizes  ?? book?.pageSizes
+    const outline    = book?.pdfOutline    ?? book?.outline
+    return detectChapters(sentences, textItems, pageSizes, outline)
+  }, [sentences, book?.pdfTextItems, book?.pdfPageSizes, book?.pdfOutline])
+
+  const sentencePageMap = useMemo(
+    () => buildSentencePageMap(sentences, book?.pdfTextItems ?? book?.textItems),
+    [sentences, book?.pdfTextItems]
+  )
+
+  const totalPages = book?.pdfPageSizes?.length ?? book?.pageSizes?.length ?? 0
+  const currentPage = pageForSentence(sentencePageMap, currentIdx)
+
+  const currentChapterIdx = useMemo(() => {
+    let ci = 0
+    for (let i = 0; i < chapters.length; i++) {
+      if (chapters[i].idx <= currentIdx) ci = i; else break
+    }
+    return ci
+  }, [chapters, currentIdx])
 
   // Search results
   const searchResults = useMemo(() => {
@@ -197,6 +223,65 @@ export default function ReaderPage({
         </div>
       )}
 
+      {/* Chapter + page navigation bar */}
+      {isDesktop && (chapters.length > 0 || totalPages > 0) && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', borderBottom: '1px solid var(--im-border)', background: 'var(--im-sidebar-bg)', flexShrink: 0, height: 36, gap: 16, fontSize: 12, fontFamily: 'Inter, sans-serif' }}>
+          {/* Chapter nav */}
+          {chapters.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <button
+                onClick={() => currentChapterIdx > 0 && onSeek(chapters[currentChapterIdx - 1].idx)}
+                disabled={currentChapterIdx === 0}
+                style={{ background: 'none', border: 'none', cursor: currentChapterIdx > 0 ? 'pointer' : 'default', color: currentChapterIdx > 0 ? 'var(--im-text)' : 'var(--im-border)', fontSize: 16, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}>
+                ‹
+              </button>
+              <span style={{ color: 'var(--im-text-dim)', flexShrink: 0, fontSize: 11 }}>Ch</span>
+              <span
+                style={{ color: 'var(--im-text)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200, cursor: 'pointer' }}
+                title={chapters[currentChapterIdx]?.title}
+                onClick={() => onSeek(chapters[currentChapterIdx]?.idx ?? 0)}>
+                {currentChapterIdx + 1}. {chapters[currentChapterIdx]?.title ?? ''}
+              </span>
+              <span style={{ color: 'var(--im-text-xdim)', flexShrink: 0 }}>/ {chapters.length}</span>
+              <button
+                onClick={() => currentChapterIdx < chapters.length - 1 && onSeek(chapters[currentChapterIdx + 1].idx)}
+                disabled={currentChapterIdx >= chapters.length - 1}
+                style={{ background: 'none', border: 'none', cursor: currentChapterIdx < chapters.length - 1 ? 'pointer' : 'default', color: currentChapterIdx < chapters.length - 1 ? 'var(--im-text)' : 'var(--im-border)', fontSize: 16, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}>
+                ›
+              </button>
+            </div>
+          )}
+
+          {/* Page nav */}
+          {totalPages > 0 && sentencePageMap.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <button
+                onClick={() => { const prevP = Math.max(1, currentPage - 1); onSeek(sentenceIdxForPage(sentencePageMap, prevP)) }}
+                disabled={currentPage <= 1}
+                style={{ background: 'none', border: 'none', cursor: currentPage > 1 ? 'pointer' : 'default', color: currentPage > 1 ? 'var(--im-text)' : 'var(--im-border)', fontSize: 16, lineHeight: 1, padding: '0 2px' }}>
+                ‹
+              </button>
+              <span style={{ color: 'var(--im-text-dim)', fontSize: 11, flexShrink: 0 }}>Pg</span>
+              <span style={{ color: 'var(--im-text)', fontWeight: 600 }}>{currentPage}</span>
+              <span style={{ color: 'var(--im-text-xdim)' }}>/ {totalPages}</span>
+              <button
+                onClick={() => { const nextP = Math.min(totalPages, currentPage + 1); onSeek(sentenceIdxForPage(sentencePageMap, nextP)) }}
+                disabled={currentPage >= totalPages}
+                style={{ background: 'none', border: 'none', cursor: currentPage < totalPages ? 'pointer' : 'default', color: currentPage < totalPages ? 'var(--im-text)' : 'var(--im-border)', fontSize: 16, lineHeight: 1, padding: '0 2px' }}>
+                ›
+              </button>
+              <form
+                onSubmit={(e) => { e.preventDefault(); const n = parseInt(e.target.elements.pg.value); if (n >= 1 && n <= totalPages) { onSeek(sentenceIdxForPage(sentencePageMap, n)); e.target.reset() } }}
+                style={{ display: 'flex', gap: 3, marginLeft: 4 }}>
+                <input name="pg" type="number" min={1} max={totalPages} placeholder="Jump…"
+                  style={{ width: 60, padding: '2px 5px', border: '1px solid var(--im-border)', borderRadius: 4, background: 'var(--im-bg)', color: 'var(--im-text)', fontSize: 11, fontFamily: 'Inter, sans-serif', outline: 'none', textAlign: 'center' }} />
+                <button type="submit" style={{ padding: '2px 7px', background: 'var(--im-border)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 11, color: 'var(--im-text)', fontFamily: 'Inter, sans-serif' }}>Go</button>
+              </form>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Tab-based content */}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <ReaderTabs
@@ -229,6 +314,10 @@ export default function ReaderPage({
           onToggleViewMode={toggleViewMode}
           showChapters={showChapters}
           onShowChapters={setShowChapters}
+          pdfBuffer={book?.pdfBuffer}
+          totalPages={totalPages}
+          currentPage={currentPage}
+          sentencePageMap={sentencePageMap}
         />
 
         {isDesktop && sidebarVisible && (
