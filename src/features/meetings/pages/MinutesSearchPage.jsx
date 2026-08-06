@@ -1,15 +1,55 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { FileSearch, Search } from 'lucide-react'
+import { useAuth } from '../../../hooks/useAuth'
+import { useToast } from '../../../context/ToastContext'
 import MinutesCard from '../components/MinutesCard'
+import MeetingMinutesViewer from '../components/MeetingMinutesViewer'
 import { searchMinutesBlocks } from '../lib/meetings'
 
-export default function MinutesSearchPage({ departmentId, meetingType, readOnly = false }) {
+export default function MinutesSearchPage({ departmentId, meetingType, readOnly = false, profileId, isSuperAdmin = false }) {
+  const { profile } = useAuth()
+  const { showToast } = useToast()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [searched, setSearched] = useState(false)
   const debounceRef = useRef(null)
+  const [viewerMeeting, setViewerMeeting] = useState(null)
+
+  const exportMinutesPdf = async () => {
+    if (!viewerMeeting) return
+    try {
+      const { generateMinutesPDF, generateMinutesPDFFilename } = await import('../../../lib/meetings/pdfGeneration')
+      const splitLines = (text) => (text || '')
+        .split('\n')
+        .map((line) => line.replace(/^[•\-*]\s*/, '').trim())
+        .filter(Boolean)
+      const notesPlainText = viewerMeeting?.notes_text || viewerMeeting?.minutes || ''
+      const blob = await generateMinutesPDF({
+        summary: viewerMeeting?.meeting_notes || notesPlainText,
+        decisions: splitLines(viewerMeeting?.decisions || ''),
+        nextSteps: splitLines(viewerMeeting?.next_steps || ''),
+        detailedNotes: notesPlainText,
+        actionItems: [],
+        openItems: [],
+        agenda: [],
+        attendees: (viewerMeeting?.meeting_attendance || []).map((a) => ({
+          name: a.attendee?.name || 'Unknown',
+          status: a.status || 'present',
+        })),
+      }, viewerMeeting)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = generateMinutesPDFFilename(viewerMeeting)
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('Minutes PDF downloaded', { tone: 'success' })
+    } catch (err) {
+      showToast(`PDF export failed: ${err.message}`, { tone: 'error' })
+    }
+  }
 
   const search = useCallback(async (value, scope, nextMeetingType) => {
     if (!value.trim()) { setResults([]); setSearched(false); return }
@@ -33,6 +73,19 @@ export default function MinutesSearchPage({ departmentId, meetingType, readOnly 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {viewerMeeting && (
+        <MeetingMinutesViewer
+          meetingId={viewerMeeting.id}
+          initialMeeting={viewerMeeting}
+          searchQuery={query}
+          currentUser={profile}
+          exportPdf={exportMinutesPdf}
+          onViewMeetingLog={() => {
+            setViewerMeeting(null)
+          }}
+          onClose={() => setViewerMeeting(null)}
+        />
+      )}
       <div style={{ position: 'relative', maxWidth: 620 }}>
         <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary, #B0A696)', pointerEvents: 'none' }} />
         <input
@@ -58,7 +111,17 @@ export default function MinutesSearchPage({ departmentId, meetingType, readOnly 
         <>
           <div style={{ fontSize: 12, color: 'var(--text-secondary, #7A6F5E)', fontWeight: 600 }}>{results.length} result{results.length === 1 ? '' : 's'}{results.length === 30 ? ' (showing top 30)' : ''}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {results.map((result) => <MinutesCard key={result.id} meeting={result} snippet={(result.notes_text || '').substring(0, 120)} readOnly={readOnly} />)}
+            {results.map((result) => (
+              <MinutesCard
+                key={result.id}
+                meeting={result}
+                snippet={(result.notes_text || '').substring(0, 120)}
+                readOnly={readOnly}
+                canNavigate={result.created_by === profileId}
+                showMeetingLink={isSuperAdmin}
+                onOpenViewer={setViewerMeeting}
+              />
+            ))}
           </div>
         </>
       )}

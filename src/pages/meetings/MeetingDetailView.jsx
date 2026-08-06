@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { Check, CheckCircle2, ClipboardList, Download, FileText, FolderOpen, ListChecks, Lock, Mic, RotateCw, Sparkles, Square, Users } from 'lucide-react'
+import { Check, CheckCircle2, ClipboardList, Download, FileText, FolderOpen, ListChecks, Lock, Mic, RotateCw, Sparkles, Square, Users, Eye } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { useToast } from '../../context/ToastContext'
 import { hasSpaceRole } from '../../lib/permissions.js'
+import { canViewMeetingLog } from '../../features/meetings/lib/meetingPermissions'
 import { MeetingsProvider } from '../../features/meetings/MeetingsContext'
 import ActionItemBridge from '../../features/meetings/components/ActionItemBridge'
 import AudioTranscriptionPanel from '../../features/meetings/components/AudioTranscriptionPanel'
@@ -13,6 +14,7 @@ import MeetingDocsTab from '../../features/meetings/components/MeetingDocsTab'
 import MeetingSummaryEditor from '../../features/meetings/components/MeetingSummaryEditor'
 import GenerateMeetingDocButton from '../../features/meetings/components/GenerateMeetingDocButton'
 import MeetingShareModal from '../../features/meetings/components/MeetingShareModal'
+import MeetingMinutesViewer from '../../features/meetings/components/MeetingMinutesViewer'
 import TaskModal from '../../features/tasks/components/TaskModal'
 import { getTaskById } from '../../features/tasks/lib/tasks'
 import { createTasksFromActionItems, setNotesSharedWithAttendee, editRecurringMeeting, getMeetingSpaces, addMeetingSpace, removeMeetingSpace } from '../../features/meetings/lib/meetings'
@@ -126,6 +128,7 @@ function MeetingDetailViewInner() {
   const [savingTranscript, setSavingTranscript]   = useState(false)
   const [showRawTranscript, setShowRawTranscript] = useState(false)  // WIN 1: toggle polished/raw
   const [exportingPdf, setExportingPdf]           = useState(false)
+  const [showMinutesViewer, setShowMinutesViewer] = useState(false)
   const [confirmingEnd, setConfirmingEnd]         = useState(false)
   const [context, setContext]                     = useState('')      // WIN 2: meeting context
   const [contextChanged, setContextChanged]       = useState(false)
@@ -1036,6 +1039,24 @@ function MeetingDetailViewInner() {
     </div>
   )
 
+  // Unauthorized access check: non-privileged users cannot view the full Meeting Log
+  const isAuthorized = canViewMeetingLog({ user: profile, meeting })
+  if (!isAuthorized) return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', gap:12 }}>
+      <div style={{ textAlign:'center', maxWidth:400 }}>
+        <div style={{ fontSize:20, fontWeight:800, color: FS.text, marginBottom:8 }}>Access Restricted</div>
+        <div style={{ color: FS.muted, fontSize:14, marginBottom:16, lineHeight:1.6 }}>
+          You can view the published meeting minutes, but you don't have permission to access the full meeting log.
+          <br /><br />
+          Only meeting organizers and administrators can access the complete meeting details.
+        </div>
+      </div>
+      <button onClick={() => navigate('/meetings')} style={{ padding:'8px 16px', border:'none', background: FS.navy, color:'#fff', borderRadius:6, cursor:'pointer', fontWeight:600, fontSize:13 }}>
+        ← Back to Meetings
+      </button>
+    </div>
+  )
+
   const dateLabel = new Date(meeting.date).toLocaleDateString('en-CA', { weekday:'long', month:'short', day:'numeric', year:'numeric' })
   const timeRange = meeting.meeting_type ? `${meeting.meeting_type} meeting` : 'Meeting'
   const currentItem = agenda[currentIdx] ?? null
@@ -1058,16 +1079,9 @@ function MeetingDetailViewInner() {
       `}</style>
 
       {/* ── UNIFIED HEADER ── */}
-      <div style={{ flexShrink:0, background: isLive ? FS.navy : FS.surface, borderBottom: isLive ? 'none' : `1px solid ${FS.border}`, padding: isMobile ? '10px 14px' : '13px 20px', display:'flex', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 8 : 14, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+      <div style={{ flexShrink:0, background: FS.surface, borderBottom: `1px solid ${FS.border}`, padding: isMobile ? '10px 14px' : '13px 20px', display:'flex', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 8 : 14, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
         {/* Back + title */}
-        <button onClick={() => navigate('/meetings')} style={{ background:'transparent', border:'none', color: isLive ? 'rgba(255,255,255,.4)' : FS.muted, fontSize:16, cursor:'pointer', padding:'0 6px 0 0', lineHeight:1, flexShrink:0 }}>←</button>
-
-        {isLive && (
-          <span style={{ display:'inline-flex', alignItems:'center', gap:6, background:'rgba(201,72,48,.18)', border:'1px solid rgba(201,72,48,.5)', color:'#FF9583', borderRadius:999, padding:'4px 11px', fontSize:10, fontWeight:700, letterSpacing:'.06em', flexShrink:0 }}>
-            <span style={{ width:7, height:7, borderRadius:999, background:'#FF5A3C', animation:'pulse 1.5s infinite', display:'inline-block' }} />
-            LIVE
-          </span>
-        )}
+        <button onClick={() => navigate('/meetings')} style={{ background:'transparent', border:'none', color: FS.muted, fontSize:16, cursor:'pointer', padding:'0 6px 0 0', lineHeight:1, flexShrink:0 }}>←</button>
 
         {isPost && (
           <span style={{ fontSize:11, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.sage, flexShrink:0 }}>✓ Complete</span>
@@ -1127,8 +1141,8 @@ function MeetingDetailViewInner() {
             </div>
           ) : (
             <div style={{ display:'flex', alignItems:'center', gap:8, minWidth:0 }}>
-              <div style={{ fontSize:15, fontWeight:800, color: isLive ? '#fff' : FS.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{meeting.title}</div>
-              {canManage && !isLive && (
+              <div style={{ fontSize:15, fontWeight:800, color: FS.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{meeting.title}</div>
+              {canManage && (
                 <button
                   type="button"
                   onClick={startTitleEdit}
@@ -1137,7 +1151,7 @@ function MeetingDetailViewInner() {
                   Rename
                 </button>
               )}
-              {canEditVisibility && !isLive && (
+              {canEditVisibility && (
                 <button
                   type="button"
                   onClick={toggleVisibility}
@@ -1166,7 +1180,7 @@ function MeetingDetailViewInner() {
                   {meeting.visibility === 'private' ? 'Private' : 'Published'}
                 </button>
               )}
-              {canEditVisibility && !isLive && meeting.visibility === 'private' && (
+              {canEditVisibility && meeting.visibility === 'private' && (
                 <button
                   type="button"
                   onClick={() => setShareModalOpen(true)}
@@ -1192,7 +1206,7 @@ function MeetingDetailViewInner() {
               )}
             </div>
           )}
-          <div style={{ fontSize:11, color: isLive ? 'rgba(255,255,255,.55)' : FS.muted, marginTop:1 }}>
+          <div style={{ fontSize:11, color: FS.muted, marginTop:1 }}>
             {isPost ? `Duration: ${fmt(elapsed)} · ` : ''}{dateLabel}
             {meeting.recurrence_id && meeting.series_instance_num ? (
               <>
@@ -1205,7 +1219,7 @@ function MeetingDetailViewInner() {
 
           {/* Shared with departments */}
           {sharedSpaces.length > 0 && (
-            <div style={{ marginTop:8, fontSize:11, color: isLive ? 'rgba(255,255,255,.55)' : FS.muted }}>
+            <div style={{ marginTop:8, fontSize:11, color: FS.muted }}>
               Shared with:
               <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:4 }}>
                 {sharedSpaces.map((space) => (
@@ -1217,14 +1231,14 @@ function MeetingDetailViewInner() {
                       gap:6,
                       padding:'4px 8px',
                       borderRadius:6,
-                      background: isLive ? 'rgba(255,255,255,.1)' : (space.dept?.color || '#ccc') + '22',
-                      color: isLive ? '#fff' : (space.dept?.color || '#999'),
+                      background: (space.dept?.color || '#ccc') + '22',
+                      color: (space.dept?.color || '#999'),
                       fontSize:10,
                       fontWeight:600,
                     }}
                   >
                     {space.dept?.name || 'Unknown'}
-                    {canManage && !isLive && (
+                    {canManage && (
                       <button
                         type="button"
                         onClick={() => {
@@ -1260,26 +1274,6 @@ function MeetingDetailViewInner() {
 
         {/* Right controls */}
         <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0, flexWrap:'wrap' }}>
-          {/* Live: timer + record */}
-          {isLive && (
-            <>
-              <div style={{ textAlign:'right' }}>
-                <div style={{ fontFamily:"'DM Mono', monospace", fontSize:22, fontWeight:500, lineHeight:1, color:'#fff' }}>{fmt(elapsed)}</div>
-                <div style={{ fontSize:9, fontWeight:700, letterSpacing:'.08em', textTransform:'uppercase', color:'rgba(255,255,255,.4)', marginTop:2 }}>Elapsed</div>
-              </div>
-              {canRecord && (
-                <button
-                  onClick={() => { if (!recording) { setRecording(true); setActiveTab('audio') } else { setRecording(false) } }}
-                  style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'7px 13px', borderRadius:999, border:'none', fontFamily:'inherit', fontSize:11.5, fontWeight:700, cursor:'pointer', background: recording ? FS.coral : 'rgba(255,255,255,.15)', color:'#fff', transition:'all .2s' }}
-                >
-                  {recording
-                    ? <><span style={{ width:8, height:8, borderRadius:2, background:'#fff', display:'inline-block' }} /> Stop recording</>
-                    : <><span style={{ width:8, height:8, borderRadius:'50%', background:'#FF5A3C', display:'inline-block', animation:'pulse 1.5s infinite' }} /> Record</>
-                  }
-                </button>
-              )}
-            </>
-          )}
 
           {/* View in hub — hidden on mobile to reduce header clutter */}
           {!isMobile && (
@@ -1290,6 +1284,18 @@ function MeetingDetailViewInner() {
               <FolderOpen size={15} aria-hidden="true" />
               Minutes Hub
             </Link>
+          )}
+
+          {/* View minutes inline */}
+          {meeting && (
+            <button
+              onClick={() => setShowMinutesViewer(true)}
+              title="View meeting minutes in document format"
+              style={{ padding:'7px 13px', border:`1px solid ${FS.border}`, borderRadius:6, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}
+            >
+              <FileText size={15} aria-hidden="true" />
+              {!isMobile && 'View Minutes'}
+            </button>
           )}
 
           {/* Post: export buttons */}
@@ -1304,32 +1310,6 @@ function MeetingDetailViewInner() {
             </button>
           )}
 
-          {canManage && isLive && !confirmingEnd && (
-            <button
-              onClick={() => setConfirmingEnd(true)}
-              style={{ padding:'7px 14px', border:`1px solid rgba(255,255,255,.3)`, borderRadius:6, background:'rgba(255,255,255,.12)', color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}
-            >
-              <Square size={13} fill="currentColor" aria-hidden="true" />
-              End meeting
-            </button>
-          )}
-          {canManage && isLive && confirmingEnd && (
-            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-              <span style={{ fontSize:11, color:'rgba(255,255,255,.7)' }}>End &amp; save?</span>
-              <button
-                onClick={endMeeting}
-                style={{ padding:'5px 12px', border:'none', borderRadius:6, background:'#DC2626', color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
-              >
-                Yes
-              </button>
-              <button
-                onClick={() => setConfirmingEnd(false)}
-                style={{ padding:'5px 12px', border:`1px solid rgba(255,255,255,.3)`, borderRadius:6, background:'transparent', color:'#fff', fontFamily:'inherit', fontSize:12, fontWeight:700, cursor:'pointer' }}
-              >
-                Cancel
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1384,19 +1364,19 @@ function MeetingDetailViewInner() {
               ) : (
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
                   <div style={{ fontSize:12.5, fontWeight:700, color: FS.text }}>{dateLabel}</div>
-                  {canManage && !isLive && meeting.status !== 'completed' && (
+                  {canManage && (
                     <button
                       type="button"
                       onClick={startDateEdit}
-                      title="Reschedule"
+                      title="Edit date"
                       style={{ flexShrink:0, padding:'2px 7px', border:`1px solid ${FS.border}`, borderRadius:999, background: FS.surface, color: FS.muted, fontFamily:'inherit', fontSize:10, fontWeight:700, cursor:'pointer' }}
                     >
-                      Reschedule
+                      Edit date
                     </button>
                   )}
                 </div>
               )}
-              {canManage && !isLive ? (
+              {canManage ? (
                 <select
                   value={meeting.meeting_type ?? 'general'}
                   onChange={(e) => saveType(e.target.value)}
@@ -1409,17 +1389,6 @@ function MeetingDetailViewInner() {
                 </select>
               ) : (
                 <div style={{ fontSize:11.5, color: FS.muted }}>{meeting.meeting_type ?? 'General'} meeting</div>
-              )}
-              {isLive && (
-                <>
-                  <div style={{ marginTop:8, height:3, background: FS.borderL, borderRadius:999, overflow:'hidden' }}>
-                    <div style={{ width: timerPct, height:'100%', background: FS.navy, borderRadius:999, transition:'width .5s' }} />
-                  </div>
-                  <div style={{ fontSize:10, color: FS.muted, marginTop:4, display:'flex', justifyContent:'space-between' }}>
-                    <span>{fmt(elapsed)} elapsed</span>
-                    <span>90 min total</span>
-                  </div>
-                </>
               )}
             </div>
 
@@ -1462,16 +1431,13 @@ function MeetingDetailViewInner() {
                       <div style={{ fontSize:12, fontWeight:700, color: active ? FS.navy : FS.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.title}</div>
                       {item.mins && <div style={{ fontSize:10, color: FS.muted, marginTop:1 }}>{item.mins} min</div>}
                     </div>
-                    {active && isLive && (
-                      <span style={{ flexShrink:0, width:6, height:6, borderRadius:999, background: FS.coral, marginTop:5, animation:'pulse 1.5s infinite', display:'inline-block' }} />
-                    )}
                   </div>
                 )
               })}
             </div>
             )}
 
-            {isLive && currentIdx < agenda.length - 1 && (
+            {currentIdx < agenda.length - 1 && (
               <button
                 onClick={() => setCurrentIdx(i => i + 1)}
                 style={{ width:'100%', padding:'8px', borderRadius:8, border:`1px solid ${FS.navy}`, background:'transparent', color: FS.navy, fontSize:11, fontWeight:600, cursor:'pointer', marginBottom:14 }}
@@ -1589,9 +1555,6 @@ function MeetingDetailViewInner() {
                         Current agenda item{currentItem.mins ? ` · ${currentItem.mins} min allocated` : ''}
                       </div>
                     </div>
-                    {isLive && (
-                      <span style={{ fontSize:10, fontWeight:700, color: FS.coral, background: FS.coralL, borderRadius:999, padding:'3px 10px' }}>In progress</span>
-                    )}
                   </div>
                 )}
 
@@ -2048,8 +2011,7 @@ function MeetingDetailViewInner() {
                   startImmediately={recording}
                   stopImmediately={!recording}
                   onRecordingChange={(isRec) => {
-                    if (isRec) { if (!isLive) startLive() }
-                    else setRecording(false)
+                    if (!isRec) setRecording(false)
                   }}
                   onTranscriptionComplete={({ transcript }) => {
                     setMeeting(m => ({ ...m, summary: transcript }))
@@ -2517,6 +2479,17 @@ function MeetingDetailViewInner() {
           excludeUserIds={[meeting.created_by, profile?.id]}
           onClose={() => setShareModalOpen(false)}
           onChange={(next) => setMeeting((current) => ({ ...current, allowed_viewers: next }))}
+        />
+      )}
+
+      {showMinutesViewer && meeting && (
+        <MeetingMinutesViewer
+          meetingId={meeting.id}
+          initialMeeting={meeting}
+          currentUser={profile}
+          exportPdf={exportPdf}
+          onViewMeetingLog={() => setShowMinutesViewer(false)}
+          onClose={() => setShowMinutesViewer(false)}
         />
       )}
     </div>
