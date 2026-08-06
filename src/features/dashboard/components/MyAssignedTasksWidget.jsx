@@ -29,6 +29,7 @@ export default function MyAssignedTasksWidget({ userId }) {
           .select('id, title, due_date, status_definition:task_status_definitions!status_id(category, color, name)')
           .eq('assignee_id', userId)
           .eq('is_personal', false)
+          .is('parent_task_id', null)
           .order('due_date', { ascending: true, nullsFirst: false })
           .limit(12)
 

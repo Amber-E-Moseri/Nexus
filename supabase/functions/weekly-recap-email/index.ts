@@ -240,7 +240,7 @@ Deno.serve(async (req) => {
   // 3a. task_assignees table (current multi-assignee pattern)
   const { data: assigneeRows } = await supabase
     .from('task_assignees')
-    .select('user_id, task:task_id(id, title, due_date, status_definition:status_id(category))')
+    .select('user_id, task:task_id(id, title, due_date, parent_task_id, status_definition:status_id(category))')
     .in('user_id', allUserIds)
 
   // 3b. Legacy assignee_id column (personal tasks + older tasks)
@@ -249,14 +249,15 @@ Deno.serve(async (req) => {
     .select('id, title, assignee_id, due_date, status_definition:status_id(category)')
     .in('assignee_id', allUserIds)
     .not('assignee_id', 'is', null)
+    .is('parent_task_id', null)
 
   // Merge both sources into user → taskMap (deduplicated by task ID)
   type TaskEntry = { title: string; due_date: string | null; category: string | null }
   const userTaskMaps: Record<string, Map<string, TaskEntry>> = {}
 
   for (const row of assigneeRows ?? []) {
-    const t = row.task as { id: string; title: string; due_date: string | null; status_definition?: { category?: string } | null } | null
-    if (!t || !row.user_id) continue
+    const t = row.task as { id: string; title: string; due_date: string | null; parent_task_id: string | null; status_definition?: { category?: string } | null } | null
+    if (!t || !row.user_id || t.parent_task_id) continue
     const map = (userTaskMaps[row.user_id] ??= new Map())
     map.set(t.id, {
       title: t.title,

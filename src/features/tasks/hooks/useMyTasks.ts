@@ -138,7 +138,7 @@ export function useMyTasks(userId: string, filters?: UseMyTasksFilter, dateRange
       // Sprint IDs are included so tasks from custom sprints (no department_id) reach
       // this hook. The myTasks memo in MyTasks.jsx then trims to assignee_id/task_assignees,
       // so only tasks actually assigned to the user surface in the Mine tab.
-      let query = supabase.from('tasks').select(TASK_SELECT).is('deleted_at', null)
+      let query = supabase.from('tasks').select(TASK_SELECT).is('deleted_at', null).is('parent_task_id', null)
 
       // Filter by user. Quick-view scopes are assignee-only; the default view
       // also includes tasks the user created (for the Delegated tab).
