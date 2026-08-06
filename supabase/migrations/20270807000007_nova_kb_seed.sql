@@ -1615,3 +1615,199 @@ Your updated photo and name will appear everywhere in Nexus: in task assignees, 
   'general',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member']
 );
+
+-- =====================================================================
+-- CORE FEATURE ENTRIES (detailed walkthrough style)
+-- =====================================================================
+
+insert into public.nova_kb_entries
+  (slug, question, answer, feature_area, applicable_roles)
+values
+
+(
+  'flock-crm-what-is',
+  'What is Flock CRM?',
+  'Flock CRM is a pastoral outreach tool built into Nexus for tracking and managing your relationships with contacts in your care. Think of it as a personal journal combined with a to-do list for people you''re following up with.
+
+**What it does:**
+- Stores a list of people you''re regularly in touch with — pastors, volunteers, or anyone you''re doing pastoral care for
+- Tracks the last time you reached them (call, message, visit, prayer)
+- Lets you add quick notes about conversations or prayer requests
+- Shows you who''s due for a follow-up, so you never lose track of someone important
+- Automatically suggests people overdue for contact based on how often you normally reach out to them
+
+**How it''s scoped to you:**
+- You can only see people assigned to you or to your pastoral scope — you won''t see another pastor''s contact list unless they share it with you
+- If your role is pastor, Flock is visible in the sidebar under your name; if you''re staff, you''ll see it if you have pastoral responsibilities
+
+**Real example:** You haven''t called Sarah in two weeks; Flock flags her as "Due today." You click her card, log a quick call note ("Prayer for her job interview"), and Flock resets the timer for the next expected follow-up.',
+  'flock',
+  ARRAY['super_admin','regional_secretary','pastor']
+),
+
+(
+  'planner-what-is',
+  'What is the Planner?',
+  'The Planner is a time-blocking tool for visualizing your week at a glance — not a calendar sync like Google Calendar, but a personal weekly grid where you control exactly how you spend your time.
+
+**What it does:**
+- Shows your week (Monday–Sunday) as a grid with hourly time blocks
+- Lets you drag your assigned tasks into specific time slots to plan when you''ll work on them
+- Warns you if you''ve over-committed (e.g. booked 40 hours of work into 20 available hours) so you catch conflicts early
+- Shows your "Done this week" count so you can see progress as you complete tasks
+
+**How tasks connect to the Planner:**
+- Any task assigned to you shows up on the left sidebar ready to be time-blocked
+- Dragging a task onto a time slot creates a "time block" — a reservation of your time for that work
+- Completing the task in Nexus (marking it Done) automatically closes out the time block, so your calendar stays in sync with reality
+- You can unlink a task from its time block if plans change, so the task isn''t lost — it just goes back to "unscheduled"
+
+**Mobile note:** On phones, the Planner shows one day at a time with a sidebar to navigate the week, since the full grid is too wide to fit.
+
+**Common scenario:** You have 5 tasks due this week. The Planner helps you figure out when you can actually do them — if you only have 10 hours free but 30 hours of work, you''ll see the red warning before Wednesday rolls around and you''re drowning.',
+  'planner',
+  ARRAY['super_admin','regional_secretary','dept_lead','pastor','member']
+),
+
+(
+  'planner-how-to-use',
+  'How do I time-block my tasks in the Planner?',
+  '**Step 1: Open the Planner and see your week**
+- Click Planner in the sidebar (or tap the icon on mobile)
+- You''ll see a weekly grid (Mon–Sun) with time slots from early morning to evening
+- The left sidebar lists all tasks assigned to you that aren''t yet time-blocked
+
+**Step 2: Drag a task into a time slot**
+- Find the task you want to schedule in the left sidebar
+- Click and hold the task, then drag it onto the day and time you want to work on it
+- Drop it — it snaps into that time slot and reserves that time for that task
+- The task now shows in the grid with its priority color and title
+
+**Step 3: Adjust the block if needed**
+- Once a task is in a slot, you can drag it to a different day/time by dragging again
+- You can also resize a block by dragging its bottom edge — if a task will take 2 hours, make the block 2 hours tall
+- If you change your mind, drag it back to the sidebar (or click the X) to unlink it from time and free up that slot
+
+**Step 4: Watch for warnings**
+- If you''ve booked more work than hours available in a day (or week), the Planner shows a warning banner at the top
+- This means you''ve over-committed — you''ll need to either move tasks to another day, break them up, or delegate
+- Red warnings are the most urgent; yellow warnings are cautions you can often work with
+
+**Step 5: Complete tasks as you go**
+- As you finish a task in Nexus (mark it Done), its time block automatically closes
+- The block disappears from the Planner, freeing up that time visually
+- You''ll see your "Done this week" count go up
+
+**Pro tip:** The Planner isn''t a strict schedule — it''s a planning tool. You can move blocks around up to the day-of if something urgent comes up. The goal is to help you see realistic capacity for the week, not to lock you into a rigid schedule.',
+  'planner',
+  ARRAY['super_admin','regional_secretary','dept_lead','pastor','member']
+),
+
+(
+  'personal-list-what-is',
+  'What is my Personal List?',
+  'Your Personal List is a private space for tasks and notes that aren''t part of the shared department work. Think of it as your personal to-do list within Nexus — no one else sees it, and it doesn''t show up in department task boards.
+
+**What it''s for:**
+- Personal reminders (e.g. "call mom," "buy groceries")
+- Personal development tasks (e.g. "read chapter 3 of X book")
+- Private notes to yourself that you want to keep in one place but don''t need to share with your team
+
+**How it works:**
+- Your Personal List appears in the sidebar under your name
+- You can add tasks directly to it (no approval needed; it''s just for you)
+- Tasks in your Personal List won''t show up when your team looks at the task board
+- You can still time-block Personal List tasks in the Planner if you want to reserve time for personal work
+
+**Important:** Your Personal List is read-only to others — even super_admin can''t see the contents. Only you can add, edit, or delete tasks here.',
+  'tasks',
+  ARRAY['super_admin','regional_secretary','dept_lead','pastor','member']
+),
+
+(
+  'personal-list-sublists',
+  'What are sublists, and how do I organize my Personal List?',
+  'Sublists let you organize your Personal List into categories. Instead of one flat list of everything, you can group related tasks together.
+
+**How sublists work:**
+- A sublist is like a folder within your Personal List — it has its own name and can contain multiple tasks
+- Example sublists: "Health & Fitness," "Learning," "Home Projects," "Ministry Ideas"
+- Tasks live in sublists, not directly in the Personal List itself
+
+**How to create and use sublists:**
+1. Open your Personal List
+2. Click "+ New Sublist" (or similar option, depending on the UI)
+3. Give it a name (e.g. "Reading goals")
+4. Add tasks to it by clicking "+ New task" within that sublist
+5. Each task in the sublist can have its own due date, priority, and notes — just like a regular task
+
+**Why sublists help:**
+- **Organization:** Group similar tasks together so you can focus on one area at a time (e.g. look only at "Health" tasks)
+- **Less overwhelming:** Instead of seeing a huge list of 50 personal tasks at once, you see them grouped by category
+- **Quick scanning:** If you want to focus on "Learning" this week, you can expand only that sublist and ignore the others
+
+**Can I move tasks between sublists?** Yes — drag and drop a task to move it to a different sublist, or edit the task and reassign it.',
+  'tasks',
+  ARRAY['super_admin','regional_secretary','dept_lead','pastor','member']
+),
+
+(
+  'meetings-what-is',
+  'What are Meetings in Nexus?',
+  'Meetings is a module for tracking, documenting, and coordinating your department''s regular gatherings. It goes beyond just "when do we meet" — it captures agendas, minutes, action items, and attendance, all in one place.
+
+**What Meetings does:**
+- Lists all scheduled meetings for your department (or ones you''re invited to)
+- Lets you build agendas before the meeting
+- Records meeting minutes and action items during the meeting
+- Tracks who attended (including whether they were planned to attend but didn''t show)
+- Assigns follow-up tasks to people based on what was discussed
+- Exports meeting docs and minutes as PDFs to save or share
+
+**Who can see what:**
+- Everyone in your department can see the meetings your department holds
+- If a meeting is cross-department (involves multiple departments), visibility depends on who''s invited
+- Action items assigned to you show up in your task list so you don''t forget the follow-up
+
+**Real workflow:** Your team meets Monday morning. You build an agenda in Nexus on Friday. During the meeting, the person taking notes captures the key discussion points. You assign one action item to yourself and another to a team member. Both action items automatically appear in their task lists, and you can export the full minutes as a PDF afterward.',
+  'meetings',
+  ARRAY['super_admin','regional_secretary','dept_lead','pastor','member']
+),
+
+(
+  'meetings-how-to-use',
+  'How do I use Meetings to run a meeting?',
+  '**Before the meeting: Build an agenda**
+1. Click Meetings in the sidebar
+2. Click "+ New Meeting" and fill in:
+   - Title (e.g. "Weekly Staff Sync")
+   - Date and time
+   - Attendees (everyone expected to be there)
+   - Meeting type (if your department has configured types, like "standup" or "planning")
+3. Click "+ Add agenda item" to list what you''ll discuss
+4. Agenda items are visible to all attendees before the meeting so everyone can prepare
+
+**During the meeting: Record minutes**
+1. Open the meeting from the Meetings list
+2. Click "Live Minutes Mode" or "Start documenting"
+3. For each agenda item:
+   - Click the item to highlight it
+   - Type notes on the discussion (key decisions, points discussed, questions raised)
+   - If someone raised an action item, click "+ Add action item" and fill in: what needs to be done, who it''s assigned to, and when it''s due
+4. If available, enable transcription: Nexus can record audio and create a transcript of the meeting
+5. Click "End meeting" when done
+
+**After the meeting: Export and assign**
+1. Review the meeting minutes you just recorded
+2. Click "Export to PDF" to save or share the full meeting doc
+3. Action items are automatically turned into tasks and assigned to the people you listed — they see them in their task list and can mark them complete
+4. If you need to add more action items after the fact, you can edit the meeting record
+
+**Optional: Share the meeting**
+- If this meeting involved people from other departments, you can explicitly share the meeting record with them
+- Shared meetings show up in their "Meetings" view too
+
+**Pro tip:** If your team regularly meets (e.g. Monday staff meeting), you can create a recurring meeting so Nexus remembers to create it automatically each week.',
+  'meetings',
+  ARRAY['super_admin','regional_secretary','dept_lead','pastor','member']
+);
