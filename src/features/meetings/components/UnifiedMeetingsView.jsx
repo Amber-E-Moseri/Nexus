@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Trash2 } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Trash2, FileText } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../hooks/useAuth'
 import { useMeetings } from '../MeetingsContext'
 import { searchMeetings } from '../lib/meetings'
+import MeetingMinutesViewer from './MeetingMinutesViewer'
 import StatsCards from './StatsCards'
 import DepartmentFilter from './DepartmentFilter'
 import LoadingSpinner from '../../../components/ui/LoadingSpinner'
@@ -138,6 +139,7 @@ export default function UnifiedMeetingsView({
   onStartLive,
 }) {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { profile } = useAuth()
   const { meetings, loading, removeMeeting, hasMore, loadMore, reload: reloadMeetings, totalCount: totalMeetingCount } = useMeetings()
   const [activeType, setActiveType] = useState('all')
@@ -155,6 +157,20 @@ export default function UnifiedMeetingsView({
   const searchDebounce = useRef(null)
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [showScheduleModal, setShowScheduleModal] = useState(false)
+
+  const viewerMeetingId = searchParams.get('minutes') || null
+
+  function openViewer(meetingId) {
+    const next = new URLSearchParams(searchParams)
+    next.set('minutes', meetingId)
+    setSearchParams(next)
+  }
+
+  function closeViewer() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('minutes')
+    setSearchParams(next)
+  }
 
   // Server-side content search (debounced, fires when search >= 2 chars)
   useEffect(() => {
@@ -482,8 +498,8 @@ export default function UnifiedMeetingsView({
                       key={meeting.id}
                       role="button"
                       tabIndex={0}
-                      onClick={() => navigate(`/meetings/${meeting.id}`)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/meetings/${meeting.id}`) }}
+                      onClick={() => openViewer(meeting.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') openViewer(meeting.id) }}
                       onMouseEnter={() => setHoveredId(meeting.id)}
                       onMouseLeave={() => setHoveredId((current) => (current === meeting.id ? null : current))}
                       aria-label={`${meeting.title}, ${new Date(meeting.date).toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}`}
@@ -589,7 +605,29 @@ export default function UnifiedMeetingsView({
                           <Trash2 size={14} />
                         </button>
                       )}
-                      <span style={{ color: 'var(--ink-3)', fontSize: 16, flexShrink: 0 }}>›</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openViewer(meeting.id) }}
+                        aria-label={`View minutes for ${meeting.title}`}
+                        style={{
+                          flexShrink: 0,
+                          display: 'flex', alignItems: 'center', gap: 4,
+                          padding: '4px 10px',
+                          borderRadius: 7,
+                          border: '1px solid var(--border-1)',
+                          background: 'white',
+                          color: 'var(--purple-700)',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          opacity: isHovered ? 1 : 0,
+                          transition: 'opacity .13s',
+                        }}
+                      >
+                        <FileText size={12} />
+                        Minutes
+                      </button>
                     </div>
                   )
                 })}
@@ -599,7 +637,7 @@ export default function UnifiedMeetingsView({
           <CardGalleryView
             meetings={filteredMeetings.sort((a, b) => new Date(b.date) - new Date(a.date))}
             selectedMeeting={null}
-            onSelectMeeting={(m) => navigate(`/meetings/${m.id}`)}
+            onSelectMeeting={(m) => openViewer(m.id)}
             title=""
             emptyMessage="No meetings in this category"
             showAttendance
@@ -635,6 +673,18 @@ export default function UnifiedMeetingsView({
             setShowScheduleModal(false)
             reloadMeetings()
           }}
+        />
+      )}
+
+      {viewerMeetingId && (
+        <MeetingMinutesViewer
+          meetingId={viewerMeetingId}
+          currentUser={profile}
+          onViewMeetingLog={() => {
+            closeViewer()
+            navigate(`/meetings/${viewerMeetingId}`)
+          }}
+          onClose={closeViewer}
         />
       )}
     </div>

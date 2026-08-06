@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { X, Download, Eye, Printer } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
+import { useToast } from '../../../context/ToastContext'
 import { canViewMeetingLog } from '../lib/meetingPermissions'
 
 // Highlights all occurrences of `query` in `text` with <mark> spans.
@@ -71,6 +72,7 @@ function SectionHeader({ children }) {
 
 export default function MeetingMinutesViewer({ meetingId, initialMeeting, searchQuery = '', onClose, currentUser = null, exportPdf = null, onViewMeetingLog = null }) {
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const [meeting, setMeeting] = useState(initialMeeting || null)
   const [agenda, setAgenda] = useState([])
   const [loading, setLoading] = useState(!initialMeeting)
@@ -78,6 +80,42 @@ export default function MeetingMinutesViewer({ meetingId, initialMeeting, search
   const overlayRef = useRef(null)
 
   const authorized = canViewMeetingLog({ user: currentUser, meeting })
+
+  async function handleInternalExport() {
+    if (!meeting) return
+    setExporting(true)
+    try {
+      const { generateMinutesPDF, generateMinutesPDFFilename } = await import('../../../lib/meetings/pdfGeneration')
+      const splitLines = (text) => (text || '').split('\n').map((l) => l.replace(/^[•\-*]\s*/, '').trim()).filter(Boolean)
+      const notesPlainText = meeting.notes_text || meeting.minutes || ''
+      const blob = await generateMinutesPDF({
+        summary: meeting.meeting_notes || notesPlainText,
+        decisions: splitLines(meeting.decisions || ''),
+        nextSteps: splitLines(meeting.next_steps || ''),
+        detailedNotes: notesPlainText,
+        actionItems: meeting.extraction_result?.action_items ?? [],
+        openItems: meeting.extraction_result?.open_items ?? [],
+        agenda: [],
+        attendees: (meeting.meeting_attendance || []).map((a) => ({
+          name: a.attendee?.name || 'Unknown',
+          status: a.status || 'present',
+        })),
+      }, meeting)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = generateMinutesPDFFilename(meeting)
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('Minutes PDF downloaded', { tone: 'success' })
+    } catch (err) {
+      showToast(`PDF export failed: ${err.message}`, { tone: 'error' })
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleExport = exportPdf ?? handleInternalExport
 
   useEffect(() => {
     if (!meetingId) return
@@ -193,16 +231,9 @@ export default function MeetingMinutesViewer({ meetingId, initialMeeting, search
           </button>
 
           {/* Download PDF */}
-          {exportPdf && (
+          {meeting && (
             <button
-              onClick={async () => {
-                setExporting(true)
-                try {
-                  await exportPdf()
-                } finally {
-                  setExporting(false)
-                }
-              }}
+              onClick={handleExport}
               disabled={exporting}
               title="Download PDF"
               style={{

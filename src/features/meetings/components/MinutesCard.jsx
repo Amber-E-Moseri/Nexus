@@ -28,10 +28,10 @@ export default function MinutesCard({ meeting, snippet, onClick, readOnly = fals
   function handleClick() {
     if (readOnly) return
     if (onClick) { onClick(meeting); return }
-    if (canNavigate) {
+    if (onOpenViewer) {
+      onOpenViewer(meeting)
+    } else if (canNavigate) {
       navigate(`/meetings/${meeting.id}?tab=minutes`)
-    } else {
-      onOpenViewer?.(meeting)
     }
   }
 
