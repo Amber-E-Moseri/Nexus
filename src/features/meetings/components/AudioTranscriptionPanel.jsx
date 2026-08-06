@@ -20,7 +20,10 @@ function displayAudioUploadName(fileName, index) {
   }
   return fileName
 }
-const STORAGE_LIMIT = 49 * 1024 * 1024 // 49MB — just under Supabase Storage 50MB limit
+// Files above this threshold stream directly to the Whisper edge function instead of
+// going through Deepgram. Whisper handles noisy/fragmented/multi-speaker meeting audio
+// much better. Only very small clips (quick tests, short voice memos) stay on Deepgram.
+const STORAGE_LIMIT = 5 * 1024 * 1024 // 5MB — ~2-3 min of audio
 
 export default function AudioTranscriptionPanel({
   meetingId,

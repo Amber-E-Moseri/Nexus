@@ -63,7 +63,6 @@ export function useAudioPlayer(sentences, voice, speed, initialIdx = 0, onSenten
 
   function play(idx = currentIdx) {
     r.current.isPlaying = true
-    r.current.voice = voice
     setIsPlaying(true)
     doPlay(idx)
   }

@@ -104,6 +104,16 @@ serve(async (req) => {
   );
   if (authErr || !user) return json({ error: "Invalid token" }, 401);
 
+  // ── credit check ─────────────────────────────────────────────────────────
+  const { data: creditRow } = await supabase
+    .from("reader_credits")
+    .select("balance_mins")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!creditRow || creditRow.balance_mins <= 0) {
+    return json({ status: "failed", message: "Insufficient credits" }, 402);
+  }
+
   // ── validate input ───────────────────────────────────────────────────────
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   if (!openaiKey) return json({ error: "OPENAI_API_KEY not configured" }, 500);
@@ -130,7 +140,8 @@ serve(async (req) => {
   // ── CASE A: ready ────────────────────────────────────────────────────────
   if (row?.status === "ready" && row.storage_path) {
     // Increment access_count atomically via RPC (defined in migration)
-    await supabase.rpc("increment_tts_access", { p_cache_key: cacheKey });
+    const { error: rpcErr } = await supabase.rpc("increment_tts_access", { p_cache_key: cacheKey });
+    if (rpcErr) console.error("[generate-tts] increment_tts_access failed", rpcErr.message);
 
     const { data: signedData, error: signErr } = await supabase.storage
       .from(BUCKET)
@@ -183,7 +194,7 @@ serve(async (req) => {
 
   // ── CASE D: not found — insert ───────────────────────────────────────────
   else if (!row) {
-    const { data: inserted } = await supabase
+    const { data: inserted, error: insertErr } = await supabase
       .from("tts_cache")
       .insert({
         cache_key: cacheKey,
@@ -201,6 +212,10 @@ serve(async (req) => {
       })
       .select("id");
 
+    if (insertErr) {
+      console.error("[generate-tts] cache insert error", insertErr.code, insertErr.message);
+      return json({ status: "failed", message: "Cache initialization failed" }, 500);
+    }
     if (!inserted?.length) return json({ status: "generating" }); // concurrent insert won
     // fall through to GENERATE
   }

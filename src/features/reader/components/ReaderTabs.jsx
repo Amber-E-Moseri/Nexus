@@ -17,7 +17,14 @@ export default function ReaderTabs({
   pdfBuffer, totalPages, currentPage, sentencePageMap,
 }) {
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('immerse-tab') || 'Read')
-  const isDesktop = window.innerWidth >= 768
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 768)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const handler = (e) => setIsDesktop(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
 
   // Track the page the PDF view is currently on so position can be synced back
   const pdfPageRef = useRef(currentPage)

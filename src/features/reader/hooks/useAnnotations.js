@@ -12,8 +12,10 @@ export function useAnnotations(bookId) {
     Promise.all([
       supabase.from('reader_highlights').select('*').eq('book_id', bookId).order('created_at'),
       supabase.from('reader_notes').select('*').eq('book_id', bookId).order('created_at'),
-    ]).then(([{ data: hl }, { data: nt }]) => {
+    ]).then(([{ data: hl, error: hlErr }, { data: nt, error: ntErr }]) => {
       if (cancelled) return
+      if (hlErr) console.error('highlights fetch failed', hlErr)
+      if (ntErr) console.error('notes fetch failed', ntErr)
       setHighlights(
         (hl ?? []).map((h) => ({ id: h.id, type: 'highlight', sentenceIdx: h.sentence_idx, text: h.text, createdAt: h.created_at }))
       )
@@ -44,10 +46,14 @@ export function useAnnotations(bookId) {
   }
 
   function removeAnnotation(id) {
+    const isHighlight = highlights.some((h) => h.id === id)
     setHighlights((prev) => prev.filter((h) => h.id !== id))
     setNotes((prev) => prev.filter((n) => n.id !== id))
-    supabase.from('reader_highlights').delete().eq('id', id).then()
-    supabase.from('reader_notes').delete().eq('id', id).then()
+    if (isHighlight) {
+      supabase.from('reader_highlights').delete().eq('id', id).then()
+    } else {
+      supabase.from('reader_notes').delete().eq('id', id).then()
+    }
   }
 
   return { highlights, notes, addHighlight, addNote, removeAnnotation }

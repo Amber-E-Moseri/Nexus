@@ -135,8 +135,9 @@ function chaptersFromScoring(sentences, textItems, pageSizes) {
   }
   const deduped = [...byIdx.values()].sort((a, b) => a.idx - b.idx)
 
-  // Sparse-but-nonzero: 1–2 headings in a long book is likely a detection miss
-  if (deduped.length > 0 && deduped.length < 2 && sentences.length > 50) {
+  // Sparse-but-nonzero: too few headings relative to book length is likely a detection miss
+  const sparseThreshold = Math.max(2, Math.round(sentences.length / 150))
+  if (deduped.length > 0 && deduped.length < sparseThreshold && sentences.length > 50) {
     console.warn('[chapters] Only', deduped.length, 'heading(s) detected in', sentences.length, 'sentences — falling back to Part N chunking')
     return []
   }

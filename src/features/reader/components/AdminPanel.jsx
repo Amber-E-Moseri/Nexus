@@ -59,21 +59,6 @@ export default function AdminPanel({ myBooks, onBack }) {
     }
   }
 
-  async function handleShare() {
-    if (!selectedBook || !shareTarget) return
-    setSharing(true)
-    try {
-      await shareBook(selectedBook, shareTarget.id, selectedTag || null)
-      setHistory((prev) => [...prev, { source_book_id: selectedBook.id, shared_with: shareTarget.id }])
-      showToast(`"${selectedBook.title}" shared with ${shareTarget.name ?? shareTarget.email}`)
-      setShareTarget(null); setSelectedTag('')
-    } catch (err) {
-      showToast(err?.message ?? 'Failed to share book', false)
-    } finally {
-      setSharing(false)
-    }
-  }
-
   async function handleShareToUser(book, user, tag) {
     setSharing(true)
     try {
@@ -236,19 +221,6 @@ export default function AdminPanel({ myBooks, onBack }) {
     </div>
   )
 
-  async function handleShareTo(u) {
-    setShareTarget(u)
-    setSharing(true)
-    try {
-      await shareBook(selectedBook, u.id, selectedTag || null)
-      setHistory((prev) => [...prev, { source_book_id: selectedBook.id, shared_with: u.id }])
-      showToast(`"${selectedBook.title}" shared with ${u.name}`)
-    } catch (err) {
-      showToast(err?.message ?? 'Failed to share book', false)
-    } finally {
-      setSharing(false); setShareTarget(null)
-    }
-  }
 }
 
 const labelStyle = { display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--im-text-dim)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 5, fontFamily: 'Inter, sans-serif' }

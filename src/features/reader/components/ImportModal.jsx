@@ -9,7 +9,7 @@ export default function ImportModal({ onClose, onImport }) {
   const [error, setError] = useState('')
   const [isImporting, setIsImporting] = useState(false)
 
-  async function handlePdfFile(file) {
+  async function handlePdfFile(file, fileHandle) {
     setIsImporting(true)
     setError('')
     try {
@@ -23,7 +23,7 @@ export default function ImportModal({ onClose, onImport }) {
       const title = file.name.replace(/\.pdf$/i, '')
       const words = countWords(text)
       console.log('Importing book:', title, 'words:', words, 'estimated:', estimateMinutes(words))
-      onImport({ title, text, source: 'pdf', pdfBuffer: buffer, pdfTextItems: textItems, pdfPageSizes: pageSizes, pdfOutline: outline, sentences, wordCount: words, estimatedMinutes: estimateMinutes(words) })
+      onImport({ title, text, source: 'pdf', pdfBuffer: buffer, fileHandle: fileHandle ?? null, pdfTextItems: textItems, pdfPageSizes: pageSizes, pdfOutline: outline, sentences, wordCount: words, estimatedMinutes: estimateMinutes(words) })
     } catch (importError) {
       console.error('Import error:', importError)
       setError(importError.message || 'Unable to import this PDF.')
@@ -35,8 +35,8 @@ export default function ImportModal({ onClose, onImport }) {
   async function handleBrowse() {
     if (hasFileSystemAccess) {
       try {
-        const { file } = await openPdfWithHandle()
-        await handlePdfFile(file)
+        const { file, handle } = await openPdfWithHandle()
+        await handlePdfFile(file, handle)
       } catch (err) {
         if (err?.name !== 'AbortError') console.error(err)
       }

@@ -1,172 +1,130 @@
-# BLW CAN NEXUS Documentation
+# Nexus Documentation
 
-Welcome to the NEXUS project documentation. This directory contains comprehensive guides, implementation notes, audits, and deployment procedures organized by category.
-
-## Directory Structure
-
-### 🚀 Setup & Configuration
-Getting started guides and environment setup.
-- `setup/CLAUDE_API_SETUP.md` - Anthropic Claude API integration setup
-- `setup/DEEPGRAM_SETUP.md` - Deepgram speech-to-text configuration
-
-### 🏗️ Architecture & Design
-High-level system architecture and structure documentation.
-- `architecture/REPOSITORY_STRUCTURE.md` - Repository organization and folder layout
-- `architecture/PUBLIC_REPORT_ARCHITECTURE.md` - Meeting report generation architecture
-- `decision-catalog.md` - 35+ documented architectural decisions with rationale
-- `blw-canada-os-prd-v2.1.md` - Product requirements document
-
-### 📋 Features & Implementation
-Feature-specific implementation guides and checklists.
-- `features/NOTIFICATIONS_IMPLEMENTATION.md` - Notifications system setup
-- `features/NOTIFICATIONS_QUICK_START.md` - Quick start for notifications
-- `features/INVITATION_IMPLEMENTATION.md` - User invitation system
-- `features/TEMPORARY_SPRINT_INVITES_IMPLEMENTATION.md` - Temporary sprint invite mechanism
-- `features/SPRINT_TEAMS_IMPLEMENTATION_SUMMARY.md` - Sprint teams feature summary
-- `features/SPRINT_ENHANCEMENT_STATUS.md` - Sprint enhancement tracking
-- `features/SPRINT_MODAL_ENHANCEMENT_SUMMARY.md` - Sprint modal improvements
-- `features/COMMUNICATIONS_SYSTEM_COMPLETE.md` - Email communications system
-- `features/NATIVE_COMMUNICATIONS_README.md` - Native Nexus communications hub (replaces iframe; includes mailing-list signup)
-- `features/TASK_FOLLOWERS_IMPLEMENTATION.md` - Task followers + activity-feed fan-out
-- `features/ICAL_FEED.md` - Personal iCal calendar feed + token regeneration
-- `features/CALENDAR_IMPLEMENTATION_GUIDE.md` - Calendar feature implementation
-- `features/CALENDAR_STATUS_2026_06_25.md` - Current calendar feature status
-- `features/CALENDAR_WEEK_1_2_SUMMARY.md` - Calendar Phase 1-2 summary
-- `features/CALENDAR_WEEK_3_SUMMARY.md` - Calendar Phase 3 summary
-- `features/CALENDAR_WEEK_4_SUMMARY.md` - Calendar Phase 4 summary
-- `features/MEETINGS_CHECKLIST_UPDATED.md` - Meetings feature checklist
-- `features/PLANNER_FILTERS_IMPLEMENTATION.md` - Planner filter implementation
-- `features/WEEKLY_WINS.md` - Weekly Wins board (leadership summary, ships with Planner)
-- `features/MILESTONE_INTEGRATION_SUMMARY.md` - Milestone integration overview
-- `features/MILESTONE_INTEGRATION_VERIFICATION.md` - Milestone verification
-
-### 🚀 Deployment & Guides
-Deployment procedures, setup guides, and admin documentation.
-- `deployment/WEBPUSH_SETUP.md` - Web push notifications configuration
-- `deployment/WEBPUSH_DEPLOYMENT_SUMMARY.md` - Web push deployment guide
-- `deployment/SPRINT_TEAMS_DEPLOYMENT_GUIDE.md` - Sprint teams deployment
-- `deployment/DEPLOYMENT_CHECKLIST.md` - Pre-deployment verification checklist
-- `ADMIN_MANAGER_GUIDE.md` - Admin and manager user guide
-- `PROGRAMS_MANAGER_GUIDE.md` - Programs manager guide
-- `REGIONAL_SECRETARY_GUIDE.md` - Regional secretary guide
-- `GOOGLE_CALENDAR_SETUP.md` - Google Calendar integration setup
-- `CALENDAR_ADMIN_WORKFLOWS.md` - Calendar administrative workflows
-- `USER_INTEGRATIONS_SETUP.md` - User integrations configuration
-- `apps-script-integration-guide.md` - Google Apps Script integration
-- `ELVANTO_ATTENDANCE_IMPORT.md` - Elvanto attendance import
-- `CI_CD_IMPLEMENTATION_SUMMARY.md` - CI/CD pipeline implementation
-- `CI_CD_PIPELINE.md` - CI/CD pipeline documentation
-- `CI_SETUP_QUICKSTART.md` - CI/CD quick setup guide
-
-### 📊 Phases & Milestones
-Phase-specific implementation and validation guides.
-- `phases/PHASE_1_COMPLETION.md` - Phase 1 completion checklist
-- `phases/PHASE_2_COMPLETE.md` - Phase 2 completion
-- `phases/PHASES_3B_3C_COMPLETE.md` - Phases 3B & 3C completion
-- `phases/PHASES_3B_3C_STATUS.md` - Phases 3B & 3C status
-- `phases/MILESTONE_PHASE_1_CHECKLIST.md` - Milestone Phase 1
-- `phases/BUILD_COMPLETE_CHECKLIST.md` - Build completion checklist
-- `phases/IMPLEMENTATION_CHECKLIST.md` - Implementation checklist
-- `phases/PHASE1_BUILD_COMPLETE.md` - Phase 1 build completion
-- `phases/PHASE1_BUILD_PROGRESS.md` - Phase 1 progress tracking
-- `phases/PHASE1_VALIDATION_CHECKLIST.md` - Phase 1 validation
-- `phases/PHASE_3D_CHECKLIST.md` - Phase 3D checklist
-- `phases/PHASE_3D_IMPLEMENTATION.md` - Phase 3D implementation
-- `phases/NEXUS_MEETINGS_PHASE_0_AUDIT.md` - Meetings Phase 0 audit
-- `phases/NEXUS_MEETINGS_PHASE1_COMPLETION_PROMPT.md` - Meetings Phase 1 completion
-- `phases/NEXUS_MEETINGS_PHASE2_BUILD_PROMPT.md` - Meetings Phase 2 build
-- `phase-1-7-hardening-e2e-validation.md` - Phase 1-7 hardening validation
-- `phase-2-meeting-os-live-validation.md` - Phase 2 Meeting OS validation
-- `phase-3-task-maturity-live-validation.md` - Phase 3 task maturity validation
-- `phase-3-task-maturity-completion-report-template.md` - Phase 3 completion template
-- `phase-4-sprints-live-validation.md` - Phase 4 sprints validation
-- `phase-5-calendar-notifications-live-validation.md` - Phase 5 calendar validation
-- `phase-6-api-automations-live-validation.md` - Phase 6 API/automations validation
-- `phase-7-final-live-validation.md` - Phase 7 final validation
-
-### 📊 Reports & Audits
-Status reports, audit documents, and investigations.
-- `audits/COMMUNICATIONS_AUDIT.md` - Communications system audit
-- `audits/DATA_AUDIT_RESULTS.md` - Data integrity audit results
-- `audits/SCHEMA_FINDINGS_SUMMARY.md` - Database schema findings
-- `investigations/RSVP_SCHEMA_INVESTIGATION.md` - RSVP system investigation
-- `reports/PHASES_1_4_COMPLETE.md` - Phases 1-4 completion report
-- `reports/SOFT_LAUNCH_READY.md` - Soft launch readiness report
-- `reports/SOFT_LAUNCH_FINAL_STEPS.md` - Final steps before launch
-- `reports/SOFT_LAUNCH_AUDIT_REPORT.md` - Soft launch audit results
-- `reports/IMPLEMENTATION_SUMMARY.md` - Overall implementation summary
-- `reports/FEATURES_RESTORED_LOG.md` - Log of restored features
-- `reports/FEATURES_TO_READD.md` - Features pending re-addition
-
-### 🧪 Testing & Validation
-Testing guides and validation checklists.
-- `guides/VERIFICATION_SUMMARY.md` - Verification summary
-- `guides/SECURITY_HOTFIXES_GUIDE.md` - Security hotfixes guide
-- `guides/MILESTONE_TESTING_GUIDE.md` - Milestone testing procedures
-- `guides/PWA_VERIFICATION.md` - PWA feature verification
-- `guides/PWA_QUICK_START.md` - PWA quick start
-- `guides/PWA_SUMMARY.md` - PWA implementation summary
-- `MEETINGS_TESTING_GUIDE.md` - Meetings feature testing guide
-- `MEETINGS_UAT_CHECKLIST.md` - Meetings UAT checklist
-- `PROMPTS_1_5_TESTING_GUIDE.md` - Prompts 1-5 testing guide
-
-### 📦 Archive & Reference
-Historical documents, analysis, and reference materials.
-- `archive/` - Historical documentation and legacy analysis
-  - `CACHE_FIXES_IMPLEMENTED.md` - Cache system fixes
-  - `CACHE_SYSTEM_ANALYSIS.md` - Cache system analysis
-  - `PERFORMANCE_ANALYSIS.md` - Performance analysis
-  - `GIT_WORKFLOW.md` - Git workflow documentation
-  - `SESSION_SUMMARY_2026_06_24.md` - Session summary
-- `refactoring/` - Refactoring documentation
-  - `PROJECT_STRUCTURE.md` - Project structure refactoring
-  - `UNUSED_FILES_REPORT.md` - Unused files analysis
-  - `PHASE_3_COMPLETION.md` - Phase 3 refactoring completion
-  - `REFACTORING_COMPLETE.md` - Refactoring completion report
-  - `COMPLETE_REFACTORING_SUMMARY.md` - Complete refactoring summary
-  - `TEST_CASES_PHASE_4.md` - Phase 4 test cases
-  - `PHASE_4_VALIDATION.md` - Phase 4 validation
-  - `CURRENT_REPO_STRUCTURE.md` - Current repository structure
-  - `FILES_DIRECTORY_STRUCTURE.md` - Files directory structure
-  - `FILES_TO_DELETE.md` - Files to delete
-
-### Root Level Documentation
-- `SECURITY.md` - Security guidelines and best practices
-- `DOCUMENTATION_INDEX.md` - Master documentation index
-- `CASE_STUDY.md` - NEXUS case study
-- `REPORT_GENERATION_AND_SHARING.md` - Report generation guide
-- `URL_PERSISTENCE_ISSUE_ASSESSMENT.md` - URL persistence issue assessment
-- `interview-prep.md` - Interview preparation guide
-
-## Quick Links
-
-### Getting Started
-1. Start with `../README.md` in the root for project overview
-2. Read `SECURITY.md` for security guidelines
-3. Check `setup/` for environment configuration
-
-### For Feature Development
-1. Find feature docs in `/features`
-2. Check relevant phase guides for timeline context
-3. Reference `/architecture/decision-catalog.md` for design patterns
-
-### For Deployments
-1. Consult `/deployment` for setup procedures
-2. Review `/reports` for status and checklists
-3. Check phase validation guides before launch
-
-### For Role-Specific Guidance
-- Admins: `ADMIN_MANAGER_GUIDE.md`
-- Programs Manager: `PROGRAMS_MANAGER_GUIDE.md`
-- Regional Secretary: `REGIONAL_SECRETARY_GUIDE.md`
-
-### For Testing
-- Integration testing: `/guides`
-- Feature validation: Phase-specific guides in `/phases`
-- UAT: `MEETINGS_UAT_CHECKLIST.md`, `guides/MILESTONE_TESTING_GUIDE.md`
+Documentation for the Nexus operations platform, organized by category.
 
 ---
 
-**Last Updated:** 2026-07-09  
-**Documentation Version:** 2.1  
-**Total Docs:** 100+
+## Getting Started
+
+- [`setup/CLAUDE_API_SETUP.md`](setup/CLAUDE_API_SETUP.md) — Anthropic Claude API integration
+- [`setup/DEEPGRAM_SETUP.md`](setup/DEEPGRAM_SETUP.md) — Deepgram speech-to-text configuration
+- [`LOCAL_DEV_SETUP.md`](LOCAL_DEV_SETUP.md) — Local development environment setup
+- [`STAGING_AND_ONBOARDING.md`](STAGING_AND_ONBOARDING.md) — Staging environment and user onboarding
+
+---
+
+## Architecture & Design
+
+- [`architecture/NEXUS_ARCHITECTURE.md`](architecture/NEXUS_ARCHITECTURE.md) — System architecture overview
+- [`architecture/REPOSITORY_STRUCTURE.md`](architecture/REPOSITORY_STRUCTURE.md) — Repository organization and folder layout
+- [`architecture/PUBLIC_REPORT_ARCHITECTURE.md`](architecture/PUBLIC_REPORT_ARCHITECTURE.md) — Meeting report generation architecture
+- [`decision-catalog.md`](decision-catalog.md) — 35+ documented architectural decisions with rationale
+- [`decisions.md`](decisions.md) — Recent decision log
+- [`blw-canada-os-prd-v2.1.md`](blw-canada-os-prd-v2.1.md) — Product requirements document
+
+---
+
+## Feature Documentation
+
+- [`FEATURES.md`](FEATURES.md) — Complete feature list
+- [`FEATURES_BY_TEAM.md`](FEATURES_BY_TEAM.md) — Features by team/department
+- [`features/NEXUS_MEETINGS_IMPLEMENTATION.md`](features/NEXUS_MEETINGS_IMPLEMENTATION.md) — Meetings module
+- [`features/MEETING_TRANSCRIPT_EXTRACTION.md`](features/MEETING_TRANSCRIPT_EXTRACTION.md) — AI transcription and extraction
+- [`features/COMMUNICATIONS_SYSTEM_COMPLETE.md`](features/COMMUNICATIONS_SYSTEM_COMPLETE.md) — Email communications system
+- [`features/NATIVE_COMMUNICATIONS_README.md`](features/NATIVE_COMMUNICATIONS_README.md) — Native Nexus communications hub
+- [`features/FLOCK_CRM_DASHBOARD_IMPLEMENTATION.md`](features/FLOCK_CRM_DASHBOARD_IMPLEMENTATION.md) — Flock CRM integration
+- [`features/NOVA_ASSISTANT.md`](features/NOVA_ASSISTANT.md) — Nova AI assistant
+- [`features/NOVA_PREMERGE_CHECKLIST.md`](features/NOVA_PREMERGE_CHECKLIST.md) — Nova pre-merge verification
+- [`features/NOTIFICATIONS_QUICK_START.md`](features/NOTIFICATIONS_QUICK_START.md) — Notifications setup
+- [`RSVP_SYSTEM_DEPLOYMENT.md`](RSVP_SYSTEM_DEPLOYMENT.md) — RSVP system deployment
+- [`REPORT_GENERATION_AND_SHARING.md`](REPORT_GENERATION_AND_SHARING.md) — Meeting report generation
+
+---
+
+## User Guides
+
+Role-specific guides for platform users.
+
+- [`ADMIN_MANAGER_GUIDE.md`](ADMIN_MANAGER_GUIDE.md) — Admin and manager workflows
+- [`REGIONAL_SECRETARY_GUIDE.md`](REGIONAL_SECRETARY_GUIDE.md) — Regional secretary operations
+- [`PROGRAMS_MANAGER_GUIDE.md`](PROGRAMS_MANAGER_GUIDE.md) — Programs manager guide
+- [`guides/PWA_QUICK_START.md`](guides/PWA_QUICK_START.md) — Progressive Web App installation
+- [`guides/QUICK_START.txt`](guides/QUICK_START.txt) — Quick start reference
+
+---
+
+## Integration Guides
+
+- [`GOOGLE_CALENDAR_SETUP.md`](GOOGLE_CALENDAR_SETUP.md) — Google Calendar OAuth integration
+- [`apps-script-integration-guide.md`](apps-script-integration-guide.md) — Google Apps Script integration
+- [`ELVANTO_ATTENDANCE_IMPORT.md`](ELVANTO_ATTENDANCE_IMPORT.md) — Attendance data import
+- [`USER_INTEGRATIONS.md`](USER_INTEGRATIONS.md) — User integration overview
+- [`USER_INTEGRATIONS_SETUP.md`](USER_INTEGRATIONS_SETUP.md) — Integration setup (canonical reference)
+- [`USER_SCOPED_INTEGRATIONS.md`](USER_SCOPED_INTEGRATIONS.md) — Per-user scoped integrations
+- [`RATE_LIMITING.md`](RATE_LIMITING.md) — API rate limiting
+
+---
+
+## Deployment & Operations
+
+- [`deployment/DEPLOYMENT_CHECKLIST.md`](deployment/DEPLOYMENT_CHECKLIST.md) — Pre-deployment verification checklist
+- [`deployment/DEPLOYMENT_GUIDE.md`](deployment/DEPLOYMENT_GUIDE.md) — Full deployment guide
+- [`deployment/SPRINT_TEAMS_DEPLOYMENT_GUIDE.md`](deployment/SPRINT_TEAMS_DEPLOYMENT_GUIDE.md) — Sprint teams deployment
+- [`deployment/VAULT_ENCRYPTION_DEPLOYMENT.md`](deployment/VAULT_ENCRYPTION_DEPLOYMENT.md) — Vault/secret encryption setup
+- [`deployment/WEBPUSH_SETUP.md`](deployment/WEBPUSH_SETUP.md) — Web push notifications configuration
+- [`deployment/WEBPUSH_DEPLOYMENT_SUMMARY.md`](deployment/WEBPUSH_DEPLOYMENT_SUMMARY.md) — Web push deployment guide
+- [`CI_CD_PIPELINE.md`](CI_CD_PIPELINE.md) — CI/CD pipeline documentation
+- [`RUNBOOKS.md`](RUNBOOKS.md) — Operational runbooks
+- [`WEEKLY_MAINTENANCE_TEMPLATE.md`](WEEKLY_MAINTENANCE_TEMPLATE.md) — Weekly maintenance checklist
+- [`INCIDENTS.md`](INCIDENTS.md) — Incident log
+
+---
+
+## Security & Compliance
+
+- [`SECURITY.md`](SECURITY.md) — Security policy and guidelines
+- [`API_PERMISSIONS.md`](API_PERMISSIONS.md) — API permission reference
+- [`PERMISSION_MATRIX.md`](PERMISSION_MATRIX.md) — Role permission matrix
+- [`UNSUBSCRIBE_TOKEN_SECURITY.md`](UNSUBSCRIBE_TOKEN_SECURITY.md) — Email unsubscribe token security
+- [`COST_CONTROLS_GUIDE.md`](COST_CONTROLS_GUIDE.md) — AI usage cost controls
+- [`guides/SECURITY_HOTFIXES_GUIDE.md`](guides/SECURITY_HOTFIXES_GUIDE.md) — Security patch procedures
+
+---
+
+## Testing & QA
+
+- [`MEETINGS_TESTING_GUIDE.md`](MEETINGS_TESTING_GUIDE.md) — Meetings feature testing procedures
+- [`MEETINGS_UAT_CHECKLIST.md`](MEETINGS_UAT_CHECKLIST.md) — Meetings user acceptance checklist
+- [`reports/TESTER_CHECKLIST.md`](reports/TESTER_CHECKLIST.md) — General tester checklist
+- [`reports/TESTING_SUMMARY.md`](reports/TESTING_SUMMARY.md) — Testing roadmap
+- [`reports/TEST_REPORT_NEXUS.md`](reports/TEST_REPORT_NEXUS.md) — Test findings
+- [`guides/QUICK_TEST_REFERENCE.md`](guides/QUICK_TEST_REFERENCE.md) — Quick test reference
+- [`guides/VERIFICATION_SUMMARY.md`](guides/VERIFICATION_SUMMARY.md) — Verification status
+
+---
+
+## Audits & Investigations
+
+- [`audits/SCHEMA_FINDINGS_SUMMARY.md`](audits/SCHEMA_FINDINGS_SUMMARY.md) — Database schema audit
+- [`audits/COMMUNICATIONS_AUDIT.md`](audits/COMMUNICATIONS_AUDIT.md) — Communications system audit
+- [`audits/DATA_AUDIT_RESULTS.md`](audits/DATA_AUDIT_RESULTS.md) — Data integrity audit
+- [`audits/CALENDAR_SYNC_AUDIT.md`](audits/CALENDAR_SYNC_AUDIT.md) — Calendar sync audit
+- [`audits/SPRINT_INVITE_PROVISIONING_AUDIT.md`](audits/SPRINT_INVITE_PROVISIONING_AUDIT.md) — Sprint invite provisioning audit
+- [`audits/P0_1_RLS_AUDIT_COMPLETE.md`](audits/P0_1_RLS_AUDIT_COMPLETE.md) — RLS security audit
+- [`audits/MEETING_CACHING_AUDIT_2026-06-28.md`](audits/MEETING_CACHING_AUDIT_2026-06-28.md) — Meeting caching audit
+- [`investigations/RSVP_SCHEMA_INVESTIGATION.md`](investigations/RSVP_SCHEMA_INVESTIGATION.md) — RSVP schema investigation
+- [`refactoring/UNUSED_FILES_REPORT.md`](refactoring/UNUSED_FILES_REPORT.md) — Unused files analysis
+
+---
+
+## Reference
+
+- [`nova-kb-reference.md`](nova-kb-reference.md) — Nova AI assistant knowledge base
+- [`INTERVIEW_PREP.md`](INTERVIEW_PREP.md) — Technical Q&A grounded in the system architecture
+- [`CODE_TOUR.md`](CODE_TOUR.md) — Guided tour of the codebase
+- [`guides/SUBSCRIPTION_MIGRATION_GUIDE.md`](guides/SUBSCRIPTION_MIGRATION_GUIDE.md) — Subscription migration guide
+- [`audit/NEXUS_FEATURE_DOCUMENT.md`](audit/NEXUS_FEATURE_DOCUMENT.md) — Feature specification
+
+---
+
+**Total docs:** 77 files

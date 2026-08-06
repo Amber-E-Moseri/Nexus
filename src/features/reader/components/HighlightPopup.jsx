@@ -58,7 +58,7 @@ export default function HighlightPopup({ info, onHighlight, onAddNote, onClose }
               onChange={(e) => setNoteText(e.target.value)}
               placeholder="Add a note..."
               style={{ width: '100%', height: 72, resize: 'none', border: '1px solid var(--im-border)', borderRadius: 6, padding: '6px 8px', fontSize: 12, fontFamily: 'Inter, sans-serif', outline: 'none', color: 'var(--im-text)' }}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onAddNote(info, noteText); onClose() } }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && noteText.trim()) { e.preventDefault(); onAddNote(info, noteText); onClose() } }}
             />
             <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
               <button

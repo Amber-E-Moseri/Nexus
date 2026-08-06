@@ -39,7 +39,10 @@ export default function PdfPageView({ pdfBuffer, totalPages, initialPage = 1, on
         if (active) setLoading(false)
       })
       .catch((e) => { console.error('[pdf-view] load error', e); if (active) setLoading(false) })
-    return () => { active = false }
+    return () => {
+      active = false
+      pdfRef.current?.destroy()
+    }
   }, [pdfBuffer])
 
   // Sync when initialPage changes externally (switching back to this tab)

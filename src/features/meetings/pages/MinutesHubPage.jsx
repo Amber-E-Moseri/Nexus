@@ -73,7 +73,7 @@ export default function MinutesHubPage() {
                     onChange={(event) => setSelectedDept(event.target.value)}
                     style={{ minWidth: 190, padding: '8px 10px', border: '1px solid var(--border, #E9E4D8)', borderRadius: 7, fontSize: 13, fontFamily: 'inherit', color: 'var(--text-primary, #1C1610)', background: '#FFFFFF', cursor: 'pointer' }}
                   >
-                    <option value="all">All departments</option>
+                    <option value="all">All spaces</option>
                     {(profile?.departments ?? []).map((department) => (
                       <option key={department.id} value={department.id}>{department.name}</option>
                     ))}
@@ -120,9 +120,9 @@ export default function MinutesHubPage() {
 
       <main style={{ maxWidth: 960, margin: '0 auto', padding: '24px 20px 56px' }}>
         <Suspense fallback={<PageSpinner />}>
-          {activeTab === 'timeline' && <MinutesTimelinePage key={`timeline:${minutesVersion}`} departmentId={departmentId} meetingType={meetingType} readOnly={isExternalMember} />}
+          {activeTab === 'timeline' && <MinutesTimelinePage key={`timeline:${minutesVersion}`} departmentId={departmentId} meetingType={meetingType} readOnly={isExternalMember} profileId={profile?.id} isSuperAdmin={role === 'super_admin'} />}
           {activeTab === 'calendar' && <MinutesCalendarPage key={`calendar:${minutesVersion}`} departmentId={departmentId} meetingType={meetingType} readOnly={isExternalMember} />}
-          {activeTab === 'search' && <MinutesSearchPage key={`search:${minutesVersion}`} departmentId={departmentId} meetingType={meetingType} readOnly={isExternalMember} />}
+          {activeTab === 'search' && <MinutesSearchPage key={`search:${minutesVersion}`} departmentId={departmentId} meetingType={meetingType} readOnly={isExternalMember} profileId={profile?.id} isSuperAdmin={role === 'super_admin'} />}
         </Suspense>
       </main>
       {showLogMeeting && (

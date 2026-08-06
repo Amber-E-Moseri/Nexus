@@ -35,20 +35,20 @@ export default function BooksApp() {
   const [showEndModal, setShowEndModal] = useState(false)
   const [fontSize, setFontSize] = useState(() => Number(localStorage.getItem('immerse-font-size')) || 24)
   const [lineHeight, setLineHeight] = useState(() => Number(localStorage.getItem('immerse-line-height')) || 1.8)
-  const [bookmarks, setBookmarks] = useState(() => {
-    if (!book?.id) return []
-    const stored = localStorage.getItem(`immerse-bookmarks-${book.id}`)
-    return stored ? JSON.parse(stored) : []
-  })
+  const [bookmarks, setBookmarks] = useState([])
 
   // Track actual seconds of audio played this session (only increments on audio.onended)
   const sessionSecondsRef = useRef(0)
+  const sessionStartTimeRef = useRef(null)
+  const sessionStartIdxRef = useRef(null)
+  const [sessionUsedMins, setSessionUsedMins] = useState(0)
+  const deductUsageRef = useRef(null)
 
   const sentences = book?.sentences ?? []
   const { highlights, notes, addHighlight, addNote, removeAnnotation } = useAnnotations(book?.isShared ? null : book?.id)
   const { currentIdx, isPlaying, elapsedTime, totalTime, play, pause, seekToIdx, setSpeed: setPlayerSpeed, setVoice: setPlayerVoice } = useAudioPlayer(
     sentences, voice, speed, book?.progressIndex ?? 0,
-    (secs) => { sessionSecondsRef.current += secs },
+    (secs) => { sessionSecondsRef.current += secs; setSessionUsedMins((prev) => prev + secs / 60) },
   )
   const { saveState, saveError, saveHighlights } = usePdfSave()
 
@@ -100,8 +100,15 @@ export default function BooksApp() {
       } finally {
         setBookLoading(false)
       }
+      if (!b.sentences?.length) {
+        console.error('[reader] Book has no readable content after hydration')
+        return
+      }
     }
     sessionSecondsRef.current = 0
+    sessionStartTimeRef.current = Date.now()
+    sessionStartIdxRef.current = b.progressIndex ?? 0
+    setSessionUsedMins(0)
     setBook(b)
     // Load bookmarks for this book
     const stored = localStorage.getItem(`immerse-bookmarks-${b.id}`)
@@ -121,11 +128,17 @@ export default function BooksApp() {
     try {
       await saveStoredBook(b)
       if (b.pdfBuffer) await uploadBookPdf(b.id, b.pdfBuffer)
+      openBook(b)
     } catch (err) {
       console.error('[reader] Import workflow failed', err)
     }
-    openBook(b)
   }
+
+  // Always point to the latest deductUsage closure; used by unmount cleanup
+  deductUsageRef.current = deductUsage
+
+  // Deduct remaining credits when the component unmounts (page close, nav away)
+  useEffect(() => () => { deductUsageRef.current?.() }, [])
 
   // Deduct credits when session ends — uses real audio duration, never estimated
   async function deductUsage() {
@@ -278,6 +291,7 @@ export default function BooksApp() {
           fontSize={fontSize}
           lineHeight={lineHeight}
           credits={creditsHrs}
+          sessionUsedMins={sessionUsedMins}
           readOnly={!!book?.isShared}
           onPlay={guardedPlay}
           onPause={pause}
@@ -292,7 +306,7 @@ export default function BooksApp() {
           onRemoveBookmark={book?.isShared ? undefined : removeBookmark}
           onJumpToBookmark={jumpToBookmark}
           onSelectionChange={setSelectionInfo}
-          onBack={() => setPage('home')}
+          onBack={() => { deductUsage(); pause(); setPage('home') }}
           onOpenSettings={() => setShowSettings(true)}
           onEndSession={handleEndSession}
         />

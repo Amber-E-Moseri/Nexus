@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Maximize2, Book, AlignLeft, ChevronLeft, Bookmark, Search, BarChart3 } from 'lucide-react'
 import ReadingPanel from '../components/ReadingPanel'
@@ -13,21 +13,26 @@ import { buildSentencePageMap, pageForSentence, sentenceIdxForPage } from '../se
 
 export default function ReaderPage({
   book, sentences, currentIdx, isPlaying, elapsedTime, totalTime, voice, speed,
-  highlights, notes, bookmarks, readingStats, selectionInfo, fontSize, lineHeight, credits,
+  highlights, notes, bookmarks, readingStats, selectionInfo, fontSize, lineHeight, credits, sessionUsedMins = 0,
   onPlay, onPause, onSeek, onSkip, onSpeedChange, onVoiceChange,
   onAddHighlight, onAddNote, onRemoveAnnotation, onAddBookmark, onRemoveBookmark, onJumpToBookmark,
   onSelectionChange, onBack, onOpenSettings, onEndSession,
 }) {
   const navigate = useNavigate()
-  const [playerVisible, setPlayerVisible] = useState(true)
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('immerse-view-mode') || 'scroll')
   const [showChapters, setShowChapters] = useState(false)
   const [sidebarVisible, setSidebarVisible] = useState(() => localStorage.getItem('immerse-sidebar-visible') !== 'false')
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showStats, setShowStats] = useState(false)
-  const lastScrollY = useRef(0)
-  const isDesktop = window.innerWidth >= 768
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 768)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const handler = (e) => setIsDesktop(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
 
   // Chapter + page data derived from book metadata
   const chapters = useMemo(() => {
@@ -96,29 +101,17 @@ export default function ReaderPage({
     return bookmarks?.some(b => b.sentenceIdx === currentIdx) ?? false
   }, [bookmarks, currentIdx])
 
-  // Real-time credit tracking (0.2 mins per sentence = 0.0033 hrs per sentence)
+  // Real-time credit tracking — uses actual audio seconds played, not sentence count estimates
   const creditMetrics = useMemo(() => {
-    const MINS_PER_SENTENCE = 0.2
-    const creditsUsedMins = currentIdx * MINS_PER_SENTENCE
-    const creditsUsedHrs = creditsUsedMins / 60
+    const creditsUsedHrs = sessionUsedMins / 60
     const creditsRemaining = Math.max(0, parseFloat(credits) - creditsUsedHrs)
     const totalSentences = sentences.length
-    const estimatedTotalHrs = (totalSentences * MINS_PER_SENTENCE) / 60
-    const costPerSentence = (MINS_PER_SENTENCE / 60).toFixed(4)
     return {
       usedHrs: creditsUsedHrs.toFixed(2),
       remainingHrs: creditsRemaining.toFixed(2),
-      totalHrs: estimatedTotalHrs.toFixed(2),
-      costPerSentence,
       progress: totalSentences > 0 ? Math.round((currentIdx / totalSentences) * 100) : 0,
     }
-  }, [currentIdx, credits, sentences.length])
-
-  function handleScroll(e) {
-    const y = e.currentTarget.scrollTop
-    setPlayerVisible(y <= lastScrollY.current || y < 50)
-    lastScrollY.current = y
-  }
+  }, [sessionUsedMins, credits, currentIdx, sentences.length])
 
   function handleHighlight(info) {
     onAddHighlight(info.sentenceIdx, info.text)
@@ -212,9 +205,16 @@ export default function ReaderPage({
         )}
 
         {!isDesktop && (
-          <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 16, fontWeight: 700, minWidth: 32, justifyContent: 'flex-end' }}>
-            ···
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {chapters.length > 0 && (
+              <button onClick={() => setShowChapters(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, fontSize: 12, fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>
+                Ch
+              </button>
+            )}
+            <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 16, fontWeight: 700, minWidth: 32, justifyContent: 'flex-end' }}>
+              ···
+            </button>
+          </div>
         )}
       </div>
 
@@ -344,6 +344,15 @@ export default function ReaderPage({
           />
         )}
       </div>
+
+      {!isDesktop && showChapters && (
+        <ChaptersDrawer
+          sentences={sentences}
+          currentIdx={currentIdx}
+          onSeek={onSeek}
+          onClose={() => setShowChapters(false)}
+        />
+      )}
 
       {selectionInfo && (
         <HighlightPopup
