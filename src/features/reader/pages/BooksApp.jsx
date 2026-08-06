@@ -189,9 +189,10 @@ export default function BooksApp() {
     const elapsedMins = elapsedMs / 60000
     const elapsedHours = (elapsedMins / 60).toFixed(2)
     const sentencesRead = currentIdx - sessionStartIdxRef.current
-    const sentencesPerMin = elapsedMins > 0 ? (sentencesRead / elapsedMins).toFixed(1) : 0
+    const sentencesPerMinRaw = elapsedMins > 0 ? sentencesRead / elapsedMins : 0
+    const sentencesPerMin = sentencesPerMinRaw.toFixed(1)
     const remainingSentences = Math.max(0, sentences.length - currentIdx)
-    const estimatedMinsRemaining = remainingSentences > 0 ? (remainingSentences / sentencesPerMin).toFixed(0) : 0
+    const estimatedMinsRemaining = sentencesPerMinRaw > 0 ? remainingSentences / sentencesPerMinRaw : 0
     const estimatedHoursRemaining = (estimatedMinsRemaining / 60).toFixed(1)
     return {
       elapsedHours,
