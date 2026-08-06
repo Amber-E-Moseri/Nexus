@@ -170,24 +170,17 @@ function renderHtmlShell(bodyHtml: string, previewText: string, unsubscribeToken
   const unsubUrl = `${frontendUrl}/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`
   const safePreview = escapeHtml(previewText || ' ')
 
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-  body { font-family: Arial, sans-serif; color: #2D2A22; line-height: 1.6; }
-  .email-container { max-width: 640px; margin: 0 auto; background: #ffffff; }
-  .email-header { padding: 24px; border-bottom: 1px solid #EDE8DC; text-align: center; }
-  .email-logo { max-width: 120px; height: auto; margin-bottom: 16px; }
-  .email-title { font-size: 24px; font-weight: 700; color: #C41E3A; margin: 0; }
-  .email-subtitle { font-size: 12px; color: #666; margin: 4px 0 0; }
-  .email-body { padding: 24px; color: #2D2A22; line-height: 1.7; font-size: 14px; }
-  .email-footer { padding: 16px 24px; border-top: 1px solid #EDE8DC; font-size: 11px; color: #9E9488; text-align: center; }
-  .email-footer a { color: #4C2A92; text-decoration: underline; }
-</style>
-</head>
-<body>
+  return `
+    <style>
+      body { font-family: Arial, sans-serif; color: #2D2A22; line-height: 1.6; }
+      .email-container { max-width: 640px; margin: 0 auto; background: #ffffff; }
+      .email-header { padding: 24px; border-bottom: 1px solid #EDE8DC; text-align: center; }
+      .email-title { font-size: 24px; font-weight: 700; color: #C41E3A; margin: 0; }
+      .email-subtitle { font-size: 12px; color: #666; margin: 4px 0 0; }
+      .email-body { padding: 24px; color: #2D2A22; line-height: 1.7; font-size: 14px; }
+      .email-footer { padding: 16px 24px; border-top: 1px solid #EDE8DC; font-size: 11px; color: #9E9488; text-align: center; }
+      .email-footer a { color: #4C2A92; text-decoration: underline; }
+    </style>
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
       ${safePreview}
     </div>
@@ -203,8 +196,6 @@ function renderHtmlShell(bodyHtml: string, previewText: string, unsubscribeToken
         <a href="${unsubUrl}">Unsubscribe</a>
       </div>
     </div>
-</body>
-</html>
   `
 }
 
