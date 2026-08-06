@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Maximize2, Book, ChevronLeft, Bookmark, Search, BarChart3 } from 'lucide-react'
+import { Maximize2, Book, AlignLeft, ChevronLeft, Bookmark, Search, BarChart3 } from 'lucide-react'
 import ReadingPanel from '../components/ReadingPanel'
 import MobilePlayer from '../components/MobilePlayer'
 import PlayerControls from '../components/PlayerControls'
@@ -43,11 +43,16 @@ export default function ReaderPage({
     localStorage.setItem('immerse-sidebar-visible', String(next))
   }
 
+  const VIEW_MODES = ['scroll', 'pages', 'teleprompter']
   function toggleViewMode() {
-    const next = viewMode === 'scroll' ? 'pages' : 'scroll'
+    const next = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length]
     setViewMode(next)
     localStorage.setItem('immerse-view-mode', next)
   }
+
+  const viewModeLabel = viewMode === 'scroll' ? { icon: <Maximize2 size={12} />, label: 'Scroll' }
+    : viewMode === 'pages' ? { icon: <Book size={12} />, label: 'Pages' }
+    : { icon: <AlignLeft size={12} />, label: 'Focus' }
 
   const annotations = [
     ...highlights.map((h) => ({ ...h })),
@@ -152,15 +157,7 @@ export default function ReaderPage({
             <button onClick={() => navigate('/dashboard')} style={{ ...hdrBtn, color: 'var(--im-text-dim)' }}>← Nexus</button>
             <div style={{ width: 1, height: 16, background: 'var(--im-border)' }} />
             <button onClick={toggleViewMode} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5 }}>
-              {viewMode === 'scroll' ? (
-                <>
-                  <Maximize2 size={12} /> Scroll
-                </>
-              ) : (
-                <>
-                  <Book size={12} /> Pages
-                </>
-              )}
+              {viewModeLabel.icon} {viewModeLabel.label}
             </button>
             <button onClick={toggleSidebar} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: sidebarVisible ? 'var(--im-text)' : 'var(--im-text-dim)' }}>
               <ChevronLeft size={12} /> {sidebarVisible ? 'Hide' : 'Show'}

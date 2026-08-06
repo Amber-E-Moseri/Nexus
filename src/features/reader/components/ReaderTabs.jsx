@@ -132,22 +132,34 @@ export default function ReaderTabs({
 
   // Read tab: clean text view with minimal highlighting/notes (Apple Notes style)
   function ReadView() {
+    // When user selects text, also seek audio to that sentence so playback starts from selection
+    function handleSelectionChange(info) {
+      if (info?.sentenceIdx != null && info.sentenceIdx >= 0) {
+        onSeek(info.sentenceIdx)
+      }
+      onSelectionChange(info)
+    }
+
+    const isTeleprompter = viewMode === 'teleprompter'
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--im-bg)' }}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: isDesktop ? '40px 120px' : '20px 16px', maxWidth: isDesktop ? 800 : '100%', margin: '0 auto', width: '100%' }}>
-          <div style={{ marginBottom: 40 }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--im-text)', marginBottom: 8 }}>{book.title}</div>
-            {book.author && <div style={{ fontSize: 14, color: 'var(--im-text-dim)' }}>{book.author}</div>}
-          </div>
+        <div style={{ flex: 1, overflowY: isTeleprompter ? 'hidden' : 'auto', padding: isTeleprompter ? 0 : (isDesktop ? '40px 120px' : '20px 16px'), maxWidth: isTeleprompter ? '100%' : (isDesktop ? 800 : '100%'), margin: '0 auto', width: '100%', display: isTeleprompter ? 'flex' : 'block', flexDirection: 'column' }}>
+          {!isTeleprompter && (
+            <div style={{ marginBottom: 40 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--im-text)', marginBottom: 8 }}>{book.title}</div>
+              {book.author && <div style={{ fontSize: 14, color: 'var(--im-text-dim)' }}>{book.author}</div>}
+            </div>
+          )}
           <ReadingPanel
             sentences={sentences}
             currentIdx={currentIdx}
             highlights={highlights}
-            onSelectionChange={onSelectionChange}
+            onSelectionChange={handleSelectionChange}
             onSeek={onSeek}
             fontSize={fontSize}
             lineHeight={lineHeight}
             viewMode={viewMode}
+            isPlaying={isPlaying}
           />
         </div>
       </div>
@@ -168,6 +180,7 @@ export default function ReaderTabs({
             fontSize={fontSize}
             lineHeight={lineHeight}
             viewMode="scroll"
+            isPlaying={isPlaying}
           />
         </div>
         <div style={{ padding: '12px 16px', background: 'var(--im-card)', borderTop: '1px solid var(--im-border)' }}>

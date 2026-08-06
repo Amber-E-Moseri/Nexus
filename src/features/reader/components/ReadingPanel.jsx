@@ -5,13 +5,35 @@ const isHeading = (s) =>
   /^[A-Z\s\d]{4,40}$/.test(s.trim())
 
 // ── Scroll mode ────────────────────────────────────────────────────────────
-function ScrollView({ sentences, currentIdx, highlights, onSelectionChange, onSeek, fontSize, lineHeight }) {
+function ScrollView({ sentences, currentIdx, highlights, onSelectionChange, onSeek, fontSize, lineHeight, isPlaying }) {
   const activeRef = useRef(null)
   const highlighted = new Set(highlights.map((h) => h.sentenceIdx))
+  // Auto-scroll is suppressed while the user is manually scrolling
+  const autoScrollRef = useRef(true)
+  const scrollTimerRef = useRef(null)
+  const containerRef = useRef(null)
 
+  // Re-enable auto-scroll 1.5 s after the user stops scrolling
+  function handleScroll() {
+    autoScrollRef.current = false
+    clearTimeout(scrollTimerRef.current)
+    scrollTimerRef.current = setTimeout(() => {
+      autoScrollRef.current = true
+    }, 1500)
+  }
+
+  // Auto-scroll only when playing and not suppressed by manual scroll
   useEffect(() => {
+    if (!isPlaying || !autoScrollRef.current) return
     activeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, [currentIdx])
+  }, [currentIdx, isPlaying])
+
+  // When the user clicks a sentence: seek there AND re-enable auto-scroll
+  function handleSentenceClick(idx) {
+    autoScrollRef.current = true
+    clearTimeout(scrollTimerRef.current)
+    onSeek?.(idx)
+  }
 
   function handleMouseUp() {
     const sel = window.getSelection()
@@ -26,7 +48,7 @@ function ScrollView({ sentences, currentIdx, highlights, onSelectionChange, onSe
   }
 
   return (
-    <div className="im-reading-text" style={{ fontSize, lineHeight }} onMouseUp={handleMouseUp}>
+    <div ref={containerRef} className="im-reading-text" style={{ fontSize, lineHeight }} onMouseUp={handleMouseUp} onScroll={handleScroll}>
       {sentences.map((s, idx) => {
         if (isHeading(s) && s.trim().length < 50) {
           return (
@@ -41,11 +63,79 @@ function ScrollView({ sentences, currentIdx, highlights, onSelectionChange, onSe
         else if (idx === currentIdx) cls += ' im-sentence--active'
         if (highlighted.has(idx)) cls += ' im-sentence--highlighted'
         return (
-          <span key={idx} ref={idx === currentIdx ? activeRef : null} className={cls} data-idx={idx} onClick={() => onSeek?.(idx)} style={{ cursor: 'pointer' }}>
+          <span key={idx} ref={idx === currentIdx ? activeRef : null} className={cls} data-idx={idx}
+            onClick={() => handleSentenceClick(idx)} style={{ cursor: 'pointer' }}>
             {s}{' '}
           </span>
         )
       })}
+    </div>
+  )
+}
+
+// ── Teleprompter / line-by-line mode ──────────────────────────────────────
+function TeleprompterView({ sentences, currentIdx, highlights, onSelectionChange, onSeek, fontSize, lineHeight }) {
+  const highlighted = new Set(highlights.map((h) => h.sentenceIdx))
+  const prev = sentences[currentIdx - 1]
+  const curr = sentences[currentIdx]
+  const next = sentences[currentIdx + 1]
+
+  function handleMouseUp(sentenceIdx) {
+    return () => {
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) { onSelectionChange(null); return }
+      const text = sel.toString().trim()
+      const range = sel.getRangeAt(0)
+      const rect = range.getBoundingClientRect()
+      onSelectionChange({ text, sentenceIdx, rect })
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '0 10%', gap: '2rem', userSelect: 'text' }}>
+      {/* Previous sentence — dim, clickable to go back */}
+      {prev && (
+        <p
+          data-idx={currentIdx - 1}
+          onClick={() => onSeek?.(currentIdx - 1)}
+          onMouseUp={handleMouseUp(currentIdx - 1)}
+          style={{ fontSize: fontSize * 0.72, lineHeight, color: 'var(--im-text-xdim)', textAlign: 'center', cursor: 'pointer', opacity: 0.4, transition: 'opacity 0.3s', margin: 0, fontFamily: 'Georgia, serif' }}>
+          {prev}
+        </p>
+      )}
+
+      {/* Current sentence — full size, highlighted */}
+      {curr && (
+        <p
+          data-idx={currentIdx}
+          onMouseUp={handleMouseUp(currentIdx)}
+          style={{ fontSize, lineHeight, color: 'var(--im-text)', textAlign: 'center', fontWeight: 600, margin: 0, fontFamily: 'Georgia, serif', background: highlighted.has(currentIdx) ? 'var(--im-highlight)' : 'transparent', borderRadius: 4, padding: '0 8px', transition: 'all 0.3s' }}>
+          {curr}
+        </p>
+      )}
+
+      {/* Next sentence — dim, clickable to skip ahead */}
+      {next && (
+        <p
+          data-idx={currentIdx + 1}
+          onClick={() => onSeek?.(currentIdx + 1)}
+          onMouseUp={handleMouseUp(currentIdx + 1)}
+          style={{ fontSize: fontSize * 0.72, lineHeight, color: 'var(--im-text-dim)', textAlign: 'center', cursor: 'pointer', opacity: 0.5, transition: 'opacity 0.3s', margin: 0, fontFamily: 'Georgia, serif' }}>
+          {next}
+        </p>
+      )}
+
+      {/* Progress dots */}
+      <div style={{ display: 'flex', gap: 4, marginTop: 16 }}>
+        {[-2, -1, 0, 1, 2].map((offset) => {
+          const i = currentIdx + offset
+          if (i < 0 || i >= sentences.length) return null
+          return (
+            <div key={i} onClick={() => onSeek?.(i)}
+              style={{ width: offset === 0 ? 20 : 6, height: 6, borderRadius: 3, background: offset === 0 ? 'var(--im-blue)' : 'var(--im-border)', cursor: 'pointer', transition: 'all 0.3s' }} />
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -170,9 +260,12 @@ function PageView({ sentences, currentIdx, highlights, onSelectionChange, onSeek
 }
 
 // ── Public export ──────────────────────────────────────────────────────────
-export default function ReadingPanel({ sentences, currentIdx, highlights, onSelectionChange, onSeek, fontSize = 24, lineHeight = 1.8, viewMode = 'scroll' }) {
+export default function ReadingPanel({ sentences, currentIdx, highlights, onSelectionChange, onSeek, fontSize = 24, lineHeight = 1.8, viewMode = 'scroll', isPlaying = false }) {
   if (viewMode === 'pages') {
     return <PageView sentences={sentences} currentIdx={currentIdx} highlights={highlights} onSelectionChange={onSelectionChange} onSeek={onSeek} fontSize={Math.min(fontSize, 20)} lineHeight={lineHeight} />
   }
-  return <ScrollView sentences={sentences} currentIdx={currentIdx} highlights={highlights} onSelectionChange={onSelectionChange} fontSize={fontSize} lineHeight={lineHeight} />
+  if (viewMode === 'teleprompter') {
+    return <TeleprompterView sentences={sentences} currentIdx={currentIdx} highlights={highlights} onSelectionChange={onSelectionChange} onSeek={onSeek} fontSize={fontSize} lineHeight={lineHeight} />
+  }
+  return <ScrollView sentences={sentences} currentIdx={currentIdx} highlights={highlights} onSelectionChange={onSelectionChange} onSeek={onSeek} fontSize={fontSize} lineHeight={lineHeight} isPlaying={isPlaying} />
 }
