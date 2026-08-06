@@ -58,7 +58,7 @@ function BulkTasksBanner({ tasks, statuses, canEdit, onStatusChange, onTaskClick
   )
 }
 
-function SprintTasksInner({ sprintId, sprint, canEdit }) {
+function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
   const { profile, role } = useAuth()
   const { tasks, loading, error, statuses, defaultStatusId, moveTask, addTask } = useTasks()
 
@@ -395,7 +395,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
           </div>
         ) : (
           <div className="h-full overflow-hidden rounded-[16px] border border-[var(--border)] bg-white">
-            <SprintReviewView sprint={{ id: sprintId }} canEdit={canEdit} />
+            <SprintReviewView sprint={{ id: sprintId, status: sprint?.sprint?.status }} canEdit={canEdit} onArchived={onArchived} />
           </div>
         )}
       </div>
@@ -416,10 +416,10 @@ function SprintTasksInner({ sprintId, sprint, canEdit }) {
   )
 }
 
-export default function SprintTaskBoard({ sprintId, sprint, canEdit, initialTasks }) {
+export default function SprintTaskBoard({ sprintId, sprint, canEdit, initialTasks, onArchived }) {
   return (
     <TasksProvider sprintId={sprintId} departmentId={sprint?.sprint?.department_id} initialTasks={initialTasks}>
-      <SprintTasksInner sprintId={sprintId} sprint={sprint} canEdit={canEdit} />
+      <SprintTasksInner sprintId={sprintId} sprint={sprint} canEdit={canEdit} onArchived={onArchived} />
     </TasksProvider>
   )
 }

@@ -451,6 +451,13 @@ export default function SprintOverview() {
     }
   }
 
+  function handleBoardArchived() {
+    setDetail((prev) => prev ? {
+      ...prev,
+      sprint: { ...prev.sprint, status: 'archived', is_archived: true, archived_at: new Date().toISOString() }
+    } : null)
+  }
+
   async function reloadTeamsAndMembers() {
     try {
       const { data: teamsRes } = await supabase.from('sprint_teams').select('id, name, description, lead_user_id').eq('sprint_id', sprintId).order('created_at')
@@ -674,7 +681,7 @@ export default function SprintOverview() {
       {/* Tasks & Tabs */}
       {activeTab === 'Tasks' || activeTab === 'Overview' ? (
         <div className="flex flex-col rounded-[24px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)]" style={{ minHeight: 520 }}>
-          <SprintTaskBoard sprintId={detail.sprint.id} sprint={detail} canEdit={Boolean(canCreateTask && !isArchived)} initialTasks={tasks} />
+          <SprintTaskBoard sprintId={detail.sprint.id} sprint={detail} canEdit={Boolean(canCreateTask && !isArchived)} initialTasks={tasks} onArchived={handleBoardArchived} />
         </div>
       ) : null}
 
