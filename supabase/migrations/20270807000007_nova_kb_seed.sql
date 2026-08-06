@@ -482,6 +482,30 @@ Open the sprint and go to the **Members** tab. Click "Invite member."
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member']
 ),
 
+(
+  'sprints-custom-vs-multidept',
+  'When should I use a Custom sprint vs a Multi-Dept sprint?',
+  'Use **Multi-Dept sprints** when you''re bringing together teams from two or more of our existing departments for a specific project or initiative. Multi-Dept sprints are ideal when:
+
+- The team structure follows our standard department lines (you''re pulling members from existing departments)
+- Members need to see sprint tasks alongside their regular department work
+- The sprint goals align with cross-department collaboration
+- Examples: a campaign involving Media and ORS, an initiative with participation from multiple dept leads
+
+Multi-Dept sprints automatically add all active members from each participating department, and sprint tasks will show up in each department''s space view.
+
+Use **Custom sprints** when you''re assembling a one-off or cross-functional team that doesn''t fit your standard department structure. Custom sprints are ideal when:
+
+- The group doesn''t align with existing departments (e.g., a special project team, an ad-hoc working group)
+- You want to keep the work completely separate from regular department views
+- You need to manually select exactly who participates (no auto-add from departments)
+- Examples: a short-term task force, a volunteer initiative, an off-campus event planning committee
+
+Custom sprints don''t appear in any department space — all work stays sprint-only, keeping department views focused on regular operations.',
+  'sprints',
+  ARRAY['super_admin','regional_secretary','dept_lead','pastor','member']
+),
+
 -- =====================================================================
 -- CALENDAR
 -- =====================================================================

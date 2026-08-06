@@ -1148,22 +1148,19 @@ export default function Dashboard() {
             ))}
           </div>
         ) : (
-          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-            {[visibleWidgets.filter((_, i) => i % 2 === 0), visibleWidgets.filter((_, i) => i % 2 !== 0)].map((col, ci) => (
-              <div key={ci} className="dash-stagger" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {col.map((pref) => (
-                  <WidgetCard
-                    key={pref.widget_key}
-                    widgetKey={pref.widget_key}
-                    role={role}
-                    userId={profile?.id}
-                    departmentId={profile?.department_id}
-                    config={pref.config}
-                    onConfigChange={(config) => handleConfigChange(pref.widget_key, config)}
-                    onUnpin={handleUnpin}
-                    data={dashboardData?.[pref.widget_key]}
-                  />
-                ))}
+          <div className="dash-stagger" style={{ columns: 2, gap: 16 }}>
+            {visibleWidgets.map((pref) => (
+              <div key={pref.widget_key} style={{ breakInside: 'avoid', marginBottom: 16 }}>
+                <WidgetCard
+                  widgetKey={pref.widget_key}
+                  role={role}
+                  userId={profile?.id}
+                  departmentId={profile?.department_id}
+                  config={pref.config}
+                  onConfigChange={(config) => handleConfigChange(pref.widget_key, config)}
+                  onUnpin={handleUnpin}
+                  data={dashboardData?.[pref.widget_key]}
+                />
               </div>
             ))}
           </div>

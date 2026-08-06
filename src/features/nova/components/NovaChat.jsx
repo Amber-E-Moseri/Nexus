@@ -1,7 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
-import { Sparkles, X, ArrowUp, ThumbsUp, ThumbsDown, LoaderCircle, RotateCcw, Eraser } from 'lucide-react'
+import { Sparkles, X, ArrowUp, ThumbsUp, ThumbsDown, LoaderCircle, RotateCcw, Eraser, ChevronRight } from 'lucide-react'
 import { askNova, submitNovaFeedback } from '../lib/novaApi'
 import NovaMarkdown from './NovaMarkdown'
+
+const RELATED_QUESTIONS = {
+  sprint: [
+    'What is a sprint?',
+    'Can I be in more than one sprint at the same time?',
+    'How do I view my sprint tasks?',
+  ],
+  task: [
+    'How do I create a task?',
+    'How do I assign a task to someone?',
+    'What are task statuses?',
+  ],
+  calendar: [
+    'How do I add an event to the ministry calendar?',
+    'How do I RSVP to a calendar event?',
+  ],
+}
 
 // fetch() throws a bare "Failed to fetch" TypeError for CORS blocks, DNS
 // failures, and dropped connections alike — none of that is meaningful to a
@@ -27,6 +44,36 @@ function TrackBadge({ track }) {
     <span className="mt-1 inline-block text-[10.5px] font-semibold uppercase tracking-[0.05em] text-[var(--text-tertiary)]">
       {label}
     </span>
+  )
+}
+
+function RelatedQuestions({ question, onQuestionClick }) {
+  const lowerQuestion = (question || '').toLowerCase()
+  let topic = null
+  if (lowerQuestion.includes('sprint')) topic = 'sprint'
+  else if (lowerQuestion.includes('task')) topic = 'task'
+  else if (lowerQuestion.includes('calendar') || lowerQuestion.includes('event')) topic = 'calendar'
+
+  const suggestions = topic ? RELATED_QUESTIONS[topic] || [] : []
+  if (!suggestions.length) return null
+
+  return (
+    <div className="mt-3 pt-2 border-t" style={{ borderColor: 'var(--border-light)' }}>
+      <div className="text-[11px] font-semibold text-[var(--text-tertiary)] mb-2">Related:</div>
+      <div className="flex flex-col gap-1.5">
+        {suggestions.map((q) => (
+          <button
+            key={q}
+            type="button"
+            onClick={() => onQuestionClick(q)}
+            className="flex items-center gap-1 text-left text-[11px] text-[var(--accent)] hover:underline transition-colors"
+          >
+            <ChevronRight size={12} />
+            {q}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -68,6 +115,22 @@ export default function NovaChat() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages, open])
+
+  // Inject greeting when panel opens for the first time
+  useEffect(() => {
+    if (open && messages.length === 0) {
+      setMessages([{
+        id: nextId(),
+        role: 'nova',
+        text: "Hi, I'm Nova, your Nexus assistant. Ask me how-to questions about Nexus, or what's due in your sprint today.",
+        track: null,
+        logId: null,
+        feedback: null,
+        streaming: false,
+        error: false,
+      }])
+    }
+  }, [open])
 
   // Land the user straight in the input instead of making them click twice
   // (open the panel, then click the box) every time they open Nova.
@@ -201,66 +264,60 @@ export default function NovaChat() {
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
-            {messages.length === 0 ? (
-              <div className="flex flex-col items-start">
-                <div
-                  className="max-w-[92%] rounded-[12px] rounded-bl-[4px] px-3 py-2"
-                  style={{ background: 'var(--surface-secondary)', color: 'var(--text-primary)' }}
-                >
-                  <span className="text-[12.5px]">Hi I'm Nova your Nexus guide, How can i help you today</span>
+            {messages.map((m) =>
+              m.role === 'user' ? (
+                <div key={m.id} className="flex justify-end">
+                  <div
+                    className="max-w-[85%] rounded-[12px] rounded-br-[4px] px-3 py-2 text-[12.5px]"
+                    style={{ background: 'var(--accent)', color: '#fff' }}
+                  >
+                    {m.text}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              messages.map((m) =>
-                m.role === 'user' ? (
-                  <div key={m.id} className="flex justify-end">
-                    <div
-                      className="max-w-[85%] rounded-[12px] rounded-br-[4px] px-3 py-2 text-[12.5px]"
-                      style={{ background: 'var(--accent)', color: '#fff' }}
-                    >
-                      {m.text}
-                    </div>
-                  </div>
-                ) : (
-                  <div key={m.id} className="flex flex-col items-start">
-                    <div
-                      className="max-w-[92%] rounded-[12px] rounded-bl-[4px] px-3 py-2"
-                      style={{
-                        background: m.error ? 'var(--coral-light)' : 'var(--surface-secondary)',
-                        color: m.error ? 'var(--coral)' : 'var(--text-primary)',
-                      }}
-                    >
-                      {m.error ? (
-                        <span className="text-[12.5px]">{m.text}</span>
-                      ) : m.text ? (
-                        <NovaMarkdown text={m.text} />
-                      ) : m.streaming ? (
-                        <LoaderCircle size={13} className="animate-spin" style={{ color: 'var(--text-tertiary)' }} />
-                      ) : null}
-                    </div>
+              ) : (
+                <div key={m.id} className="flex flex-col items-start">
+                  <div
+                    className="max-w-[92%] rounded-[12px] rounded-bl-[4px] px-3 py-2"
+                    style={{
+                      background: m.error ? 'var(--coral-light)' : 'var(--surface-secondary)',
+                      color: m.error ? 'var(--coral)' : 'var(--text-primary)',
+                    }}
+                  >
                     {m.error ? (
-                      <button
-                        type="button"
-                        onClick={() => handleRetry(m)}
-                        disabled={sending}
-                        className="ml-1 mt-1 flex items-center gap-1 text-[11px] font-semibold transition-colors disabled:opacity-50"
-                        style={{ color: 'var(--accent)' }}
-                      >
-                        <RotateCcw size={11} />
-                        Retry
-                      </button>
-                    ) : null}
-                    {!m.streaming && !m.error ? (
-                      <div className="ml-1 flex items-center gap-2">
-                        <TrackBadge track={m.track} />
-                      </div>
-                    ) : null}
-                    {!m.streaming && !m.error ? (
-                      <FeedbackButtons message={m} onFeedback={handleFeedback} />
+                      <span className="text-[12.5px]">{m.text}</span>
+                    ) : m.text ? (
+                      <NovaMarkdown text={m.text} />
+                    ) : m.streaming ? (
+                      <LoaderCircle size={13} className="animate-spin" style={{ color: 'var(--text-tertiary)' }} />
                     ) : null}
                   </div>
-                ),
-              )
+                  {m.error ? (
+                    <button
+                      type="button"
+                      onClick={() => handleRetry(m)}
+                      disabled={sending}
+                      className="ml-1 mt-1 flex items-center gap-1 text-[11px] font-semibold transition-colors disabled:opacity-50"
+                      style={{ color: 'var(--accent)' }}
+                    >
+                      <RotateCcw size={11} />
+                      Retry
+                    </button>
+                  ) : null}
+                  {!m.streaming && !m.error ? (
+                    <div className="ml-1 flex items-center gap-2">
+                      <TrackBadge track={m.track} />
+                    </div>
+                  ) : null}
+                  {!m.streaming && !m.error && m.question ? (
+                    <div className="ml-1 mt-2">
+                      <RelatedQuestions question={m.question} onQuestionClick={sendQuestion} />
+                    </div>
+                  ) : null}
+                  {!m.streaming && !m.error ? (
+                    <FeedbackButtons message={m} onFeedback={handleFeedback} />
+                  ) : null}
+                </div>
+              ),
             )}
           </div>
 
