@@ -4,13 +4,14 @@ import ReaderHomePage from './ReaderHomePage'
 import ReaderLibraryPage from './ReaderLibraryPage'
 import ReaderPage from './ReaderPage'
 import ImportModal from '../components/ImportModal'
+import PurchaseCreditsModal from '../components/PurchaseCreditsModal'
 import SettingsModal from '../components/SettingsModal'
 import SessionEndModal from '../components/SessionEndModal'
 import AdminPanel from '../components/AdminPanel'
 import { useAnnotations } from '../hooks/useAnnotations'
 import { useAudioPlayer } from '../hooks/useAudioPlayer'
 import { usePdfSave } from '../hooks/usePdfSave'
-import { clearTTSCache } from '../services/openai-tts'
+import { clearSessionCache } from '../services/tts-cache'
 import { listStoredBooks, saveStoredBook, uploadBookPdf, hydrateBook } from '../services/library-storage'
 import { getMyCredits, recordUsage, listSharedBooksForMe, markSharedBookOpened } from '../services/reader-admin'
 import { useAuth } from '../../../hooks/useAuth'
@@ -27,6 +28,7 @@ export default function BooksApp() {
   const [library, setLibrary] = useState([])
   const [sharedLibrary, setSharedLibrary] = useState([])
   const [credits, setCredits] = useState(0)
+  const [showNoCredits, setShowNoCredits] = useState(false)
   const [selectionInfo, setSelectionInfo] = useState(null)
   const [showImport, setShowImport] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -39,14 +41,15 @@ export default function BooksApp() {
     return stored ? JSON.parse(stored) : []
   })
 
-  // Track sentences played this session for usage deduction
-  const sessionSentencesRef = useRef(0)
-  const sessionStartTimeRef = useRef(Date.now())
-  const sessionStartIdxRef = useRef(0)
+  // Track actual seconds of audio played this session (only increments on audio.onended)
+  const sessionSecondsRef = useRef(0)
 
   const sentences = book?.sentences ?? []
   const { highlights, notes, addHighlight, addNote, removeAnnotation } = useAnnotations(book?.isShared ? null : book?.id)
-  const { currentIdx, isPlaying, elapsedTime, totalTime, play, pause, seekToIdx, setSpeed: setPlayerSpeed, setVoice: setPlayerVoice } = useAudioPlayer(sentences, voice, speed, book?.progressIndex ?? 0)
+  const { currentIdx, isPlaying, elapsedTime, totalTime, play, pause, seekToIdx, setSpeed: setPlayerSpeed, setVoice: setPlayerVoice } = useAudioPlayer(
+    sentences, voice, speed, book?.progressIndex ?? 0,
+    (secs) => { sessionSecondsRef.current += secs },
+  )
   const { saveState, saveError, saveHighlights } = usePdfSave()
 
   // Load library + credits on mount
@@ -70,11 +73,6 @@ export default function BooksApp() {
   useEffect(() => { localStorage.setItem('immerse-speed', String(speed)) }, [speed])
   useEffect(() => { localStorage.setItem('immerse-font-size', String(fontSize)) }, [fontSize])
   useEffect(() => { localStorage.setItem('immerse-line-height', String(lineHeight)) }, [lineHeight])
-
-  // Track sentences played for usage metering
-  useEffect(() => {
-    sessionSentencesRef.current = currentIdx
-  }, [currentIdx])
 
   // Progress sync (debounced, own books only)
   useEffect(() => {
@@ -103,9 +101,7 @@ export default function BooksApp() {
         setBookLoading(false)
       }
     }
-    sessionSentencesRef.current = 0
-    sessionStartTimeRef.current = Date.now()
-    sessionStartIdxRef.current = b.progressIndex ?? 0
+    sessionSecondsRef.current = 0
     setBook(b)
     // Load bookmarks for this book
     const stored = localStorage.getItem(`immerse-bookmarks-${b.id}`)
@@ -131,13 +127,12 @@ export default function BooksApp() {
     openBook(b)
   }
 
-  // Deduct credits when session ends
+  // Deduct credits when session ends — uses real audio duration, never estimated
   async function deductUsage() {
     if (!profile?.id) return
-    const sentencesPlayed = sessionSentencesRef.current
-    if (!sentencesPlayed) return
-    // Estimate: avg sentence ~12 words, ~60 wpm TTS → 0.2 min per sentence
-    const minsUsed = sentencesPlayed * 0.2
+    const secsPlayed = sessionSecondsRef.current
+    if (secsPlayed <= 0) return
+    const minsUsed = secsPlayed / 60
     try {
       await recordUsage(profile.id, minsUsed)
       setCredits((prev) => Math.max(0, prev - minsUsed))
@@ -212,7 +207,7 @@ export default function BooksApp() {
   function handleSessionSave() { saveHighlights(book, highlights) }
   function handleNewBook() {
     deductUsage()
-    setBook(null); setPage('home'); clearTTSCache(); setShowEndModal(false)
+    setBook(null); setPage('home'); clearSessionCache(); setShowEndModal(false)
   }
 
   async function handleRenameBook(bookId, newTitle) {
@@ -232,6 +227,11 @@ export default function BooksApp() {
   async function refreshCredits() {
     const bal = await getMyCredits().catch(() => 0)
     setCredits(bal)
+  }
+
+  function guardedPlay(idx) {
+    if (credits <= 0) { setShowNoCredits(true); return }
+    play(idx)
   }
 
   const creditsHrs = (credits / 60).toFixed(1)
@@ -279,7 +279,7 @@ export default function BooksApp() {
           lineHeight={lineHeight}
           credits={creditsHrs}
           readOnly={!!book?.isShared}
-          onPlay={play}
+          onPlay={guardedPlay}
           onPause={pause}
           onSeek={seekToIdx}
           onSkip={skip}
@@ -304,6 +304,21 @@ export default function BooksApp() {
         />
       )}
 
+      {showNoCredits && (
+        <div className="im-modal-overlay" onClick={() => setShowNoCredits(false)}>
+          <div className="im-sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360, textAlign: 'center' }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🎧</div>
+            <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--im-text)', marginBottom: 8 }}>Out of listening credits</h2>
+            <p style={{ fontSize: 13, color: 'var(--im-text-dim)', lineHeight: 1.6, marginBottom: 20 }}>
+              You've used all your Immerse credits. Contact your admin to get more — credits are gifted directly to your account.
+            </p>
+            <button onClick={() => setShowNoCredits(false)}
+              style={{ padding: '10px 24px', background: 'var(--im-blue)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
       {showImport && <ImportModal onClose={() => setShowImport(false)} onImport={handleImport} />}
       {showSettings && (
         <SettingsModal

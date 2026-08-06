@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { fetchSentenceAudio } from '../services/openai-tts'
+import { fetchSegmentAudio } from '../services/tts-cache'
 
-export function useAudioPlayer(sentences, voice, speed, initialIdx = 0) {
+export function useAudioPlayer(sentences, voice, speed, initialIdx = 0, onSentencePlayed) {
   const [currentIdx, setCurrentIdx] = useState(initialIdx)
   const [isPlaying, setIsPlaying] = useState(false)
 
@@ -28,7 +28,7 @@ export function useAudioPlayer(sentences, voice, speed, initialIdx = 0) {
     const fetchedVoice = r.current.voice
     let audio
     try {
-      audio = await fetchSentenceAudio(sentences[idx], fetchedVoice)
+      audio = await fetchSegmentAudio(sentences[idx], fetchedVoice)
     } catch (err) {
       console.error('TTS fetch failed', err)
       r.current.isPlaying = false
@@ -44,12 +44,15 @@ export function useAudioPlayer(sentences, voice, speed, initialIdx = 0) {
     }
 
     audio.playbackRate = r.current.speed
-    audio.onended = () => doPlayRef.current?.(r.current.currentIdx + 1)
+    audio.onended = () => {
+      if (audio.duration && audio.duration > 0) onSentencePlayed?.(audio.duration)
+      doPlayRef.current?.(r.current.currentIdx + 1)
+    }
     r.current.currentAudio = audio
 
-    // prefetch next
-    if (idx + 1 < sentences.length) fetchSentenceAudio(sentences[idx + 1], fetchedVoice).catch(() => {})
-    if (idx + 2 < sentences.length) fetchSentenceAudio(sentences[idx + 2], fetchedVoice).catch(() => {})
+    // prefetch next 2 segments — triggers server-side generation before they're needed
+    if (idx + 1 < sentences.length) fetchSegmentAudio(sentences[idx + 1], fetchedVoice).catch(() => {})
+    if (idx + 2 < sentences.length) fetchSegmentAudio(sentences[idx + 2], fetchedVoice).catch(() => {})
 
     try {
       await audio.play()
