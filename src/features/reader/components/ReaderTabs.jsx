@@ -6,7 +6,7 @@ import MobilePlayer from './MobilePlayer'
 import PdfPageView from './PdfPageView'
 import { sentenceIdxForPage } from '../services/page-map'
 
-const TABS = ['Read', 'Listen', 'Tandem', 'Pages']
+const TABS = ['Read', 'Listen', 'Tandem']
 
 export default function ReaderTabs({
   book, sentences, currentIdx, isPlaying, elapsedTime, totalTime, voice, speed,
@@ -16,23 +16,13 @@ export default function ReaderTabs({
   onEndSession, onOpenSettings, viewMode, onToggleViewMode, showChapters, onShowChapters,
   pdfBuffer, totalPages, currentPage, sentencePageMap,
 }) {
-  const [activeTab, setActiveTab] = useState(() => {
-    const saved = localStorage.getItem('immerse-tab')
-    // Don't restore Pages tab if PDF not available
-    if (saved === 'Pages' && !pdfBuffer) return 'Read'
-    return saved || 'Read'
-  })
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('immerse-tab') || 'Read')
   const isDesktop = window.innerWidth >= 768
 
-  // Track which page Page View is showing so we can sync position when leaving
+  // Track the page the PDF view is currently on so position can be synced back
   const pdfPageRef = useRef(currentPage)
 
   function handleTabChange(tab) {
-    // Sync Page View position back to sentence-based views when leaving
-    if (activeTab === 'Pages' && tab !== 'Pages' && sentencePageMap?.length) {
-      const sentIdx = sentenceIdxForPage(sentencePageMap, pdfPageRef.current)
-      onSeek(sentIdx)
-    }
     setActiveTab(tab)
     localStorage.setItem('immerse-tab', tab)
   }
@@ -146,21 +136,44 @@ export default function ReaderTabs({
     )
   }
 
-  // Read tab: clean text view with minimal highlighting/notes (Apple Notes style)
+  // Read tab: switches between text rendering modes and PDF canvas based on viewMode
   function ReadView() {
-    // When user selects text, also seek audio to that sentence so playback starts from selection
-    function handleSelectionChange(info) {
-      if (info?.sentenceIdx != null && info.sentenceIdx >= 0) {
-        onSeek(info.sentenceIdx)
+    // PDF page-flip view (viewMode === 'pdf')
+    if (viewMode === 'pdf') {
+      if (!pdfBuffer) {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8, color: 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
+            <span>PDF view not available — re-import the book as a PDF file.</span>
+          </div>
+        )
       }
+      return (
+        <PdfPageView
+          pdfBuffer={pdfBuffer}
+          totalPages={totalPages ?? 1}
+          initialPage={currentPage ?? 1}
+          onPageChange={(p) => {
+            pdfPageRef.current = p
+            // Sync reading position back so audio tabs resume from the right place
+            if (sentencePageMap?.length) {
+              onSeek(sentenceIdxForPage(sentencePageMap, p))
+            }
+          }}
+        />
+      )
+    }
+
+    // Text rendering views (scroll / pages / teleprompter)
+    function handleSelectionChange(info) {
+      if (info?.sentenceIdx != null && info.sentenceIdx >= 0) onSeek(info.sentenceIdx)
       onSelectionChange(info)
     }
 
-    const isTeleprompter = viewMode === 'teleprompter'
+    const isFullscreen = viewMode === 'teleprompter'
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--im-bg)' }}>
-        <div style={{ flex: 1, overflowY: isTeleprompter ? 'hidden' : 'auto', padding: isTeleprompter ? 0 : (isDesktop ? '40px 120px' : '20px 16px'), maxWidth: isTeleprompter ? '100%' : (isDesktop ? 800 : '100%'), margin: '0 auto', width: '100%', display: isTeleprompter ? 'flex' : 'block', flexDirection: 'column' }}>
-          {!isTeleprompter && (
+        <div style={{ flex: 1, overflowY: isFullscreen ? 'hidden' : 'auto', padding: isFullscreen ? 0 : (isDesktop ? '40px 120px' : '20px 16px'), maxWidth: isFullscreen ? '100%' : (isDesktop ? 800 : '100%'), margin: '0 auto', width: '100%', display: isFullscreen ? 'flex' : 'block', flexDirection: 'column' }}>
+          {!isFullscreen && (
             <div style={{ marginBottom: 40 }}>
               <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--im-text)', marginBottom: 8 }}>{book.title}</div>
               {book.author && <div style={{ fontSize: 14, color: 'var(--im-text-dim)' }}>{book.author}</div>}
@@ -236,31 +249,10 @@ export default function ReaderTabs({
     )
   }
 
-  // Pages tab: actual PDF canvas rendering with 3D page flip
-  function PagesView() {
-    if (!pdfBuffer) {
-      return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8, color: 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
-          <span>Page view requires a PDF source.</span>
-          <span style={{ fontSize: 11 }}>Re-import the book as a PDF file to enable this view.</span>
-        </div>
-      )
-    }
-    return (
-      <PdfPageView
-        pdfBuffer={pdfBuffer}
-        totalPages={totalPages ?? 1}
-        initialPage={currentPage ?? 1}
-        onPageChange={(p) => { pdfPageRef.current = p }}
-      />
-    )
-  }
-
   const tabViews = {
     Read: <ReadView />,
     Listen: <ListenView />,
     Tandem: <TandemView />,
-    Pages: <PagesView />,
   }
 
   return (
@@ -275,7 +267,7 @@ export default function ReaderTabs({
         overflowX: 'auto',
         flexShrink: 0,
       }}>
-        {TABS.filter(tab => tab !== 'Pages' || (pdfBuffer && totalPages > 0)).map(tab => (
+        {TABS.map(tab => (
           <button
             key={tab}
             onClick={() => handleTabChange(tab)}

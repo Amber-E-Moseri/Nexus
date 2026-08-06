@@ -69,16 +69,22 @@ export default function ReaderPage({
     localStorage.setItem('immerse-sidebar-visible', String(next))
   }
 
-  const VIEW_MODES = ['scroll', 'pages', 'teleprompter']
+  const hasPdf = !!(book?.pdfBuffer && totalPages > 0)
+  const VIEW_MODES = hasPdf
+    ? ['scroll', 'pdf', 'pages', 'teleprompter']
+    : ['scroll', 'pages', 'teleprompter']
+
   function toggleViewMode() {
     const next = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length]
     setViewMode(next)
     localStorage.setItem('immerse-view-mode', next)
   }
 
-  const viewModeLabel = viewMode === 'scroll' ? { icon: <Maximize2 size={12} />, label: 'Scroll' }
-    : viewMode === 'pages' ? { icon: <Book size={12} />, label: 'Pages' }
-    : { icon: <AlignLeft size={12} />, label: 'Focus' }
+  const viewModeLabel =
+    viewMode === 'scroll'       ? { icon: <Maximize2 size={12} />, label: 'Scroll' }
+    : viewMode === 'pdf'        ? { icon: <Book size={12} />,      label: 'PDF' }
+    : viewMode === 'pages'      ? { icon: <AlignLeft size={12} />, label: 'Pages' }
+    :                             { icon: <AlignLeft size={12} />, label: 'Focus' }
 
   const annotations = [
     ...highlights.map((h) => ({ ...h })),
