@@ -39,6 +39,12 @@ async function fetchProfile(userId) {
     isProgramsMember = dept?.is_programs ?? false
   }
 
+  // Fetch all departments for space/scope selection in admin views
+  const { data: departments } = await supabase
+    .from('departments')
+    .select('id, name')
+    .order('name')
+
   // Space roles (Phase 3 permission model): ors/programs/media/dept_lead are
   // granted per-space via the space_roles table, not users.role. Attached to
   // the profile so hasSpaceRole()/route guards can resolve them without extra
@@ -60,7 +66,7 @@ async function fetchProfile(userId) {
     .select('grant_type')
     .eq('user_id', userId)
 
-  return { ...data, space_roles: spaceRoles ?? [], grants: (grantRows ?? []).map((g) => g.grant_type), is_programs_member: isProgramsMember }
+  return { ...data, departments: departments ?? [], space_roles: spaceRoles ?? [], grants: (grantRows ?? []).map((g) => g.grant_type), is_programs_member: isProgramsMember }
 }
 
 export function AuthProvider({ children }) {
