@@ -332,6 +332,13 @@ export default function NovaChat() {
             ) : null}
           </div>
 
+          <div
+            className="border-b px-4 py-2"
+            style={{ borderColor: 'var(--border-light)', background: 'var(--surface)' }}
+          >
+            <IntentChips selected={selectedIntent} onSelect={setSelectedIntent} />
+          </div>
+
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
             {messages.map((m) =>
               m.role === 'user' ? (
