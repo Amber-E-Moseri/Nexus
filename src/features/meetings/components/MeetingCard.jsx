@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { getMeetingTasks } from '../lib/meetings'
 import { getTaskStatusColor, isTaskCompleted } from '../../../lib/taskStatuses'
 import { safeHref } from '../../../lib/urlUtils'
@@ -246,6 +247,37 @@ export default function MeetingCard({ meeting, canManage = false, onTasksAdded }
               onCancel={() => setShowBridge(false)}
             />
           ) : null}
+
+          {/* Navigation links to the full meeting detail view */}
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {(canManage || !meeting.summary) && (
+              <Link
+                to={`/meetings/${meeting.id}`}
+                style={{
+                  padding: '6px 14px', borderRadius: 20,
+                  background: 'var(--accent)', color: '#fff',
+                  fontSize: 12, fontWeight: 700, textDecoration: 'none',
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                }}
+              >
+                ✏ Log Meeting
+              </Link>
+            )}
+            {(meeting.summary || meeting.minutes) && (
+              <Link
+                to={`/meetings/${meeting.id}?tab=minutes`}
+                style={{
+                  padding: '6px 14px', borderRadius: 20,
+                  background: 'transparent', color: 'var(--accent)',
+                  border: '1px solid var(--accent)',
+                  fontSize: 12, fontWeight: 700, textDecoration: 'none',
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                }}
+              >
+                📄 View Minutes
+              </Link>
+            )}
+          </div>
         </div>
       ) : null}
     </article>
