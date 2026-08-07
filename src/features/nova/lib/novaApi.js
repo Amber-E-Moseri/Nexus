@@ -62,6 +62,36 @@ export async function askNova(question, { onText, onDone, signal } = {}) {
   return { text, track, logId }
 }
 
+/**
+ * Calls nova-orchestrate with a structured intent request.
+ * Returns a NovaResponse: { answer, sources, intent, sessionId }.
+ * @param {{ intent?: string, message: string, context?: object }} body
+ * @returns {Promise<{ answer: string, sources: Array, intent: string, sessionId?: string }>}
+ */
+export async function askNovaOrchestrate(body) {
+  const session = (await supabase.auth.getSession()).data.session
+  if (!session?.access_token) {
+    throw new Error('Session expired. Please log in again.')
+  }
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+  const response = await fetch(`${supabaseUrl}/functions/v1/nova-orchestrate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.error || `Nova is unavailable right now (${response.status}).`)
+  }
+
+  return await response.json()
+}
+
 /** Records a thumbs up/down on a previously-answered question. */
 export async function submitNovaFeedback(logId, feedback) {
   if (!logId) return
