@@ -46,19 +46,27 @@ async function gatherMeetingContext(
     const endISO = windowEnd.toISOString().slice(0, 10)
 
     if (searchTerm && searchTerm.length > 2) {
-      const { data } = await client
-        .from('meetings')
-        .select('id, title, date, meeting_type, agenda, summary, minutes')
-        .ilike('title', `%${searchTerm}%`)
-        .gte('date', `${startISO}T00:00:00`)
-        .lte('date', `${endISO}T23:59:59`)
-        .order('date', { ascending: true })
-        .limit(1)
-        .maybeSingle()
-      meeting = data
+      // Restrict to meetings the user attends — join through meeting_attendance
+      const { data: attendanceRows } = await client
+        .from('meeting_attendance')
+        .select('meeting:meetings!meeting_id(id, title, date, meeting_type, agenda, summary, minutes)')
+        .eq('user_id', ctx.userId)
+        .gte('meetings.date', `${startISO}T00:00:00`)
+        .lte('meetings.date', `${endISO}T23:59:59`)
+
+      const accessible = (attendanceRows ?? [])
+        .map((r: any) => r.meeting)
+        .filter(Boolean)
+        .filter((m: any) => m.title?.toLowerCase().includes(searchTerm.toLowerCase()))
+
+      // Prefer closest upcoming; fall back to most recent past
+      const upcoming = accessible.filter((m: any) => m.date >= `${todayISO()}T00:00:00`)
+      meeting = (upcoming.length > 0 ? upcoming : accessible).sort((a: any, b: any) =>
+        a.date < b.date ? -1 : 1
+      )[0] ?? null
     }
 
-    // Fallback: next upcoming meeting the user is attending
+    // Fallback: next upcoming meeting the user is attending (no title filter)
     if (!meeting) {
       const today = todayISO()
       const { data: attendanceRow } = await client
@@ -136,12 +144,13 @@ export async function handleMeetingPrep(
   sessionId: string | null,
 ): Promise<NovaResponse> {
   const meetingId = (request.context as any)?.meetingId ?? null
+  const confirmed = (request.context as any)?.confirmed === true
 
   const context = await gatherMeetingContext(client, ctx, meetingId, request.message)
 
   if (!context) {
     return {
-      answer: "I couldn't find the meeting you're referring to. Try clicking **Prepare with Nova** directly from the meeting page, or specify the meeting name.",
+      answer: "I couldn't find a meeting you have access to matching that name. Try clicking **Prepare with Nova** directly from the meeting page, or be more specific with the meeting name.",
       sources: [],
       intent: 'meeting_prep',
       sessionId: sessionId ?? undefined,
@@ -149,6 +158,28 @@ export async function handleMeetingPrep(
   }
 
   const { meeting, attendees, openTasks, lastMinutes, sprint } = context
+
+  // When the meeting was found by title search (no explicit meetingId), ask for
+  // confirmation before running the expensive brief — protects against wrong match.
+  if (!meetingId && !confirmed) {
+    const dateStr = meeting.date
+      ? new Date(meeting.date).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : 'Date unknown'
+    return {
+      answer: `I found **${meeting.title}** (${dateStr}). Is this the meeting you want to prepare for?`,
+      sources: [meetingSource(meeting.id, meeting.title)],
+      intent: 'meeting_prep',
+      sessionId: sessionId ?? undefined,
+      metadata: {
+        pendingMeeting: {
+          id: meeting.id,
+          title: meeting.title,
+          date: meeting.date,
+          type: meeting.meeting_type,
+        },
+      },
+    }
+  }
 
   const sources: NovaSource[] = [
     meetingSource(meeting.id, meeting.title),

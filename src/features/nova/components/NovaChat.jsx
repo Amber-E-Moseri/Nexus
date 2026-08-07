@@ -5,6 +5,39 @@ import NovaMarkdown from './NovaMarkdown'
 import SourceChip from './SourceChip'
 import ConfirmAction from './ConfirmAction'
 
+function MeetingConfirmCard({ meeting, onConfirm, onCancel }) {
+  const dateStr = meeting.date
+    ? new Date(meeting.date).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : null
+  return (
+    <div style={{
+      marginTop: 8, border: '1px solid var(--border-light)',
+      borderLeft: '3px solid var(--accent)', borderRadius: 8,
+      overflow: 'hidden', fontSize: 12,
+    }}>
+      <div style={{ padding: '8px 12px', background: 'var(--surface-secondary)', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <CalendarClock size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+        <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>Confirm meeting</span>
+      </div>
+      <div style={{ padding: '10px 12px' }}>
+        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{meeting.title}</div>
+        {dateStr && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 10 }}>{dateStr}</div>}
+        <div style={{ display: 'flex', gap: 7 }}>
+          <button type="button" onClick={onConfirm} style={{
+            padding: '5px 14px', borderRadius: 20, fontWeight: 700, fontSize: 11,
+            background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+          }}>Yes, prepare this</button>
+          <button type="button" onClick={onCancel} style={{
+            padding: '5px 14px', borderRadius: 20, fontWeight: 600, fontSize: 11,
+            background: 'transparent', color: 'var(--text-secondary)',
+            border: '1px solid var(--border-light)', cursor: 'pointer', fontFamily: 'inherit',
+          }}>Wrong meeting</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const INTENT_CHIPS = [
   { intent: 'daily_brief', label: 'Daily Brief', Icon: Sun, defaultMessage: 'Give me my daily brief.' },
   { intent: 'meeting_prep', label: 'Meeting Prep', Icon: CalendarClock, defaultMessage: 'Prepare me for my next meeting.' },
@@ -203,7 +236,7 @@ export default function NovaChat() {
     return idCounter.current
   }
 
-  async function sendQuestion(question, { novaMsgId, userMsgId, intent } = {}) {
+  async function sendQuestion(question, { novaMsgId, userMsgId, intent, context } = {}) {
     setSending(true)
     // If no chip is selected (or chip is 'ask'), try to infer from the message.
     const inferred = (!selectedIntent || selectedIntent === 'ask') ? inferIntent(question) : null
@@ -227,11 +260,11 @@ export default function NovaChat() {
     try {
       if (resolvedIntent) {
         // Nova-orchestrate: JSON response, no streaming.
-        const response = await askNovaOrchestrate({ intent: resolvedIntent, message: question })
+        const response = await askNovaOrchestrate({ intent: resolvedIntent, message: question, context })
         setMessages((prev) =>
           prev.map((m) =>
             m.id === novaMsgId
-              ? { ...m, text: response.answer, sources: response.sources ?? [], proposedAction: response.proposedAction ?? null, streaming: false }
+              ? { ...m, text: response.answer, sources: response.sources ?? [], proposedAction: response.proposedAction ?? null, pendingMeeting: response.metadata?.pendingMeeting ?? null, streaming: false }
               : m,
           ),
         )
@@ -411,6 +444,23 @@ export default function NovaChat() {
                   ) : null}
                   {!m.streaming && !m.error ? (
                     <FeedbackButtons message={m} onFeedback={handleFeedback} />
+                  ) : null}
+                  {!m.streaming && !m.error && m.pendingMeeting ? (
+                    <div className="ml-1 mt-1" style={{ maxWidth: '92%', width: '100%' }}>
+                      <MeetingConfirmCard
+                        meeting={m.pendingMeeting}
+                        onConfirm={() => {
+                          setMessages((prev) => prev.map((msg) => msg.id === m.id ? { ...msg, pendingMeeting: null } : msg))
+                          sendQuestion(`Prepare meeting: ${m.pendingMeeting.title}`, {
+                            intent: 'meeting_prep',
+                            context: { meetingId: m.pendingMeeting.id, confirmed: true },
+                          })
+                        }}
+                        onCancel={() => {
+                          setMessages((prev) => prev.map((msg) => msg.id === m.id ? { ...msg, pendingMeeting: null } : msg))
+                        }}
+                      />
+                    </div>
                   ) : null}
                   {!m.streaming && !m.error && m.proposedAction ? (
                     <div className="ml-1 mt-2" style={{ maxWidth: '92%', width: '100%' }}>
