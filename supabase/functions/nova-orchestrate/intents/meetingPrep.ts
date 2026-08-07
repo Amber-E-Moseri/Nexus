@@ -30,16 +30,28 @@ async function gatherMeetingContext(
       .single()
     meeting = data
   } else {
-    // Extract meeting name from free-text query
-    const nameMatch = query.match(/(?:prepare|prep|brief)(?:\s+for)?(?:\s+the)?\s+(.+?)(?:\s+meeting)?$/i)
+    // Extract meeting name from free-text query — broad pattern covers:
+    // "prepare for board meeting", "brief on the sync", "prep hslhs", "what's the status of monday standup"
+    const nameMatch = query.match(
+      /(?:prepare|prep|brief(?:ing)?|ready for|status of|about)\s+(?:for\s+)?(?:the\s+)?(.+?)(?:\s+meeting)?\s*$/i
+    ) ?? query.match(/meeting[:\s]+(.+)/i)
     const searchTerm = nameMatch?.[1]?.trim()
+
+    // Search window: 7 days ago → 60 days out (catches today's and recent past meetings)
+    const windowStart = new Date()
+    windowStart.setDate(windowStart.getDate() - 7)
+    const windowEnd = new Date()
+    windowEnd.setDate(windowEnd.getDate() + 60)
+    const startISO = windowStart.toISOString().slice(0, 10)
+    const endISO = windowEnd.toISOString().slice(0, 10)
+
     if (searchTerm && searchTerm.length > 2) {
-      const today = todayISO()
       const { data } = await client
         .from('meetings')
         .select('id, title, date, meeting_type, agenda, summary, minutes')
         .ilike('title', `%${searchTerm}%`)
-        .gte('date', `${today}T00:00:00`)
+        .gte('date', `${startISO}T00:00:00`)
+        .lte('date', `${endISO}T23:59:59`)
         .order('date', { ascending: true })
         .limit(1)
         .maybeSingle()
