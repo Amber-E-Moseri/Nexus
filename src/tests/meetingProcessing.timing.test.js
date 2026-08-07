@@ -44,7 +44,7 @@ class PerfTimer {
     const start = this.marks[startLabel]
     const end = endLabel ? this.marks[endLabel] : performance.now()
 
-    if (!start) {
+    if (start === undefined || start === null) {
       console.warn(`Mark "${startLabel}" not found`)
       return null
     }
