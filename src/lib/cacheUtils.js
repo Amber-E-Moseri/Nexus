@@ -66,3 +66,89 @@ export function removeItemSafe(key) {
     console.error(`Failed to remove cache key ${key}:`, error)
   }
 }
+
+// IndexedDB helpers for persistent session storage (iOS PWA session recovery)
+const DB_NAME = 'nexus'
+const DB_VERSION = 1
+const STORE_NAME = 'session'
+const SESSION_KEY = 'auth-session'
+const SESSION_TTL = 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
+
+export async function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION)
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => resolve(request.result)
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME)
+      }
+    }
+  })
+}
+
+export async function saveSession(sessionData) {
+  try {
+    const db = await openDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_NAME], 'readwrite')
+      const store = tx.objectStore(STORE_NAME)
+      const payload = {
+        ...sessionData,
+        savedAt: Date.now(),
+      }
+      const request = store.put(payload, SESSION_KEY)
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => resolve(payload)
+    })
+  } catch (error) {
+    console.error('Failed to save session to IndexedDB:', error)
+    return null
+  }
+}
+
+export async function loadSession() {
+  try {
+    const db = await openDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_NAME], 'readonly')
+      const store = tx.objectStore(STORE_NAME)
+      const request = store.get(SESSION_KEY)
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => {
+        const session = request.result
+        if (!session) {
+          resolve(null)
+          return
+        }
+        // Check TTL: if saved more than SESSION_TTL ago, consider expired
+        const age = Date.now() - session.savedAt
+        if (age > SESSION_TTL) {
+          clearSession() // Async cleanup, don't await
+          resolve(null)
+        } else {
+          resolve(session)
+        }
+      }
+    })
+  } catch (error) {
+    console.error('Failed to load session from IndexedDB:', error)
+    return null
+  }
+}
+
+export async function clearSession() {
+  try {
+    const db = await openDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_NAME], 'readwrite')
+      const store = tx.objectStore(STORE_NAME)
+      const request = store.delete(SESSION_KEY)
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => resolve()
+    })
+  } catch (error) {
+    console.error('Failed to clear session from IndexedDB:', error)
+  }
+}

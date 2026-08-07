@@ -169,3 +169,21 @@ export async function getPushStatus() {
     }
   }
 }
+
+/**
+ * Get current push subscription object (used for iOS PWA recovery)
+ */
+export async function getPushSubscription() {
+  if (!pushSupported()) {
+    return null
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready
+    const subscription = await registration.pushManager.getSubscription()
+    return subscription
+  } catch (err) {
+    console.error('Failed to get push subscription:', err)
+    return null
+  }
+}

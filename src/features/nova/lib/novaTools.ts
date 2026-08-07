@@ -20,7 +20,13 @@ export interface NovaToolDefinition {
   cache_control?: { type: 'ephemeral' }
 }
 
-export const NOVA_TOOL_NAMES = ['get_sprint_due_today', 'get_my_followups_today'] as const
+export const NOVA_TOOL_NAMES = [
+  'get_sprint_due_today',
+  'get_my_followups_today',
+  'get_my_work_summary',
+  'get_onboarding_status',
+  'get_department_health',
+] as const
 export type NovaToolName = (typeof NOVA_TOOL_NAMES)[number]
 
 // The tool schema itself is stable across every call regardless of who's
@@ -53,6 +59,31 @@ export function buildNovaToolDefinitions(): NovaToolDefinition[] {
         'preserve that grouping in your answer rather than flattening it into one list.',
       input_schema: { type: 'object', properties: {} },
       cache_control: { type: 'ephemeral' },
+    },
+    {
+      name: 'get_my_work_summary',
+      description:
+        "Summarize everything the asking user needs to know about their work today and this week: " +
+        'tasks due today, tasks due this week, upcoming meetings, unresolved meeting action items, ' +
+        'and their onboarding status if incomplete. Use this to answer "What should I focus on today?" ' +
+        'or "What\'s my week looking like?" questions.',
+      input_schema: { type: 'object', properties: {} },
+    },
+    {
+      name: 'get_onboarding_status',
+      description:
+        "Get the asking user's Nexus onboarding progress and next steps. Use this when the user " +
+        'asks about onboarding, setup, or "what am I supposed to do next?"',
+      input_schema: { type: 'object', properties: {} },
+    },
+    {
+      name: 'get_department_health',
+      description:
+        "Get the asking user's department's operational health score and breakdown (if the user is " +
+        'a department lead or admin). Includes task execution rate, meeting discipline, action ' +
+        'follow-through, adoption metrics, and explainability. Use this when asked "How is our health?", ' +
+        '"Are we keeping up?", or similar. Only department leads and admins can access this.',
+      input_schema: { type: 'object', properties: {} },
     },
   ]
 }

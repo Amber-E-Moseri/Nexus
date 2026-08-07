@@ -43,6 +43,7 @@ import { RegionalUpdateWidget } from '../features/regional-updates/components/Re
 import { getDashboardPresets } from '../features/dashboard/lib/dashboard-queries'
 import { useDashboardData } from '../features/dashboard/hooks/useDashboardData'
 import WidgetErrorBoundary from '../features/dashboard/components/WidgetErrorBoundary'
+import OnboardingChecklist from '../features/dashboard/components/OnboardingChecklist'
 import { FONT_BODY, FONT_HEADING } from '../lib/fonts'
 import BorderGlow from '../components/ui/BorderGlow'
 
@@ -1072,6 +1073,9 @@ export default function Dashboard() {
             </button>
           </div>
         </section>
+
+        {/* ── Onboarding Checklist ── */}
+        <OnboardingChecklist />
 
         {/* ── Hero stat cards — semantic accent mapping: purple anchor /
             blue progress / orange priority / green active ── */}

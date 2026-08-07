@@ -249,9 +249,9 @@ export default function EmailAdminPage() {
   // Update iframe preview when form changes
   useEffect(() => {
     if (showPreview && iframeRef.current) {
-      iframeRef.current.srcdoc = buildPreviewHtml(form)
+      iframeRef.current.srcdoc = buildPreviewHtml(form, emailFormat)
     }
-  }, [form, showPreview])
+  }, [form, showPreview, emailFormat])
 
   async function loadDepartments() {
     const { data } = await supabase
@@ -657,47 +657,73 @@ export default function EmailAdminPage() {
             </div>
 
             {showPreview && (
-              <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, overflow: 'hidden', background: '#f5f5f5' }}>
-                <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>Subject: <strong style={{ color: TEXT }}>{form.subject || (emailFormat === 'standard' && form.feature_name ? `New in Nexus: ${form.feature_name}` : '(No subject)')}</strong></div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {['desktop', 'mobile'].map(mode => (
+              <div
+                onClick={() => setShowPreview(false)}
+                style={{
+                  position: 'fixed', inset: 0, zIndex: 50,
+                  background: 'rgba(45,42,34,0.18)',
+                  backdropFilter: 'blur(2px)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <div
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    background: '#fff', borderRadius: 14, overflow: 'hidden',
+                    boxShadow: '0 8px 40px rgba(45,42,34,0.12)',
+                    border: `1px solid ${BORDER}`,
+                    display: 'flex', flexDirection: 'column',
+                    maxHeight: '90vh',
+                  }}
+                >
+                  <div style={{ padding: '10px 14px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                    <div style={{ fontSize: 11, color: MUTED }}>
+                      Subject: <strong style={{ color: TEXT }}>{form.subject || (emailFormat === 'standard' && form.feature_name ? `New in Nexus: ${form.feature_name}` : '(No subject)')}</strong>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {['desktop', 'mobile'].map(mode => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setPreviewMode(mode)}
+                          style={{
+                            padding: '4px 9px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                            border: `1px solid ${previewMode === mode ? PRIMARY : BORDER}`,
+                            background: previewMode === mode ? PRIMARY + '12' : '#fff',
+                            color: previewMode === mode ? PRIMARY : MUTED,
+                            cursor: 'pointer',
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                          }}
+                        >
+                          {mode === 'desktop' ? <Monitor size={11} /> : <Smartphone size={11} />}
+                          {mode === 'mobile' ? 'Mobile' : 'Desktop'}
+                        </button>
+                      ))}
                       <button
-                        key={mode}
                         type="button"
-                        onClick={() => setPreviewMode(mode)}
-                        style={{
-                          padding: '5px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600,
-                          border: `1px solid ${previewMode === mode ? PRIMARY : BORDER}`,
-                          background: previewMode === mode ? PRIMARY + '12' : '#fff',
-                          color: previewMode === mode ? PRIMARY : MUTED,
-                          cursor: 'pointer',
-                          display: 'inline-flex', alignItems: 'center', gap: 3,
-                        }}
+                        onClick={() => setShowPreview(false)}
+                        style={{ marginLeft: 4, padding: '4px 8px', borderRadius: 4, border: `1px solid ${BORDER}`, background: '#fff', fontSize: 11, color: MUTED, cursor: 'pointer' }}
                       >
-                        {mode === 'desktop' ? <Monitor size={11} /> : <Smartphone size={11} />}
-                        {mode === 'mobile' ? 'Mobile' : 'Desktop'}
+                        ✕
                       </button>
-                    ))}
+                    </div>
                   </div>
-                </div>
-                <div style={{ padding: '16px', background: '#f5f5f5', display: 'flex', justifyContent: 'center' }}>
-                  <iframe
-                    ref={iframeRef}
-                    srcDoc={buildPreviewHtml(form, emailFormat)}
-                    style={{
-                      width: previewMode === 'desktop' ? 600 : 375,
-                      height: previewMode === 'desktop' ? 520 : 680,
-                      border: 'none',
-                      display: 'block',
-                      borderRadius: 4,
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                    }}
-                    sandbox="allow-same-origin"
-                    title="Email preview"
-                  />
+                  <div style={{ padding: '16px', background: '#f9f7f5', display: 'flex', justifyContent: 'center', overflowY: 'auto' }}>
+                    <iframe
+                      ref={iframeRef}
+                      srcDoc={buildPreviewHtml(form, emailFormat)}
+                      style={{
+                        width: previewMode === 'desktop' ? 600 : 375,
+                        height: previewMode === 'desktop' ? 560 : 680,
+                        border: 'none',
+                        display: 'block',
+                        borderRadius: 6,
+                        boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
+                      }}
+                      sandbox="allow-same-origin"
+                      title="Email preview"
+                    />
+                  </div>
                 </div>
               </div>
             )}

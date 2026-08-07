@@ -1,7 +1,8 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { touchLastActive } from '../lib/people/api'
 import { supabase } from '../lib/supabase'
-import { clearAllAppCache } from '../lib/cacheUtils'
+import { clearAllAppCache, saveSession, loadSession, clearSession } from '../lib/cacheUtils'
+import { requestPushPermission, unsubscribePush } from '../lib/webPush'
 
 export const AuthContext = createContext(null)
 
@@ -9,6 +10,19 @@ function getJwtRole(session) {
   return session?.user?.app_metadata?.user_role
     ?? session?.user?.user_metadata?.user_role
     ?? null
+}
+
+async function restorePushSubscription() {
+  try {
+    const registration = await navigator.serviceWorker.ready
+    const subscription = await registration.pushManager.getSubscription()
+    // If no active subscription but push is enabled, re-subscribe
+    if (!subscription) {
+      await requestPushPermission()
+    }
+  } catch (error) {
+    console.warn('Failed to restore push subscription:', error)
+  }
 }
 
 async function fetchProfile(userId) {
@@ -102,24 +116,65 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true
 
-    const loadSession = async () => {
+    const initializeAuth = async () => {
+      // Layer 1: Try restore session from IndexedDB (iOS PWA recovery)
+      const cachedSession = await loadSession()
+      if (cachedSession?.access_token && mounted) {
+        try {
+          // Restore the session to Supabase client
+          const { error } = await supabase.auth.setSession(cachedSession)
+          if (error) {
+            console.warn('Failed to restore IndexedDB session:', error)
+            clearSession()
+          }
+        } catch (e) {
+          console.warn('Error restoring IndexedDB session:', e)
+          clearSession()
+        }
+      }
+
+      // Layer 2: Try silent token refresh if session is old or missing
       const {
         data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session && mounted) {
+        // No session available; try silent refresh
+        try {
+          const { data: refreshed } = await supabase.auth.refreshSession()
+          if (refreshed?.session && mounted) {
+            // Save refreshed session to IndexedDB
+            await saveSession(refreshed.session)
+          }
+        } catch (e) {
+          console.warn('Silent token refresh failed:', e)
+        }
+      }
+
+      // Layer 3: Get current session (after potential refresh/restore)
+      const {
+        data: { session: finalSession },
       } = await supabase.auth.getSession()
 
       if (!mounted) {
         return
       }
 
-      setUser(session?.user ?? null)
-      setJwtRole(getJwtRole(session))
+      setUser(finalSession?.user ?? null)
+      setJwtRole(getJwtRole(finalSession))
 
-      if (session?.user) {
+      if (finalSession?.user) {
         try {
-          const nextProfile = await fetchProfile(session.user.id)
+          const nextProfile = await fetchProfile(finalSession.user.id)
           if (mounted) {
             setProfile(nextProfile)
           }
+
+          // Layer 4: Restore push subscription if enabled and missing
+          if (nextProfile?.push_enabled && localStorage.getItem('notification-permission-granted') === 'true') {
+            restorePushSubscription().catch(() => {})
+          }
+
           touchLastActive().catch(() => {})
         } catch {
           if (mounted) {
@@ -133,7 +188,7 @@ export function AuthProvider({ children }) {
       }
     }
 
-    loadSession()
+    initializeAuth()
 
     const {
       data: { subscription },
@@ -172,6 +227,9 @@ export function AuthProvider({ children }) {
       setJwtRole(getJwtRole(session))
 
       if (session?.user) {
+        // Save session to IndexedDB for iOS PWA recovery
+        await saveSession(session)
+
         // Only fetch profile on SIGNED_IN (initial login). On TOKEN_REFRESHED
         // and other events, keep the cached profile to avoid unnecessary DB queries.
         if (event === 'SIGNED_IN') {
@@ -206,6 +264,7 @@ export function AuthProvider({ children }) {
         setProfile(null)
         setLoading(false)
         clearAllAppCache()
+        clearSession()
       }
     })
 
@@ -240,7 +299,14 @@ export function AuthProvider({ children }) {
       },
       signIn,
       signUp,
-      signOut: () => supabase.auth.signOut(),
+      signOut: async () => {
+        // Unsubscribe from push notifications before signing out
+        await unsubscribePush().catch(() => {})
+        // Clear IndexedDB session
+        await clearSession().catch(() => {})
+        // Sign out from Supabase
+        return supabase.auth.signOut()
+      },
       refreshProfile,
     }),
     [jwtRole, loading, profile, user, isRecoveryMode, signIn, signUp],

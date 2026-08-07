@@ -292,9 +292,67 @@ function formatFollowupTask(t: any) {
   }
 }
 
+// ── Adoption layer tools ────────────────────────────────────────────────
+
+async function toolGetMyWorkSummary(client: ReturnType<typeof createClient>, userId: string) {
+  // Combines sprint-due-today, followups-today, and onboarding status.
+  const sprintDue = await toolGetSprintDueToday(client, userId)
+  const followups = await toolGetMyFollowupsToday(client, userId)
+  const onboarding = await toolGetOnboardingStatus(client, userId)
+
+  return {
+    summary: 'Your work summary',
+    sprint_tasks_due_today: sprintDue.tasks.length,
+    overdue_tasks: followups.overdue_tasks.length,
+    tasks_due_today: followups.due_today_tasks.length,
+    meeting_action_items: followups.meeting_action_items.length,
+    onboarding_complete: onboarding.completed_at !== null,
+    onboarding_progress: onboarding.steps ? onboarding.steps.filter((s: any) => s.completed_at).length : 0,
+    onboarding_total: onboarding.steps ? onboarding.steps.length : 0,
+    details: {
+      sprint_tasks: sprintDue.tasks,
+      followups: followups,
+      onboarding_status: onboarding,
+    },
+  }
+}
+
+async function toolGetOnboardingStatus(client: ReturnType<typeof createClient>, userId: string) {
+  const { data } = await client.rpc('get_onboarding_status', { p_user_id: userId })
+  if (!data) {
+    return {
+      started_at: new Date().toISOString(),
+      completed_at: null,
+      steps: [],
+    }
+  }
+  return data
+}
+
+async function toolGetDepartmentHealth(client: ReturnType<typeof createClient>, userId: string) {
+  // Stub for Release 1: returns a placeholder. Real implementation in Release 2.
+  // This tool requires permission checks (only dept leads + admins).
+  const { data: user } = await client.from('users').select('role, department_id').eq('id', userId).single()
+
+  if (!user || !['super_admin', 'regional_secretary', 'dept_lead'].includes(user.role)) {
+    return {
+      error: 'Only department leads and admins can view health scores.',
+    }
+  }
+
+  // Placeholder response for now
+  return {
+    message: 'Department health score calculation coming in Release 2.',
+    placeholder: true,
+  }
+}
+
 async function executeTool(name: NovaToolName | string, client: ReturnType<typeof createClient>, userId: string) {
   if (name === 'get_sprint_due_today') return await toolGetSprintDueToday(client, userId)
   if (name === 'get_my_followups_today') return await toolGetMyFollowupsToday(client, userId)
+  if (name === 'get_my_work_summary') return await toolGetMyWorkSummary(client, userId)
+  if (name === 'get_onboarding_status') return await toolGetOnboardingStatus(client, userId)
+  if (name === 'get_department_health') return await toolGetDepartmentHealth(client, userId)
   throw new Error(`Unknown tool: ${name}`)
 }
 
