@@ -2120,8 +2120,9 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, exemptFello
     [merged]);
 
   const filtered = useMemo(() =>
-    subgroupFilter === 'All' ? outOfState : outOfState.filter(r => r.subgroup === subgroupFilter),
-    [outOfState, subgroupFilter]);
+    // Transportation team always sees all flights (no subgroup filtering)
+    outOfState,
+    [outOfState]);
 
   const withFlight = useMemo(() =>
     filtered.filter(r => r.arrivalFlight || r.departureFlight || r.arrivalDate || r.departureDate),
@@ -2173,7 +2174,7 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, exemptFello
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {!isLimited && <SubgroupSelect value={subgroupFilter} onChange={setSubgroupFilter} subgroups={subgroups} />}
+          {/* Subgroup filter hidden for Transportation team since they see all flights */}
           <Btn tone="ghost" small onClick={handleRefresh} disabled={refreshing}>
             <RefreshCw size={13} style={refreshing ? { animation: 'spin 1s linear infinite' } : {}} />
             {refreshing ? 'Refreshing…' : 'Refresh'}
