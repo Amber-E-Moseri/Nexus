@@ -13,6 +13,17 @@ const INTENT_CHIPS = [
   { intent: 'ask', label: 'Ask Nexus', Icon: HelpCircle, defaultMessage: '' },
 ]
 
+// Infer intent from message text when no chip is selected (or wrong one is).
+function inferIntent(text) {
+  const t = text.toLowerCase()
+  if (/\b(daily brief|my day|due today|what'?s? (on )?today|today'?s tasks?|sprint today)\b/.test(t)) return 'daily_brief'
+  if (/\b(prepare|prep|brief(ing)?|before (the |my )?meeting)\b/.test(t)) return 'meeting_prep'
+  if (/\b(extract|decisions?|action items?|from (the |this )?meeting)\b/.test(t)) return 'meeting_extract'
+  if (/\b(report|overview|summary|recap|department (status|update))\b/.test(t)) return 'report'
+  if (/\b(analyz|risk|sprint (status|health)|project (status|analysis)|bottleneck)\b/.test(t)) return 'project_analysis'
+  return null
+}
+
 const RELATED_QUESTIONS = {
   sprint: [
     'What is a sprint?',
@@ -194,7 +205,11 @@ export default function NovaChat() {
 
   async function sendQuestion(question, { novaMsgId, userMsgId, intent } = {}) {
     setSending(true)
-    const resolvedIntent = intent ?? selectedIntent
+    // If no chip is selected (or chip is 'ask'), try to infer from the message.
+    const inferred = (!selectedIntent || selectedIntent === 'ask') ? inferIntent(question) : null
+    const resolvedIntent = intent ?? inferred ?? selectedIntent
+    // Sync the chip highlight to the inferred intent so users see what mode fired.
+    if (inferred && inferred !== selectedIntent) setSelectedIntent(inferred)
     if (novaMsgId == null) {
       userMsgId = nextId()
       novaMsgId = nextId()
@@ -367,11 +382,6 @@ export default function NovaChat() {
                       <LoaderCircle size={13} className="animate-spin" style={{ color: 'var(--text-tertiary)' }} />
                     ) : null}
                   </div>
-                  {m.showIntents && !m.streaming ? (
-                    <div className="ml-1 mt-2">
-                      <IntentChips selected={selectedIntent} onSelect={setSelectedIntent} />
-                    </div>
-                  ) : null}
                   {m.error ? (
                     <button
                       type="button"

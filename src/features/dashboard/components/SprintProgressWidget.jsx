@@ -19,7 +19,13 @@ export default function SprintProgressWidget({ role, userId, departmentId, data 
     // Served by the consolidated get_dashboard_data RPC (BLW-02): rows already
     // carry total/completed counts, role-scoped server-side.
     if (Array.isArray(data)) {
-      setSprints(data.slice(0, 3))
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const active = data.filter(s =>
+        ['planning', 'active', 'review'].includes(s.status) &&
+        (s.end_date == null || new Date(s.end_date) >= today)
+      )
+      setSprints(active.slice(0, 3))
       setLoading(false)
       return
     }
@@ -27,10 +33,12 @@ export default function SprintProgressWidget({ role, userId, departmentId, data 
     async function load() {
       setLoading(true)
       try {
+        const todayISO = new Date().toISOString().slice(0, 10)
         let query = supabase
           .from('sprints')
           .select('id, name, status, start_date, end_date, department_id')
           .in('status', ['planning', 'active', 'review'])
+          .or(`end_date.is.null,end_date.gte.${todayISO}`)
 
         // SCOPING FIX: role-based filtering for sprints visibility
         if (role === 'dept_lead' && departmentId) {
