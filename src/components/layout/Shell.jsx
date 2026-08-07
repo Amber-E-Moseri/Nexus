@@ -7,6 +7,7 @@ import PageSpinner from '../ui/PageSpinner'
 import NotificationPermissionPrompt from '../notifications/NotificationPermissionPrompt'
 import { NovaChat } from '../../features/nova'
 import BirthdayOverlay from '../ui/BirthdayOverlay'
+import RegionalUpdatesPopup from '../ui/RegionalUpdatesPopup'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
 
@@ -50,6 +51,7 @@ export default function Shell() {
         </div>
         <NovaChat />
         <BirthdayOverlay />
+        <RegionalUpdatesPopup />
       </EventConfigProvider>
     </SprintsProvider>
   )

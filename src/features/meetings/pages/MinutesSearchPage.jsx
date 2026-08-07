@@ -87,16 +87,37 @@ export default function MinutesSearchPage({ departmentId, meetingType, readOnly 
         />
       )}
       <div style={{ position: 'relative', maxWidth: 620 }}>
-        <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary, #B0A696)', pointerEvents: 'none' }} />
+        <Search size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary, #B0A696)', pointerEvents: 'none' }} />
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search meeting minutes"
           autoFocus
-          style={{ width: '100%', padding: '11px 42px 11px 36px', border: '1px solid var(--border, #E9E4D8)', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', color: 'var(--text-primary, #1C1610)', background: '#FFFFFF', outline: 'none', boxSizing: 'border-box' }}
+          style={{
+            width: '100%',
+            padding: '12px 42px 12px 40px',
+            border: 'none',
+            borderRadius: 10,
+            fontSize: 14,
+            fontFamily: 'inherit',
+            color: 'var(--text-primary, #1C1610)',
+            background: '#F9F8F6',
+            outline: 'none',
+            boxSizing: 'border-box',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+            transition: 'all 0.2s ease'
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.background = '#FFFFFF'
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(76, 42, 146, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08)'
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.background = '#F9F8F6'
+            e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.08)'
+          }}
         />
-        {loading && <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--text-secondary, #7A6F5E)' }}>Searching</span>}
+        {loading && <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--text-secondary, #7A6F5E)', fontWeight: 600 }}>Searching…</span>}
       </div>
 
       {error && <div style={{ fontSize: 13, color: '#C4383A' }}>Search failed: {error}</div>}

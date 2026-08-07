@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 
-const BIRTHDAY_DATE = '2026-08-05'
+const BIRTHDAY_DATE = '2026-08-06'
 
 function isBirthdayWindow() {
   const now = new Date()
@@ -9,6 +9,10 @@ function isBirthdayWindow() {
   const m = String(now.getMonth() + 1).padStart(2, '0')
   const d = String(now.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}` === BIRTHDAY_DATE
+}
+
+function getStorageKey() {
+  return `birthday_dismissed_${BIRTHDAY_DATE}`
 }
 
 // Confetti uses Nexus brand palette + celebration tones
@@ -37,26 +41,42 @@ const CONFETTI = Array.from({ length: 100 }, (_, i) => ({
   driftX: ((i % 7) - 3) * 38,
 }))
 
-const BALLOONS = Array.from({ length: 9 }, (_, i) => ({
+const BALLOONS = Array.from({ length: 18 }, (_, i) => ({
   id: i,
   color: BALLOON_COLORS[i % BALLOON_COLORS.length],
-  x: 3 + i * 11.5,
-  delay: i * 0.42,
-  size: 52 + (i % 4) * 11,
-  duration: 7.5 + (i % 4) * 1.8,
+  x: 2 + i * 5.5,
+  delay: i * 0.18,
+  size: 36 + (i % 4) * 14,
+  duration: 6.5 + (i % 5) * 2.2,
+}))
+
+const STREAMERS = Array.from({ length: 6 }, (_, i) => ({
+  id: i,
+  color: BALLOON_COLORS[i % BALLOON_COLORS.length],
+  x: 10 + i * 15,
+  delay: i * 0.25,
+  duration: 4.2 + (i % 3) * 1.5,
 }))
 
 const KEYFRAMES = `
 @keyframes bdayFall {
   0%   { transform: translateY(-20px) rotate(0deg)   translateX(0);                opacity: 1; }
-  100% { transform: translateY(108vh) rotate(680deg) translateX(var(--bday-dx,0px)); opacity: 0.3; }
+  100% { transform: translateY(108vh) rotate(680deg) translateX(var(--bday-dx,0px)); opacity: 0.2; }
 }
 @keyframes bdayBalloon {
-  0%   { transform: translateY(0);      opacity: 0; }
-  7%   { opacity: 1; }
-  48%  { transform: translateY(-55vh) rotate(3deg); }
-  72%  { transform: translateY(-98vh) rotate(-3deg); }
-  93%  { opacity: 0.9; }
+  0%   { transform: translateY(0) scale(0.8);      opacity: 0; }
+  5%   { opacity: 1; transform: translateY(0) scale(1); }
+  45%  { transform: translateY(-50vh) rotate(8deg); }
+  70%  { transform: translateY(-95vh) rotate(-8deg); }
+  92%  { opacity: 0.95; }
+  100% { transform: translateY(-150vh); opacity: 0; }
+}
+@keyframes bdayStreamer {
+  0%   { transform: translateY(0) scaleY(0);      opacity: 0; }
+  8%   { opacity: 1; transform: translateY(0) scaleY(1); }
+  50%  { transform: translateY(-45vh) rotateZ(var(--bday-rotate, 0deg)); }
+  75%  { transform: translateY(-95vh) rotateZ(var(--bday-rotate, 0deg)); }
+  95%  { opacity: 0.8; }
   100% { transform: translateY(-150vh); opacity: 0; }
 }
 @keyframes bdayCardIn {
@@ -74,6 +94,10 @@ const KEYFRAMES = `
 @keyframes bdayFadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+@keyframes bdayPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 `
 
@@ -100,8 +124,20 @@ export default function BirthdayOverlay() {
     if (profile.role !== 'regional_secretary') return
     if (!isBirthdayWindow()) return
 
+    const storageKey = getStorageKey()
+    const alreadyDismissed = localStorage.getItem(storageKey)
+
+    if (alreadyDismissed) {
+      setCardGone(true)
+    }
+
     setVisible(true)
   }, [profile])
+
+  const handleDismiss = () => {
+    setCardGone(true)
+    localStorage.setItem(getStorageKey(), 'true')
+  }
 
   if (!visible) return null
 
@@ -147,6 +183,27 @@ export default function BirthdayOverlay() {
         </div>
       ))}
 
+      {/* Streamers */}
+      {STREAMERS.map(s => (
+        <div
+          key={s.id}
+          style={{
+            position: 'fixed',
+            top: -40,
+            left: `${s.x}%`,
+            width: 8,
+            height: 500,
+            background: `linear-gradient(180deg, ${s.color}, ${s.color}cc, transparent)`,
+            borderRadius: 4,
+            '--bday-rotate': `${(s.id - 3) * 15}deg`,
+            animation: `bdayStreamer ${s.duration}s ${s.delay}s ease-in both`,
+            zIndex: 9996,
+            pointerEvents: 'none',
+            transformOrigin: 'top center',
+          }}
+        />
+      ))}
+
       {/* Backdrop */}
       {!cardGone && (
         <div
@@ -163,7 +220,7 @@ export default function BirthdayOverlay() {
         />
       )}
 
-      {/* Card — Nexus surface + border language */}
+      {/* Card — Sleek minimal design */}
       {!cardGone && (
         <div
           style={{
@@ -171,122 +228,99 @@ export default function BirthdayOverlay() {
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            width: 'min(388px, 88vw)',
+            width: 'min(360px, 88vw)',
             background: '#FFFFFF',
-            border: '1px solid #E9E4D8',
-            borderRadius: 16,
+            border: '0.5px solid #E9E4D8',
+            borderRadius: 12,
             overflow: 'hidden',
             zIndex: 9999,
-            boxShadow: '0 20px 60px rgba(28,22,16,0.18), 0 4px 16px rgba(28,22,16,0.08)',
+            boxShadow: '0 12px 32px rgba(28,22,16,0.12)',
             animation: 'bdayCardIn 0.5s cubic-bezier(.22,1,.36,1) both',
             fontFamily: "'DM Sans', system-ui, sans-serif",
           }}
         >
-          {/* Header — Nexus amber → navy purple */}
+          {/* Header — Nexus primary */}
           <div style={{
-            background: 'linear-gradient(140deg, #E8A020 0%, #4C2A92 100%)',
-            padding: '32px 28px 24px',
+            background: 'var(--color-primary, #4C2A92)',
+            padding: '36px 28px 28px',
             textAlign: 'center',
           }}>
-            <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 14 }}>🎂</div>
+            <div style={{ fontSize: 40, lineHeight: 1, marginBottom: 14 }}>🎉</div>
             <div style={{
-              fontSize: 10.5,
-              fontWeight: 600,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.65)',
-              marginBottom: 5,
+              fontSize: 18,
+              fontWeight: 700,
+              color: '#ffffff',
+              letterSpacing: '0em',
+              lineHeight: 1.2,
             }}>
               Happy Birthday
             </div>
             <div style={{
-              fontSize: 23,
-              fontWeight: 700,
-              color: '#ffffff',
-              letterSpacing: '-0.01em',
-              lineHeight: 1.2,
+              fontSize: 14,
+              fontWeight: 500,
+              color: 'rgba(255,255,255,0.8)',
+              marginTop: 6,
             }}>
               Pastor Sir
             </div>
           </div>
 
-          {/* Divider line */}
-          <div style={{ height: 1, background: '#E9E4D8' }} />
+          {/* Divider */}
+          <div style={{ height: '0.5px', background: 'var(--border, #E9E4D8)' }} />
 
           {/* Body */}
-          <div style={{ padding: '22px 26px 20px', background: '#FFFFFF' }}>
+          <div style={{ padding: '28px 28px 24px', background: 'var(--surface, #FFFFFF)' }}>
             <p style={{
               margin: 0,
-              fontSize: 14.5,
-              lineHeight: 1.8,
-              color: '#1C1610',
+              fontSize: 14,
+              lineHeight: 1.6,
+              color: 'var(--text-primary, #1C1610)',
               textAlign: 'center',
-              fontStyle: 'italic',
-              letterSpacing: '0.01em',
+              fontWeight: 500,
             }}>
-              Thank you Sir for all the investments
+              Thank you for all the investments
               <br />you've made in us.
             </p>
             <p style={{
-              margin: '4px 0 0',
-              fontSize: 14.5,
-              lineHeight: 1.8,
-              color: '#7A6F5E',
+              margin: '10px 0 0',
+              fontSize: 14,
+              lineHeight: 1.6,
+              color: 'var(--text-secondary, #7A6F5E)',
               textAlign: 'center',
-              fontStyle: 'italic',
-              letterSpacing: '0.01em',
             }}>
               The Lord gave us the very best.
             </p>
 
-            {/* Divider with heart */}
-            <div style={{
-              margin: '18px 0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-            }}>
-              <span style={{ flex: 1, height: 1, background: '#E9E4D8' }} />
-              <span style={{
-                fontSize: 18,
-                animation: 'bdayHeart 1.5s ease-in-out infinite',
-                display: 'inline-block',
-              }}>❤️</span>
-              <span style={{ flex: 1, height: 1, background: '#E9E4D8' }} />
-            </div>
-
             <p style={{
-              margin: '0 0 18px',
-              fontSize: 14.5,
+              margin: '16px 0 0',
+              fontSize: 14,
               fontWeight: 600,
-              fontStyle: 'italic',
-              color: '#1C1610',
+              color: 'var(--text-primary, #1C1610)',
               textAlign: 'center',
-              letterSpacing: '0.01em',
             }}>
               We love you immensely. 💛
             </p>
 
-            {/* Nexus-style primary button — amber */}
+            {/* Button */}
             <button
-              onClick={() => setCardGone(true)}
+              onClick={handleDismiss}
               style={{
                 display: 'block',
                 width: '100%',
-                padding: '10px 0',
-                background: '#E8A020',
+                marginTop: 20,
+                padding: '11px 0',
+                background: 'var(--color-primary, #4C2A92)',
                 border: 'none',
-                borderRadius: 10,
+                borderRadius: 'var(--radius, 8px)',
                 color: '#fff',
-                fontSize: 13.5,
+                fontSize: 13,
                 fontWeight: 600,
                 cursor: 'pointer',
-                letterSpacing: '0.01em',
                 fontFamily: "'DM Sans', system-ui, sans-serif",
                 transition: 'background 0.15s',
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#C47E0A' }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#E8A020' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-primary-hover, #3D1F6D)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--color-primary, #4C2A92)' }}
             >
               Continue
             </button>

@@ -49,6 +49,7 @@ export default function BooksApp() {
   const { currentIdx, isPlaying, elapsedTime, totalTime, play, pause, seekToIdx, setSpeed: setPlayerSpeed, setVoice: setPlayerVoice } = useAudioPlayer(
     sentences, voice, speed, book?.progressIndex ?? 0,
     (secs) => { sessionSecondsRef.current += secs; setSessionUsedMins((prev) => prev + secs / 60) },
+    () => setShowNoCredits(true),
   )
   const { saveState, saveError, saveHighlights } = usePdfSave()
 
@@ -139,6 +140,35 @@ export default function BooksApp() {
 
   // Deduct remaining credits when the component unmounts (page close, nav away)
   useEffect(() => () => { deductUsageRef.current?.() }, [])
+
+  // Catch tab-close: visibilitychange fires reliably before the page is discarded
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.hidden) deductUsageRef.current?.()
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
+
+  // Periodic 5-minute checkpoint: write to DB and reset counter so dual-tab abuse
+  // is bounded to at most 5 minutes of unrecorded time
+  useEffect(() => {
+    const CHECKPOINT_MS = 5 * 60 * 1000
+    const timer = setInterval(async () => {
+      if (!profile?.id || sessionSecondsRef.current <= 0) return
+      const minsUsed = sessionSecondsRef.current / 60
+      sessionSecondsRef.current = 0
+      try {
+        await recordUsage(profile.id, minsUsed)
+        setCredits((prev) => Math.max(0, prev - minsUsed))
+      } catch (err) {
+        // On failure restore the counter so the unmount deduction catches it
+        sessionSecondsRef.current += minsUsed * 60
+        console.error('Checkpoint usage record failed', err)
+      }
+    }, CHECKPOINT_MS)
+    return () => clearInterval(timer)
+  }, [profile?.id])
 
   // Deduct credits when session ends — uses real audio duration, never estimated
   async function deductUsage() {

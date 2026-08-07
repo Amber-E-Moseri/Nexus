@@ -40,7 +40,7 @@ as $$
       ts_rank(to_tsvector('english', ne.question), plainto_tsquery('english', p_query)) * 2 as q_rank,
       ts_rank(to_tsvector('english', coalesce(ne.answer, '')), plainto_tsquery('english', p_query)) as a_rank
     from public.nova_kb_entries ne
-    where ne.active = true
+    where ne.status = 'active'
       and (
         to_tsvector('english', ne.question) @@ plainto_tsquery('english', p_query)
         or to_tsvector('english', coalesce(ne.answer, '')) @@ plainto_tsquery('english', p_query)

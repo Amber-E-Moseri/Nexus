@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { fetchSegmentAudio } from '../services/tts-cache'
 
-export function useAudioPlayer(sentences, voice, speed, initialIdx = 0, onSentencePlayed) {
+export function useAudioPlayer(sentences, voice, speed, initialIdx = 0, onSentencePlayed, onCreditError) {
   const [currentIdx, setCurrentIdx] = useState(initialIdx)
   const [isPlaying, setIsPlaying] = useState(false)
 
@@ -30,7 +30,11 @@ export function useAudioPlayer(sentences, voice, speed, initialIdx = 0, onSenten
     try {
       audio = await fetchSegmentAudio(sentences[idx], fetchedVoice)
     } catch (err) {
-      console.error('TTS fetch failed', err)
+      if (err.code === 'CREDIT_EXHAUSTED') {
+        onCreditError?.()
+      } else {
+        console.error('TTS fetch failed', err)
+      }
       r.current.isPlaying = false
       setIsPlaying(false)
       return

@@ -42,6 +42,7 @@ export function detectChapters(sentences, textItems, pageSizes, outline) {
 function chaptersFromOutline(outline, sentences, textItems) {
   // outline: [{ title, pageNum }] from extractOutline in pdf-export.js
   // Map each entry to the first sentence on/after its page
+  if (!Array.isArray(textItems)) return []
   const sorted = [...textItems].sort((a, b) => a.charOffset - b.charOffset)
   return outline
     .map(({ title, pageNum }) => {

@@ -24,8 +24,12 @@ export async function fetchSegmentAudio(text, voice) {
     })
 
     if (!res.ok) {
+      if (res.status === 402) {
+        throw Object.assign(new Error('Out of listening credits'), { code: 'CREDIT_EXHAUSTED' })
+      }
       if (res.status >= 500) {
-        // Server error — treat as transient, retry with backoff
+        const body = await res.text().catch(() => '')
+        console.error('[tts] 500 from generate-tts:', body)
         await delay(POLL_BASE_MS * Math.pow(POLL_BACKOFF, attempt))
         continue
       }

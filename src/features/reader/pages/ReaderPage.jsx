@@ -25,6 +25,7 @@ export default function ReaderPage({
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showStats, setShowStats] = useState(false)
+  const [showAnnotations, setShowAnnotations] = useState(false)
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 768)
 
   useEffect(() => {
@@ -131,91 +132,86 @@ export default function ReaderPage({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: isDesktop ? '0 20px' : '12px 16px',
+        padding: isDesktop ? '0 20px' : '0 12px',
         borderBottom: '1px solid var(--im-border)',
         background: 'var(--im-card)',
         flexShrink: 0,
-        height: isDesktop ? 56 : 'auto',
+        height: 48,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: isDesktop ? 10 : 0 }}>
-          <button onClick={onBack} style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--im-text)',
-            fontSize: isDesktop ? 14 : 14,
-            fontWeight: 500,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 3,
-            fontFamily: 'Inter, sans-serif',
-            minWidth: isDesktop ? 'auto' : 72,
-          }}>
-            <IconBack size={15} /> {isDesktop ? '' : 'Library'}
+        {/* Left: back + title */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 500, flexShrink: 0, padding: '4px 0' }}>
+            <IconBack size={14} /> {isDesktop ? 'Library' : ''}
           </button>
           {isDesktop && (
             <>
-              <div className="im-logo-mark">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                  <rect x="4" y="3" width="6" height="18" rx="2" /><rect x="14" y="3" width="6" height="18" rx="2" />
-                </svg>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.2px', color: 'var(--im-text)' }}>immerse</span>
-              <div style={{ width: 1, height: 18, background: 'var(--im-border)', margin: '0 4px' }} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--im-text)' }}>{book.title}</span>
-              {book.author && <><span style={{ color: 'var(--im-text-xdim)' }}>·</span><span style={{ fontSize: 12, color: 'var(--im-text-dim)' }}>{book.author}</span></>}
+              <div style={{ width: 1, height: 16, background: 'var(--im-border)', flexShrink: 0 }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--im-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{book.title}</span>
+              {book.author && <span style={{ fontSize: 12, color: 'var(--im-text-dim)', flexShrink: 0 }}>· {book.author}</span>}
             </>
           )}
         </div>
 
-        <div style={{ fontSize: isDesktop ? 'auto' : 12, color: 'var(--im-blue)', fontWeight: 600, fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: isDesktop ? 12 : 6, background: isDesktop ? 'none' : 'var(--im-blue-bg)', border: isDesktop ? 'none' : '1px solid var(--im-blue-bg-2)', borderRadius: isDesktop ? 0 : 20, padding: isDesktop ? 0 : '3px 10px' }}>
-          <span>{creditMetrics.remainingHrs} hrs</span>
+        {/* Center: title on mobile */}
+        {!isDesktop && (
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--im-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160, textAlign: 'center' }}>{book.title}</span>
+        )}
+
+        {/* Right: actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: isDesktop ? 4 : 2, flexShrink: 0 }}>
+          {/* Credits badge */}
+          <span style={{ fontSize: 11, color: 'var(--im-blue)', fontWeight: 600, fontFamily: 'Inter, sans-serif', background: 'var(--im-blue-bg)', borderRadius: 20, padding: '3px 8px', marginRight: 4 }}>
+            {creditMetrics.remainingHrs}h
+          </span>
+
           {isDesktop && (
-            <span style={{ fontSize: 11, color: 'var(--im-text-dim)', fontWeight: 400 }}>
-              ({creditMetrics.usedHrs} used • {creditMetrics.progress}%)
-            </span>
+            <>
+              <button onClick={toggleViewMode} style={{ ...hdrBtn, gap: 4 }}>
+                {viewModeLabel.icon} {viewModeLabel.label}
+              </button>
+              <button
+                onClick={() => isCurrentBookmarked ? onRemoveBookmark?.(bookmarks.find(b => b.sentenceIdx === currentIdx)?.id) : onAddBookmark?.()}
+                style={{ ...hdrBtn, color: isCurrentBookmarked ? 'var(--im-blue)' : 'var(--im-text-dim)' }}
+                title="Bookmark">
+                <Bookmark size={13} fill={isCurrentBookmarked ? 'currentColor' : 'none'} />
+              </button>
+              <button onClick={() => setShowSearch(!showSearch)} style={{ ...hdrBtn, color: showSearch ? 'var(--im-blue)' : 'var(--im-text-dim)' }} title="Search">
+                <Search size={13} />
+              </button>
+              <button onClick={() => setShowStats(!showStats)} style={{ ...hdrBtn, color: showStats ? 'var(--im-blue)' : 'var(--im-text-dim)' }} title="Stats">
+                <BarChart3 size={13} />
+              </button>
+              <button onClick={onOpenSettings} style={hdrBtn} title="Settings"><IconSettings size={13} /></button>
+              <button onClick={toggleSidebar} style={{ ...hdrBtn, color: sidebarVisible ? 'var(--im-blue)' : 'var(--im-text-dim)' }} title={sidebarVisible ? 'Hide panel' : 'Show panel'}>
+                <ChevronLeft size={13} style={{ transform: sidebarVisible ? 'none' : 'rotate(180deg)', transition: 'transform 0.2s' }} />
+              </button>
+              <div style={{ width: 1, height: 16, background: 'var(--im-border)' }} />
+              <button onClick={onEndSession} style={{ ...hdrBtn, background: 'var(--im-blue)', color: '#fff', borderRadius: 6, padding: '5px 14px', fontSize: 12 }}>
+                Done
+              </button>
+            </>
+          )}
+
+          {!isDesktop && (
+            <>
+              {chapters.length > 0 && (
+                <button onClick={() => setShowChapters(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: '4px 6px', fontSize: 12, fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>
+                  Ch
+                </button>
+              )}
+              <button
+                onClick={() => setShowAnnotations(true)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: (highlights.length + notes.length) > 0 ? 'var(--im-blue)' : 'var(--im-text-dim)', padding: '4px 6px', fontSize: 16, display: 'flex', alignItems: 'center' }}
+                title="Highlights & Notes"
+              >
+                <Bookmark size={15} fill={(highlights.length + notes.length) > 0 ? 'currentColor' : 'none'} />
+              </button>
+              <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: '4px 6px', fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center' }}>
+                ···
+              </button>
+            </>
           )}
         </div>
-
-        {isDesktop && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => navigate('/dashboard')} style={{ ...hdrBtn, color: 'var(--im-text-dim)' }}>← Nexus</button>
-            <div style={{ width: 1, height: 16, background: 'var(--im-border)' }} />
-            <button onClick={toggleViewMode} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5 }}>
-              {viewModeLabel.icon} {viewModeLabel.label}
-            </button>
-            <button onClick={toggleSidebar} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: sidebarVisible ? 'var(--im-text)' : 'var(--im-text-dim)' }}>
-              <ChevronLeft size={12} /> {sidebarVisible ? 'Hide' : 'Show'}
-            </button>
-            <button onClick={() => isCurrentBookmarked ? onRemoveBookmark?.(bookmarks.find(b => b.sentenceIdx === currentIdx)?.id) : onAddBookmark?.()}
-              style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: isCurrentBookmarked ? 'var(--im-blue)' : 'var(--im-text-dim)' }}>
-              <Bookmark size={12} fill={isCurrentBookmarked ? 'currentColor' : 'none'} /> Bookmark
-            </button>
-            <button onClick={() => setShowSearch(!showSearch)} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: showSearch ? 'var(--im-blue)' : 'var(--im-text-dim)' }}>
-              <Search size={12} /> Search
-            </button>
-            <button onClick={() => setShowStats(!showStats)} style={{ ...hdrBtn, display: 'flex', alignItems: 'center', gap: 5, color: showStats ? 'var(--im-blue)' : 'var(--im-text-dim)' }}>
-              <BarChart3 size={12} /> Stats
-            </button>
-            <button onClick={onOpenSettings} style={hdrBtn}><IconSettings size={14} /> Settings</button>
-            <button onClick={onEndSession} style={{ ...hdrBtn, background: 'var(--im-blue)', color: '#fff', borderRadius: 6, padding: '5px 12px' }}>
-              End Reading
-            </button>
-          </div>
-        )}
-
-        {!isDesktop && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            {chapters.length > 0 && (
-              <button onClick={() => setShowChapters(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, fontSize: 12, fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>
-                Ch
-              </button>
-            )}
-            <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', padding: 4, display: 'flex', alignItems: 'center', fontSize: 16, fontWeight: 700, minWidth: 32, justifyContent: 'flex-end' }}>
-              ···
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Low credit warning with detailed breakdown */}
@@ -348,9 +344,21 @@ export default function ReaderPage({
       {!isDesktop && showChapters && (
         <ChaptersDrawer
           sentences={sentences}
+          chapters={chapters}
           currentIdx={currentIdx}
           onSeek={onSeek}
           onClose={() => setShowChapters(false)}
+        />
+      )}
+
+      {!isDesktop && showAnnotations && (
+        <AnnotationsDrawer
+          highlights={highlights}
+          notes={notes}
+          sentences={sentences}
+          onSeek={(idx) => { onSeek(idx); setShowAnnotations(false) }}
+          onRemove={onRemoveAnnotation}
+          onClose={() => setShowAnnotations(false)}
         />
       )}
 
@@ -360,6 +368,7 @@ export default function ReaderPage({
           onHighlight={handleHighlight}
           onAddNote={handleAddNote}
           onClose={() => onSelectionChange(null)}
+          onPlayFrom={(idx) => { onSeek(idx); onPlay(idx) }}
         />
       )}
 
@@ -442,20 +451,12 @@ export default function ReaderPage({
 
 }
 
-function isChapterHeading(s) {
-  return /^(chapter|part|prologue|epilogue|introduction|preface|afterword)\b/i.test(s.trim()) ||
-    /^[A-Z\s\d]{4,40}$/.test(s.trim())
-}
-
-function ChaptersDrawer({ sentences, currentIdx, onSeek, onClose }) {
+function ChaptersDrawer({ sentences, currentIdx, onSeek, onClose, chapters: propChapters }) {
   const chapters = useMemo(() => {
-    const list = []
-    sentences.forEach((s, idx) => {
-      if (isChapterHeading(s) && s.trim().length < 50) list.push({ title: s.trim(), idx })
-    })
-    if (list.length === 0 && sentences.length > 0) list.push({ title: 'Start', idx: 0 })
-    return list
-  }, [sentences])
+    if (propChapters?.length > 0) return propChapters
+    if (sentences.length > 0) return [{ title: 'Start', idx: 0 }]
+    return []
+  }, [propChapters, sentences])
 
   const currentChapterIdx = useMemo(() => {
     let ci = 0
@@ -496,6 +497,71 @@ function ChaptersDrawer({ sentences, currentIdx, onSeek, onClose }) {
               </button>
             )
           })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AnnotationsDrawer({ highlights, notes, sentences, onSeek, onRemove, onClose }) {
+  const [tab, setTab] = useState('highlights')
+
+  const allAnnotations = [
+    ...highlights.map((h) => ({ ...h, kind: 'highlight' })),
+    ...notes.map((n) => ({ ...n, kind: 'note' })),
+  ].sort((a, b) => (a.sentenceIdx ?? 0) - (b.sentenceIdx ?? 0))
+
+  const shown = tab === 'all' ? allAnnotations : allAnnotations.filter((a) => a.kind === tab.replace('highlights', 'highlight').replace('notes', 'note'))
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 150 }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} />
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'var(--im-card)', borderRadius: '16px 16px 0 0', maxHeight: '80vh', display: 'flex', flexDirection: 'column', animation: 'im-slide-up 0.25s ease-out' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 0', flexShrink: 0 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--im-text)', fontFamily: 'Inter, sans-serif' }}>
+            Highlights &amp; Notes
+          </span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--im-text-dim)', lineHeight: 1 }}>×</button>
+        </div>
+        {/* Tab strip */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--im-border)', marginTop: 8, flexShrink: 0 }}>
+          {[['highlights', `Highlights (${highlights.length})`], ['notes', `Notes (${notes.length})`], ['all', 'All']].map(([t, label]) => (
+            <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '9px 0', background: 'none', border: 'none', borderBottom: tab === t ? '2px solid var(--im-blue)' : '2px solid transparent', cursor: 'pointer', fontSize: 11, fontWeight: 700, color: tab === t ? 'var(--im-blue)' : 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif', letterSpacing: '0.04em', marginBottom: -1 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {/* List */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {shown.length === 0 && (
+            <div style={{ padding: '32px 20px', textAlign: 'center', fontSize: 13, color: 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif' }}>
+              {tab === 'highlights' ? 'No highlights yet — select text while reading.' : tab === 'notes' ? 'No notes yet — select text and tap Note.' : 'No annotations yet.'}
+            </div>
+          )}
+          {shown.map((a) => (
+            <button key={a.id} onClick={() => onSeek(a.sentenceIdx)}
+              style={{ width: '100%', textAlign: 'left', padding: '13px 20px', background: 'none', border: 'none', borderBottom: '1px solid var(--im-border-lt)', cursor: 'pointer', display: 'block' }}>
+              {/* Quoted text */}
+              <div style={{ fontSize: 13, color: 'var(--im-text)', fontFamily: 'var(--im-font-serif, Georgia, serif)', lineHeight: 1.5, marginBottom: a.content ? 6 : 0, background: a.kind === 'highlight' ? 'rgba(251,240,222,0.85)' : 'transparent', borderRadius: 3, padding: a.kind === 'highlight' ? '1px 3px' : 0 }}>
+                {a.text || sentences[a.sentenceIdx] || ''}
+              </div>
+              {/* Note content */}
+              {a.content && (
+                <div style={{ fontSize: 12, color: 'var(--im-text-dim)', fontFamily: 'Inter, sans-serif', lineHeight: 1.5, background: 'var(--im-sidebar-bg, #F8F5F0)', borderLeft: '2px solid var(--im-pink, #B8710A)', padding: '6px 10px', borderRadius: '0 5px 5px 0' }}>
+                  {a.content}
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+                <span style={{ fontSize: 10, color: 'var(--im-text-xdim, var(--im-text-dim))', fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+                  {a.kind === 'highlight' ? '▐ Highlight' : '✎ Note'} · sentence {(a.sentenceIdx ?? 0) + 1}
+                </span>
+                {onRemove && (
+                  <button onClick={(e) => { e.stopPropagation(); onRemove(a.id) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--im-text-dim)', fontSize: 16, padding: '0 0 0 8px', lineHeight: 1 }}>×</button>
+                )}
+              </div>
+            </button>
+          ))}
         </div>
       </div>
     </div>

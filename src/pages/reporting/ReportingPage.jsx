@@ -134,9 +134,17 @@ export default function ReportingPage() {
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
-      await supabase.functions.invoke('mi-sync', { method: 'POST' })
-      await queryClient.invalidateQueries({ queryKey: ['mi_'] })
-      await queryClient.invalidateQueries({ queryKey: ['mi_sync_log'] })
+      const { data, error } = await supabase.functions.invoke('mi-sync', { method: 'POST' })
+      if (error) {
+        console.error('[mi-sync] invoke error:', error)
+        alert(`Sync failed: ${error.message}`)
+        return
+      }
+      if (data?.status === 'error') {
+        alert(`Sync error: ${data.error}`)
+        return
+      }
+      await queryClient.invalidateQueries()
     } finally {
       setRefreshing(false)
     }

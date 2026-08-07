@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { IconHighlight, IconNote, IconX } from '../icons'
+import { IconHighlight, IconNote } from '../icons'
 
-export default function HighlightPopup({ info, onHighlight, onAddNote, onClose }) {
+export default function HighlightPopup({ info, onHighlight, onAddNote, onClose, onPlayFrom }) {
   const [mode, setMode] = useState('buttons')
   const [noteText, setNoteText] = useState('')
 
@@ -14,8 +14,8 @@ export default function HighlightPopup({ info, onHighlight, onAddNote, onClose }
   if (!info) return null
 
   const rect = info.rect
-  const top = rect.top < 80 ? rect.bottom + 8 : rect.top - (mode === 'note' ? 110 : 50)
-  const left = Math.min(Math.max(rect.left, 8), window.innerWidth - 220)
+  const top = rect.top < 80 ? rect.bottom + 8 : rect.top - (mode === 'note' ? 120 : 46)
+  const left = Math.min(Math.max(rect.left, 8), window.innerWidth - 260)
 
   const popupStyle = {
     position: 'fixed',
@@ -26,8 +26,7 @@ export default function HighlightPopup({ info, onHighlight, onAddNote, onClose }
     border: '1px solid var(--im-border)',
     borderRadius: 10,
     boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-    padding: '10px 12px',
-    minWidth: 200,
+    padding: '8px 10px',
     animation: 'im-slide-up 0.15s ease-out',
   }
 
@@ -36,19 +35,27 @@ export default function HighlightPopup({ info, onHighlight, onAddNote, onClose }
       <div style={{ position: 'fixed', inset: 0, zIndex: 299 }} onClick={onClose} />
       <div style={popupStyle}>
         {mode === 'buttons' ? (
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 6 }}>
             <button
               onClick={() => { onHighlight(info); onClose() }}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'var(--im-blue-bg)', border: 'none', borderRadius: 6, color: 'var(--im-blue)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', background: 'var(--im-blue-bg)', border: 'none', borderRadius: 6, color: 'var(--im-blue)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
             >
               <IconHighlight size={12} color="var(--im-blue)" /> Highlight
             </button>
             <button
               onClick={() => setMode('note')}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'var(--im-pink-bg)', border: 'none', borderRadius: 6, color: 'var(--im-pink)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', background: 'var(--im-pink-bg)', border: 'none', borderRadius: 6, color: 'var(--im-pink)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
             >
               <IconNote size={12} color="var(--im-pink)" /> Note
             </button>
+            {onPlayFrom && (
+              <button
+                onClick={() => { onPlayFrom(info.sentenceIdx); onClose() }}
+                style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', background: 'rgba(34,197,94,0.1)', border: 'none', borderRadius: 6, color: '#16a34a', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
+              >
+                ▶ Play here
+              </button>
+            )}
           </div>
         ) : (
           <div>
