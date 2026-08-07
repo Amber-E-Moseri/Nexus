@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../context/ToastContext'
-import { Send, Mail, RefreshCw, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react'
+import { Send, Mail, Monitor, RefreshCw, ChevronDown, ChevronUp, Eye, EyeOff, Smartphone } from 'lucide-react'
 
 const PRIMARY = '#4C2A92'
 const BORDER  = '#EDE8DC'

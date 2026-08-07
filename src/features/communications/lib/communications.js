@@ -36,7 +36,6 @@ export function sanitizeEmailHtml(html = '') {
   safe = safe.replace(/<\s*(script|style|iframe|object|embed|form|input|button|textarea|select|meta|link)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
   safe = safe.replace(/<\s*(script|style|iframe|object|embed|form|input|button|textarea|select|meta|link)\b[^>]*\/?\s*>/gi, '')
   safe = safe.replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-  safe = safe.replace(/\sstyle=(?:"[^"]*"|'[^']*')/gi, '')
   safe = safe.replace(/(href|src)\s*=\s*(['"])\s*javascript:[^'"]*\2/gi, '$1="#"')
 
   return safe
