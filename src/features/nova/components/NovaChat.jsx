@@ -51,8 +51,7 @@ function inferIntent(text) {
   const t = text.toLowerCase()
   if (/\b(daily brief|my day|due today|what'?s? (on )?today|today'?s tasks?|sprint today)\b/.test(t)) return 'daily_brief'
   if (/\b(prepare|prep|brief(ing)?|before (the |my )?meeting)\b/.test(t)) return 'meeting_prep'
-  if (/\b(extract|decisions?|action items?|from (the |this )?meeting)\b/.test(t)) return 'meeting_extract'
-  if (/\b(report|overview|summary|recap|department (status|update))\b/.test(t)) return 'report'
+if (/\b(report|overview|summary|recap|department (status|update))\b/.test(t)) return 'report'
   if (/\b(analyz|risk|sprint (status|health)|project (status|analysis)|bottleneck)\b/.test(t)) return 'project_analysis'
   return null
 }
