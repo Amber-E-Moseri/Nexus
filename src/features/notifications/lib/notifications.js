@@ -103,7 +103,8 @@ export async function setNotificationPref(userId, type, inApp, email, mobile = f
 export const NOTIFICATION_TYPES = {
   task_assigned: { label: 'Task assigned to me', icon: '📋', description: 'When someone assigns a task to you' },
   task_comment: { label: 'Comment on my task', icon: '💬', description: 'When someone comments on your task' },
-  task_due_soon: { label: 'Task due date approaching', icon: '⏰', description: 'When a task is due soon' },
+  task_due_soon: { label: 'Task due date approaching', icon: '⏰', description: 'When a task you own is due soon or overdue' },
+  task_status_changed: { label: 'Task status changed', icon: '🔄', description: 'When someone changes the status of a task assigned to you' },
   sprint_added: { label: 'Added to a sprint', icon: '⚡', description: 'When you are added to a sprint' },
   sprint_status: { label: 'Sprint status changed', icon: '🔄', description: 'When sprint status changes' },
   sprint_access_requested: { label: 'Sprint access requested', icon: '🔐', description: 'When someone requests access to a sprint you manage' },
@@ -265,7 +266,9 @@ export function formatNotificationMessage(notification) {
       }
       return `${payload.actor_name ?? 'Someone'} mentioned you in "${payload.task_title ?? 'a task'}"\n\n"${payload.comment_preview ?? ''}"`
     case 'task_due_soon':
-      return `"${payload.task_title ?? 'A task'}" is due soon`
+      return `"${payload.task_title ?? 'A task'}" is ${payload.is_overdue ? 'overdue' : 'due soon'}`
+    case 'task_status_changed':
+      return `"${payload.task_title ?? 'A task'}" was moved to ${payload.new_status_name ?? 'a new status'}`
     case 'event_approved':
       return `Your event "${payload.event_title ?? 'Untitled'}" was approved`
     case 'event_rejected':

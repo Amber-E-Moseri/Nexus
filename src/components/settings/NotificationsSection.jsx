@@ -204,25 +204,21 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
 
           {browserPermission === 'denied' && (
             <div>
-              <p className="text-xs text-[var(--text-secondary)] mb-3">
-                ❌ <strong>Blocked</strong> — your browser is preventing notifications. Follow these steps to unblock:
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, lineHeight: 1.6 }}>
+                Notifications are currently blocked. To turn them on: click the <strong>lock icon</strong> in your address bar, find Notifications, and set it to Allow. Then come back and tap below.
               </p>
-              <ol style={{ fontSize: 12, color: 'var(--text-secondary)', paddingLeft: 18, lineHeight: 1.8, marginBottom: 14 }}>
-                <li>Click the <strong>lock icon</strong> (or info icon) in your browser's address bar</li>
-                <li>Find <strong>Notifications</strong> and change it from <em>Block</em> to <em>Allow</em></li>
-                <li>Come back here and click the button below</li>
-              </ol>
               <button
                 onClick={handleReactivatePush}
                 disabled={reactivating}
                 style={{
-                  fontSize: 12, fontWeight: 600, color: 'white',
-                  background: reactivating ? '#9e9488' : 'var(--accent)',
-                  border: 'none', borderRadius: 6, padding: '7px 14px',
+                  fontSize: 12, fontWeight: 500, color: 'var(--accent)',
+                  background: 'none', border: '1px solid var(--accent)',
+                  borderRadius: 6, padding: '5px 12px',
                   cursor: reactivating ? 'not-allowed' : 'pointer',
+                  opacity: reactivating ? 0.6 : 1,
                 }}
               >
-                {reactivating ? 'Checking…' : "I've allowed it — activate now"}
+                {reactivating ? 'Checking…' : "I've allowed it — activate"}
               </button>
             </div>
           )}
