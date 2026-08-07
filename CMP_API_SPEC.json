@@ -1,0 +1,232 @@
+{
+  "api_spec": {
+    "base_url": "https://leaders.lwcanada.org",
+    "api_path": "/api",
+    "root_unit_id": "cmotpb106000ewkxbi3md8xs6",
+    "authentication": {
+      "type": "Bearer token",
+      "header": "Authorization: Bearer ${REPORTS_API_TOKEN}",
+      "token_location": "Supabase Vault (environment variable for edge functions)"
+    }
+  },
+  "endpoints": {
+    "confirmed_working": [
+      {
+        "path": "/api/services/export",
+        "method": "GET",
+        "status": 200,
+        "response_format": "CSV",
+        "parameters": [
+          {
+            "name": "unitId",
+            "type": "string",
+            "required": true,
+            "example": "cmotpb106000ewkxbi3md8xs6",
+            "description": "Unit/org ID to export from"
+          },
+          {
+            "name": "shape",
+            "type": "string",
+            "required": true,
+            "example": "checkins",
+            "description": "Export shape (only 'checkins' tested)"
+          },
+          {
+            "name": "from",
+            "type": "date",
+            "required": true,
+            "example": "2026-07-01",
+            "description": "Start date (YYYY-MM-DD)"
+          },
+          {
+            "name": "to",
+            "type": "date",
+            "required": true,
+            "example": "2026-07-31",
+            "description": "End date (YYYY-MM-DD)"
+          }
+        ],
+        "csv_fields": [
+          "Service date",
+          "Service",
+          "Host unit",
+          "Attendee",
+          "Status",
+          "First-timer at this service",
+          "Kind"
+        ],
+        "rate_limit": "Unknown; recommend 200-500ms delay",
+        "notes": "May return TRUNCATED markers for large datasets. Fetch month-by-month to avoid truncation."
+      },
+      {
+        "path": "/api/forms/{formId}/submissions",
+        "method": "GET",
+        "status": 200,
+        "response_format": "JSON",
+        "parameters": [
+          {
+            "name": "pageSize",
+            "type": "integer",
+            "required": false,
+            "example": 100,
+            "description": "Items per page (default 100, max 1000)"
+          },
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false,
+            "example": 1,
+            "description": "Page number (1-indexed)"
+          }
+        ],
+        "known_forms": [
+          {
+            "id": "cmrgl1w5r009e853pn1x0gvws",
+            "name": "This Is It 2.0",
+            "description": "Annual conference registration"
+          },
+          {
+            "id": "cms8ehb3j00iekhw1ywwge7oi",
+            "name": "Flights/Accommodation",
+            "description": "Flight and accommodation booking form"
+          }
+        ],
+        "response_shape": {
+          "data": "array of submission objects",
+          "pagination": {
+            "page": "integer",
+            "pageSize": "integer",
+            "total": "integer"
+          }
+        }
+      },
+      {
+        "path": "/api/units",
+        "method": "GET",
+        "status": 200,
+        "response_format": "JSON",
+        "parameters": [
+          {
+            "name": "pageSize",
+            "type": "integer",
+            "required": false,
+            "example": 1000,
+            "description": "Items per page (tested up to 1000)"
+          },
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false,
+            "example": 1,
+            "description": "Page number (1-indexed)"
+          }
+        ],
+        "response_fields": [
+          "id",
+          "name",
+          "kind",
+          "parentId",
+          "active"
+        ],
+        "unit_kinds": [
+          "SundayService",
+          "GlobalService",
+          "CellLeadership",
+          "Fellowship"
+        ],
+        "notes": "Full org hierarchy; use to build department/cell tree"
+      }
+    ],
+    "endpoints_needing_auth": [
+      "/api/members",
+      "/api/events",
+      "/api/services",
+      "/api/first-timers",
+      "/api/forms",
+      "/api/reports"
+    ],
+    "endpoints_missing_404": [
+      "/api/checkins",
+      "/api/members/{memberId}/checkins",
+      "/api/attendance-records",
+      "/api/search/members",
+      "/api/follow-ups",
+      "/api/leaders",
+      "/api/roles",
+      "/api/departments",
+      "/api/pastoral-care"
+    ]
+  },
+  "field_mapping": {
+    "service_attendees_csv": {
+      "cmp_field": "csv_column_name",
+      "service_date": "Service date",
+      "service_name": "Service",
+      "host_unit": "Host unit",
+      "attendee_name": "Attendee",
+      "attendance_status": "Status",
+      "is_first_timer": "First-timer at this service",
+      "unit_kind": "Kind"
+    }
+  },
+  "sync_strategy": {
+    "phase_1": {
+      "name": "Service Attendance (MVP)",
+      "data_source": "/api/services/export",
+      "frequency": "Daily or weekly",
+      "strategy": "Monthly batch export with CSV parsing",
+      "member_discovery": "Extract unique attendee names, create member records",
+      "first_timer_tracking": "Flag from CSV 'First-timer at this service' column"
+    },
+    "phase_2": {
+      "name": "Member Intake (Forms)",
+      "data_source": "/api/forms/{formId}/submissions",
+      "frequency": "Daily",
+      "strategy": "Sync form submissions for This Is It 2.0 + flights",
+      "member_enrichment": "Phone, email, demographic data from form fields"
+    },
+    "phase_3": {
+      "name": "Follow-up Tracking (Manual)",
+      "data_source": "Nexus UI form or admin entry",
+      "frequency": "On-demand",
+      "strategy": "Manual entry for pastoral care workflow",
+      "fallback": "No CMP endpoint available; track locally in Nexus"
+    }
+  },
+  "pagination_guide": {
+    "csv_export": {
+      "method": "Date range (from/to)",
+      "recommended_batch_size": "1 month",
+      "reason": "Avoid truncation; fetch data in monthly chunks"
+    },
+    "json_endpoints": {
+      "method": "pageSize + page (1-indexed)",
+      "max_page_size": 1000,
+      "recommended_delay_ms": 300,
+      "example_loop": "for page = 1 to ceil(total/pageSize): fetch(pageSize=1000, page=page)"
+    }
+  },
+  "error_handling": {
+    "401": "Unauthorized - token invalid or expired; check vault",
+    "403": "Forbidden - valid token but insufficient permissions",
+    "404": "Not Found - endpoint does not exist (check spec)",
+    "422": "Unprocessable Entity - bad parameters (e.g., invalid date format)",
+    "500": "Server Error - retry with exponential backoff"
+  },
+  "rate_limiting": {
+    "documented": false,
+    "recommendation": "200-500ms delay between requests",
+    "monitoring": "Check X-RateLimit-* response headers (if present)",
+    "strategy": "Implement telemetry in sync function to track response times"
+  },
+  "discovery_metadata": {
+    "discovered_at": "2026-08-07T06:00:00Z",
+    "method": "Local Node.js probe + existing function code analysis",
+    "probe_results_file": "cmp-api-discovery-final.json",
+    "documentation_file": "CMP_API_DISCOVERY.md",
+    "endpoints_probed": 11,
+    "endpoints_confirmed": 3,
+    "endpoints_requiring_auth": 11,
+    "endpoints_missing": 15
+  }
+}

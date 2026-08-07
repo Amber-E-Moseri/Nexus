@@ -88,7 +88,21 @@ class PerfTimer {
 
 describe('Meeting Processing Pipeline — Timing Analysis', () => {
   let testMeetingId
-  let testDepartmentId = '5b84e3e6-c96e-490a-a7c3-f9c0db4f7e15'
+  let testDepartmentId
+
+  beforeAll(async () => {
+    if (!supabase) return
+    // Fetch a valid department from the database
+    const { data: departments } = await supabase
+      .from('spaces')
+      .select('id')
+      .limit(1)
+    if (departments?.length > 0) {
+      testDepartmentId = departments[0].id
+    } else {
+      console.warn('No departments found in test database; tests will be skipped')
+    }
+  })
 
   const smallTranscript = `
 Good morning everyone.
@@ -165,8 +179,8 @@ Everyone agrees to these timelines. We'll reconvene on September 2 to check prog
   `.trim()
 
   test('should measure small transcript ingestion time', async () => {
-    if (!supabase) {
-      console.warn('Skipping timing test: Supabase not configured')
+    if (!supabase || !testDepartmentId) {
+      console.warn('Skipping timing test: Supabase or test department not configured')
       return
     }
 
@@ -233,8 +247,8 @@ Everyone agrees to these timelines. We'll reconvene on September 2 to check prog
   })
 
   test('should measure medium transcript ingestion time', async () => {
-    if (!supabase) {
-      console.warn('Skipping timing test: Supabase not configured')
+    if (!supabase || !testDepartmentId) {
+      console.warn('Skipping timing test: Supabase or test department not configured')
       return
     }
 
@@ -290,8 +304,8 @@ Everyone agrees to these timelines. We'll reconvene on September 2 to check prog
   })
 
   test('should measure large transcript ingestion time', async () => {
-    if (!supabase) {
-      console.warn('Skipping timing test: Supabase not configured')
+    if (!supabase || !testDepartmentId) {
+      console.warn('Skipping timing test: Supabase or test department not configured')
       return
     }
 
@@ -347,8 +361,8 @@ Everyone agrees to these timelines. We'll reconvene on September 2 to check prog
   })
 
   test('should measure multi-audio concatenation time', async () => {
-    if (!supabase) {
-      console.warn('Skipping timing test: Supabase not configured')
+    if (!supabase || !testDepartmentId) {
+      console.warn('Skipping timing test: Supabase or test department not configured')
       return
     }
 

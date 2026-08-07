@@ -28,10 +28,25 @@ beforeAll(async () => {
   })
 })
 
+let testDepartmentId
+
+beforeAll(async () => {
+  if (!supabase) return
+  // Fetch a valid department from the database
+  const { data: departments } = await supabase
+    .from('spaces')
+    .select('id')
+    .limit(1)
+  if (departments?.length > 0) {
+    testDepartmentId = departments[0].id
+  } else {
+    console.warn('No departments found in test database; tests will be skipped')
+  }
+})
+
 describe('Meeting Processing Pipeline', () => {
   describe('Transcript + Extraction + Action Items', () => {
     let testMeetingId
-    let testDepartmentId = '5b84e3e6-c96e-490a-a7c3-f9c0db4f7e15' // Test ORS department
 
     const sampleTranscript = `
 Good morning everyone. Today we're discussing Q3 planning and system improvements.
@@ -61,8 +76,8 @@ Next meeting: September 2, 2026 at 10 AM.
     `.trim()
 
     test('should paste transcript and create meeting_transcriptions record', async () => {
-      if (!supabase) {
-        console.warn('Skipping test: Supabase not configured')
+      if (!supabase || !testDepartmentId) {
+        console.warn('Skipping test: Supabase or test department not configured')
         return
       }
 
@@ -121,8 +136,8 @@ Next meeting: September 2, 2026 at 10 AM.
     })
 
     test('should call extract-meeting-data edge function', async () => {
-      if (!supabase) {
-        console.warn('Skipping test: Supabase not configured')
+      if (!supabase || !testDepartmentId) {
+        console.warn('Skipping test: Supabase or test department not configured')
         return
       }
 
@@ -241,8 +256,8 @@ Next meeting: September 2, 2026 at 10 AM.
     })
 
     test('should update meeting extraction_status', async () => {
-      if (!supabase) {
-        console.warn('Skipping test: Supabase not configured')
+      if (!supabase || !testDepartmentId) {
+        console.warn('Skipping test: Supabase or test department not configured')
         return
       }
 
@@ -294,8 +309,8 @@ Next meeting: September 2, 2026 at 10 AM.
     })
 
     test('should handle multi-audio concatenation', async () => {
-      if (!supabase) {
-        console.warn('Skipping test: Supabase not configured')
+      if (!supabase || !testDepartmentId) {
+        console.warn('Skipping test: Supabase or test department not configured')
         return
       }
 
@@ -350,8 +365,8 @@ Summary of action items:
     })
 
     test('should concatenate multi-audio transcripts for extraction', async () => {
-      if (!supabase) {
-        console.warn('Skipping test: Supabase not configured')
+      if (!supabase || !testDepartmentId) {
+        console.warn('Skipping test: Supabase or test department not configured')
         return
       }
 
@@ -375,8 +390,8 @@ Summary of action items:
     })
 
     test('should verify real-time extraction status subscription', async () => {
-      if (!supabase) {
-        console.warn('Skipping test: Supabase not configured')
+      if (!supabase || !testDepartmentId) {
+        console.warn('Skipping test: Supabase or test department not configured')
         return
       }
 

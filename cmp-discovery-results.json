@@ -1,0 +1,155 @@
+{
+  "timestamp": "2026-08-07T05:50:49.348Z",
+  "base_url": "https://leaders.lwcanada.org/api",
+  "supabase_url": "https://kraurtuhflouyorgtpun.supabase.co",
+  "probed_count": 28,
+  "summary": {
+    "status_200": 0,
+    "status_401": 13,
+    "status_404": 15,
+    "status_403": 0,
+    "errors": 0
+  },
+  "results": [
+    {
+      "endpoint": "/members",
+      "status": 401,
+      "error": "Unauthorized (endpoint exists but needs auth)"
+    },
+    {
+      "endpoint": "/members",
+      "status": 401,
+      "error": "Unauthorized (endpoint exists but needs auth)"
+    },
+    {
+      "endpoint": "/members/{memberId}",
+      "status": 401,
+      "error": "Unauthorized (endpoint exists but needs auth)"
+    },
+    {
+      "endpoint": "/search/members",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/units/{unitId}/members",
+      "status": 401,
+      "error": "Unauthorized (endpoint exists but needs auth)"
+    },
+    {
+      "endpoint": "/checkins",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/members/{memberId}/checkins",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/attendance-records",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/events",
+      "status": 401,
+      "error": "Unauthorized (endpoint exists but needs auth)"
+    },
+    {
+      "endpoint": "/services",
+      "status": 401,
+      "error": "Unauthorized (endpoint exists but needs auth)"
+    },
+    {
+      "endpoint": "/first-timers",
+      "status": 401,
+      "error": "Unauthorized (endpoint exists but needs auth)"
+    },
+    {
+      "endpoint": "/members/{memberId}/first-timer",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/follow-ups",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/members/{memberId}/follow-up",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/pastoral-care",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/leaders",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/leaders/{leaderId}",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/units/{unitId}/leaders",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/roles",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/forms",
+      "status": 401,
+      "error": "Unauthorized (endpoint exists but needs auth)"
+    },
+    {
+      "endpoint": "/forms/{formId}",
+      "status": 401,
+      "error": "Unauthorized (endpoint exists but needs auth)"
+    },
+    {
+      "endpoint": "/forms/{formId}/submissions",
+      "status": 401,
+      "error": "Unauthorized (endpoint exists but needs auth)"
+    },
+    {
+      "endpoint": "/units",
+      "status": 401,
+      "error": "Unauthorized (endpoint exists but needs auth)"
+    },
+    {
+      "endpoint": "/units",
+      "status": 401,
+      "error": "Unauthorized (endpoint exists but needs auth)"
+    },
+    {
+      "endpoint": "/departments",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/cell-meetings",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/training-events",
+      "status": 404,
+      "error": "Not found"
+    },
+    {
+      "endpoint": "/reports",
+      "status": 401,
+      "error": "Unauthorized (endpoint exists but needs auth)"
+    }
+  ]
+}

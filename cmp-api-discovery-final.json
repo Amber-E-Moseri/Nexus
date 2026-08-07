@@ -1,0 +1,88 @@
+{
+  "timestamp": "2026-08-07T05:52:52.014Z",
+  "base_url": "https://leaders.lwcanada.org",
+  "root_unit_id": "cmotpb106000ewkxbi3md8xs6",
+  "authenticated": false,
+  "probed_count": 12,
+  "summary": {
+    "status_200": 0,
+    "status_401": 11,
+    "status_404": 1,
+    "status_403": 0,
+    "errors": 0
+  },
+  "results": [
+    {
+      "path": "/api/services/export",
+      "status": 401,
+      "error": "Unauthorized",
+      "sample": "{\"error\":{\"code\":\"UNAUTHENTICATED\",\"message\":\"Not signed in\",\"details\":{}}}"
+    },
+    {
+      "path": "/api/forms/cmrgl1w5r009e853pn1x0gvws/submissions",
+      "status": 401,
+      "error": "Unauthorized",
+      "sample": "{\"error\":{\"code\":\"UNAUTHENTICATED\",\"message\":\"Not signed in\",\"details\":{}}}"
+    },
+    {
+      "path": "/api/forms/cms8ehb3j00iekhw1ywwge7oi/submissions",
+      "status": 401,
+      "error": "Unauthorized",
+      "sample": "{\"error\":{\"code\":\"UNAUTHENTICATED\",\"message\":\"Not signed in\",\"details\":{}}}"
+    },
+    {
+      "path": "/api/members",
+      "status": 401,
+      "error": "Unauthorized",
+      "sample": "{\"error\":{\"code\":\"UNAUTHENTICATED\",\"message\":\"Not signed in\",\"details\":{}}}"
+    },
+    {
+      "path": "/api/units",
+      "status": 401,
+      "error": "Unauthorized",
+      "sample": "{\"error\":{\"code\":\"UNAUTHENTICATED\",\"message\":\"Not signed in\",\"details\":{}}}"
+    },
+    {
+      "path": "/api/units",
+      "status": 401,
+      "error": "Unauthorized",
+      "sample": "{\"error\":{\"code\":\"UNAUTHENTICATED\",\"message\":\"Not signed in\",\"details\":{}}}"
+    },
+    {
+      "path": "/api/events",
+      "status": 401,
+      "error": "Unauthorized",
+      "sample": "{\"error\":{\"code\":\"UNAUTHENTICATED\",\"message\":\"Not signed in\",\"details\":{}}}"
+    },
+    {
+      "path": "/api/services",
+      "status": 401,
+      "error": "Unauthorized",
+      "sample": "{\"error\":{\"code\":\"UNAUTHENTICATED\",\"message\":\"Not signed in\",\"details\":{}}}"
+    },
+    {
+      "path": "/api/first-timers",
+      "status": 401,
+      "error": "Unauthorized",
+      "sample": "{\"error\":{\"code\":\"UNAUTHENTICATED\",\"message\":\"Not signed in\",\"details\":{}}}"
+    },
+    {
+      "path": "/api/forms",
+      "status": 401,
+      "error": "Unauthorized",
+      "sample": "{\"error\":{\"code\":\"UNAUTHENTICATED\",\"message\":\"Not signed in\",\"details\":{}}}"
+    },
+    {
+      "path": "/api/reports",
+      "status": 401,
+      "error": "Unauthorized",
+      "sample": "{\"error\":{\"code\":\"UNAUTHENTICATED\",\"message\":\"Not signed in\",\"details\":{}}}"
+    },
+    {
+      "path": "/api/leaders",
+      "status": 404,
+      "error": "Not Found",
+      "sample": "<!DOCTYPE html><html lang=\"en\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><link rel=\"stylesheet\" href=\"/_next/static/css/0a9680752923b294.css\" da"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "timestamp": "2026-08-07T05:51:42.026Z",
+  "base_url": "https://leaders.lwcanada.org/api",
+  "supabase_url": "https://kraurtuhflouyorgtpun.supabase.co",
+  "authenticated": true,
+  "probed_count": 9,
+  "summary": {
+    "status_200": 0,
+    "status_401": 9,
+    "status_404": 0,
+    "status_403": 0,
+    "errors": 0
+  },
+  "results": [
+    {
+      "endpoint": "/members",
+      "status": 401,
+      "error": "Unauthorized"
+    },
+    {
+      "endpoint": "/members",
+      "status": 401,
+      "error": "Unauthorized"
+    },
+    {
+      "endpoint": "/units",
+      "status": 401,
+      "error": "Unauthorized"
+    },
+    {
+      "endpoint": "/units",
+      "status": 401,
+      "error": "Unauthorized"
+    },
+    {
+      "endpoint": "/events",
+      "status": 401,
+      "error": "Unauthorized"
+    },
+    {
+      "endpoint": "/services",
+      "status": 401,
+      "error": "Unauthorized"
+    },
+    {
+      "endpoint": "/first-timers",
+      "status": 401,
+      "error": "Unauthorized"
+    },
+    {
+      "endpoint": "/forms",
+      "status": 401,
+      "error": "Unauthorized"
+    },
+    {
+      "endpoint": "/reports",
+      "status": 401,
+      "error": "Unauthorized"
+    }
+  ]
+}
