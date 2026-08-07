@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, MailCheck, MessageCircle, HelpCircle } from 'lucide-react'
+import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, MailCheck, MessageCircle, HelpCircle, ClipboardList, BarChart3 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
 const PRIMARY = '#4C2A92'
@@ -133,6 +133,14 @@ export default function AppsPage() {
             onClick={() => navigate('/meetings/minutes')}
           />
           <AppIcon
+            icon={ClipboardList}
+            label="Meeting Log"
+            color="#4C2A92"
+            bg="#F1EEF6"
+            description="Full meeting records"
+            onClick={() => navigate('/meetings')}
+          />
+          <AppIcon
             icon={ClipboardCheck}
             label="Meeting Reports"
             color="#4C2A92"
@@ -216,6 +224,16 @@ export default function AppsPage() {
               bg="linear-gradient(135deg, #F1EEF6 0%, #E8E0FF 100%)"
               description="AI assistant quality queue"
               onClick={() => navigate('/admin/nova-review')}
+            />
+          )}
+          {isSuperAdmin && (
+            <AppIcon
+              icon={BarChart3}
+              label="Reporting"
+              color="#8B5A3C"
+              bg="linear-gradient(135deg, #F5EDE3 0%, #E8DED0 100%)"
+              description="Member intelligence & analytics"
+              onClick={() => navigate('/reporting')}
             />
           )}
         </div>
