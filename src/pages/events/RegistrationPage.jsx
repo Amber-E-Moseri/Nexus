@@ -198,15 +198,9 @@ export default function RegistrationPage() {
 
       // Scoped on Registration Data tab only, view only; see all on their own team tab
       if (matchesAny(SCOPED_VIEW_REG_ONLY)) {
-        const subgroups = await getOwnSubgroups()
-        if (subgroups.length) {
-          setLimitedToSubgroups(subgroups)
-          setLimitedToRegistrationDataOnly(true)
-          setCanAccess('limited')
-        } else {
-          setNeedsSubgroupAssignment(true)
-          setCanAccess(false)
-        }
+        // Transportation and other view-only teams see all registration data (no subgroup scoping)
+        setLimitedToRegistrationDataOnly(true)
+        setCanAccess('limited')
         setLoading(false)
         return
       }
