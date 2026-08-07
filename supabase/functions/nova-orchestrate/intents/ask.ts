@@ -10,23 +10,43 @@ import { taskSource, meetingSource, sprintSource } from '../../_shared/novaCitat
 import { callClaude, extractTextFromResponse } from '../../_shared/novaModelRouter.ts'
 import { searchKnowledgeBase, recordKbQuery } from '../../_shared/novaKbSearch.ts'
 import { executeIntentWithFallback, buildAskFallback } from './fallbacks.ts'
+import { embedText } from '../../_shared/novaEmbeddings.ts'
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+// Extract potential meeting name keywords from the query
+// e.g. "what happened in central coordinators meeting" → "central coordinators"
+function extractMeetingName(q: string): string | null {
+  const patterns = [
+    /(?:in|at|from|about)\s+(?:the\s+)?(.+?)\s+meeting/i,
+    /(?:what happened in|notes from|minutes from|summary of)\s+(?:the\s+)?(.+?)(?:\s+meeting)?$/i,
+    /(.+?)\s+meeting\s+(?:notes|minutes|summary|decisions|recap)/i,
+  ]
+  for (const p of patterns) {
+    const m = q.match(p)
+    if (m?.[1] && m[1].length > 2 && m[1].length < 60) return m[1].trim()
+  }
+  return null
 }
 
 async function fetchContextData(
   client: ReturnType<typeof createClient>,
   ctx: NovaUserContext,
   query: string,
-): Promise<{ tasks: any[]; meetings: any[]; sprints: any[] }> {
+): Promise<{ tasks: any[]; meetings: any[]; minutesByMeeting: Record<string, any>; sprints: any[] }> {
   const today = todayISO()
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const fourteenDaysAhead = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const q = query.toLowerCase()
 
   const mentionsTask = /task|overdue|due|assign|pending|complet/.test(q)
-  const mentionsMeeting = /meeting|agenda|minutes|action item/.test(q)
+  const mentionsMeeting = /meeting|agenda|minutes|action item|happened|discussed|decided|notes|recap|summary/.test(q)
   const mentionsSprint = /sprint|programme|program|cycle/.test(q)
   const wantsAny = !mentionsTask && !mentionsMeeting && !mentionsSprint
+
+  const meetingName = mentionsMeeting ? extractMeetingName(query) : null
 
   const [tasksResult, meetingsResult, sprintsResult] = await Promise.all([
     mentionsTask || wantsAny
@@ -40,12 +60,19 @@ async function fetchContextData(
       : Promise.resolve({ data: [] }),
 
     mentionsMeeting || wantsAny
-      ? client
-          .from('meetings')
-          .select('id, title, scheduled_start, summary')
-          .gte('scheduled_start', `${today}T00:00:00`)
-          .order('scheduled_start', { ascending: true })
-          .limit(10)
+      ? (() => {
+          let q2 = client
+            .from('meetings')
+            .select('id, title, date, meeting_type, summary, minutes, agenda')
+            .gte('date', `${thirtyDaysAgo}T00:00:00`)
+            .lte('date', `${fourteenDaysAhead}T23:59:59`)
+            .order('date', { ascending: false })
+          // Narrow by name if query targets a specific meeting
+          if (meetingName) {
+            q2 = q2.ilike('title', `%${meetingName}%`)
+          }
+          return q2.limit(8)
+        })()
       : Promise.resolve({ data: [] }),
 
     mentionsSprint || wantsAny
@@ -56,23 +83,67 @@ async function fetchContextData(
       : Promise.resolve({ data: [] }),
   ])
 
+  const meetings = meetingsResult.data ?? []
+
+  // Fetch structured minutes (decisions + action items) for meetings that have them
+  let minutesByMeeting: Record<string, any> = {}
+  if (meetings.length > 0 && mentionsMeeting) {
+    const meetingIds = meetings.map((m: any) => m.id)
+    const { data: minutesRows } = await client
+      .from('meeting_minutes')
+      .select(`
+        id, meeting_id, summary, status,
+        segments:meeting_minutes_segments(
+          segment_name, notes, decisions, key_points,
+          action_items:meeting_action_items(
+            description, due_date, status,
+            assignee:users!assigned_to(name)
+          )
+        )
+      `)
+      .in('meeting_id', meetingIds)
+      .eq('status', 'submitted')
+
+    for (const row of minutesRows ?? []) {
+      minutesByMeeting[row.meeting_id] = row
+    }
+  }
+
   const activeSprints = (sprintsResult.data ?? [])
     .map((m: any) => (Array.isArray(m.sprint) ? m.sprint[0] : m.sprint))
     .filter((s: any) => s?.status === 'active')
 
   return {
     tasks: tasksResult.data ?? [],
-    meetings: meetingsResult.data ?? [],
+    meetings,
+    minutesByMeeting,
     sprints: activeSprints,
   }
 }
 
-function buildSources(data: { tasks: any[]; meetings: any[]; sprints: any[] }): NovaSource[] {
+function buildSources(data: { tasks: any[]; meetings: any[]; minutesByMeeting: Record<string, any>; sprints: any[] }): NovaSource[] {
   return [
     ...data.tasks.slice(0, 6).map((t: any) => taskSource(t.id, t.title)),
     ...data.meetings.slice(0, 4).map((m: any) => meetingSource(m.id, m.title)),
     ...data.sprints.slice(0, 3).map((s: any) => sprintSource(s.id, s.name)),
   ]
+}
+
+// Vector similarity search — degrades silently if nova_embeddings is empty or OPENAI_API_KEY missing
+async function fetchSemanticContext(
+  client: ReturnType<typeof createClient>,
+  query: string,
+): Promise<Array<{ content: string; source_id: string; source_type: string; similarity: number }>> {
+  try {
+    const embedding = await embedText(query)
+    const { data: chunks } = await client.rpc('match_authorized_nova_chunks', {
+      query_embedding: `[${embedding.join(',')}]`,
+      match_count: 5,
+    })
+    return ((chunks ?? []) as any[]).filter((c: any) => c.similarity > 0.65)
+  } catch {
+    return []
+  }
 }
 
 export async function handleAskNexus(
@@ -106,8 +177,11 @@ export async function handleAskNexus(
     }
   }
 
-  // Step 2: Gather SQL context
-  const data = await fetchContextData(client, ctx, request.message)
+  // Step 2: SQL context + semantic search in parallel
+  const [data, semanticChunks] = await Promise.all([
+    fetchContextData(client, ctx, request.message),
+    fetchSemanticContext(client, request.message),
+  ])
   const sources = buildSources(data)
 
   const contextPayload = {
@@ -117,8 +191,36 @@ export async function handleAskNexus(
       status: t.status_definition?.name, category: t.status_definition?.category,
       assignee: t.assignee?.name,
     })),
-    meetings: data.meetings.map((m: any) => ({ id: m.id, title: m.title, time: m.scheduled_start })),
+    meetings: data.meetings.map((m: any) => {
+      const mins = data.minutesByMeeting[m.id]
+      return {
+        id: m.id,
+        title: m.title,
+        date: m.date,
+        type: m.meeting_type,
+        summary: m.summary || null,
+        minutes_text: m.minutes || null,
+        structured_minutes: mins ? {
+          summary: mins.summary,
+          segments: (mins.segments ?? []).map((seg: any) => ({
+            topic: seg.segment_name,
+            notes: seg.notes,
+            decisions: seg.decisions,
+            key_points: seg.key_points,
+            action_items: (seg.action_items ?? []).map((ai: any) => ({
+              description: ai.description,
+              assigned_to: ai.assignee?.name,
+              due_date: ai.due_date,
+              status: ai.status,
+            })),
+          })),
+        } : null,
+      }
+    }),
     sprints: data.sprints.map((s: any) => ({ id: s.id, name: s.name, end_date: s.end_date })),
+    semantic_context: semanticChunks.length > 0
+      ? semanticChunks.map((c: any) => ({ content: c.content, source: c.source_type, similarity: Math.round(c.similarity * 100) / 100 }))
+      : undefined,
   }
 
   // Include KB fallthrough answer as context if rank was medium

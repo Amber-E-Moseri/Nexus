@@ -110,6 +110,7 @@ const InstagramGradingPage = lazyRoute('/instagram', () => import('./features/in
 const RegistrationPage = lazyRoute('/registration', () => import('./pages/events/RegistrationPage'))
 const HelpPage = lazyRoute('/help', () => import('./pages/HelpPage'))
 const NovaKnowledgeBase = lazyRoute('/nova/kb', () => import('./pages/NovaKnowledgeBase'))
+const NovaReportsPage = lazyRoute('/nova/reports', () => import('./pages/nova/NovaReportsPage'))
 const SupportPage = lazyRoute('/support', () => import('./pages/SupportPage'))
 const SupportTicketsAdminPage = lazyRoute('/admin/tickets', () => import('./pages/SupportTicketsAdminPage'))
 const GrowthTrackingPage = lazyRoute('/growth-tracking', () => import('./pages/growth/GrowthTrackingPage'))
@@ -442,6 +443,7 @@ export default function App() {
           <Route path="/settings/api-docs" element={<ApiDocumentationPage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/nova/kb" element={<NovaKnowledgeBase />} />
+          <Route path="/nova/reports" element={<NovaReportsPage />} />
           <Route path="/support" element={<SupportPage />} />
           <Route
             path="/admin/tickets"

@@ -1,7 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { Sparkles, X, ArrowUp, ThumbsUp, ThumbsDown, LoaderCircle, RotateCcw, Eraser, ChevronRight } from 'lucide-react'
-import { askNova, submitNovaFeedback } from '../lib/novaApi'
+import { Sparkles, X, ArrowUp, ThumbsUp, ThumbsDown, LoaderCircle, RotateCcw, Eraser, ChevronRight, FolderKanban, HelpCircle, Sun, CalendarClock, BarChart3 } from 'lucide-react'
+import { askNova, askNovaOrchestrate, submitNovaFeedback } from '../lib/novaApi'
 import NovaMarkdown from './NovaMarkdown'
+import SourceChip from './SourceChip'
+import ConfirmAction from './ConfirmAction'
+
+const INTENT_CHIPS = [
+  { intent: 'daily_brief', label: 'Daily Brief', Icon: Sun, defaultMessage: 'Give me my daily brief.' },
+  { intent: 'meeting_prep', label: 'Meeting Prep', Icon: CalendarClock, defaultMessage: 'Prepare me for my next meeting.' },
+  { intent: 'project_analysis', label: 'Project Analysis', Icon: FolderKanban, defaultMessage: 'Analyze my current sprint or tasks for risks.' },
+  { intent: 'report', label: 'Report', Icon: BarChart3, defaultMessage: 'Generate a department overview report.' },
+  { intent: 'ask', label: 'Ask Nexus', Icon: HelpCircle, defaultMessage: '' },
+]
 
 const RELATED_QUESTIONS = {
   sprint: [
@@ -103,11 +113,49 @@ function FeedbackButtons({ message, onFeedback }) {
   )
 }
 
+function IntentChips({ selected, onSelect }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {INTENT_CHIPS.map(({ intent, label, Icon }) => {
+        const active = selected === intent
+        return (
+          <button
+            key={intent}
+            type="button"
+            onClick={() => onSelect(active ? null : intent)}
+            className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors hover:scale-105"
+            style={{
+              background: active ? 'var(--accent)' : 'var(--surface-secondary)',
+              color: active ? '#fff' : 'var(--text-secondary)',
+              border: `1px solid ${active ? 'var(--accent)' : 'var(--border-light)'}`,
+            }}
+          >
+            <Icon size={11} />
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function SourceRow({ sources }) {
+  if (!sources?.length) return null
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {sources.map((source) => (
+        <SourceChip key={`${source.type}-${source.id}`} source={source} />
+      ))}
+    </div>
+  )
+}
+
 export default function NovaChat() {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [selectedIntent, setSelectedIntent] = useState(null)
   const scrollRef = useRef(null)
   const inputRef = useRef(null)
   const idCounter = useRef(0)
@@ -128,6 +176,7 @@ export default function NovaChat() {
         feedback: null,
         streaming: false,
         error: false,
+        showIntents: true,
       }])
     }
   }, [open])
@@ -143,36 +192,49 @@ export default function NovaChat() {
     return idCounter.current
   }
 
-  async function sendQuestion(question, { novaMsgId, userMsgId } = {}) {
+  async function sendQuestion(question, { novaMsgId, userMsgId, intent } = {}) {
     setSending(true)
+    const resolvedIntent = intent ?? selectedIntent
     if (novaMsgId == null) {
       userMsgId = nextId()
       novaMsgId = nextId()
       setMessages((prev) => [
         ...prev,
         { id: userMsgId, role: 'user', text: question },
-        { id: novaMsgId, role: 'nova', text: '', question, track: null, logId: null, feedback: null, streaming: true, error: false },
+        { id: novaMsgId, role: 'nova', text: '', question, intent: resolvedIntent, sources: [], track: null, logId: null, feedback: null, streaming: true, error: false },
       ])
     } else {
-      // Retry: reuse the existing bubble instead of appending a duplicate pair.
       setMessages((prev) =>
-        prev.map((m) => (m.id === novaMsgId ? { ...m, text: '', streaming: true, error: false } : m)),
+        prev.map((m) => (m.id === novaMsgId ? { ...m, text: '', sources: [], streaming: true, error: false } : m)),
       )
     }
 
     try {
-      await askNova(question, {
-        onText: (chunk) => {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === novaMsgId ? { ...m, text: m.text + chunk } : m)),
-          )
-        },
-        onDone: ({ track, logId }) => {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === novaMsgId ? { ...m, track, logId, streaming: false } : m)),
-          )
-        },
-      })
+      if (resolvedIntent) {
+        // Nova-orchestrate: JSON response, no streaming.
+        const response = await askNovaOrchestrate({ intent: resolvedIntent, message: question })
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === novaMsgId
+              ? { ...m, text: response.answer, sources: response.sources ?? [], proposedAction: response.proposedAction ?? null, streaming: false }
+              : m,
+          ),
+        )
+      } else {
+        // Legacy nova-chat: SSE streaming (KB + 2-tool path).
+        await askNova(question, {
+          onText: (chunk) => {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === novaMsgId ? { ...m, text: m.text + chunk } : m)),
+            )
+          },
+          onDone: ({ track, logId }) => {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === novaMsgId ? { ...m, track, logId, streaming: false } : m)),
+            )
+          },
+        })
+      }
     } catch (err) {
       setMessages((prev) =>
         prev.map((m) =>
@@ -186,9 +248,16 @@ export default function NovaChat() {
 
   async function handleSend() {
     const question = input.trim()
-    if (!question || sending) return
+    if (sending) return
+    // For intent chips that have a default message (e.g. daily_brief), allow
+    // sending with an empty input by using the chip's default.
+    const chipDefault = selectedIntent
+      ? (INTENT_CHIPS.find((c) => c.intent === selectedIntent)?.defaultMessage ?? '')
+      : ''
+    const effectiveQuestion = question || chipDefault
+    if (!effectiveQuestion) return
     setInput('')
-    await sendQuestion(question)
+    await sendQuestion(effectiveQuestion)
   }
 
   function handleRetry(message) {
@@ -291,6 +360,11 @@ export default function NovaChat() {
                       <LoaderCircle size={13} className="animate-spin" style={{ color: 'var(--text-tertiary)' }} />
                     ) : null}
                   </div>
+                  {m.showIntents && !m.streaming ? (
+                    <div className="ml-1 mt-2">
+                      <IntentChips selected={selectedIntent} onSelect={setSelectedIntent} />
+                    </div>
+                  ) : null}
                   {m.error ? (
                     <button
                       type="button"
@@ -308,13 +382,32 @@ export default function NovaChat() {
                       <TrackBadge track={m.track} />
                     </div>
                   ) : null}
-                  {!m.streaming && !m.error && m.question ? (
+                  {!m.streaming && !m.error && m.sources?.length > 0 ? (
+                    <div className="ml-1 mt-1">
+                      <SourceRow sources={m.sources} />
+                    </div>
+                  ) : null}
+                  {!m.streaming && !m.error && m.question && !m.intent ? (
                     <div className="ml-1 mt-2">
                       <RelatedQuestions question={m.question} onQuestionClick={sendQuestion} />
                     </div>
                   ) : null}
                   {!m.streaming && !m.error ? (
                     <FeedbackButtons message={m} onFeedback={handleFeedback} />
+                  ) : null}
+                  {!m.streaming && !m.error && m.proposedAction ? (
+                    <div className="ml-1 mt-2" style={{ maxWidth: '92%', width: '100%' }}>
+                      <ConfirmAction
+                        proposal={m.proposedAction}
+                        onComplete={(r) => {
+                          if (r.success) {
+                            setMessages((prev) =>
+                              prev.map((msg) => msg.id === m.id ? { ...msg, proposedAction: null } : msg),
+                            )
+                          }
+                        }}
+                      />
+                    </div>
                   ) : null}
                 </div>
               ),
@@ -331,7 +424,7 @@ export default function NovaChat() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask Nova..."
+                placeholder={selectedIntent === 'daily_brief' ? 'Press send for your daily brief...' : selectedIntent === 'project_analysis' ? 'Or ask about a specific sprint...' : 'Ask Nova...'}
                 rows={1}
                 disabled={sending}
                 className="max-h-24 flex-1 resize-none bg-transparent text-[12.5px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
@@ -339,7 +432,7 @@ export default function NovaChat() {
               <button
                 type="button"
                 onClick={handleSend}
-                disabled={sending || !input.trim()}
+                disabled={sending || (!input.trim() && !(selectedIntent && INTENT_CHIPS.find((c) => c.intent === selectedIntent)?.defaultMessage))}
                 aria-label="Send"
                 className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-opacity disabled:opacity-40"
                 style={{ background: 'var(--accent)', color: '#fff' }}

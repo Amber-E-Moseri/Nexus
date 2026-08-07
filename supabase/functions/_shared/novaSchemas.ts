@@ -5,9 +5,9 @@ export const KNOWN_INTENTS = [
   'daily_brief',
   'ask',
   'meeting_prep',
+  'meeting_extract',
   'project_analysis',
   'report',
-  'draft',
 ] as const
 
 export type NovaIntent = (typeof KNOWN_INTENTS)[number]
@@ -24,7 +24,6 @@ export interface NovaOrchestrateRequest {
     sprintId?: string
     departmentId?: string
     reportType?: string
-    flagId?: string
   }
 }
 

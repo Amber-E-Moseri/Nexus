@@ -14,6 +14,9 @@ import type { ModelCallResult } from '../_shared/novaModelRouter.ts'
 import { handleDailyBrief } from './intents/brief.ts'
 import { handleAskNexus } from './intents/ask.ts'
 import { handleProjectAnalysis } from './intents/projectAnalysis.ts'
+import { handleMeetingPrep } from './intents/meetingPrep.ts'
+import { handleMeetingExtract } from './intents/meetingExtract.ts'
+import { handleReport } from './intents/report.ts'
 
 const RATE_LIMIT_PER_HOUR = 30
 
@@ -45,10 +48,11 @@ async function classifyIntent(message: string): Promise<string> {
 
 Intents:
 - daily_brief: asking for a summary of their day, daily overview, what's on their plate
+- meeting_prep: asking to prepare for an upcoming meeting, pre-meeting brief, "prepare for X meeting"
 - project_analysis: asking about project risks, sprint health, task analysis, blockers
 - ask: any other question about Nexus data, tasks, meetings, general questions
 
-Respond with one word only: daily_brief, project_analysis, or ask`,
+Respond with one word only: daily_brief, meeting_prep, project_analysis, or ask`,
         },
       ],
       messages: [{ role: 'user', content: message }],
@@ -106,7 +110,10 @@ serve(async (req) => {
 
     const sessionType =
       intent === 'daily_brief' ? 'daily_brief' :
-      intent === 'project_analysis' ? 'project_analysis' : 'chat'
+      intent === 'project_analysis' ? 'project_analysis' :
+      intent === 'meeting_prep' ? 'meeting_prep' :
+      intent === 'meeting_extract' ? 'meeting_extract' :
+      intent === 'report' ? 'report' : 'chat'
 
     const sessionId = await createSession(userClient, user.id, sessionType, userCtx.departmentId)
 
@@ -124,8 +131,17 @@ serve(async (req) => {
       case 'daily_brief':
         response = await handleDailyBrief(userClient, userCtx, sessionId)
         break
+      case 'meeting_prep':
+        response = await handleMeetingPrep(userClient, userCtx, request, sessionId)
+        break
+      case 'meeting_extract':
+        response = await handleMeetingExtract(userClient, userCtx, request, sessionId)
+        break
       case 'project_analysis':
         response = await handleProjectAnalysis(userClient, userCtx, request, sessionId)
+        break
+      case 'report':
+        response = await handleReport(userClient, userCtx, request, sessionId)
         break
       default:
         response = await handleAskNexus(userClient, userCtx, request, sessionId)

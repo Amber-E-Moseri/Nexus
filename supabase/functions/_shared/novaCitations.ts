@@ -10,11 +10,23 @@ export interface NovaSource {
   excerpt?: string
 }
 
+export interface NovaActionProposal {
+  proposalId: string
+  toolName: string
+  displayTitle: string
+  displayDescription: string
+  confirmationToken: string
+  arguments: Record<string, unknown>
+  expiresAt: string
+}
+
 export interface NovaResponse {
   answer: string
   sources: NovaSource[]
   intent: string
   sessionId?: string
+  metadata?: Record<string, unknown>
+  proposedAction?: NovaActionProposal
 }
 
 export function taskSource(id: string, title: string, excerpt?: string): NovaSource {

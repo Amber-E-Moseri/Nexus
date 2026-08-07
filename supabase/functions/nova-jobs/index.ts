@@ -6,9 +6,10 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { cleanupAuditData } from './jobs/cleanupAuditData.ts'
 import { checkBudgetHealth } from './jobs/checkBudgetHealth.ts'
+import { embedContent } from './jobs/embedContent.ts'
 
-type JobName = 'cleanup_audit_data' | 'check_budget_health'
-const KNOWN_JOBS = new Set<JobName>(['cleanup_audit_data', 'check_budget_health'])
+type JobName = 'cleanup_audit_data' | 'check_budget_health' | 'embed_content'
+const KNOWN_JOBS = new Set<JobName>(['cleanup_audit_data', 'check_budget_health', 'embed_content'])
 
 serve(async (req) => {
   if (req.method !== 'POST') {
@@ -50,6 +51,13 @@ serve(async (req) => {
       case 'check_budget_health': {
         const result = await checkBudgetHealth(serviceClient)
         console.log('nova-jobs check_budget_health:', result)
+        return new Response(JSON.stringify({ job, result }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      case 'embed_content': {
+        const result = await embedContent(serviceClient)
+        console.log('nova-jobs embed_content:', result)
         return new Response(JSON.stringify({ job, result }), {
           status: 200, headers: { 'Content-Type': 'application/json' },
         })
