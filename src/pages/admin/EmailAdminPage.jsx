@@ -53,7 +53,38 @@ function StatCard({ label, value, sub }) {
   )
 }
 
-function buildPreviewHtml(form, frontendUrl = 'https://nexus.lwcanada.org') {
+function getStarterTemplate() {
+  return `<table style="width:100%;border-collapse:collapse;margin:0;padding:0;">
+<tr><td style="padding:32px 28px;background:#faf8f5;">
+
+  <!-- Header section -->
+  <div style="text-align:center;margin-bottom:32px;">
+    <h1 style="margin:0 0 12px;font-size:26px;font-weight:800;color:#4c2a92;line-height:1.2;">Headline Here</h1>
+    <p style="margin:0;font-size:15px;color:#5a5248;line-height:1.6;">Supporting tagline or description</p>
+  </div>
+
+  <!-- Content -->
+  <p style="margin:0 0 16px;font-size:14px;color:#2d2a22;line-height:1.8;">Hi {{firstName}},</p>
+  <p style="margin:0 0 24px;font-size:14px;color:#5a5248;line-height:1.8;">Your message content goes here. You can use HTML tags and inline CSS.</p>
+
+  <!-- Feature/content card -->
+  <div style="margin:24px 0;padding:20px;background:#fff;border-radius:10px;border:1px solid #e8dedd;">
+    <h3 style="margin:0 0 10px;font-size:15px;font-weight:700;color:#4c2a92;">Feature Highlight</h3>
+    <p style="margin:0;font-size:13px;color:#5a5248;line-height:1.6;">Describe your feature or benefit here.</p>
+  </div>
+
+  <!-- CTA -->
+  <div style="text-align:center;margin:32px 0;">
+    <a href="https://nexus.lwcanada.org" style="display:inline-block;padding:14px 32px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">
+      Call to Action
+    </a>
+  </div>
+
+</td></tr>
+</table>`
+}
+
+function buildStandardAnnouncementHtml(form, frontendUrl = 'https://nexus.lwcanada.org') {
   const year = new Date().getFullYear()
   const benefits = form.benefits
     .split('\n')
@@ -62,10 +93,11 @@ function buildPreviewHtml(form, frontendUrl = 'https://nexus.lwcanada.org') {
     .slice(0, 3)
 
   const benefitRows = benefits.map(b => `
-    <li style="margin:0;padding:8px 0;border-bottom:1px solid #f4f0e8;font-size:13px;color:#2d2a22;list-style:none;display:flex;align-items:flex-start;gap:10px;">
-      <span style="width:6px;height:6px;border-radius:50%;background:#4c2a92;flex-shrink:0;margin-top:5px;"></span>
-      <span>${b}</span>
-    </li>`).join('')
+    <tr>
+      <td style="padding:12px 0;border-bottom:1px solid #f0ebe2;font-size:13px;color:#2d2a22;">
+        <span style="margin-right:10px;">✓</span>${b}
+      </td>
+    </tr>`).join('')
 
   const ctaUrl = (form.cta_url || '/').startsWith('http')
     ? form.cta_url
@@ -75,50 +107,100 @@ function buildPreviewHtml(form, frontendUrl = 'https://nexus.lwcanada.org') {
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;line-height:1.6;color:#2d2a22;margin:0;padding:0;background:#f9f7f5;">
-<div style="max-width:600px;margin:0 auto;background:#fff;">
-  <div style="background:#4c2a92;padding:24px 28px;">
-    <p style="margin:0 0 16px;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.6);">Nexus</p>
-    <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:99px;padding:4px 12px;margin-bottom:14px;">
+<table style="width:100%;border-collapse:collapse;max-width:600px;margin:0 auto;">
+<tr><td style="background:#fff;padding:0;">
+
+  <!-- Header -->
+  <div style="background:linear-gradient(135deg, #4c2a92 0%, #6b3fb5 100%);padding:32px 28px;">
+    <p style="margin:0 0 16px;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.7);">Nexus</p>
+    <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:20px;padding:6px 14px;margin-bottom:16px;">
       <span style="font-size:11px;font-weight:700;color:#fff;letter-spacing:0.06em;text-transform:uppercase;">What's New</span>
     </div>
-    <h1 style="margin:0 0 8px;font-size:26px;font-weight:800;color:#fff;line-height:1.2;">${form.feature_name || 'Feature Name'}</h1>
-    <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.8);">${form.tagline || ''}</p>
+    <h1 style="margin:0 0 12px;font-size:28px;font-weight:800;color:#fff;line-height:1.2;">${form.feature_name || 'Feature Name'}</h1>
+    <p style="margin:0;font-size:16px;color:rgba(255,255,255,0.85);line-height:1.5;">${form.tagline || ''}</p>
   </div>
-  <div style="padding:28px 28px 0;">
-    <p style="margin:0 0 20px;font-size:15px;color:#2d2a22;">Hi <strong>there</strong>,</p>
-    <p style="margin:0 0 24px;font-size:14px;color:#5a5248;line-height:1.7;">${form.description || 'Description goes here.'}</p>
+
+  <!-- Body -->
+  <div style="padding:32px 28px;">
+    <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#2d2a22;">Hi {{firstName}},</p>
+    <div style="margin:0 0 28px;font-size:14px;line-height:1.8;color:#5a5248;white-space:pre-wrap;">${form.description || 'Description goes here.'}</div>
+
     ${benefits.length > 0 ? `
-    <div style="margin-bottom:24px;background:#faf8f5;border-radius:10px;border:1px solid #e8dedd;overflow:hidden;">
-      <ul style="margin:0;padding:12px 16px;">${benefitRows}</ul>
+    <div style="margin:28px 0;background:#faf8f5;border-radius:12px;border:1px solid #e8dedd;padding:0;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;margin:0;padding:0;">
+        <tbody style="margin:0;padding:16px;">
+          ${benefitRows}
+        </tbody>
+      </table>
     </div>` : ''}
+
+    <!-- CTA -->
+    <div style="margin:32px 0;text-align:center;">
+      <a href="${ctaUrl}" style="display:inline-block;padding:16px 40px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;transition:background 0.2s ease;">${form.cta_label || 'Get started'}</a>
+    </div>
   </div>
-  <div style="padding:8px 28px 28px;text-align:center;">
-    <a href="${ctaUrl}" style="display:inline-block;padding:14px 36px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">${form.cta_label || 'Get started'}</a>
-  </div>
-  <div style="background:#f9f7f5;border-top:1px solid #e8dedd;padding:16px 28px;text-align:center;">
-    <p style="margin:0;font-size:11px;color:#9e9488;">
+
+  <!-- Footer -->
+  <div style="background:#f9f7f5;border-top:1px solid #e8dedd;padding:20px 28px;text-align:center;">
+    <p style="margin:0;font-size:11px;color:#9e9488;line-height:1.6;">
       You're receiving this as an active Nexus user.
-      &nbsp;·&nbsp;
+      <br />
       <a href="${frontendUrl}/settings" style="color:#4c2a92;text-decoration:none;font-weight:500;">Unsubscribe from announcements</a>
-      &nbsp;·&nbsp; © ${year} Nexus
+      <br />
+      © ${year} Nexus
     </p>
   </div>
-</div>
+
+</td></tr>
+</table>
 </body>
 </html>`
+}
+
+function buildPreviewHtml(form, emailFormat = 'standard', frontendUrl = 'https://nexus.lwcanada.org') {
+  if (emailFormat === 'html') {
+    // Custom HTML mode - wrap provided HTML with Nexus footer
+    const year = new Date().getFullYear()
+    return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;line-height:1.6;color:#2d2a22;margin:0;padding:0;background:#f9f7f5;">
+<table style="width:100%;border-collapse:collapse;max-width:600px;margin:0 auto;">
+<tr><td style="background:#fff;">
+  ${form.customHtml || '<p style="padding:28px;color:#9e9488;text-align:center;">Custom HTML preview goes here</p>'}
+  <div style="background:#f9f7f5;border-top:1px solid #e8dedd;padding:20px 28px;text-align:center;">
+    <p style="margin:0;font-size:11px;color:#9e9488;line-height:1.6;">
+      You're receiving this as an active Nexus user.
+      <br />
+      <a href="${frontendUrl}/settings" style="color:#4c2a92;text-decoration:none;font-weight:500;">Unsubscribe from announcements</a>
+      <br />
+      © ${year} Nexus
+    </p>
+  </div>
+</td></tr>
+</table>
+</body>
+</html>`
+  }
+  return buildStandardAnnouncementHtml(form, frontendUrl)
 }
 
 export default function EmailAdminPage() {
   const { profile } = useAuth()
   const toast = useToast()
 
+  // Email format mode: 'standard' or 'html'
+  const [emailFormat, setEmailFormat] = useState('standard')
+
   const [form, setForm] = useState({
+    subject: '',
     feature_name: '',
     tagline: '',
     description: '',
     benefits: '',
     cta_label: 'Go to Dashboard',
     cta_url: 'https://nexus.lwcanada.org',
+    customHtml: '',
   })
 
   // Audience targeting
@@ -131,11 +213,13 @@ export default function EmailAdminPage() {
 
   // Preview
   const [showPreview, setShowPreview] = useState(false)
+  const [previewMode, setPreviewMode] = useState('desktop') // 'desktop' | 'mobile'
   const iframeRef = useRef(null)
 
   // Send state
   const [sending, setSending] = useState(false)
   const [sendResult, setSendResult] = useState(null)
+  const [showSendConfirm, setShowSendConfirm] = useState(false)
 
   // Delivery log
   const [logs, setLogs] = useState([])
@@ -236,36 +320,60 @@ export default function EmailAdminPage() {
     )
   }
 
-  async function handleSend(e) {
-    e.preventDefault()
-    if (!form.feature_name || !form.description || !form.cta_url || !form.cta_label) {
-      toast?.error('Fill in all required fields')
-      return
+  async function validateForm() {
+    if (!form.subject) {
+      toast?.error('Email subject is required')
+      return false
+    }
+    if (emailFormat === 'standard') {
+      if (!form.feature_name || !form.description || !form.cta_url || !form.cta_label) {
+        toast?.error('Fill in all required fields')
+        return false
+      }
+    } else {
+      if (!form.customHtml) {
+        toast?.error('Custom HTML is required')
+        return false
+      }
     }
     if (audienceMode === 'department' && selectedDepts.length === 0) {
       toast?.error('Select at least one department')
-      return
+      return false
     }
     if (audienceMode === 'role' && selectedRoles.length === 0) {
       toast?.error('Select at least one role')
-      return
+      return false
     }
+    return true
+  }
 
+  async function handleSend() {
+    if (!validateForm()) return
+
+    setShowSendConfirm(false)
     setSending(true)
     setSendResult(null)
     try {
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData?.session?.access_token
-      const benefits = form.benefits.split('\n').map(l => l.trim()).filter(Boolean)
 
       const payload = {
-        feature_name: form.feature_name,
-        tagline: form.tagline || undefined,
-        description: form.description,
-        benefits,
-        cta_label: form.cta_label,
-        cta_url: form.cta_url,
+        format: emailFormat,
+        subject: form.subject,
       }
+
+      if (emailFormat === 'standard') {
+        const benefits = form.benefits.split('\n').map(l => l.trim()).filter(Boolean)
+        payload.feature_name = form.feature_name
+        payload.tagline = form.tagline || undefined
+        payload.description = form.description
+        payload.benefits = benefits
+        payload.cta_label = form.cta_label
+        payload.cta_url = form.cta_url
+      } else {
+        payload.customHtml = form.customHtml
+      }
+
       if (audienceMode === 'department' && selectedDepts.length > 0) {
         payload.department_ids = selectedDepts
       } else if (audienceMode === 'role' && selectedRoles.length > 0) {
@@ -284,7 +392,7 @@ export default function EmailAdminPage() {
       setSendResult({ ok: res.ok, ...result })
       if (res.ok) {
         toast?.success(`Sent to ${result.sent} users`)
-        setForm(f => ({ ...f, feature_name: '', tagline: '', description: '', benefits: '' }))
+        setForm(f => ({ ...f, subject: '', feature_name: '', tagline: '', description: '', benefits: '', customHtml: '' }))
         loadLogs()
       } else {
         toast?.error(result.error ?? 'Send failed')
@@ -334,7 +442,33 @@ export default function EmailAdminPage() {
             <span style={{ fontWeight: 600, fontSize: 15, color: TEXT }}>Send Feature Announcement</span>
           </div>
 
-          <form onSubmit={handleSend} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <form onSubmit={e => { e.preventDefault(); setShowSendConfirm(true) }} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* Email format mode selector */}
+            <div>
+              <label style={labelStyle}>Email format</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  { id: 'standard', label: 'Standard Template' },
+                  { id: 'html', label: 'Advanced HTML' },
+                ].map(opt => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setEmailFormat(opt.id)}
+                    style={{
+                      padding: '7px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                      border: `1.5px solid ${emailFormat === opt.id ? PRIMARY : BORDER}`,
+                      background: emailFormat === opt.id ? PRIMARY + '12' : '#fff',
+                      color: emailFormat === opt.id ? PRIMARY : MUTED,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* Audience targeting */}
             <div>
@@ -413,46 +547,98 @@ export default function EmailAdminPage() {
               )}
             </div>
 
-            {/* Form fields */}
-            <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>Feature name *</label>
-                <input value={form.feature_name} onChange={e => setForm(f => ({ ...f, feature_name: e.target.value }))}
-                  placeholder="e.g. Sprint Task Board" style={inputStyle} required />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>Tagline</label>
-                <input value={form.tagline} onChange={e => setForm(f => ({ ...f, tagline: e.target.value }))}
-                  placeholder="One-line hook (optional)" style={inputStyle} />
-              </div>
-            </div>
-
+            {/* Email subject */}
             <div>
-              <label style={labelStyle}>Description *</label>
-              <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="1-2 sentences explaining the feature" rows={3}
-                style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }} required />
+              <label style={labelStyle}>Email subject *</label>
+              <input
+                value={form.subject || (emailFormat === 'standard' && form.feature_name ? `New in Nexus: ${form.feature_name}` : '')}
+                onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+                placeholder={emailFormat === 'standard' ? 'New in Nexus: Feature Name' : 'Email subject'}
+                style={inputStyle}
+                required
+              />
+              {emailFormat === 'standard' && !form.subject && form.feature_name && (
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: MUTED }}>Default: New in Nexus: {form.feature_name}</p>
+              )}
             </div>
 
-            <div>
-              <label style={labelStyle}>Benefits (one per line, optional)</label>
-              <textarea value={form.benefits} onChange={e => setForm(f => ({ ...f, benefits: e.target.value }))}
-                placeholder={'Drag tasks to update status\nSee due dates at a glance'} rows={3}
-                style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }} />
-            </div>
+            {emailFormat === 'standard' ? (
+              <>
+                {/* Standard template fields */}
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Feature name *</label>
+                    <input value={form.feature_name} onChange={e => setForm(f => ({ ...f, feature_name: e.target.value }))}
+                      placeholder="e.g. Sprint Task Board" style={inputStyle} required />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Tagline</label>
+                    <input value={form.tagline} onChange={e => setForm(f => ({ ...f, tagline: e.target.value }))}
+                      placeholder="One-line hook (optional)" style={inputStyle} />
+                  </div>
+                </div>
 
-            <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>Button label *</label>
-                <input value={form.cta_label} onChange={e => setForm(f => ({ ...f, cta_label: e.target.value }))}
-                  placeholder="Try it now" style={inputStyle} required />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>Button URL *</label>
-                <input value={form.cta_url} onChange={e => setForm(f => ({ ...f, cta_url: e.target.value }))}
-                  placeholder="/sprints" style={inputStyle} required />
-              </div>
-            </div>
+                <div>
+                  <label style={labelStyle}>Description *</label>
+                  <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                    placeholder="Explain the feature. Preserve line breaks for better readability." rows={4}
+                    style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }} required />
+                  <p style={{ margin: '4px 0 0', fontSize: 11, color: MUTED }}>Blank lines will be preserved in the email.</p>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Benefits (one per line, optional)</label>
+                  <textarea value={form.benefits} onChange={e => setForm(f => ({ ...f, benefits: e.target.value }))}
+                    placeholder={'Drag tasks to update status\nSee due dates at a glance\nFilter by assignee'} rows={3}
+                    style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }} />
+                  <p style={{ margin: '4px 0 0', fontSize: 11, color: MUTED }}>Up to 3 benefits will display. Each line becomes a bullet point.</p>
+                </div>
+
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Button label *</label>
+                    <input value={form.cta_label} onChange={e => setForm(f => ({ ...f, cta_label: e.target.value }))}
+                      placeholder="Try it now" style={inputStyle} required />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Button URL *</label>
+                    <input value={form.cta_url} onChange={e => setForm(f => ({ ...f, cta_url: e.target.value }))}
+                      placeholder="/sprints" style={inputStyle} required />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Advanced HTML mode */}
+                <div>
+                  <label style={labelStyle}>Custom Email HTML *</label>
+                  <textarea
+                    value={form.customHtml}
+                    onChange={e => setForm(f => ({ ...f, customHtml: e.target.value }))}
+                    placeholder="Paste your email HTML here. Use {{firstName}} and {{fullName}} for personalization."
+                    rows={8}
+                    style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }}
+                    required
+                  />
+                  <p style={{ margin: '8px 0 0', fontSize: 11, color: MUTED }}>
+                    Use inline CSS and table-based layouts for email compatibility.
+                    <br />
+                    Available variables: <strong>{'{{'} firstName {'}}'}</strong>, <strong>{'{{'} fullName {'}}'}</strong>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, customHtml: getStarterTemplate() }))}
+                    style={{
+                      marginTop: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600,
+                      border: `1px solid ${BORDER}`, borderRadius: 6, background: '#fff',
+                      color: MUTED, cursor: 'pointer',
+                    }}
+                  >
+                    ← Insert Nexus Starter Template
+                  </button>
+                </div>
+              </>
+            )}
 
             {/* Preview toggle */}
             <div>
@@ -472,16 +658,47 @@ export default function EmailAdminPage() {
 
             {showPreview && (
               <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, overflow: 'hidden', background: '#f5f5f5' }}>
-                <div style={{ padding: '8px 14px', borderBottom: `1px solid ${BORDER}`, background: '#fff', fontSize: 11, color: MUTED }}>
-                  Preview — <strong style={{ color: TEXT }}>New in Nexus: {form.feature_name || 'Feature Name'}</strong>
+                <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>Subject: <strong style={{ color: TEXT }}>{form.subject || (emailFormat === 'standard' && form.feature_name ? `New in Nexus: ${form.feature_name}` : '(No subject)')}</strong></div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {['desktop', 'mobile'].map(mode => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setPreviewMode(mode)}
+                        style={{
+                          padding: '5px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                          border: `1px solid ${previewMode === mode ? PRIMARY : BORDER}`,
+                          background: previewMode === mode ? PRIMARY + '12' : '#fff',
+                          color: previewMode === mode ? PRIMARY : MUTED,
+                          cursor: 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 3,
+                        }}
+                      >
+                        {mode === 'desktop' ? <Monitor size={11} /> : <Smartphone size={11} />}
+                        {mode === 'mobile' ? 'Mobile' : 'Desktop'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <iframe
-                  ref={iframeRef}
-                  srcDoc={buildPreviewHtml(form)}
-                  style={{ width: '100%', height: 520, border: 'none', display: 'block' }}
-                  sandbox="allow-same-origin"
-                  title="Email preview"
-                />
+                <div style={{ padding: '16px', background: '#f5f5f5', display: 'flex', justifyContent: 'center' }}>
+                  <iframe
+                    ref={iframeRef}
+                    srcDoc={buildPreviewHtml(form, emailFormat)}
+                    style={{
+                      width: previewMode === 'desktop' ? 600 : 375,
+                      height: previewMode === 'desktop' ? 520 : 680,
+                      border: 'none',
+                      display: 'block',
+                      borderRadius: 4,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    }}
+                    sandbox="allow-same-origin"
+                    title="Email preview"
+                  />
+                </div>
               </div>
             )}
 
@@ -518,6 +735,72 @@ export default function EmailAdminPage() {
             </div>
           </form>
         </div>
+
+        {/* Send Confirmation Modal */}
+        {showSendConfirm && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000,
+          }}>
+            <div style={{
+              background: '#fff', borderRadius: 12, padding: 28,
+              maxWidth: 400, width: '100%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+            }}>
+              <h2 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700, color: TEXT }}>Send announcement?</h2>
+              <div style={{ marginBottom: 20, fontSize: 13, color: '#5a5248', lineHeight: 1.6 }}>
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontWeight: 600, color: TEXT, marginBottom: 4 }}>Audience:</div>
+                  <div style={{ color: MUTED }}>
+                    {audienceMode === 'all'
+                      ? 'All active users'
+                      : audienceMode === 'department'
+                        ? selectedDepts.length === 1
+                          ? `1 department`
+                          : `${selectedDepts.length} departments`
+                        : selectedRoles.length === 1
+                          ? `1 role`
+                          : `${selectedRoles.length} roles`
+                    }
+                  </div>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontWeight: 600, color: TEXT, marginBottom: 4 }}>Recipients:</div>
+                  <div style={{ color: MUTED }}>~{recipientCount || '?'} eligible users</div>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, color: TEXT, marginBottom: 4 }}>Subject:</div>
+                  <div style={{ color: MUTED }}>{form.subject || (emailFormat === 'standard' && form.feature_name ? `New in Nexus: ${form.feature_name}` : '(No subject)')}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowSendConfirm(false)}
+                  style={{
+                    flex: 1, padding: '10px 14px', border: `1px solid ${BORDER}`,
+                    borderRadius: 8, background: '#fff', color: TEXT, fontSize: 13,
+                    fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={sending}
+                  style={{
+                    flex: 1, padding: '10px 14px', background: sending ? MUTED : PRIMARY,
+                    border: 'none', borderRadius: 8, color: '#fff', fontSize: 13,
+                    fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {sending ? 'Sending…' : 'Send announcement'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Delivery Log */}
         <div style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 12, overflow: 'hidden' }}>

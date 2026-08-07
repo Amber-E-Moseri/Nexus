@@ -1,15 +1,23 @@
 // Manually triggered by an admin POST with the announcement payload.
 // Sends a feature announcement to all active users who haven't opted out.
 //
-// POST body:
+// POST body (standard template):
 // {
-//   feature_name: string          — e.g. "Sprint Task Board"
-//   tagline: string               — one-line hook, e.g. "Plan your sprint visually"
-//   description: string           — 1-2 sentence body explaining what it does
-//   benefits: string[]            — up to 3 short bullet points (optional)
-//   cta_label: string             — button text, e.g. "Try it now"
-//   cta_url: string               — relative path, e.g. "/sprints"
-//   user_ids?: string[]           — if present, send only to these users
+//   format: "standard"
+//   subject: string                 — e.g. "New in Nexus: Sprint Task Board"
+//   feature_name: string            — e.g. "Sprint Task Board"
+//   tagline: string                 — one-line hook (optional)
+//   description: string             — 1-2 sentence body explaining what it does
+//   benefits: string[]              — up to 3 short bullet points (optional)
+//   cta_label: string               — button text, e.g. "Try it now"
+//   cta_url: string                 — relative path, e.g. "/sprints"
+// }
+//
+// POST body (custom HTML):
+// {
+//   format: "html"
+//   subject: string                 — email subject line
+//   customHtml: string              — custom email HTML with {{firstName}}, {{fullName}} tokens
 // }
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -51,7 +59,38 @@ async function verifyAccess(req: Request): Promise<boolean> {
   }
 }
 
-function buildAnnouncementHtml(
+// Sanitize HTML by removing dangerous tags and attributes
+function sanitizeHtml(html: string): string {
+  // Remove script tags and their content
+  html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+
+  // Remove dangerous attributes (event handlers, javascript:, etc.)
+  html = html.replace(/\s?on\w+\s*=\s*["'][^"']*["']/gi, '') // event attributes
+  html = html.replace(/\s?on\w+\s*=\s*[^\s>]*/gi, '') // event attributes without quotes
+  html = html.replace(/javascript:/gi, '') // javascript: protocol
+  html = html.replace(/vbscript:/gi, '') // vbscript: protocol
+
+  // Remove dangerous tags
+  const dangerousTags = ['iframe', 'object', 'embed', 'form', 'input', 'style']
+  for (const tag of dangerousTags) {
+    html = html.replace(new RegExp(`<${tag}\\b[^<]*(?:(?!<\\/${tag}>)<[^<]*)*<\\/${tag}>`, 'gi'), '')
+  }
+
+  return html
+}
+
+// Personalize HTML by replacing tokens
+function personalizeHtml(html: string, firstName?: string, fullName?: string): string {
+  const first = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : 'there'
+  const full = fullName ?? first
+
+  html = html.replace(/\{\{firstName\}\}/g, first)
+  html = html.replace(/\{\{fullName\}\}/g, full)
+
+  return html
+}
+
+function buildStandardAnnouncementHtml(
   firstName: string,
   frontendUrl: string,
   featureName: string,
@@ -66,10 +105,11 @@ function buildAnnouncementHtml(
     .slice(0, 3)
     .map(
       (b) => `
-      <li style="margin:0;padding:8px 0;border-bottom:1px solid #f4f0e8;font-size:13px;color:#2d2a22;list-style:none;display:flex;align-items:flex-start;gap:10px;">
-        <span style="width:6px;height:6px;border-radius:50%;background:#4c2a92;flex-shrink:0;margin-top:5px;"></span>
-        <span>${b}</span>
-      </li>`,
+      <tr>
+        <td style="padding:12px 0;border-bottom:1px solid #f0ebe2;font-size:13px;color:#2d2a22;">
+          <span style="margin-right:10px;">✓</span>${b}
+        </td>
+      </tr>`,
     )
     .join('')
 
@@ -79,44 +119,75 @@ function buildAnnouncementHtml(
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;line-height:1.6;color:#2d2a22;margin:0;padding:0;background:#f9f7f5;">
-<div style="max-width:600px;margin:0 auto;background:#fff;">
+<table style="width:100%;border-collapse:collapse;max-width:600px;margin:0 auto;">
+<tr><td style="background:#fff;padding:0;">
 
-  <div style="background:#4c2a92;padding:24px 28px;">
-    <p style="margin:0 0 16px;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.6);">Nexus</p>
-    <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:99px;padding:4px 12px;margin-bottom:14px;">
+  <!-- Header -->
+  <div style="background:linear-gradient(135deg, #4c2a92 0%, #6b3fb5 100%);padding:32px 28px;">
+    <p style="margin:0 0 16px;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.7);">Nexus</p>
+    <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:20px;padding:6px 14px;margin-bottom:16px;">
       <span style="font-size:11px;font-weight:700;color:#fff;letter-spacing:0.06em;text-transform:uppercase;">What's New</span>
     </div>
-    <h1 style="margin:0 0 8px;font-size:26px;font-weight:800;color:#fff;line-height:1.2;">${featureName}</h1>
-    <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.8);">${tagline}</p>
+    <h1 style="margin:0 0 12px;font-size:28px;font-weight:800;color:#fff;line-height:1.2;">${featureName}</h1>
+    <p style="margin:0;font-size:16px;color:rgba(255,255,255,0.85);line-height:1.5;">${tagline}</p>
   </div>
 
-  <div style="padding:28px 28px 0;">
-    <p style="margin:0 0 20px;font-size:15px;color:#2d2a22;">Hi <strong>${firstName}</strong>,</p>
-    <p style="margin:0 0 24px;font-size:14px;color:#5a5248;line-height:1.7;">${description}</p>
+  <!-- Body -->
+  <div style="padding:32px 28px;">
+    <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#2d2a22;">Hi {{firstName}},</p>
+    <div style="margin:0 0 28px;font-size:14px;line-height:1.8;color:#5a5248;white-space:pre-wrap;">${description}</div>
 
-    ${
-      benefits.length > 0
-        ? `<div style="margin-bottom:24px;background:#faf8f5;border-radius:10px;border:1px solid #e8dedd;overflow:hidden;">
-        <ul style="margin:0;padding:12px 16px;">${benefitRows}</ul>
-      </div>`
-        : ''
-    }
+    ${benefits.length > 0 ? `
+    <div style="margin:28px 0;background:#faf8f5;border-radius:12px;border:1px solid #e8dedd;padding:0;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;margin:0;padding:0;">
+        <tbody style="margin:0;padding:16px;">
+          ${benefitRows}
+        </tbody>
+      </table>
+    </div>` : ''}
+
+    <!-- CTA -->
+    <div style="margin:32px 0;text-align:center;">
+      <a href="${fullCtaUrl}" style="display:inline-block;padding:16px 40px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;transition:background 0.2s ease;">${ctaLabel}</a>
+    </div>
   </div>
 
-  <div style="padding:8px 28px 28px;text-align:center;">
-    <a href="${fullCtaUrl}" style="display:inline-block;padding:14px 36px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">${ctaLabel}</a>
-  </div>
-
-  <div style="background:#f9f7f5;border-top:1px solid #e8dedd;padding:16px 28px;text-align:center;">
-    <p style="margin:0;font-size:11px;color:#9e9488;">
+  <!-- Footer -->
+  <div style="background:#f9f7f5;border-top:1px solid #e8dedd;padding:20px 28px;text-align:center;">
+    <p style="margin:0;font-size:11px;color:#9e9488;line-height:1.6;">
       You're receiving this as an active Nexus user.
-      &nbsp;·&nbsp;
+      <br />
       <a href="${frontendUrl}/settings" style="color:#4c2a92;text-decoration:none;font-weight:500;">Unsubscribe from announcements</a>
-      &nbsp;·&nbsp; © ${year} Nexus
+      <br />
+      © ${year} Nexus
     </p>
   </div>
 
-</div>
+</td></tr>
+</table>
+</body>
+</html>`
+}
+
+function buildCustomHtml(customHtml: string, frontendUrl: string, year: number): string {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;line-height:1.6;color:#2d2a22;margin:0;padding:0;background:#f9f7f5;">
+<table style="width:100%;border-collapse:collapse;max-width:600px;margin:0 auto;">
+<tr><td style="background:#fff;">
+  ${customHtml}
+  <div style="background:#f9f7f5;border-top:1px solid #e8dedd;padding:20px 28px;text-align:center;">
+    <p style="margin:0;font-size:11px;color:#9e9488;line-height:1.6;">
+      You're receiving this as an active Nexus user.
+      <br />
+      <a href="${frontendUrl}/settings" style="color:#4c2a92;text-decoration:none;font-weight:500;">Unsubscribe from announcements</a>
+      <br />
+      © ${year} Nexus
+    </p>
+  </div>
+</td></tr>
+</table>
 </body>
 </html>`
 }
@@ -127,17 +198,34 @@ Deno.serve(async (req) => {
   if (!(await verifyAccess(req))) return jsonResponse(401, { error: 'Unauthorized' })
 
   const body = await req.json().catch(() => null)
-  if (!body?.feature_name || !body?.description || !body?.cta_url || !body?.cta_label) {
-    return jsonResponse(400, { error: 'Missing required fields: feature_name, description, cta_url, cta_label' })
+  if (!body?.subject) {
+    return jsonResponse(400, { error: 'Missing required field: subject' })
+  }
+
+  const format = body.format ?? 'standard'
+  const subject = body.subject
+
+  // Validate format-specific fields
+  if (format === 'standard') {
+    if (!body?.feature_name || !body?.description || !body?.cta_url || !body?.cta_label) {
+      return jsonResponse(400, { error: 'Standard format requires: feature_name, description, cta_url, cta_label' })
+    }
+  } else if (format === 'html') {
+    if (!body?.customHtml) {
+      return jsonResponse(400, { error: 'HTML format requires: customHtml' })
+    }
+  } else {
+    return jsonResponse(400, { error: 'Invalid format; must be "standard" or "html"' })
   }
 
   const {
-    feature_name,
+    feature_name = '',
     tagline = '',
-    description,
+    description = '',
     benefits = [],
-    cta_label,
-    cta_url,
+    cta_label = '',
+    cta_url = '',
+    customHtml = '',
     user_ids,
     department_ids,
     roles,
@@ -210,19 +298,31 @@ Deno.serve(async (req) => {
   for (const user of eligible) {
     const cap = user.role === 'dept_lead' ? 1 : 2
     if ((weeklyCount[user.email] ?? 0) >= cap) { skipped++; continue }
-    const firstName = (user.name ?? 'there').split(' ')[0]
 
-    const html = buildAnnouncementHtml(
-      firstName,
-      frontendUrl,
-      feature_name,
-      tagline,
-      description,
-      benefits,
-      cta_label,
-      cta_url,
-      year,
-    )
+    const firstName = (user.name ?? 'there').split(' ')[0]
+    const fullName = user.name ?? 'there'
+
+    let html: string
+    if (format === 'standard') {
+      html = buildStandardAnnouncementHtml(
+        firstName,
+        frontendUrl,
+        feature_name,
+        tagline,
+        description,
+        benefits as string[],
+        cta_label,
+        cta_url,
+        year,
+      )
+    } else {
+      const sanitized = sanitizeHtml(customHtml)
+      const personalized = personalizeHtml(sanitized, firstName, fullName)
+      html = buildCustomHtml(personalized, frontendUrl, year)
+    }
+
+    // Apply personalization to template
+    html = personalizeHtml(html, firstName, fullName)
 
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -231,7 +331,7 @@ Deno.serve(async (req) => {
         from: fromEmail,
         reply_to: ['info@lwcanada.org'],
         to: [user.email],
-        subject: `New in Nexus: ${feature_name}`,
+        subject,
         html,
       }),
     })
@@ -241,7 +341,7 @@ Deno.serve(async (req) => {
     await supabase.from('email_delivery_log').insert({
       recipient_email: user.email,
       sender_email: fromEmail,
-      subject: `New in Nexus: ${feature_name}`,
+      subject,
       email_type: 'feature_announcement',
       resend_email_id: emailResult.id ?? null,
       status: emailRes.ok ? 'sent' : 'failed',
