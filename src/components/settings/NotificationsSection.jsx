@@ -22,6 +22,7 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
   const [saving, setSaving] = useState({})
   const [message, setMessage] = useState('')
   const [testLoading, setTestLoading] = useState(false)
+  const [reactivating, setReactivating] = useState(false)
 
   useEffect(() => {
     if ('Notification' in window) {
@@ -118,6 +119,34 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
     }
   }
 
+  // Called after user manually unblocks in browser settings and clicks "I've allowed it"
+  const handleReactivatePush = async () => {
+    setReactivating(true)
+    setMessage('')
+    try {
+      const current = Notification.permission
+      setBrowserPermission(current)
+
+      if (current !== 'granted') {
+        setMessage('Notifications are still blocked in your browser. Follow the steps below and try again.')
+        return
+      }
+
+      const success = await requestPushPermission()
+      if (success) {
+        setPushEnabled(true)
+        await checkPushStatus()
+        setMessage('✅ Push notifications are now active on this device!')
+      } else {
+        setMessage('Subscription failed — try reloading the page and enabling again.')
+      }
+    } catch (err) {
+      setMessage(`Error: ${err.message}`)
+    } finally {
+      setReactivating(false)
+    }
+  }
+
   const handleTestNotification = async () => {
     if (!user?.id) return
     setTestLoading(true)
@@ -153,28 +182,50 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
       {/* Browser Notification Status */}
       {browserSupport && (
         <div className="rounded-xl border border-[var(--border)] bg-white p-5 mb-4">
-          <div className="flex items-start justify-between gap-4">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
+            Browser Notifications
+          </h3>
+
+          {browserPermission === 'granted' && (
+            <p className="text-xs text-[var(--text-secondary)]">✅ Allowed — your browser will receive desktop alerts.</p>
+          )}
+
+          {browserPermission === 'default' && (
             <div>
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
-                Browser Notifications
-              </h3>
-              <p className="text-xs text-[var(--text-secondary)] mb-3">
-                {browserPermission === 'granted'
-                  ? '✅ Enabled - You will receive desktop alerts'
-                  : browserPermission === 'denied'
-                    ? '❌ Blocked - Check your browser settings to re-enable'
-                    : '⏳ Not requested yet'}
-              </p>
-              {browserPermission !== 'granted' && browserPermission !== 'denied' && (
-                <button
-                  onClick={requestBrowserPermission}
-                  className="text-xs font-medium text-white bg-[var(--accent)] px-3 py-1.5 rounded-md hover:opacity-90 transition"
-                >
-                  Enable Browser Notifications
-                </button>
-              )}
+              <p className="text-xs text-[var(--text-secondary)] mb-3">⏳ Not enabled yet — click below to allow.</p>
+              <button
+                onClick={requestBrowserPermission}
+                className="text-xs font-medium text-white bg-[var(--accent)] px-3 py-1.5 rounded-md hover:opacity-90 transition"
+              >
+                Enable Browser Notifications
+              </button>
             </div>
-          </div>
+          )}
+
+          {browserPermission === 'denied' && (
+            <div>
+              <p className="text-xs text-[var(--text-secondary)] mb-3">
+                ❌ <strong>Blocked</strong> — your browser is preventing notifications. Follow these steps to unblock:
+              </p>
+              <ol style={{ fontSize: 12, color: 'var(--text-secondary)', paddingLeft: 18, lineHeight: 1.8, marginBottom: 14 }}>
+                <li>Click the <strong>lock icon</strong> (or info icon) in your browser's address bar</li>
+                <li>Find <strong>Notifications</strong> and change it from <em>Block</em> to <em>Allow</em></li>
+                <li>Come back here and click the button below</li>
+              </ol>
+              <button
+                onClick={handleReactivatePush}
+                disabled={reactivating}
+                style={{
+                  fontSize: 12, fontWeight: 600, color: 'white',
+                  background: reactivating ? '#9e9488' : 'var(--accent)',
+                  border: 'none', borderRadius: 6, padding: '7px 14px',
+                  cursor: reactivating ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {reactivating ? 'Checking…' : "I've allowed it — activate now"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -198,17 +249,23 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
                 Works on Android Chrome, Firefox, Edge and iOS Safari (when installed as app)
               </p>
             </div>
-            <button
-              onClick={handleTogglePush}
-              disabled={pushLoading}
-              className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition ${
-                pushEnabled
-                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                  : 'bg-[var(--accent)] text-white hover:opacity-90'
-              } disabled:opacity-50`}
-            >
-              {pushLoading ? 'Updating...' : pushEnabled ? 'Disable' : 'Enable'}
-            </button>
+            {pushStatus.permission === 'denied' ? (
+              <span style={{ fontSize: 12, color: '#9e9488', whiteSpace: 'nowrap' }}>
+                Unblock above first
+              </span>
+            ) : (
+              <button
+                onClick={handleTogglePush}
+                disabled={pushLoading}
+                className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition ${
+                  pushEnabled
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-[var(--accent)] text-white hover:opacity-90'
+                } disabled:opacity-50`}
+              >
+                {pushLoading ? 'Updating...' : pushEnabled ? 'Disable' : 'Enable'}
+              </button>
+            )}
           </div>
         </div>
       )}
