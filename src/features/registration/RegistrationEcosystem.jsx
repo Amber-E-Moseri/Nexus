@@ -2087,6 +2087,7 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, exemptFello
   const [subgroupFilter, setSubgroupFilter] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
   const [clearingEmail, setClearingEmail] = useState(null);
+  const [viewMode, setViewMode] = useState('arrivals'); // 'arrivals' | 'departures' | 'full'
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -2151,19 +2152,35 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, exemptFello
     filtered.filter(r => !r.arrivalFlight && !r.departureFlight && !r.arrivalDate && !r.departureDate),
     [filtered]);
 
-  // Group people with flights by arrival date for pickup logistics
+  // Group people with flights by arrival date, sorted by arrival time
   const byArrivalDate = useMemo(() => {
     const groups = {};
-    withFlight.forEach(r => {
+    withFlight.filter(r => r.arrivalFlight || r.arrivalDate).forEach(r => {
       const key = r.arrivalDate || 'Unknown';
       if (!groups[key]) groups[key] = [];
       groups[key].push(r);
     });
-    // Sort each group by arrival time
     Object.values(groups).forEach(g =>
       g.sort((a, b) => (a.arrivalTime || '').localeCompare(b.arrivalTime || '')),
     );
-    // Return entries sorted by date (Unknown last)
+    return Object.entries(groups).sort(([a], [b]) => {
+      if (a === 'Unknown') return 1;
+      if (b === 'Unknown') return -1;
+      return a.localeCompare(b);
+    });
+  }, [withFlight]);
+
+  // Group people with flights by departure date, sorted by departure time
+  const byDepartureDate = useMemo(() => {
+    const groups = {};
+    withFlight.filter(r => r.departureFlight || r.departureDate).forEach(r => {
+      const key = r.departureDate || 'Unknown';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(r);
+    });
+    Object.values(groups).forEach(g =>
+      g.sort((a, b) => (a.departureTime || '').localeCompare(b.departureTime || '')),
+    );
     return Object.entries(groups).sort(([a], [b]) => {
       if (a === 'Unknown') return 1;
       if (b === 'Unknown') return -1;
@@ -2182,6 +2199,67 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, exemptFello
     { key: 'departureFlight', label: 'Departure Flight' },
   ];
 
+  const FlightGroup = ({ groups, labelPrefix, timeKey, flightKey, emptyMsg }) => (
+    groups.length > 0 ? groups.map(([date, people]) => (
+      <div key={date} style={{ marginBottom: 24 }}>
+        <div style={{ fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 13.5, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Plane size={14} color={C.purple} />
+          {date === 'Unknown' ? `${labelPrefix} date unknown` : `${labelPrefix} ${date}`}
+          <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11.5, fontWeight: 400, color: C.mute }}>{people.length} person{people.length !== 1 ? 's' : ''}</span>
+        </div>
+        <Card style={{ padding: 0 }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Subgroup</th>
+                  <th>Time</th>
+                  <th>Flight</th>
+                  {viewMode === 'full' && <><th>Dep. Date</th><th>Dep. Time</th><th>Dep. Flight</th></>}
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {people.map(r => (
+                  <tr key={r.email}>
+                    <td style={{ fontWeight: 500 }}>{r.fullName}</td>
+                    <td style={{ color: C.mute }}>{r.subgroup}</td>
+                    <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r[timeKey] ? fmtTime(r[timeKey]) : '—'}</td>
+                    <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r[flightKey] || '—'}</td>
+                    {viewMode === 'full' && (
+                      <>
+                        <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.departureDate || '—'}</td>
+                        <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.departureTime ? fmtTime(r.departureTime) : '—'}</td>
+                        <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.departureFlight || '—'}</td>
+                      </>
+                    )}
+                    <td>
+                      <button
+                        onClick={() => clearFlight(r)}
+                        disabled={clearingEmail === r.email}
+                        title="Clear flight info"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: clearingEmail === r.email ? C.mute : `${C.mute}88`, padding: '2px 4px', lineHeight: 1, transition: 'color .12s' }}
+                        onMouseEnter={e => { if (clearingEmail !== r.email) e.currentTarget.style.color = C.red; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = clearingEmail === r.email ? C.mute : `${C.mute}88`; }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+    )) : (
+      <Card>
+        <div style={{ color: C.mute, textAlign: 'center', padding: '20px 0', fontSize: 13 }}>{emptyMsg}</div>
+      </Card>
+    )
+  );
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
@@ -2192,8 +2270,18 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, exemptFello
             {' '}{withFlight.length} with flights · {missingFlight.length} awaiting flight info.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {/* Subgroup filter hidden for Transportation team since they see all flights */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* View mode toggle */}
+          <div style={{ display: 'flex', background: '#F1EEF6', borderRadius: 8, padding: 2, gap: 2 }}>
+            {[['arrivals', 'Arrivals'], ['departures', 'Departures'], ['full', 'Full View']].map(([mode, label]) => (
+              <button key={mode} onClick={() => setViewMode(mode)} style={{
+                padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                background: viewMode === mode ? C.purple : 'transparent',
+                color: viewMode === mode ? '#fff' : C.mute,
+                transition: 'all .15s',
+              }}>{label}</button>
+            ))}
+          </div>
           <Btn tone="ghost" small onClick={handleRefresh} disabled={refreshing}>
             <RefreshCw size={13} style={refreshing ? { animation: 'spin 1s linear infinite' } : {}} />
             {refreshing ? 'Refreshing…' : 'Refresh'}
@@ -2206,64 +2294,40 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, exemptFello
 
       <FlightsSyncBlock onApplied={onApplied} />
 
-      {/* Flight manifest grouped by arrival date */}
-      {byArrivalDate.length > 0 ? byArrivalDate.map(([date, people]) => (
-        <div key={date} style={{ marginBottom: 24 }}>
-          <div style={{ fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 13.5, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Plane size={14} color={C.purple} />
-            {date === 'Unknown' ? 'Arrival date unknown' : `Arriving ${date}`}
-            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11.5, fontWeight: 400, color: C.mute }}>{people.length} person{people.length !== 1 ? 's' : ''}</span>
-          </div>
-          <Card style={{ padding: 0 }}>
-            <div style={{ overflowX: 'auto' }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Subgroup</th>
-                    <th>Arrival Time</th>
-                    <th>Arrival Flight</th>
-                    <th>Departure Date</th>
-                    <th>Departure Time</th>
-                    <th>Departure Flight</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {people.map(r => (
-                    <tr key={r.email}>
-                      <td style={{ fontWeight: 500 }}>{r.fullName}</td>
-                      <td style={{ color: C.mute }}>{r.subgroup}</td>
-                      <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.arrivalTime ? fmtTime(r.arrivalTime) : '—'}</td>
-                      <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.arrivalFlight || '—'}</td>
-                      <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.departureDate || '—'}</td>
-                      <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.departureTime ? fmtTime(r.departureTime) : '—'}</td>
-                      <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.departureFlight || '—'}</td>
-                      <td>
-                        <button
-                          onClick={() => clearFlight(r)}
-                          disabled={clearingEmail === r.email}
-                          title="Clear flight info"
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: clearingEmail === r.email ? C.mute : `${C.mute}88`, padding: '2px 4px', lineHeight: 1, transition: 'color .12s' }}
-                          onMouseEnter={e => { if (clearingEmail !== r.email) e.currentTarget.style.color = C.red; }}
-                          onMouseLeave={e => { e.currentTarget.style.color = clearingEmail === r.email ? C.mute : `${C.mute}88`; }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {/* Arrivals view */}
+      {(viewMode === 'arrivals' || viewMode === 'full') && (
+        <div>
+          {viewMode === 'full' && (
+            <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 13, color: C.purple, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Arrivals
             </div>
-          </Card>
+          )}
+          <FlightGroup
+            groups={byArrivalDate}
+            labelPrefix="Arriving"
+            timeKey="arrivalTime"
+            flightKey="arrivalFlight"
+            emptyMsg="No arrival data yet. Sync from the platform above or edit individual records."
+          />
         </div>
-      )) : (
-        <Card>
-          <div style={{ color: C.mute, textAlign: 'center', padding: '20px 0', fontSize: 13 }}>
-            No flight data yet. Sync from the platform above or edit individual records.
-          </div>
-        </Card>
+      )}
+
+      {/* Departures view */}
+      {(viewMode === 'departures' || viewMode === 'full') && (
+        <div style={viewMode === 'full' ? { marginTop: 32 } : {}}>
+          {viewMode === 'full' && (
+            <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 13, color: C.purple, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Departures
+            </div>
+          )}
+          <FlightGroup
+            groups={byDepartureDate}
+            labelPrefix="Departing"
+            timeKey="departureTime"
+            flightKey="departureFlight"
+            emptyMsg="No departure data yet. Sync from the platform above or edit individual records."
+          />
+        </div>
       )}
 
       {/* Missing flight info */}
