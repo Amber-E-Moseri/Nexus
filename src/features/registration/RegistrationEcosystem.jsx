@@ -542,13 +542,16 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     const pay = paymentByEmail[r.email];
     const hasPaid = pay ? (Number(pay.amount_paid) || 0) > 0 && (Number(pay.amount_paid) || 0) >= (Number(pay.amount_expected) || 0) : false;
     const hasFlightInfo = !!(r.arrivalFlight || r.departureFlight || r.arrivalDate || r.departureDate);
-    const inStateConfirmed = !!conf.inState || hasPaid;
+    // isLocal = explicitly marked as driving/not flying (excludes from Transportation tab)
+    const isLocal = !!conf.inState;
+    // fullyConfirmed = confirmed attending by any means: paid, has a flight, or marked in-state
+    const fullyConfirmed = hasPaid || hasFlightInfo || isLocal;
     return {
       ...r,
       hasPaid,
       hasFlightInfo,
-      inStateConfirmed,
-      fullyConfirmed: inStateConfirmed,
+      inStateConfirmed: isLocal,
+      fullyConfirmed,
     };
   }), [registrationsFiltered, confirmations, paymentByEmail]);
 
