@@ -3,6 +3,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { listDepartments } from '../../lib/people/api'
 import { getNotificationPrefs, setNotificationPref } from '../../features/notifications'
 import { supabase } from '../../lib/supabase'
+import { getOnboardingStepCount } from '../../lib/adoption-config'
 import AutomationsPage from '../platform/AutomationsPage'
 import IntegrationsSection from './IntegrationsSection'
 import NotificationsSection from '../../components/settings/NotificationsSection'
@@ -33,7 +34,7 @@ const EXPORT_TABLE_SELECT = {
 }
 
 export default function Settings() {
-  const { user, profile, role, refreshProfile } = useAuth()
+  const { user, profile, role, refreshProfile, jwtRole } = useAuth()
   const [activeTab, setActiveTab] = useState('Profile')
   const [departments, setDepartments] = useState([])
   const [prefs, setPrefs] = useState({})
@@ -138,6 +139,20 @@ export default function Settings() {
     await refreshProfile()
     setProfileMessage('Profile saved.')
     setProfileSaving(false)
+
+    // Mark onboarding step as complete when profile is saved
+    if (jwtRole) {
+      const totalSteps = getOnboardingStepCount(jwtRole)
+      try {
+        await supabase.rpc('mark_onboarding_step_complete', {
+          p_step_key: 'profile_completed',
+          p_total_steps: totalSteps,
+          p_metadata: {}
+        })
+      } catch (err) {
+        console.log('[onboarding] step marking skipped:', err)
+      }
+    }
   }
 
   async function handlePasswordUpdate() {
