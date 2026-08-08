@@ -604,8 +604,8 @@ export default function EmailComposerPage() {
   const [subject, setSubject] = useState('')
   const [previewText, setPreviewText] = useState('')
   const [bodyHtml, setBodyHtml] = useState('<p></p>')
-  const [replyTo, setReplyTo] = useState('')
-  const [fromName, setFromName] = useState('BLW CAN NEXUS')
+  const [replyTo, setReplyTo] = useState('info@lwcanada.org')
+  const [fromName, setFromName] = useState('BLW CANADA')
   const [testEmail, setTestEmail] = useState('')
   const [scheduleMode, setScheduleMode] = useState('now')
   const [scheduledAt, setScheduledAt] = useState('')
@@ -659,8 +659,8 @@ export default function EmailComposerPage() {
           setScheduledAt(data.scheduled_at ? new Date(data.scheduled_at).toISOString().slice(0, 16) : '')
           setScheduleMode(data.status === 'scheduled' ? 'later' : 'now')
           setSelectedSegmentId(data.segment_id ?? '')
-          setFromName(data.from_name ?? 'BLW CAN NEXUS')
-          setReplyTo(data.reply_to_email ?? profile?.email ?? '')
+          setFromName(data.from_name ?? 'BLW CANADA')
+          setReplyTo(data.reply_to_email ?? 'info@lwcanada.org')
 
           if (Array.isArray(data.recipient_filters) && data.recipient_filters.length > 0) {
             setRecipientPills(data.recipient_filters)

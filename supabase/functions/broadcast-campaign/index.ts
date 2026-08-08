@@ -70,9 +70,7 @@ function generateEmailHtml(title: string, bodyHtml: string | null, body: string)
   <style>
     body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 0 auto; background: white; }
-    .header { background: linear-gradient(135deg, #4C2A92, #6B3FD4); color: white; padding: 24px; text-align: center; }
-    .header h1 { margin: 0; font-size: 24px; font-weight: 800; }
-    .header p { margin: 4px 0 0 0; font-size: 14px; opacity: 0.9; }
+    .header { padding: 20px; text-align: center; border-bottom: 1px solid #EDE8DC; }
     .content { padding: 24px; color: #333; line-height: 1.6; }
     .content h2 { color: #4C2A92; margin-top: 0; font-size: 20px; }
     .content p { margin: 12px 0; }
@@ -84,15 +82,14 @@ function generateEmailHtml(title: string, bodyHtml: string | null, body: string)
 <body>
   <div class="container">
     <div class="header">
-      <h1>BLW CAN NEXUS</h1>
-      <p>Community Update</p>
+      <img src="https://nexus.lwcanada.org/canada_sr.png" alt="BLW Canada" width="52" height="52" style="display:block;margin:0 auto;" />
     </div>
     <div class="content">
       <h2>${escapeHtml(title)}</h2>
       ${content}
     </div>
     <div class="footer">
-      <p>© 2024 BLW CAN NEXUS. All rights reserved.</p>
+      <p>© BLW Canada Sub-Region</p>
       <p><a href="${FRONTEND_URL}/notifications">View in app</a></p>
     </div>
   </div>

@@ -182,6 +182,9 @@ function renderHtmlShell(bodyHtml: string, previewText: string, unsubscribeToken
       ${safePreview}
     </div>
     <div class="email-container">
+      <div style="padding: 16px; text-align: center; border-bottom: 1px solid #EDE8DC;">
+        <img src="https://nexus.lwcanada.org/canada_sr.png" alt="BLW Canada" width="52" height="52" style="display:block;margin:0 auto;" />
+      </div>
       <div class="email-body">
         ${bodyHtml}
       </div>

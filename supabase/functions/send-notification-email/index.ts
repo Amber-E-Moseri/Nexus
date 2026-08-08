@@ -73,6 +73,7 @@ Deno.serve(async (req) => {
 
   const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://blwcannexus.org'
   const currentYear = new Date().getFullYear()
+  const actionUrl = (payload.action_url as string | undefined) ?? undefined
 
   function htmlTemplate(userName: string, body: string, actionUrl?: string, actionLabel?: string): string {
     return `
@@ -84,7 +85,7 @@ Deno.serve(async (req) => {
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: #2d2a22; margin: 0; padding: 0; }
             .container { max-width: 600px; margin: 0 auto; background: #ffffff; }
-            .header { background: #4c2a92; color: #ffffff; padding: 20px; text-align: center; }
+            .header { padding: 20px; text-align: center; border-bottom: 1px solid #e8dedd; }
             .content { padding: 24px; }
             .footer { background: #f9f7f5; border-top: 1px solid #e8dedd; padding: 16px; text-align: center; font-size: 12px; color: #9e9488; }
             .button { display: inline-block; padding: 10px 20px; background: #4c2a92; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 500; }
@@ -96,7 +97,7 @@ Deno.serve(async (req) => {
         <body>
           <div class="container">
             <div class="header">
-              <h1 style="margin: 0; font-size: 24px;">BLW CAN NEXUS</h1>
+              <img src="https://nexus.lwcanada.org/canada_sr.png" alt="BLW Canada" width="52" height="52" style="display:block;margin:0 auto;" />
             </div>
             <div class="content">
               <div class="section">
@@ -106,7 +107,7 @@ Deno.serve(async (req) => {
                 <p>${body}</p>
               </div>
               ${actionUrl ? `<div class="section" style="margin-top: 24px;">
-                <a href="${actionUrl}" class="button">${actionLabel || 'View in BLW CAN NEXUS'}</a>
+                <a href="${actionUrl}" class="button">${actionLabel || 'View in Nexus'}</a>
               </div>` : ''}
               <div class="section" style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e8dedd;">
                 <p style="font-size: 12px; color: #9e9488; margin: 0;">
@@ -115,7 +116,7 @@ Deno.serve(async (req) => {
               </div>
             </div>
             <div class="footer">
-              <p>© ${currentYear} BLW CAN NEXUS. All rights reserved.</p>
+              <p>© ${currentYear} BLW Canada Sub-Region</p>
             </div>
           </div>
         </body>
@@ -196,8 +197,7 @@ Deno.serve(async (req) => {
     return jsonResponse(500, { error: 'Missing RESEND_API_KEY' })
   }
 
-  const payloadActionUrl = payload.action_url as string | undefined
-  const htmlContent = htmlTemplate(user.name, message.body, payloadActionUrl || message.actionUrl, message.actionLabel)
+  const htmlContent = htmlTemplate(user.name, message.body, actionUrl || message.actionUrl, message.actionLabel)
 
   const emailResponse = await fetch('https://api.resend.com/emails', {
     method: 'POST',
