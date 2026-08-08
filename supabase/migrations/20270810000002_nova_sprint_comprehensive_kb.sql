@@ -20,8 +20,8 @@ In Nexus, sprints:
 Each sprint belongs to a department/space and has its own settings, member roster, and task list.',
     'sprints',
     'active',
-    '["super_admin","regional_secretary","dept_lead","pastor","member"]',
-    '["sprints-scopes","sprints-types","sprints-members","sprints-archive"]'
+    ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
+    ARRAY['sprints-scopes','sprints-types','sprints-members','sprints-archive']
   ),
   (
     'sprints-scopes',
@@ -42,7 +42,7 @@ Each sprint belongs to a department/space and has its own settings, member roste
 
 **Why scopes matter:**
 - Scopes control who sees sprint details (dates, tasks, attendance)
-- Privacy: department-scoped sprints don't leak sensitive work
+- Privacy: department-scoped sprints don''t leak sensitive work
 - Collaboration: org-scoped sprints invite input from across the ministry
 - Governance: RLS policies enforce scope restrictions at the database level
 
@@ -50,8 +50,8 @@ Each sprint belongs to a department/space and has its own settings, member roste
 When creating a sprint, choose "Department" or "Organization" from the scope dropdown. Existing sprints can have their scope changed in sprint settings (super_admin only).',
     'sprints',
     'active',
-    '["super_admin","regional_secretary","dept_lead","pastor","member"]',
-    '["sprints-what-is"]'
+    ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
+    ARRAY['sprints-what-is']
   ),
   (
     'sprints-types',
@@ -81,8 +81,8 @@ When creating a sprint, choose "Department" or "Organization" from the scope dro
 A sprint named "Q3 Discipleship Curriculum" might be typed "Training" so it stands out from "Planning" or "Operations" sprints in the same quarter.',
     'sprints',
     'active',
-    '["super_admin","regional_secretary","dept_lead","pastor","member"]',
-    '["sprints-what-is"]'
+    ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
+    ARRAY['sprints-what-is']
   ),
   (
     'sprints-members',
@@ -113,8 +113,8 @@ A sprint named "Q3 Discipleship Curriculum" might be typed "Training" so it stan
 **Re-inviting:** If an external member needs to return after sprint end, simply add them again; Nexus treats them as a fresh invite.',
     'sprints',
     'active',
-    '["super_admin","regional_secretary","dept_lead","pastor","member"]',
-    '["sprints-what-is","sprints-scopes"]'
+    ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
+    ARRAY['sprints-what-is','sprints-scopes']
   ),
   (
     'sprints-archive',
@@ -150,8 +150,8 @@ Not through the UI. If you archive by mistake, contact a super_admin who can res
 **Example:** After your "Q3 Planning Sprint" wraps up and the roadmap is locked, archive it so the sprint list focuses on "Q4 Execution" and ongoing sprints.',
     'sprints',
     'active',
-    '["super_admin","regional_secretary","dept_lead","pastor","member"]',
-    '["sprints-what-is"]'
+    ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
+    ARRAY['sprints-what-is']
   ),
   (
     'sprints-meetings',
@@ -199,8 +199,8 @@ Not through the UI. If you archive by mistake, contact a super_admin who can res
 5. At sprint end, link a "Donor Outreach Review" meeting to show progress and decisions',
     'sprints',
     'active',
-    '["super_admin","regional_secretary","dept_lead","pastor","member"]',
-    '["sprints-what-is","meetings-create"]'
+    ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
+    ARRAY['sprints-what-is','meetings-create']
   )
 on conflict (slug) do update set
   question = excluded.question,

@@ -145,4 +145,9 @@ Alternatively, be very specific with the meeting name: "Prepare for the Board Me
 Try rephrasing your question to be more specific about what data or summary you need.',
   'nova',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member']
-);
+)
+on conflict (slug) do update set
+  question = excluded.question,
+  answer = excluded.answer,
+  feature_area = excluded.feature_area,
+  applicable_roles = excluded.applicable_roles;
