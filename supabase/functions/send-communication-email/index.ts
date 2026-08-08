@@ -174,9 +174,6 @@ function renderHtmlShell(bodyHtml: string, previewText: string, unsubscribeToken
     <style>
       body { font-family: Arial, sans-serif; color: #2D2A22; line-height: 1.6; }
       .email-container { max-width: 640px; margin: 0 auto; background: #ffffff; }
-      .email-header { padding: 24px; border-bottom: 1px solid #EDE8DC; text-align: center; }
-      .email-title { font-size: 24px; font-weight: 700; color: #C41E3A; margin: 0; }
-      .email-subtitle { font-size: 12px; color: #666; margin: 4px 0 0; }
       .email-body { padding: 24px; color: #2D2A22; line-height: 1.7; font-size: 14px; }
       .email-footer { padding: 16px 24px; border-top: 1px solid #EDE8DC; font-size: 11px; color: #9E9488; text-align: center; }
       .email-footer a { color: #4C2A92; text-decoration: underline; }
@@ -185,10 +182,6 @@ function renderHtmlShell(bodyHtml: string, previewText: string, unsubscribeToken
       ${safePreview}
     </div>
     <div class="email-container">
-      <div class="email-header">
-        <div class="email-title">BLW CANADA</div>
-        <div class="email-subtitle">Sub-Region</div>
-      </div>
       <div class="email-body">
         ${bodyHtml}
       </div>
@@ -273,15 +266,20 @@ function buildRecipientData({
   roster = [],
   contacts = [],
   contactCategoryLinks = [],
+  spaceRoles = [],
 }: {
   users?: Array<Record<string, string | null>>
   roster?: Array<Record<string, string | null>>
   contacts?: Array<Record<string, string | null>>
   contactCategoryLinks?: Array<{ contact_id: string; category_id: string }>
+  spaceRoles?: Array<{ space_id: string; user_id: string }>
 }) {
   const deptMembers: Record<string, Array<Record<string, string | null>>> = {}
   const subgroupMembers: Record<string, Array<Record<string, string | null>>> = {}
   const categoryMembers: Record<string, Array<Record<string, string | null>>> = {}
+
+  // Build a lookup map for fast user-by-id access
+  const usersById = new Map(users.map((u) => [u.id ?? '', u]))
 
   for (const user of users) {
     if (user.department_id) {
@@ -290,6 +288,18 @@ function buildRecipientData({
     if (user.role) {
       const key = `role:${user.role}`
       categoryMembers[key] = [...(categoryMembers[key] ?? []), user]
+    }
+  }
+
+  // Also include users found via space_roles (the Phase 3 membership table).
+  // This catches members who are linked to a space but whose users.department_id
+  // does not point to that space (e.g. cross-department roles or legacy records).
+  for (const sr of spaceRoles) {
+    const user = usersById.get(sr.user_id)
+    if (!user?.email) continue
+    const existing = deptMembers[sr.space_id] ?? []
+    if (!existing.some((u) => u.id === user.id)) {
+      deptMembers[sr.space_id] = [...existing, user]
     }
   }
 
@@ -321,11 +331,12 @@ function buildRecipientData({
 
 async function fetchCampaignRecipients(campaign: CampaignRow, supabase: ReturnType<typeof createClient>) {
   if (Array.isArray(campaign.recipient_filters) && campaign.recipient_filters.length > 0) {
-    const [usersRes, rosterRes, contactsRes, linksRes] = await Promise.all([
+    const [usersRes, rosterRes, contactsRes, linksRes, spaceRolesRes] = await Promise.all([
       supabase.from('users').select('id, name, email, role, department_id'),
       supabase.from('expected_attendees').select('id, full_name, email, subgroup, leadership_category').eq('active', true),
       supabase.from('communication_contacts').select('id, full_name, email'),
       supabase.from('communication_contact_categories').select('contact_id, category_id'),
+      supabase.from('space_roles').select('space_id, user_id'),
     ])
 
     return resolveFromPills(
@@ -335,6 +346,7 @@ async function fetchCampaignRecipients(campaign: CampaignRow, supabase: ReturnTy
         roster: rosterRes.data ?? [],
         contacts: contactsRes.data ?? [],
         contactCategoryLinks: linksRes.data ?? [],
+        spaceRoles: spaceRolesRes.data ?? [],
       }),
     )
   }
@@ -370,9 +382,10 @@ async function fetchCampaignRecipients(campaign: CampaignRow, supabase: ReturnTy
     pills.push({ id: `category:role:${role}`, type: 'category', category: `role:${role}` })
   }
 
-  const [usersRes, rosterRes] = await Promise.all([
+  const [usersRes, rosterRes, spaceRolesRes] = await Promise.all([
     supabase.from('users').select('id, name, email, role, department_id'),
     supabase.from('expected_attendees').select('id, full_name, email, subgroup, leadership_category').eq('active', true),
+    supabase.from('space_roles').select('space_id, user_id'),
   ])
 
   return resolveFromPills(
@@ -380,6 +393,7 @@ async function fetchCampaignRecipients(campaign: CampaignRow, supabase: ReturnTy
     buildRecipientData({
       users: usersRes.data ?? [],
       roster: rosterRes.data ?? [],
+      spaceRoles: spaceRolesRes.data ?? [],
     }),
   )
 }

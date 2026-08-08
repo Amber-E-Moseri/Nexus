@@ -187,12 +187,26 @@ export function buildCommunicationRecipientData({
   commPersonTags = [],
   commLeadershipRoles = [],
   commLeadershipRoleMembers = [],
+  spaceRoles = [],
 } = {}) {
+  const usersById = new Map(users.map((u) => [u.id, u]))
+
   const deptMembers = users.reduce((acc, user) => {
     if (!user.department_id) return acc
     acc[user.department_id] = [...(acc[user.department_id] ?? []), user]
     return acc
   }, {})
+
+  // Also union in users reachable via space_roles (Phase 3 membership table).
+  // Catches members whose users.department_id doesn't match the space UUID.
+  for (const sr of spaceRoles) {
+    const user = usersById.get(sr.user_id)
+    if (!user?.email) continue
+    const existing = deptMembers[sr.space_id] ?? []
+    if (!existing.some((u) => u.id === user.id)) {
+      deptMembers[sr.space_id] = [...existing, user]
+    }
+  }
 
   const subgroupMembers = roster.reduce((acc, person) => {
     const subgroup = person.subgroup?.trim()
@@ -439,7 +453,7 @@ export async function loadCommunicationSources(supabase) {
   const [
     deptsRes, rosterRes, usersRes, contactsRes, categoriesRes, linksRes,
     subGroupsRes, subGroupMembersRes, tagsRes, personTagsRes,
-    leadershipRolesRes, leadershipRoleMembersRes,
+    leadershipRolesRes, leadershipRoleMembersRes, spaceRolesRes,
   ] = await Promise.all([
     supabase.from('departments').select('id, name, color').order('name'),
     supabase
@@ -468,6 +482,7 @@ export async function loadCommunicationSources(supabase) {
     supabase.from('communication_person_tags').select('id, tag_id, email, person_name'),
     supabase.from('communication_leadership_roles').select('id, name, description, color').order('name'),
     supabase.from('communication_leadership_role_members').select('id, leadership_role_id, email, person_name'),
+    supabase.from('space_roles').select('space_id, user_id'),
   ])
 
   return buildCommunicationRecipientData({
@@ -483,6 +498,7 @@ export async function loadCommunicationSources(supabase) {
     commPersonTags: personTagsRes.data ?? [],
     commLeadershipRoles: leadershipRolesRes.data ?? [],
     commLeadershipRoleMembers: leadershipRoleMembersRes.data ?? [],
+    spaceRoles: spaceRolesRes.data ?? [],
   })
 }
 
