@@ -8,15 +8,12 @@ import NotificationPermissionPrompt from '../notifications/NotificationPermissio
 import { NovaChat } from '../../features/nova'
 import BirthdayOverlay from '../ui/BirthdayOverlay'
 import RegionalUpdatesPopup from '../ui/RegionalUpdatesPopup'
-import OnboardingModal from '../../features/onboarding/components/OnboardingModal'
-import { useOnboardingTracking } from '../../features/onboarding/hooks/useOnboardingTracking'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
 
 export default function Shell() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   usePrefetchRoutes()
-  // TODO: useOnboardingTracking() — disabled temporarily due to hooks error
 
   return (
     <SprintsProvider>
@@ -55,7 +52,6 @@ export default function Shell() {
         <NovaChat />
         <BirthdayOverlay />
         <RegionalUpdatesPopup />
-        <OnboardingModal />
       </EventConfigProvider>
     </SprintsProvider>
   )
