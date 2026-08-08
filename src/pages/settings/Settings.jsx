@@ -112,13 +112,27 @@ export default function Settings() {
       if (orgData) {
         setOrgSettings(orgData)
       }
+
+      // Mark onboarding profile step complete when user views Settings
+      if (jwtRole) {
+        const totalSteps = getOnboardingStepCount(jwtRole)
+        try {
+          await supabase.rpc('mark_onboarding_step_complete', {
+            p_step_key: 'profile_completed',
+            p_total_steps: totalSteps,
+            p_metadata: {}
+          })
+        } catch (err) {
+          console.log('[onboarding] step marking skipped:', err)
+        }
+      }
     }
 
     loadSettingsData()
     return () => {
       active = false
     }
-  }, [user?.id, profile?.id, role])
+  }, [user?.id, profile?.id, role, jwtRole])
 
   async function handleSaveProfile() {
     if (!profile?.id) return
@@ -139,20 +153,6 @@ export default function Settings() {
     await refreshProfile()
     setProfileMessage('Profile saved.')
     setProfileSaving(false)
-
-    // Mark onboarding step as complete when profile is saved
-    if (jwtRole) {
-      const totalSteps = getOnboardingStepCount(jwtRole)
-      try {
-        await supabase.rpc('mark_onboarding_step_complete', {
-          p_step_key: 'profile_completed',
-          p_total_steps: totalSteps,
-          p_metadata: {}
-        })
-      } catch (err) {
-        console.log('[onboarding] step marking skipped:', err)
-      }
-    }
   }
 
   async function handlePasswordUpdate() {
