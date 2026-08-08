@@ -74,12 +74,17 @@ Deno.serve(async (req) => {
       )
 
       const emailResult = await emailResponse.json()
+      console.log('[test-push] send-notification-email response:', JSON.stringify(emailResult))
       return jsonResponse(200, {
         success: true,
         in_app: true,
-        email: emailResult.sent ?? false,
+        email: emailResult.sent === true,
+        email_skipped: emailResult.skipped ?? false,
+        email_skip_reason: emailResult.reason ?? null,
+        email_error: emailResult.error ?? null,
       })
     } catch (err) {
+      console.error('[test-push] send-notification-email fetch error:', err)
       return jsonResponse(200, {
         success: true,
         in_app: true,
