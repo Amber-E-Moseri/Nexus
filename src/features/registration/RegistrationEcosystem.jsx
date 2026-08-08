@@ -2119,37 +2119,17 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, exemptFello
   }, [merged]);
 
   // Out-of-state delegates = not inStateConfirmed, not from exempt fellowships
-  const outOfState = useMemo(() => {
-    const result = merged.filter(r => !r.inStateConfirmed && !exemptFellowships.has(r.fellowship));
-    console.log('[FLIGHT LOG] outOfState calculation:', {
-      mergedTotal: merged.length,
-      outOfStateCount: result.length,
-      exemptFellowshipsSize: exemptFellowships.size,
-      samples: result.slice(0, 3).map(r => ({ name: r.fullName, email: r.email, inStateConfirmed: r.inStateConfirmed, fellowship: r.fellowship, arrivalFlight: r.arrivalFlight }))
-    });
-    return result;
-  }, [merged, exemptFellowships]);
+  const outOfState = useMemo(() =>
+    merged.filter(r => !r.inStateConfirmed && !exemptFellowships.has(r.fellowship)),
+    [merged, exemptFellowships]);
 
-  const filtered = useMemo(() => {
-    const result = subgroupFilter === 'All' ? outOfState : outOfState.filter(r => r.subgroup === subgroupFilter);
-    console.log('[FLIGHT LOG] filtered calculation:', {
-      subgroupFilter,
-      outOfStateCount: outOfState.length,
-      filteredCount: result.length,
-      samples: result.slice(0, 3).map(r => ({ name: r.fullName, email: r.email, subgroup: r.subgroup, arrivalFlight: r.arrivalFlight }))
-    });
-    return result;
-  }, [outOfState, subgroupFilter]);
+  const filtered = useMemo(() =>
+    subgroupFilter === 'All' ? outOfState : outOfState.filter(r => r.subgroup === subgroupFilter),
+    [outOfState, subgroupFilter]);
 
-  const withFlight = useMemo(() => {
-    const result = filtered.filter(r => r.arrivalFlight || r.departureFlight || r.arrivalDate || r.departureDate);
-    console.log('[FLIGHT LOG] withFlight calculation:', {
-      filteredTotal: filtered.length,
-      withFlightCount: result.length,
-      details: result.map(r => ({ name: r.fullName, email: r.email, arrival: r.arrivalFlight, departure: r.departureFlight, arrivalDate: r.arrivalDate }))
-    });
-    return result;
-  }, [filtered]);
+  const withFlight = useMemo(() =>
+    filtered.filter(r => r.arrivalFlight || r.departureFlight || r.arrivalDate || r.departureDate),
+    [filtered]);
 
   const missingFlight = useMemo(() =>
     filtered.filter(r => !r.arrivalFlight && !r.departureFlight && !r.arrivalDate && !r.departureDate),
