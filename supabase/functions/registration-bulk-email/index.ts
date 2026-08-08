@@ -49,7 +49,7 @@ function bodyToHtml(text: string): string {
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #2D2A22; line-height: 1.6; font-size: 14px;">
       <div style="padding: 16px; text-align: center; border-bottom: 1px solid #EDE8DC;">
-        <img src="https://nexus.lwcanada.org/canada_sr.png" alt="BLW Canada" width="52" height="52" style="display:block;margin:0 auto;" />
+        <img src="https://nexus.lwcanada.org/blw-canada-logo.png" alt="BLW Canada" width="120" height="120" style="display:block;margin:0 auto;" />
       </div>
       <div style="padding: 20px;">
         ${paragraphs}

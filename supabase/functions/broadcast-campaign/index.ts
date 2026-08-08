@@ -82,7 +82,7 @@ function generateEmailHtml(title: string, bodyHtml: string | null, body: string)
 <body>
   <div class="container">
     <div class="header">
-      <img src="https://nexus.lwcanada.org/canada_sr.png" alt="BLW Canada" width="52" height="52" style="display:block;margin:0 auto;" />
+      <img src="https://nexus.lwcanada.org/blw-canada-logo.png" alt="BLW Canada" width="120" height="120" style="display:block;margin:0 auto;" />
     </div>
     <div class="content">
       <h2>${escapeHtml(title)}</h2>

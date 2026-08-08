@@ -573,7 +573,7 @@ function buildPreviewDocument({ subject, previewText, bodyHtml, context, recipie
     html: `
       <div style="font-family:Arial,sans-serif;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #EDE8DC;">
         <div style="padding:16px;text-align:center;border-bottom:1px solid #EDE8DC;">
-          <img src="https://nexus.lwcanada.org/canada_sr.png" alt="BLW Canada" width="52" height="52" style="display:block;margin:0 auto;" />
+          <img src="https://nexus.lwcanada.org/blw-canada-logo.png" alt="BLW Canada" width="120" height="120" style="display:block;margin:0 auto;" />
         </div>
         <div style="padding:24px;color:#2D2A22;font-size:14px;line-height:1.7;">
           ${safeHtml || `<p style="color:#9E9488;">${escapeHtml('Start writing your email body...')}</p>`}
