@@ -12,7 +12,7 @@ values
   'Nexus is BLW Canada''s internal operations platform. It replaces ClickUp and serves the ~50-person team across 5 departments (Admin, Media, ORS, Pastors, PFCC). Nexus manages tasks, sprints, meetings, communications, calendars, and automations — all in one place with real-time collaboration and secure multi-tenant data isolation.',
   'getting-started',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -106,7 +106,7 @@ You can also see tasks in:
 • **Dashboard** — Recent and overdue tasks',
   'navigation',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -124,7 +124,7 @@ You can also access meetings from:
 • **Department space** — Meeting list in sidebar',
   'navigation',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -140,7 +140,7 @@ You can also access meetings from:
 You can also @ mention people when commenting on tasks — start typing @ to see the list.',
   'navigation',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -158,7 +158,7 @@ Common reports:
 • **Communications** — Email campaign analytics and bounce tracking',
   'navigation',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -176,7 +176,7 @@ Sprints can be:
 • **Custom sprints** — Hand-picked team members',
   'navigation',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -192,7 +192,7 @@ Sprints can be:
 You can also **Unsubscribe from specific campaigns** — Look for the unsubscribe link in email footers.',
   'navigation',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -210,7 +210,7 @@ You can also **Unsubscribe from specific campaigns** — Look for the unsubscrib
 Click **Save changes** when done.',
   'navigation',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 -- ─── TASKS ────────────────────────────────────────────────────────────
@@ -236,7 +236,7 @@ You can also:
 • Use **action items** as quick tasks',
   'tasks',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -260,7 +260,7 @@ To unassign:
 **Note:** You can only assign tasks to people in your department or team. Admins and regional secretaries can assign across departments.',
   'tasks',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -281,7 +281,7 @@ To unassign:
 Departments may have custom statuses. Check your department space to see what''s available.',
   'tasks',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -298,7 +298,7 @@ Departments may have custom statuses. Check your department space to see what''s
 **For future tasks:** Use comment threads to explain blockers instead of relying on a Blocked status. Tag the relevant person with @ to notify them.',
   'tasks',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -322,7 +322,7 @@ Departments may have custom statuses. Check your department space to see what''s
 • Everyone on the thread gets notified',
   'tasks',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -345,7 +345,7 @@ You can also:
 • Stored securely in Nexus Storage',
   'tasks',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -370,7 +370,7 @@ You can also:
 • Options: 1 day before, 1 hour before, etc.',
   'tasks',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -395,7 +395,7 @@ You can also:
 **Example:** "Design mockups" blocks "Build UI" — when mockups are done, the UI task lights up as ready to start.',
   'tasks',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -420,7 +420,7 @@ You can also:
 Click **My Tasks** in the sidebar to open it.',
   'tasks',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -452,7 +452,7 @@ Click **My Tasks** in the sidebar to open it.',
 • **Personal list** for private reminders',
   'tasks',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 -- ─── SPRINTS/PROJECTS ─────────────────────────────────────────────────
@@ -482,7 +482,7 @@ Click **My Tasks** in the sidebar to open it.',
 4. **Close** — Archive sprint, capture learnings',
   'sprints',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -682,7 +682,7 @@ You can move tasks between columns as work progresses.',
 • Action items assigned auto-create tasks',
   'meetings',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1008,7 +1008,7 @@ You can move tasks between columns as work progresses.',
 You can manage all of these in **Settings > Notifications**.',
   'notifications',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1042,7 +1042,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Set quiet hours to avoid notifications during off-hours',
   'notifications',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1076,7 +1076,7 @@ You can manage all of these in **Settings > Notifications**.',
 **Note:** You''ll still see activity in Nexus Inbox even if emails are off.',
   'notifications',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1115,7 +1115,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Department members can''t see your personal task notifications',
   'notifications',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1152,7 +1152,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Enable alerts in **Settings > Notifications** so you don''t miss them',
   'notifications',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1189,7 +1189,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Adjust frequency if too much/too little',
   'notifications',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 -- ─── PERMISSIONS ──────────────────────────────────────────────────────
@@ -1238,7 +1238,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Or contact admin for special permissions',
   'permissions',
   ARRAY['member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1288,7 +1288,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Regional secretary for region-wide access',
   'permissions',
   ARRAY['dept_lead'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1340,7 +1340,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Delegate to dept leads when possible',
   'permissions',
   ARRAY['super_admin'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1378,7 +1378,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Admin can override any permission',
   'permissions',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1458,7 +1458,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Or contact super admin to request access to another department',
   'permissions',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1503,7 +1503,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Contact admin if permissions seem wrong',
   'permissions',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 -- ─── ADOPTION & HEALTH ────────────────────────────────────────────────
@@ -1546,7 +1546,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Use Nexus features regularly',
   'adoption',
   ARRAY['super_admin','regional_secretary','dept_lead'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1635,7 +1635,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Identify which teams need more training',
   'adoption',
   ARRAY['super_admin','regional_secretary','dept_lead'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1679,7 +1679,7 @@ You can manage all of these in **Settings > Notifications**.',
 **Tip:** Ask Nova "Is our health score reliable?" and it''ll check the confidence level.',
   'adoption',
   ARRAY['super_admin','regional_secretary','dept_lead'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1805,7 +1805,7 @@ You can manage all of these in **Settings > Notifications**.',
 **Tip:** Ask Nova "Is our team active this week?" to see current engagement.',
   'adoption',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 -- ─── NOVA ─────────────────────────────────────────────────────────────
@@ -1851,7 +1851,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Nova will search its knowledge base and answer',
   'nova',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1899,7 +1899,7 @@ You can manage all of these in **Settings > Notifications**.',
 • All access follows RLS and security policies',
   'nova',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1951,7 +1951,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Secure and audited',
   'nova',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -1997,7 +1997,7 @@ You can manage all of these in **Settings > Notifications**.',
 • You''re always the one making decisions',
   'nova',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -2042,7 +2042,7 @@ You can manage all of these in **Settings > Notifications**.',
 • For now, you''re in full control',
   'nova',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -2086,7 +2086,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Message **super admin** for admin questions',
   'nova',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 ),
 
 (
@@ -2140,7 +2140,7 @@ You can manage all of these in **Settings > Notifications**.',
 • Audited for security',
   'nova',
   ARRAY['super_admin','regional_secretary','dept_lead','pastor','member'],
-  ARRAY[]
+  ARRAY[]::text[]
 )
 
 on conflict (slug) do nothing;
