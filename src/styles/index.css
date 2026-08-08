@@ -522,3 +522,32 @@ code, kbd { font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospa
   --z-modal:         50;
   --z-toast:         60;
 }
+
+/* ── Mobile spacing & touch-target improvements ────────────────────────────
+   Applied at ≤640px: expands padding on cards/list items, enforces 44px
+   minimum touch targets on interactive rows, and adds vertical breathing room
+   between page sections. Desktop layout is unchanged. */
+@media (max-width: 640px) {
+  /* Settings page tab bar — wider tap targets, readable font */
+  [role="tablist"] [role="tab"] {
+    min-height: 44px;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  /* Increase vertical rhythm between stacked page sections */
+  .space-y-6 > * + * { margin-top: 28px !important; }
+  .space-y-4 > * + * { margin-top: 20px !important; }
+
+  /* Generic card padding bump: any .fs-quick-card or surface card */
+  .fs-quick-card { padding: 18px !important; }
+
+  /* Filter chips — easier to tap */
+  .fchip { padding: 8px 13px !important; font-size: 12px !important; }
+
+  /* Table cells — a touch more vertical room */
+  .fs-table td { padding-top: 8px !important; padding-bottom: 8px !important; }
+
+  /* Badge pills — slightly more padding so text doesn't hug the border */
+  .badge { padding: 3px 10px !important; }
+}
