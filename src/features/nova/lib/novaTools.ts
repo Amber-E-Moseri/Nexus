@@ -58,7 +58,6 @@ export function buildNovaToolDefinitions(): NovaToolDefinition[] {
         'category (overdue tasks / due today / meeting action items / awaiting your response) — ' +
         'preserve that grouping in your answer rather than flattening it into one list.',
       input_schema: { type: 'object', properties: {} },
-      cache_control: { type: 'ephemeral' },
     },
     {
       name: 'get_my_work_summary',
@@ -84,6 +83,7 @@ export function buildNovaToolDefinitions(): NovaToolDefinition[] {
         'follow-through, adoption metrics, and explainability. Use this when asked "How is our health?", ' +
         '"Are we keeping up?", or similar. Only department leads and admins can access this.',
       input_schema: { type: 'object', properties: {} },
+      cache_control: { type: 'ephemeral' },
     },
   ]
 }

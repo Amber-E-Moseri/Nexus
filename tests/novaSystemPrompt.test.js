@@ -200,10 +200,10 @@ describe('related_slugs support in KB formatting', () => {
 })
 
 describe('buildNovaToolDefinitions', () => {
-  it('defines exactly the two v1 tools — no more', () => {
+  it('defines exactly the tools listed in NOVA_TOOL_NAMES — no more, no less', () => {
     const tools = buildNovaToolDefinitions()
     expect(tools.map((t) => t.name).sort()).toEqual([...NOVA_TOOL_NAMES].sort())
-    expect(tools).toHaveLength(2)
+    expect(tools).toHaveLength(NOVA_TOOL_NAMES.length)
   })
 
   it('caches the tool definitions block via cache_control on the last tool', () => {
