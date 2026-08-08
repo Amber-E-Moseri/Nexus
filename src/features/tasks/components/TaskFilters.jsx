@@ -230,7 +230,31 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
 
           {showDateClosedFilter ? (
             <div style={{ display: 'grid', gap: 10 }}>
-              <SectionTitle>Date Closed</SectionTitle>
+              {/* Title + Is / Is not toggle on the same row */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <SectionTitle style={{ margin: 0 }}>Date Closed</SectionTitle>
+                <div style={{ display: 'flex', borderRadius: 6, border: '1px solid var(--border)', overflow: 'hidden', fontSize: 11 }}>
+                  {[{ value: 'is', label: 'Is' }, { value: 'is_not', label: 'Is not' }].map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setFilters((prev) => ({ ...prev, dateClosedOperator: value }))}
+                      style={{
+                        padding: '3px 10px',
+                        border: 'none',
+                        borderRight: value === 'is' ? '1px solid var(--border)' : 'none',
+                        cursor: 'pointer',
+                        fontWeight: filters.dateClosedOperator === value ? 600 : 400,
+                        background: filters.dateClosedOperator === value ? 'var(--accent)' : 'transparent',
+                        color: filters.dateClosedOperator === value ? '#fff' : 'var(--text-secondary)',
+                        transition: 'background 0.15s, color 0.15s',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {/* Preset pills */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -292,18 +316,6 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
                     />
                   </div>
                 </div>
-              )}
-
-              {/* Exclude toggle — only visible when a range is active */}
-              {filters.dateClosedRangeDays !== null && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-                  <input
-                    type="checkbox"
-                    checked={filters.dateClosedOperator === 'is_not'}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, dateClosedOperator: e.target.checked ? 'is_not' : 'is' }))}
-                  />
-                  Exclude this range
-                </label>
               )}
             </div>
           ) : null}

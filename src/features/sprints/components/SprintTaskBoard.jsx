@@ -11,6 +11,7 @@ import SprintReviewView from './SprintReviewView'
 import AllTeamsBoard from './AllTeamsBoard'
 import { TasksProvider, useTasks } from '../../tasks/TasksContext'
 import { useTaskFilters } from '../../tasks/hooks/useTaskFilters'
+import { STALE_COMPLETED_TASK_DAYS } from '../../../lib/taskStatuses'
 import TaskSearchInput, { filterTasksBySearch } from '../../tasks/components/TaskSearchInput'
 import { followTask } from '../../tasks/lib/followers'
 
@@ -88,7 +89,10 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
   const [teamView, setTeamView] = useState(canEdit ? 'my' : 'all')
   const [modal, setModal] = useState(null)
   const [taskSearch, setTaskSearch] = useState('')
-  const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks)
+  const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks, {
+    defaultDateClosedRangeDays: STALE_COMPLETED_TASK_DAYS.SPACE,
+    persistKey: `blw_date_closed_filter_sprint_${sprint?.id}`,
+  })
   const searchedTasks = useMemo(() => filterTasksBySearch(filtered, taskSearch), [filtered, taskSearch])
   const bulkTasks = useMemo(
     () => searchedTasks.filter((task) => task.is_bulk_assigned && (
@@ -339,6 +343,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
           members={members}
           statuses={statuses}
           tasks={tasks}
+          showDateClosedFilter
         />
       </div>
 
