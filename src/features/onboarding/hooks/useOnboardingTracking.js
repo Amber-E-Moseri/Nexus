@@ -78,23 +78,27 @@ export function useOnboardingTracking() {
     if (totalSteps === 0) return
 
     const subscription = supabase
-      .from('task_activity')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'task_activity',
-        filter: `user_id=eq.${profile.id}`,
-      }, () => {
-        const trackKey = `${profile.id}:task_updated`
-        if (!trackedRef.current.has(trackKey)) {
-          trackedRef.current.add(trackKey)
-          supabase.rpc('mark_onboarding_step_complete', {
-            p_step_key: 'task_updated',
-            p_total_steps: totalSteps,
-            p_metadata: {}
-          }).catch(err => console.error('[onboarding] task_updated error:', err))
+      .channel(`task_activity_${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'task_activity',
+          filter: `user_id=eq.${profile.id}`,
+        },
+        () => {
+          const trackKey = `${profile.id}:task_updated`
+          if (!trackedRef.current.has(trackKey)) {
+            trackedRef.current.add(trackKey)
+            supabase.rpc('mark_onboarding_step_complete', {
+              p_step_key: 'task_updated',
+              p_total_steps: totalSteps,
+              p_metadata: {}
+            }).catch(err => console.error('[onboarding] task_updated error:', err))
+          }
         }
-      })
+      )
       .subscribe()
 
     return () => subscription?.unsubscribe?.()

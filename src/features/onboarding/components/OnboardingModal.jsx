@@ -103,20 +103,24 @@ export default function OnboardingModal() {
 
     // ── Subscribe to real-time progress updates ────────────────────────────
     const subscription = supabase
-      .from('user_onboarding_progress')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'user_onboarding_progress',
-        filter: `user_id=eq.${profile.id}`,
-      }, (payload) => {
-        if (!active) return
-        // New step completed → add it to progress
-        setProgress((prev) => {
-          const alreadyExists = prev.some(p => p.step_key === payload.new.step_key)
-          return alreadyExists ? prev : [...prev, { step_key: payload.new.step_key, completed_at: payload.new.completed_at }]
-        })
-      })
+      .channel(`onboarding_${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'user_onboarding_progress',
+          filter: `user_id=eq.${profile.id}`,
+        },
+        (payload) => {
+          if (!active) return
+          // New step completed → add it to progress
+          setProgress((prev) => {
+            const alreadyExists = prev.some(p => p.step_key === payload.new.step_key)
+            return alreadyExists ? prev : [...prev, { step_key: payload.new.step_key, completed_at: payload.new.completed_at }]
+          })
+        }
+      )
       .subscribe()
 
     return () => {
