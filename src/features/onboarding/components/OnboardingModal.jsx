@@ -18,8 +18,10 @@ import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
 import { getOnboardingStepsForRole } from '../../../lib/adoption-config'
 
+const LS_SUPPRESSED_UNTIL = 'nexus_onboarding_suppressed_until'
 const LS_DISMISS_COUNT    = 'nexus_onboarding_dismiss_count'
-const MAX_DISMISSALS      = 1
+const RESURFACE_DAYS      = 3
+const MAX_DISMISSALS      = 2
 
 const KEYFRAMES = `
 @keyframes onboardingBackdropIn {
@@ -44,10 +46,15 @@ function shouldShow(dbState) {
   // Never dismissed before → always show
   if (!dbState?.dismissed_at) return true
 
-  // Once dismissed, never show again
+  // Dismissed twice → permanently hidden
   const dismissCount = parseInt(localStorage.getItem(LS_DISMISS_COUNT) || '0', 10)
   if (dismissCount >= MAX_DISMISSALS) return false
 
+  // Check time-based suppression (3-day window after first dismiss)
+  const suppressedUntil = localStorage.getItem(LS_SUPPRESSED_UNTIL)
+  if (suppressedUntil && new Date(suppressedUntil) > new Date()) return false
+
+  // Suppression window expired → resurface once
   return true
 }
 
@@ -102,8 +109,16 @@ export default function OnboardingModal() {
     setClosing(true)
     setTimeout(() => setVisible(false), 240)
 
-    // Permanently suppress — one dismiss is enough
-    localStorage.setItem(LS_DISMISS_COUNT, '1')
+    // Increment dismiss counter
+    const prev = parseInt(localStorage.getItem(LS_DISMISS_COUNT) || '0', 10)
+    localStorage.setItem(LS_DISMISS_COUNT, String(prev + 1))
+
+    // First dismiss → suppress for 3 days, then resurface once
+    if (prev === 0) {
+      const until = new Date()
+      until.setDate(until.getDate() + RESURFACE_DAYS)
+      localStorage.setItem(LS_SUPPRESSED_UNTIL, until.toISOString())
+    }
 
     // Persist to DB
     try {
