@@ -572,15 +572,14 @@ function buildPreviewDocument({ subject, previewText, bodyHtml, context, recipie
     previewText: safePreview,
     html: `
       <div style="font-family:Arial,sans-serif;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #EDE8DC;">
-        <div style="padding:24px 24px 16px;border-bottom:1px solid #EDE8DC;">
-          <div style="font-size:20px;font-weight:700;color:#4C2A92;">BLW CAN NEXUS</div>
-          <div style="margin-top:4px;font-size:12px;color:#9E9488;">Sent via BLW CAN NEXUS</div>
+        <div style="padding:16px;text-align:center;border-bottom:1px solid #EDE8DC;">
+          <img src="https://nexus.lwcanada.org/canada_sr.png" alt="BLW Canada" width="52" height="52" style="display:block;margin:0 auto;" />
         </div>
         <div style="padding:24px;color:#2D2A22;font-size:14px;line-height:1.7;">
           ${safeHtml || `<p style="color:#9E9488;">${escapeHtml('Start writing your email body...')}</p>`}
         </div>
         <div style="padding:16px 24px;border-top:1px solid #EDE8DC;font-size:11px;color:#9E9488;text-align:center;">
-          BLW CAN NEXUS · <a href="#" style="color:#9E9488;text-decoration:underline;">Unsubscribe</a>
+          BLW Canada Sub-Region · <a href="#" style="color:#9E9488;text-decoration:underline;">Unsubscribe</a>
         </div>
       </div>
     `,
@@ -794,8 +793,8 @@ export default function EmailComposerPage() {
       previewText,
       bodyHtml,
       context: {
-        sender_name: fromName || 'BLW CAN NEXUS',
-        org_name: 'BLW CAN NEXUS',
+        sender_name: fromName || 'BLW CANADA',
+        org_name: 'BLW Canada',
         unsubscribe_link: '#',
       },
       recipient: previewRecipient,
