@@ -222,6 +222,7 @@ export default function EmailAdminPage() {
   const [sending, setSending] = useState(false)
   const [sendResult, setSendResult] = useState(null)
   const [showSendConfirm, setShowSendConfirm] = useState(false)
+  const [testSending, setTestSending] = useState(false)
 
   // Delivery log
   const [logs, setLogs] = useState([])
@@ -349,11 +350,11 @@ export default function EmailAdminPage() {
     return true
   }
 
-  async function handleSend() {
+  async function sendEmail(isTest = false) {
     if (!validateForm()) return
 
-    setShowSendConfirm(false)
-    setSending(true)
+    const isSending = isTest ? setTestSending : setSending
+    isSending(true)
     setSendResult(null)
     try {
       const { data: sessionData } = await supabase.auth.getSession()
@@ -376,10 +377,15 @@ export default function EmailAdminPage() {
         payload.customHtml = form.customHtml
       }
 
-      if (audienceMode === 'department' && selectedDepts.length > 0) {
-        payload.department_ids = selectedDepts
-      } else if (audienceMode === 'role' && selectedRoles.length > 0) {
-        payload.roles = selectedRoles
+      // Test mode: send only to admin's email
+      if (isTest) {
+        payload.test_recipient_email = profile?.email
+      } else {
+        if (audienceMode === 'department' && selectedDepts.length > 0) {
+          payload.department_ids = selectedDepts
+        } else if (audienceMode === 'role' && selectedRoles.length > 0) {
+          payload.roles = selectedRoles
+        }
       }
 
       const res = await fetch(
@@ -391,12 +397,16 @@ export default function EmailAdminPage() {
         },
       )
       const result = await res.json()
-      setSendResult({ ok: res.ok, ...result })
+      setSendResult({ ok: res.ok, ...result, isTest })
       if (res.ok) {
-        toast?.showToast(`Sent to ${result.sent} users`, { tone: 'success' })
-        setForm(f => ({ ...f, subject: '', feature_name: '', tagline: '', description: '', benefits: '', customHtml: '' }))
-        loadLogs()
-        setTimeout(() => setSendResult(null), 5000)
+        if (isTest) {
+          toast?.showToast('Test email sent to your inbox', { tone: 'success' })
+        } else {
+          toast?.showToast(`Sent to ${result.sent} users`, { tone: 'success' })
+          setForm(f => ({ ...f, subject: '', feature_name: '', tagline: '', description: '', benefits: '', customHtml: '' }))
+          loadLogs()
+          setTimeout(() => setSendResult(null), 5000)
+        }
       } else {
         toast?.showToast(result.error ?? 'Send failed', { tone: 'error' })
       }
@@ -404,8 +414,18 @@ export default function EmailAdminPage() {
       setSendResult({ ok: false, error: err.message })
       toast?.showToast(err.message, { tone: 'error' })
     } finally {
-      setSending(false)
+      isSending(false)
     }
+  }
+
+  async function handleSend() {
+    if (!validateForm()) return
+    setShowSendConfirm(false)
+    await sendEmail(false)
+  }
+
+  async function handleTestSend() {
+    await sendEmail(true)
   }
 
   if (!isAdmin) {
@@ -746,15 +766,28 @@ export default function EmailAdminPage() {
               </div>
             )}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={handleTestSend}
+                disabled={testSending || sending}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '9px 14px', background: testSending ? MUTED : '#fff',
+                  color: testSending ? '#fff' : PRIMARY, border: `1.5px solid ${testSending ? MUTED : PRIMARY}`,
+                  borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: testSending || sending ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {testSending ? 'Sending test…' : '📧 Send test to me'}
+              </button>
               <button
                 type="submit"
-                disabled={sending}
+                disabled={sending || testSending}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 8,
-                  padding: '10px 20px', background: sending ? MUTED : PRIMARY,
+                  padding: '10px 20px', background: sending || testSending ? MUTED : PRIMARY,
                   color: '#fff', border: 'none', borderRadius: 8,
-                  fontSize: 14, fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer',
+                  fontSize: 14, fontWeight: 600, cursor: sending || testSending ? 'not-allowed' : 'pointer',
                 }}
               >
                 <Send size={14} />

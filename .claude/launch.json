@@ -87,6 +87,12 @@
       "port": 5901
     },
     {
+      "name": "dev-alt14",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5955", "--strictPort"],
+      "port": 5955
+    },
+    {
       "name": "design",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "9877", "--directory", "C:/Users/moser/Downloads"],

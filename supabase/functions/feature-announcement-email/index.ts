@@ -262,6 +262,7 @@ Deno.serve(async (req) => {
       customHtml = '',
       department_ids,
       roles,
+      test_recipient_email,
     } = payload
 
     const supabase = createClient(
@@ -274,48 +275,62 @@ Deno.serve(async (req) => {
     }
 
     // ── 1. Target users ──────────────────────────────────────────────────
-    let userQuery = supabase
-      .from('users')
-      .select('id, name, email, role')
-      .eq('status', 'active')
-      .not('email', 'is', null)
+    let users: Array<{ id: string; name: string; email: string; role: string }>
 
-    if (Array.isArray(department_ids) && department_ids.length) {
-      userQuery = userQuery.in('department_id', department_ids)
-    } else if (Array.isArray(roles) && roles.length) {
-      userQuery = userQuery.in('role', roles)
+    if (test_recipient_email) {
+      // Test mode: send to single email only
+      users = [{ id: 'test', name: 'Test User', email: test_recipient_email, role: 'test' }]
+    } else {
+      let userQuery = supabase
+        .from('users')
+        .select('id, name, email, role')
+        .eq('status', 'active')
+        .not('email', 'is', null)
+
+      if (Array.isArray(department_ids) && department_ids.length) {
+        userQuery = userQuery.in('department_id', department_ids)
+      } else if (Array.isArray(roles) && roles.length) {
+        userQuery = userQuery.in('role', roles)
+      }
+
+      const { data: queryUsers, error: usersError } = await userQuery
+      if (usersError) return jsonResponse(500, { error: usersError.message }, req)
+      if (!queryUsers?.length) return jsonResponse(200, { sent: 0, message: 'No active users found' }, req)
+      users = queryUsers
     }
 
-    const { data: users, error: usersError } = await userQuery
-    if (usersError) return jsonResponse(500, { error: usersError.message }, req)
-    if (!users?.length) return jsonResponse(200, { sent: 0, message: 'No active users found' }, req)
+    // ── 2. Opted-out users & weekly cap ──────────────────────────────────
+    let eligible = users
+    let weeklyCount: Record<string, number> = {}
+    let optedOutCount = 0
 
-    // ── 2. Opted-out users ───────────────────────────────────────────────
-    const { data: optedOut } = await supabase
-      .from('user_notification_prefs')
-      .select('user_id')
-      .in('user_id', users.map((u) => u.id))
-      .eq('notification_type', 'feature_announcement')
-      .eq('email', false)
+    if (!test_recipient_email) {
+      const { data: optedOut } = await supabase
+        .from('user_notification_prefs')
+        .select('user_id')
+        .in('user_id', users.map((u) => u.id))
+        .eq('notification_type', 'feature_announcement')
+        .eq('email', false)
 
-    const optedOutIds = new Set((optedOut ?? []).map((p: { user_id: string }) => p.user_id))
-    const eligible = users.filter((u) => !optedOutIds.has(u.id))
+      const optedOutIds = new Set((optedOut ?? []).map((p: { user_id: string }) => p.user_id))
+      eligible = users.filter((u) => !optedOutIds.has(u.id))
+      optedOutCount = optedOutIds.size
 
-    if (!eligible.length) return jsonResponse(200, { sent: 0, skipped: optedOutIds.size, message: 'All users opted out' }, req)
+      if (!eligible.length) return jsonResponse(200, { sent: 0, skipped: optedOutCount, message: 'All users opted out' }, req)
 
-    // ── 3. Weekly send cap (max 2 per person per 7 days) ─────────────────
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const eligibleEmails = eligible.map((u) => u.email).filter(Boolean)
-    const { data: recentLogs } = await supabase
-      .from('email_delivery_log')
-      .select('recipient_email')
-      .in('recipient_email', eligibleEmails)
-      .eq('status', 'sent')
-      .gte('sent_at', sevenDaysAgo)
+      // ── 3. Weekly send cap (max 2 per person per 7 days) ─────────────────
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      const eligibleEmails = eligible.map((u) => u.email).filter(Boolean)
+      const { data: recentLogs } = await supabase
+        .from('email_delivery_log')
+        .select('recipient_email')
+        .in('recipient_email', eligibleEmails)
+        .eq('status', 'sent')
+        .gte('sent_at', sevenDaysAgo)
 
-    const weeklyCount: Record<string, number> = {}
-    for (const row of recentLogs ?? []) {
-      weeklyCount[row.recipient_email] = (weeklyCount[row.recipient_email] ?? 0) + 1
+      for (const row of recentLogs ?? []) {
+        weeklyCount[row.recipient_email] = (weeklyCount[row.recipient_email] ?? 0) + 1
+      }
     }
 
     // ── 4. Send ──────────────────────────────────────────────────────────
@@ -388,7 +403,11 @@ Deno.serve(async (req) => {
       await sleep(100)
     }
 
-    return jsonResponse(200, { sent, skipped, errors: errors.length ? errors : undefined }, req)
+    return jsonResponse(200, {
+      sent,
+      skipped: test_recipient_email ? 0 : skipped + optedOutCount,
+      errors: errors.length ? errors : undefined
+    }, req)
   } catch (err) {
     console.error(err)
     return jsonResponse(500, { error: err instanceof Error ? err.message : 'Internal error' }, req)

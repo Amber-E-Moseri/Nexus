@@ -258,12 +258,12 @@ describe('Adoption System - Configuration', () => {
   })
 })
 
-describe('Adoption System - OnboardingChecklist Component', () => {
-  it('should export OnboardingChecklist component', async () => {
-    // Just check that the file can be imported
-    const OnboardingChecklist = await import('../features/dashboard/components/OnboardingChecklist.jsx')
+describe('Adoption System - OnboardingModal Component', () => {
+  it('should export OnboardingModal component', async () => {
+    // Verify the modal overlay (mounted in Shell) can be imported
+    const OnboardingModal = await import('../features/onboarding/components/OnboardingModal.jsx')
 
-    expect(OnboardingChecklist).toBeDefined()
-    expect(OnboardingChecklist.default).toBeDefined()
+    expect(OnboardingModal).toBeDefined()
+    expect(OnboardingModal.default).toBeDefined()
   })
 })
