@@ -396,6 +396,7 @@ export default function EmailAdminPage() {
         toast?.showToast(`Sent to ${result.sent} users`, { tone: 'success' })
         setForm(f => ({ ...f, subject: '', feature_name: '', tagline: '', description: '', benefits: '', customHtml: '' }))
         loadLogs()
+        setTimeout(() => setSendResult(null), 5000)
       } else {
         toast?.showToast(result.error ?? 'Send failed', { tone: 'error' })
       }
