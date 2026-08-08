@@ -193,10 +193,12 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
     }
   }
 
-  const notificationTypesList = Object.entries(NOTIFICATION_TYPES).map(([key, value]) => ({
-    key,
-    ...value
-  }))
+  const notificationTypesList = Object.entries(NOTIFICATION_TYPES)
+    .filter(([, value]) => !value.hidden)
+    .map(([key, value]) => ({
+      key,
+      ...value
+    }))
 
   return (
     <div className="space-y-6">
