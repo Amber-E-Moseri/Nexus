@@ -54,35 +54,84 @@ function StatCard({ label, value, sub }) {
   )
 }
 
-function getStarterTemplate() {
-  return `<table style="width:100%;border-collapse:collapse;margin:0;padding:0;">
+const HTML_TEMPLATES = [
+  {
+    id: 'basic',
+    name: 'Basic',
+    preview: 'Simple centered text',
+    html: `<table style="width:100%;border-collapse:collapse;margin:0;padding:0;">
 <tr><td style="padding:32px 28px;background:#faf8f5;">
-
-  <!-- Header section -->
   <div style="text-align:center;margin-bottom:32px;">
     <h1 style="margin:0 0 12px;font-size:26px;font-weight:800;color:#4c2a92;line-height:1.2;">Headline Here</h1>
     <p style="margin:0;font-size:15px;color:#5a5248;line-height:1.6;">Supporting tagline or description</p>
   </div>
-
-  <!-- Content -->
   <p style="margin:0 0 16px;font-size:14px;color:#2d2a22;line-height:1.8;">Hi {{firstName}},</p>
-  <p style="margin:0 0 24px;font-size:14px;color:#5a5248;line-height:1.8;">Your message content goes here. You can use HTML tags and inline CSS.</p>
-
-  <!-- Feature/content card -->
-  <div style="margin:24px 0;padding:20px;background:#fff;border-radius:10px;border:1px solid #e8dedd;">
-    <h3 style="margin:0 0 10px;font-size:15px;font-weight:700;color:#4c2a92;">Feature Highlight</h3>
-    <p style="margin:0;font-size:13px;color:#5a5248;line-height:1.6;">Describe your feature or benefit here.</p>
-  </div>
-
-  <!-- CTA -->
+  <p style="margin:0 0 24px;font-size:14px;color:#5a5248;line-height:1.8;">Your message content goes here.</p>
   <div style="text-align:center;margin:32px 0;">
-    <a href="https://nexus.lwcanada.org" style="display:inline-block;padding:14px 32px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">
-      Call to Action
-    </a>
+    <a href="https://nexus.lwcanada.org" style="display:inline-block;padding:14px 32px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;">CTA</a>
   </div>
-
 </td></tr>
 </table>`
+  },
+  {
+    id: 'featured',
+    name: 'Featured Card',
+    preview: 'Hero + card + CTA',
+    html: `<table style="width:100%;border-collapse:collapse;margin:0;padding:0;">
+<tr><td style="padding:32px 28px;background:#faf8f5;">
+  <div style="text-align:center;margin-bottom:32px;">
+    <h1 style="margin:0 0 12px;font-size:26px;font-weight:800;color:#4c2a92;">Feature Name</h1>
+    <p style="margin:0;font-size:15px;color:#5a5248;">One-line description</p>
+  </div>
+  <p style="margin:0 0 16px;font-size:14px;color:#2d2a22;">Hi {{firstName}},</p>
+  <div style="margin:24px 0;padding:20px;background:#fff;border-radius:10px;border:1px solid #e8dedd;">
+    <h3 style="margin:0 0 10px;font-size:15px;font-weight:700;color:#4c2a92;">What's New</h3>
+    <p style="margin:0 0 12px;font-size:13px;color:#5a5248;line-height:1.6;">Describe the feature benefit here.</p>
+    <ul style="margin:8px 0;padding-left:20px;font-size:13px;color:#5a5248;">
+      <li>Key benefit 1</li>
+      <li>Key benefit 2</li>
+      <li>Key benefit 3</li>
+    </ul>
+  </div>
+  <div style="text-align:center;margin:32px 0;">
+    <a href="https://nexus.lwcanada.org" style="display:inline-block;padding:14px 32px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;">Get Started</a>
+  </div>
+</td></tr>
+</table>`
+  },
+  {
+    id: 'twocol',
+    name: 'Two Column',
+    preview: 'Side-by-side layout',
+    html: `<table style="width:100%;border-collapse:collapse;margin:0;padding:0;">
+<tr><td style="padding:32px 28px;background:#faf8f5;">
+  <h1 style="text-align:center;margin:0 0 24px;font-size:26px;font-weight:800;color:#4c2a92;">Announcement</h1>
+  <table style="width:100%;border-collapse:collapse;">
+    <tr>
+      <td style="padding:0 12px;width:50%;vertical-align:top;">
+        <div style="padding:16px;background:#fff;border-radius:8px;border:1px solid #e8dedd;">
+          <h3 style="margin:0 0 8px;font-size:14px;font-weight:700;color:#4c2a92;">Column 1</h3>
+          <p style="margin:0;font-size:13px;color:#5a5248;line-height:1.6;">Content for the left column here.</p>
+        </div>
+      </td>
+      <td style="padding:0 12px;width:50%;vertical-align:top;">
+        <div style="padding:16px;background:#fff;border-radius:8px;border:1px solid #e8dedd;">
+          <h3 style="margin:0 0 8px;font-size:14px;font-weight:700;color:#4c2a92;">Column 2</h3>
+          <p style="margin:0;font-size:13px;color:#5a5248;line-height:1.6;">Content for the right column here.</p>
+        </div>
+      </td>
+    </tr>
+  </table>
+  <div style="text-align:center;margin:32px 0 0;">
+    <a href="https://nexus.lwcanada.org" style="display:inline-block;padding:12px 28px;background:#4c2a92;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;">Learn More</a>
+  </div>
+</td></tr>
+</table>`
+  }
+]
+
+function getStarterTemplate() {
+  return HTML_TEMPLATES[0].html
 }
 
 function buildStandardAnnouncementHtml(form, frontendUrl = 'https://nexus.lwcanada.org') {
@@ -634,6 +683,27 @@ export default function EmailAdminPage() {
               <>
                 {/* Advanced HTML mode */}
                 <div>
+                  <label style={labelStyle}>Template Library</label>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                    {HTML_TEMPLATES.map(tmpl => (
+                      <button
+                        key={tmpl.id}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, customHtml: tmpl.html }))}
+                        style={{
+                          padding: '8px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                          border: `1px solid ${BORDER}`, background: '#fff',
+                          color: MUTED, cursor: 'pointer', transition: 'all .13s',
+                        }}
+                        title={tmpl.preview}
+                      >
+                        {tmpl.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
                   <label style={labelStyle}>Custom Email HTML *</label>
                   <textarea
                     value={form.customHtml}
@@ -648,17 +718,6 @@ export default function EmailAdminPage() {
                     <br />
                     Available variables: <strong>{'{{'} firstName {'}}'}</strong>, <strong>{'{{'} fullName {'}}'}</strong>
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, customHtml: getStarterTemplate() }))}
-                    style={{
-                      marginTop: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600,
-                      border: `1px solid ${BORDER}`, borderRadius: 6, background: '#fff',
-                      color: MUTED, cursor: 'pointer',
-                    }}
-                  >
-                    ← Insert Nexus Starter Template
-                  </button>
                 </div>
               </>
             )}
