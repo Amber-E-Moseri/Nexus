@@ -124,6 +124,12 @@ Deno.serve(async (req) => {
   }
 
   const templates: Record<string, { subject: string; body: string; actionUrl?: string; actionLabel?: string }> = {
+    system: {
+      subject: 'Notification from BLW CAN NEXUS',
+      body: String(payload.message ?? 'You have a new notification from BLW CAN NEXUS.'),
+      actionUrl: actionUrl || frontendUrl,
+      actionLabel: 'Open Nexus'
+    },
     task_assigned: {
       subject: `"${payload.task_title ?? 'Task'}" assigned to you`,
       body: `${payload.assigner_name ?? 'Someone'} assigned you a task: <strong>"${payload.task_title ?? 'a task'}"</strong>${payload.task_description ? ` – ${payload.task_description}` : ''}.`,

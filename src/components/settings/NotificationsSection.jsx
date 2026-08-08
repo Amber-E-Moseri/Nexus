@@ -160,7 +160,10 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
       if (result.error) {
         setMessage(`Test failed: ${result.error}`)
       } else {
-        setMessage('✅ Test notification sent — check your bell icon in the sidebar.')
+        const parts = ['✅ In-app notification sent — check your bell icon.']
+        if (result.email === true) parts.push('Email also sent.')
+        else if (result.email === false) parts.push('Email delivery skipped (check your email preferences).')
+        setMessage(parts.join(' '))
       }
     } catch (err) {
       setMessage(`Test failed: ${err.message}`)
