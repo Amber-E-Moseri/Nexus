@@ -43,6 +43,9 @@ export async function requestPushPermission() {
       return false
     }
 
+    // Remember that user granted permission
+    localStorage.setItem('notification-permission-granted', 'true')
+
     // Subscribe to push
     const registration = await navigator.serviceWorker.ready
     const subscription = await registration.pushManager.subscribe({
@@ -76,6 +79,57 @@ export async function requestPushPermission() {
     return true
   } catch (err) {
     console.error('Failed to request push permission:', err)
+    return false
+  }
+}
+
+/**
+ * Silently subscribe to push (no permission prompt) if permission already granted
+ * Used for auto-recovery on sign-in when user previously enabled notifications
+ */
+export async function silentSubscribeToPush() {
+  if (!pushSupported()) {
+    return false
+  }
+
+  try {
+    // Only proceed if permission already granted
+    if (Notification.permission !== 'granted') {
+      return false
+    }
+
+    const registration = await navigator.serviceWorker.ready
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    })
+
+    // Save subscription to Supabase
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user?.id) {
+      console.error('No authenticated user found')
+      return false
+    }
+
+    const { error } = await supabase
+      .from('users')
+      .update({
+        push_subscription: subscription.toJSON(),
+        push_subscribed_at: new Date().toISOString(),
+        push_enabled: true
+      })
+      .eq('id', user.id)
+
+    if (error) {
+      console.error('Failed to save subscription to database:', error)
+      await subscription.unsubscribe()
+      return false
+    }
+
+    console.log('Push subscription auto-restored on sign-in')
+    return true
+  } catch (err) {
+    console.error('Failed to silently subscribe to push:', err)
     return false
   }
 }

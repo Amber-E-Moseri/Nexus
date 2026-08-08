@@ -3,6 +3,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../context/ToastContext'
 import { Send, Mail, Monitor, RefreshCw, ChevronDown, ChevronUp, Eye, EyeOff, Smartphone } from 'lucide-react'
+import { sanitizeEmailHtml } from '../../features/communications/lib/communications'
 
 const PRIMARY = '#4C2A92'
 const BORDER  = '#EDE8DC'
@@ -161,13 +162,14 @@ function buildPreviewHtml(form, emailFormat = 'standard', frontendUrl = 'https:/
   if (emailFormat === 'html') {
     // Custom HTML mode - wrap provided HTML with Nexus footer
     const year = new Date().getFullYear()
+    const sanitized = form.customHtml ? sanitizeEmailHtml(form.customHtml) : ''
     return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;line-height:1.6;color:#2d2a22;margin:0;padding:0;background:#f9f7f5;">
 <table style="width:100%;border-collapse:collapse;max-width:600px;margin:0 auto;">
 <tr><td style="background:#fff;">
-  ${form.customHtml || '<p style="padding:28px;color:#9e9488;text-align:center;">Custom HTML preview goes here</p>'}
+  ${sanitized || '<p style="padding:28px;color:#9e9488;text-align:center;">Paste your custom HTML above</p>'}
   <div style="background:#f9f7f5;border-top:1px solid #e8dedd;padding:20px 28px;text-align:center;">
     <p style="margin:0;font-size:11px;color:#9e9488;line-height:1.6;">
       You're receiving this as an active Nexus user.
@@ -322,26 +324,26 @@ export default function EmailAdminPage() {
 
   async function validateForm() {
     if (!form.subject) {
-      toast?.error('Email subject is required')
+      toast?.showToast('Email subject is required', { tone: 'error' })
       return false
     }
     if (emailFormat === 'standard') {
       if (!form.feature_name || !form.description || !form.cta_url || !form.cta_label) {
-        toast?.error('Fill in all required fields')
+        toast?.showToast('Fill in all required fields', { tone: 'error' })
         return false
       }
     } else {
       if (!form.customHtml) {
-        toast?.error('Custom HTML is required')
+        toast?.showToast('Custom HTML is required', { tone: 'error' })
         return false
       }
     }
     if (audienceMode === 'department' && selectedDepts.length === 0) {
-      toast?.error('Select at least one department')
+      toast?.showToast('Select at least one department', { tone: 'error' })
       return false
     }
     if (audienceMode === 'role' && selectedRoles.length === 0) {
-      toast?.error('Select at least one role')
+      toast?.showToast('Select at least one role', { tone: 'error' })
       return false
     }
     return true
@@ -391,15 +393,15 @@ export default function EmailAdminPage() {
       const result = await res.json()
       setSendResult({ ok: res.ok, ...result })
       if (res.ok) {
-        toast?.success(`Sent to ${result.sent} users`)
+        toast?.showToast(`Sent to ${result.sent} users`, { tone: 'success' })
         setForm(f => ({ ...f, subject: '', feature_name: '', tagline: '', description: '', benefits: '', customHtml: '' }))
         loadLogs()
       } else {
-        toast?.error(result.error ?? 'Send failed')
+        toast?.showToast(result.error ?? 'Send failed', { tone: 'error' })
       }
     } catch (err) {
       setSendResult({ ok: false, error: err.message })
-      toast?.error(err.message)
+      toast?.showToast(err.message, { tone: 'error' })
     } finally {
       setSending(false)
     }
@@ -735,7 +737,7 @@ export default function EmailAdminPage() {
                 color: sendResult.ok ? GREEN : RED,
               }}>
                 {sendResult.ok
-                  ? `Sent to ${sendResult.sent} user${sendResult.sent !== 1 ? 's' : ''}.${sendResult.skipped ? ` ${sendResult.skipped} skipped (opted out).` : ''}`
+                  ? `Sent to ${sendResult.sent} user${sendResult.sent !== 1 ? 's' : ''}.${sendResult.skipped ? ` ${sendResult.skipped} unsubscribed.` : ''}`
                   : `Error: ${sendResult.error ?? 'Unknown error'}`}
                 {sendResult.errors?.length > 0 && (
                   <div style={{ marginTop: 4, fontSize: 11, opacity: 0.8 }}>{sendResult.errors.join(', ')}</div>
@@ -757,7 +759,7 @@ export default function EmailAdminPage() {
                 <Send size={14} />
                 {sending ? 'Sending…' : 'Send announcement'}
               </button>
-              <span style={{ fontSize: 12, color: MUTED }}>Skips users who opted out</span>
+              <span style={{ fontSize: 12, color: MUTED }}>All users opted in by default • Users can unsubscribe in settings</span>
             </div>
           </form>
         </div>

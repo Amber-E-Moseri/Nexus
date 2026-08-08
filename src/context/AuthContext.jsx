@@ -2,7 +2,7 @@ import { createContext, useCallback, useEffect, useMemo, useRef, useState } from
 import { touchLastActive } from '../lib/people/api'
 import { supabase } from '../lib/supabase'
 import { clearAllAppCache, saveSession, loadSession, clearSession } from '../lib/cacheUtils'
-import { requestPushPermission, unsubscribePush } from '../lib/webPush'
+import { requestPushPermission, silentSubscribeToPush, unsubscribePush } from '../lib/webPush'
 
 export const AuthContext = createContext(null)
 
@@ -16,9 +16,13 @@ async function restorePushSubscription() {
   try {
     const registration = await navigator.serviceWorker.ready
     const subscription = await registration.pushManager.getSubscription()
-    // If no active subscription but push is enabled, re-subscribe
+    // If no active subscription but push is enabled, try silent restore first
     if (!subscription) {
-      await requestPushPermission()
+      const silentSuccess = await silentSubscribeToPush()
+      // If silent subscribe failed and user previously granted permission, show prompt
+      if (!silentSuccess && localStorage.getItem('notification-permission-granted') === 'true') {
+        await requestPushPermission()
+      }
     }
   } catch (error) {
     console.warn('Failed to restore push subscription:', error)

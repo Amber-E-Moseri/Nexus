@@ -12,7 +12,7 @@ const NOTIFICATION_CHANNELS = [
 ]
 
 export default function NotificationsSection({ prefs = {}, role, onTogglePref }) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [preferences, setPreferences] = useState(prefs)
   const [browserSupport, setBrowserSupport] = useState(false)
   const [browserPermission, setBrowserPermission] = useState('default')
@@ -23,6 +23,8 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
   const [message, setMessage] = useState('')
   const [testLoading, setTestLoading] = useState(false)
   const [reactivating, setReactivating] = useState(false)
+  const [emailOptedOut, setEmailOptedOut] = useState(profile?.opted_out ?? false)
+  const [emailSaving, setEmailSaving] = useState(false)
 
   useEffect(() => {
     if ('Notification' in window) {
@@ -165,6 +167,30 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
     }
   }
 
+  const handleToggleEmailOptOut = async () => {
+    if (!user?.id) return
+    setEmailSaving(true)
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ opted_out: !emailOptedOut })
+        .eq('id', user.id)
+
+      if (error) throw error
+
+      setEmailOptedOut(!emailOptedOut)
+      setMessage(
+        !emailOptedOut
+          ? '✓ You're unsubscribed from feature announcements and promotional emails'
+          : '✓ You're subscribed to feature announcements'
+      )
+    } catch (err) {
+      setMessage(`Failed to update preference: ${err.message}`)
+    } finally {
+      setEmailSaving(false)
+    }
+  }
+
   const notificationTypesList = Object.entries(NOTIFICATION_TYPES).map(([key, value]) => ({
     key,
     ...value
@@ -178,6 +204,36 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
           <p style={{ fontSize: 13, color: '#059669', margin: 0 }}>{message}</p>
         </div>
       )}
+
+      {/* Email Announcements Opt-Out */}
+      <div className="rounded-xl border border-[var(--border)] bg-white p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <Mail size={18} style={{ color: 'var(--accent)' }} />
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                Feature Announcements & Updates
+              </h3>
+            </div>
+            <p className="text-xs text-[var(--text-secondary)] mb-3">
+              {emailOptedOut
+                ? '⭕ You're unsubscribed from announcement emails'
+                : '✅ You're subscribed to feature announcements and promotional emails'}
+            </p>
+          </div>
+          <button
+            onClick={handleToggleEmailOptOut}
+            disabled={emailSaving}
+            className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition ${
+              emailOptedOut
+                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                : 'bg-green-100 text-green-700 hover:bg-green-200'
+            } disabled:opacity-50`}
+          >
+            {emailSaving ? 'Updating...' : emailOptedOut ? 'Subscribe' : 'Unsubscribe'}
+          </button>
+        </div>
+      </div>
 
       {/* Browser Notification Status */}
       {browserSupport && (

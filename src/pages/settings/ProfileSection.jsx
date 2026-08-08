@@ -142,9 +142,9 @@ export default function ProfileSection({
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[1.05fr_1fr]">
-      <section className="rounded-3xl border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-        <div className="flex items-start justify-between gap-4">
+    <div className="grid gap-4 lg:grid-cols-[1.05fr_1fr]">
+      <section className="rounded-3xl border border-[var(--border)] bg-white p-4 sm:p-5 shadow-[var(--card-shadow)]">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-center gap-4">
             <div style={{ position: 'relative' }}>
               <Avatar name={name} src={profile?.avatar_url} />
@@ -169,31 +169,31 @@ export default function ProfileSection({
                 </div>
               )}
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-[var(--text-primary)]">{name || 'Your profile'}</h2>
-              <button type="button" className="text-sm text-[var(--accent)] underline-offset-2 hover:underline">
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-xl font-semibold text-[var(--text-primary)] truncate">{name || 'Your profile'}</h2>
+              <button type="button" className="text-xs sm:text-sm text-[var(--accent)] underline-offset-2 hover:underline truncate">
                 {user?.email ?? profile?.email ?? '[email protected]'}
               </button>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', gap: '8px', flexDirection: 'row' }} className="flex-wrap">
             <button
               type="button"
               onClick={handleChangePhotoClick}
               disabled={avatarUploading}
-              className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-semibold text-[var(--text-primary)] disabled:opacity-60"
+              className="rounded-xl border border-[var(--border)] px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-[var(--text-primary)] disabled:opacity-60"
             >
-              Change photo
+              Change
             </button>
             {profile?.avatar_url && (
               <button
                 type="button"
                 onClick={handleRemovePhoto}
                 disabled={avatarUploading}
-                className="rounded-xl border border-[#F3B6A8] px-4 py-2 text-sm font-semibold text-[#C94830] disabled:opacity-60"
+                className="rounded-xl border border-[#F3B6A8] px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-[#C94830] disabled:opacity-60"
               >
-                Remove photo
+                Remove
               </button>
             )}
           </div>
@@ -213,7 +213,7 @@ export default function ProfileSection({
           </p>
         )}
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
           <label className="space-y-1">
             <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">Full name</span>
             <input
@@ -251,7 +251,7 @@ export default function ProfileSection({
             />
           </label>
 
-          <label className="space-y-1">
+          <label className="space-y-1 sm:col-span-2">
             <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">Ministry group</span>
             <select
               className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm"

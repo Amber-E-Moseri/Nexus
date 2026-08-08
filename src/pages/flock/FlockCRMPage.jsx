@@ -18,14 +18,14 @@ function StatTile({ label, value, tone, note }) {
   const palette = tones[tone] ?? tones.violet
 
   return (
-    <div className="flock-stat-tile" style={{ ...flockCard({ padding: '16px' }), transition: 'border-color 0.15s ease, box-shadow 0.15s ease' }}>
-      <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
+    <div className="flock-stat-tile" style={{ ...flockCard({ padding: '12px' }), transition: 'border-color 0.15s ease, box-shadow 0.15s ease' }}>
+      <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
         {label}
       </div>
-      <div className="flock-stat-value" style={{ marginTop: '8px', fontSize: '32px', lineHeight: 1, fontWeight: 700, color: palette.fg, fontFamily: FLOCK.fontHead }}>
+      <div className="flock-stat-value" style={{ marginTop: '6px', fontSize: 'clamp(20px, 5vw, 32px)', lineHeight: 1, fontWeight: 700, color: palette.fg, fontFamily: FLOCK.fontHead }}>
         {value}
       </div>
-      <div style={{ marginTop: '10px', fontSize: '12px', lineHeight: 1.5, color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
+      <div style={{ marginTop: '6px', fontSize: '11px', lineHeight: 1.4, color: FLOCK.muted, fontFamily: FLOCK.fontBody }}>
         {note}
       </div>
     </div>
