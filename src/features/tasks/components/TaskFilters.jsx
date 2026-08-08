@@ -7,6 +7,13 @@ const DUE_RANGES = [
   { value: 'this_week', label: 'This week' },
 ]
 
+const CLOSED_RANGES = [
+  { value: 7,        label: 'Last 7 days' },
+  { value: 14,       label: 'Last 14 days' },
+  { value: 30,       label: 'Last 30 days' },
+  { value: 'custom', label: 'Custom…' },
+]
+
 const TASK_TYPES = [
   { value: 'space', label: 'Space' },
   { value: 'sprint', label: 'Sprint' },
@@ -224,46 +231,24 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
           {showDateClosedFilter ? (
             <div style={{ display: 'grid', gap: 10 }}>
               <SectionTitle>Date Closed</SectionTitle>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <select
-                  value={filters.dateClosedOperator}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, dateClosedOperator: event.target.value }))}
-                  style={{
-                    fontSize: 13,
-                    padding: '8px 10px',
-                    border: '1px solid var(--border)',
-                    borderRadius: 10,
-                    background: 'white',
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  <option value="is">Is</option>
-                  <option value="is_not">Is not</option>
-                </select>
-                <select
-                  value={filters.dateClosedRangeDays ?? 'any'}
-                  onChange={(event) => setFilters((prev) => ({
-                    ...prev,
-                    dateClosedRangeDays: event.target.value === 'any' ? null : (event.target.value === 'custom' ? 'custom' : Number(event.target.value)),
-                  }))}
-                  style={{
-                    flex: 1,
-                    fontSize: 13,
-                    padding: '8px 10px',
-                    border: '1px solid var(--border)',
-                    borderRadius: 10,
-                    background: filters.dateClosedRangeDays !== null ? 'var(--accent-light)' : 'white',
-                    color: filters.dateClosedRangeDays !== null ? 'var(--accent)' : 'var(--text-primary)',
-                  }}
-                >
-                  <option value="any">Any time</option>
-                  <option value="7">Last 7 days</option>
-                  <option value="14">Last 14 days</option>
-                  <option value="30">Last 30 days</option>
-                  <option value="custom">Custom range</option>
-                </select>
+
+              {/* Preset pills */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {CLOSED_RANGES.map((range) => (
+                  <FilterPill
+                    key={range.value}
+                    label={range.label}
+                    active={filters.dateClosedRangeDays === range.value}
+                    onClick={() => setFilters((prev) => ({
+                      ...prev,
+                      dateClosedRangeDays: prev.dateClosedRangeDays === range.value ? null : range.value,
+                    }))}
+                    onRemove={() => setFilters((prev) => ({ ...prev, dateClosedRangeDays: null }))}
+                  />
+                ))}
               </div>
 
+              {/* Custom date pickers */}
               {filters.dateClosedRangeDays === 'custom' && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <div>
@@ -307,6 +292,18 @@ export default function TaskFilters({ filters, setFilters, clearFilters, hasActi
                     />
                   </div>
                 </div>
+              )}
+
+              {/* Exclude toggle — only visible when a range is active */}
+              {filters.dateClosedRangeDays !== null && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                  <input
+                    type="checkbox"
+                    checked={filters.dateClosedOperator === 'is_not'}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, dateClosedOperator: e.target.checked ? 'is_not' : 'is' }))}
+                  />
+                  Exclude this range
+                </label>
               )}
             </div>
           ) : null}
