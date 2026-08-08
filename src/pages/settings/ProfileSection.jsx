@@ -3,6 +3,9 @@ import { motion } from 'framer-motion'
 import Avatar from '../../components/ui/Avatar'
 import { deleteAvatar, uploadAvatar } from '../../lib/users'
 import { useToast } from '../../context/ToastContext'
+import { useAuth } from '../../hooks/useAuth'
+import { supabase } from '../../lib/supabase'
+import { getOnboardingStepCount } from '../../lib/adoption-config'
 
 function getInitials(name = '') {
   return name
@@ -29,6 +32,7 @@ export default function ProfileSection({
   onRefreshProfile,
 }) {
   const { showToast } = useToast()
+  const { jwtRole } = useAuth()
   const fileInputRef = useRef(null)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState('')
@@ -115,6 +119,20 @@ export default function ProfileSection({
       await uploadAvatar(file, profile.id)
       showToast('Photo updated', { tone: 'success' })
       await onRefreshProfile?.()
+
+      // Mark onboarding step as complete when profile photo is set
+      if (jwtRole) {
+        const totalSteps = getOnboardingStepCount(jwtRole)
+        try {
+          await supabase.rpc('mark_onboarding_step_complete', {
+            p_step_key: 'profile_completed',
+            p_total_steps: totalSteps,
+            p_metadata: {}
+          })
+        } catch (err) {
+          console.log('[onboarding] step marking skipped:', err)
+        }
+      }
     } catch (error) {
       setAvatarError(error.message)
       showToast(error.message, { tone: 'error' })
