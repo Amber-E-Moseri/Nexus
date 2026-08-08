@@ -40,22 +40,9 @@ const KEYFRAMES = `
 `
 
 function shouldShow(dbState) {
-  // Completed → never
-  if (dbState?.completed_at) return false
-
-  // Never dismissed before → always show
-  if (!dbState?.dismissed_at) return true
-
-  // Dismissed twice → permanently hidden
-  const dismissCount = parseInt(localStorage.getItem(LS_DISMISS_COUNT) || '0', 10)
-  if (dismissCount >= MAX_DISMISSALS) return false
-
-  // Check time-based suppression (3-day window after first dismiss)
-  const suppressedUntil = localStorage.getItem(LS_SUPPRESSED_UNTIL)
-  if (suppressedUntil && new Date(suppressedUntil) > new Date()) return false
-
-  // Suppression window expired → resurface once
-  return true
+  // Show modal as long as onboarding is not fully completed
+  // Stays visible through all steps, hidden only when all steps are done
+  return !dbState?.completed_at
 }
 
 export default function OnboardingModal() {
