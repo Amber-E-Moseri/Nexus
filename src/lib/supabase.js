@@ -34,8 +34,16 @@ async function getAuthDB() {
   return _authDB
 }
 
+// Safe localStorage accessor — returns null in Node/SSR environments
+const _ls = {
+  get:    (k) => typeof localStorage !== 'undefined' ? localStorage.getItem(k)    : null,
+  set:    (k, v) => typeof localStorage !== 'undefined' ? localStorage.setItem(k, v)  : undefined,
+  remove: (k) => typeof localStorage !== 'undefined' ? localStorage.removeItem(k) : undefined,
+}
+
 const idbAuthStorage = {
   async getItem(key) {
+    if (typeof indexedDB === 'undefined') return _ls.get(key)
     try {
       const db = await getAuthDB()
       return new Promise((resolve, reject) => {
@@ -45,12 +53,12 @@ const idbAuthStorage = {
         req.onsuccess = () => resolve(req.result ?? null)
       })
     } catch {
-      // Fallback to localStorage in environments without IndexedDB support
-      return localStorage.getItem(key)
+      return _ls.get(key)
     }
   },
 
   async setItem(key, value) {
+    if (typeof indexedDB === 'undefined') { _ls.set(key, value); return }
     try {
       const db = await getAuthDB()
       await new Promise((resolve, reject) => {
@@ -60,11 +68,12 @@ const idbAuthStorage = {
         req.onsuccess = () => resolve()
       })
     } catch {
-      localStorage.setItem(key, value)
+      _ls.set(key, value)
     }
   },
 
   async removeItem(key) {
+    if (typeof indexedDB === 'undefined') { _ls.remove(key); return }
     try {
       const db = await getAuthDB()
       await new Promise((resolve, reject) => {
@@ -74,7 +83,7 @@ const idbAuthStorage = {
         req.onsuccess = () => resolve()
       })
     } catch {
-      localStorage.removeItem(key)
+      _ls.remove(key)
     }
   },
 }
