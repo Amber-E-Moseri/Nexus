@@ -12,20 +12,14 @@ import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
 import { getOnboardingStepCount } from '../../../lib/adoption-config'
 
-const COMPLETION_EVENTS = {
-  profile_completed: { event: 'profile_updated', minFields: ['avatar_url'] },
-  dept_opened: { event: 'dept_opened', minFields: [] },
-  task_viewed: { event: 'task_viewed', minFields: [] },
-  task_updated: { event: 'task_updated', minFields: [] },
-  meeting_opened: { event: 'meeting_opened', minFields: [] },
-}
-
 export function useOnboardingTracking() {
   const { profile, jwtRole } = useAuth()
   const trackedRef = useRef(new Set())
 
   useEffect(() => {
     if (!profile?.id || !jwtRole) return
+
+    console.log('[onboarding] tracking active:', { avatar: !!profile?.avatar_url, role: jwtRole })
 
     async function trackEvent(completionEvent) {
       const trackKey = `${profile.id}:${completionEvent}`
@@ -35,14 +29,16 @@ export function useOnboardingTracking() {
       const totalSteps = getOnboardingStepCount(jwtRole)
       if (totalSteps === 0) return
 
+      console.log('[onboarding] marking:', completionEvent)
       try {
         await supabase.rpc('mark_onboarding_step_complete', {
           p_step_key: completionEvent,
           p_total_steps: totalSteps,
           p_metadata: {}
         })
+        console.log('[onboarding] marked:', completionEvent)
       } catch (err) {
-        console.error('[onboarding] failed to mark step complete:', err)
+        console.error('[onboarding] error:', err)
       }
     }
 
@@ -51,8 +47,7 @@ export function useOnboardingTracking() {
       trackEvent('profile_completed')
     }
 
-    // Listen for page visits via navigation events
-    // dept_opened: user navigated to /dashboard (main dept view)
+    // Listen for page visits
     const originalPushState = window.history.pushState
     window.history.pushState = function(...args) {
       const result = originalPushState.apply(this, args)
@@ -69,38 +64,4 @@ export function useOnboardingTracking() {
       window.history.pushState = originalPushState
     }
   }, [profile?.id, profile?.avatar_url, jwtRole])
-
-  // Also track task_updated via a realtime subscription
-  useEffect(() => {
-    if (!profile?.id || !jwtRole) return
-
-    const totalSteps = getOnboardingStepCount(jwtRole)
-    if (totalSteps === 0) return
-
-    const subscription = supabase
-      .channel(`task_activity_${profile.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'task_activity',
-          filter: `user_id=eq.${profile.id}`,
-        },
-        () => {
-          const trackKey = `${profile.id}:task_updated`
-          if (!trackedRef.current.has(trackKey)) {
-            trackedRef.current.add(trackKey)
-            supabase.rpc('mark_onboarding_step_complete', {
-              p_step_key: 'task_updated',
-              p_total_steps: totalSteps,
-              p_metadata: {}
-            }).catch(err => console.error('[onboarding] task_updated error:', err))
-          }
-        }
-      )
-      .subscribe()
-
-    return () => subscription?.unsubscribe?.()
-  }, [profile?.id, jwtRole])
 }
