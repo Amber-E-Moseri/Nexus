@@ -49,6 +49,7 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
         const success = await unsubscribePush()
         if (success) {
           setPushEnabled(false)
+          localStorage.removeItem('notification-permission-granted')
           setMessage('Mobile push notifications disabled')
         } else {
           setMessage('Failed to disable push notifications')
@@ -57,6 +58,7 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
         const success = await requestPushPermission()
         if (success) {
           setPushEnabled(true)
+          localStorage.setItem('notification-permission-granted', 'true')
           setMessage('✅ Mobile push notifications enabled!')
           await checkPushStatus()
         } else {
@@ -114,7 +116,7 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
 
       if (permission === 'granted') {
         setMessage('Browser notifications enabled!')
-        localStorage.setItem('notification-permission-asked', 'true')
+        localStorage.setItem('notification-permission-granted', 'true')
       }
     } catch (err) {
       setMessage(`Failed to request permission: ${err.message}`)

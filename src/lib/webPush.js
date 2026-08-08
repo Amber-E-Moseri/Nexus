@@ -75,6 +75,7 @@ export async function requestPushPermission() {
       return false
     }
 
+    localStorage.setItem('notification-permission-granted', 'true')
     console.log('Push subscription saved successfully')
     return true
   } catch (err) {
@@ -162,6 +163,7 @@ export async function unsubscribePush() {
         .eq('id', user.id)
     }
 
+    localStorage.removeItem('notification-permission-granted')
     console.log('Push subscription removed')
     return true
   } catch (err) {
