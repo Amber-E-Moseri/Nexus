@@ -183,8 +183,8 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
       setEmailOptedOut(!emailOptedOut)
       setMessage(
         !emailOptedOut
-          ? '✓ You're unsubscribed from feature announcements and promotional emails'
-          : '✓ You're subscribed to feature announcements'
+          ? "✓ You're unsubscribed from feature announcements and promotional emails"
+          : "✓ You're subscribed to feature announcements"
       )
     } catch (err) {
       setMessage(`Failed to update preference: ${err.message}`)
@@ -221,8 +221,8 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
             </div>
             <p className="text-xs text-[var(--text-secondary)] mb-3">
               {emailOptedOut
-                ? '⭕ You're unsubscribed from announcement emails'
-                : '✅ You're subscribed to feature announcements and promotional emails'}
+                ? "⭕ You're unsubscribed from announcement emails"
+                : "✅ You're subscribed to feature announcements and promotional emails"}
             </p>
           </div>
           <button
