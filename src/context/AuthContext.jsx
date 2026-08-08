@@ -27,6 +27,20 @@ async function restorePushSubscription() {
   }
 }
 
+// Abort-safe timeout wrapper: rejects if the inner promise takes longer than
+// `ms`. The Supabase JS client uses `fetch()` which has no built-in timeout,
+// so a network stall (server never responds, IndexedDB lock, etc.) would hang
+// the auth init forever — this cap prevents the infinite-spinner scenario.
+function withTimeout(promise, ms) {
+  let timer
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms)
+    }),
+  ]).finally(() => clearTimeout(timer))
+}
+
 async function fetchProfile(userId) {
   const { data, error } = await supabase
     .from('users')
@@ -44,45 +58,28 @@ async function fetchProfile(userId) {
     throw error
   }
 
-  // Check if user's department is the Programs department
-  let isProgramsMember = false
-  if (data.department_id) {
-    const { data: dept } = await supabase
-      .from('departments')
-      .select('is_programs')
-      .eq('id', data.department_id)
-      .single()
-    isProgramsMember = dept?.is_programs ?? false
+  // Fire all supplementary queries in parallel — they're independent of each
+  // other and waiting sequentially doubled the cold-start time for no reason.
+  const [deptResult, departmentsResult, spaceRolesResult, grantResult] = await Promise.all([
+    // Check if user's department is the Programs department
+    data.department_id
+      ? supabase.from('departments').select('is_programs').eq('id', data.department_id).single()
+      : Promise.resolve({ data: null }),
+    // Fetch all departments for space/scope selection in admin views
+    supabase.from('departments').select('id, name').order('name'),
+    // Space roles (Phase 3 permission model)
+    supabase.from('space_roles').select('space_id, role').eq('user_id', userId),
+    // Ad-hoc grants (user_grants table)
+    supabase.from('user_grants').select('grant_type').eq('user_id', userId),
+  ])
+
+  return {
+    ...data,
+    departments: departmentsResult.data ?? [],
+    space_roles: spaceRolesResult.data ?? [],
+    grants: (grantResult.data ?? []).map((g) => g.grant_type),
+    is_programs_member: deptResult.data?.is_programs ?? false,
   }
-
-  // Fetch all departments for space/scope selection in admin views
-  const { data: departments } = await supabase
-    .from('departments')
-    .select('id, name')
-    .order('name')
-
-  // Space roles (Phase 3 permission model): ors/programs/media/dept_lead are
-  // granted per-space via the space_roles table, not users.role. Attached to
-  // the profile so hasSpaceRole()/route guards can resolve them without extra
-  // fetches. A failure here degrades to "no space roles" rather than blocking
-  // sign-in.
-  const { data: spaceRoles } = await supabase
-    .from('space_roles')
-    .select('space_id, role')
-    .eq('user_id', userId)
-
-  // Ad-hoc grants (user_grants table) — capabilities given to a specific user
-  // beyond their base role/department, e.g. a pastor given regional_secretary-
-  // level admin reach without changing their base role (which would silently
-  // drop the ~10 pastor-specific RLS/RPC checks elsewhere in the app). Attached
-  // as a flat array of grant_type strings so hasGrant()/route guards can check
-  // synchronously, same as space_roles above.
-  const { data: grantRows } = await supabase
-    .from('user_grants')
-    .select('grant_type')
-    .eq('user_id', userId)
-
-  return { ...data, departments: departments ?? [], space_roles: spaceRoles ?? [], grants: (grantRows ?? []).map((g) => g.grant_type), is_programs_member: isProgramsMember }
 }
 
 export function AuthProvider({ children }) {
@@ -173,7 +170,17 @@ export function AuthProvider({ children }) {
       if (mounted) setLoading(false)
     }
 
-    initializeAuth()
+    // Safety-net: if initializeAuth hangs (network stall, IndexedDB lock, etc.),
+    // force loading=false after 12 seconds so the user isn't stuck on the spinner
+    // forever. They'll land on the login page and can retry.
+    const loadingTimeout = setTimeout(() => {
+      if (mounted) {
+        console.warn('[Auth] Initialization timed out after 12 s — clearing loading state')
+        setLoading(false)
+      }
+    }, 12_000)
+
+    initializeAuth().finally(() => clearTimeout(loadingTimeout))
 
     // Re-check push subscription whenever the PWA comes back to the foreground.
     // On iOS/Android the subscription can be dropped while the app is suspended;

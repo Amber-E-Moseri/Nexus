@@ -244,6 +244,12 @@ function CampaignForm({ initial, onSaved, onCancel }) {
         body: { campaign_id: campaignId, context: { sender_name: profile?.name ?? '' } },
       })
       if (sendError) {
+        // Reset the campaign back to draft so the user can retry — otherwise it
+        // stays stuck at 'sending' forever if the edge function timed out.
+        await supabase
+          .from('communication_campaigns')
+          .update({ status: 'draft' })
+          .eq('id', campaignId)
         setError(await getFunctionErrorMessage(sendError))
         setSaving(false)
         return
@@ -832,7 +838,10 @@ export default function CampaignPage() {
 
     query = query.range(nextPage * PAGE_SIZE, nextPage * PAGE_SIZE + PAGE_SIZE - 1)
 
-    const { data, count } = await query
+    const { data, count, error: queryError } = await query
+    if (queryError) {
+      console.error('[CampaignPage] loadCampaigns failed:', queryError.message, queryError)
+    }
     const rows = data ?? []
     setCampaigns((prev) => (nextPage === 0 ? rows : [...prev, ...rows]))
     setTotalCount(count ?? 0)
@@ -931,6 +940,14 @@ export default function CampaignPage() {
 
   async function handleCancel(id) {
     await supabase.from('communication_campaigns').update({ status: 'cancelled' }).eq('id', id)
+    await loadCampaigns()
+  }
+
+  // Resets a stuck 'sending' campaign back to 'draft' so it can be retried.
+  // Only callable by super_admin — avoids duplicate sends if it actually finished.
+  async function handleResetStuck(id) {
+    if (!window.confirm('This campaign appears stuck. Reset it to draft so you can retry sending?')) return
+    await supabase.from('communication_campaigns').update({ status: 'draft' }).eq('id', id)
     await loadCampaigns()
   }
 
@@ -1280,6 +1297,9 @@ export default function CampaignPage() {
                               <>
                                 <button type="button" onClick={() => setModal({ mode: 'report', campaign: c })} style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: PRIMARY, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>View Report</button>
                                 <button type="button" onClick={() => handleDuplicate(c)} style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: MUTED, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Duplicate</button>
+                                {c.status === 'sending' && profile?.role === 'super_admin' && (
+                                  <button type="button" onClick={() => handleResetStuck(c.id)} style={{ border: `1px solid ${BORDER}`, background: SURFACE, color: 'var(--accent-red-text)', borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Reset</button>
+                                )}
                               </>
                             ) : null}
                           </div>
