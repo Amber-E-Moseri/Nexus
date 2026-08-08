@@ -16,7 +16,7 @@ import TopBar from './TopBar'
 export default function Shell() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   usePrefetchRoutes()
-  useOnboardingTracking()
+  // TODO: useOnboardingTracking() — disabled temporarily due to hooks error
 
   return (
     <SprintsProvider>

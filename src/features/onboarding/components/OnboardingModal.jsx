@@ -103,31 +103,6 @@ export default function OnboardingModal() {
     return () => { active = false }
   }, [profile?.id])
 
-  // ── Real-time progress subscription ───────────────────────────────────────
-  useEffect(() => {
-    if (!profile?.id) return
-
-    const subscription = supabase
-      .from('user_onboarding_progress')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'user_onboarding_progress',
-        filter: `user_id=eq.${profile.id}`,
-      }, (payload) => {
-        // New step completed → add to progress and update UI live
-        setProgress((prev) => {
-          const alreadyExists = prev.some(p => p.step_key === payload.new.step_key)
-          return alreadyExists ? prev : [...prev, { step_key: payload.new.step_key, completed_at: payload.new.completed_at }]
-        })
-      })
-      .subscribe()
-
-    return () => {
-      subscription?.unsubscribe?.()
-    }
-  }, [profile?.id])
-
   // ── Dismiss logic ──────────────────────────────────────────────────────────
   const handleDismiss = useCallback(async () => {
     // Animate out
