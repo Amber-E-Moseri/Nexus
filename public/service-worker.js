@@ -1,7 +1,7 @@
 // Service Worker for PWA: offline support, caching, and push notifications
 // Version: 1.0.0 (increment on deploy for cache busting)
 
-const CACHE_VERSION = 'v1.0.6';
+const CACHE_VERSION = 'v1.0.7';
 const STATIC_CACHE = `nexus-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `nexus-dynamic-${CACHE_VERSION}`;
 const API_CACHE = `nexus-api-${CACHE_VERSION}`;
@@ -89,15 +89,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Auth and realtime traffic must NEVER be cached (BLW-14): a cached token
-  // response would be replayed after expiry and break session refresh.
-  if (url.pathname.includes('/auth/v1/') || url.pathname.includes('/realtime/v1/')) {
-    return; // let the browser handle it directly
-  }
-
-  // API calls: Network-first, fall back to cache
-  if (url.pathname.startsWith('/api/') || url.origin.includes('supabase')) {
-    event.respondWith(networkFirstStrategy(request, API_CACHE));
+  // Never intercept Supabase traffic — auth, REST API, realtime, and storage
+  // must all go directly to the network. Caching Supabase responses caused
+  // getSession() hangs during SW activation because networkFirstStrategy's
+  // caches.open() competes with the activate handler's cache cleanup (BLW-14).
+  if (url.origin.includes('supabase')) {
     return;
   }
 
