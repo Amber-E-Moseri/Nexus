@@ -718,6 +718,20 @@ export default function EmailAdminPage() {
                     <br />
                     Available variables: <strong>{'{{'} firstName {'}}'}</strong>, <strong>{'{{'} fullName {'}}'}</strong>
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(form.customHtml)
+                      toast?.showToast('HTML copied to clipboard', { tone: 'success' })
+                    }}
+                    style={{
+                      marginTop: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600,
+                      border: `1px solid ${BORDER}`, borderRadius: 6, background: '#fff',
+                      color: MUTED, cursor: 'pointer',
+                    }}
+                  >
+                    📋 Copy HTML
+                  </button>
                 </div>
               </>
             )}
@@ -812,15 +826,21 @@ export default function EmailAdminPage() {
 
             {sendResult && (
               <div style={{
-                padding: '10px 14px', borderRadius: 8, fontSize: 13,
+                padding: '12px 14px', borderRadius: 8, fontSize: 13,
                 background: sendResult.ok ? '#e8f5e9' : '#fce4ec',
                 color: sendResult.ok ? GREEN : RED,
               }}>
-                {sendResult.ok
-                  ? `Sent to ${sendResult.sent} user${sendResult.sent !== 1 ? 's' : ''}.${sendResult.skipped ? ` ${sendResult.skipped} unsubscribed.` : ''}`
-                  : `Error: ${sendResult.error ?? 'Unknown error'}`}
+                {sendResult.ok ? (
+                  <div>
+                    {sendResult.isTest
+                      ? '✅ Test email sent to your inbox. Check it out, then send to all users.'
+                      : `✅ Sent to ${sendResult.sent} user${sendResult.sent !== 1 ? 's' : ''}.${sendResult.skipped ? ` ${sendResult.skipped} unsubscribed.` : ''}`}
+                  </div>
+                ) : (
+                  <div>❌ Error: {sendResult.error ?? 'Unknown error'}</div>
+                )}
                 {sendResult.errors?.length > 0 && (
-                  <div style={{ marginTop: 4, fontSize: 11, opacity: 0.8 }}>{sendResult.errors.join(', ')}</div>
+                  <div style={{ marginTop: 4, fontSize: 11, opacity: 0.8 }}>Failed: {sendResult.errors.slice(0, 2).join('; ')}{sendResult.errors.length > 2 ? '…' : ''}</div>
                 )}
               </div>
             )}
