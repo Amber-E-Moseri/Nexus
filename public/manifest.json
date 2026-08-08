@@ -1,6 +1,7 @@
 {
   "name": "BLW Canada Nexus",
   "short_name": "BLW Nexus",
+  "id": "/",
   "description": "BLW Canada Operations System — Ministry management platform for planning, coordinating, and tracking ministry activities.",
   "start_url": "/",
   "scope": "/",

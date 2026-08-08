@@ -32,12 +32,7 @@ export default function NotificationPermissionPrompt() {
   }, [user])
 
   const dismiss = () => {
-    localStorage.setItem('notification-permission-dismissed-at', Date.now().toString())
-    setShow(false)
-    setDenied(false)
-  }
-
-  const dismissNever = () => {
+    // "Not now" = permanent dismiss (same as "Don't show again")
     localStorage.setItem('notification-permission-never', 'true')
     setShow(false)
     setDenied(false)
@@ -77,24 +72,35 @@ export default function NotificationPermissionPrompt() {
     }
   }
 
+  const overlayStyle = {
+    position: 'fixed',
+    bottom: '24px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 9999,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px 16px',
+    borderRadius: '10px',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+    maxWidth: '480px',
+    width: 'calc(100vw - 48px)',
+  }
+
   if (denied) {
     return (
       <div style={{
-        padding: '10px 14px',
+        ...overlayStyle,
         backgroundColor: 'var(--surface-secondary)',
-        borderRadius: '8px',
-        marginBottom: '16px',
         border: '1px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
       }}>
         <Bell size={16} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
         <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', flex: 1 }}>
           Browser notifications are blocked.{' '}
           <strong>Click the lock icon</strong> in your address bar → Notifications → Allow, then reload.
         </p>
-        <button onClick={dismiss} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-secondary)' }}>
+        <button onClick={dismiss} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-secondary)', flexShrink: 0 }}>
           <X size={14} />
         </button>
       </div>
@@ -105,25 +111,20 @@ export default function NotificationPermissionPrompt() {
 
   return (
     <div style={{
-      padding: '12px 16px',
-      backgroundColor: 'var(--accent-muted)',
-      borderRadius: '8px',
-      marginBottom: '16px',
+      ...overlayStyle,
+      backgroundColor: 'var(--surface-primary, #fff)',
       border: '1px solid var(--accent)',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
     }}>
       <Bell size={20} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-      <div style={{ flex: 1 }}>
-        <p style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: '0 0 2px 0', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
           Enable browser notifications
         </p>
         <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
           Get alerted for task assignments, @mentions, and comments
         </p>
       </div>
-      <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
         <button
           onClick={dismiss}
           style={{
@@ -135,25 +136,10 @@ export default function NotificationPermissionPrompt() {
             border: '1px solid var(--border)',
             borderRadius: '6px',
             cursor: 'pointer',
+            whiteSpace: 'nowrap',
           }}
         >
           Not now
-        </button>
-        <button
-          onClick={dismissNever}
-          style={{
-            padding: '6px 12px',
-            fontSize: '12px',
-            fontWeight: 500,
-            color: 'var(--text-tertiary)',
-            background: 'transparent',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            textDecoration: 'underline',
-          }}
-        >
-          Don't show again
         </button>
         <button
           onClick={requestPermission}
@@ -168,6 +154,7 @@ export default function NotificationPermissionPrompt() {
             borderRadius: '6px',
             cursor: loading ? 'not-allowed' : 'pointer',
             opacity: loading ? 0.7 : 1,
+            whiteSpace: 'nowrap',
           }}
         >
           {loading ? 'Enabling…' : 'Enable'}

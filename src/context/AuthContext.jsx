@@ -1,8 +1,8 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { touchLastActive } from '../lib/people/api'
 import { supabase } from '../lib/supabase'
-import { clearAllAppCache, saveSession, loadSession, clearSession } from '../lib/cacheUtils'
-import { requestPushPermission, silentSubscribeToPush, unsubscribePush } from '../lib/webPush'
+import { clearAllAppCache, loadSession, clearSession } from '../lib/cacheUtils'
+import { silentSubscribeToPush, unsubscribePush } from '../lib/webPush'
 
 export const AuthContext = createContext(null)
 
@@ -13,16 +13,14 @@ function getJwtRole(session) {
 }
 
 async function restorePushSubscription() {
+  // Callers already guard on Notification.permission === 'granted', so we
+  // only need to ensure an active PushManager subscription exists in the DB.
   try {
     const registration = await navigator.serviceWorker.ready
     const subscription = await registration.pushManager.getSubscription()
-    // If no active subscription but push is enabled, try silent restore first
     if (!subscription) {
-      const silentSuccess = await silentSubscribeToPush()
-      // If silent subscribe failed and user previously granted permission, show prompt
-      if (!silentSuccess && localStorage.getItem('notification-permission-granted') === 'true') {
-        await requestPushPermission()
-      }
+      // Silent re-subscribe (no browser permission prompt since it's already granted)
+      await silentSubscribeToPush()
     }
   } catch (error) {
     console.warn('Failed to restore push subscription:', error)
@@ -121,78 +119,71 @@ export function AuthProvider({ children }) {
     let mounted = true
 
     const initializeAuth = async () => {
-      // Layer 1: Try restore session from IndexedDB (iOS PWA recovery)
-      const cachedSession = await loadSession()
-      if (cachedSession?.access_token && mounted) {
-        try {
-          // Restore the session to Supabase client
-          const { error } = await supabase.auth.setSession(cachedSession)
-          if (error) {
-            console.warn('Failed to restore IndexedDB session:', error)
+      // Primary: Supabase SDK reads from its own IndexedDB store (nexus-auth/kv).
+      // This is the main session source now that auth storage was switched from
+      // localStorage to IndexedDB — it survives PWA standalone cold-starts and
+      // background suspension on both iOS and Android.
+      let { data: { session } } = await supabase.auth.getSession()
+
+      // Migration path: on first launch after switching to IDB storage the SDK's
+      // store is empty. Fall back to the old manual nexus/session IDB store so
+      // existing logged-in users aren't forced to re-authenticate.
+      if (!session) {
+        const cachedSession = await loadSession()
+        if (cachedSession?.access_token) {
+          try {
+            const { data: restored, error } = await supabase.auth.setSession({
+              access_token:  cachedSession.access_token,
+              refresh_token: cachedSession.refresh_token,
+            })
+            if (error) {
+              console.warn('Session migration failed:', error)
+              clearSession()
+            } else {
+              session = restored?.session ?? null
+            }
+          } catch (e) {
+            console.warn('Error during session migration:', e)
             clearSession()
           }
-        } catch (e) {
-          console.warn('Error restoring IndexedDB session:', e)
-          clearSession()
         }
       }
 
-      // Layer 2: Try silent token refresh if session is old or missing
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
+      if (!mounted) return
 
-      if (!session && mounted) {
-        // No session available; try silent refresh
+      setUser(session?.user ?? null)
+      setJwtRole(getJwtRole(session))
+
+      if (session?.user) {
         try {
-          const { data: refreshed } = await supabase.auth.refreshSession()
-          if (refreshed?.session && mounted) {
-            // Save refreshed session to IndexedDB
-            await saveSession(refreshed.session)
-          }
-        } catch (e) {
-          console.warn('Silent token refresh failed:', e)
-        }
-      }
+          const nextProfile = await fetchProfile(session.user.id)
+          if (mounted) setProfile(nextProfile)
 
-      // Layer 3: Get current session (after potential refresh/restore)
-      const {
-        data: { session: finalSession },
-      } = await supabase.auth.getSession()
-
-      if (!mounted) {
-        return
-      }
-
-      setUser(finalSession?.user ?? null)
-      setJwtRole(getJwtRole(finalSession))
-
-      if (finalSession?.user) {
-        try {
-          const nextProfile = await fetchProfile(finalSession.user.id)
-          if (mounted) {
-            setProfile(nextProfile)
-          }
-
-          // Layer 4: Restore push subscription if enabled and missing
-          if (nextProfile?.push_enabled && localStorage.getItem('notification-permission-granted') === 'true') {
+          // Restore push subscription if it was enabled (handles PWA cold-start)
+          if (nextProfile?.push_enabled && Notification.permission === 'granted') {
             restorePushSubscription().catch(() => {})
           }
 
           touchLastActive().catch(() => {})
         } catch {
-          if (mounted) {
-            setProfile(null)
-          }
+          if (mounted) setProfile(null)
         }
       }
 
-      if (mounted) {
-        setLoading(false)
-      }
+      if (mounted) setLoading(false)
     }
 
     initializeAuth()
+
+    // Re-check push subscription whenever the PWA comes back to the foreground.
+    // On iOS/Android the subscription can be dropped while the app is suspended;
+    // this silently re-registers it without prompting the user again.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && profileRef.current?.push_enabled && Notification.permission === 'granted') {
+        restorePushSubscription().catch(() => {})
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     const {
       data: { subscription },
@@ -231,9 +222,6 @@ export function AuthProvider({ children }) {
       setJwtRole(getJwtRole(session))
 
       if (session?.user) {
-        // Save session to IndexedDB for iOS PWA recovery
-        await saveSession(session)
-
         // Only fetch profile on SIGNED_IN (initial login). On TOKEN_REFRESHED
         // and other events, keep the cached profile to avoid unnecessary DB queries.
         if (event === 'SIGNED_IN') {
@@ -275,6 +263,7 @@ export function AuthProvider({ children }) {
     return () => {
       mounted = false
       subscription.unsubscribe()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [])
 

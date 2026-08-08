@@ -72,7 +72,10 @@ const DB_NAME = 'nexus'
 const DB_VERSION = 1
 const STORE_NAME = 'session'
 const SESSION_KEY = 'auth-session'
-const SESSION_TTL = 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
+// 30-day TTL — this store is now a migration fallback only (the Supabase SDK
+// manages its own IDB-backed session). The TTL just guards against infinitely
+// old data sitting in the old store; Supabase handles its own token expiry.
+const SESSION_TTL = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 export async function openDB() {
   return new Promise((resolve, reject) => {
