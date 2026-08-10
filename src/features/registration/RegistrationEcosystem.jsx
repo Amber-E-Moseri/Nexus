@@ -1970,21 +1970,40 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups,
   );
 }
 
+// Extract the actual error message from a Supabase FunctionsHttpError.
+// When a function returns non-2xx, error.message is the generic
+// "Edge Function returned a non-2xx status code" — the real detail lives
+// in error.context (the raw Response). Read it so we show something useful.
+async function readFunctionError(error) {
+  if (!error) return ''
+  try {
+    const body = await error.context?.json?.()
+    if (body?.error) return body.error + (body.details ? ` — ${body.details}` : '')
+  } catch {}
+  return error.message || String(error)
+}
+
 // ============ TRANSPORTATION ============
-function FlightsSyncBlock({ onApplied }) {
+function FlightsSyncBlock({ onApplied, registrations = [] }) {
   const [state, setState] = useState('idle'); // idle | loading | preview | applying | done | error
   const [preview, setPreview] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  // manualMatches: { [submissionFullName]: { email, registrantName } }
+  const [manualMatches, setManualMatches] = useState({});
+  // search text typed per unmatched row
+  const [searches, setSearches] = useState({});
 
   async function fetchPreview() {
     setState('loading');
     setPreview(null);
     setErrorMsg('');
+    setManualMatches({});
+    setSearches({});
     try {
       const { data, error } = await supabase.functions.invoke('registration-api-sync', {
         body: { action: 'preview', form: 'flights' },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await readFunctionError(error));
       if (data?.error) throw new Error(data.error + (data.details ? ` — ${data.details}` : ''));
       setPreview(data);
       setState('preview');
@@ -1997,10 +2016,24 @@ function FlightsSyncBlock({ onApplied }) {
   async function applySync() {
     setState('applying');
     try {
+      // Build manual_matches: attach flight data from each unmatched row that has been assigned
+      const manualList = (preview?.unmatched_rows || [])
+        .filter(row => manualMatches[row.full_name])
+        .map(row => ({
+          email: manualMatches[row.full_name].email,
+          full_name: row.full_name,
+          arrival_date: row.arrival_date,
+          arrival_time: row.arrival_time,
+          arrival_flight: row.arrival_flight,
+          departure_date: row.departure_date,
+          departure_time: row.departure_time,
+          departure_flight: row.departure_flight,
+        }));
+
       const { data, error } = await supabase.functions.invoke('registration-api-sync', {
-        body: { action: 'apply', form: 'flights' },
+        body: { action: 'apply', form: 'flights', manual_matches: manualList },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await readFunctionError(error));
       if (data?.error) throw new Error(data.error + (data.details ? ` — ${data.details}` : ''));
       setState('done');
       onApplied?.();
@@ -2009,6 +2042,22 @@ function FlightsSyncBlock({ onApplied }) {
       setState('error');
     }
   }
+
+  function pickRegistrant(submissionName, registrantName) {
+    const reg = registrations.find(r => r.fullName === registrantName);
+    if (reg) {
+      setManualMatches(prev => ({ ...prev, [submissionName]: { email: reg.email, registrantName } }));
+    } else {
+      // clear if the typed value doesn't match any registrant
+      setManualMatches(prev => {
+        const next = { ...prev };
+        delete next[submissionName];
+        return next;
+      });
+    }
+  }
+
+  const totalToWrite = (preview?.matched_count ?? 0) + Object.keys(manualMatches).length;
 
   return (
     <Card style={{ marginBottom: 20 }}>
@@ -2038,9 +2087,12 @@ function FlightsSyncBlock({ onApplied }) {
             <span style={{ fontSize: 12.5 }}><b>{preview.total_submissions}</b> submissions</span>
             <span style={{ fontSize: 12.5 }}><b>{preview.unique_people}</b> unique people</span>
             <span style={{ fontSize: 12.5, color: C.green }}><b>{preview.matched_count}</b> matched</span>
-            <span style={{ fontSize: 12.5, color: C.red }}><b>{preview.unmatched_count}</b> unmatched by name</span>
+            {preview.unmatched_count > 0 && (
+              <span style={{ fontSize: 12.5, color: C.red }}><b>{preview.unmatched_count}</b> unmatched by name</span>
+            )}
           </div>
 
+          {/* Auto-matched rows */}
           {preview.rows?.length > 0 && (
             <div style={{ overflowX: 'auto', marginBottom: 12, maxHeight: 280, overflowY: 'auto', border: `1px solid ${C.line}`, borderRadius: 8 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -2068,17 +2120,73 @@ function FlightsSyncBlock({ onApplied }) {
             </div>
           )}
 
-          {preview.unmatched?.length > 0 && (
-            <div style={{ marginBottom: 12, padding: '8px 12px', background: C.amberBg, borderRadius: 8, fontSize: 12.5, color: C.amber }}>
-              <b>Could not match:</b> {preview.unmatched.join(', ')}
+          {/* Manual match section for unmatched rows */}
+          {preview.unmatched_rows?.length > 0 && (
+            <div style={{ marginBottom: 14, border: `1px solid ${C.amber}`, borderRadius: 8, overflow: 'hidden' }}>
+              <div style={{ padding: '8px 12px', background: C.amberBg, fontSize: 12.5, color: C.amber, fontWeight: 600 }}>
+                ⚠ {preview.unmatched_rows.length} name{preview.unmatched_rows.length > 1 ? 's' : ''} couldn't be matched automatically — assign each one below to apply their flights
+              </div>
+              {/* datalist for autocomplete */}
+              <datalist id="reg-names-list">
+                {registrations.map(r => <option key={r.email} value={r.fullName} />)}
+              </datalist>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#FFFBF2' }}>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>Name on form</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Arrival</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Arr. Flight</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Departure</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>Dep. Flight</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>Match to registrant</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.unmatched_rows.map((row, i) => {
+                      const assigned = manualMatches[row.full_name];
+                      return (
+                        <tr key={i} style={{ borderTop: `1px solid ${C.line}`, background: assigned ? '#F0FDF4' : undefined }}>
+                          <td style={{ padding: '6px 10px', fontWeight: 500, color: C.amber }}>{row.full_name}</td>
+                          <td style={{ padding: '6px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{row.arrival_date}{row.arrival_time ? ` ${fmtTime(row.arrival_time)}` : ''}</td>
+                          <td style={{ padding: '6px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{row.arrival_flight || '—'}</td>
+                          <td style={{ padding: '6px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{row.departure_date}{row.departure_time ? ` ${fmtTime(row.departure_time)}` : ''}</td>
+                          <td style={{ padding: '6px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{row.departure_flight || '—'}</td>
+                          <td style={{ padding: '6px 10px', minWidth: 200 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input
+                                list="reg-names-list"
+                                placeholder="Type a name…"
+                                value={searches[row.full_name] ?? ''}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setSearches(prev => ({ ...prev, [row.full_name]: val }));
+                                  pickRegistrant(row.full_name, val);
+                                }}
+                                style={{
+                                  flex: 1, padding: '4px 8px', fontSize: 12, borderRadius: 6,
+                                  border: `1px solid ${assigned ? '#22C55E' : C.line}`,
+                                  background: assigned ? '#F0FDF4' : '#fff',
+                                  outline: 'none',
+                                }}
+                              />
+                              {assigned && <span style={{ color: '#22C55E', fontSize: 14 }}>✓</span>}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Btn tone="primary" small onClick={applySync} disabled={state === 'applying'}>
-              {state === 'applying' ? 'Applying…' : `Apply — write ${preview.matched_count} records`}
+            <Btn tone="primary" small onClick={applySync} disabled={state === 'applying' || totalToWrite === 0}>
+              {state === 'applying' ? 'Applying…' : `Apply — write ${totalToWrite} record${totalToWrite !== 1 ? 's' : ''}`}
             </Btn>
-            <Btn tone="ghost" small onClick={() => { setState('idle'); setPreview(null); }}>Cancel</Btn>
+            <Btn tone="ghost" small onClick={() => { setState('idle'); setPreview(null); setManualMatches({}); setSearches({}); }}>Cancel</Btn>
           </div>
         </div>
       )}
@@ -2275,7 +2383,10 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, exemptFello
         </div>
       </div>
 
-      <FlightsSyncBlock onApplied={onApplied} />
+      <FlightsSyncBlock
+        onApplied={onApplied}
+        registrations={merged.map(r => ({ email: r.email, fullName: r.fullName || `${r.firstName || ''} ${r.lastName || ''}`.trim() }))}
+      />
 
       {/* Arrivals view */}
       {(viewMode === 'arrivals' || viewMode === 'full') && (
@@ -2371,7 +2482,7 @@ function ApiSyncBlock({ onApplied }) {
       const { data, error } = await supabase.functions.invoke('registration-api-sync', {
         body: { action: 'preview' },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await readFunctionError(error));
       if (data?.error) throw new Error(data.error + (data.details ? ` — ${data.details}` : ''));
       setPreview(data);
       setState('preview');
@@ -2387,7 +2498,7 @@ function ApiSyncBlock({ onApplied }) {
       const { data, error } = await supabase.functions.invoke('registration-api-sync', {
         body: { action: 'apply' },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await readFunctionError(error));
       if (data?.error) throw new Error(data.error + (data.details ? ` — ${data.details}` : ''));
       setState('done');
       onApplied?.();

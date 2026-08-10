@@ -130,7 +130,8 @@ serve(async (req) => {
   const { data: { user }, error: authError } = await userClient.auth.getUser()
   if (authError || !user) return json(401, { error: 'Unauthorized' })
 
-  const body = await req.json().catch(() => ({})) as { action?: string; form?: string }
+  // deno-lint-ignore no-explicit-any
+  const body = await req.json().catch(() => ({})) as { action?: string; form?: string; manual_matches?: any[] }
   const action = body.action || 'preview'
   const form = body.form || 'registrations'
 
@@ -180,8 +181,10 @@ serve(async (req) => {
     )
 
     // Match each flight row to a registration email
-    const matched: { email: string; full_name: string; arrival_date: string; arrival_time: string; arrival_flight: string; departure_date: string; departure_time: string; departure_flight: string }[] = []
-    const unmatched: string[] = []
+    // deno-lint-ignore no-explicit-any
+    const matched: any[] = []
+    // deno-lint-ignore no-explicit-any
+    const unmatchedRows: any[] = []
     for (const row of flightRows) {
       const email = regByNorm.get(normName(row.full_name))
       if (email) {
@@ -196,7 +199,15 @@ serve(async (req) => {
           departure_flight: row.departure_flight,
         })
       } else {
-        unmatched.push(row.full_name)
+        unmatchedRows.push({
+          full_name: row.full_name,
+          arrival_date: row.arrival_date,
+          arrival_time: row.arrival_time,
+          arrival_flight: row.arrival_flight,
+          departure_date: row.departure_date,
+          departure_time: row.departure_time,
+          departure_flight: row.departure_flight,
+        })
       }
     }
 
@@ -205,22 +216,25 @@ serve(async (req) => {
         total_submissions: submissions.length,
         unique_people: flightRows.length,
         matched_count: matched.length,
-        unmatched_count: unmatched.length,
+        unmatched_count: unmatchedRows.length,
         rows: matched,
-        unmatched,
+        unmatched: unmatchedRows.map(r => r.full_name), // backward compat
+        unmatched_rows: unmatchedRows,                   // full flight data for manual matching
       })
     }
 
     if (action === 'apply') {
-      if (matched.length === 0) return json(200, { upserted: 0, message: 'No matched registrations to update' })
+      // Merge auto-matched with any manual overrides supplied by the caller
+      const allMatched = [...matched, ...(body.manual_matches || [])]
+      if (allMatched.length === 0) return json(200, { upserted: 0, message: 'No matched registrations to update' })
       const { error } = await serviceClient
         .from('registrations')
-        .upsert(matched, { onConflict: 'email' })
+        .upsert(allMatched, { onConflict: 'email' })
       if (error) return json(500, { error: 'Database error', details: error.message })
       return json(200, {
-        upserted: matched.length,
-        unmatched: unmatched.length,
-        message: `${matched.length} flight records synced (${unmatched.length} unmatched by name)`,
+        upserted: allMatched.length,
+        unmatched: unmatchedRows.length - (body.manual_matches?.length ?? 0),
+        message: `${allMatched.length} flight records synced`,
       })
     }
 
