@@ -1,5 +1,4 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const REGISTRATIONS_FORM_URL =
   'https://leaders.lwcanada.org/api/forms/cmrgl1w5r009e853pn1x0gvws/submissions'
@@ -110,7 +109,7 @@ function mapFlight(sub: Record<string, unknown>) {
   }
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' })
 
