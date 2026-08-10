@@ -123,11 +123,17 @@ Deno.serve(async (req) => {
   }
 
   const authHeader = req.headers.get('authorization') || ''
-  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
-  })
-  const { data: { user }, error: authError } = await userClient.auth.getUser()
-  if (authError || !user) return json(401, { error: 'Unauthorized' })
+
+  // Allow service-role callers (pg_cron scheduled jobs) to bypass user-auth.
+  // All other callers must present a valid user JWT.
+  const isCronCall = authHeader === `Bearer ${supabaseServiceKey}`
+  if (!isCronCall) {
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    })
+    const { data: { user }, error: authError } = await userClient.auth.getUser()
+    if (authError || !user) return json(401, { error: 'Unauthorized' })
+  }
 
   // deno-lint-ignore no-explicit-any
   const body = await req.json().catch(() => ({})) as { action?: string; form?: string; manual_matches?: any[] }
