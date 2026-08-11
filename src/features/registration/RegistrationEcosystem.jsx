@@ -844,33 +844,55 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         select, input[type=text], input[type=number], textarea { font-family: Inter; border: 1px solid ${C.line}; border-radius: 7px; padding: 6px 9px; font-size: 13px; background: #fff; }
         ::-webkit-scrollbar { height: 8px; width: 8px; }
         ::-webkit-scrollbar-thumb { background: ${C.line}; border-radius: 4px; }
+
+        /* ── responsive layout ── */
+        .reg-header    { padding: 18px 32px; }
+        .reg-header-stats { display: flex; gap: 18px; font-family: 'JetBrains Mono'; font-size: 11px; color: #D8CCF0; }
+        .reg-tabs-bar  { display: flex; gap: 4px; padding: 14px 32px 0; border-bottom: 1px solid ${C.line}; background: ${C.paper}; overflow-x: auto; scrollbar-width: none; }
+        .reg-tabs-bar::-webkit-scrollbar { display: none; }
+        .reg-content   { padding: 28px; max-width: 1280px; margin: 0 auto; }
+        .reg-grid-3    { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+        .reg-tab-label { }
+
+        @media (max-width: 768px) {
+          .reg-header       { padding: 12px 16px; }
+          .reg-header-stats { display: none; }
+          .reg-tabs-bar     { padding: 8px 10px 0; gap: 2px; }
+          .reg-tab-label    { display: none; }
+          .reg-content      { padding: 12px; }
+          .reg-grid-3       { grid-template-columns: 1fr; gap: 12px; margin-bottom: 16px; }
+        }
+        @media (max-width: 480px) {
+          .reg-header   { padding: 10px 12px; }
+          .reg-content  { padding: 8px; }
+        }
       `}</style>
 
       {/* header */}
-      <div style={{ background: C.purple, padding: '22px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="reg-header" style={{ background: C.purple, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 20, color: '#fff', letterSpacing: -0.3 }}>
             {eventConfig.event_name}{isLimited && <span style={{ fontSize: 14, fontWeight: 500, marginLeft: 12, opacity: 0.9 }}>• Viewing: {limitedToSubgroups.join(', ')}</span>}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 18, fontFamily: 'JetBrains Mono', fontSize: 11, color: '#D8CCF0' }}>
+        <div className="reg-header-stats">
           <span>roster: {rosterFiltered.length > 0 ? rosterFiltered.length : '—'}</span>
           <span>reg: {registrationsFiltered.length > 0 ? registrationsFiltered.length : '—'}</span>
         </div>
       </div>
 
       {/* tabs */}
-      <div style={{ display: 'flex', gap: 4, padding: '14px 32px 0', borderBottom: `1px solid ${C.line}`, background: C.paper, overflowX: 'auto' }}>
+      <div className="reg-tabs-bar">
         {visibleTabs.map(t => {
           const Icon = t.icon;
           const active = tab === t.key;
           return (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
-              display: 'flex', alignItems: 'center', gap: 7, padding: '10px 16px', background: 'none', border: 'none',
+              display: 'flex', alignItems: 'center', gap: 7, padding: '10px 14px', background: 'none', border: 'none',
               borderBottom: active ? `2px solid ${C.purple}` : '2px solid transparent', color: active ? C.purple : C.mute,
-              fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap',
+              fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap', flexShrink: 0,
             }}>
-              <Icon size={15} /> {t.label}
+              <Icon size={15} /> <span className="reg-tab-label">{t.label}</span>
             </button>
           );
         })}
@@ -884,7 +906,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         />
       )}
 
-      <div style={{ padding: 28, maxWidth: 1280, margin: '0 auto' }}>
+      <div className="reg-content">
         {tab === 'overview' && (
           <OverviewTab {...{ totalRegs, totalRegTarget, subgroups, bySubgroup, targets, setTarget, merged, isLimited,
             canSetTargets: role === 'super_admin' || role === 'regional_secretary' || (role === 'pastor' && !isGloballyScoped) }} />
@@ -940,7 +962,7 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
+      <div className="reg-grid-3">
         <SummaryCard label="Total registrations" current={totalRegs} target={totalRegTarget} pct={regPct} />
         <SummaryCard label="Confirmed" current={confirmedCount} target={totalRegs} pct={totalRegs ? Math.round((confirmedCount / totalRegs) * 100) : 0} />
         <SummaryCard label="Flights" current={totalFlightsBooked} target={totalFlightsNeeded} pct={totalFlightsNeeded ? Math.round((totalFlightsBooked / totalFlightsNeeded) * 100) : 0} />
@@ -1002,7 +1024,7 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets
         </div>
       </Card>
 
-      <div style={{ marginTop: 10, display: 'flex', gap: 16, alignItems: 'center', padding: '8px 4px' }}>
+      <div style={{ marginTop: 10, display: 'flex', gap: 12, alignItems: 'center', padding: '8px 4px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11.5, color: C.mute, fontFamily: 'JetBrains Mono', textTransform: 'uppercase', letterSpacing: 0.05 }}>Status:</span>
         {[
           { tone: 'green', label: 'On track', desc: '≥ 95% of reg target' },
