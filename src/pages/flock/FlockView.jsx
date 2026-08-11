@@ -160,6 +160,15 @@ export default function FlockView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [deptNames, setDeptNames] = useState({})
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640)
+  // On mobile: 'list' shows member list, 'detail' shows selected member's tasks
+  const [mobileView, setMobileView] = useState('list')
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   const RESTRICTED_DEPTS = useMemo(() => new Set(['ors', 'admin']), [])
 
@@ -179,7 +188,11 @@ export default function FlockView() {
       setMembers(m ?? [])
       setAllTasks(t ?? [])
       setDeptNames(dm)
-      if (m?.length > 0) setSelectedId(m[0].id)
+      if (m?.length > 0) {
+      setSelectedId(m[0].id)
+      // On desktop auto-select first; on mobile stay on list view
+      if (window.innerWidth >= 640) setMobileView('detail')
+    }
     }).catch((err) => {
       console.error('Failed to load flock data:', err)
       setError(err.message || 'Failed to load member information')
@@ -222,189 +235,210 @@ export default function FlockView() {
     )
   }
 
-  return (
-    <div style={{ display: 'flex', height: '100%', gap: 0 }}>
-      {/* Left panel — member list */}
+  // ── member list (shared between mobile list view and desktop sidebar) ──
+  const memberList = (
+    <div style={{ padding: '16px 12px' }}>
       <div
         style={{
-          width: 280, flexShrink: 0,
-          borderRight: '1px solid var(--border)',
-          overflowY: 'auto', padding: '16px 12px',
+          fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)',
+          textTransform: 'uppercase', letterSpacing: '0.1em',
+          padding: '0 8px 10px',
         }}
       >
-        <div
-          style={{
-            fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)',
-            textTransform: 'uppercase', letterSpacing: '0.1em',
-            padding: '0 8px 10px',
-          }}
-        >
-          My Flock · {members.length}
-        </div>
-
-        {members.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>👤</div>
-            <div style={{ fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>
-              No members assigned
-            </div>
-            <div>Contact your administrator to assign members</div>
-          </div>
-        )}
-
-        {members.map((member) => {
-          const overdueCount = (memberTasks[member.id] ?? []).filter(
-            (t) => t.due_date && new Date(t.due_date + 'T00:00:00') < new Date() && !isTaskCompleted(t),
-          ).length
-          const statusBadge = memberStatusBadge(member, memberTasks)
-          const isSelected = member.id === selectedId
-
-          return (
-            <button
-              key={member.id}
-              type="button"
-              onClick={() => setSelectedId(member.id)}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                padding: '9px 10px', borderRadius: 10, cursor: 'pointer',
-                border: 'none', textAlign: 'left', marginBottom: 2,
-                background: isSelected ? 'var(--accent-light)' : 'transparent',
-                transition: 'background 0.15s',
-              }}
-              onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--surface-secondary)' }}
-              onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
-            >
-              <Initials name={member.name} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: 13, fontWeight: 500,
-                    color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}
-                >
-                  {member.name}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
-                  <span
-                    style={{
-                      fontSize: 10, fontWeight: 500, padding: '1px 6px', borderRadius: 20,
-                      background: statusBadge.bg, color: statusBadge.text,
-                    }}
-                  >
-                    {statusBadge.label}
-                  </span>
-                  {overdueCount > 0 && (
-                    <span style={{ fontSize: 10, color: 'var(--coral-dark)' }}>
-                      {overdueCount} overdue
-                    </span>
-                  )}
-                </div>
-              </div>
-            </button>
-          )
-        })}
+        My Flock · {members.length}
       </div>
 
-      {/* Right panel — selected member's tasks */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-        {!selectedMember ? (
-          <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13, paddingTop: 60 }}>
-            Select a member to view their tasks.
+      {members.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>👤</div>
+          <div style={{ fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>
+            No members assigned
           </div>
-        ) : (
-          <>
-            {/* Member header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-              <Initials name={selectedMember.name} size={40} />
-              <div>
-                <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {selectedMember.name}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2, textTransform: 'capitalize' }}>
-                  {selectedMember.role?.replace('_', ' ')}
-                </div>
-              </div>
-              <span
+          <div>Contact your administrator to assign members</div>
+        </div>
+      )}
+
+      {members.map((member) => {
+        const overdueCount = (memberTasks[member.id] ?? []).filter(
+          (t) => t.due_date && new Date(t.due_date + 'T00:00:00') < new Date() && !isTaskCompleted(t),
+        ).length
+        const statusBadge = memberStatusBadge(member, memberTasks)
+        const isSelected = !isMobile && member.id === selectedId
+
+        return (
+          <button
+            key={member.id}
+            type="button"
+            onClick={() => {
+              setSelectedId(member.id)
+              if (isMobile) setMobileView('detail')
+            }}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px', borderRadius: 10, cursor: 'pointer',
+              border: 'none', textAlign: 'left', marginBottom: 2,
+              background: isSelected ? 'var(--accent-light)' : 'transparent',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--surface-secondary)' }}
+            onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+          >
+            <Initials name={member.name} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
                 style={{
-                  marginLeft: 'auto', fontSize: 12, color: 'var(--text-tertiary)',
-                  background: 'var(--surface-secondary)', padding: '4px 10px',
-                  borderRadius: 8, border: '1px solid var(--border)',
+                  fontSize: 13, fontWeight: 500,
+                  color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}
               >
-                {selectedTasks.length} task{selectedTasks.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-
-            {selectedTasks.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
-                <div style={{ fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                  No tasks yet
-                </div>
-                <div>Create your first task to get started</div>
+                {member.name}
               </div>
-            ) : isMemberRestricted(selectedMember) ? (
-              <WorkloadSummary tasks={selectedTasks} deptGroups={deptGroups} />
-            ) : (
-              STATUS_SECTIONS.map((section) => {
-                const tasks = statusGroups[section.key] ?? []
-                if (tasks.length === 0) return null
-                return (
-                  <div key={section.key} style={{ marginBottom: 24 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <span
-                        style={{
-                          fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-                          letterSpacing: '0.08em', color: section.color,
-                        }}
-                      >
-                        {section.label}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 11, fontWeight: 600, color: 'white',
-                          background: section.color, borderRadius: 20,
-                          padding: '0px 7px', lineHeight: '18px',
-                        }}
-                      >
-                        {tasks.length}
-                      </span>
-                    </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                <span
+                  style={{
+                    fontSize: 10, fontWeight: 500, padding: '1px 6px', borderRadius: 20,
+                    background: statusBadge.bg, color: statusBadge.text,
+                  }}
+                >
+                  {statusBadge.label}
+                </span>
+                {overdueCount > 0 && (
+                  <span style={{ fontSize: 10, color: 'var(--coral-dark)' }}>
+                    {overdueCount} overdue
+                  </span>
+                )}
+              </div>
+            </div>
+            {isMobile && (
+              <span style={{ fontSize: 18, color: 'var(--text-tertiary)', lineHeight: 1 }}>›</span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {tasks.map((task) => {
-                        const isOverdue =
-                          task.due_date && new Date(task.due_date + 'T00:00:00') < new Date() && !isTaskCompleted(task)
-                        const priority = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium
-                        const statusName = task.status_definition?.name ?? task.status ?? ''
+  // ── detail panel content ──
+  const detailPanel = (
+    <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px' : '20px 24px' }}>
+      {/* Back button — mobile only */}
+      {isMobile && (
+        <button
+          type="button"
+          onClick={() => setMobileView('list')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--accent)', fontSize: 13, fontWeight: 600,
+            padding: '0 0 16px', marginBottom: 4,
+          }}
+        >
+          ‹ All members
+        </button>
+      )}
 
-                        return (
-                          <div
-                            key={task.id}
+      {!selectedMember ? (
+        <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13, paddingTop: 60 }}>
+          Select a member to view their tasks.
+        </div>
+      ) : (
+        <>
+          {/* Member header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+            <Initials name={selectedMember.name} size={40} />
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)' }}>
+                {selectedMember.name}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2, textTransform: 'capitalize' }}>
+                {selectedMember.role?.replace('_', ' ')}
+              </div>
+            </div>
+            <span
+              style={{
+                marginLeft: 'auto', fontSize: 12, color: 'var(--text-tertiary)',
+                background: 'var(--surface-secondary)', padding: '4px 10px',
+                borderRadius: 8, border: '1px solid var(--border)', whiteSpace: 'nowrap',
+              }}
+            >
+              {selectedTasks.length} task{selectedTasks.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          {selectedTasks.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-tertiary)', fontSize: 13 }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+              <div style={{ fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                No tasks yet
+              </div>
+              <div>Create your first task to get started</div>
+            </div>
+          ) : isMemberRestricted(selectedMember) ? (
+            <WorkloadSummary tasks={selectedTasks} deptGroups={deptGroups} />
+          ) : (
+            STATUS_SECTIONS.map((section) => {
+              const tasks = statusGroups[section.key] ?? []
+              if (tasks.length === 0) return null
+              return (
+                <div key={section.key} style={{ marginBottom: 24 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span
+                      style={{
+                        fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                        letterSpacing: '0.08em', color: section.color,
+                      }}
+                    >
+                      {section.label}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11, fontWeight: 600, color: 'white',
+                        background: section.color, borderRadius: 20,
+                        padding: '0px 7px', lineHeight: '18px',
+                      }}
+                    >
+                      {tasks.length}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {tasks.map((task) => {
+                      const isOverdue =
+                        task.due_date && new Date(task.due_date + 'T00:00:00') < new Date() && !isTaskCompleted(task)
+                      const priority = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium
+
+                      return (
+                        <div
+                          key={task.id}
+                          style={{
+                            display: 'flex', alignItems: 'flex-start', gap: 10,
+                            padding: '10px 12px', borderRadius: 8,
+                            border: '1px solid var(--border)', background: 'white',
+                            flexWrap: isMobile ? 'wrap' : 'nowrap',
+                          }}
+                        >
+                          {/* Status dot */}
+                          <span
                             style={{
-                              display: 'flex', alignItems: 'center', gap: 10,
-                              padding: '9px 12px', borderRadius: 8,
-                              border: '1px solid var(--border)', background: 'white',
+                              width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 4,
+                              background: task.status_definition?.color
+                                ? `#${task.status_definition.color.replace('#', '')}`
+                                : section.color,
+                            }}
+                          />
+                          <span
+                            style={{
+                              flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
+                              minWidth: isMobile ? '100%' : 0,
+                              overflow: 'hidden', textOverflow: 'ellipsis',
+                              whiteSpace: isMobile ? 'normal' : 'nowrap',
+                              wordBreak: isMobile ? 'break-word' : undefined,
                             }}
                           >
-                            {/* Status dot */}
-                            <span
-                              style={{
-                                width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                                background: task.status_definition?.color
-                                  ? `#${task.status_definition.color.replace('#', '')}`
-                                  : section.color,
-                              }}
-                            />
-                            <span
-                              style={{
-                                flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
-                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {task.title}
-                            </span>
+                            {task.title}
+                          </span>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
                             {/* Dept badge */}
                             {task.department && (
                               <span
@@ -412,7 +446,7 @@ export default function FlockView() {
                                   fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 20,
                                   background: `#${task.department.color}22`,
                                   color: `#${task.department.color}`,
-                                  flexShrink: 0, maxWidth: 80,
+                                  maxWidth: 80,
                                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                 }}
                               >
@@ -422,7 +456,7 @@ export default function FlockView() {
                             <span
                               style={{
                                 fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 20,
-                                background: priority.bg, color: priority.text, flexShrink: 0,
+                                background: priority.bg, color: priority.text,
                               }}
                             >
                               {task.priority}
@@ -430,9 +464,10 @@ export default function FlockView() {
                             {task.due_date && (
                               <span
                                 style={{
-                                  fontSize: 11, flexShrink: 0,
+                                  fontSize: 11,
                                   color: isOverdue ? 'var(--coral-dark)' : 'var(--text-tertiary)',
                                   fontWeight: isOverdue ? 500 : 400,
+                                  whiteSpace: 'nowrap',
                                 }}
                               >
                                 {isOverdue ? '⚠ ' : ''}
@@ -442,16 +477,41 @@ export default function FlockView() {
                               </span>
                             )}
                           </div>
-                        )
-                      })}
-                    </div>
+                        </div>
+                      )
+                    })}
                   </div>
-                )
-              })
-            )}
-          </>
-        )}
+                </div>
+              )
+            })
+          )}
+        </>
+      )}
+    </div>
+  )
+
+  // ── mobile: show list OR detail, never both ──
+  if (isMobile) {
+    return (
+      <div style={{ height: '100%', overflowY: 'auto' }}>
+        {mobileView === 'list' ? memberList : detailPanel}
       </div>
+    )
+  }
+
+  // ── desktop: classic two-panel layout ──
+  return (
+    <div style={{ display: 'flex', height: '100%', gap: 0 }}>
+      <div
+        style={{
+          width: 280, flexShrink: 0,
+          borderRight: '1px solid var(--border)',
+          overflowY: 'auto',
+        }}
+      >
+        {memberList}
+      </div>
+      {detailPanel}
     </div>
   )
 }
