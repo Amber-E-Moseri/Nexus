@@ -4,7 +4,7 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { endOfWeek, isBefore, isEqual, parseISO, startOfDay, startOfWeek } from 'date-fns'
 import { AnimatePresence, motion } from 'framer-motion'
 import { BellRing, ChevronRight } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useMediaQuery } from '../hooks/useMediaQuery'
@@ -36,7 +36,10 @@ import WeeklyWinsWidget from '../features/dashboard/components/WeeklyWinsWidget'
 import PersonalRemindersWidget from '../features/dashboard/components/PersonalRemindersWidget'
 import MyAssignedTasksWidget from '../features/dashboard/components/MyAssignedTasksWidget'
 import MySprintTasksWidget from '../features/dashboard/components/MySprintTasksWidget'
-import ChartWidget from '../features/dashboard/components/ChartWidget'
+// Lazy: pulls in the full recharts bundle, which every user otherwise
+// downloaded on login via the dashboard's idle-preload — even with zero
+// chart widgets configured.
+const ChartWidget = lazy(() => import('../features/dashboard/components/ChartWidget'))
 import CalculationWidget from '../features/dashboard/components/CalculationWidget'
 import EmbedWidget from '../features/dashboard/components/EmbedWidget'
 import { RegionalUpdateWidget } from '../features/regional-updates/components/RegionalUpdateWidget'
@@ -687,11 +690,13 @@ function WidgetCard({ widgetKey, role, userId, departmentId, config, onConfigCha
         </button>
       </div>
       <WidgetErrorBoundary resetKeys={[widgetKey, data]}>
-        {configurable ? (
-          <Component config={config} onConfigChange={onConfigChange} />
-        ) : (
-          <Component role={role} userId={userId} departmentId={departmentId} data={data} />
-        )}
+        <Suspense fallback={<div style={{ height: 120 }} />}>
+          {configurable ? (
+            <Component config={config} onConfigChange={onConfigChange} />
+          ) : (
+            <Component role={role} userId={userId} departmentId={departmentId} data={data} />
+          )}
+        </Suspense>
       </WidgetErrorBoundary>
     </div>
   )

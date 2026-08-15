@@ -434,6 +434,28 @@ export async function getTeamDetail(teamId) {
   return { ...team, sprint_team_members: members || [] }
 }
 
+// Fetches sprint_team_members for many teams in one query, grouped by team_id.
+// Still a separate query from sprint_teams (nesting it caused PostgREST
+// relationship ambiguity), but batched instead of one round trip per team.
+async function fetchTeamMembersGrouped(teamIds, userFields) {
+  const ids = [...new Set((teamIds ?? []).filter(Boolean))]
+  if (!ids.length) return {}
+
+  const { data, error } = await supabase
+    .from('sprint_team_members')
+    .select(`team_id, user_id, users:user_id(${userFields})`)
+    .in('team_id', ids)
+
+  if (error) throw error
+
+  const grouped = {}
+  for (const row of data ?? []) {
+    if (!grouped[row.team_id]) grouped[row.team_id] = []
+    grouped[row.team_id].push(row)
+  }
+  return grouped
+}
+
 export async function listAllTeams() {
   const { data: teams, error } = await supabase
     .from('sprint_teams')
@@ -443,19 +465,9 @@ export async function listAllTeams() {
 
   if (error) throw error
 
-  // Fetch members separately to avoid nested relationship ambiguity
-  const teamsWithMembers = await Promise.all(
-    (teams || []).map(async (team) => {
-      const { data: members } = await supabase
-        .from('sprint_team_members')
-        .select('user_id, users:user_id(id, name, email, department_id)')
-        .eq('team_id', team.id)
+  const membersByTeam = await fetchTeamMembersGrouped((teams || []).map((t) => t.id), 'id, name, email, department_id')
 
-      return { ...team, sprint_team_members: members || [] }
-    })
-  )
-
-  return teamsWithMembers
+  return (teams || []).map((team) => ({ ...team, sprint_team_members: membersByTeam[team.id] || [] }))
 }
 
 export async function listSprintTeamsIndependent(sprintId) {
@@ -468,19 +480,9 @@ export async function listSprintTeamsIndependent(sprintId) {
 
   if (error) throw error
 
-  // Fetch members separately to avoid nested relationship ambiguity
-  const teamsWithMembers = await Promise.all(
-    (data || []).map(async (team) => {
-      const { data: members } = await supabase
-        .from('sprint_team_members')
-        .select('user_id, users:user_id(id, name, email)')
-        .eq('team_id', team.id)
+  const membersByTeam = await fetchTeamMembersGrouped((data || []).map((t) => t.id), 'id, name, email')
 
-      return { ...team, sprint_team_members: members || [] }
-    })
-  )
-
-  return teamsWithMembers
+  return (data || []).map((team) => ({ ...team, sprint_team_members: membersByTeam[team.id] || [] }))
 }
 
 export async function addTeamMember(teamId, userId, role = null) {
@@ -664,6 +666,33 @@ export async function getActiveUsers() {
 
   if (error) throw error
   return data ?? []
+}
+
+// Lightweight task/completed counts for many sprints in one query — used by
+// SprintsList's card grid, which only needs counts, not full task detail
+// (subtasks/comments/files/dependencies). Avoids an N+1 waterfall of the
+// much heavier getSprintTasks() per sprint.
+export async function getSprintTaskCounts(sprintIds = []) {
+  const ids = [...new Set((sprintIds ?? []).filter(Boolean))]
+  if (!ids.length) return {}
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('sprint_id, status_definition:task_status_definitions!status_id(category)')
+    .in('sprint_id', ids)
+    .eq('task_type', 'sprint')
+    .is('parent_task_id', null)
+    .is('deleted_at', null)
+
+  if (error) throw error
+
+  const counts = {}
+  for (const row of data ?? []) {
+    const bucket = counts[row.sprint_id] ?? (counts[row.sprint_id] = { task_count: 0, completed_count: 0 })
+    bucket.task_count += 1
+    if (row.status_definition?.category === 'completed') bucket.completed_count += 1
+  }
+  return counts
 }
 
 export async function getSprintTasks(sprintId) {

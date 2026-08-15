@@ -7,7 +7,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { deleteSprint, duplicateSprint, getAllSprints, getMySprints, restoreSprint } from '../../features/sprints'
 import { requestSprintAccess, getMySprintAccessRequests } from '../../lib/people/api'
 import { useToast } from '../../context/ToastContext'
-import { getSprintTasks } from '../../features/sprints/lib/sprints'
+import { getSprintTaskCounts } from '../../features/sprints/lib/sprints'
 import { supabase } from '../../lib/supabase'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 import { hasSpaceRole } from '../../lib/permissions'
@@ -82,55 +82,38 @@ export default function SprintsList() {
 
       const requestMap = Object.fromEntries(myRequests.map((r) => [r.sprint_id, r.status]))
 
-      const enrichedSprints = await Promise.all(
-        allSprints.map(async (sprint) => {
-          let deptName = null
-          if (sprint.department_id) {
-            const { data: dept } = await supabase
-              .from('departments')
-              .select('name')
-              .eq('id', sprint.department_id)
-              .single()
-            deptName = dept?.name
-          }
+      // Batch both lookups that used to run once per sprint (department name,
+      // task counts) into a single query each, instead of an N+1 waterfall.
+      const deptIds = [...new Set(allSprints.map((s) => s.department_id).filter(Boolean))]
+      const accessibleIds = allSprints.filter((s) => memberIds.has(s.id)).map((s) => s.id)
 
-          const hasAccess = memberIds.has(sprint.id)
-
-          if (!hasAccess) {
-            return {
-              ...sprint,
-              task_count: 0,
-              completed_count: 0,
-              department_name: deptName,
-              has_access: false,
-              accessRequestStatus: requestMap[sprint.id] ?? null,
-            }
-          }
-
+      const [deptRows, taskCounts] = await Promise.all([
+        deptIds.length
+          ? supabase.from('departments').select('id, name').in('id', deptIds)
+          : Promise.resolve({ data: [] }),
+        (async () => {
           try {
-            const tasks = await getSprintTasks(sprint.id)
-            const completed = tasks.filter((t) => t.status_definition?.category === 'completed').length
-            return {
-              ...sprint,
-              task_count: tasks.length,
-              completed_count: completed,
-              department_name: deptName,
-              has_access: true,
-              accessRequestStatus: null,
-            }
+            return await getSprintTaskCounts(accessibleIds)
           } catch (err) {
-            console.error(`Failed to load details for sprint ${sprint.id}:`, err)
-            return {
-              ...sprint,
-              task_count: 0,
-              completed_count: 0,
-              department_name: deptName,
-              has_access: true,
-              accessRequestStatus: null,
-            }
+            console.error('Failed to load sprint task counts:', err)
+            return {}
           }
-        }),
-      )
+        })(),
+      ])
+      const deptNameById = Object.fromEntries((deptRows.data ?? []).map((d) => [d.id, d.name]))
+
+      const enrichedSprints = allSprints.map((sprint) => {
+        const hasAccess = memberIds.has(sprint.id)
+        const counts = taskCounts[sprint.id] ?? { task_count: 0, completed_count: 0 }
+        return {
+          ...sprint,
+          task_count: hasAccess ? counts.task_count : 0,
+          completed_count: hasAccess ? counts.completed_count : 0,
+          department_name: sprint.department_id ? deptNameById[sprint.department_id] : null,
+          has_access: hasAccess,
+          accessRequestStatus: hasAccess ? null : (requestMap[sprint.id] ?? null),
+        }
+      })
 
       setSprints(enrichedSprints)
     } finally {
