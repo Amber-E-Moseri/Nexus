@@ -294,7 +294,15 @@ Deno.serve(async (req) => {
         )
       }
 
-      await supabase.from('meetings').update({ next_occurrence_scheduled: null }).eq('id', meeting.id)
+      // Unchecked before: a silently-swallowed failure here (e.g. a trigger
+      // rejecting the update) left this row's marker stuck non-null, so it
+      // kept re-triggering an identical duplicate generation on every
+      // subsequent cron tick. See 20270816000004 migration.
+      const { error: resetError } = await supabase
+        .from('meetings')
+        .update({ next_occurrence_scheduled: null })
+        .eq('id', meeting.id)
+      if (resetError) throw resetError
       generated += 1
     } catch (err) {
       errors.push(`meeting ${meeting.id}: ${err instanceof Error ? err.message : String(err)}`)
