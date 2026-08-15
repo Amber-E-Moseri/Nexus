@@ -32,19 +32,56 @@ jobs:
               process.env.SUPABASE_SERVICE_ROLE_KEY
             );
 
-            const now = new Date().toISOString();
-            const { data, error } = await supabase
-              .from('sprint_members')
-              .update({ is_active: false })
-              .eq('is_active', true)
-              .lt('expires_at', now)
-              .select('id');
+            // Mirrors deactivateExpiredSprintMembers() in src/features/sprints/lib/sprints.js.
+            // sprint_members has no is_active/expires_at columns (that was the bug —
+            // this job failed every run) — membership expiry is tracked via
+            // is_temporary + membership_end_date, and 'deactivating' means flipping
+            // the person's own user account to inactive, not touching sprint_members.
+            const today = new Date().toISOString().split('T')[0];
 
-            if (error) {
-              console.error('Deactivation failed:', error.message);
+            const { data: expiredMembers, error: fetchError } = await supabase
+              .from('sprint_members')
+              .select('user_id, membership_end_date, sprint_id')
+              .eq('is_temporary', true)
+              .lte('membership_end_date', today);
+
+            if (fetchError) {
+              console.error('Deactivation failed:', fetchError.message);
               process.exit(1);
             }
-            console.log('Deactivated', data?.length ?? 0, 'expired sprint member(s)');
+
+            if (!expiredMembers || expiredMembers.length === 0) {
+              console.log('No expired temporary members');
+              process.exit(0);
+            }
+
+            const userIds = [...new Set(expiredMembers.map((m) => m.user_id))];
+
+            const { error: updateError } = await supabase
+              .from('users')
+              .update({ status: 'inactive', inactivated_at: new Date().toISOString() })
+              .in('id', userIds);
+
+            if (updateError) {
+              console.error('Deactivation failed:', updateError.message);
+              process.exit(1);
+            }
+
+            for (const userId of userIds) {
+              const { error: notifyError } = await supabase
+                .from('notifications')
+                .insert({
+                  user_id: userId,
+                  type: 'sprint_access_ended',
+                  payload: {
+                    title: 'Sprint Access Ended',
+                    message: 'Your temporary sprint access has ended. Your account is now inactive.',
+                  },
+                });
+              if (notifyError) console.error('Error creating notification for', userId, notifyError.message);
+            }
+
+            console.log('Deactivated', userIds.length, 'expired temporary sprint member(s)');
           "
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
