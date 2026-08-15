@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings } from 'lucide-react';
+import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import RegistrationEditModal from './RegistrationEditModal';
@@ -28,6 +28,12 @@ const C = {
 };
 
 const FONT_LINK = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap';
+
+// Maps the camelCase field names used in flight-manifest rows to DB columns
+const FLIGHT_FIELD_TO_DB = {
+  arrivalDate: 'arrival_date', arrivalTime: 'arrival_time', arrivalFlight: 'arrival_flight',
+  departureDate: 'departure_date', departureTime: 'departure_time', departureFlight: 'departure_flight',
+};
 
 
 // Convert any raw time value to "h:mm AM/PM" for display
@@ -321,6 +327,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         team: r.team, leadership: r.leadership, submittedAt: r.submitted_at,
         arrivalDate: r.arrival_date, arrivalTime: r.arrival_time, arrivalFlight: r.arrival_flight,
         departureDate: r.departure_date, departureTime: r.departure_time, departureFlight: r.departure_flight,
+        flightManualOverride: r.flight_manual_override,
       }));
       // Merge: keep local version for any record edited in the last 10 s
       setRegistrations(prev => {
@@ -343,19 +350,19 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       // Optimistically update local state first
       setRegistrations(prev => prev.map(r =>
         r.email === regEmail
-          ? { ...r, arrivalDate: null, arrivalTime: null, arrivalFlight: null, departureDate: null, departureTime: null, departureFlight: null }
+          ? { ...r, arrivalDate: null, arrivalTime: null, arrivalFlight: null, departureDate: null, departureTime: null, departureFlight: null, flightManualOverride: false }
           : r
       ));
       // Try direct client update first (may fail due to RLS)
       const { error, count } = await supabase
         .from('registrations')
-        .update({ arrival_date: null, arrival_time: null, arrival_flight: null, departure_date: null, departure_time: null, departure_flight: null })
+        .update({ arrival_date: null, arrival_time: null, arrival_flight: null, departure_date: null, departure_time: null, departure_flight: null, flight_manual_override: false })
         .eq('email', regEmail.toLowerCase());
 
       console.log('Clear flight response:', { error, count });
       if (error) {
         console.error('RLS blocked direct update, trying edge function...');
-        // If RLS blocks it, try the edge function
+        // If RLS blocked it, try the edge function
         const { data: fnData, error: fnError } = await supabase.functions.invoke('clear-flight', {
           body: { email: regEmail },
         });
@@ -366,6 +373,32 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       console.error('Failed to clear flight:', e);
       alert(`Failed to clear flight: ${e.message}`);
       // Refetch to undo optimistic update on error
+      await refetchRegistrations();
+    }
+  }, [refetchRegistrations]);
+
+  const handleUpdateFlight = useCallback(async (regEmail, field, value) => {
+    const dbKey = FLIGHT_FIELD_TO_DB[field];
+    if (!dbKey) return;
+
+    // Mark as dirty so the next refetch won't overwrite this record while the
+    // DB write is still propagating (same pattern as handleSaveReg).
+    dirtyEmails.current.add(regEmail);
+    setTimeout(() => dirtyEmails.current.delete(regEmail), 10_000);
+
+    setRegistrations(prev => prev.map(r =>
+      r.email === regEmail ? { ...r, [field]: value, flightManualOverride: true } : r
+    ));
+
+    try {
+      const { error } = await supabase
+        .from('registrations')
+        .update({ [dbKey]: value || null, flight_manual_override: true })
+        .eq('email', regEmail.toLowerCase());
+      if (error) throw error;
+    } catch (e) {
+      console.error('Failed to update flight info:', e);
+      alert(`Failed to save flight info: ${e.message}`);
       await refetchRegistrations();
     }
   }, [refetchRegistrations]);
@@ -937,7 +970,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom, isLimited }} />}
-        {tab === 'transport' && <TransportTab {...{ merged, isLimited, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, exemptFellowships }} />}
+        {tab === 'transport' && <TransportTab {...{ merged, isLimited, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, exemptFellowships }} />}
         {tab === 'finance' && (hasFinanceAccess
           ? <FinanceTab {...{ registrations: registrationsFiltered, payments, setPayments, userId: profile?.id, earlyCutoffAt: eventConfig.early_cutoff_at, earlyFee: eventConfig.early_fee, standardFee: eventConfig.standard_fee }} />
           : <div style={{ padding: 48, textAlign: 'center' }}>
@@ -2216,7 +2249,56 @@ function FlightsSyncBlock({ onApplied, registrations = [] }) {
   );
 }
 
-function TransportTab({ merged, isLimited, onApplied, onClearFlight, exemptFellowships }) {
+// Click-to-edit table cell for flight manifest fields. Renders as static text
+// until clicked, then swaps to an input; commits on blur/Enter, cancels on Escape.
+function EditableFlightCell({ value, onCommit, type = 'text', mono = true, placeholder = '—' }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value || '');
+
+  useEffect(() => { if (!editing) setDraft(value || ''); }, [value, editing]);
+
+  function commit() {
+    setEditing(false);
+    const next = draft.trim();
+    if (next !== (value || '')) onCommit(next || null);
+  }
+
+  if (editing) {
+    return (
+      <td style={{ padding: '2px 6px' }}>
+        <input
+          autoFocus
+          type={type}
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+            if (e.key === 'Escape') { setDraft(value || ''); setEditing(false); }
+          }}
+          style={{
+            width: '100%', fontFamily: mono ? 'JetBrains Mono' : undefined, fontSize: 12,
+            border: `1px solid ${C.purple}`, borderRadius: 4, padding: '3px 5px', boxSizing: 'border-box',
+          }}
+        />
+      </td>
+    );
+  }
+
+  return (
+    <td
+      onClick={() => setEditing(true)}
+      title="Click to edit"
+      style={{ fontFamily: mono ? 'JetBrains Mono' : undefined, fontSize: 12, cursor: 'pointer' }}
+      onMouseEnter={e => { e.currentTarget.style.background = '#F1EEF6'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      {type === 'time' && value ? fmtTime(value) : (value || placeholder)}
+    </td>
+  );
+}
+
+function TransportTab({ merged, isLimited, onApplied, onClearFlight, onUpdateFlight, exemptFellowships }) {
   const [subgroupFilter, setSubgroupFilter] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
   const [clearingEmail, setClearingEmail] = useState(null);
@@ -2336,15 +2418,20 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, exemptFello
               <tbody>
                 {people.map(r => (
                   <tr key={r.email}>
-                    <td style={{ fontWeight: 500 }}>{r.fullName}</td>
+                    <td style={{ fontWeight: 500 }}>
+                      {r.fullName}
+                      {r.flightManualOverride && (
+                        <Lock size={10} color={C.amber} style={{ marginLeft: 6, verticalAlign: 'middle' }} />
+                      )}
+                    </td>
                     <td style={{ color: C.mute }}>{r.subgroup}</td>
-                    <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r[timeKey] ? fmtTime(r[timeKey]) : '—'}</td>
-                    <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r[flightKey] || '—'}</td>
+                    <EditableFlightCell type="time" value={r[timeKey]} onCommit={v => onUpdateFlight?.(r.email, timeKey, v)} />
+                    <EditableFlightCell value={r[flightKey]} onCommit={v => onUpdateFlight?.(r.email, flightKey, v)} />
                     {viewMode === 'full' && (
                       <>
-                        <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.departureDate || '—'}</td>
-                        <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.departureTime ? fmtTime(r.departureTime) : '—'}</td>
-                        <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.departureFlight || '—'}</td>
+                        <EditableFlightCell type="date" value={r.departureDate} onCommit={v => onUpdateFlight?.(r.email, 'departureDate', v)} />
+                        <EditableFlightCell type="time" value={r.departureTime} onCommit={v => onUpdateFlight?.(r.email, 'departureTime', v)} />
+                        <EditableFlightCell value={r.departureFlight} onCommit={v => onUpdateFlight?.(r.email, 'departureFlight', v)} />
                       </>
                     )}
                     <td>
@@ -2381,6 +2468,8 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, exemptFello
           <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>
             Out-of-state delegates (excludes in-state confirmed &amp; exempt fellowships).
             {' '}{withFlight.length} with flights · {missingFlight.length} awaiting flight info.
+            {' '}Click a time or flight code to edit — edited fields
+            {' '}<Lock size={9.5} color={C.amber} style={{ verticalAlign: 'middle' }} /> won't be overwritten by the next sync.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -2630,14 +2719,24 @@ function ImportTab({ handleImport, handleImportWorkingList, roster, registration
 }
 
 // ============ DELEGATE COMPLIANCE ============
+const NA_ALLERGY_WORDS = new Set([
+  'no', 'nah', 'nope', 'not', 'none', 'nil', 'na', 'n', 'a', 'never', 'nada',
+  "don't", 'dont', "doesn't", 'doesnt', "can't", 'cant', "i'm", 'im',
+  'i', 'do', 'does', 'did', 'have', 'has', 'any', 'that', 'know', 'of',
+  'applicable', 'thanks', 'thank', 'you',
+]);
+
 function isNaAllergy(val) {
-  // Strip all N/A variants (N/A, N\A, NA, none, nil, nope, no) plus separators
-  // to catch compound values like "N\A . n/a"
-  return val
-    .replace(/[nN][\\\/]?[aA]/g, '')
-    .replace(/\bnone\b|\bnil\b|\bnope\b|\bno\b/gi, '')
-    .replace(/[\s.,\\/!]+/g, '')
-    .length === 0;
+  // Tokenize and check whether every word is a negative/filler word
+  // (e.g. "No I don't", "Nah", "No I do not", "not applicable") so
+  // free-text "no" answers don't get treated as real allergy entries.
+  const words = val
+    .toLowerCase()
+    .replace(/[^a-z']+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  return words.length === 0 || words.every(w => NA_ALLERGY_WORDS.has(w));
 }
 
 function DelegateComplianceTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }) {

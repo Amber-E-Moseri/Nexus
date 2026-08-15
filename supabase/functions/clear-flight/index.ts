@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
   try {
     const { error } = await serviceClient
       .from('registrations')
-      .update({ arrival_date: null, arrival_time: null, arrival_flight: null, departure_date: null, departure_time: null, departure_flight: null })
+      .update({ arrival_date: null, arrival_time: null, arrival_flight: null, departure_date: null, departure_time: null, departure_flight: null, flight_manual_override: false })
       .eq('email', email)
 
     if (error) throw error

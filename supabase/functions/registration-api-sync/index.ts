@@ -179,10 +179,16 @@ Deno.serve(async (req) => {
     // Fetch all registrations to match against by name
     const { data: regs } = await serviceClient
       .from('registrations')
-      .select('email, full_name')
+      .select('email, full_name, flight_manual_override')
 
     const regByNorm = new Map<string, string>(
       (regs || []).map((r: { email: string; full_name: string }) => [normName(r.full_name), r.email]),
+    )
+    // Rows hand-edited in the Transportation tab — sync must not overwrite them
+    const lockedEmails = new Set<string>(
+      (regs || [])
+        .filter((r: { email: string; flight_manual_override: boolean }) => r.flight_manual_override)
+        .map((r: { email: string }) => r.email),
     )
 
     // Match each flight row to a registration email
@@ -229,17 +235,24 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'apply') {
-      // Merge auto-matched with any manual overrides supplied by the caller
+      // Merge auto-matched with any manual overrides supplied by the caller,
+      // then drop any row that was hand-edited in the Transportation tab —
+      // those are locked until the edit is cleared.
       const allMatched = [...matched, ...(body.manual_matches || [])]
-      if (allMatched.length === 0) return json(200, { upserted: 0, message: 'No matched registrations to update' })
+      const toUpsert = allMatched.filter((r) => !lockedEmails.has(r.email))
+      const lockedSkipped = allMatched.length - toUpsert.length
+      if (toUpsert.length === 0) {
+        return json(200, { upserted: 0, locked_skipped: lockedSkipped, message: 'No matched registrations to update' })
+      }
       const { error } = await serviceClient
         .from('registrations')
-        .upsert(allMatched, { onConflict: 'email' })
+        .upsert(toUpsert, { onConflict: 'email' })
       if (error) return json(500, { error: 'Database error', details: error.message })
       return json(200, {
-        upserted: allMatched.length,
+        upserted: toUpsert.length,
+        locked_skipped: lockedSkipped,
         unmatched: unmatchedRows.length - (body.manual_matches?.length ?? 0),
-        message: `${allMatched.length} flight records synced`,
+        message: `${toUpsert.length} flight records synced${lockedSkipped ? ` (${lockedSkipped} skipped — manually edited)` : ''}`,
       })
     }
 
