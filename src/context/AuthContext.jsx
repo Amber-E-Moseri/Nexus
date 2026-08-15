@@ -120,29 +120,46 @@ export function AuthProvider({ children }) {
       // This is the main session source now that auth storage was switched from
       // localStorage to IndexedDB — it survives PWA standalone cold-starts and
       // background suspension on both iOS and Android.
-      let { data: { session } } = await supabase.auth.getSession()
+      // Wrapped in withTimeout: a stuck IndexedDB connection (known iOS/Safari
+      // issue after backgrounding) must not hang init forever — that left
+      // `user` unset until the 12s safety-net fired, which read as a random
+      // logout even though a valid session existed.
+      let session = null
+      try {
+        const result = await withTimeout(supabase.auth.getSession(), 8_000)
+        session = result?.data?.session ?? null
+      } catch (e) {
+        console.warn('[Auth] getSession failed or timed out:', e)
+      }
 
       // Migration path: on first launch after switching to IDB storage the SDK's
       // store is empty. Fall back to the old manual nexus/session IDB store so
       // existing logged-in users aren't forced to re-authenticate.
       if (!session) {
-        const cachedSession = await loadSession()
-        if (cachedSession?.access_token) {
-          try {
-            const { data: restored, error } = await supabase.auth.setSession({
-              access_token:  cachedSession.access_token,
-              refresh_token: cachedSession.refresh_token,
-            })
-            if (error) {
-              console.warn('Session migration failed:', error)
+        try {
+          const cachedSession = await withTimeout(loadSession(), 5_000)
+          if (cachedSession?.access_token) {
+            try {
+              const { data: restored, error } = await withTimeout(
+                supabase.auth.setSession({
+                  access_token:  cachedSession.access_token,
+                  refresh_token: cachedSession.refresh_token,
+                }),
+                8_000,
+              )
+              if (error) {
+                console.warn('Session migration failed:', error)
+                clearSession()
+              } else {
+                session = restored?.session ?? null
+              }
+            } catch (e) {
+              console.warn('Error during session migration:', e)
               clearSession()
-            } else {
-              session = restored?.session ?? null
             }
-          } catch (e) {
-            console.warn('Error during session migration:', e)
-            clearSession()
           }
+        } catch (e) {
+          console.warn('[Auth] loadSession fallback failed or timed out:', e)
         }
       }
 
@@ -153,7 +170,7 @@ export function AuthProvider({ children }) {
 
       if (session?.user) {
         try {
-          const nextProfile = await fetchProfile(session.user.id)
+          const nextProfile = await withTimeout(fetchProfile(session.user.id), 8_000)
           if (mounted) setProfile(nextProfile)
 
           // Restore push subscription if it was enabled (handles PWA cold-start)
@@ -162,7 +179,8 @@ export function AuthProvider({ children }) {
           }
 
           touchLastActive().catch(() => {})
-        } catch {
+        } catch (e) {
+          console.warn('[Auth] fetchProfile failed or timed out:', e)
           if (mounted) setProfile(null)
         }
       }
