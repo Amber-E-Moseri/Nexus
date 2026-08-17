@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query'
 import { supabase } from '../../../lib/supabase'
 
 function utilizationColor(percent) {
@@ -7,17 +7,38 @@ function utilizationColor(percent) {
   return '#2D8653'
 }
 
+function formatSnapshotAge(snapshotAt) {
+  if (!snapshotAt) return null
+  const diffMs = Date.now() - new Date(snapshotAt).getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays === 0) return 'today'
+  if (diffDays === 1) return 'yesterday'
+  return `${diffDays}d ago`
+}
+
 export default function DepartmentUtilizationWidget({ role }) {
   const allowed = ['super_admin', 'regional_secretary'].includes(role)
+  const queryClient = useQueryClient()
+
   const { data: departments = [], isPending, error } = useQuery({
     queryKey: ['department-utilization'],
     enabled: allowed,
-    staleTime: 5 * 60 * 1000,
+    // Snapshots refresh biweekly — cache for 7 days so we only re-fetch once
+    // per session when the cached copy is genuinely stale.
+    staleTime: 7 * 24 * 60 * 60 * 1000,
     queryFn: async () => {
-      const { data, error: queryError } = await supabase.rpc('get_department_utilization')
+      const { data, error: queryError } = await supabase.rpc('get_latest_department_utilization')
       if (queryError) throw queryError
       return data ?? []
     },
+  })
+
+  const { mutate: triggerRefresh, isPending: isRefreshing } = useMutation({
+    mutationFn: async () => {
+      const { error: rpcError } = await supabase.rpc('refresh_department_utilization_snapshot')
+      if (rpcError) throw rpcError
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['department-utilization'] }),
   })
 
   if (!allowed) return null
@@ -30,6 +51,9 @@ export default function DepartmentUtilizationWidget({ role }) {
   )
   if (departments.length === 0) return <div style={{ fontSize: 12.5, color: '#9E9488', padding: '20px 0', textAlign: 'center' }}>No department activity yet.</div>
 
+  const snapshotAt = departments[0]?.snapshot_at ?? null
+  const snapshotAge = formatSnapshotAge(snapshotAt)
+
   const allTopUsers = departments
     .flatMap((d) => (d.top_users ?? []).map((u) => ({ ...u, department: d.department_name })))
     .sort((a, b) => b.completed_tasks - a.completed_tasks)
@@ -41,10 +65,6 @@ export default function DepartmentUtilizationWidget({ role }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {departments.map((dept) => {
           const color = utilizationColor(dept.utilization_percent)
-          const dueStr = dept.due_date
-            ? new Date(dept.due_date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
-            : null
-          void dueStr
           return (
             <div key={dept.department_id}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
@@ -55,7 +75,7 @@ export default function DepartmentUtilizationWidget({ role }) {
               </div>
               <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', background: '#EDE8DC' }}>
                 <div style={{
-                  width: `${dept.utilization_percent}%`,
+                  width: `${Math.min(dept.utilization_percent, 100)}%`,
                   height: '100%',
                   background: color,
                   transition: 'width 0.4s ease',
@@ -99,6 +119,28 @@ export default function DepartmentUtilizationWidget({ role }) {
           </div>
         </div>
       )}
+
+      {/* Snapshot metadata + manual refresh */}
+      <div style={{ borderTop: '1px solid #EDE8DC', paddingTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 10.5, color: '#9E9488' }}>
+          Snapshot {snapshotAge ? `updated ${snapshotAge}` : '—'} · refreshes 1st & 15th
+        </span>
+        <button
+          onClick={() => triggerRefresh()}
+          disabled={isRefreshing}
+          style={{
+            fontSize: 10.5,
+            color: isRefreshing ? '#9E9488' : '#4C2A92',
+            background: 'none',
+            border: 'none',
+            cursor: isRefreshing ? 'default' : 'pointer',
+            padding: 0,
+            fontWeight: 600,
+          }}
+        >
+          {isRefreshing ? 'Refreshing…' : 'Refresh now'}
+        </button>
+      </div>
     </div>
   )
 }
