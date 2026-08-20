@@ -348,14 +348,19 @@ export default function MembersPanel() {
   }
 
   async function handleResetPassword(userId, userEmail) {
-    if (!window.confirm(`Reset password for ${userEmail}? They will receive a password reset email.`)) {
+    if (!window.confirm(`Generate a password reset link for ${userEmail}? The link will be copied to your clipboard to share with them.`)) {
       return
     }
 
     setSaving(true)
     try {
-      await resetUserPassword(userId)
-      showToast(`Password reset email sent to ${userEmail}.`, { tone: 'success' })
+      const data = await resetUserPassword(userId, userEmail)
+      if (data?.recovery_link) {
+        await navigator.clipboard.writeText(data.recovery_link)
+        showToast(`Recovery link copied to clipboard for ${userEmail}. Share it with them directly.`, { tone: 'success' })
+      } else {
+        showToast(`Password reset email sent to ${userEmail}.`, { tone: 'success' })
+      }
     } catch (error) {
       showToast(error.message, { tone: 'error' })
     } finally {

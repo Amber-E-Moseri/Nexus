@@ -289,20 +289,22 @@ export async function rejectSprintAccessRequest(requestId, message = null) {
   if (error) throw error
 }
 
-export async function resetUserPassword(userId) {
+export async function resetUserPassword(userId, userEmail) {
+  // Use admin-reset-password which generates a recovery link directly,
+  // bypassing the broken email flow (Supabase otp_expired issue).
+  if (userEmail) {
+    const { data, error } = await supabase.functions.invoke('admin-reset-password', {
+      body: { email: userEmail },
+    })
+    if (error) throw error
+    if (data?.error) throw new Error(data.error)
+    return data
+  }
+
   const { data, error } = await supabase.functions.invoke('reset-user-password', {
-    body: {
-      user_id: userId,
-    },
+    body: { user_id: userId },
   })
-
-  if (error) {
-    throw error
-  }
-
-  if (data?.error) {
-    throw new Error(data.error)
-  }
-
+  if (error) throw error
+  if (data?.error) throw new Error(data.error)
   return data
 }
