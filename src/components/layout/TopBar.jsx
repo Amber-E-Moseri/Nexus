@@ -479,10 +479,12 @@ export default function TopBar({ onOpenMobileMenu }) {
                 style={{ borderColor: 'var(--border)', background: 'var(--surface-secondary)' }}
               >
                 <div
-                  className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+                  className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold overflow-hidden"
                   style={{ background: 'var(--accent)', color: '#FFFFFF' }}
                 >
-                  {initials}
+                  {profile?.avatar_url
+                    ? <img src={profile.avatar_url} alt={initials} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : initials}
                 </div>
                 <span className="hidden max-w-[100px] truncate text-[12px] font-semibold text-[var(--text-primary)] sm:block">
                   {profile?.name?.split(' ')[0]}
