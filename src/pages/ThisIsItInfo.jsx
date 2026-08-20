@@ -189,12 +189,12 @@ export default function ThisIsItInfo() {
         )}
 
         <nav className="tii-nav">
-          <a href="#pack">Before You Fly</a>
-          <a href="#getting-there">Getting There</a>
-          <a href="#checkin">Check-In</a>
-          <a href="#venue">Venue</a>
-          <a href="#schedule">Schedule</a>
-          <a href="#help">Need Help</a>
+          <a href="#pack" onClick={(e) => { e.preventDefault(); document.getElementById('pack')?.scrollIntoView({ behavior: 'smooth' }); }}>Before You Fly</a>
+          <a href="#getting-there" onClick={(e) => { e.preventDefault(); document.getElementById('getting-there')?.scrollIntoView({ behavior: 'smooth' }); }}>Getting There</a>
+          <a href="#checkin" onClick={(e) => { e.preventDefault(); document.getElementById('checkin')?.scrollIntoView({ behavior: 'smooth' }); }}>Check-In</a>
+          <a href="#venue" onClick={(e) => { e.preventDefault(); document.getElementById('venue')?.scrollIntoView({ behavior: 'smooth' }); }}>Venue</a>
+          <a href="#schedule" onClick={(e) => { e.preventDefault(); document.getElementById('schedule')?.scrollIntoView({ behavior: 'smooth' }); }}>Schedule</a>
+          <a href="#help" onClick={(e) => { e.preventDefault(); document.getElementById('help')?.scrollIntoView({ behavior: 'smooth' }); }}>Need Help</a>
         </nav>
 
         {/* Hero */}
