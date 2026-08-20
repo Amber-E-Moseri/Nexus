@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle2, XCircle, Circle, AlertCircle, Pencil, Download, ChevronUp, ChevronDown, Link2, Copy, RefreshCw, Trash2, X, Plus, UserX } from 'lucide-react';
+import { CheckCircle2, XCircle, Circle, AlertCircle, Pencil, Download, ChevronUp, ChevronDown, Link2, Copy, RefreshCw, Trash2, X, Plus, UserX, GitMerge } from 'lucide-react';
 import RegistrationEditModal from './RegistrationEditModal';
 import { supabase } from '../../lib/supabase';
 
@@ -166,6 +166,7 @@ export default function RegistrationDataTab({
   onConfirm,
   highlightEmail,
   onClearHighlight,
+  crossCountrySubgroups,
   sprintEditAccess = false,
   publicTokenKey = 'tii2_public_token',
 }) {
@@ -198,6 +199,9 @@ export default function RegistrationDataTab({
   const [showAddModal,  setShowAddModal]  = useState(false);
   // link-registration modal
   const [linkingPerson, setLinkingPerson] = useState(null);
+  // merge state: first selected reg, then confirm modal
+  const [mergeSource, setMergeSource] = useState(null); // reg object to merge FROM (delete)
+  const [mergeTarget, setMergeTarget] = useState(null); // reg object to merge INTO (keep)
 
   useEffect(() => {
     if (!highlightEmail) return;
@@ -309,6 +313,7 @@ export default function RegistrationDataTab({
         phone:      reg?.phone      || '',
         subgroup:   reg?.subgroup   || p.subgroup   || '',
         email: p.email,
+        registrationEmail: reg?.email || p.email,
         hasPaid,
         isRegistered,
         isConfirmed,
@@ -419,8 +424,12 @@ export default function RegistrationDataTab({
     [allPeople, subgroupFilter]);
 
   const stats = useMemo(() => {
-    const s = { total: 0, not_registered: 0, registered_outstanding: 0, confirmed: 0, absent: 0 };
-    statsSource.forEach(p => { s.total++; s[p.registrationStatus] = (s[p.registrationStatus] || 0) + 1; });
+    const s = { total: 0, not_registered: 0, registered_outstanding: 0, confirmed: 0, absent: 0, manual_no_flight: 0 };
+    statsSource.forEach(p => {
+      s.total++;
+      s[p.registrationStatus] = (s[p.registrationStatus] || 0) + 1;
+      if (p.manuallyConfirmed && !p.hasFlightInfo && !p.absent) s.manual_no_flight++;
+    });
     return s;
   }, [statsSource]);
 
@@ -433,7 +442,9 @@ export default function RegistrationDataTab({
   // ── filtered + sorted view ────────────────────────────────────────────────
   const filtered = useMemo(() => {
     let rows = allPeople;
-    if (statusFilter !== 'all')
+    if (statusFilter === 'manual_no_flight')
+      rows = rows.filter(p => p.manuallyConfirmed && !p.hasFlightInfo && !p.absent);
+    else if (statusFilter !== 'all')
       rows = rows.filter(p => p.registrationStatus === statusFilter);
     if (subgroupFilter !== 'All')
       rows = rows.filter(p => p.subgroup === subgroupFilter);
@@ -490,6 +501,7 @@ export default function RegistrationDataTab({
     { key: 'registered_outstanding',label: `Confirming (${stats.registered_outstanding})`,    color: C.amber },
     { key: 'confirmed',            label: `Confirmed (${stats.confirmed})`,                    color: C.green },
     { key: 'absent',               label: `Absent (${stats.absent || 0})`,                    color: C.mute },
+    { key: 'manual_no_flight',     label: `Manual, No Flight (${stats.manual_no_flight || 0})`, color: '#7C3AED' },
   ];
 
   return (
@@ -632,6 +644,15 @@ export default function RegistrationDataTab({
         )}
       </div>
 
+      {/* ── Merge mode banner ───────────────────────────────────────── */}
+      {mergeSource && !mergeTarget && (
+        <div style={{ background: '#EDE8F8', border: `1px solid ${C.purple}`, borderRadius: 10, padding: '10px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+          <GitMerge size={15} color={C.purple} />
+          <span style={{ color: C.purple, fontWeight: 600 }}>"{mergeSource.fullName}" selected — click the <GitMerge size={12} /> on the duplicate to merge.</span>
+          <button onClick={() => setMergeSource(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: C.purple }}><X size={15} /></button>
+        </div>
+      )}
+
       {/* ── Table ────────────────────────────────────────────────────── */}
       <div style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
@@ -734,7 +755,7 @@ export default function RegistrationDataTab({
                             Manual
                           </span>
                         )}
-                        {p.inStateConfirmed && (
+                        {p.inStateConfirmed && crossCountrySubgroups?.has(p.subgroup) && (
                           <span title="Driving cross country" style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, background: C.greenBg, color: C.green, padding: '2px 6px', borderRadius: 10, whiteSpace: 'nowrap' }}>
                             Cross Country
                           </span>
@@ -749,11 +770,11 @@ export default function RegistrationDataTab({
                             p.isConfirmed ? (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <button
-                                  onClick={() => onConfirm(p.email)}
+                                  onClick={() => onConfirm(p.registrationEmail || p.email)}
                                   title="Click to un-confirm"
                                   style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.green}`, background: C.greenBg, color: C.green, cursor: 'pointer', fontFamily: 'Inter', fontWeight: 600, whiteSpace: 'nowrap' }}
                                 >
-                                  <CheckCircle2 size={12} /> Confirmed
+                                  <CheckCircle2 size={12} /> {p.manuallyConfirmed ? 'Confirmed Manual' : 'Confirmed'}
                                 </button>
                                 {!p.hasFlightInfo && !/manitoba|winnipeg/i.test(p.fellowship || '') && (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#FFF3CD', color: '#B8710A', border: '1px solid #F5C842', borderRadius: 12, fontSize: 11, fontWeight: 600, padding: '2px 8px', whiteSpace: 'nowrap' }}>
@@ -763,7 +784,7 @@ export default function RegistrationDataTab({
                               </div>
                             ) : (
                               <button
-                                onClick={() => onConfirm(p.email)}
+                                onClick={() => onConfirm(p.registrationEmail || p.email)}
                                 style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.line}`, background: 'transparent', color: C.mute, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
                               >
                                 <Circle size={12} /> Confirm
@@ -838,19 +859,39 @@ export default function RegistrationDataTab({
                         </td>
                       </>
                     )}
-                    {/* Edit pencil + delete */}
-                    <td style={{ padding: '6px 8px', borderBottom: `1px solid ${C.line}`, width: 64 }}>
+                    {/* Edit pencil + delete + merge */}
+                    <td style={{ padding: '6px 8px', borderBottom: `1px solid ${C.line}`, width: 80 }}>
                       <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                         {canEdit && p.isRegistered && regObj && (
-                          <button
-                            onClick={() => onDeleteReg?.(regObj.id, regObj.email)}
-                            title="Delete registration"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DDB8B8', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6 }}
-                            onMouseEnter={e => e.currentTarget.style.color = C.red}
-                            onMouseLeave={e => e.currentTarget.style.color = '#DDB8B8'}
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          <>
+                            <button
+                              onClick={() => onDeleteReg?.(regObj.id, regObj.email)}
+                              title="Delete registration"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DDB8B8', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6 }}
+                              onMouseEnter={e => e.currentTarget.style.color = C.red}
+                              onMouseLeave={e => e.currentTarget.style.color = '#DDB8B8'}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (!mergeSource) {
+                                  setMergeSource(regObj);
+                                } else if (mergeSource.email !== regObj.email) {
+                                  setMergeTarget(regObj);
+                                } else {
+                                  setMergeSource(null);
+                                }
+                              }}
+                              title={mergeSource ? (mergeSource.email === regObj.email ? 'Cancel merge' : 'Merge with selected') : 'Select to merge'}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6,
+                                color: mergeSource?.email === regObj.email ? C.purple : '#C8BDD8' }}
+                              onMouseEnter={e => e.currentTarget.style.color = C.purple}
+                              onMouseLeave={e => e.currentTarget.style.color = mergeSource?.email === regObj.email ? C.purple : '#C8BDD8'}
+                            >
+                              <GitMerge size={14} />
+                            </button>
+                          </>
                         )}
                         <button
                           onClick={() => setEditingReg(regObj || {
@@ -944,6 +985,51 @@ export default function RegistrationDataTab({
           onLink={regEmail => { onEditPerson?.(linkingPerson.email, { linked_registration_email: regEmail }); setLinkingPerson(null); }}
           onClose={() => setLinkingPerson(null)}
         />,
+        document.body,
+      )}
+
+      {/* ── Merge confirmation modal ─────────────────────────────────── */}
+      {mergeSource && mergeTarget && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => { setMergeSource(null); setMergeTarget(null); }}>
+          <div style={{ background: C.paper, borderRadius: 14, width: '90%', maxWidth: 480, boxShadow: '0 20px 50px rgba(0,0,0,0.25)', fontFamily: 'Inter, sans-serif' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.ink, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <GitMerge size={16} color={C.purple} /> Merge duplicate records
+              </div>
+              <button onClick={() => { setMergeSource(null); setMergeTarget(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ padding: '16px 20px' }}>
+              <p style={{ fontSize: 13, color: C.mute, marginBottom: 16 }}>
+                Choose which record to <strong>keep</strong>. The other will be permanently deleted.
+              </p>
+              {[mergeSource, mergeTarget].map((reg, i) => (
+                <div key={reg.email} style={{ border: `2px solid ${C.line}`, borderRadius: 10, padding: '12px 14px', marginBottom: 10, cursor: 'pointer', transition: 'border-color 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = C.purple}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = C.line}
+                  onClick={async () => {
+                    const keep = reg;
+                    const discard = i === 0 ? mergeTarget : mergeSource;
+                    if (!window.confirm(`Keep "${keep.fullName}" and delete "${discard.fullName}"?`)) return;
+                    await onDeleteReg?.(discard.id, discard.email);
+                    setMergeSource(null);
+                    setMergeTarget(null);
+                  }}>
+                  <div style={{ fontWeight: 600, fontSize: 13.5, color: C.ink, marginBottom: 4 }}>{reg.fullName}</div>
+                  <div style={{ fontSize: 12, color: C.mute, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    <span>{reg.email}</span>
+                    {reg.subgroup && <span>{reg.subgroup}</span>}
+                    {reg.manuallyConfirmed && <span style={{ color: C.green, fontWeight: 600 }}>Confirmed</span>}
+                  </div>
+                  <div style={{ marginTop: 10, fontSize: 12, color: C.purple, fontWeight: 600 }}>Click to keep this one →</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>,
         document.body,
       )}
 

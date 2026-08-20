@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Copy, Plus, Save } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
-import { useSprints } from '../sprints/SprintsContext'
+import { getMySprints } from '../sprints/lib/sprints'
 import { supabase } from '../../lib/supabase'
 
 export const ALL_TABS_DEFAULT = [
@@ -72,8 +72,9 @@ const fieldStyle = { width: '100%', border: '1px solid #E7E2EE', borderRadius: 7
 const sectionStyle = { background: '#fff', border: '1px solid #E7E2EE', borderRadius: 10, padding: 18, marginBottom: 14 }
 
 export default function SettingsTab({ config, onSaved }) {
-  const { sprints } = useSprints()
   const { showToast } = useToast()
+  const [sprints, setSprints] = useState([])
+  useEffect(() => { getMySprints().then(setSprints).catch(() => {}) }, [])
   const [draft, setDraft] = useState(() => toDraft(config))
   const [saving, setSaving] = useState(false)
   const [templates, setTemplates] = useState([])

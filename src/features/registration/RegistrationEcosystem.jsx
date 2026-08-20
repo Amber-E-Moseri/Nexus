@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Car } from 'lucide-react';
+import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Car, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import RegistrationEditModal from './RegistrationEditModal';
@@ -211,8 +211,8 @@ function ProgressBar({ pct, tone }) {
   );
 }
 
-function statusTone(pct) { return pct >= 80 ? 'green' : pct >= 60 ? 'amber' : 'red'; }
-function statusLabel(pct) { return pct >= 80 ? 'On track' : pct >= 60 ? 'Tracking' : 'Behind'; }
+function statusTone(pct) { return pct >= 80 ? 'green' : pct >= 50 ? 'amber' : 'red'; }
+function statusLabel(pct) { return pct >= 80 ? 'On track' : pct >= 50 ? 'Behind' : 'At risk'; }
 
 function Card({ children, style, ...rest }) {
   return <div {...rest} style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, ...style }}>{children}</div>;
@@ -257,6 +257,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   };
   const [tab, setTab] = useState('overview');
   const exemptFellowships = useMemo(() => new Set(eventConfig.exempt_fellowships || []), [eventConfig]);
+  const crossCountrySubgroups = useMemo(() => new Set(eventConfig.cross_country_subgroups || []), [eventConfig]);
   // isGloballyScoped: user has a subgroup scope — controls tab visibility
   const isGloballyScoped = !!(limitedToSubgroups?.length);
   // isLimited: filters displayed data — only applies to Registration Data tab when limitedToRegistrationDataOnly
@@ -579,8 +580,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     const hasFlightInfo = !!(r.arrivalFlight || r.departureFlight || r.arrivalDate || r.departureDate);
     // isLocal = explicitly marked as driving/not flying (excludes from Transportation tab)
     const isLocal = !!conf.inState;
-    // fullyConfirmed = confirmed attending by any means: paid, has a flight, or marked in-state
-    const fullyConfirmed = hasPaid || hasFlightInfo || isLocal;
+    // fullyConfirmed = confirmed attending by any means: paid, has a flight, marked in-state, or manually confirmed
+    const fullyConfirmed = hasPaid || hasFlightInfo || isLocal || !!r.manuallyConfirmed;
     return {
       ...r,
       hasPaid,
@@ -600,8 +601,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     return [...s].filter(Boolean).sort();
   }, [rosterFiltered, registrationsFiltered]);
 
-  const bySubgroup = useMemo(() => {
-    // Build set of absent registrant emails from the working list
+  const { bySubgroup, flightNeededPeople, confirmedPeople, confirmingPeople } = useMemo(() => {
     const absentEmails = new Set(
       workingListDb
         .filter(p => p.absent)
@@ -610,20 +610,30 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     );
 
     const out = {};
-    subgroups.forEach(sg => { out[sg] = { total: 0, confirmed: 0, absent: 0, flights: 0, flightsNeeded: 0 }; });
+    const flightPeople = {};
+    const confPeople = {};
+    const confirmingP = {};
+    subgroups.forEach(sg => {
+      out[sg] = { total: 0, confirmed: 0, absent: 0, flights: 0, flightsNeeded: 0 };
+      flightPeople[sg] = []; confPeople[sg] = []; confirmingP[sg] = [];
+    });
     merged.forEach(r => {
-      if (!out[r.subgroup]) out[r.subgroup] = { total: 0, confirmed: 0, absent: 0, flights: 0, flightsNeeded: 0 };
+      if (!out[r.subgroup]) {
+        out[r.subgroup] = { total: 0, confirmed: 0, absent: 0, flights: 0, flightsNeeded: 0 };
+        flightPeople[r.subgroup] = []; confPeople[r.subgroup] = []; confirmingP[r.subgroup] = [];
+      }
       out[r.subgroup].total++;
-      if (absentEmails.has(r.email)) out[r.subgroup].absent++;
-      if (r.fullyConfirmed) out[r.subgroup].confirmed++;
+      const isAbsent = absentEmails.has(r.email);
+      if (isAbsent) out[r.subgroup].absent++;
+      if (r.fullyConfirmed) { out[r.subgroup].confirmed++; confPeople[r.subgroup].push(r); }
+      else if (!isAbsent) { confirmingP[r.subgroup].push(r); }
       if (r.arrivalFlight || r.departureFlight) out[r.subgroup].flights++;
-
-      // Count out-of-state, non-exempt, non-absent people as eligible confirming
-      if (!r.inStateConfirmed && !exemptFellowships.has(r.fellowship) && !absentEmails.has(r.email)) {
+      if (!r.inStateConfirmed && !exemptFellowships.has(r.fellowship) && !isAbsent && !r.arrivalFlight && !r.departureFlight) {
         out[r.subgroup].flightsNeeded++;
+        flightPeople[r.subgroup].push(r);
       }
     });
-    return out;
+    return { bySubgroup: out, flightNeededPeople: flightPeople, confirmedPeople: confPeople, confirmingPeople: confirmingP };
   }, [merged, subgroups, exemptFellowships, workingListDb]);
 
   const totalRegs = registrationsFiltered.length;
@@ -780,7 +790,16 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     const rows = parseCSV(text);
     const now = new Date().toISOString();
     if (kind === 'roster') { setRoster(rows); await saveKey('roster', rows); }
-    if (kind === 'registrations') { setRegistrations(rows); await saveKey('registrations', rows); }
+    if (kind === 'registrations') {
+      // Merge: new rows override existing by email; records not in the new import are kept
+      setRegistrations(prev => {
+        const byEmail = new Map(prev.map(r => [(r.email || '').toLowerCase(), r]));
+        rows.forEach(r => byEmail.set((r.email || '').toLowerCase(), r));
+        const merged = Array.from(byEmail.values());
+        saveKey('registrations', merged);
+        return merged;
+      });
+    }
     const li = { ...lastImport, [kind]: now };
     setLastImport(li); await saveKey('last-import', li);
   }
@@ -890,6 +909,22 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     }
   }
 
+  async function handleToggleManualConfirm(email) {
+    const reg = registrations.find(r => r.email === email);
+    if (!reg) return;
+    const next = !reg.manuallyConfirmed;
+    dirtyEmails.current.add(email);
+    setTimeout(() => dirtyEmails.current.delete(email), 10_000);
+    setRegistrations(prev => prev.map(r => r.email === email ? { ...r, manuallyConfirmed: next } : r));
+    try {
+      const { error } = await supabase.from('registrations').update({ manually_confirmed: next }).eq('email', email);
+      if (error) throw error;
+    } catch (e) {
+      setRegistrations(prev => prev.map(r => r.email === email ? { ...r, manuallyConfirmed: !next } : r));
+      alert('Failed to update confirmation: ' + e.message);
+    }
+  }
+
   async function handleMarkAbsent(email, absent, reason) {
     try {
       const { error } = await supabase.from('working_list').update({ absent, absent_reason: reason || null }).eq('email', email);
@@ -946,6 +981,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         .reg-content   { padding: 28px; max-width: 1280px; margin: 0 auto; }
         .reg-grid-3    { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
         .reg-tab-label { }
+        .sg-hover-td:hover .sg-name-popup { display: block !important; }
 
         @media (max-width: 768px) {
           .reg-header       { padding: 12px 16px; }
@@ -1001,7 +1037,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
 
       <div className="reg-content">
         {tab === 'overview' && (
-          <OverviewTab {...{ totalRegs, totalRegTarget, subgroups, bySubgroup, targets, setTarget, merged, isLimited,
+          <OverviewTab {...{ totalRegs, totalRegTarget, subgroups, bySubgroup, flightNeededPeople, confirmedPeople, confirmingPeople, targets, setTarget, merged, isLimited,
             canSetTargets: role === 'super_admin' || role === 'regional_secretary' || (role === 'pastor' && !isGloballyScoped) }} />
         )}
         {tab === 'central' && (
@@ -1021,7 +1057,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
             onAddPerson={handleAddToWorkingList}
             onEditPerson={handleEditWorkingListPerson}
             onRemove={handleRemoveFromWorkingList}
-            onConfirm={toggleConfirm}
+            onConfirm={handleToggleManualConfirm}
+            crossCountrySubgroups={crossCountrySubgroups}
             highlightEmail={highlightEmail}
             onClearHighlight={() => setHighlightEmail(null)}
             publicTokenKey={eventConfig.public_token_key}
@@ -1031,7 +1068,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom, isLimited }} />}
-        {tab === 'transport' && <TransportTab {...{ merged, isLimited, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, exemptFellowships, onBulkMarkDriving: bulkMarkDriving }} />}
+        {tab === 'transport' && <TransportTab {...{ merged, isLimited, subgroups, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving: bulkMarkDriving, onToggleCrossCountry: toggleConfirm, onUpdateCrossCountrySubgroups: async (list) => { if (!config?.id) return; await supabase.from('event_configs').update({ cross_country_subgroups: list }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'finance' && (hasFinanceAccess
           ? <FinanceTab {...{ registrations: registrationsFiltered, payments, setPayments, userId: profile?.id, earlyCutoffAt: eventConfig.early_cutoff_at, earlyFee: eventConfig.early_fee, standardFee: eventConfig.standard_fee }} />
           : <div style={{ padding: 48, textAlign: 'center' }}>
@@ -1048,7 +1085,25 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
 }
 
 // ============ OVERVIEW ============
-function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets, setTarget, merged, isLimited, canSetTargets }) {
+function HoverNameList({ people = [], color }) {
+  if (!people.length) return null;
+  return (
+    <div className="sg-name-popup" style={{
+      display: 'none', position: 'absolute', zIndex: 200, top: 'calc(100% + 2px)', left: 0,
+      background: '#fff', border: '1px solid #E7E2EE', borderRadius: 8,
+      boxShadow: '0 4px 16px rgba(0,0,0,.10)', minWidth: 170, maxHeight: 220, overflowY: 'auto', padding: '4px 0',
+    }}>
+      {people.map(r => (
+        <div key={r.email} style={{ padding: '5px 12px', fontSize: 12.5, fontFamily: 'Inter', color: '#1A1523', display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+          {r.fullName}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightNeededPeople, confirmedPeople, confirmingPeople, targets, setTarget, merged, isLimited, canSetTargets }) {
   const regPct = totalRegTarget ? Math.round((totalRegs / totalRegTarget) * 100) : 0;
   const confirmedCount = useMemo(() => merged.filter(r => r.fullyConfirmed).length, [merged]);
   const totalAbsent = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.absent || 0), 0), [bySubgroup]);
@@ -1070,8 +1125,8 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets
         <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>By subgroup</h2>
       </div>
 
-      <Card style={{ padding: 0, overflowX: 'auto' }}>
-        <div style={{ overflowX: 'auto', minWidth: 0 }}>
+      <Card style={{ padding: 0, overflow: 'visible' }}>
+        <div style={{ overflowX: 'auto', minWidth: 0, overflow: 'visible' }}>
         <table>
           <thead>
             <tr>
@@ -1079,7 +1134,7 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets
               <th>Registration target</th>
               <th>Registrations</th>
               <th>Confirmed / Confirming</th>
-              <th>Eligible Confirming</th>
+              <th>Flights needed</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -1087,9 +1142,9 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets
             {subgroups.map(sg => {
               const s = bySubgroup[sg] || { total: 0 };
               const t = targets[sg] || {};
-              const regTarget = Number(t.reg) || 0;
-              const regPctSg = regTarget ? Math.round((s.total / regTarget) * 100) : 0;
-              const tone = statusTone(regPctSg);
+              const confirming = s.total - (s.absent || 0);
+              const confirmedPct = confirming ? Math.round(((s.confirmed || 0) / confirming) * 100) : 0;
+              const tone = statusTone(confirmedPct);
               return (
                 <tr key={sg}>
                   <td style={{ fontWeight: 600 }}>{sg}</td>
@@ -1102,14 +1157,36 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets
                   <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>
                     {s.total}
                   </td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>
+                  <td className="sg-hover-td" style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, position: 'relative' }}>
                     <span style={{ color: C.green }}>{s.confirmed || 0}</span>
-                    <span style={{ color: C.mute }}> / {s.total - (s.absent || 0)}</span>
+                    <span style={{ color: C.mute }}> / {confirming}</span>
+                    {(confirmedPeople[sg]?.length || confirmingPeople[sg]?.length) ? (
+                      <div className="sg-name-popup" style={{
+                        display: 'none', position: 'absolute', zIndex: 200, top: 'calc(100% + 2px)', left: 0,
+                        background: '#fff', border: '1px solid #E7E2EE', borderRadius: 8,
+                        boxShadow: '0 4px 16px rgba(0,0,0,.10)', minWidth: 170, maxHeight: 300, overflowY: 'auto', padding: '4px 0',
+                      }}>
+                        {confirmedPeople[sg]?.map(r => (
+                          <div key={r.email} style={{ padding: '5px 12px', fontSize: 12.5, fontFamily: 'Inter', color: '#1A1523', display: 'flex', alignItems: 'center', gap: 7 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, flexShrink: 0 }} />{r.fullName}
+                          </div>
+                        ))}
+                        {confirmedPeople[sg]?.length > 0 && confirmingPeople[sg]?.length > 0 && (
+                          <div style={{ margin: '4px 0', borderTop: '1px solid #F0EBF8' }} />
+                        )}
+                        {confirmingPeople[sg]?.map(r => (
+                          <div key={r.email} style={{ padding: '5px 12px', fontSize: 12.5, fontFamily: 'Inter', color: '#1A1523', display: 'flex', alignItems: 'center', gap: 7 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.amber, flexShrink: 0 }} />{r.fullName}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </td>
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: C.mute }}>
+                  <td className="sg-hover-td" style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: C.mute, position: 'relative' }}>
                     {s.flightsNeeded || 0}
+                    <HoverNameList people={flightNeededPeople[sg]} label="No flights" color={C.mute} />
                   </td>
-                  <td><Pill tone={tone}>{statusLabel(regPctSg)}</Pill></td>
+                  <td><Pill tone={tone}>{statusLabel(confirmedPct)}</Pill></td>
                 </tr>
               );
             })}
@@ -1122,9 +1199,9 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, targets
       <div style={{ marginTop: 10, display: 'flex', gap: 12, alignItems: 'center', padding: '8px 4px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11.5, color: C.mute, fontFamily: 'JetBrains Mono', textTransform: 'uppercase', letterSpacing: 0.05 }}>Status:</span>
         {[
-          { tone: 'green', label: 'On track', desc: '≥ 80% of reg target' },
-          { tone: 'amber', label: 'Tracking', desc: '60–79%' },
-          { tone: 'red',   label: 'Behind',   desc: '< 60%' },
+          { tone: 'green', label: 'On track', desc: '≥ 80% confirmed' },
+          { tone: 'amber', label: 'Behind',   desc: '50–79% confirmed' },
+          { tone: 'red',   label: 'At risk',  desc: '< 50% confirmed' },
         ].map(({ tone, label, desc }) => (
           <div key={tone} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Pill tone={tone}>{label}</Pill>
@@ -2361,7 +2438,7 @@ function EditableFlightCell({ value, onCommit, type = 'text', mono = true, place
   );
 }
 
-function TransportTab({ merged, isLimited, onApplied, onClearFlight, onUpdateFlight, exemptFellowships, onBulkMarkDriving }) {
+function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, onClearFlight, onUpdateFlight, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving, onToggleCrossCountry, onUpdateCrossCountrySubgroups }) {
   const [subgroupFilter, setSubgroupFilter] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
   const [clearingEmail, setClearingEmail] = useState(null);
@@ -2395,7 +2472,7 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, onUpdateFli
 
   // Out-of-state delegates = not inStateConfirmed, not from exempt fellowships
   const outOfState = useMemo(() =>
-    merged.filter(r => !r.inStateConfirmed && !exemptFellowships.has(r.fellowship)),
+    merged.filter(r => !r.inStateConfirmed && !exemptFellowships.has(r.fellowship) && !r.absent),
     [merged, exemptFellowships]);
 
   const filtered = useMemo(() =>
@@ -2562,6 +2639,32 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, onUpdateFli
         registrations={merged.map(r => ({ email: r.email, fullName: r.fullName || `${r.firstName || ''} ${r.lastName || ''}`.trim() }))}
       />
 
+      {/* Cross country subgroup config */}
+      {onUpdateCrossCountrySubgroups && allSubgroups?.length > 0 && (
+        <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: C.mute, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Car size={13} color={C.mute} /> Cross country subgroups:
+          </span>
+          {allSubgroups.map(sg => {
+            const active = crossCountrySubgroups?.has(sg);
+            return (
+              <button key={sg} onClick={() => {
+                const next = active
+                  ? [...(crossCountrySubgroups || [])].filter(s => s !== sg)
+                  : [...(crossCountrySubgroups || []), sg];
+                onUpdateCrossCountrySubgroups(next);
+              }} style={{
+                fontSize: 11.5, padding: '3px 10px', borderRadius: 20, border: `1px solid ${active ? C.green : C.line}`,
+                background: active ? C.greenBg : 'transparent', color: active ? C.green : C.mute,
+                cursor: 'pointer', fontFamily: 'Inter', fontWeight: active ? 700 : 400,
+              }}>
+                {sg}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Subgroup filter + bulk driving action */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <select
@@ -2572,7 +2675,7 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, onUpdateFli
           <option value="All">All subgroups</option>
           {subgroups.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        {subgroupFilter !== 'All' && (() => {
+        {subgroupFilter !== 'All' && crossCountrySubgroups?.has(subgroupFilter) && (() => {
           const subgroupPeople = outOfState.filter(r => r.subgroup === subgroupFilter);
           if (subgroupPeople.length === 0) return null;
           return (
@@ -2636,6 +2739,7 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, onUpdateFli
                     <th>Subgroup</th>
                     <th>Fellowship</th>
                     <th>Email</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2645,6 +2749,14 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, onUpdateFli
                       <td style={{ color: C.mute }}>{r.subgroup}</td>
                       <td style={{ color: C.mute }}>{r.fellowship}</td>
                       <td style={{ fontFamily: 'JetBrains Mono', fontSize: 11.5, color: C.mute }}>{r.email}</td>
+                      {crossCountrySubgroups?.has(r.subgroup) && (
+                        <td>
+                          <Btn tone="ghost" small onClick={() => onToggleCrossCountry?.(r.email)} title="Mark as cross country (driving)">
+                            <Car size={12} /> Cross country
+                          </Btn>
+                        </td>
+                      )}
+                      {!crossCountrySubgroups?.has(r.subgroup) && <td />}
                     </tr>
                   ))}
                 </tbody>
@@ -2659,6 +2771,23 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, onUpdateFli
           </div>
         </div>
       )}
+
+      {/* Incorrectly flagged cross country warning */}
+      {crossCountrySubgroups?.size > 0 && (() => {
+        const wronglyFlagged = merged.filter(r => r.inStateConfirmed && !crossCountrySubgroups.has(r.subgroup));
+        if (wronglyFlagged.length === 0) return null;
+        return (
+          <div style={{ background: '#FFF3CD', border: '1px solid #F5C842', borderRadius: 10, padding: '10px 14px', marginTop: 16, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+            <AlertCircle size={15} color="#B8710A" />
+            <span style={{ color: '#7A4E00', flex: 1 }}>
+              <strong>{wronglyFlagged.length} {wronglyFlagged.length === 1 ? 'person' : 'people'}</strong> incorrectly flagged as cross country ({wronglyFlagged.map(r => r.fullName).join(', ')})
+            </span>
+            <Btn tone="ghost" small onClick={() => wronglyFlagged.forEach(r => onToggleCrossCountry?.(r.email))}>
+              Clear all
+            </Btn>
+          </div>
+        );
+      })()}
 
       {/* Driving locally */}
       {(() => {
@@ -2679,6 +2808,7 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, onUpdateFli
                       <th>Name</th>
                       <th>Subgroup</th>
                       <th>Fellowship</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2690,6 +2820,11 @@ function TransportTab({ merged, isLimited, onApplied, onClearFlight, onUpdateFli
                         </td>
                         <td style={{ color: C.mute }}>{r.subgroup}</td>
                         <td style={{ color: C.mute }}>{r.fellowship}</td>
+                        <td>
+                          <Btn tone="ghost" small onClick={() => onToggleCrossCountry?.(r.email)} title="Remove cross country marking">
+                            <X size={12} /> Unmark
+                          </Btn>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

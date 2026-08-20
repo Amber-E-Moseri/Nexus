@@ -170,12 +170,11 @@ export function AuthProvider({ children }) {
 
       if (!mounted) return
 
-      // If getSession timed out (likely waiting on a slow token refresh), don't
-      // overwrite auth state — onAuthStateChange will have already set the user
-      // correctly when the session was first read from storage. Only update state
-      // when we have a definitive result.
-      if (!getSessionTimedOut || session) {
-        setUser(session?.user ?? null)
+      // Only set user state when we have a valid session. Never call setUser(null)
+      // here — onAuthStateChange is the sole authority for the signed-out transition.
+      // INITIAL_SESSION fires shortly and will clear state if there truly is no session.
+      if (session?.user) {
+        setUser(session.user)
         setJwtRole(getJwtRole(session))
       }
 
@@ -201,22 +200,26 @@ export function AuthProvider({ children }) {
           console.warn('[Auth] fetchProfile failed or timed out:', e)
           if (mounted) setProfile(null)
         }
+        // Session found — we've done everything we can; release the spinner.
+        if (mounted) setLoading(false)
       }
-
-      if (mounted) setLoading(false)
+      // No session: don't call setLoading(false) here. onAuthStateChange will fire
+      // INITIAL_SESSION (null) shortly and call setLoading(false) in its else branch.
+      // The 12 s safety-net above catches the case where it never fires.
     }
 
-    // Safety-net: if initializeAuth hangs (network stall, IndexedDB lock, etc.),
-    // force loading=false after 12 seconds so the user isn't stuck on the spinner
-    // forever. They'll land on the login page and can retry.
-    const loadingTimeout = setTimeout(() => {
+    // Safety-net covers the FULL auth lifecycle — both initializeAuth AND the
+    // onAuthStateChange INITIAL_SESSION profile fetch (which can fire after
+    // initializeAuth returns and has no timeout of its own). The timer is never
+    // cleared early; setLoading(false) when loading is already false is a no-op.
+    setTimeout(() => {
       if (mounted) {
-        console.warn('[Auth] Initialization timed out after 12 s — clearing loading state')
+        console.warn('[Auth] Initialization timed out after 15 s — clearing loading state')
         setLoading(false)
       }
-    }, 12_000)
+    }, 15_000)
 
-    initializeAuth().finally(() => clearTimeout(loadingTimeout))
+    initializeAuth()
 
     // Re-check push subscription whenever the PWA comes back to the foreground.
     // On iOS/Android the subscription can be dropped while the app is suspended;
@@ -279,7 +282,7 @@ export function AuthProvider({ children }) {
           }
           setLoading(true)
           try {
-            const nextProfile = await fetchMinimalProfile(session.user.id)
+            const nextProfile = await withTimeout(fetchMinimalProfile(session.user.id), 8_000)
             if (mounted) {
               setProfile(nextProfile)
               fetchSupplementaryProfile(session.user.id, nextProfile.department_id)
@@ -299,14 +302,34 @@ export function AuthProvider({ children }) {
             }
           }
         } else if (event === 'TOKEN_REFRESHED') {
-          // Token refreshed: keep existing profile (no DB query needed)
           touchLastActive().catch(() => {})
+          // If INITIAL_SESSION fired with null before the refresh completed,
+          // the profile was cleared. Re-fetch it now that we have a valid session.
+          if (!profileRef.current) {
+            try {
+              const nextProfile = await fetchMinimalProfile(session.user.id)
+              if (mounted) {
+                setProfile(nextProfile)
+                fetchSupplementaryProfile(session.user.id, nextProfile.department_id)
+                  .then((supplementary) => {
+                    if (mounted) setProfile((prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary } : prev)
+                  })
+                  .catch(() => {})
+              }
+            } catch {}
+          }
         }
       } else {
         setProfile(null)
         setLoading(false)
-        clearAllAppCache()
-        clearSession()
+        // Only wipe cached data on an explicit sign-out. INITIAL_SESSION fires
+        // null when the stored token is expired but the refresh token is still
+        // valid — auth-js will emit TOKEN_REFRESHED shortly. Wiping the cache
+        // here causes a flash to the login page and a null profile after restore.
+        if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+          clearAllAppCache()
+          clearSession()
+        }
       }
     })
 
