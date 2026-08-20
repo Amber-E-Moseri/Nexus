@@ -3177,6 +3177,20 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
     setTimeout(() => win.print(), 400);
   }
 
+  // Compute all event nights from the spread of arrival/departure dates
+  const eventNights = useMemo(() => {
+    const allDates = merged.flatMap(r => [r.arrivalDate, r.departureDate]).filter(Boolean).sort();
+    if (allDates.length < 2) return [];
+    const nights = [];
+    const d = new Date(allDates[0] + 'T12:00:00');
+    const end = new Date(allDates[allDates.length - 1] + 'T12:00:00');
+    while (d < end) {
+      nights.push(d.toISOString().slice(0, 10));
+      d.setDate(d.getDate() + 1);
+    }
+    return nights;
+  }, [merged]);
+
   const assignedEmails = new Set(rooms.flatMap(r => r.people.map(p => p.email)));
   const unassigned = merged.filter(m => !assignedEmails.has(m.email));
   const byGender = { male: [], female: [] };
@@ -3386,6 +3400,16 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                               <span style={{ flex: 1, minWidth: 0, fontWeight: isHead ? 700 : 400, color: '#1A1220', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {person.fullName}
                               </span>
+                              {eventNights.length > 0 && eventNights.map(night => {
+                                const arr = person.arrivalDate, dep = person.departureDate;
+                                const needed = arr && dep && night >= arr && night < dep;
+                                const dayLabel = new Date(night + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+                                return (
+                                  <span key={night} style={{ fontSize: 8.5, fontWeight: 700, padding: '1px 3px', borderRadius: 3, flexShrink: 0, background: needed ? '#4C2A92' : '#EDE9F6', color: needed ? '#fff' : '#C4B5FD', letterSpacing: 0.2 }}>
+                                    {dayLabel}
+                                  </span>
+                                );
+                              })}
                               <button
                                 onClick={() => handleSetRoomHead(room.id, person.email)}
                                 title={isHead ? 'Remove as head' : 'Set as head'}
