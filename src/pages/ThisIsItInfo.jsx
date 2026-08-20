@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
 
-// Try to get profile without requiring auth
 function useOptionalProfile() {
   const [profile, setProfile] = useState(null);
   useEffect(() => {
@@ -32,15 +31,81 @@ const FALLBACK = {
   all_white_for: 'Thanksgiving service',
 };
 
+function EditableText({ value, onSave, multiline = false, className = '' }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [tmpValue, setTmpValue] = useState(value);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select?.();
+    }
+  }, [isEditing]);
+
+  const handleSave = async () => {
+    if (tmpValue !== value) {
+      await onSave(tmpValue);
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setTmpValue(value);
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !multiline) {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      handleCancel();
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div style={{ display: 'inline-block', position: 'relative' }}>
+        {multiline ? (
+          <textarea
+            ref={inputRef}
+            value={tmpValue}
+            onChange={(e) => setTmpValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={handleSave}
+            style={{ width: '100%', padding: '8px', minHeight: '60px', fontFamily: 'inherit', fontSize: 'inherit', border: '2px solid var(--purple)' }}
+          />
+        ) : (
+          <input
+            ref={inputRef}
+            type="text"
+            value={tmpValue}
+            onChange={(e) => setTmpValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={handleSave}
+            style={{ padding: '4px 8px', fontFamily: 'inherit', fontSize: 'inherit', border: '2px solid var(--purple)' }}
+          />
+        )}
+      </div>
+    );
+  }
+
+  return <span className={className} onClick={() => setIsEditing(true)} style={{ cursor: 'pointer', position: 'relative' }}>
+    {value}
+  </span>;
+}
+
 export default function ThisIsItInfo() {
   const profile = useOptionalProfile();
   const navigate = useNavigate();
   const [activeDay, setActiveDay] = useState('fri');
-  const observerRef = useRef(null);
+  const [editMode, setEditMode] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const queryClient = useQueryClient();
 
   const canEdit = profile?.role === 'super_admin' || profile?.role === 'regional_secretary';
 
-  const { data: content } = useQuery({
+  const { data: content, isLoading } = useQuery({
     queryKey: ['this_is_it_event_content', 2026],
     queryFn: async () => {
       const { data } = await supabase
@@ -81,19 +146,8 @@ export default function ThisIsItInfo() {
       });
     }, { threshold: 0.12 });
     document.querySelectorAll('.stop-head,.card').forEach(el => obs.observe(el));
-    observerRef.current = obs;
     return () => obs.disconnect();
   }, []);
-
-  const DAYS = [
-    { key: 'fri', label: 'Fri, Aug 28' },
-    { key: 'sat', label: 'Sat, Aug 29' },
-    { key: 'sun', label: 'Sun, Aug 30' },
-    { key: 'mon', label: 'Mon, Aug 31' },
-  ];
-
-  const dayItems = scheduleByDay[activeDay] || [];
-  const [scrollProgress, setScrollProgress] = useState(0);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -106,6 +160,31 @@ export default function ThisIsItInfo() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  const handleSaveField = async (field, value) => {
+    try {
+      await supabase
+        .from('this_is_it_event_content')
+        .update({ [field]: value })
+        .eq('id', content.id);
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_event_content'] });
+    } catch (err) {
+      console.error('Save error:', err);
+    }
+  };
+
+  if (isLoading) {
+    return <div style={{ padding: '40px', textAlign: 'center' }}>Loading...</div>;
+  }
+
+  const DAYS = [
+    { key: 'fri', label: 'Fri, Aug 28' },
+    { key: 'sat', label: 'Sat, Aug 29' },
+    { key: 'sun', label: 'Sun, Aug 30' },
+    { key: 'mon', label: 'Mon, Aug 31' },
+  ];
+
+  const dayItems = scheduleByDay[activeDay] || [];
 
   return (
     <>
@@ -138,7 +217,6 @@ export default function ThisIsItInfo() {
         .tii-tk-field.full{grid-column:1/-1;}
         .tii-stub{border-top:1px solid var(--paper-line);padding:14px 20px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;}
         .tii-stub-code{font-size:11px;letter-spacing:.08em;color:#999;text-transform:uppercase;}
-        .tii-stub-badge{font-size:12px;letter-spacing:.02em;font-weight:600;background:var(--coral);color:#fff;padding:5px 10px;border-radius:6px;}
         .tii-section{max-width:var(--max);margin:40px auto 0;padding:0 18px;scroll-margin-top:60px;}
         .tii-stop-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;opacity:0;transform:translateY(16px);transition:opacity .5s,transform .5s;}
         .tii-stop-head.in{opacity:1;transform:translateY(0);}
@@ -152,7 +230,6 @@ export default function ThisIsItInfo() {
         .tii-card p:last-child{margin-bottom:0;}
         .tii-card h3{font-size:15px;font-weight:700;margin:0 0 8px;display:flex;align-items:center;gap:8px;}
         .tii-tag{display:inline-block;font-size:10px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;padding:4px 9px;border-radius:5px;border:1px solid;margin-bottom:10px;}
-        .tii-tag.placeholder{background:rgba(221,111,81,.1);color:var(--coral);}
         .tii-tag.ready{background:rgba(126,218,195,.1);color:#3aa895;}
         .tii-checklist{list-style:none;margin:0;padding:0;}
         .tii-checklist li{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--paper-line);font-size:14px;cursor:pointer;user-select:none;transition:padding-left .15s,background .2s,transform .2s;}
@@ -190,7 +267,9 @@ export default function ThisIsItInfo() {
         @media(max-width:640px){.tii-section{padding:0 14px;}.tii-card h3{font-size:14px;}.tii-card p{font-size:14px;}}
         .tii-dept-arrival{background:#f9f7f2;border:1px solid var(--paper-line);border-radius:8px;padding:14px;margin-top:12px;}
         .tii-dept-arrival ul{margin:6px 0 0;padding-left:18px;font-size:14px;line-height:1.7;}
+        .edit-mode-indicator{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--purple);color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;z-index:99;font-size:13px;}
       `}</style>
+
       <div className="tii-body">
         {/* Progress airplane */}
         <div style={{ position:'fixed', top:'70px', left:0, right:0, height:'3px', background:'rgba(22,23,23,.08)', zIndex:49 }}>
@@ -198,12 +277,18 @@ export default function ThisIsItInfo() {
           <div style={{ position:'absolute', top:'-12px', left:`${scrollProgress * 100}%`, transform:'translateX(-50%)', fontSize:'20px', transition:'left .1s linear', userSelect:'none' }}>✈️</div>
         </div>
 
+        {editMode && (
+          <div className="edit-mode-indicator">
+            ✏️ Editing — Click any text to edit (ESC to cancel)
+          </div>
+        )}
+
         {canEdit && (
           <button
-            onClick={() => navigate('/thisisitinfo-admin')}
-            style={{ position:'fixed',top:'16px',right:'16px',zIndex:100,padding:'8px 14px',background:'#6B12BC',color:'#fff',border:'none',borderRadius:'8px',fontWeight:700,cursor:'pointer',fontSize:'13px' }}
+            onClick={() => setEditMode(!editMode)}
+            style={{ position:'fixed',top:'16px',right:'16px',zIndex:100,padding:'8px 14px',background:editMode ? '#DD6F51' : '#6B12BC',color:'#fff',border:'none',borderRadius:'8px',fontWeight:700,cursor:'pointer',fontSize:'13px' }}
           >
-            ✏️ Edit
+            {editMode ? '✕ Done' : '✏️ Edit'}
           </button>
         )}
 
@@ -231,7 +316,7 @@ export default function ThisIsItInfo() {
                 </div>
                 <div className="tii-tk-arrow">→</div>
                 <div>
-                  <div className="tii-tk-city">{c.airport_code}</div>
+                  <div className="tii-tk-city">{editMode ? <EditableText value={c.airport_code} onSave={(v) => handleSaveField('airport_code', v)} /> : c.airport_code}</div>
                   <div className="tii-tk-sub">Winnipeg, MB</div>
                 </div>
               </div>
@@ -246,7 +331,7 @@ export default function ThisIsItInfo() {
                 </div>
                 <div className="tii-tk-field">
                   <label>Opens</label>
-                  <div className="val">Fri {c.friday_opening_time}</div>
+                  <div className="val">Fri {editMode ? <EditableText value={c.friday_opening_time} onSave={(v) => handleSaveField('friday_opening_time', v)} /> : c.friday_opening_time}</div>
                 </div>
                 <div className="tii-tk-field">
                   <label>Checkout</label>
@@ -294,7 +379,7 @@ export default function ThisIsItInfo() {
           </div>
           <div className="tii-card card" style={{ marginTop:'10px' }}>
             <h3>✨ Dress code</h3>
-            <p>{c.dress_code}</p>
+            <p>{editMode ? <EditableText value={c.dress_code} onSave={(v) => handleSaveField('dress_code', v)} multiline /> : c.dress_code}</p>
           </div>
         </section>
 
@@ -309,7 +394,7 @@ export default function ThisIsItInfo() {
           </div>
           <div className="tii-card card">
             <h3>✈️ Airport</h3>
-            <p><b>{c.airport_name} ({c.airport_code})</b>. This is the airport to fly into — it's only about {c.airport_distance_km} minutes from the hotel.</p>
+            <p><b>{editMode ? <EditableText value={c.airport_name} onSave={(v) => handleSaveField('airport_name', v)} /> : c.airport_name} ({editMode ? <EditableText value={c.airport_code} onSave={(v) => handleSaveField('airport_code', v)} /> : c.airport_code})</b>. This is the airport to fly into — it's only about {editMode ? <EditableText value={c.airport_distance_km?.toString()} onSave={(v) => handleSaveField('airport_distance_km', parseInt(v))} /> : c.airport_distance_km} minutes from the hotel.</p>
           </div>
           <div className="tii-card card">
             <h3>🚌 Hotel shuttle</h3>
@@ -339,9 +424,9 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>🛏️ {c.hotel_name}</h3>
-            <p style={{ margin:'0 0 6px' }}>{c.hotel_address}</p>
-            <p style={{ margin:'0 0 10px', fontSize:'13px', color:'#666' }}>Tel: {c.hotel_phone}</p>
+            <h3>🛏️ {editMode ? <EditableText value={c.hotel_name} onSave={(v) => handleSaveField('hotel_name', v)} /> : c.hotel_name}</h3>
+            <p style={{ margin:'0 0 6px' }}>{editMode ? <EditableText value={c.hotel_address} onSave={(v) => handleSaveField('hotel_address', v)} multiline /> : c.hotel_address}</p>
+            <p style={{ margin:'0 0 10px', fontSize:'13px', color:'#666' }}>Tel: {editMode ? <EditableText value={c.hotel_phone} onSave={(v) => handleSaveField('hotel_phone', v)} /> : c.hotel_phone}</p>
             <div className="tii-mapwrap">
               <iframe
                 loading="lazy"
@@ -404,7 +489,7 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <p>The first session kicks off Friday at <b>{c.friday_opening_time}</b>. The full schedule will fill in as it's ready.</p>
+            <p>The first session kicks off Friday at <b>{editMode ? <EditableText value={c.friday_opening_time} onSave={(v) => handleSaveField('friday_opening_time', v)} /> : c.friday_opening_time}</b>. The full schedule will fill in as it's ready.</p>
             <div className="tii-daytabs">
               {DAYS.map(d => (
                 <button
@@ -449,16 +534,16 @@ export default function ThisIsItInfo() {
             <div className="tii-help-grid">
               <div className="tii-mini">
                 <div className="lbl">Name</div>
-                <div className="big">{c.transport_contact_name}</div>
+                <div className="big">{editMode ? <EditableText value={c.transport_contact_name} onSave={(v) => handleSaveField('transport_contact_name', v)} /> : c.transport_contact_name}</div>
               </div>
               <div className="tii-mini">
                 <div className="lbl">Phone / WhatsApp</div>
-                <div className="big"><a href={`tel:${c.transport_contact_phone}`} style={{ color:'var(--purple)' }}>{c.transport_contact_phone}</a></div>
+                <div className="big"><a href={`tel:${c.transport_contact_phone}`} style={{ color:'var(--purple)' }}>{editMode ? <EditableText value={c.transport_contact_phone} onSave={(v) => handleSaveField('transport_contact_phone', v)} /> : c.transport_contact_phone}</a></div>
               </div>
               {c.transport_contact_chat && (
                 <div className="tii-mini">
                   <div className="lbl">Chat</div>
-                  <div className="big">{c.transport_contact_chat}</div>
+                  <div className="big">{editMode ? <EditableText value={c.transport_contact_chat} onSave={(v) => handleSaveField('transport_contact_chat', v)} /> : c.transport_contact_chat}</div>
                 </div>
               )}
             </div>
