@@ -24,19 +24,22 @@ Deno.serve(async (req) => {
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   if (!supabaseUrl || !serviceRoleKey) return json(req, 500, { error: 'Missing env vars' })
 
-  // Verify caller is admin via their JWT
+  // Verify caller is admin by decoding JWT claims directly
   const authHeader = req.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) return json(req, 401, { error: 'Missing authorization header' })
   const token = authHeader.slice(7)
 
-  const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
-    headers: { 'Authorization': `Bearer ${token}`, 'apikey': serviceRoleKey },
-  })
-  if (!userRes.ok) return json(req, 401, { error: 'Invalid token' })
-  const caller = await userRes.json()
-  const callerRole = caller?.app_metadata?.user_role ?? caller?.user_metadata?.user_role
+  let claims: Record<string, unknown> | null = null
+  try {
+    claims = JSON.parse(atob(token.split('.')[1]))
+  } catch {
+    return json(req, 401, { error: 'Invalid token' })
+  }
+
+  const callerRole = (claims?.user_role ?? claims?.app_metadata?.['user_role']) as string | undefined
   if (callerRole !== 'super_admin' && callerRole !== 'regional_secretary') {
-    return json(req, 403, { error: 'Only admins can reset passwords' })
+    console.error('Role check failed, claims:', JSON.stringify(claims))
+    return json(req, 403, { error: `Only admins can reset passwords (role: ${callerRole})` })
   }
 
   const body = await req.json().catch(() => null) as { email?: string } | null
