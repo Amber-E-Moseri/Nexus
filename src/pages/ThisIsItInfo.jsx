@@ -233,7 +233,6 @@ export default function ThisIsItInfo() {
             </div>
             <div className="tii-stub">
               <span className="tii-stub-code">TII · 2026 · BLW CAN</span>
-              <span className="tii-stub-badge">Staff Only</span>
             </div>
           </div>
           <p style={{ textAlign:'center', maxWidth:'520px', margin:'18px auto 0', fontSize:'14px', color:'#666', lineHeight:1.6 }}>
