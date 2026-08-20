@@ -55,9 +55,12 @@ function AssigneeAvatar({ person }) {
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
+        overflow: 'hidden',
       }}
     >
-      {person.initials || '?'}
+      {person.avatar_url
+        ? <img src={person.avatar_url} alt={person.initials} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        : person.initials || '?'}
     </div>
   )
 }

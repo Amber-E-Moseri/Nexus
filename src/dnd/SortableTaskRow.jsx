@@ -82,9 +82,12 @@ function AssigneeStack({ task, people }) {
             marginLeft: index === 0 ? 0 : -6,
             border: '1.5px solid #FFFFFF',
             flexShrink: 0,
+            overflow: 'hidden',
           }}
         >
-          {person.initials || '?'}
+          {person.avatar_url
+            ? <img src={person.avatar_url} alt={person.initials} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : person.initials || '?'}
         </div>
       ))}
     </div>

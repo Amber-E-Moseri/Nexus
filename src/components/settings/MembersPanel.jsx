@@ -474,8 +474,10 @@ export default function MembersPanel() {
                 <tr key={entry.id} style={{ borderBottom: '1px solid #EDE8DC' }}>
                   <td style={{ padding: '14px 16px', fontSize: 13, color: '#2D2A22' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: 999, background: '#4C2A92', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
-                        {getInitials(entry.name, entry.email)}
+                      <div style={{ width: 32, height: 32, borderRadius: 999, background: '#4C2A92', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, overflow: 'hidden' }}>
+                        {entry.avatar_url
+                          ? <img src={entry.avatar_url} alt={getInitials(entry.name, entry.email)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : getInitials(entry.name, entry.email)}
                       </div>
                       <span>{entry.name}</span>
                     </div>
