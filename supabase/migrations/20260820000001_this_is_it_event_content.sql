@@ -46,22 +46,14 @@ create policy "super_admin_full_access" on this_is_it_event_content
     (select role from public.users where id = auth.uid()) = 'super_admin'
   );
 
--- Programs space members (Chinelo, Ella, Dorcas) can read/write
+-- Programs team members (regional_secretary role) can read/write
 create policy "programs_team_access" on this_is_it_event_content
   as permissive for all
   using (
-    exists (
-      select 1 from public.space_members
-      where user_id = auth.uid()
-        and space_id = (select id from public.spaces where slug = 'programs' limit 1)
-    )
+    (select role from public.users where id = auth.uid()) = 'regional_secretary'
   )
   with check (
-    exists (
-      select 1 from public.space_members
-      where user_id = auth.uid()
-        and space_id = (select id from public.spaces where slug = 'programs' limit 1)
-    )
+    (select role from public.users where id = auth.uid()) = 'regional_secretary'
   );
 
 -- Public read (anyone can read, no auth required)
@@ -84,24 +76,14 @@ create table this_is_it_schedule_items (
 
 alter table this_is_it_schedule_items enable row level security;
 
--- Programs team + super admin can manage schedule items
+-- Super admin + regional secretary can manage schedule items
 create policy "programs_and_super_admin_schedule" on this_is_it_schedule_items
   as permissive for all
   using (
-    (select role from public.users where id = auth.uid()) = 'super_admin'
-    or exists (
-      select 1 from public.space_members
-      where user_id = auth.uid()
-        and space_id = (select id from public.spaces where slug = 'programs' limit 1)
-    )
+    (select role from public.users where id = auth.uid()) in ('super_admin', 'regional_secretary')
   )
   with check (
-    (select role from public.users where id = auth.uid()) = 'super_admin'
-    or exists (
-      select 1 from public.space_members
-      where user_id = auth.uid()
-        and space_id = (select id from public.spaces where slug = 'programs' limit 1)
-    )
+    (select role from public.users where id = auth.uid()) in ('super_admin', 'regional_secretary')
   );
 
 -- Public read schedule items
