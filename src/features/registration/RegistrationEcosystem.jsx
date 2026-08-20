@@ -273,6 +273,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   const [rooms, setRooms] = useState([]);
   const [numRooms, setNumRooms] = useState(5);
   const [peoplePerRoom, setPeoplePerRoom] = useState(2);
+  const [roomsNote, setRoomsNote] = useState('');
   const [workingListDb, setWorkingListDb] = useState([]);
   const [workingListLoading, setWorkingListLoading] = useState(false);
   const [hasFinanceAccess, setHasFinanceAccess] = useState(financeAccess);
@@ -549,6 +550,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
           setRooms(stored.rooms || []);
           setNumRooms(stored.numRooms || 5);
           setPeoplePerRoom(stored.peoplePerRoom || 2);
+          if (stored.roomsNote != null) setRoomsNote(stored.roomsNote);
         } else {
           initializeRooms(5, 2);
         }
@@ -706,8 +708,13 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     saveKey('room-assignments', { rooms: newRooms, numRooms: count, peoplePerRoom: capacity });
   }
 
-  function saveRoomData(roomsToSave, numR, perRoom) {
-    saveKey('room-assignments', { rooms: roomsToSave, numRooms: numR, peoplePerRoom: perRoom });
+  function saveRoomData(roomsToSave, numR, perRoom, note) {
+    saveKey('room-assignments', { rooms: roomsToSave, numRooms: numR, peoplePerRoom: perRoom, roomsNote: note ?? roomsNote });
+  }
+
+  function handleUpdateRoomsNote(note) {
+    setRoomsNote(note);
+    saveKey('room-assignments', { rooms, numRooms, peoplePerRoom, roomsNote: note });
   }
 
   function handleAddRoom(newRoomName, capacity) {
@@ -1077,7 +1084,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onEditReg: setEditingReg }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
-        {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, handleUpdatePersonNote, peoplePerRoom, isLimited }} />}
+        {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, roomsNote, handleUpdateRoomsNote, peoplePerRoom, isLimited }} />}
         {tab === 'transport' && <TransportTab {...{ merged, isLimited, subgroups, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving: bulkMarkDriving, onToggleCrossCountry: toggleConfirm, onUpdateCrossCountrySubgroups: async (list) => { if (!config?.id) return; await supabase.from('event_configs').update({ cross_country_subgroups: list }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'finance' && (hasFinanceAccess
           ? <FinanceTab {...{ registrations: registrationsFiltered, payments, setPayments, userId: profile?.id, earlyCutoffAt: eventConfig.early_cutoff_at, earlyFee: eventConfig.early_fee, standardFee: eventConfig.standard_fee }} />
@@ -3099,7 +3106,7 @@ function ImportBlock({ title, hint, count, last, onImport }) {
 }
 
 // ============ ROOM ASSIGNMENTS ============
-function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, handleUpdatePersonNote, peoplePerRoom, isLimited }) {
+function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, roomsNote, handleUpdateRoomsNote, peoplePerRoom, isLimited }) {
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomCapacity, setNewRoomCapacity] = useState(peoplePerRoom);
   const [bulkPrefix, setBulkPrefix] = useState('Room');
@@ -3163,6 +3170,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
       @media print{@page{margin:1.5cm}.grid{grid-template-columns:1fr 1fr}}</style></head>
       <body><h1>Room Assignments</h1>
       <p>Printed ${new Date().toLocaleDateString('en-CA', { weekday:'long', year:'numeric', month:'long', day:'numeric' })} · ${rooms.length} rooms · ${rooms.reduce((s,r)=>s+r.people.length,0)} assigned</p>
+      ${roomsNote ? `<div style="background:#F5F0FF;border:1px solid #C4B5FD;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#4C2A92;white-space:pre-wrap"><strong>Special requests / notes:</strong><br>${roomsNote}</div>` : ''}
       <div class="grid">${rows}</div></body></html>`);
     win.document.close();
     win.focus();
@@ -3393,13 +3401,6 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                                 title="Remove"
                               >✕</button>
                               </div>
-                              <input
-                                type="text"
-                                placeholder="Special request…"
-                                value={person.specialRequest || ''}
-                                onChange={e => handleUpdatePersonNote(room.id, person.email, e.target.value)}
-                                style={{ width: '100%', marginTop: 3, fontSize: 10.5, border: '1px solid #E7E2EE', borderRadius: 4, padding: '2px 6px', fontFamily: 'Inter, sans-serif', color: '#1A1220', background: '#FAFAFA', boxSizing: 'border-box', outline: 'none' }}
-                              />
                             </div>
                           );
                         })
@@ -3439,6 +3440,18 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
               <input type="number" min={1} value={bulkCapacity} onChange={e => setBulkCapacity(e.target.value)} style={{ width: 48, fontSize: 12.5, padding: '8px 6px', borderRadius: 6, border: `1px solid ${C.line}` }} title="Capacity each" />
               <Btn small onClick={() => handleBulkCreateRooms(bulkPrefix, Number(bulkCount), bulkCapacity)} disabled={rooms.length >= 50 || !bulkCount}><Plus size={12} /> Bulk</Btn>
             </div>
+          </div>
+
+          {/* general notes */}
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.line}` }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, marginBottom: 6 }}>Special requests / general notes</div>
+            <textarea
+              value={roomsNote}
+              onChange={e => handleUpdateRoomsNote(e.target.value)}
+              placeholder="Add any special requests or general notes for room assignments…"
+              rows={3}
+              style={{ width: '100%', fontSize: 13, fontFamily: 'Inter, sans-serif', border: `1px solid ${C.line}`, borderRadius: 7, padding: '8px 10px', resize: 'vertical', color: '#1A1220', background: '#FAFAFA', boxSizing: 'border-box', outline: 'none' }}
+            />
           </div>
         </div>
       </div>
