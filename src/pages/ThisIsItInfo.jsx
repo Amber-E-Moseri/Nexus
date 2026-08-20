@@ -251,27 +251,27 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>✈️ Flight form</h3>
+            <h3>📝 Flight form</h3>
             <p>Fill this out so the team knows your travel details and can arrange transfers.</p>
             <a className="tii-btn" href={c.flight_form_url} target="_blank" rel="noopener noreferrer">Fill out the flight form</a>
           </div>
           <div className="tii-card card" style={{ marginTop:'10px' }}>
-            <h3>🎒 What to pack</h3>
+            <h3>🧳 What to pack</h3>
             <p>Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.</p>
             <ul className="tii-checklist" id="packlist">
-              <CheckItem>Photo ID (for flight + hotel check-in)</CheckItem>
-              <CheckItem>All white outfit for Thanksgiving service</CheckItem>
-              <CheckItem>Sunday service outfit</CheckItem>
-              <CheckItem>Light jacket or sweater (evenings get cool)</CheckItem>
-              <CheckItem>Toiletries (hotel has basics, bring your own if you prefer)</CheckItem>
-              <CheckItem>Portable charger / phone charger</CheckItem>
+              <CheckItem>🆔 Photo ID (for flight + hotel check-in)</CheckItem>
+              <CheckItem>🤍 All white outfit for Thanksgiving service</CheckItem>
+              <CheckItem>⛪ Sunday service outfit</CheckItem>
+              <CheckItem>🧥 Light jacket or sweater (evenings get cool)</CheckItem>
+              <CheckItem>🧴 Toiletries (hotel has basics, bring your own if you prefer)</CheckItem>
+              <CheckItem>🔌 Portable charger / phone charger</CheckItem>
             </ul>
             <p style={{ fontSize:'13px', color:'#666', marginTop:'10px', paddingTop:'10px', borderTop:'1px solid var(--paper-line)' }}>
-              <strong>This Is It shirt:</strong> Will be provided at check-in or after the Friday opening session — no need to pack it.
+              <strong>👕 This Is It shirt:</strong> Will be provided at check-in or after the Friday opening session — no need to pack it.
             </p>
           </div>
           <div className="tii-card card" style={{ marginTop:'10px' }}>
-            <h3>👗 Dress code</h3>
+            <h3>✨ Dress code</h3>
             <p>{c.dress_code}</p>
           </div>
         </section>
@@ -286,16 +286,16 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>🛬 Airport</h3>
+            <h3>✈️ Airport</h3>
             <p><b>{c.airport_name} ({c.airport_code})</b>. This is the airport to fly into — it's only about {c.airport_distance_km} minutes from the hotel.</p>
           </div>
           <div className="tii-card card">
-            <h3>🚐 Hotel shuttle</h3>
+            <h3>🚌 Hotel shuttle</h3>
             <span className="tii-tag ready">Included</span>
             <p>A driver from the hotel shuttle will come get you at arrivals. They'll already have your name on their pickup list — nothing to book or call ahead. Just head to arrivals and look for the <b>Sandman shuttle</b>.</p>
           </div>
           <div className="tii-card card">
-            <h3>🕐 When to arrive</h3>
+            <h3>⏰ When to arrive</h3>
             <p>Your arrival time depends on your department. Check with your department lead. If you haven't heard otherwise, aim to arrive by <b>4:30 PM</b> so you're settled before the opening session.</p>
             <div className="tii-dept-arrival">
               <b style={{ fontSize:'13px' }}>Arrival time by department</b>
@@ -317,7 +317,7 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>🏨 {c.hotel_name}</h3>
+            <h3>🛏️ {c.hotel_name}</h3>
             <p style={{ margin:'0 0 6px' }}>{c.hotel_address}</p>
             <p style={{ margin:'0 0 10px', fontSize:'13px', color:'#666' }}>Tel: {c.hotel_phone}</p>
             <div className="tii-mapwrap">
@@ -332,7 +332,7 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>📋 Check-in process</h3>
+            <h3>🎯 Check-in process</h3>
             <p>When you arrive, look for the check-in stand or table in the lobby. Your room is covered — no card required. The team at the stand will get you sorted and send you to your room.</p>
           </div>
         </section>
@@ -347,25 +347,25 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>📍 Conference Room, {c.hotel_name}</h3>
+            <h3>🎤 Conference Room, {c.hotel_name}</h3>
             <p>Good news: the retreat venue is the hotel itself. All sessions run out of the conference room at the Sandman — once you're checked in, you're already there.</p>
           </div>
           <div className="tii-card card">
             <div className="tii-grid2">
               <div className="tii-mini">
-                <div className="lbl">Wi-Fi</div>
+                <div className="lbl">📶 Wi-Fi</div>
                 <div className="big">Free, hotel-wide</div>
               </div>
               <div className="tii-mini">
-                <div className="lbl">Sessions</div>
+                <div className="lbl">🎯 Sessions</div>
                 <div className="big">Conference Room</div>
               </div>
               <div className="tii-mini">
-                <div className="lbl">Meals</div>
+                <div className="lbl">🍽️ Meals</div>
                 <div className="big">Details to come</div>
               </div>
               <div className="tii-mini">
-                <div className="lbl">Checkout</div>
+                <div className="lbl">🚪 Checkout</div>
                 <div className="big">Mon morning</div>
               </div>
             </div>
@@ -426,26 +426,26 @@ export default function ThisIsItInfo() {
             <p>For transport needs — shuttle timing, arrival delays, or airport pickup questions:</p>
             <div className="tii-help-grid">
               <div className="tii-mini">
-                <div className="lbl">Name</div>
+                <div className="lbl">👤 Name</div>
                 <div className="big">{c.transport_contact_name}</div>
               </div>
               <div className="tii-mini">
-                <div className="lbl">Phone / WhatsApp</div>
+                <div className="lbl">📱 Phone / WhatsApp</div>
                 <div className="big"><a href={`tel:${c.transport_contact_phone}`} style={{ color:'var(--purple)' }}>{c.transport_contact_phone}</a></div>
               </div>
               {c.transport_contact_chat && (
                 <div className="tii-mini">
-                  <div className="lbl">Chat</div>
+                  <div className="lbl">💬 Chat</div>
                   <div className="big">{c.transport_contact_chat}</div>
                 </div>
               )}
             </div>
           </div>
           <div className="tii-card card">
-            <h3>❓ General questions</h3>
+            <h3>💌 General questions</h3>
             <p>For any other questions about the retreat:</p>
             <div style={{ marginTop:'10px' }}>
-              <a href="mailto:info@lwcanada.org" style={{ color:'var(--purple)', fontWeight:600 }}>info@lwcanada.org</a>
+              <a href="mailto:info@lwcanada.org" style={{ color:'var(--purple)', fontWeight:600 }}>📧 info@lwcanada.org</a>
             </div>
           </div>
         </section>
