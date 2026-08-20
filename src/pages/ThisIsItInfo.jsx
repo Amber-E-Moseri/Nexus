@@ -93,6 +93,19 @@ export default function ThisIsItInfo() {
   ];
 
   const dayItems = scheduleByDay[activeDay] || [];
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const windowHeight = window.innerHeight;
+      const docHeight = document.documentElement.scrollHeight;
+      const scrollTop = window.scrollY;
+      const progress = Math.min(scrollTop / (docHeight - windowHeight), 1);
+      setScrollProgress(progress);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   return (
     <>
@@ -112,8 +125,8 @@ export default function ThisIsItInfo() {
         .tii-nav a{display:inline-block;font-size:13px;font-weight:500;letter-spacing:.02em;color:var(--ink);text-decoration:none;padding:6px 12px;margin-right:4px;border-radius:6px;transition:background .2s,color .2s;}
         .tii-nav a:hover{background:rgba(22,23,23,.08);}
         .tii-eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#999;font-weight:600;text-align:center;margin:0 0 12px;animation:fadeIn .6s ease;}
-        .tii-ticket{max-width:var(--max);margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(22,23,23,.06);border:1px solid var(--paper-line);animation:ticketIn .6s ease .15s both;transition:box-shadow .25s,transform .25s;}
-        .tii-ticket:hover{box-shadow:0 4px 12px rgba(22,23,23,.1);transform:translateY(-2px);}
+        .tii-ticket{max-width:var(--max);margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 4px 16px rgba(22,23,23,.08);border:1px solid var(--paper-line);animation:ticketIn .6s ease .15s both;transition:box-shadow .25s,transform .25s;}
+        .tii-ticket:hover{box-shadow:0 8px 24px rgba(22,23,23,.12);transform:translateY(-2px);}
         .tii-ticket-top{padding:20px 20px 16px;animation:slideUp .6s ease .2s both;}
         .tii-tk-row{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
         .tii-tk-city{font-family:'Anton',sans-serif;font-size:clamp(24px,6vw,36px);line-height:.95;letter-spacing:.01em;animation:slideUp .5s ease .25s both;}
@@ -131,9 +144,9 @@ export default function ThisIsItInfo() {
         .tii-stop-head.in{opacity:1;transform:translateY(0);}
         .tii-dot{flex:none;width:32px;height:32px;border-radius:50%;background:var(--yellow);color:var(--ink);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:1px solid var(--paper-line);animation:pulse 3s ease-in-out infinite;}
         .tii-stop-head h2{font-family:'Anton',sans-serif;font-weight:400;font-size:clamp(20px,5vw,28px);letter-spacing:.01em;margin:0;}
-        .tii-card{background:#fff;border:1px solid var(--paper-line);border-radius:10px;padding:18px;box-shadow:0 1px 3px rgba(22,23,23,.04);opacity:0;transform:translateY(16px);transition:transform .4s,box-shadow .2s,opacity .4s;}
+        .tii-card{background:#fff;border:1px solid var(--paper-line);border-radius:10px;padding:18px;box-shadow:0 2px 8px rgba(22,23,23,.06);opacity:0;transform:translateY(16px);transition:transform .4s,box-shadow .3s,opacity .4s;}
         .tii-card.in{opacity:1;transform:translateY(0);}
-        .tii-card.in:hover{transform:translateY(-2px);box-shadow:0 3px 8px rgba(22,23,23,.08);}
+        .tii-card.in:hover{transform:translateY(-3px);box-shadow:0 8px 20px rgba(22,23,23,.12);}
         .tii-card + .tii-card{margin-top:10px;}
         .tii-card p{margin:0 0 10px;line-height:1.6;font-size:15px;}
         .tii-card p:last-child{margin-bottom:0;}
@@ -142,8 +155,8 @@ export default function ThisIsItInfo() {
         .tii-tag.placeholder{background:rgba(221,111,81,.1);color:var(--coral);}
         .tii-tag.ready{background:rgba(126,218,195,.1);color:#3aa895;}
         .tii-checklist{list-style:none;margin:0;padding:0;}
-        .tii-checklist li{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--paper-line);font-size:14px;cursor:pointer;user-select:none;transition:padding-left .15s,background .2s;}
-        .tii-checklist li:hover{padding-left:4px;background:rgba(126,218,195,.05);border-radius:4px;}
+        .tii-checklist li{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--paper-line);font-size:14px;cursor:pointer;user-select:none;transition:padding-left .15s,background .2s,transform .2s;}
+        .tii-checklist li:hover{padding-left:4px;background:rgba(126,218,195,.05);border-radius:4px;transform:translateX(2px);}
         .tii-checklist li:last-child{border-bottom:none;}
         .tii-box{flex:none;width:18px;height:18px;border:1.5px solid var(--ink);border-radius:4px;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:background .12s,border-color .12s;}
         .tii-checklist li:hover .tii-box{border-color:var(--teal);}
@@ -179,6 +192,12 @@ export default function ThisIsItInfo() {
         .tii-dept-arrival ul{margin:6px 0 0;padding-left:18px;font-size:14px;line-height:1.7;}
       `}</style>
       <div className="tii-body">
+        {/* Progress airplane */}
+        <div style={{ position:'fixed', top:'70px', left:0, right:0, height:'3px', background:'rgba(22,23,23,.08)', zIndex:49 }}>
+          <div style={{ height:'100%', width:`${scrollProgress * 100}%`, background:'linear-gradient(90deg, var(--coral), var(--purple))', transition:'width .1s linear' }} />
+          <div style={{ position:'absolute', top:'-12px', left:`${scrollProgress * 100}%`, transform:'translateX(-50%)', fontSize:'20px', transition:'left .1s linear', userSelect:'none' }}>✈️</div>
+        </div>
+
         {canEdit && (
           <button
             onClick={() => navigate('/thisisitinfo-admin')}
