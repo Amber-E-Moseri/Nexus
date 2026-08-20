@@ -230,14 +230,14 @@ function SpaceHeader({ space, members, canManage, canManageStatuses, onOpenStatu
                         onSelect={onOpenStatuses}
                         className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
                       >
-                        <span>⚙</span>
+                        <span>🎨</span>
                         <span>Statuses</span>
                       </DropdownMenu.Item>
                       <DropdownMenu.Item
                         onSelect={onOpenAutomations}
                         className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
                       >
-                        <span>⚡</span>
+                        <span>⚡️</span>
                         <span>Automations</span>
                       </DropdownMenu.Item>
                     </>
@@ -1912,6 +1912,8 @@ export default function SpaceOverview() {
       setActiveTab('Meetings')
     } else if (action === 'open-items') {
       setActiveTab('Open Items')
+    } else if (action === 'integrations') {
+      setActiveTab('Integrations')
     }
   }, [searchParams])
 

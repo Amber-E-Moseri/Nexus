@@ -32,3 +32,12 @@ verify_jwt = false
 
 [functions."weekly-growth-report"]
 verify_jwt = false
+
+[functions."nova-jobs"]
+verify_jwt = false
+
+[functions."zoom-webhook-receiver"]
+verify_jwt = false
+
+[functions."zoom-recording-sync"]
+verify_jwt = false

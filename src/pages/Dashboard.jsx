@@ -524,13 +524,15 @@ function QuickActionsWidget({ role }) {
 function MySpacesWidget({ userId, role, departmentId }) {
   const navigate = useNavigate()
 
-  // Shared query cache (BLW-05) — same key any page fetching the user's
-  // spaces can reuse.
-  const { data: spaces = null } = useQuery({
+  // Shared query cache (BLW-05) — same key Sidebar uses; slice applied here
+  // so the cache holds the full list and Sidebar doesn't get a truncated set.
+  const { data: rawSpaces = null } = useQuery({
     queryKey: ['my-spaces', userId, role, departmentId ?? null],
     enabled: Boolean(userId && role),
-    queryFn: () => getMySpaces(userId, role, departmentId).then((rows) => rows.slice(0, 6)).catch(() => []),
+    staleTime: 5 * 60_000,
+    queryFn: () => getMySpaces(userId, role, departmentId).catch(() => []),
   })
+  const spaces = rawSpaces?.slice(0, 6) ?? null
 
   if (spaces === null) {
     return <div style={{ fontSize: 13, color: 'var(--ink-3)', padding: '8px 0' }}>Loading…</div>

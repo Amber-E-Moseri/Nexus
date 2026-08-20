@@ -2,13 +2,11 @@
 // hierarchy under each space. Navigation + lightweight quick-management
 // (rename / visibility / delete). Heavy actions (member-level sharing) live
 // in the roomy Overview "Folders & Lists" manager.
-// Hex literals inside framer-motion animate targets mirror tokens
-// (CSS vars aren't interpolable): #EDE8F8 = --purple-tint.
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronRight, Folder, List, MoreHorizontal } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
@@ -36,6 +34,7 @@ const TREE_ITEM_STYLE = {
   background: HOVER_BG_OFF,
   color: 'var(--ink-1)',
   fontFamily: FONT_BODY,
+  transition: 'background 0.12s, transform 0.1s',
 }
 
 const MENU_CONTENT_STYLE = {
@@ -105,42 +104,37 @@ function QuickMenu({ label, isPrivate, onAddList, onRename, onToggleVisibility, 
   )
 }
 
-export default function SidebarSpaceTree({ spaceId, spaceName, spaceColor, isActive, canManage = false, refreshToken = 0 }) {
+export default function SidebarSpaceTree({ spaceId, spaceName, spaceColor, isActive, canManage = false }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
-  const [folders, setFolders] = useState([])
-  const [lists, setLists] = useState([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState({})
   // folder id to preselect in the Create List modal; false = closed
   const [addListFolderId, setAddListFolderId] = useState(false)
+
+  // Only fetch when this space is active — eliminates the 2×N query fan-out
+  // where every visible space fired folders+lists regardless of expansion state.
+  const { data: treeData, isFetching } = useQuery({
+    queryKey: ['space-tree', spaceId],
+    enabled: isActive,
+    queryFn: async () => {
+      const [folderRes, listRes] = await Promise.all([
+        supabase.from('folders').select('id, name, sort_order, created_by, visibility').eq('department_id', spaceId).order('sort_order'),
+        supabase.from('lists').select('id, name, folder_id, sort_order, created_by, visibility').eq('department_id', spaceId).order('sort_order'),
+      ])
+      return { folders: folderRes.data ?? [], lists: listRes.data ?? [] }
+    },
+  })
+
+  const folders = treeData?.folders ?? []
+  const lists = treeData?.lists ?? []
+  const loading = isActive && isFetching && !treeData
 
   const listsByFolder = useMemo(
     () => folders.reduce((acc, folder) => ({ ...acc, [folder.id]: lists.filter((list) => list.folder_id === folder.id) }), {}),
     [folders, lists],
   )
   const unfoldedLists = useMemo(() => lists.filter((list) => !list.folder_id), [lists])
-
-  async function loadTree() {
-    setLoading(true)
-    try {
-      const [folderRes, listRes] = await Promise.all([
-        supabase.from('folders').select('id, name, sort_order, created_by, visibility').eq('department_id', spaceId).order('sort_order'),
-        supabase.from('lists').select('id, name, folder_id, sort_order, created_by, visibility').eq('department_id', spaceId).order('sort_order'),
-      ])
-
-      setFolders(folderRes.data ?? [])
-      setLists(listRes.data ?? [])
-    } catch (error) {
-      console.error('Failed to load space tree:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    loadTree()
-  }, [spaceId, refreshToken])
 
   useEffect(() => {
     if (profile?.id) {
@@ -172,39 +166,43 @@ export default function SidebarSpaceTree({ spaceId, spaceName, spaceColor, isAct
 
   const canManageItem = (item) => canManage || item.created_by === profile?.id
 
+  function invalidateTree() {
+    queryClient.invalidateQueries({ queryKey: ['space-tree', spaceId] })
+  }
+
   async function renameFolder(folder) {
     const name = window.prompt('Rename folder', folder.name)?.trim()
     if (!name || name === folder.name) return
-    try { await updateFolder(folder.id, { name }); await loadTree() }
+    try { await updateFolder(folder.id, { name }); invalidateTree() }
     catch (err) { window.alert(`Failed to rename folder: ${err.message}`) }
   }
 
   async function renameList(list) {
     const name = window.prompt('Rename list', list.name)?.trim()
     if (!name || name === list.name) return
-    try { await updateList(list.id, { name }); await loadTree() }
+    try { await updateList(list.id, { name }); invalidateTree() }
     catch (err) { window.alert(`Failed to rename list: ${err.message}`) }
   }
 
   async function toggleFolderVisibility(folder) {
-    try { await updateFolderVisibility(folder.id, folder.visibility === 'private' ? 'public' : 'private'); await loadTree() }
+    try { await updateFolderVisibility(folder.id, folder.visibility === 'private' ? 'public' : 'private'); invalidateTree() }
     catch (err) { window.alert(`Failed to update visibility: ${err.message}`) }
   }
 
   async function toggleListVisibility(list) {
-    try { await updateListVisibility(list.id, list.visibility === 'private' ? 'public' : 'private'); await loadTree() }
+    try { await updateListVisibility(list.id, list.visibility === 'private' ? 'public' : 'private'); invalidateTree() }
     catch (err) { window.alert(`Failed to update visibility: ${err.message}`) }
   }
 
   async function removeFolder(folder) {
     if (!window.confirm(`Delete folder "${folder.name}"? This also deletes all lists inside it.`)) return
-    try { await deleteFolder(folder.id); await loadTree() }
+    try { await deleteFolder(folder.id); invalidateTree() }
     catch (err) { window.alert(`Failed to delete folder: ${err.message}`) }
   }
 
   async function removeList(list) {
     if (!window.confirm(`Delete list "${list.name}"? This cannot be undone.`)) return
-    try { await deleteList(list.id); await loadTree() }
+    try { await deleteList(list.id); invalidateTree() }
     catch (err) { window.alert(`Failed to delete list: ${err.message}`) }
   }
 
@@ -219,17 +217,19 @@ export default function SidebarSpaceTree({ spaceId, spaceName, spaceColor, isAct
       onMouseEnter={(e) => { const m = e.currentTarget.querySelector('.tree-row-menu'); if (m) m.style.opacity = '1' }}
       onMouseLeave={(e) => { const m = e.currentTarget.querySelector('.tree-row-menu'); if (m) m.style.opacity = '0' }}
     >
-      <motion.button
+      <button
         type="button"
         onClick={() => navigateToList(list.id)}
-        whileHover={{ backgroundColor: HOVER_BG }}
-        whileTap={{ scale: 0.98 }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = HOVER_BG }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = HOVER_BG_OFF }}
+        onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+        onMouseUp={(e) => { e.currentTarget.style.transform = '' }}
         style={{ ...TREE_ITEM_STYLE, paddingLeft, fontSize: 11, color: 'var(--ink-2)', gap: 7, marginBottom: 0 }}
       >
         <List size={12} style={{ flexShrink: 0, color: 'var(--ink-3)' }} />
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{list.name}</span>
         {list.visibility === 'private' ? <span title="Private" style={{ fontSize: 9, flexShrink: 0 }}>🔒</span> : null}
-      </motion.button>
+      </button>
       {canManageItem(list) ? (
         <span className="tree-row-menu" style={{ opacity: 0, transition: 'opacity 0.12s', marginLeft: -2, marginRight: 4 }}>
           <QuickMenu
@@ -258,24 +258,24 @@ export default function SidebarSpaceTree({ spaceId, spaceName, spaceColor, isAct
               onMouseEnter={(e) => { const m = e.currentTarget.querySelector('.tree-row-menu'); if (m) m.style.opacity = '1' }}
               onMouseLeave={(e) => { const m = e.currentTarget.querySelector('.tree-row-menu'); if (m) m.style.opacity = '0' }}
             >
-              <motion.button
+              <button
                 type="button"
                 onClick={() => toggleFolder(folder.id)}
-                whileHover={{ backgroundColor: HOVER_BG }}
-                whileTap={{ scale: 0.98 }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = HOVER_BG }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = HOVER_BG_OFF }}
+                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)' }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = '' }}
                 style={{ ...TREE_ITEM_STYLE, paddingLeft: 4, marginBottom: 0 }}
               >
-                <motion.span
-                  animate={{ rotate: isOpen ? 90 : 0 }}
-                  transition={{ type: 'spring', stiffness: 480, damping: 32 }}
-                  style={{ display: 'inline-flex', flexShrink: 0, color: 'var(--ink-3)' }}
+                <span
+                  style={{ display: 'inline-flex', flexShrink: 0, color: 'var(--ink-3)', transform: `rotate(${isOpen ? 90 : 0}deg)`, transition: 'transform 0.18s ease' }}
                 >
                   <ChevronRight size={14} />
-                </motion.span>
+                </span>
                 <Folder size={12} style={{ flexShrink: 0, color: 'var(--accent-teal)' }} />
                 <span style={{ flex: 1, fontSize: 11, fontWeight: 500, color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{folder.name}</span>
                 {folder.visibility === 'private' ? <span title="Private" style={{ fontSize: 9, flexShrink: 0 }}>🔒</span> : null}
-              </motion.button>
+              </button>
               {canManageItem(folder) ? (
                 <span className="tree-row-menu" style={{ opacity: 0, transition: 'opacity 0.12s', marginLeft: -2, marginRight: 4 }}>
                   <QuickMenu
@@ -290,24 +290,16 @@ export default function SidebarSpaceTree({ spaceId, spaceName, spaceColor, isAct
               ) : null}
             </div>
 
-            <AnimatePresence initial={false}>
-              {isOpen ? (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ type: 'spring', stiffness: 380, damping: 36 }}
-                  style={{ overflow: 'hidden' }}
-                >
-                  {folderLists.map((list) => renderListRow(list, 32))}
-                  {folderLists.length === 0 ? (
-                    <div style={{ paddingLeft: 32, padding: '4px 8px', fontSize: 10, color: 'var(--ink-3)', fontStyle: 'italic', fontFamily: FONT_BODY }}>
-                      No lists
-                    </div>
-                  ) : null}
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
+            <div style={{ display: 'grid', gridTemplateRows: isOpen ? '1fr' : '0fr', transition: 'grid-template-rows 0.2s ease' }}>
+              <div style={{ overflow: 'hidden', opacity: isOpen ? 1 : 0, transition: 'opacity 0.15s ease' }}>
+                {folderLists.map((list) => renderListRow(list, 32))}
+                {folderLists.length === 0 ? (
+                  <div style={{ paddingLeft: 32, padding: '4px 8px', fontSize: 10, color: 'var(--ink-3)', fontStyle: 'italic', fontFamily: FONT_BODY }}>
+                    No lists
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
         )
       })}
@@ -318,8 +310,8 @@ export default function SidebarSpaceTree({ spaceId, spaceName, spaceColor, isAct
         <CreateListModal
           space={{ id: spaceId, name: spaceName, color: spaceColor }}
           defaultFolderId={addListFolderId}
-          onCreated={async (list) => {
-            await loadTree()
+          onCreated={(list) => {
+            invalidateTree()
             navigateToList(list.id)
           }}
           onClose={() => setAddListFolderId(false)}

@@ -287,10 +287,14 @@ export default function Settings() {
         tables: {},
       }
 
-      for (const table of tables) {
-        const { data: tableData, error } = await supabase.from(table).select(EXPORT_TABLE_SELECT[table]).limit(10000)
-        if (error) continue
-        data.tables[table] = tableData
+      const results = await Promise.all(
+        tables.map(async (table) => {
+          const { data: tableData, error } = await supabase.from(table).select(EXPORT_TABLE_SELECT[table]).limit(10000)
+          return [table, error ? null : tableData]
+        })
+      )
+      for (const [table, tableData] of results) {
+        if (tableData !== null) data.tables[table] = tableData
       }
 
       const json = JSON.stringify(data, null, 2)

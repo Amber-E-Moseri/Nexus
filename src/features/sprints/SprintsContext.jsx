@@ -1,18 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
-import { getMySprints, getActiveSprintsForSidebar } from './lib/sprints'
+import { getActiveSprintsForSidebar } from './lib/sprints'
 
 export const SprintsContext = createContext(null)
 
 export function SprintsProvider({ children }) {
   const { user } = useAuth()
-  const [sprints, setSprints] = useState([])
   const [sidebarSprints, setSidebarSprints] = useState([])
   const [loading, setLoading] = useState(true)
 
   const loadSprints = useCallback(async () => {
     if (!user) {
-      setSprints([])
       setSidebarSprints([])
       setLoading(false)
       return
@@ -20,15 +18,10 @@ export function SprintsProvider({ children }) {
 
     try {
       setLoading(true)
-      const [allSprints, activeSidebarSprints] = await Promise.all([
-        getMySprints(),
-        getActiveSprintsForSidebar(user.id),
-      ])
-      setSprints(allSprints)
+      const activeSidebarSprints = await getActiveSprintsForSidebar(user.id)
       setSidebarSprints(activeSidebarSprints)
     } catch (err) {
       console.error('Failed to load sprints:', err)
-      setSprints([])
       setSidebarSprints([])
     } finally {
       setLoading(false)
@@ -46,12 +39,11 @@ export function SprintsProvider({ children }) {
   }), [sidebarSprints])
 
   const value = useMemo(() => ({
-    sprints,
     activeSprints,
     planningSprints,
     loading,
     reload: loadSprints,
-  }), [sprints, activeSprints, planningSprints, loading, loadSprints])
+  }), [activeSprints, planningSprints, loading, loadSprints])
 
   return (
     <SprintsContext.Provider value={value}>

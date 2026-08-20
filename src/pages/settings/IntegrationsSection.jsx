@@ -456,14 +456,11 @@ export default function IntegrationsSection({ role, supabaseClient }) {
   }
 
   async function persistDraftOrder() {
-    for (const draft of integrationDrafts) {
-      if (!draft.id) continue
-      await supabaseClient
-        .from('external_integrations')
-        .update({ sort_order: draft.sort_order })
-        .eq('id', draft.id)
-    }
-
+    await Promise.all(
+      integrationDrafts.filter(d => d.id).map(d =>
+        supabaseClient.from('external_integrations').update({ sort_order: d.sort_order }).eq('id', d.id)
+      )
+    )
     setIntegrations(integrationDrafts)
   }
 

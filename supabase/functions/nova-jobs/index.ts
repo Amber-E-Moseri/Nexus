@@ -7,9 +7,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { cleanupAuditData } from './jobs/cleanupAuditData.ts'
 import { checkBudgetHealth } from './jobs/checkBudgetHealth.ts'
 import { embedContent } from './jobs/embedContent.ts'
+import { recordingSyncWorker } from './jobs/recordingSyncWorker.ts'
+import { recordingIntelligenceWorker } from './jobs/recordingIntelligenceWorker.ts'
 
-type JobName = 'cleanup_audit_data' | 'check_budget_health' | 'embed_content'
-const KNOWN_JOBS = new Set<JobName>(['cleanup_audit_data', 'check_budget_health', 'embed_content'])
+type JobName = 'cleanup_audit_data' | 'check_budget_health' | 'embed_content' | 'process_recording_sync' | 'generate_recording_intelligence'
+const KNOWN_JOBS = new Set<JobName>(['cleanup_audit_data', 'check_budget_health', 'embed_content', 'process_recording_sync', 'generate_recording_intelligence'])
 
 serve(async (req) => {
   if (req.method !== 'POST') {
@@ -58,6 +60,20 @@ serve(async (req) => {
       case 'embed_content': {
         const result = await embedContent(serviceClient)
         console.log('nova-jobs embed_content:', result)
+        return new Response(JSON.stringify({ job, result }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      case 'process_recording_sync': {
+        const result = await recordingSyncWorker(serviceClient)
+        console.log('nova-jobs process_recording_sync:', result)
+        return new Response(JSON.stringify({ job, result }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      case 'generate_recording_intelligence': {
+        const result = await recordingIntelligenceWorker(serviceClient)
+        console.log('nova-jobs generate_recording_intelligence:', result)
         return new Response(JSON.stringify({ job, result }), {
           status: 200, headers: { 'Content-Type': 'application/json' },
         })

@@ -84,9 +84,9 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
         (user) => user.department_id === departmentIdValue && user.id !== profile.id,
       )
 
-      for (const member of members) {
-        await addSprintMember(sprintRecord.id, member.id, 'contributor', [team.id])
-      }
+      await Promise.all(
+        members.map(member => addSprintMember(sprintRecord.id, member.id, 'contributor', [team.id]))
+      )
 
       const creatorBelongsToTeam = activeUsers.some(
         (user) => user.id === profile.id && user.department_id === departmentIdValue,

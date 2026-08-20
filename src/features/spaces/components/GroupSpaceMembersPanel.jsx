@@ -66,10 +66,7 @@ export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwners
     setSuccess('')
 
     try {
-      // Add to all selected spaces
-      for (const spaceId of selectedSpaceIds) {
-        await addGroupSpaceMember(spaceId, selectedUserId)
-      }
+      await Promise.all([...selectedSpaceIds].map(spaceId => addGroupSpaceMember(spaceId, selectedUserId)))
 
       setSuccess(`Added to ${selectedSpaceIds.size} space${selectedSpaceIds.size > 1 ? 's' : ''}`)
       setSelectedUserId('')

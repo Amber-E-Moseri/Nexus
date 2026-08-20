@@ -4,8 +4,10 @@ import { useAuth } from '../../hooks/useAuth'
 
 export const EventConfigContext = createContext(null)
 
+const REGISTRATION_ROLES = new Set(['super_admin', 'regional_secretary', 'pastor', 'member'])
+
 export function EventConfigProvider({ children }) {
-  const { user } = useAuth()
+  const { user, effectiveRole } = useAuth()
   const [config, setConfig] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -14,6 +16,15 @@ export function EventConfigProvider({ children }) {
     if (!user) {
       setConfig(null)
       setError(null)
+      setLoading(false)
+      return
+    }
+
+    // Skip the DB query for roles that can never access registration.
+    // `member` role still queries because sprint-team membership (not role alone)
+    // determines access and that data isn't available here.
+    if (effectiveRole && !REGISTRATION_ROLES.has(effectiveRole)) {
+      setConfig(null)
       setLoading(false)
       return
     }
@@ -36,7 +47,7 @@ export function EventConfigProvider({ children }) {
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [user, effectiveRole])
 
   useEffect(() => {
     loadConfig()

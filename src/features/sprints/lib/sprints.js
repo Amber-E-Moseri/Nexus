@@ -975,16 +975,14 @@ export async function deactivateExpiredSprintMembers() {
   if (updateError) throw updateError
 
   // Step 4: Send notifications (create notification records)
-  for (const userId of userIds) {
-    try {
-      await createNotification(userId, 'sprint_access_ended', {
+  await Promise.allSettled(
+    userIds.map(userId =>
+      createNotification(userId, 'sprint_access_ended', {
         title: 'Sprint Access Ended',
         message: 'Your temporary sprint access has ended. Your account is now inactive.',
       })
-    } catch (err) {
-      console.error('Error creating notification:', err)
-    }
-  }
+    )
+  )
 
   return {
     deactivated: userIds.length,
@@ -1024,16 +1022,14 @@ export async function archiveSprintWithAutoDeactivation(sprintId) {
       .in('id', userIds)
 
     // Notify each
-    for (const userId of userIds) {
-      try {
-        await createNotification(userId, 'sprint_archived', {
+    await Promise.allSettled(
+      userIds.map(userId =>
+        createNotification(userId, 'sprint_archived', {
           title: 'Sprint Archived',
           message: 'The sprint you were working on has been archived. Your access is now inactive.',
         })
-      } catch (err) {
-        console.error('Error creating notification:', err)
-      }
-    }
+      )
+    )
   }
 
   return { archived: true, deactivated: tempMembers?.length || 0 }

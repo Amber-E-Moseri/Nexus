@@ -101,17 +101,17 @@ export default function DeliverableTaskBuilder({ event, onSaved }) {
         ...(programsUsers ?? []).map(u => u.id),
         ...(deptLeads ?? []).map(r => r.user_id),
       ])]
-      for (const userId of ids) {
-        try { await followTask(taskId, userId) } catch { /* non-fatal */ }
-      }
+      await Promise.allSettled(ids.map(userId => followTask(taskId, userId)))
     } catch { /* non-fatal */ }
   }
 
   async function handleSave() {
     setSubmitting(true)
-    for (const row of rows.filter(r => r.status === 'idle')) {
-      updateRow(row.id, { status: 'saving', error: '' })
-      try {
+    const idleRows = rows.filter(r => r.status === 'idle')
+    idleRows.forEach(row => updateRow(row.id, { status: 'saving', error: '' }))
+
+    await Promise.allSettled(
+      idleRows.map(async (row) => {
         const payload = isSprintMode
           ? {
               title: row.title.trim(),
@@ -137,13 +137,15 @@ export default function DeliverableTaskBuilder({ event, onSaved }) {
               is_personal: false,
             }
 
-        const created = await createTask(payload)
-        await fanOutWatchers(created.id, row.assignee.department_id)
-        updateRow(row.id, { status: 'done' })
-      } catch (err) {
-        updateRow(row.id, { status: 'error', error: err.message ?? 'Failed to create task' })
-      }
-    }
+        try {
+          const created = await createTask(payload)
+          await fanOutWatchers(created.id, row.assignee.department_id)
+          updateRow(row.id, { status: 'done' })
+        } catch (err) {
+          updateRow(row.id, { status: 'error', error: err.message ?? 'Failed to create task' })
+        }
+      })
+    )
     setSubmitting(false)
     onSaved?.()
   }

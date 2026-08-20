@@ -24,20 +24,35 @@ export default function MyAssignedTasksWidget({ userId }) {
     async function load() {
       setLoading(true)
       try {
-        const { data } = await supabase
+        const { data: assigneeRows } = await supabase
+          .from('task_assignees')
+          .select('task_id')
+          .eq('user_id', userId)
+
+        const extraIds = (assigneeRows ?? []).map((r) => r.task_id)
+
+        let query = supabase
           .from('tasks')
           .select('id, title, due_date, status_definition:task_status_definitions!status_id(category, color, name)')
-          .eq('assignee_id', userId)
           .eq('is_personal', false)
           .is('parent_task_id', null)
+          .is('deleted_at', null)
           .order('due_date', { ascending: true, nullsFirst: false })
-          .limit(12)
+          .limit(20)
+
+        if (extraIds.length > 0) {
+          query = query.or(`assignee_id.eq.${userId},id.in.(${extraIds.join(',')})`)
+        } else {
+          query = query.eq('assignee_id', userId)
+        }
+
+        const { data } = await query
 
         if (!active) return
         const open = (data ?? []).filter(
           (t) => t.status_definition?.category !== 'completed' && t.status_definition?.category !== 'cancelled',
         )
-        setTasks(open)
+        setTasks(open.slice(0, 12))
       } finally {
         if (active) setLoading(false)
       }

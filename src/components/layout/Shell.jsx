@@ -1,19 +1,18 @@
-import { Suspense, useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { SprintsProvider } from '../../features/sprints/SprintsContext'
 import { EventConfigProvider } from '../../features/registration/EventConfigContext'
-import { usePrefetchRoutes } from '../../hooks/usePrefetchRoutes'
 import PageSpinner from '../ui/PageSpinner'
 import NotificationPermissionPrompt from '../notifications/NotificationPermissionPrompt'
-import { NovaChat } from '../../features/nova'
-import BirthdayOverlay from '../ui/BirthdayOverlay'
 import RegionalUpdatesPopup from '../ui/RegionalUpdatesPopup'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
 
+const NovaChat = lazy(() => import('../../features/nova').then(m => ({ default: m.NovaChat })))
+const BirthdayOverlay = lazy(() => import('../ui/BirthdayOverlay'))
+
 export default function Shell() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
-  usePrefetchRoutes()
 
   return (
     <SprintsProvider>
@@ -49,8 +48,12 @@ export default function Shell() {
             </main>
           </div>
         </div>
-        <NovaChat />
-        <BirthdayOverlay />
+        <Suspense fallback={null}>
+          <NovaChat />
+        </Suspense>
+        <Suspense fallback={null}>
+          <BirthdayOverlay />
+        </Suspense>
         <RegionalUpdatesPopup />
       </EventConfigProvider>
     </SprintsProvider>

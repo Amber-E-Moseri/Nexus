@@ -471,13 +471,9 @@ export default function RecipientsPage() {
 
   async function handleSuppressSelected() {
     const toSuppress = profiles.filter((p) => selectedRows.has(p.id))
-    for (const profile of toSuppress) {
-      await supabase.from('communication_unsubscribes').insert({
-        email: profile.email,
-        full_name: profile.full_name,
-        reason: 'manual_admin',
-      })
-    }
+    await supabase.from('communication_unsubscribes').insert(
+      toSuppress.map(p => ({ email: p.email, full_name: p.full_name, reason: 'manual_admin' }))
+    )
     setSelectedRows(new Set())
     setSelectAll(false)
     await loadData()

@@ -156,7 +156,7 @@ export default function AppsPage() {
             description="Nova knowledge base"
             onClick={() => navigate('/nova/kb')}
           />
-          {isSuperAdmin && (
+          {(isSuperAdmin || role === 'regional_secretary') && (
             <AppIcon
               icon={TrendingUp}
               label="Growth Tracking"

@@ -121,16 +121,15 @@ export function useTimeBlocks(userId, weekStartISO, weekEndISO) {
         .eq('user_id', userId)
       if (parentError) throw parentError
 
-      for (const child of childBlocks) {
-        const offset = child.time_offset_from_parent ?? computeOffsetMinutes(parentBlock, child)
-        const next = applyOffsetToChild(newDateISO, newStartTime, child, offset)
-        const { error: childError } = await supabase
-          .from('time_blocks')
-          .update(next)
-          .eq('id', child.id)
-          .eq('user_id', userId)
-        if (childError) throw childError
-      }
+      const childResults = await Promise.all(
+        childBlocks.map(child => {
+          const offset = child.time_offset_from_parent ?? computeOffsetMinutes(parentBlock, child)
+          const next = applyOffsetToChild(newDateISO, newStartTime, child, offset)
+          return supabase.from('time_blocks').update(next).eq('id', child.id).eq('user_id', userId)
+        })
+      )
+      const firstChildError = childResults.find(r => r.error)?.error
+      if (firstChildError) throw firstChildError
       await invalidate()
     },
     [userId, invalidate],

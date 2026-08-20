@@ -11,30 +11,49 @@ export function NotificationsProvider({ children }) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [isOpen, setIsOpen] = useState(false)
+  const [listLoaded, setListLoaded] = useState(false)
 
-  const loadNotifications = useCallback(async () => {
+  // On mount: fetch only the unread count — the full list is deferred until the panel opens.
+  const loadCount = useCallback(async () => {
     if (!user) {
       setNotifications([])
       setUnreadCount(0)
+      setListLoaded(false)
       setLoading(false)
       return
     }
-
     try {
       setLoading(true)
-      const [notifs, count] = await Promise.all([getNotifications(user.id), getUnreadCount(user.id)])
-      setNotifications(notifs)
+      const count = await getUnreadCount(user.id)
       setUnreadCount(count)
     } catch (err) {
-      console.error('Failed to load notifications:', err)
+      console.error('Failed to load notification count:', err)
     } finally {
       setLoading(false)
     }
   }, [user])
 
+  const loadNotifications = useCallback(async () => {
+    if (!user) return
+    try {
+      const notifs = await getNotifications(user.id)
+      setNotifications(notifs)
+      setListLoaded(true)
+    } catch (err) {
+      console.error('Failed to load notifications:', err)
+    }
+  }, [user])
+
   useEffect(() => {
-    loadNotifications()
-  }, [loadNotifications])
+    loadCount()
+  }, [loadCount])
+
+  // Load the full list the first time the panel opens.
+  useEffect(() => {
+    if (isOpen && !listLoaded) {
+      loadNotifications()
+    }
+  }, [isOpen, listLoaded, loadNotifications])
 
   useEffect(() => {
     if (!user) return undefined
@@ -116,6 +135,18 @@ export function NotificationsProvider({ children }) {
     setUnreadCount(0)
   }, [user])
 
+  const reload = useCallback(async () => {
+    if (!user) return
+    try {
+      const [notifs, count] = await Promise.all([getNotifications(user.id), getUnreadCount(user.id)])
+      setNotifications(notifs)
+      setUnreadCount(count)
+      setListLoaded(true)
+    } catch (err) {
+      console.error('Failed to reload notifications:', err)
+    }
+  }, [user])
+
   const value = useMemo(() => ({
     notifications,
     unreadCount,
@@ -124,8 +155,8 @@ export function NotificationsProvider({ children }) {
     setIsOpen,
     markAsRead: handleMarkAsRead,
     markAllAsRead: handleMarkAllAsRead,
-    reload: loadNotifications,
-  }), [notifications, unreadCount, loading, isOpen, handleMarkAsRead, handleMarkAllAsRead, loadNotifications])
+    reload,
+  }), [notifications, unreadCount, loading, isOpen, handleMarkAsRead, handleMarkAllAsRead, reload])
 
   return (
     <NotificationsContext.Provider value={value}>

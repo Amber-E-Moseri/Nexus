@@ -57,15 +57,13 @@ export function MapSettingsView({ campuses, onClose }) {
         updated_at: new Date().toISOString(),
       }))
 
-      // Update all campuses in batch
-      for (const update of updates) {
-        const { error } = await supabase
-          .from('campuses')
-          .update({ status: update.status, updated_at: update.updated_at })
-          .eq('id', update.id)
-
-        if (error) throw error
-      }
+      const results = await Promise.all(
+        updates.map(update =>
+          supabase.from('campuses').update({ status: update.status, updated_at: update.updated_at }).eq('id', update.id)
+        )
+      )
+      const firstError = results.find(r => r.error)?.error
+      if (firstError) throw firstError
 
       showToast(`Updated ${updates.length} campus/campuses`, 'success')
       setStatusChanges({})

@@ -153,14 +153,7 @@ export async function matchPersonToUser(
 export async function matchPeopleToUsers(
   people: Array<{ name: string; id?: string }>,
 ): Promise<MatchResult[]> {
-  const results: MatchResult[] = []
-
-  for (const person of people) {
-    const result = await matchPersonToUser(person.name, person.id)
-    results.push(result)
-  }
-
-  return results
+  return Promise.all(people.map(person => matchPersonToUser(person.name, person.id)))
 }
 
 export interface ImportSummary {

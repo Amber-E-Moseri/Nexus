@@ -766,31 +766,30 @@ export async function recalculateAttendanceTrends(meetingId) {
 
     if (userIds.length === 0) return null
 
-    // For each user, calculate attendance percentage across all meetings
+    // Fetch all attendance records for these users in one query, then group in memory
+    const { data: allAttendance, error: allAttendanceError } = await supabase
+      .from('meeting_attendance')
+      .select('user_id, status')
+      .in('user_id', userIds)
+
+    if (allAttendanceError) throw allAttendanceError
+
+    const byUser = {}
+    for (const row of allAttendance ?? []) {
+      (byUser[row.user_id] ??= []).push(row)
+    }
+
     const trendUpdates = []
-
     for (const userId of userIds) {
-      const { data: allUserAttendance, error: userAttendanceError } = await supabase
-        .from('meeting_attendance')
-        .select('status')
-        .eq('user_id', userId)
-
-      if (userAttendanceError) throw userAttendanceError
-
-      const total = allUserAttendance?.length || 0
+      const records = byUser[userId] ?? []
+      const total = records.length
       if (total === 0) continue
 
-      const presentCount = allUserAttendance.filter((a) => a.status === 'present').length
+      const presentCount = records.filter((a) => a.status === 'present').length
       const attendancePercentage = Math.round((presentCount / total) * 100)
-
-      // Track if on watch list (< 75%)
       const onWatchList = attendancePercentage < 75
 
-      trendUpdates.push({
-        userId,
-        attendancePercentage,
-        onWatchList,
-      })
+      trendUpdates.push({ userId, attendancePercentage, onWatchList })
     }
 
     // Update user records with new attendance percentage

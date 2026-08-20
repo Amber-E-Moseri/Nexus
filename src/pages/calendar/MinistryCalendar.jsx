@@ -212,15 +212,13 @@ export default function MinistryCalendar() {
     setSyncing(true)
     try {
       const sources = await getMinistryCalendarSources()
-      let syncCount = 0
-      for (const source of sources) {
-        try {
-          await syncCalendarSource(source.id)
-          syncCount++
-        } catch (err) {
-          console.error(`Failed to sync ${source.display_name}:`, err)
-        }
-      }
+      const results = await Promise.allSettled(
+        sources.map(source => syncCalendarSource(source.id))
+      )
+      const syncCount = results.filter(r => r.status === 'fulfilled').length
+      results.forEach((r, i) => {
+        if (r.status === 'rejected') console.error(`Failed to sync ${sources[i].display_name}:`, r.reason)
+      })
       showToast(`Synced ${syncCount} calendar source${syncCount !== 1 ? 's' : ''}`, { tone: 'success' })
       await loadCalendar()
     } catch (err) {

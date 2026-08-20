@@ -86,6 +86,7 @@ const IntegrationStatusPage = lazy(() => import('./pages/settings/IntegrationSta
 const GoogleDriveAuthCallback = lazy(() => import('./pages/auth/GoogleDriveAuthCallback'))
 const GoogleCalendarCallback = lazy(() => import('./pages/auth/GoogleCalendarCallback'))
 const MinistryCalendarConnectionCallback = lazy(() => import('./pages/calendar/MinistryCalendarConnectionCallback'))
+const ZoomOAuthCallback = lazy(() => import('./pages/ZoomOAuthCallback'))
 const MeetingDocConnectionCallback = lazy(() => import('./pages/meetings/MeetingDocConnectionCallback'))
 const SlackCallback = lazy(() => import('./pages/auth/SlackCallback'))
 const OutlookCalendarCallback = lazy(() => import('./pages/auth/OutlookCalendarCallback'))
@@ -148,6 +149,7 @@ export default function App() {
       <Route path="/auth/google-drive/callback" element={<GoogleDriveAuthCallback />} />
       <Route path="/auth/google_calendar-callback" element={<GoogleCalendarCallback />} />
       <Route path="/auth/ministry-calendar-callback" element={<MinistryCalendarConnectionCallback />} />
+      <Route path="/auth/zoom-callback" element={<ZoomOAuthCallback />} />
       <Route path="/auth/meeting-doc-callback" element={<MeetingDocConnectionCallback />} />
       <Route path="/auth/slack-callback" element={<SlackCallback />} />
       <Route path="/auth/outlook_calendar-callback" element={<OutlookCalendarCallback />} />
@@ -459,7 +461,7 @@ export default function App() {
           <Route
             path="/growth-tracking"
             element={
-              <ProtectedRoute roles={['super_admin']}>
+              <ProtectedRoute roles={['super_admin', 'regional_secretary']}>
                 <GrowthTrackingPage />
               </ProtectedRoute>
             }

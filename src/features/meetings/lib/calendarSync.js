@@ -178,16 +178,15 @@ export async function bulkSyncMeetingsToCalendar(meetingIds) {
     errors: [],
   }
 
-  for (const meetingId of meetingIds) {
-    try {
-      await retryCalendarSync(meetingId)
+  const settled = await Promise.allSettled(
+    meetingIds.map(meetingId => retryCalendarSync(meetingId).then(() => meetingId))
+  )
+  for (let i = 0; i < settled.length; i++) {
+    if (settled[i].status === 'fulfilled') {
       results.successful++
-    } catch (error) {
+    } else {
       results.failed++
-      results.errors.push({
-        meetingId,
-        error: error.message,
-      })
+      results.errors.push({ meetingId: meetingIds[i], error: settled[i].reason?.message ?? 'Unknown error' })
     }
   }
 

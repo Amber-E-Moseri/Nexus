@@ -33,6 +33,13 @@ const MAX_CHUNKS = Number(Deno.env.get("MAX_TRANSCRIPT_CHUNKS")) || 6;
 // while still being a bounded number instead of "forever".
 const ANTHROPIC_TIMEOUT_MS = Number(Deno.env.get("ANTHROPIC_TIMEOUT_MS")) || 240000;
 
+// Lets trusted background jobs (e.g. the Zoom recording-intelligence cron
+// worker) call this function without a real end-user session. Matches the
+// same Authorization-header convention already used by zoom-recording-sync
+// and other internal job targets.
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const NOVA_JOBS_SECRET = Deno.env.get("NOVA_JOBS_SECRET") ?? "";
+
 async function fetchAnthropic(body: unknown, anthropicKey: string, extraHeaders: Record<string, string> = {}): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ANTHROPIC_TIMEOUT_MS);
@@ -593,7 +600,7 @@ serve(async (req) => {
     });
   }
 
-  // ── AUTH: Verify JWT ──────────────────────────────────────────────────────
+  // ── AUTH: Verify JWT, or accept an internal service-role/shared-secret call ─
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -602,20 +609,30 @@ serve(async (req) => {
     });
   }
 
+  // Background jobs (no end-user session to resolve via auth.getUser) present
+  // the service-role key or the shared NOVA_JOBS_SECRET instead of a user JWT.
+  // Ordinary browser callers never send either, so this never short-circuits
+  // the normal per-user path below.
+  const isServiceCall =
+    (!!NOVA_JOBS_SECRET && authHeader.includes(NOVA_JOBS_SECRET)) ||
+    (!!SUPABASE_SERVICE_ROLE_KEY && authHeader.includes(SUPABASE_SERVICE_ROLE_KEY));
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const { data: { user }, error: authErr } = await supabase.auth.getUser(
-    authHeader.substring(7)
-  );
+  if (!isServiceCall) {
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(
+      authHeader.substring(7)
+    );
 
-  if (authErr || !user) {
-    return new Response(JSON.stringify({ error: "Invalid token" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    if (authErr || !user) {
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
   }
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -634,7 +651,7 @@ serve(async (req) => {
     }
 
     if (meetingId) {
-      canPersist = await userCanAccessMeeting(authHeader, meetingId);
+      canPersist = isServiceCall ? true : await userCanAccessMeeting(authHeader, meetingId);
       if (canPersist) {
         await persistExtraction(supabase, meetingId, {
           extraction_status: "processing",

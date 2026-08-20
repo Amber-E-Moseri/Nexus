@@ -206,11 +206,22 @@ function GoogleDriveCard({ spaceId, canManage }) {
 
 // ── Zoom Card ─────────────────────────────────────────────────────────────────
 
+// Fixed redirect target registered once in the Zoom Marketplace app's OAuth
+// settings — Zoom OAuth apps take a single exact-match redirect URL (unlike
+// Google, which allows a whitelist), so this can't vary per-space the way the
+// rest of this file's URLs do. The space to return to is recovered by
+// ZoomOAuthCallback.jsx from the connected integration row itself (looked up
+// via `state`, which carries the space_integrations row id), not from the URL.
+export function zoomRedirectUri() {
+  return `${window.location.origin}/auth/zoom-callback`
+}
+
 function ZoomCard({ spaceId, canManage }) {
   const { profile } = useAuth()
   const [integration, setIntegration] = useState(undefined)
   const [isEnabled, setIsEnabled] = useState(true)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [error, setError] = useState('')
 
   async function loadIntegration() {
     const { data } = await supabase
@@ -235,18 +246,42 @@ function ZoomCard({ spaceId, canManage }) {
   useEffect(() => { loadIntegration() }, [spaceId])
 
   async function handleConnect() {
-    // Zoom OAuth — requires server-side ZOOM_CLIENT_ID
-    // Upsert a placeholder row so the card shows "connected" after the OAuth flow
-    // In production, Zoom OAuth callback would update this row with real credentials.
-    const { error } = await supabase.from('space_integrations').upsert({
-      department_id: spaceId,
-      integration_type: 'zoom',
-      display_name: 'Zoom',
-      config: { account_id: '', meeting_prefix: '' },
-      is_active: true,
-      connected_by: profile?.id,
-    }, { onConflict: 'department_id,integration_type' })
-    if (!error) await loadIntegration()
+    const clientId = import.meta.env.VITE_ZOOM_CLIENT_ID
+    if (!clientId) {
+      setError('Zoom is not configured — VITE_ZOOM_CLIENT_ID is missing.')
+      return
+    }
+    setError('')
+
+    // Create (or reuse) a placeholder row — inactive until the token exchange succeeds —
+    // so we have a stable id to round-trip through Zoom's `state` param.
+    const { data: existing } = await supabase
+      .from('space_integrations')
+      .select('id')
+      .eq('department_id', spaceId)
+      .eq('integration_type', 'zoom')
+      .maybeSingle()
+
+    let integrationId = existing?.id
+    if (!integrationId) {
+      const { data: created, error: createErr } = await supabase
+        .from('space_integrations')
+        .insert({
+          department_id: spaceId,
+          integration_type: 'zoom',
+          display_name: 'Zoom',
+          config: {},
+          is_active: false,
+          connected_by: profile?.id,
+        })
+        .select('id')
+        .single()
+      if (createErr) { setError(createErr.message); return }
+      integrationId = created.id
+    }
+
+    const authorizeUrl = `https://zoom.us/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(zoomRedirectUri())}&state=${encodeURIComponent(integrationId)}`
+    window.location.href = authorizeUrl
   }
 
   async function handleDisconnect() {
@@ -282,12 +317,14 @@ function ZoomCard({ spaceId, canManage }) {
         <div style={{ fontSize: 15, fontWeight: 700, color: '#2D2A22' }}>Zoom</div>
       </div>
 
+      {error ? <div style={{ fontSize: 12, color: '#C94830', marginBottom: 10 }}>{error}</div> : null}
+
       {integration === undefined ? (
         <div style={{ fontSize: 13, color: '#9E9488' }}>Loading…</div>
       ) : integration ? (
         <>
-          {integration.config?.account_id ? (
-            <div style={{ fontSize: 12, color: '#9E9488', marginBottom: 10 }}>Account: {integration.config.account_id}</div>
+          {integration.config?.zoom_email ? (
+            <div style={{ fontSize: 12, color: '#9E9488', marginBottom: 10 }}>Account: {integration.config.zoom_email}</div>
           ) : null}
           {canManage && (
             <div style={{ display: 'flex', gap: 8 }}>

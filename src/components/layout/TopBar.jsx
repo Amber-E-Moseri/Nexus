@@ -1,12 +1,14 @@
 ﻿import { Bell, ChevronRight, LoaderCircle, Plus, Search, Menu } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useInboxCount } from '../../context/InboxCountContext'
 import { formatDueDate } from '../../lib/dateUtils'
 import { getTaskById } from '../../features/tasks'
 import { supabase } from '../../lib/supabase'
-import TaskModal from '../../features/tasks/components/TaskModal'
+
+const loadTaskModal = () => import('../../features/tasks/components/TaskModal')
+const TaskModal = lazy(loadTaskModal)
 
 const ROUTE_CRUMBS = {
   '/': [['Home', '/']],
@@ -445,6 +447,8 @@ export default function TopBar({ onOpenMobileMenu }) {
               className="flex items-center gap-1.5 rounded-[8px] px-2 py-1.5 text-[12px] font-bold text-white transition sm:px-3"
               style={{ background: 'var(--amber)' }}
               onClick={() => setShowNewTaskModal(true)}
+              onMouseEnter={loadTaskModal}
+              onFocus={loadTaskModal}
               aria-label="New Task"
             >
               <Plus size={14} />
@@ -520,23 +524,27 @@ export default function TopBar({ onOpenMobileMenu }) {
       </header>
 
       {taskModal ? (
-        <TaskModal
-          mode="edit"
-          task={taskModal}
-          departmentId={taskModal.department_id}
-          sprintId={taskModal.sprint_id}
-          onClose={() => setTaskModal(null)}
-          onSaved={setTaskModal}
-          onDeleted={() => setTaskModal(null)}
-        />
+        <Suspense fallback={null}>
+          <TaskModal
+            mode="edit"
+            task={taskModal}
+            departmentId={taskModal.department_id}
+            sprintId={taskModal.sprint_id}
+            onClose={() => setTaskModal(null)}
+            onSaved={setTaskModal}
+            onDeleted={() => setTaskModal(null)}
+          />
+        </Suspense>
       ) : null}
 
       {showNewTaskModal ? (
-        <TaskModal
-          mode="create"
-          onClose={() => setShowNewTaskModal(false)}
-          onSaved={() => setShowNewTaskModal(false)}
-        />
+        <Suspense fallback={null}>
+          <TaskModal
+            mode="create"
+            onClose={() => setShowNewTaskModal(false)}
+            onSaved={() => setShowNewTaskModal(false)}
+          />
+        </Suspense>
       ) : null}
     </>
   )

@@ -870,18 +870,22 @@ export default function CampaignPage() {
       .lte('scheduled_at', now)
 
     if (dueList && dueList.length > 0) {
-      for (const campaign of dueList) {
-        await supabase.from('communication_campaigns').update({ status: 'sending' }).eq('id', campaign.id)
-        await supabase.functions.invoke('send-communication-email', {
-          body: {
-            campaign_id: campaign.id,
-            subject: campaign.subject,
-            body: campaign.body,
-            segment_id: campaign.segment_id,
-            recipient_filters: campaign.recipient_filters,
-          },
-        })
-      }
+      await supabase.from('communication_campaigns')
+        .update({ status: 'sending' })
+        .in('id', dueList.map(c => c.id))
+      await Promise.allSettled(
+        dueList.map(campaign =>
+          supabase.functions.invoke('send-communication-email', {
+            body: {
+              campaign_id: campaign.id,
+              subject: campaign.subject,
+              body: campaign.body,
+              segment_id: campaign.segment_id,
+              recipient_filters: campaign.recipient_filters,
+            },
+          })
+        )
+      )
       await loadCampaigns()
     }
   }

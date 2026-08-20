@@ -129,9 +129,9 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
 
         // Add cross-dept shares if any selected
         if (additionalDeptIds.length > 0) {
-          for (const deptId of additionalDeptIds) {
-            await addMeetingSpace(meeting.id, deptId, profile?.id).catch(() => {})
-          }
+          await Promise.all(
+            additionalDeptIds.map(deptId => addMeetingSpace(meeting.id, deptId, profile?.id).catch(() => {}))
+          )
         }
 
         if (agendaItems.length > 0) {
@@ -168,9 +168,9 @@ export default function ScheduleMeetingModal({ onClose, onSaved }) {
 
         // Add cross-dept shares if any selected
         if (additionalDeptIds.length > 0) {
-          for (const deptId of additionalDeptIds) {
-            await addMeetingSpace(meeting.id, deptId, profile?.id).catch(() => {})
-          }
+          await Promise.all(
+            additionalDeptIds.map(deptId => addMeetingSpace(meeting.id, deptId, profile?.id).catch(() => {}))
+          )
         }
 
         if (agendaItems.length > 0) {

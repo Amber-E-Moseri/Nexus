@@ -72,12 +72,10 @@ export default function PermissionsPage() {
 
   const loadAllPermissions = async () => {
     try {
-      const allPerms = {};
-      for (const role of roleOptions) {
-        const data = await getRolePermissions(role);
-        allPerms[role] = data;
-      }
-      setAllRolePermissions(allPerms);
+      const entries = await Promise.all(
+        roleOptions.map(async (role) => [role, await getRolePermissions(role)])
+      );
+      setAllRolePermissions(Object.fromEntries(entries));
     } catch (err) {
       console.error('Failed to load all permissions:', err);
     }

@@ -15,18 +15,15 @@ export async function persistBoardDrop({ taskId, newStatus, newSortOrder, newSta
 /**
  * Persists a reorder within a list or column.
  * updates: Array<{ id: string, sort_order: number }>
- * Runs one UPDATE per row. Returns an array of any errors encountered.
+ * Fires all UPDATEs in parallel. Returns an array of any errors encountered.
  */
 export async function persistListReorder({ updates, supabase }) {
   if (!supabase || !updates?.length) return []
 
-  const errors = []
-  for (const { id, sort_order } of updates) {
-    const { error } = await supabase
-      .from('tasks')
-      .update({ sort_order })
-      .eq('id', id)
-    if (error) errors.push(error)
-  }
-  return errors
+  const results = await Promise.all(
+    updates.map(({ id, sort_order }) =>
+      supabase.from('tasks').update({ sort_order }).eq('id', id)
+    )
+  )
+  return results.map(r => r.error).filter(Boolean)
 }
