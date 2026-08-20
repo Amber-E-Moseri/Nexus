@@ -200,6 +200,9 @@ export default function ThisIsItInfo() {
         {/* Hero */}
         <div style={{ padding:'28px 16px 6px', animation:'slideUp .6s ease' }}>
           <p className="tii-eyebrow">BLW Canada Sub-Region · This Is It 2026</p>
+          <div style={{ display:'flex', justifyContent:'center', marginBottom:'16px' }}>
+            <img src="/blw-canada-logo.png" alt="BLW Canada" style={{ width:'120px', maxWidth:'60%', height:'auto', animation:'logoIn .5s ease .1s both' }} />
+          </div>
           <div className="tii-ticket">
             <div className="tii-ticket-top">
               <div className="tii-tk-row">
@@ -259,15 +262,15 @@ export default function ThisIsItInfo() {
             <h3>🧳 What to pack</h3>
             <p>Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.</p>
             <ul className="tii-checklist" id="packlist">
-              <CheckItem>🆔 Photo ID (for flight + hotel check-in)</CheckItem>
-              <CheckItem>🤍 All white outfit for Thanksgiving service</CheckItem>
-              <CheckItem>⛪ Sunday service outfit</CheckItem>
-              <CheckItem>🧥 Light jacket or sweater (evenings get cool)</CheckItem>
-              <CheckItem>🧴 Toiletries (hotel has basics, bring your own if you prefer)</CheckItem>
-              <CheckItem>🔌 Portable charger / phone charger</CheckItem>
+              <CheckItem>Photo ID (for flight + hotel check-in)</CheckItem>
+              <CheckItem>All white outfit for Thanksgiving service</CheckItem>
+              <CheckItem>Sunday service outfit</CheckItem>
+              <CheckItem>Light jacket or sweater (evenings get cool)</CheckItem>
+              <CheckItem>Toiletries (hotel has basics, bring your own if you prefer)</CheckItem>
+              <CheckItem>Portable charger / phone charger</CheckItem>
             </ul>
             <p style={{ fontSize:'13px', color:'#666', marginTop:'10px', paddingTop:'10px', borderTop:'1px solid var(--paper-line)' }}>
-              <strong>👕 This Is It shirt:</strong> Will be provided at check-in or after the Friday opening session — no need to pack it.
+              <strong>This Is It shirt:</strong> Will be provided at check-in or after the Friday opening session — no need to pack it.
             </p>
           </div>
           <div className="tii-card card" style={{ marginTop:'10px' }}>
@@ -353,19 +356,19 @@ export default function ThisIsItInfo() {
           <div className="tii-card card">
             <div className="tii-grid2">
               <div className="tii-mini">
-                <div className="lbl">📶 Wi-Fi</div>
+                <div className="lbl">Wi-Fi</div>
                 <div className="big">Free, hotel-wide</div>
               </div>
               <div className="tii-mini">
-                <div className="lbl">🎯 Sessions</div>
+                <div className="lbl">Sessions</div>
                 <div className="big">Conference Room</div>
               </div>
               <div className="tii-mini">
-                <div className="lbl">🍽️ Meals</div>
+                <div className="lbl">Meals</div>
                 <div className="big">Details to come</div>
               </div>
               <div className="tii-mini">
-                <div className="lbl">🚪 Checkout</div>
+                <div className="lbl">Checkout</div>
                 <div className="big">Mon morning</div>
               </div>
             </div>
@@ -426,26 +429,26 @@ export default function ThisIsItInfo() {
             <p>For transport needs — shuttle timing, arrival delays, or airport pickup questions:</p>
             <div className="tii-help-grid">
               <div className="tii-mini">
-                <div className="lbl">👤 Name</div>
+                <div className="lbl">Name</div>
                 <div className="big">{c.transport_contact_name}</div>
               </div>
               <div className="tii-mini">
-                <div className="lbl">📱 Phone / WhatsApp</div>
+                <div className="lbl">Phone / WhatsApp</div>
                 <div className="big"><a href={`tel:${c.transport_contact_phone}`} style={{ color:'var(--purple)' }}>{c.transport_contact_phone}</a></div>
               </div>
               {c.transport_contact_chat && (
                 <div className="tii-mini">
-                  <div className="lbl">💬 Chat</div>
+                  <div className="lbl">Chat</div>
                   <div className="big">{c.transport_contact_chat}</div>
                 </div>
               )}
             </div>
           </div>
           <div className="tii-card card">
-            <h3>💌 General questions</h3>
+            <h3>Questions?</h3>
             <p>For any other questions about the retreat:</p>
             <div style={{ marginTop:'10px' }}>
-              <a href="mailto:info@lwcanada.org" style={{ color:'var(--purple)', fontWeight:600 }}>📧 info@lwcanada.org</a>
+              <a href="mailto:info@lwcanada.org" style={{ color:'var(--purple)', fontWeight:600 }}>info@lwcanada.org</a>
             </div>
           </div>
         </section>
