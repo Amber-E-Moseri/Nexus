@@ -41,7 +41,7 @@ function withTimeout(promise, ms) {
   ]).finally(() => clearTimeout(timer))
 }
 
-async function fetchProfile(userId) {
+async function fetchMinimalProfile(userId) {
   const { data, error } = await supabase
     .from('users')
     .select('id, name, email, role, department_id, avatar_url, status, first_name, last_name, group_name, is_temporary, last_active_at')
@@ -53,33 +53,36 @@ async function fetchProfile(userId) {
     // Try to self-heal by accepting any pending invitation for their email.
     if (error.code === 'PGRST116') {
       const { data: healed, error: healError } = await supabase.rpc('heal_pending_invitation_for_self')
-      if (!healError && healed) return healed
+      if (!healError && healed) return { ...healed, departments: [], space_roles: [], grants: [], is_programs_member: false, _supplementaryLoaded: false }
     }
     throw error
   }
 
-  // Fire all supplementary queries in parallel — they're independent of each
-  // other and waiting sequentially doubled the cold-start time for no reason.
+  return { ...data, departments: [], space_roles: [], grants: [], is_programs_member: false, _supplementaryLoaded: false }
+}
+
+async function fetchSupplementaryProfile(userId, departmentId) {
   const [deptResult, departmentsResult, spaceRolesResult, grantResult] = await Promise.all([
-    // Check if user's department is the Programs department
-    data.department_id
-      ? supabase.from('departments').select('is_programs').eq('id', data.department_id).single()
+    departmentId
+      ? supabase.from('departments').select('is_programs').eq('id', departmentId).single()
       : Promise.resolve({ data: null }),
-    // Fetch all departments for space/scope selection in admin views
     supabase.from('departments').select('id, name').order('name'),
-    // Space roles (Phase 3 permission model)
     supabase.from('space_roles').select('space_id, role').eq('user_id', userId),
-    // Ad-hoc grants (user_grants table)
     supabase.from('user_grants').select('grant_type').eq('user_id', userId),
   ])
 
   return {
-    ...data,
     departments: departmentsResult.data ?? [],
     space_roles: spaceRolesResult.data ?? [],
     grants: (grantResult.data ?? []).map((g) => g.grant_type),
     is_programs_member: deptResult.data?.is_programs ?? false,
   }
+}
+
+async function fetchProfile(userId) {
+  const minimal = await fetchMinimalProfile(userId)
+  const supplementary = await fetchSupplementaryProfile(userId, minimal.department_id)
+  return { ...minimal, ...supplementary, _supplementaryLoaded: true }
 }
 
 export function AuthProvider({ children }) {
@@ -125,11 +128,13 @@ export function AuthProvider({ children }) {
       // `user` unset until the 12s safety-net fired, which read as a random
       // logout even though a valid session existed.
       let session = null
+      let getSessionTimedOut = false
       try {
         const result = await withTimeout(supabase.auth.getSession(), 8_000)
         session = result?.data?.session ?? null
       } catch (e) {
         console.warn('[Auth] getSession failed or timed out:', e)
+        getSessionTimedOut = true
       }
 
       // Migration path: on first launch after switching to IDB storage the SDK's
@@ -165,13 +170,26 @@ export function AuthProvider({ children }) {
 
       if (!mounted) return
 
-      setUser(session?.user ?? null)
-      setJwtRole(getJwtRole(session))
+      // If getSession timed out (likely waiting on a slow token refresh), don't
+      // overwrite auth state — onAuthStateChange will have already set the user
+      // correctly when the session was first read from storage. Only update state
+      // when we have a definitive result.
+      if (!getSessionTimedOut || session) {
+        setUser(session?.user ?? null)
+        setJwtRole(getJwtRole(session))
+      }
 
       if (session?.user) {
         try {
-          const nextProfile = await withTimeout(fetchProfile(session.user.id), 8_000)
-          if (mounted) setProfile(nextProfile)
+          const nextProfile = await withTimeout(fetchMinimalProfile(session.user.id), 8_000)
+          if (mounted) {
+            setProfile(nextProfile)
+            fetchSupplementaryProfile(session.user.id, nextProfile.department_id)
+              .then((supplementary) => {
+                if (mounted) setProfile((prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary, _supplementaryLoaded: true } : prev)
+              })
+              .catch(() => {})
+          }
 
           // Restore push subscription if it was enabled (handles PWA cold-start)
           if (nextProfile?.push_enabled && Notification.permission === 'granted') {
@@ -247,9 +265,11 @@ export function AuthProvider({ children }) {
       setJwtRole(getJwtRole(session))
 
       if (session?.user) {
-        // Only fetch profile on SIGNED_IN (initial login). On TOKEN_REFRESHED
-        // and other events, keep the cached profile to avoid unnecessary DB queries.
-        if (event === 'SIGNED_IN') {
+        // Fetch profile on SIGNED_IN (explicit login) and INITIAL_SESSION (session
+        // restored from storage — this is what fires when a stored session is found,
+        // including after a background token refresh). TOKEN_REFRESHED keeps the
+        // cached profile to avoid unnecessary DB queries.
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           // Session restore / tab refocus also emit SIGNED_IN — skip the
           // refetch when the loaded profile already matches this user (BLW-06)
           if (profileRef.current?.id === session.user.id) {
@@ -259,9 +279,14 @@ export function AuthProvider({ children }) {
           }
           setLoading(true)
           try {
-            const nextProfile = await fetchProfile(session.user.id)
+            const nextProfile = await fetchMinimalProfile(session.user.id)
             if (mounted) {
               setProfile(nextProfile)
+              fetchSupplementaryProfile(session.user.id, nextProfile.department_id)
+                .then((supplementary) => {
+                  if (mounted) setProfile((prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary } : prev)
+                })
+                .catch(() => {})
             }
             touchLastActive().catch(() => {})
           } catch {
@@ -293,7 +318,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signIn = useCallback(
-    (email, password) => supabase.auth.signInWithPassword({ email, password }),
+    (email, password) => withTimeout(supabase.auth.signInWithPassword({ email, password }), 12_000)
+      .catch(e => ({ error: e })),
     [],
   )
 

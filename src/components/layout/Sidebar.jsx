@@ -39,12 +39,12 @@ import {
   Zap,
   Sparkles,
 } from 'lucide-react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useInboxCount } from '../../context/InboxCountContext'
 import { useAuth } from '../../hooks/useAuth'
-import { archiveSpace, getSpacesByType, restoreSpace, updateSpace } from '../../features/spaces'
+import { archiveSpace, getMySpaces, restoreSpace, updateSpace } from '../../features/spaces'
 import { supabase } from '../../lib/supabase'
 import { FLOCK_CRM_CONFIG, hasSpaceRole, hasGrant, isProgramsMember } from '../../lib/permissions.js'
 import { INSTAGRAM_GRADING_ENABLED } from '../../config/features.js'
@@ -283,16 +283,31 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const myTaskCounts = useMyTaskCounts(profile?.id)
   const navigate = useNavigate()
   const location = useLocation()
+  const queryClient = useQueryClient()
   const isExternalMember = Boolean(profile?.is_temporary)
 
-  const [spaceGroups, setSpaceGroups] = useState({
-    department: [],
-    program: [],
-    group: [],
-    personal: [],
-    sandbox: [],
-    archived: [],
+  const userId = profile?.id ?? null
+  const departmentId = profile?.department_id ?? null
+
+  // Spaces — shared React Query cache (same key as Dashboard's MySpacesWidget).
+  // Sidebar fires first (Shell > Outlet), so the cache is always warm by the
+  // time the Dashboard widget mounts.
+  const { data: rawSpaces = [] } = useQuery({
+    queryKey: ['my-spaces', userId, role ?? null, departmentId],
+    enabled: Boolean(userId && role),
+    staleTime: 5 * 60_000,
+    queryFn: () => getMySpaces(userId, role, departmentId),
   })
+
+  const spaceGroups = useMemo(() => ({
+    department: rawSpaces.filter((s) => s.space_type === 'department' && s.status === 'active'),
+    program:    rawSpaces.filter((s) => s.space_type === 'program'    && s.status === 'active'),
+    group:      rawSpaces.filter((s) => s.space_type === 'group'      && s.status === 'active'),
+    personal:   rawSpaces.filter((s) => s.space_type === 'personal'   && s.status === 'active'),
+    sandbox:    rawSpaces.filter((s) => s.space_type === 'sandbox'    && s.status === 'active'),
+    archived:   rawSpaces.filter((s) => s.status === 'archived'),
+  }), [rawSpaces])
+
   const [integrations, setIntegrations] = useState([])
   const [archivedOpen, setArchivedOpen] = useState(false)
   const [showSpaceModal, setShowSpaceModal] = useState(false)
@@ -305,8 +320,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const [inlineRenameValue, setInlineRenameValue] = useState('')
   // { type: 'list' | 'folder', space } → which create modal is open
   const [createModal, setCreateModal] = useState(null)
-  // spaceId → bump count; forces SidebarSpaceTree reload after create
-  const [treeVersions, setTreeVersions] = useState({})
   const [openQuickAddMenuId, setOpenQuickAddMenuId] = useState(null)
   const [spaceActionsOpenId, setSpaceActionsOpenId] = useState(null)
   const [openSpaceMenuId, setOpenSpaceMenuId] = useState(null)
@@ -356,14 +369,20 @@ export default function Sidebar({ isMobileDrawer = false }) {
   }, [profile?.id, role, eventConfig])
   const sidebarRef = useRef(null)
 
+  // _supplementaryLoaded is false during the ~200ms window between minimal
+  // profile render and the background fetch completing. Gate any check that
+  // reads space_roles or grants on this flag so an empty array is never
+  // misread as "no roles" for users who actually have them.
+  const supplementaryReady = profile?._supplementaryLoaded === true
+
   // ors/programs/media/dept_lead authority comes from space_roles rows
   // (Phase 3); users.role only ever holds the base roles now.
-  const isSpaceManager = ['ors', 'programs', 'media', 'dept_lead'].some((r) => hasSpaceRole(profile, null, r))
+  const isSpaceManager = supplementaryReady && ['ors', 'programs', 'media', 'dept_lead'].some((r) => hasSpaceRole(profile, null, r))
   const canCreateSpace = ['super_admin', 'dept_lead', 'regional_secretary', 'pastor'].includes(role) || isSpaceManager
   const canManageSpaces = canCreateSpace
   const showPeople = ['super_admin', 'dept_lead', 'regional_secretary', 'pastor'].includes(role) || isSpaceManager
   const showAdminPlatform = role === 'super_admin' || role === 'regional_secretary' || role === 'dept_lead' ||
-    hasSpaceRole(profile, null, 'dept_lead') || hasGrant(profile, 'regional_secretary_access')
+    (supplementaryReady && (hasSpaceRole(profile, null, 'dept_lead') || hasGrant(profile, 'regional_secretary_access')))
   // Group members are restricted: no platform access (meetings, calendar tools,
   // communications, map), no people management, and no Sprints unless they've
   // been added to a specific sprint (RLS scopes displayedSprints to theirs).
@@ -371,22 +390,10 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const hasAnyPlatformAccess =
     showAdminPlatform ||
     role === 'pastor' ||
-    (INSTAGRAM_GRADING_ENABLED && (['super_admin', 'regional_secretary'].includes(role) || hasSpaceRole(profile, null, 'media'))) ||
-    hasSpaceRole(profile, null, 'ors') ||
+    (INSTAGRAM_GRADING_ENABLED && (['super_admin', 'regional_secretary'].includes(role) || (supplementaryReady && hasSpaceRole(profile, null, 'media')))) ||
+    (supplementaryReady && hasSpaceRole(profile, null, 'ors')) ||
     FLOCK_CRM_CONFIG.checkAccess(role)
   const isPlatformExpanded = platformExpanded
-
-  async function loadSpaces() {
-    if (!profile?.id || !role) return
-    const groups = await getSpacesByType(profile.id, role, profile.department_id)
-    setSpaceGroups(groups)
-  }
-
-  useEffect(() => {
-    loadSpaces().catch((error) => {
-      console.error('Failed to load spaces', error)
-    })
-  }, [profile?.department_id, profile?.id, role])
 
   useEffect(() => {
     if (profile?.id) {
@@ -475,7 +482,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
     () => [...activeSprints, ...planningSprints].slice(0, 8),
     [activeSprints, planningSprints],
   )
-  const initials = getInitials(profile?.name)
+  const initials = getInitials(profile?.name || [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || profile?.email)
 
   function go(path) {
     navigate(path)
@@ -496,20 +503,16 @@ export default function Sidebar({ isMobileDrawer = false }) {
     return () => document.removeEventListener('mousedown', handleDocumentClick)
   }, [openSpaceMenuId, openQuickAddMenuId])
 
-  function bumpTreeVersion(spaceId) {
-    setTreeVersions((current) => ({ ...current, [spaceId]: (current[spaceId] ?? 0) + 1 }))
-  }
-
   async function handleArchiveSpace(space) {
     const { error } = await supabase.from('departments').update({ status: 'archived' }).eq('id', space.id)
     if (error) throw error
-    await loadSpaces()
+    queryClient.invalidateQueries({ queryKey: ['my-spaces'] })
   }
 
   async function handleRestoreSpace(space) {
     const { error } = await supabase.from('departments').update({ status: 'active' }).eq('id', space.id)
     if (error) throw error
-    await loadSpaces()
+    queryClient.invalidateQueries({ queryKey: ['my-spaces'] })
   }
 
   async function handleCopySpaceLink(space) {
@@ -525,7 +528,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
     if (!window.confirm(`Delete ${space.name}? This cannot be undone.`)) return
     const { error } = await supabase.from('departments').delete().eq('id', space.id)
     if (error) throw error
-    await loadSpaces()
+    queryClient.invalidateQueries({ queryKey: ['my-spaces'] })
   }
 
   async function handleRenameSpace(space) {
@@ -542,7 +545,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
 
     setInlineRenameId(null)
     setInlineRenameValue('')
-    await loadSpaces()
+    queryClient.invalidateQueries({ queryKey: ['my-spaces'] })
   }
 
   function handleHideSpace(spaceId) {
@@ -974,22 +977,13 @@ export default function Sidebar({ isMobileDrawer = false }) {
               ) : space.name}
               glyph={<SpaceGlyph color={space.color} label={space.name?.charAt(0)?.toUpperCase() ?? '?'} />}
               trailing={!collapsed && (hoveredSpaceId === space.id || openSpaceMenuId === space.id || openQuickAddMenuId === space.id) ? (
-                <motion.div
-                  initial={{ opacity: 0, x: 4 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.14 }}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                >
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   <DropdownMenu.Root open={openQuickAddMenuId === space.id} onOpenChange={(open) => setOpenQuickAddMenuId(open ? space.id : null)}>
                     <DropdownMenu.Trigger asChild>
-                      {/* Hex literals in motion targets mirror tokens (CSS vars
-                          aren't interpolable): #5F3BB8 = --purple-600 */}
-                      <motion.button
+                      <button
                         type="button"
                         onClick={(event) => event.stopPropagation()}
                         aria-label={`Add to ${space.name}`}
-                        whileHover={{ backgroundColor: '#5F3BB8', color: '#FFFFFF' }}
-                        whileTap={{ scale: 0.9 }}
                         style={{
                           width: 22,
                           height: 22,
@@ -1002,10 +996,15 @@ export default function Sidebar({ isMobileDrawer = false }) {
                           color: openQuickAddMenuId === space.id ? '#FFFFFF' : '#6D6860',
                           cursor: 'pointer',
                           flexShrink: 0,
+                          transition: 'background 0.14s, color 0.14s, transform 0.1s',
                         }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = '#5F3BB8'; e.currentTarget.style.color = '#FFFFFF' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = openQuickAddMenuId === space.id ? '#5F3BB8' : 'rgba(95,59,184,0)'; e.currentTarget.style.color = openQuickAddMenuId === space.id ? '#FFFFFF' : '#6D6860' }}
+                        onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.9)' }}
+                        onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
                       >
                         <Plus size={14} />
-                      </motion.button>
+                      </button>
                     </DropdownMenu.Trigger>
                     <DropdownMenu.Portal>
                       <DropdownMenu.Content
@@ -1050,12 +1049,10 @@ export default function Sidebar({ isMobileDrawer = false }) {
                   {canManageSpaces ? (
                     <DropdownMenu.Root open={openSpaceMenuId === space.id} onOpenChange={(open) => setOpenSpaceMenuId(open ? space.id : null)}>
                       <DropdownMenu.Trigger asChild>
-                        <motion.button
+                        <button
                           type="button"
                           onClick={(event) => event.stopPropagation()}
                           aria-label={`More options for ${space.name}`}
-                          whileHover={{ backgroundColor: '#5F3BB8', color: '#FFFFFF' }}
-                          whileTap={{ scale: 0.9 }}
                           style={{
                             width: 22,
                             height: 22,
@@ -1068,10 +1065,15 @@ export default function Sidebar({ isMobileDrawer = false }) {
                             color: openSpaceMenuId === space.id ? '#FFFFFF' : '#6D6860',
                             cursor: 'pointer',
                             flexShrink: 0,
+                            transition: 'background 0.14s, color 0.14s, transform 0.1s',
                           }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#5F3BB8'; e.currentTarget.style.color = '#FFFFFF' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = openSpaceMenuId === space.id ? '#5F3BB8' : 'rgba(95,59,184,0)'; e.currentTarget.style.color = openSpaceMenuId === space.id ? '#FFFFFF' : '#6D6860' }}
+                          onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.9)' }}
+                          onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
                         >
                           <MoreHorizontal size={14} />
-                        </motion.button>
+                        </button>
                       </DropdownMenu.Trigger>
                       <DropdownMenu.Portal>
                         <DropdownMenu.Content
@@ -1142,7 +1144,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
                       </DropdownMenu.Portal>
                     </DropdownMenu.Root>
                   ) : null}
-                </motion.div>
+                </div>
               ) : null}
               onClick={() => go(`/spaces/${space.id}`)}
             />
@@ -1153,7 +1155,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
                 spaceColor={space.color}
                 isActive={isPathActive(location.pathname, `/spaces/${space.id}`)}
                 canManage={canManageSpaces}
-                refreshToken={treeVersions[space.id] ?? 0}
               />
             )}
           </div>
@@ -1192,7 +1193,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
                       label={space.name}
                       glyph={<SpaceGlyph color={space.color} label={space.name?.charAt(0)?.toUpperCase() ?? '?'} />}
                       trailing={canManageSpaces ? (
-                        <motion.button
+                        <button
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation()
@@ -1200,8 +1201,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
                           }}
                           aria-label={`More options for ${space.name}`}
                           title={`More options for ${space.name}`}
-                          whileHover={{ backgroundColor: '#5F3BB8', color: '#FFFFFF' }}
-                          whileTap={{ scale: 0.9 }}
                           style={{
                             width: 22,
                             height: 22,
@@ -1214,10 +1213,15 @@ export default function Sidebar({ isMobileDrawer = false }) {
                             color: openSpaceMenuId === space.id ? '#FFFFFF' : '#6D6860',
                             cursor: 'pointer',
                             flexShrink: 0,
+                            transition: 'background 0.14s, color 0.14s, transform 0.1s',
                           }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#5F3BB8'; e.currentTarget.style.color = '#FFFFFF' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = openSpaceMenuId === space.id ? '#5F3BB8' : 'rgba(95,59,184,0)'; e.currentTarget.style.color = openSpaceMenuId === space.id ? '#FFFFFF' : '#6D6860' }}
+                          onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.9)' }}
+                          onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
                         >
                           <MoreHorizontal size={14} />
-                        </motion.button>
+                        </button>
                       ) : null}
                       onClick={() => go(`/spaces/${space.id}`)}
                     />
@@ -1710,7 +1714,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {(profile?.name ?? 'User').replace(/_/g, ' ')}
+                  {(profile?.name || [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || profile?.email?.split('@')[0] || 'User').replace(/_/g, ' ')}
                 </div>
                 <div
                   style={{
@@ -1751,12 +1755,12 @@ export default function Sidebar({ isMobileDrawer = false }) {
         </div>
       </div>
 
-      {showSpaceModal ? <SpaceModal onSaved={loadSpaces} onClose={() => setShowSpaceModal(false)} /> : null}
+      {showSpaceModal ? <SpaceModal onSaved={() => queryClient.invalidateQueries({ queryKey: ['my-spaces'] })} onClose={() => setShowSpaceModal(false)} /> : null}
       {createModal?.type === 'list' ? (
         <CreateListModal
           space={createModal.space}
           onCreated={(list) => {
-            bumpTreeVersion(createModal.space.id)
+            queryClient.invalidateQueries({ queryKey: ['space-tree', createModal.space.id] })
             navigate(`/spaces/${createModal.space.id}?list=${list.id}`)
           }}
           onClose={() => setCreateModal(null)}
@@ -1766,13 +1770,13 @@ export default function Sidebar({ isMobileDrawer = false }) {
         <CreateFolderModal
           space={createModal.space}
           onCreated={() => {
-            bumpTreeVersion(createModal.space.id)
+            queryClient.invalidateQueries({ queryKey: ['space-tree', createModal.space.id] })
             navigate(`/spaces/${createModal.space.id}`)
           }}
           onClose={() => setCreateModal(null)}
         />
       ) : null}
-      {editingSpace ? <SpaceModal mode="edit" space={editingSpace} onSaved={async () => { setEditingSpace(null); await loadSpaces() }} onClose={() => setEditingSpace(null)} /> : null}
+      {editingSpace ? <SpaceModal mode="edit" space={editingSpace} onSaved={() => { setEditingSpace(null); queryClient.invalidateQueries({ queryKey: ['my-spaces'] }) }} onClose={() => setEditingSpace(null)} /> : null}
       {showSprintModal ? (
         <SprintModal
           mode="create"

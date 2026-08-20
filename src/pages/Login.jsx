@@ -24,7 +24,16 @@ export default function Login() {
     setSubmitting(true)
     setError('')
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+    let signInError
+    try {
+      const result = await Promise.race([
+        supabase.auth.signInWithPassword({ email, password }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Login timed out — Supabase is unreachable. Check your connection and try again.')), 12_000)),
+      ])
+      signInError = result?.error
+    } catch (e) {
+      signInError = e
+    }
 
     setSubmitting(false)
 

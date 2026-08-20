@@ -159,6 +159,7 @@ export default function RegistrationDataTab({
   onSaveReg,
   onDeleteReg,
   onMarkAbsent,
+  onMarkConfirming,
   onAddPerson,
   onEditPerson,
   onRemove,
@@ -726,7 +727,19 @@ export default function RegistrationDataTab({
                     )}
                     {/* Status */}
                     <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}` }}>
-                      <Pill tone={st.tone}>{st.label}</Pill>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <Pill tone={st.tone}>{st.label}</Pill>
+                        {p.manuallyConfirmed && (
+                          <span title="Manually marked as confirming" style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, background: C.blueBg, color: C.blue, padding: '2px 6px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                            Manual
+                          </span>
+                        )}
+                        {p.inStateConfirmed && (
+                          <span title="Driving cross country" style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, background: C.greenBg, color: C.green, padding: '2px 6px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                            Cross Country
+                          </span>
+                        )}
+                      </div>
                     </td>
                     {/* Actions */}
                     <td style={{ padding: '6px 10px', borderBottom: `1px solid ${C.line}` }}>
@@ -757,12 +770,20 @@ export default function RegistrationDataTab({
                               </button>
                             )
                           )}
-                          {!p.absent && p.on_working_list && p.registrationStatus === 'not_registered' && (
+                          {!p.absent && p.on_working_list && (p.registrationStatus === 'not_registered' || p.registrationStatus === 'registered_outstanding') && (
                             <button
                               onClick={() => { setAbsentExpandedEmail(p.email); setAbsentReason(''); }}
                               style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.amber}`, background: 'transparent', color: C.amber, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
                             >
                               Mark absent
+                            </button>
+                          )}
+                          {role === 'super_admin' && !p.absent && p.registrationStatus === 'not_registered' && !p._fuzzyMatched && (
+                            <button
+                              onClick={() => onMarkConfirming?.(p)}
+                              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.blue}`, background: 'transparent', color: C.blue, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
+                            >
+                              Mark confirming
                             </button>
                           )}
                           {p.absent && (
@@ -822,11 +843,7 @@ export default function RegistrationDataTab({
                       <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                         {canEdit && p.isRegistered && regObj && (
                           <button
-                            onClick={() => {
-                              if (window.confirm(`Delete ${p.full_name || 'this person'}'s registration? This cannot be undone.`)) {
-                                onDeleteReg?.(regObj.id, regObj.email);
-                              }
-                            }}
+                            onClick={() => onDeleteReg?.(regObj.id, regObj.email)}
                             title="Delete registration"
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DDB8B8', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6 }}
                             onMouseEnter={e => e.currentTarget.style.color = C.red}
