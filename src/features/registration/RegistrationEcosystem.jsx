@@ -2123,7 +2123,6 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups,
 
   const filtered = useMemo(() => merged.filter(r => {
     if (r.absent) return false;
-    if (!r.isConfirmed && r.registrationStatus !== 'registered_outstanding') return false;
     // Check filter (subgroup or fellowship depending on limited mode)
     if (isLimited) {
       if (fellowshipFilter !== 'All' && r.fellowship !== fellowshipFilter) return false;
@@ -3039,7 +3038,6 @@ function DelegateComplianceTab({ merged, subgroupFilter, setSubgroupFilter, subg
 
   const filtered = useMemo(() => merged.filter(r => {
     if (r.absent) return false;
-    if (!r.isConfirmed && r.registrationStatus !== 'registered_outstanding') return false;
     if (isLimited) {
       if (fellowshipFilter !== 'All' && r.fellowship !== fellowshipFilter) return false;
     } else {
