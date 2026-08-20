@@ -331,6 +331,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         departureDate: r.departure_date, departureTime: r.departure_time, departureFlight: r.departure_flight,
         flightManualOverride: r.flight_manual_override,
         manuallyConfirmed: r.manually_confirmed ?? false,
+        inState: r.in_state ?? false,
       }));
       // Merge: keep local version for any record edited in the last 10 s
       setRegistrations(prev => {
@@ -514,6 +515,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
             departureTime: r.departure_time,
             departureFlight: r.departure_flight,
             manuallyConfirmed: r.manually_confirmed ?? false,
+            inState: r.in_state ?? false,
           }));
         } catch (e) {
           console.error('Failed to fetch registrations from Supabase:', e);
@@ -581,12 +583,11 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   );
 
   const merged = useMemo(() => registrationsFiltered.map(r => {
-    const conf = confirmations[r.email] || {};
     const pay = paymentByEmail[r.email];
     const hasPaid = pay ? (Number(pay.amount_paid) || 0) > 0 && (Number(pay.amount_paid) || 0) >= (Number(pay.amount_expected) || 0) : false;
     const hasFlightInfo = !!(r.arrivalFlight || r.departureFlight || r.arrivalDate || r.departureDate);
-    // isLocal = explicitly marked as driving/not flying (excludes from Transportation tab)
-    const isLocal = !!conf.inState;
+    // isLocal = explicitly marked as driving/not flying — stored in DB so all users see the same value
+    const isLocal = !!r.inState;
     // fullyConfirmed = confirmed attending by any means: paid, has a flight, marked in-state, or manually confirmed
     const fullyConfirmed = hasPaid || hasFlightInfo || isLocal || !!r.manuallyConfirmed;
     return {
@@ -683,22 +684,22 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   }, []);
 
   const toggleConfirm = useCallback((email) => {
-    setConfirmations(prev => {
-      const cur = prev[email] || {};
-      const next = { ...prev, [email]: { ...cur, inState: !cur.inState } };
-      saveKey('confirmations', next);
-      return next;
+    setRegistrations(prev => {
+      const reg = prev.find(r => r.email === email);
+      const next = !reg?.inState;
+      supabase.from('registrations').update({ in_state: next }).eq('email', email).then(({ error }) => {
+        if (error) console.error('Failed to update in_state:', error);
+      });
+      return prev.map(r => r.email === email ? { ...r, inState: next } : r);
     });
   }, []);
 
   const bulkMarkDriving = useCallback((emails) => {
-    setConfirmations(prev => {
-      const next = { ...prev };
-      for (const email of emails) {
-        next[email] = { ...(next[email] || {}), inState: true };
-      }
-      saveKey('confirmations', next);
-      return next;
+    setRegistrations(prev => {
+      supabase.from('registrations').update({ in_state: true }).in('email', emails).then(({ error }) => {
+        if (error) console.error('Failed to bulk update in_state:', error);
+      });
+      return prev.map(r => emails.includes(r.email) ? { ...r, inState: true } : r);
     });
   }, []);
 
