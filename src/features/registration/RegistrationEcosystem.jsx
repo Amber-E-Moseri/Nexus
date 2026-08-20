@@ -3116,6 +3116,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   const [selectedPerson, setSelectedPerson] = useState(null); // mobile tap-to-assign
   const [editingRoomId, setEditingRoomId] = useState(null);
   const [editingRoomName, setEditingRoomName] = useState('');
+  const [nightBannerDismissed, setNightBannerDismissed] = useState(() => localStorage.getItem('ra_night_banner_v1') === '1');
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   useEffect(() => {
     const h = () => setWindowWidth(window.innerWidth);
@@ -3217,6 +3218,27 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
         </div>
         <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0}><Download size={13} /> Print</Btn>
       </div>
+
+      {/* night highlight feature banner */}
+      {!nightBannerDismissed && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: '#F0EBFF', border: '1px solid #C4B5FD', borderRadius: 9, padding: '10px 14px', marginBottom: 14, flexShrink: 0 }}>
+          <span style={{ fontSize: 16, lineHeight: 1.3, flexShrink: 0 }}>✨</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#4C2A92', marginBottom: 2 }}>New: Stay night highlights</div>
+            <div style={{ fontSize: 12, color: '#6B5C8F', lineHeight: 1.5 }}>
+              Each person in a room now shows coloured day chips based on their flight dates.
+              <span style={{ display: 'inline-flex', gap: 3, verticalAlign: 'middle', margin: '0 4px' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#4C2A92', color: '#fff' }}>Fri</span>
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#4C2A92', color: '#fff' }}>Sat</span>
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#EDE9F6', color: '#C4B5FD' }}>Sun</span>
+              </span>
+              Purple = night needed · Faded = not staying.
+            </div>
+          </div>
+          <button onClick={() => { setNightBannerDismissed(true); localStorage.setItem('ra_night_banner_v1', '1'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9B8DB5', fontSize: 16, lineHeight: 1, padding: 0, flexShrink: 0 }} title="Dismiss">✕</button>
+        </div>
+      )}
+
 
       {/* tap-to-assign banner on mobile */}
       {isMobile && selectedPerson && (
