@@ -665,7 +665,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       }
       if (t.restricted && !hasFinanceAccess && role !== 'regional_secretary') return false;
       // Rooms: Accommodation/Programs teams, reg sec, super admin only
-      if (t.key === 'rooms' && !hasRoomsAccess) return false;
+      const onAccomTeam = userTeamNames.some(n => n.toLowerCase().includes('accommodation'));
+      if (t.key === 'rooms' && !hasRoomsAccess && !onAccomTeam) return false;
       // Import Data: super admin only
       if (t.key === 'import' && role !== 'super_admin') return false;
       if (isGloballyScoped && ['import', 'finance'].includes(t.key)) return false;
