@@ -194,7 +194,7 @@ export default function RegistrationDataTab({
   const [absentExpandedEmail, setAbsentExpandedEmail] = useState(null);
   const [absentReason,        setAbsentReason]        = useState('');
   // full view toggle
-  const [showFullView,        setShowFullView]        = useState(false);
+  const [showFullView,        setShowFullView]        = useState(true);
   // add-person modal
   const [showAddModal,  setShowAddModal]  = useState(false);
   // link-registration modal
@@ -461,11 +461,13 @@ export default function RegistrationDataTab({
     }
     if (sortField !== 'name' || sortDir !== 'asc') {
       const getVal = p => ({
-        name:       p.full_name   || '',
-        fellowship: p.fellowship  || '',
-        phone:      p.phone       || '',
-        registered: p.isRegistered ? 1 : 0,
-        fees:       p.hasPaid     ? 1 : 0,
+        name:        p.full_name    || '',
+        fellowship:  p.fellowship   || '',
+        phone:       p.phone        || '',
+        registered:  p.isRegistered ? 1 : 0,
+        fees:        p.hasPaid      ? 1 : 0,
+        department:  p.department   || '',
+        shirt:       p.shirtSize    || '',
       })[sortField];
       rows = [...rows].sort((a, b) => {
         const av = getVal(a), bv = getVal(b);
@@ -493,6 +495,8 @@ export default function RegistrationDataTab({
     { get: r => STATUS[r.registrationStatus]?.label || r.registrationStatus, label: 'Status' },
     { get: r => r.absent_reason || '', label: 'Absent Reason' },
     { key: 'email', label: 'Email' },
+    { key: 'department', label: 'Department' },
+    { key: 'shirtSize', label: 'Shirt Size' },
   ];
 
   const statusPills = [
@@ -676,9 +680,9 @@ export default function RegistrationDataTab({
                   <>
                     <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Baptism</th>
                     <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Foundation</th>
-                    <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Department</th>
+                    <SortTh label="Department" field="department" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />
                     <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Designation</th>
-                    <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Shirt</th>
+                    <SortTh label="Shirt" field="shirt" sortField={sortField} sortDir={sortDir} onSort={toggleSort} />
                     <th style={{ textAlign: 'left', fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, fontWeight: 600, padding: '8px 10px', borderBottom: `1px solid ${C.line}` }}>Dietary</th>
                   </>
                 )}
