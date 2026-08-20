@@ -199,7 +199,7 @@ export default function ThisIsItInfo() {
 
         {/* Hero */}
         <div style={{ padding:'28px 16px 6px', animation:'slideUp .6s ease' }}>
-          <p className="tii-eyebrow">BLW Canada Sub-Region · Staff Retreat 2026</p>
+          <p className="tii-eyebrow">BLW Canada Sub-Region · This Is It 2026</p>
           <div className="tii-ticket">
             <div className="tii-ticket-top">
               <div className="tii-tk-row">
