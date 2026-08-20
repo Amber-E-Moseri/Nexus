@@ -736,6 +736,16 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     saveRoomData(updated, numRooms, peoplePerRoom);
   }
 
+  function handleUpdatePersonNote(roomId, email, note) {
+    const updated = rooms.map(r =>
+      r.id === roomId
+        ? { ...r, people: r.people.map(p => p.email === email ? { ...p, specialRequest: note } : p) }
+        : r
+    );
+    setRooms(updated);
+    saveRoomData(updated, numRooms, peoplePerRoom);
+  }
+
   function handleSetRoomHead(roomId, personEmail) {
     const updated = rooms.map(r =>
       r.id === roomId ? { ...r, roomHead: r.roomHead === personEmail ? null : personEmail } : r
@@ -1067,7 +1077,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onEditReg: setEditingReg }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
-        {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom, isLimited }} />}
+        {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, handleUpdatePersonNote, peoplePerRoom, isLimited }} />}
         {tab === 'transport' && <TransportTab {...{ merged, isLimited, subgroups, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving: bulkMarkDriving, onToggleCrossCountry: toggleConfirm, onUpdateCrossCountrySubgroups: async (list) => { if (!config?.id) return; await supabase.from('event_configs').update({ cross_country_subgroups: list }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'finance' && (hasFinanceAccess
           ? <FinanceTab {...{ registrations: registrationsFiltered, payments, setPayments, userId: profile?.id, earlyCutoffAt: eventConfig.early_cutoff_at, earlyFee: eventConfig.early_fee, standardFee: eventConfig.standard_fee }} />
@@ -3089,7 +3099,7 @@ function ImportBlock({ title, hint, count, last, onImport }) {
 }
 
 // ============ ROOM ASSIGNMENTS ============
-function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, peoplePerRoom, isLimited }) {
+function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, handleUpdatePersonNote, peoplePerRoom, isLimited }) {
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomCapacity, setNewRoomCapacity] = useState(peoplePerRoom);
   const [bulkPrefix, setBulkPrefix] = useState('Room');
@@ -3126,12 +3136,15 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
       const bg = isAllFemale ? '#FFE8F4' : isAllMale ? '#E8F0FF' : isMixed ? '#FBF0DE' : '#F8F8F8';
       const accent = isAllFemale ? '#C0507A' : isAllMale ? '#2A5FA5' : isMixed ? '#B8710A' : '#6B5C8F';
       const people = room.people.map(p =>
-        `<li style="padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.07);font-size:13px;display:flex;justify-content:space-between;align-items:flex-start">
-          <div>
-            <span style="font-weight:${p.email === room.roomHead ? 700 : 400}">${p.fullName}</span>
-            ${p.designation ? `<div style="font-size:10px;color:#888;margin-top:2px">${p.designation}</div>` : ''}
+        `<li style="padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.07);font-size:13px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <span style="font-weight:${p.email === room.roomHead ? 700 : 400}">${p.fullName}</span>
+              ${p.designation ? `<div style="font-size:10px;color:#888;margin-top:2px">${p.designation}</div>` : ''}
+            </div>
+            ${p.email === room.roomHead ? '<span style="font-weight:700;color:' + accent + ';font-size:11px">HEAD</span>' : ''}
           </div>
-          ${p.email === room.roomHead ? '<span style="font-weight:700;color:' + accent + ';font-size:11px">HEAD</span>' : ''}
+          ${p.specialRequest ? `<div style="font-size:10.5px;color:#7C3AED;margin-top:3px;font-style:italic">⚑ ${p.specialRequest}</div>` : ''}
         </li>`
       ).join('');
       return `
@@ -3358,8 +3371,9 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                           return (
                             <div
                               key={person.email}
-                              style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '3px 0', borderBottom: `1px solid ${roomBorder}44`, fontSize: 11.5 }}
+                              style={{ padding: '3px 0', borderBottom: `1px solid ${roomBorder}44`, fontSize: 11.5 }}
                             >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                               {isHead && <Crown size={10} fill="#F5C842" color="#F5C842" style={{ flexShrink: 0 }} />}
                               <span style={{ flex: 1, minWidth: 0, fontWeight: isHead ? 700 : 400, color: '#1A1220', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {person.fullName}
@@ -3378,6 +3392,14 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                                 onMouseLeave={e => { e.currentTarget.style.color = `${C.mute}88`; }}
                                 title="Remove"
                               >✕</button>
+                              </div>
+                              <input
+                                type="text"
+                                placeholder="Special request…"
+                                value={person.specialRequest || ''}
+                                onChange={e => handleUpdatePersonNote(room.id, person.email, e.target.value)}
+                                style={{ width: '100%', marginTop: 3, fontSize: 10.5, border: '1px solid #E7E2EE', borderRadius: 4, padding: '2px 6px', fontFamily: 'Inter, sans-serif', color: '#1A1220', background: '#FAFAFA', boxSizing: 'border-box', outline: 'none' }}
+                              />
                             </div>
                           );
                         })
