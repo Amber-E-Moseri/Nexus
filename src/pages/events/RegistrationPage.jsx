@@ -76,20 +76,6 @@ export default function RegistrationPage() {
         return
       }
 
-      // Pastors with an explicit subgroup assignment are scoped to those subgroups.
-      // Pastors without one fall through to the sprint team check so that being
-      // added to a sprint team (e.g. Foundation School) still grants access.
-      if (role === 'pastor') {
-        const subgroups = await getPastorSubgroups()
-        if (subgroups.length) {
-          setLimitedToSubgroups(subgroups)
-          setCanAccess('limited')
-          setLoading(false)
-          return
-        }
-        // No explicit assignment — fall through to sprint team membership check below
-      }
-
       const permissions = eventConfig.team_permissions || {}
       const UNSCOPED_EDIT_TEAMS = permissions.unscoped_edit || []
       const FINANCE_TEAMS = permissions.finance_only || []
@@ -105,49 +91,65 @@ export default function RegistrationPage() {
         .limit(1)
         .maybeSingle()
 
-      if (!sprint?.id) {
-        setCanAccess(false); setLoading(false); return
+      // Resolve sprint team membership before any role-based scoping so that a
+      // pastor who is also on an unscoped team (e.g. Programs) gets full access.
+      let userTeamNames = []
+      let matchesAny = () => false
+      let isLeadOf = () => false
+
+      if (sprint?.id) {
+        const { data: teams } = await supabase
+          .from('sprint_teams')
+          .select('id, name, lead_user_id')
+          .eq('sprint_id', sprint.id)
+
+        if (teams?.length) {
+          const { data: memberRows } = await supabase
+            .from('sprint_team_members')
+            .select('team_id')
+            .in('team_id', teams.map(t => t.id))
+            .eq('user_id', profile.id)
+
+          if (memberRows?.length) {
+            userTeamNames = memberRows
+              .map(r => teams.find(t => t.id === r.team_id)?.name || '')
+              .filter(Boolean)
+            setUserTeamNames(userTeamNames)
+            matchesAny = (list) => userTeamNames.some(name =>
+              list.some(t => name.toLowerCase().includes(t.toLowerCase()))
+            )
+            isLeadOf = (teamName) => teams.some(t =>
+              t.lead_user_id === profile.id && t.name.toLowerCase().includes(teamName.toLowerCase())
+            )
+          }
+        }
       }
 
-      const { data: teams } = await supabase
-        .from('sprint_teams')
-        .select('id, name, lead_user_id')
-        .eq('sprint_id', sprint.id)
-
-      if (!teams?.length) {
-        setCanAccess(false); setLoading(false); return
-      }
-
-      const { data: memberRows } = await supabase
-        .from('sprint_team_members')
-        .select('team_id')
-        .in('team_id', teams.map(t => t.id))
-        .eq('user_id', profile.id)
-
-      if (!memberRows?.length) {
-        setCanAccess(false)
-        setLoading(false)
-        return
-      }
-
-      // Resolve team names from the already-fetched teams list (avoids join issues)
-      const userTeamNames = memberRows
-        .map(r => teams.find(t => t.id === r.team_id)?.name || '')
-        .filter(Boolean)
-      setUserTeamNames(userTeamNames)
-      const matchesAny = (list) => userTeamNames.some(name =>
-        list.some(t => name.toLowerCase().includes(t.toLowerCase()))
-      )
-      const isLeadOf = (teamName) => teams.some(t =>
-        t.lead_user_id === profile.id && t.name.toLowerCase().includes(teamName.toLowerCase())
-      )
-
-      // Full view + edit, no scope (Programs, Secretariat)
+      // Full view + edit, no scope (Programs, Secretariat) — checked before pastor subgroup
+      // scoping so that a pastor on one of these teams gets full access, not a scoped view.
       if (matchesAny(UNSCOPED_EDIT_TEAMS)) {
         setSprintEditAccess(true)
         setCanAccess(true)
         setLoading(false)
         return
+      }
+
+      // Pastors with an explicit subgroup assignment are scoped to those subgroups,
+      // unless they already matched an unscoped team above.
+      // Pastors without an assignment fall through to the remaining team checks.
+      if (role === 'pastor') {
+        const subgroups = await getPastorSubgroups()
+        if (subgroups.length) {
+          setLimitedToSubgroups(subgroups)
+          setCanAccess('limited')
+          setLoading(false)
+          return
+        }
+      }
+
+      // No sprint found or user not on any team — deny access (unless pastor falls through)
+      if (!sprint?.id || !userTeamNames.length) {
+        setCanAccess(false); setLoading(false); return
       }
 
       // Finance tab only, no edit, no scope
