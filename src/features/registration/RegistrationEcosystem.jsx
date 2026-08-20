@@ -3177,18 +3177,19 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
     setTimeout(() => win.print(), 400);
   }
 
-  // Compute all event nights from the spread of arrival/departure dates
+  // Compute only nights that at least one person actually needs
   const eventNights = useMemo(() => {
-    const allDates = merged.flatMap(r => [r.arrivalDate, r.departureDate]).filter(Boolean).sort();
-    if (allDates.length < 2) return [];
-    const nights = [];
-    const d = new Date(allDates[0] + 'T12:00:00');
-    const end = new Date(allDates[allDates.length - 1] + 'T12:00:00');
-    while (d < end) {
-      nights.push(d.toISOString().slice(0, 10));
-      d.setDate(d.getDate() + 1);
-    }
-    return nights;
+    const nightSet = new Set();
+    merged.forEach(r => {
+      if (!r.arrivalDate || !r.departureDate) return;
+      const d = new Date(r.arrivalDate + 'T12:00:00');
+      const end = new Date(r.departureDate + 'T12:00:00');
+      while (d < end) {
+        nightSet.add(d.toISOString().slice(0, 10));
+        d.setDate(d.getDate() + 1);
+      }
+    });
+    return [...nightSet].sort();
   }, [merged]);
 
   const assignedEmails = new Set(rooms.flatMap(r => r.people.map(p => p.email)));
