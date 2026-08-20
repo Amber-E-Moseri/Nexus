@@ -575,6 +575,11 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     [payments],
   );
 
+  const absentEmailsForMerge = useMemo(
+    () => new Set(workingListDb.filter(p => p.absent).map(p => p.email)),
+    [workingListDb],
+  );
+
   const merged = useMemo(() => registrationsFiltered.map(r => {
     const conf = confirmations[r.email] || {};
     const pay = paymentByEmail[r.email];
@@ -590,8 +595,9 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       hasFlightInfo,
       inStateConfirmed: isLocal,
       fullyConfirmed,
+      absent: absentEmailsForMerge.has(r.email),
     };
-  }), [registrationsFiltered, confirmations, paymentByEmail]);
+  }), [registrationsFiltered, confirmations, paymentByEmail, absentEmailsForMerge]);
 
   const rosterFiltered = useMemo(() => {
     if (!isLimited) return roster;
