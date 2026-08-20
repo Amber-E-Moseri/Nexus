@@ -1697,9 +1697,12 @@ export default function Sidebar({ isMobileDrawer = false }) {
               fontSize: 11,
               fontWeight: 700,
               flexShrink: 0,
+              overflow: 'hidden',
             }}
           >
-            {initials}
+            {profile?.avatar_url
+              ? <img src={profile.avatar_url} alt={initials} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : initials}
           </div>
           {!collapsed && (
             <>
