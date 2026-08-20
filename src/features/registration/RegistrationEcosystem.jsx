@@ -1134,6 +1134,7 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
   const totalFlightsNeeded = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.flightsNeeded || 0), 0), [bySubgroup]);
   const totalFlightsBooked = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.flights || 0), 0), [bySubgroup]);
   const crossCountryCount = useMemo(() => merged.filter(r => r.inStateConfirmed).length, [merged]);
+  const [showTargetCol, setShowTargetCol] = useState(false);
 
   return (
     <div>
@@ -1146,6 +1147,9 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>By subgroup</h2>
+        <button onClick={() => setShowTargetCol(v => !v)} title={showTargetCol ? 'Hide targets' : 'Show registration targets'} style={{ background: showTargetCol ? '#4C2A92' : 'none', border: `1px solid ${showTargetCol ? '#4C2A92' : '#C4B5FD'}`, borderRadius: 6, color: showTargetCol ? '#fff' : '#9B8DB5', fontSize: 11, fontWeight: 700, padding: '3px 9px', cursor: 'pointer', fontFamily: 'Inter' }}>
+          {showTargetCol ? '−' : '+'}
+        </button>
       </div>
 
       <Card style={{ padding: 0, overflow: 'visible' }}>
@@ -1154,7 +1158,7 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
           <thead>
             <tr>
               <th>Subgroup</th>
-              <th>Registration target</th>
+              {showTargetCol && <th>Registration target</th>}
               <th>Registrations</th>
               <th>Confirmed / Confirming</th>
               <th>Flights needed</th>
@@ -1171,12 +1175,14 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
               return (
                 <tr key={sg}>
                   <td style={{ fontWeight: 600 }}>{sg}</td>
-                  <td style={{ minWidth: 80 }}>
-                    {canSetTargets
-                      ? <input type="number" style={{ width: 60 }} value={t.reg ?? ''} placeholder="0"
-                          onChange={e => setTarget(sg, 'reg', e.target.value)} />
-                      : <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{t.reg || '—'}</span>}
-                  </td>
+                  {showTargetCol && (
+                    <td style={{ minWidth: 80 }}>
+                      {canSetTargets
+                        ? <input type="number" style={{ width: 60 }} value={t.reg ?? ''} placeholder="0"
+                            onChange={e => setTarget(sg, 'reg', e.target.value)} />
+                        : <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{t.reg || '—'}</span>}
+                    </td>
+                  )}
                   <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>
                     {s.total}
                   </td>
