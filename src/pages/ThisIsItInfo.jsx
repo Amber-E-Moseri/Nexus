@@ -332,7 +332,7 @@ export default function ThisIsItInfo() {
           </div>
           <div className="tii-card card">
             <h3>📋 Check-in process</h3>
-            <p>When you arrive, check in at the front desk. Your room is covered — no card required. If there's any issue, connect with <b>{c.transport_contact_name}</b> directly.</p>
+            <p>When you arrive, look for the check-in stand or table in the lobby. Your room is covered — no card required. The team at the stand will get you sorted and send you to your room.</p>
           </div>
         </section>
 
@@ -425,8 +425,8 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>📞 On-the-ground contact</h3>
-            <p>For anything travel-related — shuttle timing, room issues, or last-minute questions — reach out to:</p>
+            <h3>🚗 Transport contact</h3>
+            <p>For transport needs — shuttle timing, arrival delays, or airport pickup questions:</p>
             <div className="tii-help-grid">
               <div className="tii-mini">
                 <div className="lbl">Name</div>
