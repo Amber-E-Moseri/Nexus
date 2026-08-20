@@ -668,7 +668,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       if (t.key === 'rooms' && !hasRoomsAccess) return false;
       // Import Data: super admin only
       if (t.key === 'import' && role !== 'super_admin') return false;
-      if (isGloballyScoped && ['import', 'rooms', 'finance'].includes(t.key)) return false;
+      if (isGloballyScoped && ['import', 'finance'].includes(t.key)) return false;
       return true;
     });
     return allowed;
