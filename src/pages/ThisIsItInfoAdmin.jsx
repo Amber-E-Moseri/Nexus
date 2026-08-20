@@ -102,7 +102,37 @@ export default function ThisIsItInfoAdmin() {
       <h1>Admin: Edit This Is It 2.0</h1>
 
       <section style={{ marginBottom: '40px', background: '#f5f5f5', padding: '20px', borderRadius: '8px' }}>
-        <h2>Event Content</h2>
+        <h2>✈️ Before You Fly</h2>
+        <div style={{ marginBottom: '10px' }}>
+          <label>Flight Form URL:</label>
+          <input
+            type="text"
+            value={formData.flight_form_url || content?.flight_form_url || ''}
+            onChange={(e) => setFormData({ ...formData, flight_form_url: e.target.value })}
+            style={{ width: '100%', padding: '8px', fontFamily: 'monospace', fontSize: '12px' }}
+          />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <label>Dress Code:</label>
+          <textarea
+            value={formData.dress_code || content?.dress_code || ''}
+            onChange={(e) => setFormData({ ...formData, dress_code: e.target.value })}
+            style={{ width: '100%', padding: '8px', minHeight: '60px' }}
+          />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <label>All White For (e.g., Thanksgiving service):</label>
+          <input
+            type="text"
+            value={formData.all_white_for || content?.all_white_for || ''}
+            onChange={(e) => setFormData({ ...formData, all_white_for: e.target.value })}
+            style={{ width: '100%', padding: '8px' }}
+          />
+        </div>
+      </section>
+
+      <section style={{ marginBottom: '40px', background: '#f5f5f5', padding: '20px', borderRadius: '8px' }}>
+        <h2>🛬 Getting There</h2>
         <div style={{ marginBottom: '10px' }}>
           <label>Airport Code:</label>
           <input
@@ -113,6 +143,28 @@ export default function ThisIsItInfoAdmin() {
           />
         </div>
         <div style={{ marginBottom: '10px' }}>
+          <label>Airport Name:</label>
+          <input
+            type="text"
+            value={formData.airport_name || content?.airport_name || ''}
+            onChange={(e) => setFormData({ ...formData, airport_name: e.target.value })}
+            style={{ width: '100%', padding: '8px' }}
+          />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <label>Airport Distance (km):</label>
+          <input
+            type="number"
+            value={formData.airport_distance_km || content?.airport_distance_km || ''}
+            onChange={(e) => setFormData({ ...formData, airport_distance_km: parseInt(e.target.value) || 0 })}
+            style={{ width: '100%', padding: '8px' }}
+          />
+        </div>
+      </section>
+
+      <section style={{ marginBottom: '40px', background: '#f5f5f5', padding: '20px', borderRadius: '8px' }}>
+        <h2>🏨 Hotel & Logistics</h2>
+        <div style={{ marginBottom: '10px' }}>
           <label>Hotel Name:</label>
           <input
             type="text"
@@ -122,7 +174,37 @@ export default function ThisIsItInfoAdmin() {
           />
         </div>
         <div style={{ marginBottom: '10px' }}>
-          <label>Transport Contact Phone:</label>
+          <label>Hotel Address:</label>
+          <textarea
+            value={formData.hotel_address || content?.hotel_address || ''}
+            onChange={(e) => setFormData({ ...formData, hotel_address: e.target.value })}
+            style={{ width: '100%', padding: '8px', minHeight: '50px' }}
+          />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <label>Hotel Phone:</label>
+          <input
+            type="text"
+            value={formData.hotel_phone || content?.hotel_phone || ''}
+            onChange={(e) => setFormData({ ...formData, hotel_phone: e.target.value })}
+            style={{ width: '100%', padding: '8px' }}
+          />
+        </div>
+      </section>
+
+      <section style={{ marginBottom: '40px', background: '#f5f5f5', padding: '20px', borderRadius: '8px' }}>
+        <h2>🚗 Transport Contact</h2>
+        <div style={{ marginBottom: '10px' }}>
+          <label>Contact Name:</label>
+          <input
+            type="text"
+            value={formData.transport_contact_name || content?.transport_contact_name || ''}
+            onChange={(e) => setFormData({ ...formData, transport_contact_name: e.target.value })}
+            style={{ width: '100%', padding: '8px' }}
+          />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <label>Phone:</label>
           <input
             type="text"
             value={formData.transport_contact_phone || content?.transport_contact_phone || ''}
@@ -131,18 +213,51 @@ export default function ThisIsItInfoAdmin() {
           />
         </div>
         <div style={{ marginBottom: '10px' }}>
+          <label>Chat Handle (e.g., @username):</label>
+          <input
+            type="text"
+            value={formData.transport_contact_chat || content?.transport_contact_chat || ''}
+            onChange={(e) => setFormData({ ...formData, transport_contact_chat: e.target.value })}
+            style={{ width: '100%', padding: '8px' }}
+          />
+        </div>
+      </section>
+
+      <section style={{ marginBottom: '40px', background: '#f5f5f5', padding: '20px', borderRadius: '8px' }}>
+        <h2>📅 Schedule Times</h2>
+        <div style={{ marginBottom: '10px' }}>
           <label>Friday Opening Time:</label>
           <input
             type="text"
             value={formData.friday_opening_time || content?.friday_opening_time || ''}
             onChange={(e) => setFormData({ ...formData, friday_opening_time: e.target.value })}
             style={{ width: '100%', padding: '8px' }}
+            placeholder="e.g., 6:00 PM"
           />
         </div>
-        <button onClick={handleSaveContent} disabled={isSaving} style={{ padding: '10px 20px', background: '#6B12BC', color: '#fff', border: 'none', cursor: 'pointer' }}>
-          {isSaving ? 'Saving...' : 'Save Content'}
-        </button>
+        <div style={{ marginBottom: '10px' }}>
+          <label>Friday Opening Note:</label>
+          <textarea
+            value={formData.friday_opening_note || content?.friday_opening_note || ''}
+            onChange={(e) => setFormData({ ...formData, friday_opening_note: e.target.value })}
+            style={{ width: '100%', padding: '8px', minHeight: '50px' }}
+          />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <label>Monday Checkout Time:</label>
+          <input
+            type="text"
+            value={formData.monday_checkout_time || content?.monday_checkout_time || ''}
+            onChange={(e) => setFormData({ ...formData, monday_checkout_time: e.target.value })}
+            style={{ width: '100%', padding: '8px' }}
+            placeholder="e.g., Morning"
+          />
+        </div>
       </section>
+
+      <button onClick={handleSaveContent} disabled={isSaving} style={{ padding: '10px 20px', background: '#6B12BC', color: '#fff', border: 'none', cursor: 'pointer', marginBottom: '20px' }}>
+        {isSaving ? 'Saving...' : 'Save All Changes'}
+      </button>
 
       <section style={{ marginBottom: '40px', background: '#f5f5f5', padding: '20px', borderRadius: '8px' }}>
         <h2>Add Schedule Item</h2>
