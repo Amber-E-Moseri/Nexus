@@ -260,13 +260,15 @@ export default function ThisIsItInfo() {
             <p>Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.</p>
             <ul className="tii-checklist" id="packlist">
               <CheckItem>Photo ID (for flight + hotel check-in)</CheckItem>
-              <CheckItem>Semformal outfit(s) — at least one evening look</CheckItem>
-              <CheckItem>This Is It shirt (worn on day 2)</CheckItem>
-              <CheckItem>Sunday service outfit (for Sunday)</CheckItem>
+              <CheckItem>All white outfit for Thanksgiving service</CheckItem>
+              <CheckItem>Sunday service outfit</CheckItem>
               <CheckItem>Light jacket or sweater (evenings get cool)</CheckItem>
               <CheckItem>Toiletries (hotel has basics, bring your own if you prefer)</CheckItem>
               <CheckItem>Portable charger / phone charger</CheckItem>
             </ul>
+            <p style={{ fontSize:'13px', color:'#666', marginTop:'10px', paddingTop:'10px', borderTop:'1px solid var(--paper-line)' }}>
+              <strong>This Is It shirt:</strong> Will be provided at check-in or after the Friday opening session — no need to pack it.
+            </p>
           </div>
           <div className="tii-card card" style={{ marginTop:'10px' }}>
             <h3>👗 Dress code</h3>
