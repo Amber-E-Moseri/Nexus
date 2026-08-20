@@ -487,7 +487,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       if (!reg || reg.length === 0 || limitedToSubgroups?.length) {
         try {
           let regsQ = supabase.from('registrations').select('*').order('submitted_at', { ascending: false });
-          if (limitedToSubgroups?.length) regsQ = regsQ.in('subgroup', limitedToSubgroups);
+          if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) regsQ = regsQ.in('subgroup', limitedToSubgroups);
           const { data: dbRegs } = await regsQ;
           // Rename snake_case columns to camelCase for compatibility
           finalReg = (dbRegs || []).map(r => ({
