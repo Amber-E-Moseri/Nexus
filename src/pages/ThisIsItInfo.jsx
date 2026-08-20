@@ -162,14 +162,15 @@ export default function ThisIsItInfo() {
         .tii-mapwrap iframe{display:block;width:100%;height:220px;border:none;}
         .tii-daytabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;}
         .tii-daytab{font-size:12px;font-weight:600;letter-spacing:.02em;padding:7px 12px;border-radius:6px;border:1px solid var(--paper-line);background:#fff;cursor:pointer;transition:background .15s,border-color .15s,transform .15s;}
-        .tii-daytab:hover:not(.empty){background:#f9f7f2;transform:translateY(-1px);}
-        .tii-daytab.active{background:var(--ink);color:#fff;border-color:var(--ink);}
-        .tii-daytab.empty{cursor:default;opacity:.5;}
+        .tii-daytab:hover{background:#f9f7f2;transform:translateY(-1px);}
+        .tii-daytab.active{background:var(--ink);color:#fff;border-color:var(--ink);animation:slideUp .3s ease;}
         .tii-sched-empty{text-align:center;padding:32px 16px;color:#999;font-size:14px;}
-        .tii-sched-row{display:flex;gap:12px;padding:12px 0;border-bottom:1px dashed var(--paper-line);}
+        .tii-sched-row{display:flex;gap:12px;padding:9px 0;border-bottom:1px solid var(--paper-line);align-items:flex-start;transition:transform .15s ease;}
+        .tii-sched-row:hover{transform:translateX(2px);}
         .tii-sched-row:last-child{border-bottom:none;}
         .tii-sched-time{flex:none;min-width:62px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:var(--purple);padding-top:1px;}
-        .tii-sched-what b{display:block;font-size:14px;margin-bottom:2px;}
+        .tii-sched-what{font-size:14px;line-height:1.5;}
+        .tii-sched-what b{display:block;font-size:14px;font-weight:700;}
         .tii-sched-what p{margin:0;font-size:13px;color:#666;line-height:1.5;}
         .tii-help-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;}
         @media(max-width:480px){.tii-help-grid{grid-template-columns:1fr;}}
@@ -383,19 +384,15 @@ export default function ThisIsItInfo() {
           <div className="tii-card card">
             <p>The first session kicks off Friday at <b>{c.friday_opening_time}</b>. The full schedule will fill in as it's ready.</p>
             <div className="tii-daytabs">
-              {DAYS.map(d => {
-                const hasItems = (scheduleByDay[d.key] || []).length > 0;
-                return (
-                  <button
-                    key={d.key}
-                    className={`tii-daytab${activeDay === d.key ? ' active' : ''}${!hasItems ? ' empty' : ''}`}
-                    onClick={() => hasItems && setActiveDay(d.key)}
-                    title={!hasItems ? 'No schedule yet' : undefined}
-                  >
-                    {d.label}
-                  </button>
-                );
-              })}
+              {DAYS.map(d => (
+                <button
+                  key={d.key}
+                  className={`tii-daytab${activeDay === d.key ? ' active' : ''}`}
+                  onClick={() => setActiveDay(d.key)}
+                >
+                  {d.label}
+                </button>
+              ))}
             </div>
             {dayItems.length === 0 ? (
               <div className="tii-sched-empty">
@@ -442,6 +439,13 @@ export default function ThisIsItInfo() {
                   <div className="big">{c.transport_contact_chat}</div>
                 </div>
               )}
+            </div>
+          </div>
+          <div className="tii-card card">
+            <h3>❓ General questions</h3>
+            <p>For any other questions about the retreat:</p>
+            <div style={{ marginTop:'10px' }}>
+              <a href="mailto:info@lwcanada.org" style={{ color:'var(--purple)', fontWeight:600 }}>info@lwcanada.org</a>
             </div>
           </div>
         </section>
