@@ -618,8 +618,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       if (r.fullyConfirmed) out[r.subgroup].confirmed++;
       if (r.arrivalFlight || r.departureFlight) out[r.subgroup].flights++;
 
-      // Count out-of-state people (excluding exempt fellowships) as flights needed
-      if (!r.inStateConfirmed && !exemptFellowships.has(r.fellowship)) {
+      // Count out-of-state, non-exempt, non-absent people as eligible confirming
+      if (!r.inStateConfirmed && !exemptFellowships.has(r.fellowship) && !absentEmails.has(r.email)) {
         out[r.subgroup].flightsNeeded++;
       }
     });
