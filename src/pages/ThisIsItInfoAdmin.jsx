@@ -13,8 +13,7 @@ export default function ThisIsItInfoAdmin() {
   const [isSaving, setIsSaving] = useState(false);
 
   // Check permission
-  const canEdit = profile?.role === 'super_admin' ||
-    (profile && ['chinelo', 'ella', 'dorcas'].includes(profile.id));
+  const canEdit = profile?.role === 'super_admin' || profile?.role === 'regional_secretary';
 
   if (!canEdit) {
     return <div style={{ padding: '20px' }}>Access denied. Only admins can edit.</div>;
@@ -39,6 +38,7 @@ export default function ThisIsItInfoAdmin() {
       if (!content?.id) return [];
       const { data } = await supabase
         .from('this_is_it_schedule_items')
+        .select('*')
         .eq('event_content_id', content.id)
         .order('day')
         .order('order_num');
