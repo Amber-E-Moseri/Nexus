@@ -12,6 +12,7 @@ import {
   Folder,
   HelpCircle,
   HeadphonesIcon,
+  Info,
   Ticket,
   Trophy,
   TrendingUp,
@@ -931,6 +932,12 @@ export default function Sidebar({ isMobileDrawer = false }) {
             to="/registration"
           />
         )}
+        <SidebarItem
+          active={isPathActive(location.pathname, '/thisisitinfo')}
+          icon={Info}
+          label="This Is It Info"
+          to="/thisisitinfo"
+        />
         {!collapsed && shouldShowSpaces && <SidebarSectionLabel onAdd={canCreateSpace ? () => setShowSpaceModal(true) : undefined}>Spaces</SidebarSectionLabel>}
         {displaySpaces.map((space) => (
           <div
