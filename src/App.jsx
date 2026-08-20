@@ -30,6 +30,8 @@ const Dashboard = lazyRoute('/dashboard', () => import('./pages/Dashboard'))
 const Inbox = lazyRoute('/inbox', () => import('./pages/Inbox'))
 const ActivateInvitation = lazy(() => import('./pages/ActivateInvitation'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
+const ThisIsItInfo = lazy(() => import('./pages/ThisIsItInfo'))
+const ThisIsItInfoAdmin = lazy(() => import('./pages/ThisIsItInfoAdmin'))
 const MinistryCalendar = lazyRoute('/calendar', () => import('./pages/calendar/MinistryCalendar'))
 const CalendarManagementPage = lazy(() => import('./pages/calendar/CalendarManagementPage'))
 const CalendarReviewPage = lazy(() => import('./pages/calendar/CalendarReviewPage'))
@@ -145,6 +147,8 @@ export default function App() {
       <Route path="/set-password" element={<SetPassword />} />
       <Route path="/confirm-invite" element={<ConfirmInvite />} />
       <Route path="/activate" element={<ActivateInvitation />} />
+      <Route path="/thisisitinfo" element={<ThisIsItInfo />} />
+      <Route path="/thisisitinfo-admin" element={<ThisIsItInfoAdmin />} />
       <Route path="/accept-invite" element={<ActivateInvitation />} />
       <Route path="/auth/google-drive/callback" element={<GoogleDriveAuthCallback />} />
       <Route path="/auth/google_calendar-callback" element={<GoogleCalendarCallback />} />
