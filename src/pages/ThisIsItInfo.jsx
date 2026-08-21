@@ -183,13 +183,19 @@ export default function ThisIsItInfo() {
 
   const handleSaveField = async (field, value) => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('this_is_it_event_content')
         .update({ [field]: value })
         .eq('id', content.id);
+      if (error) {
+        console.error('Save error:', error);
+        alert('Error saving: ' + error.message);
+        return;
+      }
       await queryClient.invalidateQueries({ queryKey: ['this_is_it_event_content'] });
     } catch (err) {
       console.error('Save error:', err);
+      alert('Error saving: ' + err.message);
     }
   };
 
