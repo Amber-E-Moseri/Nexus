@@ -155,6 +155,22 @@ export default function ThisIsItInfo() {
     return acc;
   }, {});
 
+  const { data: checklistItems = [] } = useQuery({
+    queryKey: ['this_is_it_checklist_items', content?.id],
+    queryFn: async () => {
+      if (!content?.id) return [];
+      const { data } = await supabase
+        .from('this_is_it_checklist_items').select('*')
+        .eq('event_content_id', content.id)
+        .eq('section', 'packing')
+        .order('order_num');
+      return data || [];
+    },
+    enabled: !!content?.id
+  });
+
+  const [newChecklistItem, setNewChecklistItem] = useState('');
+
   useEffect(() => {
     document.title = 'This Is It 2.0 - Prep Guide';
     const obs = new IntersectionObserver((entries) => {
@@ -226,6 +242,62 @@ export default function ThisIsItInfo() {
       alert('Error: ' + err.message);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleAddChecklistItem = async () => {
+    if (!content?.id || !newChecklistItem.trim()) {
+      alert('Enter an item');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('this_is_it_checklist_items')
+        .insert({
+          event_content_id: content.id,
+          section: 'packing',
+          item: newChecklistItem,
+          order_num: checklistItems.length + 1
+        });
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_checklist_items'] });
+      setNewChecklistItem('');
+      alert('Checklist item added!');
+    } catch (err) {
+      console.error('Add checklist error:', err);
+      alert('Error: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteChecklistItem = async (itemId) => {
+    if (!confirm('Delete this item?')) return;
+    try {
+      const { error } = await supabase
+        .from('this_is_it_checklist_items')
+        .delete()
+        .eq('id', itemId);
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_checklist_items'] });
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('Error: ' + err.message);
+    }
+  };
+
+  const handleUpdateChecklistItem = async (itemId, newText) => {
+    try {
+      const { error } = await supabase
+        .from('this_is_it_checklist_items')
+        .update({ item: newText })
+        .eq('id', itemId);
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_checklist_items'] });
+    } catch (err) {
+      console.error('Update error:', err);
+      alert('Error: ' + err.message);
     }
   };
 
@@ -422,13 +494,48 @@ export default function ThisIsItInfo() {
             <h3>🧳 What to pack</h3>
             <p>{editMode ? <EditableText value={c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.'} onSave={(v) => handleSaveField('packing_text', v)} multiline /> : (c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.')}</p>
             <ul className="tii-checklist" id="packlist">
-              <CheckItem>Photo ID (for flight + hotel check-in)</CheckItem>
-              <CheckItem>All white outfit for Thanksgiving service</CheckItem>
-              <CheckItem>Sunday service outfit</CheckItem>
-              <CheckItem>Light jacket or sweater (evenings get cool)</CheckItem>
-              <CheckItem>Toiletries (hotel has basics, bring your own if you prefer)</CheckItem>
-              <CheckItem>Portable charger / phone charger</CheckItem>
+              {checklistItems.map((item) => (
+                <li key={item.id} style={{ position: 'relative' }}>
+                  {editMode ? (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <EditableText
+                        value={item.item}
+                        onSave={(v) => handleUpdateChecklistItem(item.id, v)}
+                        multiline={false}
+                      />
+                      <button
+                        onClick={() => handleDeleteChecklistItem(item.id)}
+                        style={{ padding: '4px 8px', background: '#dd6f51', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ) : (
+                    <CheckItem>{item.item}</CheckItem>
+                  )}
+                </li>
+              ))}
             </ul>
+            {editMode && (
+              <div style={{ marginTop: '12px', padding: '10px', background: 'rgba(107, 18, 188, 0.05)', borderRadius: '6px', border: '1px dashed var(--purple)' }}>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="New checklist item"
+                    value={newChecklistItem}
+                    onChange={(e) => setNewChecklistItem(e.target.value)}
+                    style={{ flex: 1, padding: '6px 8px', fontSize: '13px', border: '1px solid var(--paper-line)', borderRadius: '4px' }}
+                  />
+                  <button
+                    onClick={handleAddChecklistItem}
+                    disabled={isSaving}
+                    style={{ padding: '6px 12px', background: 'var(--teal)', color: '#161717', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', fontSize: '12px' }}
+                  >
+                    {isSaving ? 'Adding...' : 'Add'}
+                  </button>
+                </div>
+              </div>
+            )}
             <p style={{ fontSize:'13px', color:'#666', marginTop:'10px', paddingTop:'10px', borderTop:'1px solid var(--paper-line)' }}>
               <strong>This Is It shirt:</strong> Will be provided at check-in or after the Friday opening session — no need to pack it.
             </p>
