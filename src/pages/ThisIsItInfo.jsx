@@ -2,36 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
-
-function useOptionalProfile() {
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const { data } = await supabase.auth.getUser();
-        if (!data?.user) {
-          setLoading(false);
-          return;
-        }
-        const { data: u } = await supabase
-          .from('users')
-          .select('id,role')
-          .eq('id', data.user.id)
-          .single();
-        setProfile(u);
-      } catch (err) {
-        console.error('Profile fetch error:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProfile();
-  }, []);
-
-  return { profile, loading };
-}
+import { useAuth } from '@/hooks/useAuth';
 
 // Programs team members granted edit access on this page specifically,
 // without changing their app-wide role (which would affect permissions
@@ -155,7 +126,7 @@ function EditableText({ value, onSave, multiline = false, className = '' }) {
 }
 
 export default function ThisIsItInfo() {
-  const { profile, loading: profileLoading } = useOptionalProfile();
+  const { profile, role } = useAuth();
   const navigate = useNavigate();
   const [activeDay, setActiveDay] = useState('fri');
   const [editMode, setEditMode] = useState(false);
@@ -165,51 +136,36 @@ export default function ThisIsItInfo() {
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const queryClient = useQueryClient();
 
-  const canEdit = profile && (profile.role === 'super_admin' || profile.role === 'regional_secretary' || EXTRA_EDITOR_USER_IDS.includes(profile.id));
+  const canEdit = profile && (role === 'super_admin' || role === 'regional_secretary' || EXTRA_EDITOR_USER_IDS.includes(profile.id));
 
-  const { data: content, isLoading } = useQuery({
-    queryKey: ['this_is_it_event_content', 2026],
+  // Single query: fetch content first, then schedule + checklist in parallel.
+  // Previously three separate queries with schedule/checklist waterfalled behind
+  // content (enabled: !!content?.id) — that added one extra round-trip latency.
+  const { data: pageData, isLoading } = useQuery({
+    queryKey: ['this_is_it_page', 2026],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data: content } = await supabase
         .from('this_is_it_event_content').select('*').eq('event_year', 2026).single();
-      return data;
-    }
-  });
-
-  const c = content || FALLBACK;
-
-  const { data: scheduleItems = [] } = useQuery({
-    queryKey: ['this_is_it_schedule_items', content?.id],
-    queryFn: async () => {
-      if (!content?.id) return [];
-      const { data } = await supabase
-        .from('this_is_it_schedule_items').select('*')
-        .eq('event_content_id', content.id)
-        .order('order_num');
-      return data || [];
+      if (!content?.id) return { content, scheduleItems: [], checklistItems: [] };
+      const [{ data: scheduleItems }, { data: checklistItems }] = await Promise.all([
+        supabase.from('this_is_it_schedule_items').select('*').eq('event_content_id', content.id).order('order_num'),
+        supabase.from('this_is_it_checklist_items').select('*').eq('event_content_id', content.id).eq('section', 'packing').order('order_num'),
+      ]);
+      return { content, scheduleItems: scheduleItems || [], checklistItems: checklistItems || [] };
     },
-    enabled: !!content?.id
+    staleTime: 60_000,
   });
+
+  const content = pageData?.content ?? null;
+  const scheduleItems = pageData?.scheduleItems ?? [];
+  const checklistItems = pageData?.checklistItems ?? [];
+  const c = content || FALLBACK;
 
   const scheduleByDay = scheduleItems.reduce((acc, item) => {
     if (!acc[item.day]) acc[item.day] = [];
     acc[item.day].push(item);
     return acc;
   }, {});
-
-  const { data: checklistItems = [] } = useQuery({
-    queryKey: ['this_is_it_checklist_items', content?.id],
-    queryFn: async () => {
-      if (!content?.id) return [];
-      const { data } = await supabase
-        .from('this_is_it_checklist_items').select('*')
-        .eq('event_content_id', content.id)
-        .eq('section', 'packing')
-        .order('order_num');
-      return data || [];
-    },
-    enabled: !!content?.id
-  });
 
   const [newChecklistItem, setNewChecklistItem] = useState('');
 
@@ -269,7 +225,7 @@ export default function ThisIsItInfo() {
         alert('No rows updated - you may not have permission to edit.');
         return;
       }
-      await queryClient.invalidateQueries({ queryKey: ['this_is_it_event_content'] });
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_page'] });
     } catch (err) {
       console.error('Save error:', err);
       alert('Error saving: ' + err.message);
@@ -295,7 +251,7 @@ export default function ThisIsItInfo() {
           order_num: dayItems.length + 1
         });
       if (error) throw error;
-      await queryClient.invalidateQueries({ queryKey: ['this_is_it_schedule_items'] });
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_page'] });
       setNewItem({ day: 'fri', time: '', title: '', description: '' });
       alert('Schedule item added!');
     } catch (err) {
@@ -322,7 +278,7 @@ export default function ThisIsItInfo() {
           order_num: checklistItems.length + 1
         });
       if (error) throw error;
-      await queryClient.invalidateQueries({ queryKey: ['this_is_it_checklist_items'] });
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_page'] });
       setNewChecklistItem('');
       alert('Checklist item added!');
     } catch (err) {
@@ -345,7 +301,7 @@ export default function ThisIsItInfo() {
         .delete()
         .eq('id', itemId);
       if (error) throw error;
-      await queryClient.invalidateQueries({ queryKey: ['this_is_it_checklist_items'] });
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_page'] });
     } catch (err) {
       console.error('Delete error:', err);
       alert('Error: ' + err.message);
@@ -359,7 +315,7 @@ export default function ThisIsItInfo() {
         .update({ item: newText })
         .eq('id', itemId);
       if (error) throw error;
-      await queryClient.invalidateQueries({ queryKey: ['this_is_it_checklist_items'] });
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_page'] });
     } catch (err) {
       console.error('Update error:', err);
       alert('Error: ' + err.message);
@@ -378,7 +334,7 @@ export default function ThisIsItInfo() {
         .delete()
         .eq('id', itemId);
       if (error) throw error;
-      await queryClient.invalidateQueries({ queryKey: ['this_is_it_schedule_items'] });
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_page'] });
     } catch (err) {
       console.error('Delete error:', err);
       alert('Error: ' + err.message);
@@ -392,7 +348,7 @@ export default function ThisIsItInfo() {
         .update({ [field]: value })
         .eq('id', itemId);
       if (error) throw error;
-      await queryClient.invalidateQueries({ queryKey: ['this_is_it_schedule_items'] });
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_page'] });
     } catch (err) {
       console.error('Update error:', err);
       alert('Error: ' + err.message);
