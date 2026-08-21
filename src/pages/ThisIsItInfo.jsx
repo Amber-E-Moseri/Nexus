@@ -125,6 +125,7 @@ export default function ThisIsItInfo() {
   const [scrollProgress, setScrollProgress] = useState(0);
   const [newItem, setNewItem] = useState({ day: 'fri', time: '', title: '', description: '' });
   const [isSaving, setIsSaving] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const queryClient = useQueryClient();
 
   const canEdit = profile && (profile.role === 'super_admin' || profile.role === 'regional_secretary');
@@ -289,7 +290,11 @@ export default function ThisIsItInfo() {
   };
 
   const handleDeleteChecklistItem = async (itemId) => {
-    if (!confirm('Delete this item?')) return;
+    if (pendingDeleteId !== itemId) {
+      setPendingDeleteId(itemId);
+      return;
+    }
+    setPendingDeleteId(null);
     try {
       const { error } = await supabase
         .from('this_is_it_checklist_items')
@@ -318,7 +323,11 @@ export default function ThisIsItInfo() {
   };
 
   const handleDeleteScheduleItem = async (itemId) => {
-    if (!confirm('Delete this schedule item?')) return;
+    if (pendingDeleteId !== itemId) {
+      setPendingDeleteId(itemId);
+      return;
+    }
+    setPendingDeleteId(null);
     try {
       const { error } = await supabase
         .from('this_is_it_schedule_items')
@@ -550,9 +559,10 @@ export default function ThisIsItInfo() {
                       />
                       <button
                         onClick={() => handleDeleteChecklistItem(item.id)}
-                        style={{ padding: '4px 8px', background: '#dd6f51', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                        onBlur={() => { if (pendingDeleteId === item.id) setPendingDeleteId(null); }}
+                        style={{ padding: '4px 8px', background: pendingDeleteId === item.id ? '#b93e26' : '#dd6f51', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: pendingDeleteId === item.id ? 700 : 400 }}
                       >
-                        Delete
+                        {pendingDeleteId === item.id ? 'Confirm?' : 'Delete'}
                       </button>
                     </div>
                   ) : (
@@ -755,9 +765,10 @@ export default function ThisIsItInfo() {
                   {editMode && (
                     <button
                       onClick={() => handleDeleteScheduleItem(item.id)}
-                      style={{ position: 'absolute', top: '0', right: '0', padding: '4px 8px', background: '#dd6f51', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                      onBlur={() => { if (pendingDeleteId === item.id) setPendingDeleteId(null); }}
+                      style={{ position: 'absolute', top: '0', right: '0', padding: '4px 8px', background: pendingDeleteId === item.id ? '#b93e26' : '#dd6f51', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: pendingDeleteId === item.id ? 700 : 400 }}
                     >
-                      Delete
+                      {pendingDeleteId === item.id ? 'Confirm?' : 'Delete'}
                     </button>
                   )}
                 </div>
