@@ -301,6 +301,35 @@ export default function ThisIsItInfo() {
     }
   };
 
+  const handleDeleteScheduleItem = async (itemId) => {
+    if (!confirm('Delete this schedule item?')) return;
+    try {
+      const { error } = await supabase
+        .from('this_is_it_schedule_items')
+        .delete()
+        .eq('id', itemId);
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_schedule_items'] });
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('Error: ' + err.message);
+    }
+  };
+
+  const handleUpdateScheduleItem = async (itemId, field, value) => {
+    try {
+      const { error } = await supabase
+        .from('this_is_it_schedule_items')
+        .update({ [field]: value })
+        .eq('id', itemId);
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_schedule_items'] });
+    } catch (err) {
+      console.error('Update error:', err);
+      alert('Error: ' + err.message);
+    }
+  };
+
   if (isLoading) {
     return <div style={{ padding: '40px', textAlign: 'center' }}>Loading...</div>;
   }
@@ -671,12 +700,50 @@ export default function ThisIsItInfo() {
               </div>
             ) : (
               dayItems.map((item, i) => (
-                <div key={i} className="tii-sched-row">
-                  <div className="tii-sched-time">{item.time}</div>
-                  <div className="tii-sched-what">
-                    <b>{item.title}</b>
-                    {item.description && <p>{item.description}</p>}
+                <div key={item.id} className="tii-sched-row" style={{ position: 'relative' }}>
+                  <div className="tii-sched-time">
+                    {editMode ? (
+                      <EditableText
+                        value={item.time}
+                        onSave={(v) => handleUpdateScheduleItem(item.id, 'time', v)}
+                      />
+                    ) : (
+                      item.time
+                    )}
                   </div>
+                  <div className="tii-sched-what">
+                    <b>
+                      {editMode ? (
+                        <EditableText
+                          value={item.title}
+                          onSave={(v) => handleUpdateScheduleItem(item.id, 'title', v)}
+                        />
+                      ) : (
+                        item.title
+                      )}
+                    </b>
+                    {item.description && (
+                      <p>
+                        {editMode ? (
+                          <EditableText
+                            value={item.description}
+                            onSave={(v) => handleUpdateScheduleItem(item.id, 'description', v)}
+                            multiline
+                          />
+                        ) : (
+                          item.description
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  {editMode && (
+                    <button
+                      onClick={() => handleDeleteScheduleItem(item.id)}
+                      style={{ position: 'absolute', top: '0', right: '0', padding: '4px 8px', background: '#dd6f51', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               ))
             )}
