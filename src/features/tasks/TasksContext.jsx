@@ -143,8 +143,13 @@ export function TasksProvider({ departmentId, sprintId, initialTasks, children }
       const targetStatus = (typeof nextStatus === 'object' && nextStatus)
         ? nextStatus
         : statuses.find((status) => status.id === newStatusId) ?? null
-      setTasks((prev) =>
-        prev.map((task) =>
+
+      // Capture existing task before the optimistic update so we can pass it
+      // to updateTask — skipping the redundant DB fetch inside updateTask.
+      let existingTask = null
+      setTasks((prev) => {
+        existingTask = prev.find((t) => t.id === taskId) ?? null
+        return prev.map((task) =>
           task.id === taskId
             ? {
                 ...task,
@@ -156,14 +161,14 @@ export function TasksProvider({ departmentId, sprintId, initialTasks, children }
                 status_category: targetStatus?.category ?? task.status_category,
               }
             : task,
-        ),
-      )
+        )
+      })
       try {
         await updateTask(taskId, {
           status: targetStatus?.legacy_key ?? undefined,
           statusId: newStatusId,
           statusCategory: targetStatus?.category,
-        })
+        }, null, existingTask)
       } catch {
         loadTasks()
       }

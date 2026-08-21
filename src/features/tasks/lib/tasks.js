@@ -601,66 +601,69 @@ export async function updateTask(taskId, updates, actorId = null, existingTask =
 
   const normalized = normalizeTaskResult(data)
 
-  // Item 7: notify parent-task assignees when a subtask is marked completed.
+  // Items 7 & 8: fire completion notifications without blocking the caller.
+  // These fan-out DB reads (parent assignees, blocked-task deps) were previously
+  // awaited inline, adding 3-5 extra round-trips to every "Completed" status move.
+  // Wrapping in a detached Promise lets the status update return immediately.
   const isNowCompleted = updates.statusCategory === STATUS_CATEGORIES.COMPLETED
   const wasAlreadyCompleted = existingTask.status_definition?.category === STATUS_CATEGORIES.COMPLETED
-  if (isNowCompleted && !wasAlreadyCompleted && existingTask.parent_task_id && actorId) {
-    const { createNotification } = await import('../../notifications/lib/notifications')
-    const { data: parentAssignees } = await supabase
-      .from('task_assignees')
-      .select('user_id')
-      .eq('task_id', existingTask.parent_task_id)
-    const { data: parentTask } = await supabase.from('tasks').select('title').eq('id', existingTask.parent_task_id).single()
-    for (const row of parentAssignees ?? []) {
-      if (row.user_id !== actorId) {
-        createNotification(row.user_id, 'subtask_completed', {
-          taskId,
-          parentTaskId: existingTask.parent_task_id,
-          title: existingTask.title,
-          parentTitle: parentTask?.title ?? '',
-        }).catch(() => {})
-      }
-    }
-  }
-
-  // Item 8: notify assignees of blocked tasks when this task is marked completed.
   if (isNowCompleted && !wasAlreadyCompleted && actorId) {
-    const { createNotification } = await import('../../notifications/lib/notifications')
-    // Find all tasks that depend on (are blocked by) this task
-    const { data: blockedTasks } = await supabase
-      .from('task_dependencies')
-      .select(`
-        id,
-        task:tasks!task_id(id, title, status_definition:task_status_definitions!status_id(category))
-      `)
-      .eq('depends_on_id', taskId)
+    Promise.resolve().then(async () => {
+      const { createNotification } = await import('../../notifications/lib/notifications')
 
-    // Batch-fetch assignees for all blocked tasks in one query instead of N+1
-    const deps = (blockedTasks ?? []).filter((d) => d.task)
-    if (deps.length > 0) {
-      const depTaskIds = deps.map((d) => d.task.id)
-      const { data: allAssignees } = await supabase
-        .from('task_assignees')
-        .select('user_id, task_id')
-        .in('task_id', depTaskIds)
-      const assigneesByTask = new Map()
-      for (const row of allAssignees ?? []) {
-        if (!assigneesByTask.has(row.task_id)) assigneesByTask.set(row.task_id, [])
-        assigneesByTask.get(row.task_id).push(row)
-      }
-      for (const dep of deps) {
-        for (const row of assigneesByTask.get(dep.task.id) ?? []) {
+      // Item 7: notify parent-task assignees when a subtask is marked completed.
+      if (existingTask.parent_task_id) {
+        const [{ data: parentAssignees }, { data: parentTask }] = await Promise.all([
+          supabase.from('task_assignees').select('user_id').eq('task_id', existingTask.parent_task_id),
+          supabase.from('tasks').select('title').eq('id', existingTask.parent_task_id).single(),
+        ])
+        for (const row of parentAssignees ?? []) {
           if (row.user_id !== actorId) {
-            createNotification(row.user_id, 'dependency_cleared', {
-              taskId: dep.task.id,
-              blockerTaskId: taskId,
-              blockedTaskTitle: dep.task.title,
-              blockerTaskTitle: data?.title ?? existingTask.title,
+            createNotification(row.user_id, 'subtask_completed', {
+              taskId,
+              parentTaskId: existingTask.parent_task_id,
+              title: existingTask.title,
+              parentTitle: parentTask?.title ?? '',
             }).catch(() => {})
           }
         }
       }
-    }
+
+      // Item 8: notify assignees of blocked tasks when this task is marked completed.
+      const { data: blockedTasks } = await supabase
+        .from('task_dependencies')
+        .select(`
+          id,
+          task:tasks!task_id(id, title, status_definition:task_status_definitions!status_id(category))
+        `)
+        .eq('depends_on_id', taskId)
+
+      const deps = (blockedTasks ?? []).filter((d) => d.task)
+      if (deps.length > 0) {
+        const depTaskIds = deps.map((d) => d.task.id)
+        const { data: allAssignees } = await supabase
+          .from('task_assignees')
+          .select('user_id, task_id')
+          .in('task_id', depTaskIds)
+        const assigneesByTask = new Map()
+        for (const row of allAssignees ?? []) {
+          if (!assigneesByTask.has(row.task_id)) assigneesByTask.set(row.task_id, [])
+          assigneesByTask.get(row.task_id).push(row)
+        }
+        for (const dep of deps) {
+          for (const row of assigneesByTask.get(dep.task.id) ?? []) {
+            if (row.user_id !== actorId) {
+              createNotification(row.user_id, 'dependency_cleared', {
+                taskId: dep.task.id,
+                blockerTaskId: taskId,
+                blockedTaskTitle: dep.task.title,
+                blockerTaskTitle: data?.title ?? existingTask.title,
+              }).catch(() => {})
+            }
+          }
+        }
+      }
+    }).catch(() => {})
   }
 
   if (actorId) {
