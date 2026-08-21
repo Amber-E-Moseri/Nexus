@@ -46,6 +46,7 @@ const FALLBACK = {
   flight_form_url: 'https://leaders.lwcanada.org/f/rp3uahba3c3c',
   friday_opening_time: '6:00 PM',
   monday_checkout_time: 'Mon Morning',
+  event_dates: '28–31 Aug 2026',
   dress_code: 'Semiformal for most of the weekend. On day 2 we\'ll all be wearing our This Is It shirts.',
   all_white_for: 'Thanksgiving service',
   wifi_text: 'Free, hotel-wide',
@@ -532,7 +533,7 @@ export default function ThisIsItInfo() {
               <div className="tii-tk-fields">
                 <div className="tii-tk-field">
                   <label>Date</label>
-                  <div className="val">28–31 Aug 2026</div>
+                  <div className="val">{editMode ? <EditableText value={c.event_dates} onSave={(v) => handleSaveField('event_dates', v)} /> : c.event_dates}</div>
                 </div>
                 <div className="tii-tk-field">
                   <label>Venue</label>
