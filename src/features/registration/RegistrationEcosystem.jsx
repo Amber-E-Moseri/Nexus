@@ -3671,7 +3671,7 @@ function BulkEmailSender({ selectedStatuses, statusCounts, merged, onClose }) {
 }
 
 function SummaryTab({ merged }) {
-  const registered = merged.filter(r => r.isRegistered && !r.absent);
+  const registered = merged.filter(r => !r.absent);
 
   const byDept = useMemo(() => {
     const map = {};
