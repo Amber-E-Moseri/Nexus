@@ -51,6 +51,11 @@ Deno.serve(async (req) => {
     return jsonResponse(401, { error: 'Unauthorized' })
   }
 
+  const body = await req.json().catch(() => ({}))
+  // evening mode: only tasks due tomorrow, shorter dedup window so it doesn't
+  // collide with the 8am morning run (which has a 24h dedup).
+  const isEvening = body?.mode === 'evening'
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -60,19 +65,24 @@ Deno.serve(async (req) => {
   const today = new Date()
   const todayStr = today.toISOString().split('T')[0]
 
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const tomorrowStr = tomorrow.toISOString().split('T')[0]
+
   const inThreeDays = new Date()
   inThreeDays.setDate(inThreeDays.getDate() + 3)
   const inThreeDaysStr = inThreeDays.toISOString().split('T')[0]
 
-  // Query tasks that are:
-  // 1. Overdue (due_date < today)
-  // 2. Due today
-  // 3. Due within next 3 days
-  const { data: tasks, error: tasksError } = await supabase
+  // Evening mode: only tasks due tomorrow.
+  // Morning mode: overdue + due today + due within 3 days.
+  const query = supabase
     .from('tasks')
     .select('id, title, assignee_id, due_date, status_definition!status_id(category)')
-    .lte('due_date', inThreeDaysStr)
     .neq('status_definition.category', 'completed')
+
+  const { data: tasks, error: tasksError } = isEvening
+    ? await query.eq('due_date', tomorrowStr)
+    : await query.lte('due_date', inThreeDaysStr)
 
   if (tasksError) {
     return jsonResponse(500, { error: tasksError.message })
@@ -106,16 +116,17 @@ Deno.serve(async (req) => {
     return jsonResponse(200, { notified: 0, message: 'No users with preference enabled' })
   }
 
-  // Check for existing notifications from the last 24 hours
-  const oneDayAgo = new Date()
-  oneDayAgo.setHours(oneDayAgo.getHours() - 24)
+  // Evening run uses an 8h dedup window so it fires independently of the 8am run.
+  const dedupHours = isEvening ? 8 : 24
+  const dedupCutoff = new Date()
+  dedupCutoff.setHours(dedupCutoff.getHours() - dedupHours)
 
   const { data: existingNotifications } = await supabase
     .from('notifications')
     .select('id, user_id, payload->>task_id')
     .in('user_id', uniqueAssigneeIds)
     .eq('type', 'task_due_soon')
-    .gte('created_at', oneDayAgo.toISOString())
+    .gte('created_at', dedupCutoff.toISOString())
 
   const existingPairs = new Set(
     (existingNotifications || []).map((n) => `${n['payload->>task_id']}:${n.user_id}`)
@@ -135,6 +146,7 @@ Deno.serve(async (req) => {
         task_id: task.id,
         due_date: task.due_date,
         is_overdue: task.due_date < todayStr,
+        is_tomorrow: task.due_date === tomorrowStr,
       },
     }))
 
