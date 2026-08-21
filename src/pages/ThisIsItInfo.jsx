@@ -5,14 +5,32 @@ import { useNavigate } from 'react-router-dom';
 
 function useOptionalProfile() {
   const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data?.user) return;
-      supabase.from('users').select('id,role').eq('id', data.user.id).single()
-        .then(({ data: u }) => setProfile(u));
-    });
+    const fetchProfile = async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (!data?.user) {
+          setLoading(false);
+          return;
+        }
+        const { data: u } = await supabase
+          .from('users')
+          .select('id,role')
+          .eq('id', data.user.id)
+          .single();
+        setProfile(u);
+      } catch (err) {
+        console.error('Profile fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
   }, []);
-  return profile;
+
+  return { profile, loading };
 }
 
 const FALLBACK = {
@@ -96,14 +114,14 @@ function EditableText({ value, onSave, multiline = false, className = '' }) {
 }
 
 export default function ThisIsItInfo() {
-  const profile = useOptionalProfile();
+  const { profile, loading: profileLoading } = useOptionalProfile();
   const navigate = useNavigate();
   const [activeDay, setActiveDay] = useState('fri');
   const [editMode, setEditMode] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const queryClient = useQueryClient();
 
-  const canEdit = profile?.role === 'super_admin' || profile?.role === 'regional_secretary';
+  const canEdit = profile && (profile.role === 'super_admin' || profile.role === 'regional_secretary');
 
   const { data: content, isLoading } = useQuery({
     queryKey: ['this_is_it_event_content', 2026],
