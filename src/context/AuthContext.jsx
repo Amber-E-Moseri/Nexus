@@ -112,6 +112,10 @@ export function AuthProvider({ children }) {
   // SIGNED_IN also fires on session restore and tab refocus, where the
   // profile is already loaded and refetching is wasted work.
   const profileRef = useRef(null)
+  // Holds the timer started by INITIAL_SESSION(null) so TOKEN_REFRESHED can
+  // cancel it before it fires mid-profile-fetch (the "workspace with no user
+  // info" mobile race: timer fires at 4 s, profile fetch finishes at 4.5 s).
+  const initialSessionTimerRef = useRef(null)
   useEffect(() => {
     profileRef.current = profile
   }, [profile])
@@ -326,6 +330,14 @@ export function AuthProvider({ children }) {
             }
           }
         } else if (event === 'TOKEN_REFRESHED') {
+          // Cancel the INITIAL_SESSION null timer: we have a real session now and
+          // are about to restore the profile. Without this, the 4 s timer fires
+          // mid-fetch and calls setLoading(false) with profile=null, causing the
+          // "workspace with no user info" flash on mobile resume.
+          if (initialSessionTimerRef.current) {
+            clearTimeout(initialSessionTimerRef.current)
+            initialSessionTimerRef.current = null
+          }
           touchLastActive().catch(() => {})
           // If INITIAL_SESSION fired with null before the refresh completed,
           // the profile was cleared. Re-fetch it now that we have a valid session.
@@ -362,7 +374,11 @@ export function AuthProvider({ children }) {
           // Don't clear profile or release loading here: doing so causes a skeleton
           // flash (user is set, profile is null, app renders with no name/data).
           // Give TOKEN_REFRESHED 4 s; if it doesn't arrive, conclude no session.
-          setTimeout(() => {
+          // TOKEN_REFRESHED cancels this timer (see below) so it can never fire
+          // mid-profile-fetch — the source of the "workspace with no user info"
+          // flash on mobile cold-start after backgrounding.
+          initialSessionTimerRef.current = setTimeout(() => {
+            initialSessionTimerRef.current = null
             if (mounted && !profileRef.current) {
               setProfile(null)
               setLoading(false)
@@ -379,6 +395,10 @@ export function AuthProvider({ children }) {
       mounted = false
       subscription.unsubscribe()
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      if (initialSessionTimerRef.current) {
+        clearTimeout(initialSessionTimerRef.current)
+        initialSessionTimerRef.current = null
+      }
     }
   }, [])
 

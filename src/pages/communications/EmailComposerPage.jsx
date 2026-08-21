@@ -670,6 +670,19 @@ export default function EmailComposerPage() {
         }
       } else {
         setReplyTo(profile?.email ?? '')
+
+        try {
+          const stored = sessionStorage.getItem('selected_email_template')
+          if (stored && active) {
+            const tmpl = JSON.parse(stored)
+            sessionStorage.removeItem('selected_email_template')
+            if (tmpl.html_content) setBodyHtml(tmpl.html_content)
+            if (tmpl.subject) setSubject(tmpl.subject)
+            if (tmpl.name) setName(tmpl.name)
+          }
+        } catch {
+          // ignore corrupt sessionStorage
+        }
       }
 
       if (active) setLoading(false)

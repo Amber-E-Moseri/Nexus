@@ -51,19 +51,7 @@ export async function createNotification(userId, type, payload) {
 
   if (error) throw error
 
-  // Fetch user's mobile push preference for this notification type
-  const { data: pref } = await supabase
-    .from('user_notification_prefs')
-    .select('mobile')
-    .eq('user_id', userId)
-    .eq('notification_type', type)
-    .single()
-
-  // Only dispatch push if user has enabled mobile for this type (default to false)
-  const pushEnabled = pref?.mobile ?? false
-  if (pushEnabled) {
-    dispatchPush(userId, data)
-  }
+  dispatchPush(userId, data)
 
   return data
 }
@@ -218,16 +206,28 @@ export async function sendTaskPushNotification(userId, data) {
 // Fire-and-forget: mobile push is best-effort and must never block or fail
 // in-app notification creation. sendTaskPushNotification already no-ops
 // server-side when the user has no active push subscription.
-function dispatchPush(userId, notification) {
+// Checks the user's mobile pref internally so any call site (createNotification
+// or direct RPC callers) can call this without a separate pref lookup.
+export function dispatchPush(userId, notification) {
   if (typeof userId !== 'string' || !notification) return
   const def = NOTIFICATION_TYPES[notification.type]
-  sendTaskPushNotification(userId, {
-    taskId: notification.payload?.task_id,
-    title: def?.label ?? 'BLW CAN NEXUS',
-    message: formatNotificationMessage(notification),
-    url: '/inbox',
-    type: notification.type,
-  }).catch(() => {})
+  supabase
+    .from('user_notification_prefs')
+    .select('mobile')
+    .eq('user_id', userId)
+    .eq('notification_type', notification.type)
+    .single()
+    .then(({ data: pref }) => {
+      if (!(pref?.mobile ?? false)) return
+      sendTaskPushNotification(userId, {
+        taskId: notification.payload?.task_id,
+        title: def?.label ?? 'BLW CAN NEXUS',
+        message: formatNotificationMessage(notification),
+        url: '/inbox',
+        type: notification.type,
+      }).catch(() => {})
+    })
+    .catch(() => {})
 }
 
 export function formatNotificationMessage(notification) {

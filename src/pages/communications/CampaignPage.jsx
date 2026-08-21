@@ -7,7 +7,7 @@ import EmailComposer from '../../features/communications/components/EmailCompose
 import EmailPreviewModal from '../../features/communications/components/EmailPreviewModal'
 import EmailSignatureEditor from '../../features/communications/components/EmailSignatureEditor'
 import SegmentBuilderAdvanced from '../../features/communications/components/SegmentBuilderAdvanced'
-import { getFunctionErrorMessage } from '../../features/communications/lib/communications'
+import { getFunctionErrorMessage, sanitizeEmailHtml, stripHtmlToText } from '../../features/communications/lib/communications'
 import { Edit2, BarChart3 } from 'lucide-react'
 import { FONT_HEADING } from '../../lib/fonts'
 
@@ -100,7 +100,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   useEffect(() => {
     supabase.from('communication_segments').select('id, name, estimated_count').order('name')
       .then(({ data }) => setSegments(data ?? []))
-    supabase.from('absence_email_templates').select('id, name, subject, body').order('name')
+    supabase.from('communication_email_templates').select('id, name, subject, html_content, category').order('name')
       .then(({ data }) => setTemplates(data ?? []))
     supabase.from('app_settings').select('value').eq('key', 'email_signature').single()
       .then(({ data }) => { if (data) setOrgSignature(data.value || '') })
@@ -128,10 +128,13 @@ function CampaignForm({ initial, onSaved, onCancel }) {
       scheduledAt = convertETtoUTC(scheduledDate, scheduledTime)
     }
 
+    const draftHtml = sanitizeEmailHtml(body.trim())
     const payload = {
       name:              name.trim() || 'Untitled Campaign',
       subject:           subject.trim(),
-      body:              body.trim(),
+      body:              stripHtmlToText(draftHtml),
+      body_html:         draftHtml,
+      body_text:         stripHtmlToText(draftHtml),
       status:            'draft',
       segment_id:        segmentId || null,
       recipient_filters: useCustomFilter ? inlineConditions : [],
@@ -200,16 +203,21 @@ function CampaignForm({ initial, onSaved, onCancel }) {
     }
 
     const finalBody = useOrgSignature && orgSignature ? `${body.trim()}\n\n${orgSignature}` : body.trim()
+    const cleanHtml = sanitizeEmailHtml(finalBody)
+    const cleanText = stripHtmlToText(cleanHtml)
 
     const payload = {
       name:              name.trim(),
       subject:           subject.trim(),
-      body:              finalBody,
+      body:              cleanText,
+      body_html:         cleanHtml,
+      body_text:         cleanText,
       status,
       segment_id:        segmentId || null,
       recipient_filters: useCustomFilter ? inlineConditions : [],
       scheduled_at:      scheduledAt,
       recurring_rule:    recurringRule,
+      from_name:         fromName.trim() || 'BLW CAN NEXUS',
       created_by:        profile?.id ?? null,
     }
 
@@ -263,8 +271,9 @@ function CampaignForm({ initial, onSaved, onCancel }) {
 
   async function handleSendTest(testEmail) {
     const finalBody = useOrgSignature && orgSignature ? `${body}\n\n${orgSignature}` : body
+    const cleanHtml = sanitizeEmailHtml(finalBody)
     const { error: sendError } = await supabase.functions.invoke('send-communication-email', {
-      body: { test_email: testEmail, subject: `[TEST] ${subject}`, body: finalBody },
+      body: { test_email: testEmail, subject: `[TEST] ${subject}`, body_html: cleanHtml, body_text: stripHtmlToText(cleanHtml), body: stripHtmlToText(cleanHtml) },
     })
     if (sendError) {
       const message = await getFunctionErrorMessage(sendError)
@@ -406,7 +415,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
               value={selectedTemplate}
               onChange={(e) => {
                 const tmpl = templates.find((t) => t.id === e.target.value)
-                if (tmpl) { setSubject(tmpl.subject ?? ''); setBody(tmpl.body ?? '') }
+                if (tmpl) { setSubject(tmpl.subject ?? ''); setBody(tmpl.html_content ?? '') }
                 setSelectedTemplate(e.target.value)
               }}
               style={{ border: `1px solid ${BORDER}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }}

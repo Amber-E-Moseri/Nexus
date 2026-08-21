@@ -209,7 +209,35 @@ export function DueDatePickerPopover({ taskId, initialDate, initialTime, initial
   const [time, setTime] = useState(initialTime ?? '')
   const [showTime, setShowTime] = useState(!!initialTime)
   const [showRecurring, setShowRecurring] = useState(false)
-  useOutsideClick(ref, onClose)
+  const dateRef = useRef(date)
+  const timeRef = useRef(time)
+  dateRef.current = date
+  timeRef.current = time
+
+  async function persist(payload) {
+    if (taskId) {
+      await supabase.from('tasks').update(payload).eq('id', taskId)
+    }
+    onSave(payload)
+    onClose()
+  }
+
+  function save() {
+    persist({ due_date: dateRef.current || null, due_time: (dateRef.current && timeRef.current) ? timeRef.current : null })
+  }
+
+  function clear() {
+    persist({ due_date: null, due_time: null })
+  }
+
+  useOutsideClick(ref, () => {
+    const changed = dateRef.current !== (initialDate ?? '') || timeRef.current !== (initialTime ?? '')
+    if (changed) {
+      save()
+    } else {
+      onClose()
+    }
+  })
 
   const today = new Date()
   const thisWeekend = nextWeekday(6)
@@ -226,18 +254,6 @@ export function DueDatePickerPopover({ taskId, initialDate, initialTime, initial
     { label: '4 weeks',      date: toISO(addDays(28)), right: shortMonth(addDays(28)) },
   ]
 
-  async function persist(payload) {
-    if (taskId) {
-      await supabase.from('tasks').update(payload).eq('id', taskId)
-    }
-    onSave(payload)
-    onClose()
-  }
-
-  function pick(d, t) {
-    persist({ due_date: d || null, due_time: (d && t) ? t : null })
-  }
-
   function handleRecurringSave(recurrence) {
     persist({ due_date: date || null, due_time: (date && time) ? time : null, recurrence })
   }
@@ -251,7 +267,7 @@ export function DueDatePickerPopover({ taskId, initialDate, initialTime, initial
       ) : (
         <div style={{ width: 190, borderRight: '1px solid #F0EBE3', padding: '8px 0', display: 'flex', flexDirection: 'column' }}>
           {shortcuts.map((s) => (
-            <button key={s.label} onClick={() => { setDate(s.date); pick(s.date, time) }}
+            <button key={s.label} onClick={() => setDate(s.date)}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '7px 14px', background: date === s.date ? '#F5F0EA' : 'transparent', border: 'none', cursor: 'pointer', fontSize: 12.5, color: date === s.date ? 'var(--accent)' : 'var(--text-primary)', fontWeight: date === s.date ? 600 : 400, textAlign: 'left' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = '#F9F7F3' }}
               onMouseLeave={(e) => { e.currentTarget.style.background = date === s.date ? '#F5F0EA' : 'transparent' }}
@@ -269,7 +285,7 @@ export function DueDatePickerPopover({ taskId, initialDate, initialTime, initial
               <span>Set Recurring</span>
               <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>›</span>
             </button>
-            <button onClick={() => pick('', '')}
+            <button onClick={clear}
               style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '7px 14px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12.5, color: 'var(--text-tertiary)', textAlign: 'left' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = '#F9F7F3' }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
@@ -288,15 +304,22 @@ export function DueDatePickerPopover({ taskId, initialDate, initialTime, initial
               <path d="M5 1v4M11 1v4M1 7h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
             {date ? new Date(date + 'T00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : 'Due date'}
-            {date && <button onClick={() => pick('', '')} style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>}
+            {date && <button onClick={clear} style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>}
           </div>
           {showTime ? (
-            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} onBlur={() => date && pick(date, time)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #D5CCBE', fontSize: 12, width: 90 }} />
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #D5CCBE', fontSize: 12, width: 90 }} />
           ) : (
             <button onClick={() => setShowTime(true)} style={{ fontSize: 11.5, color: 'var(--text-tertiary)', background: 'none', border: '1px solid #E0D8CC', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Add time</button>
           )}
         </div>
-        <MiniCalendar selected={date} onSelect={(d) => { setDate(d); pick(d, time) }} />
+        <MiniCalendar selected={date} onSelect={(d) => setDate(d)} />
+        {date && (
+          <button onClick={save}
+            style={{ width: '100%', marginTop: 10, padding: '7px 0', borderRadius: 8, background: 'var(--accent)', color: '#FFF', border: 'none', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}
+          >
+            Save
+          </button>
+        )}
       </div>
     </div>
   )

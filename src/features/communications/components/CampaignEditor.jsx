@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../hooks/useAuth'
-import { getFunctionErrorMessage } from '../lib/communications'
+import { getFunctionErrorMessage, sanitizeEmailHtml, stripHtmlToText } from '../lib/communications'
 import EmailComposer from './EmailComposer'
 import EmailPreviewModal from './EmailPreviewModal'
 import SendConfirmationModal from './SendConfirmationModal'
@@ -90,7 +90,7 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   useEffect(() => {
     supabase.from('communication_segments').select('id, name, estimated_count').order('name')
       .then(({ data }) => setSegments(data ?? []))
-    supabase.from('communication_email_templates').select('id, name, subject, body').order('name')
+    supabase.from('communication_email_templates').select('id, name, subject, html_content, category').order('name')
       .then(({ data }) => setTemplates(data ?? []))
   }, [])
 
@@ -130,10 +130,14 @@ function CampaignForm({ initial, onSaved, onCancel }) {
     setShowSendConfirm(false)
 
     const status = scheduleMode === 'now' ? 'sending' : 'scheduled'
+    const cleanHtml = sanitizeEmailHtml(body.trim())
+    const cleanText = stripHtmlToText(cleanHtml)
     const payload = {
       name: name.trim(),
       subject: subject.trim(),
-      body: body.trim(),
+      body: cleanText,
+      body_html: cleanHtml,
+      body_text: cleanText,
       status,
       segment_id: segmentId || null,
       recipient_filters: pills,

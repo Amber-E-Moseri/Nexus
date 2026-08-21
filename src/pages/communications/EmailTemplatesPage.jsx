@@ -295,7 +295,6 @@ export default function EmailTemplatesPage() {
                       e.currentTarget.style.background = '#FFFFFF'
                     }}
                   >
-                    {!isMobile && <Copy size={14} />}
                     <Copy size={isMobile ? 12 : 14} />
                   </button>
                   <button
@@ -324,7 +323,6 @@ export default function EmailTemplatesPage() {
                       e.currentTarget.style.opacity = '1'
                     }}
                   >
-                    {!isMobile && <Edit3 size={14} />}
                     <Edit3 size={isMobile ? 12 : 14} />
                   </button>
                   {!template.is_system && (
@@ -356,7 +354,6 @@ export default function EmailTemplatesPage() {
                         e.currentTarget.style.background = '#FFFFFF'
                       }}
                     >
-                      {!isMobile && <Trash2 size={14} />}
                       <Trash2 size={isMobile ? 12 : 14} />
                     </button>
                   )}

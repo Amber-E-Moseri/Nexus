@@ -11,4 +11,5 @@ export {
   testPushNotifications,
   sendTaskPushNotification,
   formatNotificationMessage,
+  dispatchPush,
 } from './lib/notifications'
