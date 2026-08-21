@@ -4,7 +4,23 @@ import { supabase } from '../lib/supabase'
 import { clearAllAppCache, loadSession, clearSession } from '../lib/cacheUtils'
 import { silentSubscribeToPush, unsubscribePush } from '../lib/webPush'
 
-export const AuthContext = createContext(null)
+// Default is used by detached fibers (lazy-loaded component's Suspense retry fires
+// after the Suspense boundary unmounts due to an auth redirect). loading:true makes
+// ProtectedRoute show a spinner instead of crashing from a null context.
+const AUTH_CONTEXT_DEFAULT = {
+  user: null,
+  profile: null,
+  role: null,
+  effectiveRole: null,
+  loading: true,
+  isRecoveryMode: false,
+  clearRecoveryMode: () => {},
+  signIn: async () => ({ error: new Error('AuthProvider not mounted') }),
+  signUp: async () => ({ error: new Error('AuthProvider not mounted') }),
+  signOut: async () => {},
+  refreshProfile: async () => null,
+}
+export const AuthContext = createContext(AUTH_CONTEXT_DEFAULT)
 
 function getJwtRole(session) {
   return session?.user?.app_metadata?.user_role
