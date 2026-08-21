@@ -182,10 +182,15 @@ export function AuthProvider({ children }) {
         try {
           const nextProfile = await withTimeout(fetchMinimalProfile(session.user.id), 8_000)
           if (mounted) {
+            profileRef.current = nextProfile  // sync before INITIAL_SESSION can race
             setProfile(nextProfile)
             fetchSupplementaryProfile(session.user.id, nextProfile.department_id)
               .then((supplementary) => {
-                if (mounted) setProfile((prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary, _supplementaryLoaded: true } : prev)
+                if (mounted) {
+                  const merged = (prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary, _supplementaryLoaded: true } : prev
+                  profileRef.current = merged(profileRef.current)
+                  setProfile(merged)
+                }
               })
               .catch(() => {})
           }
@@ -196,12 +201,15 @@ export function AuthProvider({ children }) {
           }
 
           touchLastActive().catch(() => {})
+          // Profile loaded — release spinner
+          if (mounted) setLoading(false)
         } catch (e) {
+          // Profile fetch failed/timed out. Don't release the spinner here — the
+          // INITIAL_SESSION event from onAuthStateChange will retry the fetch.
+          // Releasing loading with profile=null causes a skeleton with no user info.
+          // The 15 s safety-net ensures we never hang indefinitely.
           console.warn('[Auth] fetchProfile failed or timed out:', e)
-          if (mounted) setProfile(null)
         }
-        // Session found — we've done everything we can; release the spinner.
-        if (mounted) setLoading(false)
       }
       // No session: don't call setLoading(false) here. onAuthStateChange will fire
       // INITIAL_SESSION (null) shortly and call setLoading(false) in its else branch.
@@ -309,26 +317,44 @@ export function AuthProvider({ children }) {
             try {
               const nextProfile = await fetchMinimalProfile(session.user.id)
               if (mounted) {
+                profileRef.current = nextProfile
                 setProfile(nextProfile)
                 fetchSupplementaryProfile(session.user.id, nextProfile.department_id)
                   .then((supplementary) => {
-                    if (mounted) setProfile((prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary } : prev)
+                    if (mounted) {
+                      const merged = (prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary } : prev
+                      profileRef.current = merged(profileRef.current)
+                      setProfile(merged)
+                    }
                   })
                   .catch(() => {})
               }
             } catch {}
+            // Release spinner after TOKEN_REFRESHED re-fetch (success or failure)
+            if (mounted) setLoading(false)
           }
         }
       } else {
-        setProfile(null)
-        setLoading(false)
-        // Only wipe cached data on an explicit sign-out. INITIAL_SESSION fires
-        // null when the stored token is expired but the refresh token is still
-        // valid — auth-js will emit TOKEN_REFRESHED shortly. Wiping the cache
-        // here causes a flash to the login page and a null profile after restore.
         if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+          setProfile(null)
+          setLoading(false)
           clearAllAppCache()
           clearSession()
+        } else if (event === 'INITIAL_SESSION') {
+          // INITIAL_SESSION(null) fires when the token is expired but the refresh
+          // token is still valid — auth-js emits TOKEN_REFRESHED shortly after.
+          // Don't clear profile or release loading here: doing so causes a skeleton
+          // flash (user is set, profile is null, app renders with no name/data).
+          // Give TOKEN_REFRESHED 4 s; if it doesn't arrive, conclude no session.
+          setTimeout(() => {
+            if (mounted && !profileRef.current) {
+              setProfile(null)
+              setLoading(false)
+            }
+          }, 4_000)
+        } else {
+          setProfile(null)
+          setLoading(false)
         }
       }
     })
