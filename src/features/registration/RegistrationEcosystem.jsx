@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Car, X } from 'lucide-react';
+import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Car, X, LayoutList } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import RegistrationEditModal from './RegistrationEditModal';
@@ -235,6 +235,7 @@ function Btn({ children, onClick, tone = 'primary', small, disabled }) {
 
 const DEFAULT_TABS = [
   { key: 'overview', label: 'Overview', icon: Home },
+  { key: 'summary',  label: 'Summary', icon: LayoutList },
   { key: 'central',  label: 'Registration Data', icon: Users },
   { key: 'confirm', label: 'Delegates', icon: CheckCircle2, hidden: true },
   { key: 'discipleship', label: 'Foundation & Baptism', icon: Church },
@@ -1089,6 +1090,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
             publicTokenKey={eventConfig.public_token_key}
           />
         )}
+        {tab === 'summary' && <SummaryTab merged={merged} />}
         {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onEditReg: setEditingReg }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
@@ -3665,5 +3667,90 @@ function BulkEmailSender({ selectedStatuses, statusCounts, merged, onClose }) {
       </div>
     </div>,
     document.body
+  );
+}
+
+function SummaryTab({ merged }) {
+  const registered = merged.filter(r => r.isRegistered && !r.absent);
+
+  const byDept = useMemo(() => {
+    const map = {};
+    registered.forEach(r => {
+      const key = r.team || '—';
+      map[key] = (map[key] || 0) + 1;
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [registered]);
+
+  const byShirt = useMemo(() => {
+    const order = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+    const map = {};
+    registered.forEach(r => {
+      const key = r.shirtSize || '—';
+      map[key] = (map[key] || 0) + 1;
+    });
+    return Object.entries(map).sort(([a], [b]) => {
+      const ai = order.indexOf(a), bi = order.indexOf(b);
+      if (ai === -1 && bi === -1) return a.localeCompare(b);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+  }, [registered]);
+
+  const cardStyle = { background: '#FAFAF8', border: `1px solid ${C.line}`, borderRadius: 12, padding: '18px 22px', flex: 1, minWidth: 260 };
+  const labelStyle = { fontSize: 12, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.mute, marginBottom: 14 };
+  const rowStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: `1px solid ${C.line}` };
+  const barBg = '#EDE9F6';
+  const barFg = '#4C2A92';
+  const max = (arr) => Math.max(...arr.map(([, v]) => v), 1);
+
+  function Bar({ value, total }) {
+    const pct = Math.round((value / total) * 100);
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 120 }}>
+        <div style={{ flex: 1, height: 6, borderRadius: 3, background: barBg, overflow: 'hidden' }}>
+          <div style={{ width: `${pct}%`, height: '100%', background: barFg, borderRadius: 3 }} />
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.ink, minWidth: 28, textAlign: 'right' }}>{value}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '4px 0' }}>
+      <div style={{ marginBottom: 18 }}>
+        <span style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 700 }}>Summary</span>
+        <span style={{ fontSize: 13, color: C.mute, marginLeft: 10 }}>{registered.length} registered (excl. absent)</span>
+      </div>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        {/* Department */}
+        <div style={cardStyle}>
+          <div style={labelStyle}>Department</div>
+          {byDept.length === 0
+            ? <div style={{ color: C.mute, fontSize: 13 }}>No data</div>
+            : byDept.map(([dept, count]) => (
+                <div key={dept} style={rowStyle}>
+                  <span style={{ fontSize: 13, color: C.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 12 }}>{dept}</span>
+                  <Bar value={count} total={registered.length} />
+                </div>
+              ))
+          }
+        </div>
+        {/* Shirt Size */}
+        <div style={cardStyle}>
+          <div style={labelStyle}>Shirt Size</div>
+          {byShirt.length === 0
+            ? <div style={{ color: C.mute, fontSize: 13 }}>No data</div>
+            : byShirt.map(([size, count]) => (
+                <div key={size} style={rowStyle}>
+                  <span style={{ fontSize: 13, color: C.ink, width: 48 }}>{size}</span>
+                  <Bar value={count} total={registered.length} />
+                </div>
+              ))
+          }
+        </div>
+      </div>
+    </div>
   );
 }
