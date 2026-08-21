@@ -767,9 +767,9 @@ export default function RegistrationDataTab({
                             Manual
                           </span>
                         )}
-                        {p.inStateConfirmed && crossCountrySubgroups?.has(p.subgroup) && (
-                          <span title="Driving cross country" style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, background: C.greenBg, color: C.green, padding: '2px 6px', borderRadius: 10, whiteSpace: 'nowrap' }}>
-                            Cross Country
+                        {p.inStateConfirmed && (p.transportMode === 'bus' || crossCountrySubgroups?.has(p.subgroup)) && (
+                          <span title={p.transportMode === 'bus' ? 'Taking the bus' : 'Driving cross country'} style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, background: C.greenBg, color: C.green, padding: '2px 6px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                            {p.transportMode === 'bus' ? 'Bus' : 'Cross Country'}
                           </span>
                         )}
                       </div>

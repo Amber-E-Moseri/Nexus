@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Car, X, LayoutList } from 'lucide-react';
+import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Car, Bus, X, LayoutList } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import RegistrationEditModal from './RegistrationEditModal';
@@ -333,6 +333,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         flightManualOverride: r.flight_manual_override,
         manuallyConfirmed: r.manually_confirmed ?? false,
         inState: r.in_state ?? false,
+        transportMode: r.transport_mode || null,
       }));
       // Merge: keep local version for any record edited in the last 10 s
       setRegistrations(prev => {
@@ -517,6 +518,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
             departureFlight: r.departure_flight,
             manuallyConfirmed: r.manually_confirmed ?? false,
             inState: r.in_state ?? false,
+            transportMode: r.transport_mode || null,
           }));
         } catch (e) {
           console.error('Failed to fetch registrations from Supabase:', e);
@@ -702,6 +704,15 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         if (error) console.error('Failed to bulk update in_state:', error);
       });
       return prev.map(r => emails.includes(r.email) ? { ...r, inState: true } : r);
+    });
+  }, []);
+
+  const setTransportMode = useCallback((email, mode) => {
+    setRegistrations(prev => {
+      supabase.from('registrations').update({ transport_mode: mode || null }).eq('email', email).then(({ error }) => {
+        if (error) console.error('Failed to update transport_mode:', error);
+      });
+      return prev.map(r => r.email === email ? { ...r, transportMode: mode || null } : r);
     });
   }, []);
 
@@ -1095,7 +1106,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, roomsNote, handleUpdateRoomsNote, peoplePerRoom, isLimited }} />}
-        {tab === 'transport' && <TransportTab {...{ merged, isLimited, subgroups, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving: bulkMarkDriving, onToggleCrossCountry: toggleConfirm, onUpdateCrossCountrySubgroups: async (list) => { if (!config?.id) return; await supabase.from('event_configs').update({ cross_country_subgroups: list }).eq('id', config.id); reloadConfig(); } }} />}
+        {tab === 'transport' && <TransportTab {...{ merged, isLimited, subgroups, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving: bulkMarkDriving, onToggleCrossCountry: toggleConfirm, onSetTransportMode: setTransportMode, onUpdateCrossCountrySubgroups: async (list) => { if (!config?.id) return; await supabase.from('event_configs').update({ cross_country_subgroups: list }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'finance' && (hasFinanceAccess
           ? <FinanceTab {...{ registrations: registrationsFiltered, payments, setPayments, userId: profile?.id, earlyCutoffAt: eventConfig.early_cutoff_at, earlyFee: eventConfig.early_fee, standardFee: eventConfig.standard_fee }} />
           : <div style={{ padding: 48, textAlign: 'center' }}>
@@ -2472,7 +2483,7 @@ function EditableFlightCell({ value, onCommit, type = 'text', mono = true, place
   );
 }
 
-function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, onClearFlight, onUpdateFlight, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving, onToggleCrossCountry, onUpdateCrossCountrySubgroups }) {
+function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, onClearFlight, onUpdateFlight, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving, onToggleCrossCountry, onSetTransportMode, onUpdateCrossCountrySubgroups }) {
   const [subgroupFilter, setSubgroupFilter] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
   const [clearingEmail, setClearingEmail] = useState(null);
@@ -2823,16 +2834,19 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
         );
       })()}
 
-      {/* Driving locally */}
+      {/* Not Flying (driving / bus) */}
       {(() => {
-        const driving = merged.filter(r => r.inStateConfirmed && (subgroupFilter === 'All' || r.subgroup === subgroupFilter));
-        if (driving.length === 0) return null;
+        const notFlying = merged.filter(r => r.inStateConfirmed && (subgroupFilter === 'All' || r.subgroup === subgroupFilter));
+        if (notFlying.length === 0) return null;
+        const byBus = notFlying.filter(r => r.transportMode === 'bus');
+        const byDriving = notFlying.filter(r => r.transportMode !== 'bus');
         return (
           <div style={{ marginTop: 24 }}>
             <div style={{ fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 13.5, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Car size={14} color={C.green} />
-              Cross Country
-              <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11.5, fontWeight: 400, color: C.mute }}>{driving.length} person{driving.length !== 1 ? 's' : ''}</span>
+              Not Flying
+              {byDriving.length > 0 && <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11.5, fontWeight: 400, color: C.mute }}>{byDriving.length} driving</span>}
+              {byBus.length > 0 && <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11.5, fontWeight: 400, color: C.mute }}>{byBus.length} by bus</span>}
             </div>
             <Card style={{ padding: 0 }}>
               <div style={{ overflowX: 'auto' }}>
@@ -2842,20 +2856,26 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
                       <th>Name</th>
                       <th>Subgroup</th>
                       <th>Fellowship</th>
+                      <th>Mode</th>
                       <th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {driving.map(r => (
+                    {notFlying.map(r => (
                       <tr key={r.email}>
                         <td style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Car size={11} color={C.green} />
+                          {r.transportMode === 'bus' ? <Bus size={11} color={C.green} /> : <Car size={11} color={C.green} />}
                           {r.fullName}
                         </td>
                         <td style={{ color: C.mute }}>{r.subgroup}</td>
                         <td style={{ color: C.mute }}>{r.fellowship}</td>
                         <td>
-                          <Btn tone="ghost" small onClick={() => onToggleCrossCountry?.(r.email)} title="Remove cross country marking">
+                          <Btn tone="ghost" small onClick={() => onSetTransportMode?.(r.email, r.transportMode === 'bus' ? null : 'bus')} title={r.transportMode === 'bus' ? 'Switch to Driving' : 'Switch to Bus'}>
+                            {r.transportMode === 'bus' ? <><Car size={11} /> Driving</> : <><Bus size={11} /> Bus</>}
+                          </Btn>
+                        </td>
+                        <td>
+                          <Btn tone="ghost" small onClick={() => onToggleCrossCountry?.(r.email)} title="Remove not-flying marking">
                             <X size={12} /> Unmark
                           </Btn>
                         </td>
