@@ -542,8 +542,8 @@ export default function ThisIsItInfo() {
             <p>{editMode ? <EditableText value={c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.'} onSave={(v) => handleSaveField('packing_text', v)} multiline /> : (c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.')}</p>
             <ul className="tii-checklist" id="packlist">
               {checklistItems.map((item) => (
-                <li key={item.id} style={{ position: 'relative' }}>
-                  {editMode ? (
+                editMode ? (
+                  <li key={item.id} style={{ position: 'relative', listStyle: 'none' }}>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <EditableText
                         value={item.item}
@@ -558,10 +558,10 @@ export default function ThisIsItInfo() {
                         {pendingDeleteId === item.id ? 'Confirm?' : 'Delete'}
                       </button>
                     </div>
-                  ) : (
-                    <CheckItem>{item.item}</CheckItem>
-                  )}
-                </li>
+                  </li>
+                ) : (
+                  <CheckItem key={item.id}>{item.item}</CheckItem>
+                )
               ))}
             </ul>
             {editMode && (
