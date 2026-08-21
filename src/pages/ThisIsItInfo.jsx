@@ -415,7 +415,9 @@ export default function ThisIsItInfo() {
         @keyframes fadeIn{0%{opacity:0}100%{opacity:1}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
         .tii-body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:48px;}
-        .tii-nav{position:sticky;top:0;z-index:50;background:rgba(249,247,242,0.85);backdrop-filter:blur(8px);overflow-x:auto;white-space:nowrap;padding:12px 14px;scrollbar-width:none;border-bottom:1px solid rgba(22,23,23,0.06);}
+        .tii-nav{position:sticky;top:0;z-index:50;background:rgba(249,247,242,0.85);backdrop-filter:blur(8px);overflow-x:auto;overflow-y:visible;white-space:nowrap;padding:12px 14px 15px;scrollbar-width:none;border-bottom:1px solid rgba(22,23,23,0.06);}
+        .tii-nav-progress{position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(22,23,23,.08);pointer-events:none;}
+        .tii-nav-plane{position:absolute;bottom:-1px;transform:translateX(-50%);font-size:14px;transition:left .1s linear;user-select:none;pointer-events:none;}
         .tii-nav::-webkit-scrollbar{display:none;}
         .tii-nav a{display:inline-block;font-size:13px;font-weight:500;letter-spacing:.02em;color:var(--ink);text-decoration:none;padding:6px 12px;margin-right:4px;border-radius:6px;transition:background .2s,color .2s;}
         .tii-nav a:hover{background:rgba(22,23,23,.08);}
@@ -491,12 +493,6 @@ export default function ThisIsItInfo() {
       `}</style>
 
       <div className="tii-body">
-        {/* Progress airplane */}
-        <div style={{ position:'fixed', top:'70px', left:0, right:0, height:'3px', background:'rgba(22,23,23,.08)', zIndex:49 }}>
-          <div style={{ height:'100%', width:`${scrollProgress * 100}%`, background:'linear-gradient(90deg, var(--coral), var(--purple))', transition:'width .1s linear' }} />
-          <div style={{ position:'absolute', top:'-12px', left:`${scrollProgress * 100}%`, transform:'translateX(-50%)', fontSize:'20px', transition:'left .1s linear', userSelect:'none' }}>✈️</div>
-        </div>
-
         {editMode && (
           <div className="edit-mode-indicator">
             ✏️ Editing — Click any text to edit (ESC to cancel)
@@ -519,6 +515,10 @@ export default function ThisIsItInfo() {
           <a href="#venue" onClick={(e) => { e.preventDefault(); document.getElementById('venue')?.scrollIntoView({ behavior: 'smooth' }); }}>Venue</a>
           <a href="#schedule" onClick={(e) => { e.preventDefault(); document.getElementById('schedule')?.scrollIntoView({ behavior: 'smooth' }); }}>Schedule</a>
           <a href="#help" onClick={(e) => { e.preventDefault(); document.getElementById('help')?.scrollIntoView({ behavior: 'smooth' }); }}>Need Help</a>
+          <div className="tii-nav-progress">
+            <div style={{ height:'100%', width:`${scrollProgress * 100}%`, background:'linear-gradient(90deg, var(--coral), var(--purple))', transition:'width .1s linear' }} />
+            <div className="tii-nav-plane" style={{ left:`${scrollProgress * 100}%` }}>✈️</div>
+          </div>
         </nav>
 
         {/* Hero */}
