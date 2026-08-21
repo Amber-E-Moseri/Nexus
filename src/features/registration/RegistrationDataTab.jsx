@@ -495,8 +495,8 @@ export default function RegistrationDataTab({
     { get: r => STATUS[r.registrationStatus]?.label || r.registrationStatus, label: 'Status' },
     { get: r => r.absent_reason || '', label: 'Absent Reason' },
     { key: 'email', label: 'Email' },
-    { key: 'department', label: 'Department' },
-    { key: 'shirtSize', label: 'Shirt Size' },
+    { get: r => { const reg = mergedByEmail[r.email] || mergedByEmail[r._fuzzyMatchedEmail] || mergedByEmail[r.linked_registration_email]; return reg?.team || ''; }, label: 'Department' },
+    { get: r => { const reg = mergedByEmail[r.email] || mergedByEmail[r._fuzzyMatchedEmail] || mergedByEmail[r.linked_registration_email]; return reg?.shirtSize || ''; }, label: 'Shirt Size' },
   ];
 
   const statusPills = [
