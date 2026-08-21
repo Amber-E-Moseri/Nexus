@@ -53,6 +53,7 @@ const FALLBACK = {
 function EditableText({ value, onSave, multiline = false, className = '' }) {
   const [isEditing, setIsEditing] = useState(false);
   const [tmpValue, setTmpValue] = useState(value);
+  const [isSaving, setIsSaving] = useState(false);
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -62,11 +63,20 @@ function EditableText({ value, onSave, multiline = false, className = '' }) {
     }
   }, [isEditing]);
 
+  const hasChanged = tmpValue !== value;
+
   const handleSave = async () => {
-    if (tmpValue !== value) {
-      await onSave(tmpValue);
+    if (!hasChanged) {
+      setIsEditing(false);
+      return;
     }
-    setIsEditing(false);
+    setIsSaving(true);
+    try {
+      await onSave(tmpValue);
+      setIsEditing(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -84,14 +94,13 @@ function EditableText({ value, onSave, multiline = false, className = '' }) {
 
   if (isEditing) {
     return (
-      <div style={{ display: 'inline-block', position: 'relative' }}>
+      <div style={{ display: 'inline-block', position: 'relative', width: multiline ? '100%' : 'auto' }}>
         {multiline ? (
           <textarea
             ref={inputRef}
             value={tmpValue}
             onChange={(e) => setTmpValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            onBlur={handleSave}
             style={{ width: '100%', padding: '8px', minHeight: '60px', fontFamily: 'inherit', fontSize: 'inherit', border: '2px solid var(--purple)' }}
           />
         ) : (
@@ -101,10 +110,25 @@ function EditableText({ value, onSave, multiline = false, className = '' }) {
             value={tmpValue}
             onChange={(e) => setTmpValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            onBlur={handleSave}
             style={{ padding: '4px 8px', fontFamily: 'inherit', fontSize: 'inherit', border: '2px solid var(--purple)' }}
           />
         )}
+        <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+          <button
+            onClick={handleSave}
+            disabled={!hasChanged || isSaving}
+            style={{ padding: '4px 10px', background: hasChanged ? 'var(--teal)' : '#ccc', color: '#161717', border: 'none', borderRadius: '4px', cursor: hasChanged ? 'pointer' : 'default', fontSize: '12px', fontWeight: 700 }}
+          >
+            {isSaving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            onClick={handleCancel}
+            disabled={isSaving}
+            style={{ padding: '4px 10px', background: '#eee', color: '#161717', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     );
   }
@@ -701,7 +725,7 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <p>The schedule is filling in below. Check back as details confirm.</p>
+            <p>{editMode ? <EditableText value={c.schedule_text || 'The schedule is filling in below. Check back as details confirm.'} onSave={(v) => handleSaveField('schedule_text', v)} multiline /> : (c.schedule_text || 'The schedule is filling in below. Check back as details confirm.')}</p>
             <div className="tii-daytabs">
               {DAYS.map(d => (
                 <button
