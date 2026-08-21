@@ -48,6 +48,11 @@ const FALLBACK = {
   monday_checkout_time: 'Mon Morning',
   dress_code: 'Semiformal for most of the weekend. On day 2 we\'ll all be wearing our This Is It shirts.',
   all_white_for: 'Thanksgiving service',
+  wifi_text: 'Free, hotel-wide',
+  sessions_text: 'Conference Room',
+  meals_text: 'Details to come',
+  dept_arrival_note: 'Check with your department lead for your specific arrival window',
+  dept_arrival_default: '4:30 PM Friday, Aug 28',
 };
 
 function EditableText({ value, onSave, multiline = false, className = '' }) {
@@ -643,8 +648,8 @@ export default function ThisIsItInfo() {
             <div className="tii-dept-arrival">
               <b style={{ fontSize:'13px' }}>Arrival time by department</b>
               <ul>
-                <li>Check with your department lead for your specific arrival window</li>
-                <li>Default: arrive by <b>4:30 PM</b> Friday, Aug 28</li>
+                <li>{editMode ? <EditableText value={c.dept_arrival_note} onSave={(v) => handleSaveField('dept_arrival_note', v)} /> : c.dept_arrival_note}</li>
+                <li>Default: arrive by <b>{editMode ? <EditableText value={c.dept_arrival_default} onSave={(v) => handleSaveField('dept_arrival_default', v)} /> : c.dept_arrival_default}</b></li>
               </ul>
             </div>
           </div>
@@ -697,15 +702,15 @@ export default function ThisIsItInfo() {
             <div className="tii-grid2">
               <div className="tii-mini">
                 <div className="lbl">Wi-Fi</div>
-                <div className="big">Free, hotel-wide</div>
+                <div className="big">{editMode ? <EditableText value={c.wifi_text} onSave={(v) => handleSaveField('wifi_text', v)} /> : c.wifi_text}</div>
               </div>
               <div className="tii-mini">
                 <div className="lbl">Sessions</div>
-                <div className="big">Conference Room</div>
+                <div className="big">{editMode ? <EditableText value={c.sessions_text} onSave={(v) => handleSaveField('sessions_text', v)} /> : c.sessions_text}</div>
               </div>
               <div className="tii-mini">
                 <div className="lbl">Meals</div>
-                <div className="big">Details to come</div>
+                <div className="big">{editMode ? <EditableText value={c.meals_text} onSave={(v) => handleSaveField('meals_text', v)} /> : c.meals_text}</div>
               </div>
               <div className="tii-mini">
                 <div className="lbl">Checkout</div>
