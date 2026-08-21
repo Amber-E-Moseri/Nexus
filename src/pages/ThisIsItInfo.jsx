@@ -201,7 +201,7 @@ export default function ThisIsItInfo() {
     setIsSaving(true);
     try {
       const dayItems = scheduleByDay[newItem.day] || [];
-      await supabase
+      const { error } = await supabase
         .from('this_is_it_schedule_items')
         .insert({
           event_content_id: content.id,
@@ -211,10 +211,12 @@ export default function ThisIsItInfo() {
           description: newItem.description,
           order_num: dayItems.length + 1
         });
+      if (error) throw error;
       await queryClient.invalidateQueries({ queryKey: ['this_is_it_schedule_items'] });
       setNewItem({ day: 'fri', time: '', title: '', description: '' });
       alert('Schedule item added!');
     } catch (err) {
+      console.error('Add item error:', err);
       alert('Error: ' + err.message);
     } finally {
       setIsSaving(false);
@@ -407,12 +409,12 @@ export default function ThisIsItInfo() {
           </div>
           <div className="tii-card card">
             <h3>📝 Flight form</h3>
-            <p>Fill this out so the team knows your travel details and can arrange transfers.</p>
+            <p>{editMode ? <EditableText value={c.flight_form_text || 'Fill this out so the team knows your travel details and can arrange transfers.'} onSave={(v) => handleSaveField('flight_form_text', v)} multiline /> : (c.flight_form_text || 'Fill this out so the team knows your travel details and can arrange transfers.')}</p>
             <a className="tii-btn" href={c.flight_form_url} target="_blank" rel="noopener noreferrer">Fill out the flight form</a>
           </div>
           <div className="tii-card card" style={{ marginTop:'10px' }}>
             <h3>🧳 What to pack</h3>
-            <p>Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.</p>
+            <p>{editMode ? <EditableText value={c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.'} onSave={(v) => handleSaveField('packing_text', v)} multiline /> : (c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.')}</p>
             <ul className="tii-checklist" id="packlist">
               <CheckItem>Photo ID (for flight + hotel check-in)</CheckItem>
               <CheckItem>All white outfit for Thanksgiving service</CheckItem>
@@ -447,11 +449,11 @@ export default function ThisIsItInfo() {
           <div className="tii-card card">
             <h3>🚌 Hotel shuttle</h3>
             <span className="tii-tag ready">Included</span>
-            <p>A driver from the hotel shuttle will come get you at arrivals. They'll already have your name on their pickup list — nothing to book or call ahead. Just head to arrivals and look for the <b>Sandman shuttle</b>.</p>
+            <p>{editMode ? <EditableText value={c.shuttle_text || 'A driver from the hotel shuttle will come get you at arrivals. They\'ll already have your name on their pickup list — nothing to book or call ahead. Just head to arrivals and look for the Sandman shuttle.'} onSave={(v) => handleSaveField('shuttle_text', v)} multiline /> : (c.shuttle_text || 'A driver from the hotel shuttle will come get you at arrivals. They\'ll already have your name on their pickup list — nothing to book or call ahead. Just head to arrivals and look for the Sandman shuttle.')}</p>
           </div>
           <div className="tii-card card">
             <h3>⏰ When to arrive</h3>
-            <p>Your arrival time depends on your department. Check with your department lead. If you haven't heard otherwise, aim to arrive by <b>4:30 PM</b> so you're settled before the opening session.</p>
+            <p>{editMode ? <EditableText value={c.arrival_text || 'Your arrival time depends on your department. Check with your department lead. If you haven\'t heard otherwise, aim to arrive by 4:30 PM so you\'re settled before the opening session.'} onSave={(v) => handleSaveField('arrival_text', v)} multiline /> : (c.arrival_text || 'Your arrival time depends on your department. Check with your department lead. If you haven\'t heard otherwise, aim to arrive by 4:30 PM so you\'re settled before the opening session.')}</p>
             <div className="tii-dept-arrival">
               <b style={{ fontSize:'13px' }}>Arrival time by department</b>
               <ul>
@@ -488,7 +490,7 @@ export default function ThisIsItInfo() {
           </div>
           <div className="tii-card card">
             <h3>🎯 Check-in process</h3>
-            <p>When you arrive, look for the check-in stand or table in the lobby. Your room is covered — no card required. The team at the stand will get you sorted and send you to your room.</p>
+            <p>{editMode ? <EditableText value={c.checkin_text || 'When you arrive, look for the check-in stand or table in the lobby. Your room is covered — no card required. The team at the stand will get you sorted and send you to your room.'} onSave={(v) => handleSaveField('checkin_text', v)} multiline /> : (c.checkin_text || 'When you arrive, look for the check-in stand or table in the lobby. Your room is covered — no card required. The team at the stand will get you sorted and send you to your room.')}</p>
           </div>
         </section>
 
@@ -503,7 +505,7 @@ export default function ThisIsItInfo() {
           </div>
           <div className="tii-card card">
             <h3>🎤 Conference Room, {c.hotel_name}</h3>
-            <p>Good news: the retreat venue is the hotel itself. All sessions run out of the conference room at the Sandman — once you're checked in, you're already there.</p>
+            <p>{editMode ? <EditableText value={c.venue_text || 'Good news: the retreat venue is the hotel itself. All sessions run out of the conference room at the Sandman — once you\'re checked in, you\'re already there.'} onSave={(v) => handleSaveField('venue_text', v)} multiline /> : (c.venue_text || 'Good news: the retreat venue is the hotel itself. All sessions run out of the conference room at the Sandman — once you\'re checked in, you\'re already there.')}</p>
           </div>
           <div className="tii-card card">
             <div className="tii-grid2">

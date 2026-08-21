@@ -131,7 +131,7 @@ insert into this_is_it_event_content (
 -- Seed schedule items
 insert into this_is_it_schedule_items (event_content_id, day, time, title, description, order_num)
 select
-  id,
+  event_content_id,
   day,
   time,
   title,
