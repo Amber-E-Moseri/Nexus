@@ -118,10 +118,6 @@ export default function ThisIsItInfo() {
   const navigate = useNavigate();
   const [activeDay, setActiveDay] = useState('fri');
   const [editMode, setEditMode] = useState(false);
-
-  useEffect(() => {
-    console.log('ThisIsItInfo - Profile:', profile, 'CanEdit:', profile && (profile.role === 'super_admin' || profile.role === 'regional_secretary'));
-  }, [profile]);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [newItem, setNewItem] = useState({ day: 'fri', time: '', title: '', description: '' });
   const [isSaving, setIsSaving] = useState(false);
@@ -207,14 +203,12 @@ export default function ThisIsItInfo() {
       alert('No content ID - cannot save. Please refresh the page.');
       return;
     }
-    console.log('Saving field:', field, 'value:', value, 'contentId:', content.id);
     try {
       const { data, error } = await supabase
         .from('this_is_it_event_content')
         .update({ [field]: value })
         .eq('id', content.id)
         .select();
-      console.log('Save response:', { data, error });
       if (error) {
         console.error('Save error:', error);
         alert('Error saving: ' + error.message);
@@ -224,7 +218,6 @@ export default function ThisIsItInfo() {
         alert('No rows updated - you may not have permission to edit.');
         return;
       }
-      console.log('Field saved successfully');
       await queryClient.invalidateQueries({ queryKey: ['this_is_it_event_content'] });
     } catch (err) {
       console.error('Save error:', err);
