@@ -205,6 +205,16 @@ export default function ThisIsItInfo() {
 
   useEffect(() => {
     document.title = 'This Is It 2.0 - Prep Guide';
+  }, []);
+
+  // Re-runs once isLoading flips to false: the content query shows a
+  // "Loading..." placeholder on first mount (no .stop-head/.card elements
+  // exist yet), so an observer set up with an empty dep array would find
+  // nothing to watch and those sections would stay opacity:0 forever. This
+  // only surfaced on cold loads — a warm React Query cache skips the
+  // placeholder entirely, which is why it looked intermittent.
+  useEffect(() => {
+    if (isLoading) return;
     const obs = new IntersectionObserver((entries) => {
       entries.forEach(e => {
         if (e.isIntersecting) {
@@ -215,7 +225,7 @@ export default function ThisIsItInfo() {
     }, { threshold: 0.12 });
     document.querySelectorAll('.stop-head,.card').forEach(el => obs.observe(el));
     return () => obs.disconnect();
-  }, []);
+  }, [isLoading]);
 
   useEffect(() => {
     const handleScroll = () => {
