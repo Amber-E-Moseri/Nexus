@@ -3441,7 +3441,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                               </span>
                               {eventNights.length > 0 && eventNights.map(night => {
                                 const arr = person.arrivalDate, dep = person.departureDate;
-                                const needed = arr && dep && night >= arr && night < dep;
+                                const needed = (!arr && !dep) || (arr && dep && night >= arr && night < dep);
                                 const dayLabel = new Date(night + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
                                 return (
                                   <span key={night} style={{ fontSize: 8.5, fontWeight: 700, padding: '1px 3px', borderRadius: 3, flexShrink: 0, background: needed ? '#4C2A92' : '#EDE9F6', color: needed ? '#fff' : '#C4B5FD', letterSpacing: 0.2 }}>
