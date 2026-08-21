@@ -45,6 +45,7 @@ const FALLBACK = {
   transport_contact_phone: '+1 (204) 396-6156',
   flight_form_url: 'https://leaders.lwcanada.org/f/rp3uahba3c3c',
   friday_opening_time: '6:00 PM',
+  monday_checkout_time: 'Mon Morning',
   dress_code: 'Semiformal for most of the weekend. On day 2 we\'ll all be wearing our This Is It shirts.',
   all_white_for: 'Thanksgiving service',
 };
@@ -502,7 +503,7 @@ export default function ThisIsItInfo() {
                 </div>
                 <div className="tii-tk-field">
                   <label>Venue</label>
-                  <div className="val">Sandman Hotel &amp; Suites</div>
+                  <div className="val">{editMode ? <EditableText value={c.hotel_name} onSave={(v) => handleSaveField('hotel_name', v)} /> : c.hotel_name}</div>
                 </div>
                 <div className="tii-tk-field">
                   <label>Opens</label>
@@ -510,7 +511,7 @@ export default function ThisIsItInfo() {
                 </div>
                 <div className="tii-tk-field">
                   <label>Checkout</label>
-                  <div className="val">Mon Morning</div>
+                  <div className="val">{editMode ? <EditableText value={c.monday_checkout_time} onSave={(v) => handleSaveField('monday_checkout_time', v)} /> : c.monday_checkout_time}</div>
                 </div>
               </div>
             </div>
@@ -684,7 +685,7 @@ export default function ThisIsItInfo() {
               </div>
               <div className="tii-mini">
                 <div className="lbl">Checkout</div>
-                <div className="big">Mon morning</div>
+                <div className="big">{editMode ? <EditableText value={c.monday_checkout_time} onSave={(v) => handleSaveField('monday_checkout_time', v)} /> : c.monday_checkout_time}</div>
               </div>
             </div>
           </div>
