@@ -475,6 +475,7 @@ export default function ThisIsItInfo() {
         )}
 
         <nav className="tii-nav">
+          <a href="#expect" onClick={(e) => { e.preventDefault(); document.getElementById('expect')?.scrollIntoView({ behavior: 'smooth' }); }}>What to Expect</a>
           <a href="#pack" onClick={(e) => { e.preventDefault(); document.getElementById('pack')?.scrollIntoView({ behavior: 'smooth' }); }}>Before You Fly</a>
           <a href="#getting-there" onClick={(e) => { e.preventDefault(); document.getElementById('getting-there')?.scrollIntoView({ behavior: 'smooth' }); }}>Getting There</a>
           <a href="#checkin" onClick={(e) => { e.preventDefault(); document.getElementById('checkin')?.scrollIntoView({ behavior: 'smooth' }); }}>Check-In</a>
@@ -535,6 +536,48 @@ export default function ThisIsItInfo() {
           </p>
         </div>
 
+        {/* What to Expect */}
+        <section className="tii-section" id="expect" style={{ marginTop:'40px' }}>
+          <div className="tii-stop-head stop-head">
+            <div className="tii-dot">✨</div>
+            <div>
+              <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Prepare Your Heart</span>
+              <h2>Don't Forget to Set Your Expectations</h2>
+            </div>
+          </div>
+          <div className="tii-card card">
+            <h3>🎯 What to Expect</h3>
+            <p>
+              {editMode
+                ? <EditableText value={c.expect_p1 || "This Is It isn't just another program. It's tailored for you, and it requires something from you: expectation."} onSave={(v) => handleSaveField('expect_p1', v)} multiline />
+                : (c.expect_p1 || "This Is It isn't just another program. It's tailored for you, and it requires something from you: expectation.")
+              }
+            </p>
+            <p>
+              {editMode
+                ? <EditableText value={c.expect_p2 || 'Scripture tells us, "The earnest expectation of the righteous shall not be cut short." You must come with distinct expectations. What specific changes do you want to see? In your walk with him? In the work?'} onSave={(v) => handleSaveField('expect_p2', v)} multiline />
+                : c.expect_p2
+                  ? c.expect_p2
+                  : <>Scripture tells us, <em>"The earnest expectation of the righteous shall not be cut short."</em> You must come with distinct expectations. What specific changes do you want to see? In your walk with him? In the work?</>
+              }
+            </p>
+            <p>
+              {editMode
+                ? <EditableText value={c.expect_p3 || "Yes, you'll see friends from across the region. But remember: you're here to receive something — to lambano. \"One word from God can change your life forever.\" Are you ready to receive those words?"} onSave={(v) => handleSaveField('expect_p3', v)} multiline />
+                : c.expect_p3
+                  ? c.expect_p3
+                  : <>Yes, you'll see friends from across the region. But remember: you're here to receive something — to <em>lambano</em>. <em>"One word from God can change your life forever."</em> Are you ready to receive those words?</>
+              }
+            </p>
+            <p>
+              {editMode
+                ? <EditableText value={c.expect_p4 || 'Prepare your spirit. Join us in times of prayer and participate in the fast as you ready yourself. Come expectant. Come ready to testify that This Is It was the moment everything changed.'} onSave={(v) => handleSaveField('expect_p4', v)} multiline />
+                : (c.expect_p4 || 'Prepare your spirit. Join us in times of prayer and participate in the fast as you ready yourself. Come expectant. Come ready to testify that This Is It was the moment everything changed.')
+              }
+            </p>
+          </div>
+        </section>
+
         {/* Before You Fly */}
         <section className="tii-section" id="pack" style={{ marginTop:'40px' }}>
           <div className="tii-stop-head stop-head">
@@ -543,6 +586,17 @@ export default function ThisIsItInfo() {
               <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Step 01</span>
               <h2>Before You Fly</h2>
             </div>
+          </div>
+          <div className="tii-card card" style={{ marginBottom:'10px', background:'rgba(234,198,61,0.07)', border:'1px solid rgba(234,198,61,0.45)' }}>
+            <h3>💳 Registration fee</h3>
+            <p>
+              {editMode
+                ? <EditableText value={c.registration_fee_text || "Don't forget to send your registration fee of $350 to partnership@lwcanada.org."} onSave={(v) => handleSaveField('registration_fee_text', v)} multiline />
+                : c.registration_fee_text
+                  ? c.registration_fee_text
+                  : <>Don't forget to send your registration fee of <strong>$350</strong> to <a href="mailto:partnership@lwcanada.org" style={{ color:'var(--purple)', fontWeight:600 }}>partnership@lwcanada.org</a>.</>
+              }
+            </p>
           </div>
           <div className="tii-card card">
             <h3>📝 Flight form</h3>
