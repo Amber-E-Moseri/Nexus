@@ -507,7 +507,7 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <p>The first session kicks off Friday at <b>{editMode ? <EditableText value={c.friday_opening_time} onSave={(v) => handleSaveField('friday_opening_time', v)} /> : c.friday_opening_time}</b>. The full schedule will fill in as it's ready.</p>
+            <p>The schedule is filling in below. Check back as details confirm.</p>
             <div className="tii-daytabs">
               {DAYS.map(d => (
                 <button
