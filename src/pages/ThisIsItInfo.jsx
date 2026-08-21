@@ -119,6 +119,8 @@ export default function ThisIsItInfo() {
   const [activeDay, setActiveDay] = useState('fri');
   const [editMode, setEditMode] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
+  const [newItem, setNewItem] = useState({ day: 'fri', time: '', title: '', description: '' });
+  const [isSaving, setIsSaving] = useState(false);
   const queryClient = useQueryClient();
 
   const canEdit = profile && (profile.role === 'super_admin' || profile.role === 'regional_secretary');
@@ -188,6 +190,34 @@ export default function ThisIsItInfo() {
       await queryClient.invalidateQueries({ queryKey: ['this_is_it_event_content'] });
     } catch (err) {
       console.error('Save error:', err);
+    }
+  };
+
+  const handleAddScheduleItem = async () => {
+    if (!content?.id || !newItem.title || !newItem.time) {
+      alert('Fill in title and time');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const dayItems = scheduleByDay[newItem.day] || [];
+      await supabase
+        .from('this_is_it_schedule_items')
+        .insert({
+          event_content_id: content.id,
+          day: newItem.day,
+          time: newItem.time,
+          title: newItem.title,
+          description: newItem.description,
+          order_num: dayItems.length + 1
+        });
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_schedule_items'] });
+      setNewItem({ day: 'fri', time: '', title: '', description: '' });
+      alert('Schedule item added!');
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -534,6 +564,35 @@ export default function ThisIsItInfo() {
                   </div>
                 </div>
               ))
+            )}
+            {editMode && (
+              <div style={{ marginTop:'20px', padding:'15px', background:'rgba(107, 18, 188, 0.05)', borderRadius:'8px', border:'1px dashed var(--purple)' }}>
+                <h4 style={{ margin:'0 0 12px', fontSize:'14px' }}>➕ Add Schedule Item</h4>
+                <div style={{ marginBottom:'10px' }}>
+                  <label style={{ fontSize:'12px', fontWeight:600 }}>Day:</label>
+                  <select value={newItem.day} onChange={(e) => setNewItem({ ...newItem, day: e.target.value })} style={{ width:'100%', padding:'8px', marginTop:'4px' }}>
+                    <option value="fri">Friday</option>
+                    <option value="sat">Saturday</option>
+                    <option value="sun">Sunday</option>
+                    <option value="mon">Monday</option>
+                  </select>
+                </div>
+                <div style={{ marginBottom:'10px' }}>
+                  <label style={{ fontSize:'12px', fontWeight:600 }}>Time:</label>
+                  <input type="text" placeholder="e.g., 6:00 PM" value={newItem.time} onChange={(e) => setNewItem({ ...newItem, time: e.target.value })} style={{ width:'100%', padding:'8px', marginTop:'4px' }} />
+                </div>
+                <div style={{ marginBottom:'10px' }}>
+                  <label style={{ fontSize:'12px', fontWeight:600 }}>Title:</label>
+                  <input type="text" placeholder="e.g., Opening session" value={newItem.title} onChange={(e) => setNewItem({ ...newItem, title: e.target.value })} style={{ width:'100%', padding:'8px', marginTop:'4px' }} />
+                </div>
+                <div style={{ marginBottom:'10px' }}>
+                  <label style={{ fontSize:'12px', fontWeight:600 }}>Description:</label>
+                  <textarea placeholder="e.g., Details to come" value={newItem.description} onChange={(e) => setNewItem({ ...newItem, description: e.target.value })} style={{ width:'100%', padding:'8px', marginTop:'4px', minHeight:'50px' }} />
+                </div>
+                <button onClick={handleAddScheduleItem} disabled={isSaving} style={{ padding:'8px 14px', background:'var(--purple)', color:'#fff', border:'none', borderRadius:'6px', fontWeight:600, cursor:'pointer', fontSize:'13px' }}>
+                  {isSaving ? 'Adding...' : 'Add Item'}
+                </button>
+              </div>
             )}
           </div>
         </section>
