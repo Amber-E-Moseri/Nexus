@@ -2483,6 +2483,39 @@ function EditableFlightCell({ value, onCommit, type = 'text', mono = true, place
   );
 }
 
+function NotFlyingRow({ r, onSetTransportMode, onToggleCrossCountry }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <tr>
+      <td style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+        {r.transportMode === 'bus' ? <Bus size={11} color={C.green} /> : <Car size={11} color={C.green} />}
+        {r.fullName}
+      </td>
+      <td style={{ color: C.mute }}>{r.subgroup}</td>
+      <td style={{ color: C.mute }}>{r.fellowship}</td>
+      <td>
+        {expanded ? (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <Btn tone="ghost" small onClick={() => onSetTransportMode?.(r.email, r.transportMode === 'bus' ? null : 'bus')} title={r.transportMode === 'bus' ? 'Switch to Driving' : 'Switch to Bus'}>
+              {r.transportMode === 'bus' ? <><Car size={11} /> Driving</> : <><Bus size={11} /> Bus</>}
+            </Btn>
+            <Btn tone="ghost" small onClick={() => onToggleCrossCountry?.(r.email)} title="Remove not-flying marking">
+              <X size={12} /> Unmark
+            </Btn>
+            <Btn tone="ghost" small onClick={() => setExpanded(false)} title="Collapse">
+              <X size={11} />
+            </Btn>
+          </div>
+        ) : (
+          <Btn tone="ghost" small onClick={() => setExpanded(true)} title="Edit">
+            <Plus size={12} />
+          </Btn>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, onClearFlight, onUpdateFlight, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving, onToggleCrossCountry, onSetTransportMode, onUpdateCrossCountrySubgroups }) {
   const [subgroupFilter, setSubgroupFilter] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
@@ -2817,22 +2850,6 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
         </div>
       )}
 
-      {/* Incorrectly flagged cross country warning */}
-      {crossCountrySubgroups?.size > 0 && (() => {
-        const wronglyFlagged = merged.filter(r => r.inStateConfirmed && !crossCountrySubgroups.has(r.subgroup));
-        if (wronglyFlagged.length === 0) return null;
-        return (
-          <div style={{ background: '#FFF3CD', border: '1px solid #F5C842', borderRadius: 10, padding: '10px 14px', marginTop: 16, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-            <AlertCircle size={15} color="#B8710A" />
-            <span style={{ color: '#7A4E00', flex: 1 }}>
-              <strong>{wronglyFlagged.length} {wronglyFlagged.length === 1 ? 'person' : 'people'}</strong> incorrectly flagged as cross country ({wronglyFlagged.map(r => r.fullName).join(', ')})
-            </span>
-            <Btn tone="ghost" small onClick={() => wronglyFlagged.forEach(r => onToggleCrossCountry?.(r.email))}>
-              Clear all
-            </Btn>
-          </div>
-        );
-      })()}
 
       {/* Not Flying (driving / bus) */}
       {(() => {
@@ -2856,30 +2873,12 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
                       <th>Name</th>
                       <th>Subgroup</th>
                       <th>Fellowship</th>
-                      <th>Mode</th>
                       <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {notFlying.map(r => (
-                      <tr key={r.email}>
-                        <td style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {r.transportMode === 'bus' ? <Bus size={11} color={C.green} /> : <Car size={11} color={C.green} />}
-                          {r.fullName}
-                        </td>
-                        <td style={{ color: C.mute }}>{r.subgroup}</td>
-                        <td style={{ color: C.mute }}>{r.fellowship}</td>
-                        <td>
-                          <Btn tone="ghost" small onClick={() => onSetTransportMode?.(r.email, r.transportMode === 'bus' ? null : 'bus')} title={r.transportMode === 'bus' ? 'Switch to Driving' : 'Switch to Bus'}>
-                            {r.transportMode === 'bus' ? <><Car size={11} /> Driving</> : <><Bus size={11} /> Bus</>}
-                          </Btn>
-                        </td>
-                        <td>
-                          <Btn tone="ghost" small onClick={() => onToggleCrossCountry?.(r.email)} title="Remove not-flying marking">
-                            <X size={12} /> Unmark
-                          </Btn>
-                        </td>
-                      </tr>
+                      <NotFlyingRow key={r.email} r={r} onSetTransportMode={onSetTransportMode} onToggleCrossCountry={onToggleCrossCountry} />
                     ))}
                   </tbody>
                 </table>
