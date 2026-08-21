@@ -420,8 +420,9 @@ export default function ThisIsItInfo() {
         .tii-tk-field label{display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#999;margin-bottom:3px;font-weight:600;}
         .tii-tk-field .val{font-weight:600;font-size:14px;}
         .tii-tk-field.full{grid-column:1/-1;}
-        .tii-stub{border-top:1px solid var(--paper-line);padding:14px 20px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;}
-        .tii-stub-code{font-size:11px;letter-spacing:.08em;color:#999;text-transform:uppercase;}
+        .tii-stub{border-top:1px solid var(--paper-line);padding:14px 20px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
+        .tii-stub-code{font-size:11px;letter-spacing:.08em;color:#999;text-transform:uppercase;font-family:monospace;}
+        .tii-stub-badge{display:inline-block;background:var(--coral);color:#fff;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:8px 16px;border-radius:999px;white-space:nowrap;}
         .tii-section{max-width:var(--max);margin:40px auto 0;padding:0 18px;scroll-margin-top:60px;}
         .tii-stop-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;opacity:0;transform:translateY(16px);transition:opacity .5s,transform .5s;}
         .tii-stop-head.in{opacity:1;transform:translateY(0);}
@@ -546,6 +547,7 @@ export default function ThisIsItInfo() {
             </div>
             <div className="tii-stub">
               <span className="tii-stub-code">TII · 2026 · BLW CAN</span>
+              <span className="tii-stub-badge">Bigger · Bolder · Best for God</span>
             </div>
           </div>
           <p style={{ textAlign:'center', maxWidth:'520px', margin:'18px auto 0', fontSize:'14px', color:'#666', lineHeight:1.6 }}>
