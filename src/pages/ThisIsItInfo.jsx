@@ -94,7 +94,7 @@ function EditableText({ value, onSave, multiline = false, className = '' }) {
 
   if (isEditing) {
     return (
-      <div style={{ display: 'inline-block', position: 'relative', width: multiline ? '100%' : 'auto' }}>
+      <span style={{ display: 'inline-block', position: 'relative', width: multiline ? '100%' : 'auto' }}>
         {multiline ? (
           <textarea
             ref={inputRef}
@@ -113,7 +113,7 @@ function EditableText({ value, onSave, multiline = false, className = '' }) {
             style={{ padding: '4px 8px', fontFamily: 'inherit', fontSize: 'inherit', border: '2px solid var(--purple)' }}
           />
         )}
-        <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+        <span style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
           <button
             onClick={handleSave}
             disabled={!hasChanged || isSaving}
@@ -128,8 +128,8 @@ function EditableText({ value, onSave, multiline = false, className = '' }) {
           >
             Cancel
           </button>
-        </div>
-      </div>
+        </span>
+      </span>
     );
   }
 
