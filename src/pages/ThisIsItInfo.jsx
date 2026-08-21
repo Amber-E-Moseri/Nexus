@@ -420,7 +420,10 @@ export default function ThisIsItInfo() {
         .tii-tk-field label{display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#999;margin-bottom:3px;font-weight:600;}
         .tii-tk-field .val{font-weight:600;font-size:14px;}
         .tii-tk-field.full{grid-column:1/-1;}
-        .tii-stub{border-top:1px solid var(--paper-line);padding:14px 20px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
+        .tii-stub{position:relative;border-top:2px dashed var(--paper-line);padding:18px 20px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
+        .tii-stub::before,.tii-stub::after{content:'';position:absolute;top:-11px;width:22px;height:22px;border-radius:50%;background:var(--bg);border:1px solid var(--paper-line);}
+        .tii-stub::before{left:-12px;}
+        .tii-stub::after{right:-12px;}
         .tii-stub-code{font-size:11px;letter-spacing:.08em;color:#999;text-transform:uppercase;font-family:monospace;}
         .tii-stub-badge{display:inline-block;background:var(--coral);color:#fff;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:8px 16px;border-radius:999px;white-space:nowrap;}
         .tii-section{max-width:var(--max);margin:40px auto 0;padding:0 18px;scroll-margin-top:60px;}
