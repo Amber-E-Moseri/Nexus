@@ -33,6 +33,16 @@ function useOptionalProfile() {
   return { profile, loading };
 }
 
+// Programs team members granted edit access on this page specifically,
+// without changing their app-wide role (which would affect permissions
+// well beyond this page): Pastor Chi Nwokem (cedochie@gmail.com),
+// Dorcas M (dorcasmuk20@gmail.com), Ella Ukpabia (emmanuellauk54@gmail.com).
+const EXTRA_EDITOR_USER_IDS = [
+  '4c70ca61-443b-4a64-87aa-3453c9dd5c65',
+  '750e94e0-aa87-491c-8372-958225861484',
+  '0a645fbf-01e2-4c49-a32a-4a13b2800b6d',
+];
+
 const FALLBACK = {
   airport_code: 'YWG',
   airport_name: 'Winnipeg James Armstrong Richardson International Airport',
@@ -155,7 +165,7 @@ export default function ThisIsItInfo() {
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const queryClient = useQueryClient();
 
-  const canEdit = profile && (profile.role === 'super_admin' || profile.role === 'regional_secretary');
+  const canEdit = profile && (profile.role === 'super_admin' || profile.role === 'regional_secretary' || EXTRA_EDITOR_USER_IDS.includes(profile.id));
 
   const { data: content, isLoading } = useQuery({
     queryKey: ['this_is_it_event_content', 2026],
