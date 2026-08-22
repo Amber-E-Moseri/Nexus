@@ -1129,16 +1129,16 @@ export default function ThisIsItInfo() {
             <div className="tii-help-grid">
               <div className="tii-mini">
                 <div className="lbl">Name</div>
-                <div className="big">{editMode ? <EditableText value={c.transport_contact_name} onSave={(v) => handleSaveField('transport_contact_name', v)} /> : c.transport_contact_name}</div>
+                <div className="big">{c.transport_contact_name}</div>
               </div>
               <div className="tii-mini">
                 <div className="lbl">Phone / WhatsApp</div>
-                <div className="big"><a href={`tel:${c.transport_contact_phone}`} style={{ color:'var(--purple)' }}>{editMode ? <EditableText value={c.transport_contact_phone} onSave={(v) => handleSaveField('transport_contact_phone', v)} /> : c.transport_contact_phone}</a></div>
+                <div className="big"><a href={`tel:${c.transport_contact_phone}`} style={{ color:'var(--purple)' }}>{c.transport_contact_phone}</a></div>
               </div>
               {c.transport_contact_chat && (
                 <div className="tii-mini">
                   <div className="lbl">Chat</div>
-                  <div className="big">{editMode ? <EditableText value={c.transport_contact_chat} onSave={(v) => handleSaveField('transport_contact_chat', v)} /> : c.transport_contact_chat}</div>
+                  <div className="big">{c.transport_contact_chat}</div>
                 </div>
               )}
             </div>
