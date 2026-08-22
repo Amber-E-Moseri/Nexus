@@ -527,8 +527,7 @@ export default function ThisIsItInfo() {
         .tii-tk-plane{font-size:24px;color:#D0021B;animation:flyAcross 2.2s ease-in-out infinite;display:block;line-height:1;}
         .tii-tk-route-line{width:100%;height:1px;background:linear-gradient(90deg,transparent,#ddd 20%,#ddd 80%,transparent);}
         /* fields grid */
-        .tii-tk-fields{margin-top:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px 16px;border-top:1px solid #eee;padding-top:14px;}
-        @media(max-width:520px){.tii-tk-fields{grid-template-columns:repeat(2,1fr);}}
+        .tii-tk-fields{margin-top:14px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px 16px;border-top:1px solid #eee;padding-top:14px;}
         .tii-tk-field label{display:block;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:#aaa;margin-bottom:4px;font-weight:700;}
         .tii-tk-field .val{font-weight:700;font-size:13px;color:#1a1a1a;line-height:1.3;}
         .tii-tk-passenger{border-top:1px solid #eee;padding-top:12px;margin-top:0;}
@@ -732,12 +731,14 @@ export default function ThisIsItInfo() {
               {/* City codes row */}
               <div className="tii-tk-row">
                 <div className="tii-tk-city-block">
-                  <div className="tii-tk-city">YYZ</div>
-                  <div className="tii-tk-sub">Your City</div>
+                  <div className="tii-tk-city" style={{ fontSize:'clamp(18px,5vw,26px)', letterSpacing:'.04em' }}>YOUR CITY</div>
+                  <div className="tii-tk-sub">Canada</div>
                 </div>
                 <div className="tii-tk-middle">
                   <div className="tii-tk-route-line" />
-                  <span className="tii-tk-plane">✈</span>
+                  <svg className="tii-tk-plane" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style={{ width:28, height:28, fill:'#D0021B', display:'block', flexShrink:0 }}>
+                    <path d="M62 22.5c0-2.5-2-4.5-4.5-4.5H42L26 2H18l8 16H10L6 14H0l4 18-4 18h6l4-4h16l-8 16h8l16-16h15.5c2.5 0 4.5-2 4.5-4.5V22.5z"/>
+                  </svg>
                   <div className="tii-tk-route-line" />
                 </div>
                 <div className="tii-tk-city-block" style={{ textAlign:'right' }}>
@@ -757,16 +758,8 @@ export default function ThisIsItInfo() {
                   <div className="val">{editMode ? <EditableText value={c.event_dates} onSave={(v) => handleSaveField('event_dates', v)} /> : c.event_dates}</div>
                 </div>
                 <div className="tii-tk-field">
-                  <label>Gate</label>
-                  <div className="val">B27</div>
-                </div>
-                <div className="tii-tk-field">
-                  <label>Boards</label>
+                  <label>Opens</label>
                   <div className="val">Fri {editMode ? <EditableText value={c.friday_opening_time} onSave={(v) => handleSaveField('friday_opening_time', v)} /> : c.friday_opening_time}</div>
-                </div>
-                <div className="tii-tk-field">
-                  <label>Class</label>
-                  <div className="val">Kingdom</div>
                 </div>
                 <div className="tii-tk-field" style={{ gridColumn:'1 / span 2' }}>
                   <label>Venue</label>
@@ -775,10 +768,6 @@ export default function ThisIsItInfo() {
                 <div className="tii-tk-field">
                   <label>Checkout</label>
                   <div className="val">{editMode ? <EditableText value={c.monday_checkout_time} onSave={(v) => handleSaveField('monday_checkout_time', v)} /> : c.monday_checkout_time}</div>
-                </div>
-                <div className="tii-tk-field">
-                  <label>Seat</label>
-                  <div className="val">—</div>
                 </div>
               </div>
             </div>
