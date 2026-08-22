@@ -510,10 +510,10 @@ export default function ThisIsItInfo() {
         .tii-tk-duration{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#bbb;font-weight:700;}
         .tii-tk-route-line{width:100%;height:1px;background:linear-gradient(90deg,transparent,#ddd 20%,#ddd 80%,transparent);}
         /* fields grid */
-        .tii-tk-fields{margin-top:14px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px 16px;border-top:1px solid #eee;padding-top:14px;}
+        .tii-tk-fields{margin-top:10px;display:grid;grid-template-columns:repeat(2,1fr);gap:10px 16px;border-top:1px solid #eee;padding-top:10px;}
         .tii-tk-field label{display:block;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:#aaa;margin-bottom:4px;font-weight:700;}
         .tii-tk-field .val{font-weight:700;font-size:13px;color:#1a1a1a;line-height:1.3;}
-        .tii-tk-passenger{border-top:1px solid #eee;padding-top:12px;margin-top:14px;}
+        .tii-tk-passenger{border-top:1px solid #eee;padding-top:10px;margin-top:10px;}
         .tii-tk-passenger label{display:block;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:#aaa;margin-bottom:4px;font-weight:700;}
         .tii-tk-passenger input{font-family:'Anton',sans-serif;font-size:20px;font-weight:400;color:#1a1a1a;letter-spacing:.03em;border:none;outline:none;background:transparent;width:100%;padding:0;cursor:text;}
         .tii-tk-passenger input::placeholder{color:#ccc;}
@@ -524,7 +524,8 @@ export default function ThisIsItInfo() {
         .tii-stub::after{right:-12px;}
         .tii-stub-left{display:flex;flex-direction:column;gap:2px;}
         .tii-stub-code{font-size:10px;letter-spacing:.1em;color:#aaa;text-transform:uppercase;font-family:monospace;}
-        .tii-stub-slogan{font-size:11px;font-weight:800;letter-spacing:.03em;color:var(--coral);text-transform:uppercase;}
+        .tii-stub-btn{display:inline-block;background:var(--coral);color:#fff;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:7px 14px;border-radius:999px;white-space:nowrap;text-decoration:none;border:none;cursor:pointer;}
+        .tii-stub-btn:hover{opacity:.88;}
         /* barcode */
         .tii-barcode{display:flex;align-items:flex-end;gap:1px;height:38px;}
         .tii-barcode-bar{display:inline-block;background:#1a1a1a;border-radius:0;}
@@ -758,20 +759,22 @@ export default function ThisIsItInfo() {
             {/* Tear-off stub with barcode */}
             <div className="tii-stub">
               <div className="tii-stub-left">
-                <span className="tii-stub-slogan">Bigger · Bolder · Best for God</span>
                 <span className="tii-stub-code">TII · 2026 · BLW CAN · WINNIPEG</span>
               </div>
-              <div className="tii-barcode">
-                {Array.from({length: 36}, (_, i) => (
-                  <div key={i} className="tii-barcode-bar" style={{
-                    width: i % 7 === 0 ? '3px' : i % 3 === 0 ? '2px' : '1.5px',
-                    height: `${8 + Math.round((i / 35) * 30)}px`
-                  }} />
-                ))}
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'8px' }}>
+                <a href="/registration" className="tii-stub-btn">Bigger · Bolder · Best for God</a>
+                <div className="tii-barcode">
+                  {Array.from({length: 36}, (_, i) => (
+                    <div key={i} className="tii-barcode-bar" style={{
+                      width: i % 7 === 0 ? '3px' : i % 3 === 0 ? '2px' : '1.5px',
+                      height: `${8 + Math.round((i / 35) * 30)}px`
+                    }} />
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-          <p style={{ textAlign:'center', maxWidth:'520px', margin:'18px auto 0', fontSize:'14px', color:'#666', lineHeight:1.6 }}>
+          <p style={{ textAlign:'center', maxWidth:'520px', margin:'18px auto 0', fontSize:'14px', color:'rgba(22,23,23,0.5)', lineHeight:1.6 }}>
             Everything you need to know before you fly. This page will keep updating as details are confirmed — check back before you travel.
           </p>
         </div>
