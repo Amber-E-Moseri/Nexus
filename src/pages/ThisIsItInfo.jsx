@@ -511,23 +511,41 @@ export default function ThisIsItInfo() {
 
         /* ── hero ticket ────────────────────────────────────────────────── */
         .tii-eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#999;font-weight:600;text-align:center;margin:0 0 12px;animation:fadeIn .6s ease;}
-        .tii-ticket{max-width:var(--max);margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 4px 16px rgba(22,23,23,.08);border:1px solid var(--paper-line);animation:ticketIn .85s cubic-bezier(.22,.61,.36,1) .1s both;transition:box-shadow .25s,transform .25s;}
-        .tii-ticket:hover{box-shadow:0 10px 28px rgba(22,23,23,.13);transform:translateY(-3px);}
-        .tii-ticket-top{padding:20px 20px 16px;animation:slideUp .6s ease .2s both;}
-        .tii-tk-row{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
-        .tii-tk-city{font-family:'Anton',sans-serif;font-size:clamp(24px,6vw,36px);line-height:.95;letter-spacing:.01em;animation:slideUp .5s ease .25s both;}
-        .tii-tk-sub{font-size:11px;color:#999;margin-top:3px;letter-spacing:.04em;text-transform:uppercase;animation:fadeIn .5s ease .3s both;}
-        .tii-tk-arrow{font-family:'Anton',sans-serif;font-size:20px;color:var(--coral);align-self:center;padding-bottom:4px;animation:flyAcross 2.2s ease-in-out infinite;}
-        .tii-tk-fields{margin-top:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px 14px;border-top:1px solid var(--paper-line);padding-top:14px;}
-        .tii-tk-field label{display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#999;margin-bottom:3px;font-weight:600;}
-        .tii-tk-field .val{font-weight:600;font-size:14px;}
-        .tii-tk-field.full{grid-column:1/-1;}
-        .tii-stub{position:relative;border-top:2px dashed var(--paper-line);padding:18px 20px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
-        .tii-stub::before,.tii-stub::after{content:'';position:absolute;top:-11px;width:22px;height:22px;border-radius:50%;background:var(--bg);border:1px solid var(--paper-line);}
+        .tii-ticket{max-width:var(--max);margin:0 auto;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(22,23,23,.16);animation:ticketIn .85s cubic-bezier(.22,.61,.36,1) .1s both;transition:box-shadow .25s,transform .25s;overflow:hidden;border:none;}
+        .tii-ticket:hover{box-shadow:0 16px 40px rgba(22,23,23,.2);transform:translateY(-3px);}
+        /* AC-style red header */
+        .tii-ticket-header{background:#D0021B;padding:11px 20px;display:flex;justify-content:space-between;align-items:center;}
+        .tii-ticket-airline{color:#fff;font-size:13px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;font-family:'Anton',sans-serif;}
+        .tii-ticket-bp-label{color:rgba(255,255,255,.75);font-size:9px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;}
+        /* main body */
+        .tii-ticket-top{padding:18px 20px 16px;animation:slideUp .6s ease .2s both;}
+        .tii-tk-row{display:flex;justify-content:space-between;align-items:flex-end;gap:8px;}
+        .tii-tk-city-block{flex:none;}
+        .tii-tk-city{font-family:'Anton',sans-serif;font-size:clamp(40px,10vw,58px);line-height:1;letter-spacing:.02em;color:#1a1a1a;}
+        .tii-tk-sub{font-size:10px;color:#999;margin-top:3px;letter-spacing:.06em;text-transform:uppercase;}
+        .tii-tk-middle{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:0 8px;padding-bottom:6px;}
+        .tii-tk-plane{font-size:24px;color:#D0021B;animation:flyAcross 2.2s ease-in-out infinite;display:block;line-height:1;}
+        .tii-tk-route-line{width:100%;height:1px;background:linear-gradient(90deg,transparent,#ddd 20%,#ddd 80%,transparent);}
+        /* fields grid */
+        .tii-tk-fields{margin-top:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px 16px;border-top:1px solid #eee;padding-top:14px;}
+        @media(max-width:520px){.tii-tk-fields{grid-template-columns:repeat(2,1fr);}}
+        .tii-tk-field label{display:block;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:#aaa;margin-bottom:4px;font-weight:700;}
+        .tii-tk-field .val{font-weight:700;font-size:13px;color:#1a1a1a;line-height:1.3;}
+        .tii-tk-passenger{border-top:1px solid #eee;padding-top:12px;margin-top:0;}
+        .tii-tk-passenger label{display:block;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:#aaa;margin-bottom:4px;font-weight:700;}
+        .tii-tk-passenger .val{font-weight:700;font-size:14px;color:#1a1a1a;letter-spacing:.02em;}
+        /* stub tear-off */
+        .tii-stub{position:relative;border-top:2px dashed #ccc;padding:13px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;background:#f7f7f7;}
+        .tii-stub::before,.tii-stub::after{content:'';position:absolute;top:-12px;width:23px;height:23px;border-radius:50%;background:var(--bg);z-index:1;}
         .tii-stub::before{left:-12px;}
         .tii-stub::after{right:-12px;}
-        .tii-stub-code{font-size:11px;letter-spacing:.08em;color:#999;text-transform:uppercase;font-family:monospace;}
-        .tii-stub-badge{display:inline-block;background:var(--coral);color:#fff;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:8px 16px;border-radius:999px;white-space:nowrap;}
+        .tii-stub-left{display:flex;flex-direction:column;gap:2px;}
+        .tii-stub-code{font-size:10px;letter-spacing:.1em;color:#aaa;text-transform:uppercase;font-family:monospace;}
+        .tii-stub-slogan{font-size:11px;font-weight:800;letter-spacing:.03em;color:#D0021B;text-transform:uppercase;}
+        /* barcode */
+        .tii-barcode{display:flex;align-items:flex-end;gap:1px;height:38px;}
+        .tii-barcode-bar{display:inline-block;background:#1a1a1a;border-radius:0;}
+        .tii-stub-badge{display:inline-block;background:#D0021B;color:#fff;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:7px 14px;border-radius:999px;white-space:nowrap;}
 
         /* ── sections ───────────────────────────────────────────────────── */
         .tii-section{max-width:var(--max);margin:40px auto 0;padding:0 18px;scroll-margin-top:58px;}
@@ -709,40 +727,76 @@ export default function ThisIsItInfo() {
             <img src="/this-is-it-logo.png" alt="This Is It 2.0" style={{ width:'200px', maxWidth:'70%', height:'auto', animation:'logoIn .5s ease .1s both' }} />
           </div>
           <div className="tii-ticket">
+            {/* AC-style red header */}
+            <div className="tii-ticket-header">
+              <span className="tii-ticket-airline">BLW Canada</span>
+              <span className="tii-ticket-bp-label">Boarding Pass</span>
+            </div>
             <div className="tii-ticket-top">
+              {/* City codes row */}
               <div className="tii-tk-row">
-                <div>
+                <div className="tii-tk-city-block">
                   <div className="tii-tk-city">YYZ</div>
                   <div className="tii-tk-sub">Your City</div>
                 </div>
-                <div className="tii-tk-arrow">→</div>
-                <div>
+                <div className="tii-tk-middle">
+                  <div className="tii-tk-route-line" />
+                  <span className="tii-tk-plane">✈</span>
+                  <div className="tii-tk-route-line" />
+                </div>
+                <div className="tii-tk-city-block" style={{ textAlign:'right' }}>
                   <div className="tii-tk-city">{editMode ? <EditableText value={c.airport_code} onSave={(v) => handleSaveField('airport_code', v)} /> : c.airport_code}</div>
                   <div className="tii-tk-sub">Winnipeg, MB</div>
                 </div>
               </div>
+              {/* Passenger */}
+              <div className="tii-tk-passenger" style={{ marginTop:'14px' }}>
+                <label>Passenger</label>
+                <div className="val">BLW Canada Delegate</div>
+              </div>
+              {/* Detail fields */}
               <div className="tii-tk-fields">
                 <div className="tii-tk-field">
                   <label>Date</label>
                   <div className="val">{editMode ? <EditableText value={c.event_dates} onSave={(v) => handleSaveField('event_dates', v)} /> : c.event_dates}</div>
                 </div>
                 <div className="tii-tk-field">
-                  <label>Venue</label>
-                  <div className="val">{editMode ? <EditableText value={c.hotel_name} onSave={(v) => handleSaveField('hotel_name', v)} /> : c.hotel_name}</div>
+                  <label>Gate</label>
+                  <div className="val">B27</div>
                 </div>
                 <div className="tii-tk-field">
-                  <label>Opens</label>
+                  <label>Boards</label>
                   <div className="val">Fri {editMode ? <EditableText value={c.friday_opening_time} onSave={(v) => handleSaveField('friday_opening_time', v)} /> : c.friday_opening_time}</div>
+                </div>
+                <div className="tii-tk-field">
+                  <label>Class</label>
+                  <div className="val">Kingdom</div>
+                </div>
+                <div className="tii-tk-field" style={{ gridColumn:'1 / span 2' }}>
+                  <label>Venue</label>
+                  <div className="val">{editMode ? <EditableText value={c.hotel_name} onSave={(v) => handleSaveField('hotel_name', v)} /> : c.hotel_name}</div>
                 </div>
                 <div className="tii-tk-field">
                   <label>Checkout</label>
                   <div className="val">{editMode ? <EditableText value={c.monday_checkout_time} onSave={(v) => handleSaveField('monday_checkout_time', v)} /> : c.monday_checkout_time}</div>
                 </div>
+                <div className="tii-tk-field">
+                  <label>Seat</label>
+                  <div className="val">—</div>
+                </div>
               </div>
             </div>
+            {/* Tear-off stub with barcode */}
             <div className="tii-stub">
-              <span className="tii-stub-code">TII · 2026 · BLW CAN</span>
-              <span className="tii-stub-badge">Bigger · Bolder · Best for God</span>
+              <div className="tii-stub-left">
+                <span className="tii-stub-slogan">Bigger · Bolder · Best for God</span>
+                <span className="tii-stub-code">TII · 2026 · BLW CAN · YYZ→YWG</span>
+              </div>
+              <div className="tii-barcode">
+                {[3,6,2,8,4,6,3,2,7,4,6,3,5,7,3,6,2,5,8,3,6,4,7,3].map((h,i) => (
+                  <div key={i} className="tii-barcode-bar" style={{ width: i % 3 === 0 ? '3px' : '1.5px', height: `${h * 4 + 10}px` }} />
+                ))}
+              </div>
             </div>
           </div>
           <p style={{ textAlign:'center', maxWidth:'520px', margin:'18px auto 0', fontSize:'14px', color:'#666', lineHeight:1.6 }}>
