@@ -759,7 +759,7 @@ export default function ThisIsItInfo() {
             {/* Tear-off stub with barcode */}
             <div className="tii-stub">
               <div className="tii-stub-left">
-                <a href="/registration" className="tii-stub-btn">Bigger · Bolder · Best for God</a>
+                <a href="/registration" className="tii-stub-btn">View Registration</a>
                 <span className="tii-stub-code" style={{ marginTop:'6px' }}>TII 2.0 · 2026 · BLW CAN · WINNIPEG</span>
               </div>
               <div className="tii-barcode">
