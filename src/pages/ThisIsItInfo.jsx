@@ -873,7 +873,7 @@ export default function ThisIsItInfo() {
           </div>
           <div className="tii-card card" style={{ marginTop:'10px', background:'rgba(126,218,195,0.06)', border:'1px solid rgba(126,218,195,0.35)' }}>
             <h3>💧 Getting Baptised?</h3>
-            <p>Your baptism shirt will be provided — no need to pack it. Do come prepared with <strong>appropriate clothing underneath</strong> (e.g. a plain white or light-coloured outfit) to change into after.</p>
+            <p>{editMode ? <EditableText value={c.baptism_text || 'Your baptism shirt will be provided — no need to pack it. Do come prepared with appropriate clothing underneath (e.g. a plain white or light-coloured outfit) to change into after.'} onSave={(v) => handleSaveField('baptism_text', v)} multiline /> : (c.baptism_text || 'Your baptism shirt will be provided — no need to pack it. Do come prepared with appropriate clothing underneath (e.g. a plain white or light-coloured outfit) to change into after.')}</p>
           </div>
           <div className="tii-card card" style={{ marginTop:'10px' }}>
             <h3>👔 Dress code</h3>
