@@ -766,10 +766,6 @@ export default function ThisIsItInfo() {
                   <label>Venue</label>
                   <div className="val">{editMode ? <EditableText value={c.hotel_name} onSave={(v) => handleSaveField('hotel_name', v)} /> : c.hotel_name}</div>
                 </div>
-                <div className="tii-tk-field">
-                  <label>Checkout</label>
-                  <div className="val">{editMode ? <EditableText value={c.monday_checkout_time} onSave={(v) => handleSaveField('monday_checkout_time', v)} /> : c.monday_checkout_time}</div>
-                </div>
               </div>
             </div>
             {/* Tear-off stub with barcode */}
