@@ -8,7 +8,7 @@ import { Bell, Mail, Smartphone, AlertCircle, Check, FlaskConical } from 'lucide
 const NOTIFICATION_CHANNELS = [
   { id: 'in_app', label: 'In-App', icon: Bell, alwaysOn: true, description: 'Bell icon notifications' },
   { id: 'email', label: 'Email', icon: Mail, description: 'Email notifications' },
-  { id: 'mobile', label: 'Web Push', icon: Smartphone, description: 'Get notifications even when app is closed' }
+  { id: 'mobile', label: 'Mobile Push', icon: Smartphone, description: 'Get notifications even when app is closed' }
 ]
 
 export default function NotificationsSection({ prefs = {}, role, onTogglePref }) {
