@@ -157,6 +157,7 @@ export default function ThisIsItInfo() {
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const [activeSection, setActiveSection] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [passengerName, setPassengerName] = useState('');
   const tiiRef = useRef(null);
 
   const queryClient = useQueryClient();
@@ -531,9 +532,10 @@ export default function ThisIsItInfo() {
         .tii-tk-fields{margin-top:14px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px 16px;border-top:1px solid #eee;padding-top:14px;}
         .tii-tk-field label{display:block;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:#aaa;margin-bottom:4px;font-weight:700;}
         .tii-tk-field .val{font-weight:700;font-size:13px;color:#1a1a1a;line-height:1.3;}
-        .tii-tk-passenger{border-top:1px solid #eee;padding-top:12px;margin-top:0;}
+        .tii-tk-passenger{border-top:1px solid #eee;padding-top:12px;margin-top:14px;}
         .tii-tk-passenger label{display:block;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:#aaa;margin-bottom:4px;font-weight:700;}
-        .tii-tk-passenger .val{font-weight:700;font-size:14px;color:#1a1a1a;letter-spacing:.02em;}
+        .tii-tk-passenger input{font-family:'Anton',sans-serif;font-size:20px;font-weight:400;color:#1a1a1a;letter-spacing:.03em;border:none;outline:none;background:transparent;width:100%;padding:0;cursor:text;}
+        .tii-tk-passenger input::placeholder{color:#ccc;}
         /* stub tear-off */
         .tii-stub{position:relative;border-top:2px dashed #ddd;padding:13px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;background:#fff;}
         .tii-stub::before,.tii-stub::after{content:'';position:absolute;top:-12px;width:23px;height:23px;border-radius:50%;background:#F9F7F2;border:1px solid #ddd;z-index:1;}
@@ -747,10 +749,18 @@ export default function ThisIsItInfo() {
                   <div className="tii-tk-sub">Winnipeg, MB</div>
                 </div>
               </div>
-              {/* Passenger */}
-              <div className="tii-tk-passenger" style={{ marginTop:'14px' }}>
+              {/* Typable passenger name */}
+              <div className="tii-tk-passenger">
                 <label>Passenger</label>
-                <div className="val">BLW Canada Delegate</div>
+                <input
+                  type="text"
+                  placeholder="YOUR NAME"
+                  value={passengerName}
+                  onChange={e => setPassengerName(e.target.value)}
+                  maxLength={40}
+                  spellCheck={false}
+                  autoComplete="off"
+                />
               </div>
               {/* Detail fields */}
               <div className="tii-tk-fields">
