@@ -1,6 +1,7 @@
--- Backfill mobile=true for core notification types for users who already have
--- push_enabled=true. Prior migrations only seeded task_due_soon; this covers
--- the rest of the types that requestPushPermission now seeds on first subscribe.
+-- Backfill in_app=true (and mobile=true for push-enabled users) for all core
+-- notification types for ALL users. Prior migrations only seeded task_due_soon
+-- for some users; due-date-reminders filters on in_app=true so anyone missing
+-- the row gets silently skipped even for browser notifications.
 
 DO $$
 DECLARE
@@ -12,12 +13,17 @@ DECLARE
   v_type text;
 BEGIN
   FOREACH v_type IN ARRAY v_types LOOP
+    -- All users: ensure in_app=true row exists
     INSERT INTO public.user_notification_prefs (user_id, notification_type, in_app, email, mobile)
-    SELECT u.id, v_type, true, false, true
+    SELECT u.id, v_type, true, false,
+           COALESCE(u.push_enabled, false)  -- mobile=true only if push already on
     FROM public.users u
-    WHERE u.push_enabled = true
     ON CONFLICT (user_id, notification_type) DO UPDATE
-      SET mobile = true;
+      SET in_app = true,
+          mobile = CASE
+                     WHEN EXCLUDED.mobile THEN true
+                     ELSE public.user_notification_prefs.mobile
+                   END;
   END LOOP;
 END;
 $$;
