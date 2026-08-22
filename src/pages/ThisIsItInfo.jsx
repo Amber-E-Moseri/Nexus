@@ -746,14 +746,14 @@ export default function ThisIsItInfo() {
         {/* What to Expect */}
         <section className="tii-section" id="expect" style={{ marginTop:'40px' }}>
           <div className="tii-stop-head stop-head">
-            <div className="tii-dot">✨</div>
+            <div className="tii-dot">🕊️</div>
             <div>
               <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Prepare Your Heart</span>
               <h2>Don't Forget to Set Your Expectations</h2>
             </div>
           </div>
           <div className="tii-card card">
-            <h3>🎯 What to Expect</h3>
+            <h3>🌟 What to Expect</h3>
             <p>
               {editMode
                 ? <EditableText value={c.expect_p1 || "This Is It isn't just another program. It's tailored for you, and it requires something from you: expectation."} onSave={(v) => handleSaveField('expect_p1', v)} multiline />
@@ -784,7 +784,7 @@ export default function ThisIsItInfo() {
             </p>
           </div>
           <div className="tii-card card" style={{ marginTop:'10px', background:'rgba(107,18,188,0.04)', border:'1px solid rgba(107,18,188,0.18)' }}>
-            <h3>🙏 Prayer &amp; Fasting — Join Us</h3>
+            <h3>🕯️ Prayer &amp; Fasting — Join Us</h3>
             <p>
               {editMode
                 ? <EditableText value={c.prayer_p1 || 'As we count down to This Is It, we\'re setting aside time to seek God together. Join us in a period of prayer and fasting Monday through Thursday (Aug 24–27).'} onSave={(v) => handleSaveField('prayer_p1', v)} multiline />
@@ -819,7 +819,7 @@ export default function ThisIsItInfo() {
             </p>
           </div>
           <div className="tii-card card">
-            <h3>📝 Flight form</h3>
+            <h3>🛫 Flight form</h3>
             <p>{editMode ? <EditableText value={c.flight_form_text || 'Fill this out so the team knows your travel details and can arrange transfers.'} onSave={(v) => handleSaveField('flight_form_text', v)} multiline /> : (c.flight_form_text || 'Fill this out so the team knows your travel details and can arrange transfers.')}</p>
             <a className="tii-btn" href={c.flight_form_url} target="_blank" rel="noopener noreferrer">Fill out the flight form</a>
           </div>
@@ -872,7 +872,7 @@ export default function ThisIsItInfo() {
             )}
           </div>
           <div className="tii-card card" style={{ marginTop:'10px' }}>
-            <h3>✨ Dress code</h3>
+            <h3>👔 Dress code</h3>
             <p>{editMode ? <EditableText value={c.dress_code} onSave={(v) => handleSaveField('dress_code', v)} multiline /> : c.dress_code}</p>
           </div>
         </section>
@@ -918,7 +918,7 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>🛏️ {editMode ? <EditableText value={c.hotel_name} onSave={(v) => handleSaveField('hotel_name', v)} /> : c.hotel_name}</h3>
+            <h3>🏨 {editMode ? <EditableText value={c.hotel_name} onSave={(v) => handleSaveField('hotel_name', v)} /> : c.hotel_name}</h3>
             <p style={{ margin:'0 0 6px' }}>{editMode ? <EditableText value={c.hotel_address} onSave={(v) => handleSaveField('hotel_address', v)} multiline /> : c.hotel_address}</p>
             <p style={{ margin:'0 0 10px', fontSize:'13px', color:'#666' }}>Tel: {editMode ? <EditableText value={c.hotel_phone} onSave={(v) => handleSaveField('hotel_phone', v)} /> : c.hotel_phone}</p>
             <div className="tii-mapwrap">
@@ -933,7 +933,7 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>🎯 Check-in process</h3>
+            <h3>🗝️ Check-in process</h3>
             <p>{editMode ? <EditableText value={c.checkin_text || 'When you arrive, look for the check-in stand or table in the lobby. Your room is covered — no card required. The team at the stand will get you sorted and send you to your room.'} onSave={(v) => handleSaveField('checkin_text', v)} multiline /> : (c.checkin_text || 'When you arrive, look for the check-in stand or table in the lobby. Your room is covered — no card required. The team at the stand will get you sorted and send you to your room.')}</p>
           </div>
         </section>
@@ -1091,7 +1091,7 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>🚗 Transport contact</h3>
+            <h3>🚐 Transport contact</h3>
             <p>For transport needs — shuttle timing, arrival delays, or airport pickup questions:</p>
             <div className="tii-help-grid">
               <div className="tii-mini">
