@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import twemoji from 'twemoji';
 
 // Programs team members granted edit access on this page specifically,
 // without changing their app-wide role (which would affect permissions
@@ -147,6 +148,7 @@ export default function ThisIsItInfo() {
   const [activeSection, setActiveSection] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, mins: 0, secs: 0 });
+  const tiiRef = useRef(null);
 
   const queryClient = useQueryClient();
 
@@ -222,6 +224,16 @@ export default function ThisIsItInfo() {
     }, { rootMargin: '-35% 0px -55% 0px', threshold: 0 });
     ids.forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el); });
     return () => obs.disconnect();
+  }, [isLoading]);
+
+  useEffect(() => {
+    if (isLoading || !tiiRef.current) return;
+    twemoji.parse(tiiRef.current, {
+      folder: 'svg',
+      ext: '.svg',
+      base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/',
+      attributes: () => ({ style: 'height:1.1em;width:1.1em;vertical-align:-0.15em;display:inline-block' }),
+    });
   }, [isLoading]);
 
   useEffect(() => {
@@ -621,7 +633,7 @@ export default function ThisIsItInfo() {
         }
       `}</style>
 
-      <div className="tii-body">
+      <div className="tii-body" ref={tiiRef}>
         {editMode && (
           <div className="edit-mode-indicator">
             ✏️ Editing — Click any text to edit (ESC to cancel)

@@ -45,6 +45,7 @@
     "recharts": "^3.8.1",
     "tailwindcss": "^4.1.10",
     "tesseract.js": "^7.0.0",
+    "twemoji": "^14.0.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
