@@ -430,23 +430,13 @@ export default function ThisIsItInfo() {
         :root{--yellow:#EAC63D;--coral:#DD6F51;--purple:#6B12BC;--teal:#7EDAC3;--ink:#161717;--paper:#FBF7EE;--paper-line:#E7DFCB;--bg:#F9F7F2;--max:720px;}
 
         /* ── keyframes ─────────────────────────────────────────────────── */
-        @keyframes ticketIn{
-          0%{opacity:0;transform:translateY(36px) scale(.94)}
-          55%{opacity:1;transform:translateY(-8px) scale(1.015)}
-          75%{transform:translateY(4px) scale(.998)}
-          100%{opacity:1;transform:translateY(0) scale(1)}
-        }
-        @keyframes logoIn{0%{opacity:0;transform:translateY(-12px)}100%{opacity:1;transform:translateY(0)}}
-        @keyframes flyAcross{0%{transform:translateX(-4px)}50%{transform:translateX(4px)}100%{transform:translateX(-4px)}}
-        @keyframes popCheck{0%{transform:scale(.5);opacity:0}60%{transform:scale(1.25)}100%{transform:scale(1);opacity:1}}
-        @keyframes slideUp{0%{opacity:0;transform:translateY(12px)}100%{opacity:1;transform:translateY(0)}}
+        @keyframes ticketIn{0%{opacity:0;transform:translateY(16px)}100%{opacity:1;transform:translateY(0)}}
+        @keyframes logoIn{0%{opacity:0;transform:translateY(-8px)}100%{opacity:1;transform:translateY(0)}}
+        @keyframes popCheck{0%{transform:scale(.5);opacity:0}60%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}
+        @keyframes slideUp{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:translateY(0)}}
         @keyframes fadeIn{0%{opacity:0}100%{opacity:1}}
-        @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(234,198,61,.5)}50%{box-shadow:0 0 0 5px rgba(234,198,61,0)}}
-        @keyframes dotIn{
-          0%{transform:scale(0) rotate(-25deg)}
-          65%{transform:scale(1.25) rotate(5deg)}
-          100%{transform:scale(1) rotate(0)}
-        }
+        @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(234,198,61,.4)}50%{box-shadow:0 0 0 4px rgba(234,198,61,0)}}
+        @keyframes dotIn{0%{transform:scale(0)}70%{transform:scale(1.15)}100%{transform:scale(1)}}
         @keyframes confettiBurst{
           0%{transform:translate(-50%,-50%) translate(0,0) scale(1);opacity:1}
           80%{opacity:.7}
@@ -456,16 +446,7 @@ export default function ThisIsItInfo() {
         @keyframes sheetBgIn{from{opacity:0}to{opacity:1}}
 
         /* ── base ───────────────────────────────────────────────────────── */
-        /* Gradient drift: composited opacity on a fixed overlay (no paint) */
-        @keyframes bgDrift{0%,100%{opacity:0;}50%{opacity:1;}}
-        .tii-body{margin:0;background:#F9F6EF;color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px;position:relative;}
-        .tii-body::before{
-          content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
-          background:#FBF2E8;
-          animation:bgDrift 12s ease-in-out infinite;
-          will-change:opacity;
-        }
-        .tii-body > *{position:relative;z-index:1;}
+        .tii-body{margin:0;background:#F9F6EF;color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px;}
         @media(min-width:641px){.tii-body{padding-bottom:48px;}}
 
         /* ── desktop nav ────────────────────────────────────────────────── */
@@ -519,7 +500,7 @@ export default function ThisIsItInfo() {
         .tii-ticket-airline{color:#fff;font-size:13px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;font-family:'Anton',sans-serif;}
         .tii-ticket-bp-label{color:rgba(255,255,255,.75);font-size:9px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;}
         /* main body */
-        .tii-ticket-top{padding:18px 20px 16px;animation:slideUp .6s ease .2s both;}
+        .tii-ticket-top{padding:18px 20px 16px;}
         .tii-tk-row{display:flex;justify-content:space-between;align-items:flex-end;gap:8px;}
         .tii-tk-city-block{flex:none;}
         .tii-tk-city{font-family:'Anton',sans-serif;font-size:clamp(40px,10vw,58px);line-height:1;letter-spacing:.02em;color:#1a1a1a;}
