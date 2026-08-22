@@ -514,7 +514,7 @@ export default function ThisIsItInfo() {
         .tii-ticket{max-width:var(--max);margin:0 auto;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(22,23,23,.16);animation:ticketIn .85s cubic-bezier(.22,.61,.36,1) .1s both;transition:box-shadow .25s,transform .25s;overflow:hidden;border:none;}
         .tii-ticket:hover{box-shadow:0 16px 40px rgba(22,23,23,.2);transform:translateY(-3px);}
         /* AC-style red header */
-        .tii-ticket-header{background:#D0021B;padding:11px 20px;display:flex;justify-content:space-between;align-items:center;}
+        .tii-ticket-header{background:var(--coral);padding:11px 20px;display:flex;justify-content:space-between;align-items:center;}
         .tii-ticket-airline{color:#fff;font-size:13px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;font-family:'Anton',sans-serif;}
         .tii-ticket-bp-label{color:rgba(255,255,255,.75);font-size:9px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;}
         /* main body */
@@ -524,7 +524,7 @@ export default function ThisIsItInfo() {
         .tii-tk-city{font-family:'Anton',sans-serif;font-size:clamp(40px,10vw,58px);line-height:1;letter-spacing:.02em;color:#1a1a1a;}
         .tii-tk-sub{font-size:10px;color:#999;margin-top:3px;letter-spacing:.06em;text-transform:uppercase;}
         .tii-tk-middle{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:0 8px;padding-bottom:6px;}
-        .tii-tk-plane{font-size:24px;color:#D0021B;animation:flyAcross 2.2s ease-in-out infinite;display:block;line-height:1;}
+        .tii-tk-plane{display:block;}
         .tii-tk-route-line{width:100%;height:1px;background:linear-gradient(90deg,transparent,#ddd 20%,#ddd 80%,transparent);}
         /* fields grid */
         .tii-tk-fields{margin-top:14px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px 16px;border-top:1px solid #eee;padding-top:14px;}
@@ -540,11 +540,11 @@ export default function ThisIsItInfo() {
         .tii-stub::after{right:-12px;}
         .tii-stub-left{display:flex;flex-direction:column;gap:2px;}
         .tii-stub-code{font-size:10px;letter-spacing:.1em;color:#aaa;text-transform:uppercase;font-family:monospace;}
-        .tii-stub-slogan{font-size:11px;font-weight:800;letter-spacing:.03em;color:#D0021B;text-transform:uppercase;}
+        .tii-stub-slogan{font-size:11px;font-weight:800;letter-spacing:.03em;color:var(--coral);text-transform:uppercase;}
         /* barcode */
         .tii-barcode{display:flex;align-items:flex-end;gap:1px;height:38px;}
         .tii-barcode-bar{display:inline-block;background:#1a1a1a;border-radius:0;}
-        .tii-stub-badge{display:inline-block;background:#D0021B;color:#fff;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:7px 14px;border-radius:999px;white-space:nowrap;}
+        .tii-stub-badge{display:inline-block;background:var(--coral);color:#fff;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:7px 14px;border-radius:999px;white-space:nowrap;}
 
         /* ── sections ───────────────────────────────────────────────────── */
         .tii-section{max-width:var(--max);margin:40px auto 0;padding:0 18px;scroll-margin-top:58px;}
@@ -683,7 +683,7 @@ export default function ThisIsItInfo() {
           </div>
           <div className="tii-nav-progress">
             <div style={{ height:'100%', width:`${scrollProgress * 100}%`, background:'linear-gradient(90deg, var(--coral), var(--purple))', transition:'width .15s linear' }} />
-            <div className="tii-nav-plane" style={{ left:`${scrollProgress * 100}%` }}>✈️</div>
+            <div className="tii-nav-plane" style={{ left:`${scrollProgress * 100}%` }}>✈</div>
           </div>
         </nav>
 
@@ -736,8 +736,9 @@ export default function ThisIsItInfo() {
                 </div>
                 <div className="tii-tk-middle">
                   <div className="tii-tk-route-line" />
-                  <svg className="tii-tk-plane" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style={{ width:28, height:28, fill:'#D0021B', display:'block', flexShrink:0 }}>
-                    <path d="M62 22.5c0-2.5-2-4.5-4.5-4.5H42L26 2H18l8 16H10L6 14H0l4 18-4 18h6l4-4h16l-8 16h8l16-16h15.5c2.5 0 4.5-2 4.5-4.5V22.5z"/>
+                  <svg className="tii-tk-plane" viewBox="0 0 48 16" xmlns="http://www.w3.org/2000/svg" style={{ width:48, height:16, display:'block', flexShrink:0, overflow:'visible', color:'var(--coral)' }}>
+                    <line x1="2" y1="8" x2="36" y2="8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+                    <polyline points="28,2 44,8 28,14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                   <div className="tii-tk-route-line" />
                 </div>
@@ -775,7 +776,7 @@ export default function ThisIsItInfo() {
             <div className="tii-stub">
               <div className="tii-stub-left">
                 <span className="tii-stub-slogan">Bigger · Bolder · Best for God</span>
-                <span className="tii-stub-code">TII · 2026 · BLW CAN · YYZ→YWG</span>
+                <span className="tii-stub-code">TII · 2026 · BLW CAN · WINNIPEG</span>
               </div>
               <div className="tii-barcode">
                 {[3,6,2,8,4,6,3,2,7,4,6,3,5,7,3,6,2,5,8,3,6,4,7,3].map((h,i) => (
@@ -940,7 +941,7 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>✈️ Airport</h3>
+            <h3>✈ Airport</h3>
             <p><b>{editMode ? <EditableText value={c.airport_name} onSave={(v) => handleSaveField('airport_name', v)} /> : c.airport_name} ({editMode ? <EditableText value={c.airport_code} onSave={(v) => handleSaveField('airport_code', v)} /> : c.airport_code})</b>. This is the airport to fly into — it's only about {editMode ? <EditableText value={c.airport_distance_km?.toString()} onSave={(v) => handleSaveField('airport_distance_km', parseInt(v))} /> : c.airport_distance_km} minutes from the hotel.</p>
           </div>
           <div className="tii-card card">
@@ -1157,8 +1158,8 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>Questions?</h3>
-            <p>For any other questions about the retreat:</p>
+            <h3>💬 Other Questions?</h3>
+            <p>For anything else about the retreat, reach out:</p>
             <div style={{ marginTop:'10px' }}>
               <a href="mailto:info@lwcanada.org" style={{ color:'var(--purple)', fontWeight:600 }}>info@lwcanada.org</a>
             </div>
