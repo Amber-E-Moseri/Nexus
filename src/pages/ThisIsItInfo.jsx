@@ -755,10 +755,6 @@ export default function ThisIsItInfo() {
               {/* Detail fields */}
               <div className="tii-tk-fields">
                 <div className="tii-tk-field">
-                  <label>Date</label>
-                  <div className="val">{editMode ? <EditableText value={c.event_dates} onSave={(v) => handleSaveField('event_dates', v)} /> : c.event_dates}</div>
-                </div>
-                <div className="tii-tk-field">
                   <label>Opens</label>
                   <div className="val">Fri {editMode ? <EditableText value={c.friday_opening_time} onSave={(v) => handleSaveField('friday_opening_time', v)} /> : c.friday_opening_time}</div>
                 </div>
