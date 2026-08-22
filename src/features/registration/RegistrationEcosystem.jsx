@@ -272,7 +272,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     event_name: 'This Is It 2.0', sprint_pattern: '%This Is It 2.0%',
     early_cutoff_at: '2026-08-06T00:00:00Z', early_fee: 250, standard_fee: 350,
     local_detection_regex: 'manitoba|winnipeg',
-    exempt_fellowships: ['BLW University of Manitoba', 'BLW University of Winnipeg', 'BLW University College of North'],
+    exempt_fellowships: ['BLW University of Manitoba', 'BLW University of Winnipeg', 'BLW University College of the North'],
     public_token_key: 'tii2_public_token', tab_config: [],
   };
   const [tab, setTab] = useState('overview');
