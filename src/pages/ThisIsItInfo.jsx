@@ -719,7 +719,7 @@ export default function ThisIsItInfo() {
                   <div className="tii-tk-sub">Your City</div>
                 </div>
                 <div className="tii-tk-middle">
-                  <svg viewBox="0 0 80 20" xmlns="http://www.w3.org/2000/svg" style={{ width:'100%', height:20, display:'block', color:'var(--yellow)', overflow:'visible' }}>
+                  <svg viewBox="0 0 80 20" xmlns="http://www.w3.org/2000/svg" style={{ width:'100%', height:20, display:'block', color:'var(--coral)', overflow:'visible' }}>
                     <line x1="0" y1="10" x2="65" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="4 3"/>
                     <polyline points="55,3 72,10 55,17" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
