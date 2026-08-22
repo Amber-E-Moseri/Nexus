@@ -1199,7 +1199,14 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
   const confirmingCount = totalRegs - totalAbsent;
   const totalFlightsNeeded = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.flightsNeeded || 0), 0), [bySubgroup]);
   const totalFlightsBooked = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.flights || 0), 0), [bySubgroup]);
-  const crossCountryCount = useMemo(() => merged.filter(r => r.inStateConfirmed).length, [merged]);
+  const driveCount = useMemo(() => merged.filter(r => r.inStateConfirmed && r.transportMode !== 'bus').length, [merged]);
+  const busCount   = useMemo(() => merged.filter(r => r.inStateConfirmed && r.transportMode === 'bus').length, [merged]);
+  const crossCountryNote = useMemo(() => {
+    const parts = [];
+    if (driveCount) parts.push(`${driveCount} driving`);
+    if (busCount)   parts.push(`${busCount} bus`);
+    return parts.length ? parts.join(' · ') : null;
+  }, [driveCount, busCount]);
   const [showTargetCol, setShowTargetCol] = useState(false);
 
   return (
@@ -1207,7 +1214,7 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
       <div className="reg-grid-3">
         <SummaryCard label="Total registrations" current={totalRegs} target={totalRegTarget} pct={regPct} />
         <SummaryCard label="Confirmed" current={confirmedCount} target={confirmingCount} pct={confirmingCount ? Math.round((confirmedCount / confirmingCount) * 100) : 0} noBar />
-        <SummaryCard label="Flights" current={totalFlightsBooked} target={totalFlightsNeeded} pct={totalFlightsNeeded ? Math.round((totalFlightsBooked / totalFlightsNeeded) * 100) : 0} note={crossCountryCount ? `${crossCountryCount} cross country` : null} />
+        <SummaryCard label="Flights" current={totalFlightsBooked} target={totalFlightsNeeded} pct={totalFlightsNeeded ? Math.round((totalFlightsBooked / totalFlightsNeeded) * 100) : 0} note={crossCountryNote} />
       </div>
 
 
