@@ -523,8 +523,9 @@ export default function ThisIsItInfo() {
         .tii-tk-city-block{flex:none;}
         .tii-tk-city{font-family:'Anton',sans-serif;font-size:clamp(40px,10vw,58px);line-height:1;letter-spacing:.02em;color:#1a1a1a;}
         .tii-tk-sub{font-size:10px;color:#999;margin-top:3px;letter-spacing:.06em;text-transform:uppercase;}
-        .tii-tk-middle{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:0 8px;padding-bottom:6px;}
+        .tii-tk-middle{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:0 12px;padding-bottom:6px;}
         .tii-tk-plane{display:block;}
+        .tii-tk-duration{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#bbb;font-weight:700;}
         .tii-tk-route-line{width:100%;height:1px;background:linear-gradient(90deg,transparent,#ddd 20%,#ddd 80%,transparent);}
         /* fields grid */
         .tii-tk-fields{margin-top:14px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px 16px;border-top:1px solid #eee;padding-top:14px;}
@@ -534,8 +535,8 @@ export default function ThisIsItInfo() {
         .tii-tk-passenger label{display:block;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:#aaa;margin-bottom:4px;font-weight:700;}
         .tii-tk-passenger .val{font-weight:700;font-size:14px;color:#1a1a1a;letter-spacing:.02em;}
         /* stub tear-off */
-        .tii-stub{position:relative;border-top:2px dashed #ccc;padding:13px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;background:#f7f7f7;}
-        .tii-stub::before,.tii-stub::after{content:'';position:absolute;top:-12px;width:23px;height:23px;border-radius:50%;background:var(--bg);z-index:1;}
+        .tii-stub{position:relative;border-top:2px dashed #ddd;padding:13px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;background:#fff;}
+        .tii-stub::before,.tii-stub::after{content:'';position:absolute;top:-12px;width:23px;height:23px;border-radius:50%;background:#F9F7F2;border:1px solid #ddd;z-index:1;}
         .tii-stub::before{left:-12px;}
         .tii-stub::after{right:-12px;}
         .tii-stub-left{display:flex;flex-direction:column;gap:2px;}
@@ -731,16 +732,15 @@ export default function ThisIsItInfo() {
               {/* City codes row */}
               <div className="tii-tk-row">
                 <div className="tii-tk-city-block">
-                  <div className="tii-tk-city" style={{ fontSize:'clamp(18px,5vw,26px)', letterSpacing:'.04em' }}>YOUR CITY</div>
-                  <div className="tii-tk-sub">Canada</div>
+                  <div className="tii-tk-city" style={{ fontSize:'clamp(36px,8vw,48px)' }}>???</div>
+                  <div className="tii-tk-sub">Your City</div>
                 </div>
                 <div className="tii-tk-middle">
-                  <div className="tii-tk-route-line" />
-                  <svg className="tii-tk-plane" viewBox="0 0 48 16" xmlns="http://www.w3.org/2000/svg" style={{ width:48, height:16, display:'block', flexShrink:0, overflow:'visible', color:'var(--coral)' }}>
-                    <line x1="2" y1="8" x2="36" y2="8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
-                    <polyline points="28,2 44,8 28,14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <svg viewBox="0 0 80 20" xmlns="http://www.w3.org/2000/svg" style={{ width:'100%', height:20, display:'block', color:'var(--coral)', overflow:'visible' }}>
+                    <line x1="0" y1="10" x2="65" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="4 3"/>
+                    <polyline points="55,3 72,10 55,17" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
-                  <div className="tii-tk-route-line" />
+                  <span className="tii-tk-duration">Aug 28 – 31</span>
                 </div>
                 <div className="tii-tk-city-block" style={{ textAlign:'right' }}>
                   <div className="tii-tk-city">{editMode ? <EditableText value={c.airport_code} onSave={(v) => handleSaveField('airport_code', v)} /> : c.airport_code}</div>
