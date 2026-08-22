@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, XCircle, Circle, AlertCircle, Pencil, Download, ChevronUp, ChevronDown, Link2, Copy, RefreshCw, Trash2, X, Plus, UserX, GitMerge } from 'lucide-react';
 import RegistrationEditModal from './RegistrationEditModal';
@@ -423,15 +423,22 @@ export default function RegistrationDataTab({
     subgroupFilter === 'All' ? allPeople : allPeople.filter(p => p.subgroup === subgroupFilter),
     [allPeople, subgroupFilter]);
 
+  // People who don't need a flight: cross-country subgroups and Central East Subgroup A
+  // (except Ariyo, who does fly and should remain visible in the no-flight filter).
+  const noFlightExpected = useCallback((p) =>
+    crossCountrySubgroups?.has(p.subgroup) ||
+    (p.subgroup === 'Central East Subgroup A' && !(p.full_name || '').toLowerCase().includes('ariyo')),
+    [crossCountrySubgroups]);
+
   const stats = useMemo(() => {
     const s = { total: 0, not_registered: 0, registered_outstanding: 0, confirmed: 0, absent: 0, manual_no_flight: 0 };
     statsSource.forEach(p => {
       s.total++;
       s[p.registrationStatus] = (s[p.registrationStatus] || 0) + 1;
-      if (p.manuallyConfirmed && !p.hasFlightInfo && !p.absent) s.manual_no_flight++;
+      if (p.manuallyConfirmed && !p.hasFlightInfo && !p.absent && !noFlightExpected(p)) s.manual_no_flight++;
     });
     return s;
-  }, [statsSource]);
+  }, [statsSource, noFlightExpected]);
 
   const not_registered = useMemo(() => statsSource.filter(r => r.registrationStatus === 'not_registered').length, [statsSource]);
   const registered_outstanding = useMemo(() => statsSource.filter(r => r.registrationStatus === 'registered_outstanding').length, [statsSource]);
@@ -443,7 +450,7 @@ export default function RegistrationDataTab({
   const filtered = useMemo(() => {
     let rows = allPeople;
     if (statusFilter === 'manual_no_flight')
-      rows = rows.filter(p => p.manuallyConfirmed && !p.hasFlightInfo && !p.absent);
+      rows = rows.filter(p => p.manuallyConfirmed && !p.hasFlightInfo && !p.absent && !noFlightExpected(p));
     else if (statusFilter !== 'all')
       rows = rows.filter(p => p.registrationStatus === statusFilter);
     if (subgroupFilter !== 'All')
@@ -476,7 +483,7 @@ export default function RegistrationDataTab({
       });
     }
     return rows;
-  }, [allPeople, statusFilter, subgroupFilter, fellowshipFilter, search, sortField, sortDir]);
+  }, [allPeople, statusFilter, subgroupFilter, fellowshipFilter, search, sortField, sortDir, noFlightExpected]);
 
   function toggleSort(field) {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');

@@ -2562,8 +2562,11 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
     [filtered]);
 
   const missingFlight = useMemo(() =>
-    filtered.filter(r => !r.arrivalFlight && !r.departureFlight && !r.arrivalDate && !r.departureDate),
-    [filtered]);
+    filtered.filter(r =>
+      !r.arrivalFlight && !r.departureFlight && !r.arrivalDate && !r.departureDate &&
+      !crossCountrySubgroups?.has(r.subgroup)
+    ),
+    [filtered, crossCountrySubgroups]);
 
   // Group people with flights by arrival date, sorted by arrival time
   const byArrivalDate = useMemo(() => {
