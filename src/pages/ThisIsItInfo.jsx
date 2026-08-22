@@ -746,7 +746,7 @@ export default function ThisIsItInfo() {
         {/* What to Expect */}
         <section className="tii-section" id="expect" style={{ marginTop:'40px' }}>
           <div className="tii-stop-head stop-head">
-            <div className="tii-dot">🕊️</div>
+            <div className="tii-dot">🌿</div>
             <div>
               <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Prepare Your Heart</span>
               <h2>Don't Forget to Set Your Expectations</h2>
@@ -784,7 +784,7 @@ export default function ThisIsItInfo() {
             </p>
           </div>
           <div className="tii-card card" style={{ marginTop:'10px', background:'rgba(107,18,188,0.04)', border:'1px solid rgba(107,18,188,0.18)' }}>
-            <h3>🕯️ Prayer &amp; Fasting — Join Us</h3>
+            <h3>🙏 Prayer &amp; Fasting — Join Us</h3>
             <p>
               {editMode
                 ? <EditableText value={c.prayer_p1 || 'As we count down to This Is It, we\'re setting aside time to seek God together. Join us in a period of prayer and fasting Monday through Thursday (Aug 24–27).'} onSave={(v) => handleSaveField('prayer_p1', v)} multiline />
@@ -933,7 +933,7 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>🗝️ Check-in process</h3>
+            <h3>🔑 Check-in process</h3>
             <p>{editMode ? <EditableText value={c.checkin_text || 'When you arrive, look for the check-in stand or table in the lobby. Your room is covered — no card required. The team at the stand will get you sorted and send you to your room.'} onSave={(v) => handleSaveField('checkin_text', v)} multiline /> : (c.checkin_text || 'When you arrive, look for the check-in stand or table in the lobby. Your room is covered — no card required. The team at the stand will get you sorted and send you to your room.')}</p>
           </div>
         </section>
