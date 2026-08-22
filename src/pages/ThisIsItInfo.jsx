@@ -38,6 +38,16 @@ const FALLBACK = {
   dept_arrival_default: '4:30 PM Friday, Aug 28',
 };
 
+function renderWithLinks(text) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, i) =>
+    urlRegex.test(part)
+      ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--purple)', wordBreak: 'break-all' }}>{part}</a>
+      : part
+  );
+}
+
 function EditableText({ value, onSave, multiline = false, className = '' }) {
   const [isEditing, setIsEditing] = useState(false);
   const [tmpValue, setTmpValue] = useState(value);
@@ -793,7 +803,7 @@ export default function ThisIsItInfo() {
             <p>
               {editMode
                 ? <EditableText value={c.prayer_p2 || 'Live corporate prayer every night at 8:00 PM CT. Come hungry — spiritually and expectantly.'} onSave={(v) => handleSaveField('prayer_p2', v)} multiline />
-                : (c.prayer_p2 || 'Live corporate prayer every night at 8:00 PM CT. Come hungry — spiritually and expectantly.')}
+                : renderWithLinks(c.prayer_p2 || 'Live corporate prayer every night at 8:00 PM CT. Come hungry — spiritually and expectantly.')}
             </p>
           </div>
         </section>
@@ -902,13 +912,6 @@ export default function ThisIsItInfo() {
           <div className="tii-card card">
             <h3>⏰ When to arrive</h3>
             <p>{editMode ? <EditableText value={c.arrival_text || 'Your arrival time depends on your department. Check with your department lead. If you haven\'t heard otherwise, aim to arrive by 4:30 PM so you\'re settled before the opening session.'} onSave={(v) => handleSaveField('arrival_text', v)} multiline /> : (c.arrival_text || 'Your arrival time depends on your department. Check with your department lead. If you haven\'t heard otherwise, aim to arrive by 4:30 PM so you\'re settled before the opening session.')}</p>
-            <div className="tii-dept-arrival">
-              <b style={{ fontSize:'13px' }}>Arrival time by department</b>
-              <ul>
-                <li>{editMode ? <EditableText value={c.dept_arrival_note} onSave={(v) => handleSaveField('dept_arrival_note', v)} /> : c.dept_arrival_note}</li>
-                <li>Default: arrive by <b>{editMode ? <EditableText value={c.dept_arrival_default} onSave={(v) => handleSaveField('dept_arrival_default', v)} /> : c.dept_arrival_default}</b></li>
-              </ul>
-            </div>
           </div>
         </section>
 
