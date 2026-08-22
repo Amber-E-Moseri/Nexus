@@ -242,7 +242,7 @@ export default function ThisIsItInfo() {
     function launch() {
       setPlaneKey(k => k + 1);
       setPlaneVisible(true);
-      hideTimer = setTimeout(() => setPlaneVisible(false), 7400);
+      hideTimer = setTimeout(() => setPlaneVisible(false), 7000);
     }
     const first = setTimeout(launch, 2800);
     const loop  = setInterval(launch, 24000);
@@ -570,38 +570,29 @@ export default function ThisIsItInfo() {
         .tii-dept-arrival{background:#f9f7f2;border:1px solid var(--paper-line);border-radius:8px;padding:14px;margin-top:12px;}
         .tii-dept-arrival ul{margin:6px 0 0;padding-left:18px;font-size:14px;line-height:1.7;}
         .edit-mode-indicator{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--purple);color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;z-index:99;font-size:13px;}
-        /* ── flying plane (diagonal swirl loops) ────────────────────────── */
-        /* Outer track: diagonal BL → TR + fade at edges                  */
-        @keyframes planeDiag{
-          0%  {transform:translate(-90px,85vh);opacity:0;}
+        /* ── flying plane (diagonal S-curve BL → TR) ───────────────────── */
+        @keyframes planeCurve{
+          0%  {transform:translate(-90px,90vh) rotate(-35deg);opacity:0;}
           4%  {opacity:1;}
+          /* First arc: sweeping up-right steeply */
+          20% {transform:translate(15vw,46vh) rotate(-30deg);}
+          40% {transform:translate(33vw,28vh) rotate(-14deg);}
+          /* Cross: level off, drift slightly downward */
+          50% {transform:translate(48vw,34vh) rotate(4deg);}
+          65% {transform:translate(63vw,40vh) rotate(-4deg);}
+          /* Second arc: sweep back up toward top-right */
+          80% {transform:translate(79vw,18vh) rotate(-30deg);}
           93% {opacity:1;}
-          100%{transform:translate(calc(100vw + 90px),-8vh);opacity:0;}
-        }
-        /* Inner circle: X+Y at 90° phase offset = true circular orbit    */
-        /* --r is the orbit radius; set per breakpoint via the element     */
-        @keyframes planeCircle{
-          0%  {transform:translate(0,calc(var(--r) * -1))   rotate(0deg);}
-          25% {transform:translate(var(--r),0)               rotate(90deg);}
-          50% {transform:translate(0,var(--r))               rotate(180deg);}
-          75% {transform:translate(calc(var(--r) * -1),0)   rotate(270deg);}
-          100%{transform:translate(0,calc(var(--r) * -1))   rotate(360deg);}
+          100%{transform:translate(calc(100vw + 90px),-5vh) rotate(-35deg);opacity:0;}
         }
         .tii-plane-track{
           position:fixed;top:0;left:0;z-index:65;pointer-events:none;
-          will-change:transform,opacity;
-          animation:planeDiag 7s linear both;
-        }
-        .tii-plane-swirl{
-          display:block;font-size:26px;line-height:1;
-          --r:52px;
+          font-size:26px;line-height:1;
           filter:drop-shadow(0 0 6px rgba(107,18,188,.5)) drop-shadow(0 0 18px rgba(234,198,61,.45));
-          animation:planeCircle 1.8s linear infinite;
-          will-change:transform;
+          animation:planeCurve 6.5s linear both;
+          will-change:transform,opacity;
         }
-        @media(max-width:640px){
-          .tii-plane-swirl{font-size:20px;--r:34px;}
-        }
+        @media(max-width:640px){.tii-plane-track{font-size:20px;}}
         @media(prefers-reduced-motion:reduce){
           *{animation-duration:.01ms !important;transition-duration:.01ms !important;}
         }
@@ -625,9 +616,7 @@ export default function ThisIsItInfo() {
 
         {/* Ambient plane flyover */}
         {planeVisible && (
-          <div key={planeKey} className="tii-plane-track" aria-hidden="true">
-            <span className="tii-plane-swirl">✈️</span>
-          </div>
+          <div key={planeKey} className="tii-plane-track" aria-hidden="true">✈️</div>
         )}
 
         <nav className="tii-nav">
