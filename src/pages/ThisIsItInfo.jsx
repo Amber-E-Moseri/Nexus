@@ -786,10 +786,14 @@ export default function ThisIsItInfo() {
           <div className="tii-card card" style={{ marginTop:'10px', background:'rgba(107,18,188,0.04)', border:'1px solid rgba(107,18,188,0.18)' }}>
             <h3>🙏 Prayer &amp; Fasting — Join Us</h3>
             <p>
-              As we count down to This Is It, we're setting aside time to seek God together. Join us in a period of prayer and fasting <strong>Monday through Thursday</strong> (Aug 24–27).
+              {editMode
+                ? <EditableText value={c.prayer_p1 || 'As we count down to This Is It, we\'re setting aside time to seek God together. Join us in a period of prayer and fasting Monday through Thursday (Aug 24–27).'} onSave={(v) => handleSaveField('prayer_p1', v)} multiline />
+                : (c.prayer_p1 || 'As we count down to This Is It, we\'re setting aside time to seek God together. Join us in a period of prayer and fasting Monday through Thursday (Aug 24–27).')}
             </p>
             <p>
-              Live corporate prayer every night at <strong>8:00 PM CT</strong>. Come hungry — spiritually and expectantly.
+              {editMode
+                ? <EditableText value={c.prayer_p2 || 'Live corporate prayer every night at 8:00 PM CT. Come hungry — spiritually and expectantly.'} onSave={(v) => handleSaveField('prayer_p2', v)} multiline />
+                : (c.prayer_p2 || 'Live corporate prayer every night at 8:00 PM CT. Come hungry — spiritually and expectantly.')}
             </p>
           </div>
         </section>
