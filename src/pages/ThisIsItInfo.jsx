@@ -29,7 +29,7 @@ const FALLBACK = {
   friday_opening_time: '6:00 PM',
   monday_checkout_time: 'Mon Morning',
   event_dates: '28–31 Aug 2026',
-  dress_code: 'Semiformal for most of the weekend. On day 2 we\'ll all be wearing our This Is It shirts.',
+  dress_code: 'Semiformal for most of the weekend.',
   all_white_for: 'Thanksgiving service',
   wifi_text: 'Free, hotel-wide',
   sessions_text: 'Conference Room',
@@ -857,9 +857,6 @@ export default function ThisIsItInfo() {
                 </div>
               </div>
             )}
-            <p style={{ fontSize:'13px', color:'#666', marginTop:'10px', paddingTop:'10px', borderTop:'1px solid var(--paper-line)' }}>
-              <strong>This Is It shirt:</strong> Will be provided at check-in or after the Friday opening session — no need to pack it.
-            </p>
           </div>
           <div className="tii-card card" style={{ marginTop:'10px' }}>
             <h3>✨ Dress code</h3>
