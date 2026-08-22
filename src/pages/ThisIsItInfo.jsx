@@ -570,25 +570,44 @@ export default function ThisIsItInfo() {
         .tii-dept-arrival{background:#f9f7f2;border:1px solid var(--paper-line);border-radius:8px;padding:14px;margin-top:12px;}
         .tii-dept-arrival ul{margin:6px 0 0;padding-left:18px;font-size:14px;line-height:1.7;}
         .edit-mode-indicator{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--purple);color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;z-index:99;font-size:13px;}
-        /* ── flying plane ───────────────────────────────────────────────── */
-        @keyframes planeFly{
-          0%  {transform:translateX(-80px)             translateY(0px)   rotate(6deg);opacity:0;}
-          3%  {opacity:1;}
-          20% {transform:translateX(20vw)              translateY(-22px) rotate(4deg);}
-          40% {transform:translateX(40vw)              translateY(-10px) rotate(2deg);}
-          60% {transform:translateX(60vw)              translateY(-28px) rotate(3deg);}
-          80% {transform:translateX(80vw)              translateY(-8px)  rotate(4deg);}
-          97% {opacity:1;}
-          100%{transform:translateX(calc(100vw + 80px)) translateY(-18px) rotate(3deg);opacity:0;}
+        /* ── flying plane (swirl loops) ─────────────────────────────────── */
+        /* Outer track: pure horizontal movement + fade at edges           */
+        @keyframes planeMoveX{
+          0%  {transform:translateX(-80px);opacity:0;}
+          4%  {opacity:1;}
+          94% {opacity:1;}
+          100%{transform:translateX(calc(100vw + 80px));opacity:0;}
         }
-        .tii-plane{
-          position:fixed;top:22%;left:0;z-index:65;pointer-events:none;
-          font-size:28px;line-height:1;
-          filter:drop-shadow(0 2px 8px rgba(107,18,188,.35)) drop-shadow(0 0 16px rgba(234,198,61,.4));
-          animation:planeFly 5.2s cubic-bezier(.4,0,.2,1) both;
+        /* Inner swirl: full circular loop — up → back → down → forward   */
+        @keyframes planeLoop{
+          0%  {transform:translateY(0)    rotate(0deg);}
+          25% {transform:translateY(-68px) rotate(90deg);}
+          50% {transform:translateY(0)    rotate(180deg);}
+          75% {transform:translateY(68px)  rotate(270deg);}
+          100%{transform:translateY(0)    rotate(360deg);}
+        }
+        .tii-plane-track{
+          position:fixed;top:30%;left:0;z-index:65;pointer-events:none;
           will-change:transform,opacity;
+          animation:planeMoveX 6.4s linear both;
         }
-        @media(max-width:640px){.tii-plane{font-size:22px;top:18%;}}
+        .tii-plane-swirl{
+          display:block;font-size:26px;line-height:1;
+          filter:drop-shadow(0 0 6px rgba(107,18,188,.5)) drop-shadow(0 0 18px rgba(234,198,61,.45));
+          animation:planeLoop 1.6s linear infinite;
+          will-change:transform;
+        }
+        @media(max-width:640px){
+          .tii-plane-swirl{font-size:20px;}
+          .tii-plane-track{top:20%;}
+          @keyframes planeLoop{
+            0%  {transform:translateY(0)    rotate(0deg);}
+            25% {transform:translateY(-44px) rotate(90deg);}
+            50% {transform:translateY(0)    rotate(180deg);}
+            75% {transform:translateY(44px)  rotate(270deg);}
+            100%{transform:translateY(0)    rotate(360deg);}
+          }
+        }
         @media(prefers-reduced-motion:reduce){
           *{animation-duration:.01ms !important;transition-duration:.01ms !important;}
         }
@@ -612,7 +631,9 @@ export default function ThisIsItInfo() {
 
         {/* Ambient plane flyover */}
         {planeVisible && (
-          <div key={planeKey} className="tii-plane" aria-hidden="true">✈️</div>
+          <div key={planeKey} className="tii-plane-track" aria-hidden="true">
+            <span className="tii-plane-swirl">✈️</span>
+          </div>
         )}
 
         <nav className="tii-nav">
