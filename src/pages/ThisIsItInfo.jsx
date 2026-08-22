@@ -125,6 +125,16 @@ function EditableText({ value, onSave, multiline = false, className = '' }) {
   </span>;
 }
 
+const NAV_ITEMS = [
+  { id: 'expect',       label: 'What to Expect' },
+  { id: 'pack',         label: 'Before You Fly' },
+  { id: 'getting-there',label: 'Getting There'  },
+  { id: 'checkin',      label: 'Check-In'       },
+  { id: 'venue',        label: 'Venue'           },
+  { id: 'schedule',     label: 'Schedule'        },
+  { id: 'help',         label: 'Need Help'       },
+];
+
 export default function ThisIsItInfo() {
   const { profile, role } = useAuth();
   const navigate = useNavigate();
@@ -134,6 +144,8 @@ export default function ThisIsItInfo() {
   const [newItem, setNewItem] = useState({ day: 'fri', time: '', title: '', description: '' });
   const [isSaving, setIsSaving] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [activeSection, setActiveSection] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const canEdit = profile && (role === 'super_admin' || role === 'regional_secretary' || EXTRA_EDITOR_USER_IDS.includes(profile.id));
@@ -179,17 +191,34 @@ export default function ThisIsItInfo() {
   // nothing to watch and those sections would stay opacity:0 forever. This
   // only surfaced on cold loads — a warm React Query cache skips the
   // placeholder entirely, which is why it looked intermittent.
+  // Staggered reveal: cards within the same section animate in sequence
   useEffect(() => {
     if (isLoading) return;
     const obs = new IntersectionObserver((entries) => {
       entries.forEach(e => {
         if (e.isIntersecting) {
+          if (e.target.classList.contains('card')) {
+            const siblings = [...(e.target.parentElement?.children || [])].filter(el => el.classList.contains('card'));
+            const i = siblings.indexOf(e.target);
+            e.target.style.transitionDelay = `${i * 80}ms`;
+          }
           e.target.classList.add('in');
           obs.unobserve(e.target);
         }
       });
-    }, { threshold: 0.12 });
+    }, { threshold: 0.08 });
     document.querySelectorAll('.stop-head,.card').forEach(el => obs.observe(el));
+    return () => obs.disconnect();
+  }, [isLoading]);
+
+  // Scroll-spy: highlight the nav link for whichever section is centred in the viewport
+  useEffect(() => {
+    if (isLoading) return;
+    const ids = ['expect', 'pack', 'getting-there', 'checkin', 'venue', 'schedule', 'help'];
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) setActiveSection(e.target.id); });
+    }, { rootMargin: '-35% 0px -55% 0px', threshold: 0 });
+    ids.forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el); });
     return () => obs.disconnect();
   }, [isLoading]);
 
@@ -373,23 +402,83 @@ export default function ThisIsItInfo() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap');
         :root{--yellow:#EAC63D;--coral:#DD6F51;--purple:#6B12BC;--teal:#7EDAC3;--ink:#161717;--paper:#FBF7EE;--paper-line:#E7DFCB;--bg:#F9F7F2;--max:720px;}
-        @keyframes ticketIn{0%{opacity:0;transform:translateY(20px) scale(.98)}100%{opacity:1;transform:translateY(0) scale(1)}}
+
+        /* ── keyframes ─────────────────────────────────────────────────── */
+        @keyframes ticketIn{
+          0%{opacity:0;transform:translateY(36px) scale(.94)}
+          55%{opacity:1;transform:translateY(-8px) scale(1.015)}
+          75%{transform:translateY(4px) scale(.998)}
+          100%{opacity:1;transform:translateY(0) scale(1)}
+        }
         @keyframes logoIn{0%{opacity:0;transform:translateY(-12px)}100%{opacity:1;transform:translateY(0)}}
         @keyframes flyAcross{0%{transform:translateX(-4px)}50%{transform:translateX(4px)}100%{transform:translateX(-4px)}}
-        @keyframes popCheck{0%{transform:scale(.5);opacity:0}60%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+        @keyframes popCheck{0%{transform:scale(.5);opacity:0}60%{transform:scale(1.25)}100%{transform:scale(1);opacity:1}}
         @keyframes slideUp{0%{opacity:0;transform:translateY(12px)}100%{opacity:1;transform:translateY(0)}}
         @keyframes fadeIn{0%{opacity:0}100%{opacity:1}}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
-        .tii-body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:48px;}
-        .tii-nav{position:sticky;top:0;z-index:50;background:rgba(249,247,242,0.85);backdrop-filter:blur(8px);overflow-x:auto;overflow-y:visible;white-space:nowrap;padding:12px 14px 15px;scrollbar-width:none;border-bottom:1px solid rgba(22,23,23,0.06);}
+        @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(234,198,61,.5)}50%{box-shadow:0 0 0 5px rgba(234,198,61,0)}}
+        @keyframes dotIn{
+          0%{transform:scale(0) rotate(-25deg)}
+          65%{transform:scale(1.25) rotate(5deg)}
+          100%{transform:scale(1) rotate(0)}
+        }
+        @keyframes confettiBurst{
+          0%{transform:translate(-50%,-50%) translate(0,0) scale(1);opacity:1}
+          80%{opacity:.7}
+          100%{transform:translate(-50%,-50%) translate(var(--tx),var(--ty)) scale(0);opacity:0}
+        }
+        @keyframes sheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+        @keyframes sheetBgIn{from{opacity:0}to{opacity:1}}
+
+        /* ── base ───────────────────────────────────────────────────────── */
+        .tii-body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px;}
+        @media(min-width:641px){.tii-body{padding-bottom:48px;}}
+
+        /* ── desktop nav ────────────────────────────────────────────────── */
+        .tii-nav{position:sticky;top:0;z-index:50;background:rgba(249,247,242,0.88);backdrop-filter:blur(10px);overflow-x:auto;overflow-y:visible;white-space:nowrap;padding:12px 14px 15px;scrollbar-width:none;border-bottom:1px solid rgba(22,23,23,0.06);-webkit-overflow-scrolling:touch;}
         .tii-nav-progress{position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(22,23,23,.08);pointer-events:none;}
-        .tii-nav-plane{position:absolute;bottom:-1px;transform:translateX(-50%);font-size:14px;transition:left .1s linear;user-select:none;pointer-events:none;}
+        .tii-nav-plane{position:absolute;bottom:-1px;transform:translateX(-50%);font-size:14px;transition:left .15s linear;user-select:none;pointer-events:none;}
         .tii-nav::-webkit-scrollbar{display:none;}
-        .tii-nav a{display:inline-block;font-size:13px;font-weight:500;letter-spacing:.02em;color:var(--ink);text-decoration:none;padding:6px 12px;margin-right:4px;border-radius:6px;transition:background .2s,color .2s;}
-        .tii-nav a:hover{background:rgba(22,23,23,.08);}
+        .tii-nav-links a{display:inline-block;font-size:13px;font-weight:500;letter-spacing:.02em;color:var(--ink);text-decoration:none;padding:6px 12px;margin-right:4px;border-radius:6px;transition:background .2s,color .2s,font-weight .15s;}
+        .tii-nav-links a:hover{background:rgba(22,23,23,.08);}
+        .tii-nav-links a.active{color:var(--purple);font-weight:700;background:rgba(107,18,188,.07);}
+        @media(max-width:640px){.tii-nav-links{display:none;}}
+
+        /* ── mobile bottom bar ──────────────────────────────────────────── */
+        .tii-mobile-bar{
+          display:none;position:fixed;bottom:0;left:0;right:0;z-index:80;
+          background:rgba(249,247,242,0.95);backdrop-filter:blur(12px);
+          border-top:1px solid var(--paper-line);
+          align-items:center;justify-content:space-between;
+          padding:10px 18px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));
+        }
+        @media(max-width:640px){.tii-mobile-bar{display:flex;}}
+        .tii-mobile-bar-label{font-size:13px;font-weight:600;color:var(--ink);letter-spacing:.01em;}
+        .tii-mobile-bar-btn{font-size:13px;font-weight:700;color:var(--purple);background:none;border:none;cursor:pointer;padding:6px 0;display:flex;align-items:center;gap:5px;letter-spacing:.01em;}
+
+        /* ── bottom sheet ───────────────────────────────────────────────── */
+        .tii-sheet-bg{position:fixed;inset:0;z-index:89;background:rgba(22,23,23,.5);animation:sheetBgIn .2s ease;}
+        .tii-sheet{
+          position:fixed;bottom:0;left:0;right:0;z-index:90;
+          background:var(--paper);border-radius:20px 20px 0 0;
+          padding:8px 20px calc(20px + env(safe-area-inset-bottom,0px));
+          animation:sheetUp .32s cubic-bezier(.34,1.3,.64,1);
+          box-shadow:0 -6px 30px rgba(22,23,23,.14);
+        }
+        .tii-sheet-handle{width:40px;height:4px;background:var(--paper-line);border-radius:2px;margin:8px auto 16px;}
+        .tii-sheet-link{
+          display:flex;align-items:center;justify-content:space-between;
+          width:100%;padding:13px 0;border:none;border-bottom:1px solid var(--paper-line);
+          background:none;font-family:'Inter',sans-serif;font-size:15px;font-weight:500;
+          color:var(--ink);text-align:left;cursor:pointer;transition:color .15s;
+        }
+        .tii-sheet-link:last-child{border-bottom:none;}
+        .tii-sheet-link.active{color:var(--purple);font-weight:700;}
+        .tii-sheet-link.active::after{content:'●';font-size:8px;color:var(--purple);margin-left:8px;}
+
+        /* ── hero ticket ────────────────────────────────────────────────── */
         .tii-eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#999;font-weight:600;text-align:center;margin:0 0 12px;animation:fadeIn .6s ease;}
-        .tii-ticket{max-width:var(--max);margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 4px 16px rgba(22,23,23,.08);border:1px solid var(--paper-line);animation:ticketIn .6s ease .15s both;transition:box-shadow .25s,transform .25s;}
-        .tii-ticket:hover{box-shadow:0 8px 24px rgba(22,23,23,.12);transform:translateY(-2px);}
+        .tii-ticket{max-width:var(--max);margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 4px 16px rgba(22,23,23,.08);border:1px solid var(--paper-line);animation:ticketIn .85s cubic-bezier(.22,.61,.36,1) .1s both;transition:box-shadow .25s,transform .25s;}
+        .tii-ticket:hover{box-shadow:0 10px 28px rgba(22,23,23,.13);transform:translateY(-3px);}
         .tii-ticket-top{padding:20px 20px 16px;animation:slideUp .6s ease .2s both;}
         .tii-tk-row{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
         .tii-tk-city{font-family:'Anton',sans-serif;font-size:clamp(24px,6vw,36px);line-height:.95;letter-spacing:.01em;animation:slideUp .5s ease .25s both;}
@@ -405,30 +494,40 @@ export default function ThisIsItInfo() {
         .tii-stub::after{right:-12px;}
         .tii-stub-code{font-size:11px;letter-spacing:.08em;color:#999;text-transform:uppercase;font-family:monospace;}
         .tii-stub-badge{display:inline-block;background:var(--coral);color:#fff;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:8px 16px;border-radius:999px;white-space:nowrap;}
-        .tii-section{max-width:var(--max);margin:40px auto 0;padding:0 18px;scroll-margin-top:60px;}
-        .tii-stop-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;opacity:0;transform:translateY(16px);transition:opacity .5s,transform .5s;}
+
+        /* ── sections ───────────────────────────────────────────────────── */
+        .tii-section{max-width:var(--max);margin:40px auto 0;padding:0 18px;scroll-margin-top:58px;}
+        .tii-stop-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;opacity:0;transform:translateY(18px);transition:opacity .48s cubic-bezier(.22,.61,.36,1),transform .48s cubic-bezier(.22,.61,.36,1);}
         .tii-stop-head.in{opacity:1;transform:translateY(0);}
-        .tii-dot{flex:none;width:32px;height:32px;border-radius:50%;background:var(--yellow);color:var(--ink);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:1px solid var(--paper-line);animation:pulse 3s ease-in-out infinite;}
-        .tii-stop-head h2{font-family:'Anton',sans-serif;font-weight:400;font-size:clamp(20px,5vw,28px);letter-spacing:.01em;margin:0;}
-        .tii-card{background:#fff;border:1px solid var(--paper-line);border-radius:10px;padding:18px;box-shadow:0 2px 8px rgba(22,23,23,.06);opacity:0;transform:translateY(16px);transition:transform .4s,box-shadow .3s,opacity .4s;}
+        .tii-dot{flex:none;width:32px;height:32px;border-radius:50%;background:var(--yellow);color:var(--ink);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:1px solid rgba(234,198,61,.4);}
+        .tii-stop-head.in .tii-dot{animation:dotIn .42s cubic-bezier(.34,1.56,.64,1) .12s both, pulse 2.8s ease-in-out 0.6s infinite;}
+        .tii-stop-head h2{font-family:'Anton',sans-serif;font-weight:400;font-size:clamp(20px,5vw,28px);letter-spacing:.01em;margin:0;text-wrap:balance;}
+
+        /* ── cards ──────────────────────────────────────────────────────── */
+        .tii-card{background:#fff;border:1px solid var(--paper-line);border-radius:10px;padding:18px;box-shadow:0 2px 8px rgba(22,23,23,.06);opacity:0;transform:translateY(20px);transition:transform .42s cubic-bezier(.22,.61,.36,1),box-shadow .3s,opacity .42s cubic-bezier(.22,.61,.36,1);}
         .tii-card.in{opacity:1;transform:translateY(0);}
-        .tii-card.in:hover{transform:translateY(-3px);box-shadow:0 8px 20px rgba(22,23,23,.12);}
+        .tii-card.in:hover{transform:translateY(-4px);box-shadow:0 10px 24px rgba(22,23,23,.13);}
         .tii-card + .tii-card{margin-top:10px;}
         .tii-card p{margin:0 0 10px;line-height:1.6;font-size:15px;}
         .tii-card p:last-child{margin-bottom:0;}
         .tii-card h3{font-size:15px;font-weight:700;margin:0 0 8px;display:flex;align-items:center;gap:8px;}
+
+        /* ── checklist ──────────────────────────────────────────────────── */
         .tii-tag{display:inline-block;font-size:10px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;padding:4px 9px;border-radius:5px;border:1px solid;margin-bottom:10px;}
         .tii-tag.ready{background:rgba(126,218,195,.1);color:#3aa895;}
         .tii-checklist{list-style:none;margin:0;padding:0;}
-        .tii-checklist li{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--paper-line);font-size:14px;cursor:pointer;user-select:none;transition:padding-left .15s,background .2s,transform .2s;}
+        .tii-checklist li{position:relative;display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--paper-line);font-size:14px;cursor:pointer;user-select:none;transition:padding-left .15s,background .2s,transform .2s;}
         .tii-checklist li:hover{padding-left:4px;background:rgba(126,218,195,.05);border-radius:4px;transform:translateX(2px);}
         .tii-checklist li:last-child{border-bottom:none;}
-        .tii-box{flex:none;width:18px;height:18px;border:1.5px solid var(--ink);border-radius:4px;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:background .12s,border-color .12s;}
+        .tii-box{flex:none;width:18px;height:18px;border:1.5px solid var(--ink);border-radius:4px;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:background .12s,border-color .12s,transform .15s;}
         .tii-checklist li:hover .tii-box{border-color:var(--teal);}
         .tii-box svg{width:11px;height:11px;opacity:0;}
-        .tii-checklist li.done .tii-box{background:var(--teal);border-color:var(--teal);}
-        .tii-checklist li.done .tii-box svg{opacity:1;animation:popCheck .3s cubic-bezier(.34,1.56,.64,1) both;}
+        .tii-checklist li.done .tii-box{background:var(--teal);border-color:var(--teal);transform:scale(1.08);}
+        .tii-checklist li.done .tii-box svg{opacity:1;animation:popCheck .35s cubic-bezier(.34,1.56,.64,1) both;}
         .tii-checklist li.done .tii-txt{text-decoration:line-through;color:#999;}
+        .tii-confetti-dot{position:absolute;width:6px;height:6px;border-radius:50%;top:50%;left:9px;animation:confettiBurst .55s cubic-bezier(.36,.07,.19,.97) both;pointer-events:none;}
+
+        /* ── layout helpers ─────────────────────────────────────────────── */
         .tii-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;}
         @media(max-width:520px){.tii-grid2{grid-template-columns:1fr;}}
         .tii-mini{background:#f9f7f2;border:1px solid var(--paper-line);border-radius:8px;padding:12px;}
@@ -452,10 +551,13 @@ export default function ThisIsItInfo() {
         .tii-sched-what p{margin:0;font-size:13px;color:#666;line-height:1.5;}
         .tii-help-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;}
         @media(max-width:480px){.tii-help-grid{grid-template-columns:1fr;}}
-        @media(max-width:640px){.tii-section{padding:0 14px;}.tii-card h3{font-size:14px;}.tii-card p{font-size:14px;}}
+        @media(max-width:640px){.tii-section{padding:0 12px;}.tii-card h3{font-size:14px;}.tii-card p{font-size:14px;}.tii-card{padding:14px;}}
         .tii-dept-arrival{background:#f9f7f2;border:1px solid var(--paper-line);border-radius:8px;padding:14px;margin-top:12px;}
         .tii-dept-arrival ul{margin:6px 0 0;padding-left:18px;font-size:14px;line-height:1.7;}
         .edit-mode-indicator{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--purple);color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;z-index:99;font-size:13px;}
+        @media(prefers-reduced-motion:reduce){
+          *{animation-duration:.01ms !important;transition-duration:.01ms !important;}
+        }
       `}</style>
 
       <div className="tii-body">
@@ -475,18 +577,55 @@ export default function ThisIsItInfo() {
         )}
 
         <nav className="tii-nav">
-          <a href="#expect" onClick={(e) => { e.preventDefault(); document.getElementById('expect')?.scrollIntoView({ behavior: 'smooth' }); }}>What to Expect</a>
-          <a href="#pack" onClick={(e) => { e.preventDefault(); document.getElementById('pack')?.scrollIntoView({ behavior: 'smooth' }); }}>Before You Fly</a>
-          <a href="#getting-there" onClick={(e) => { e.preventDefault(); document.getElementById('getting-there')?.scrollIntoView({ behavior: 'smooth' }); }}>Getting There</a>
-          <a href="#checkin" onClick={(e) => { e.preventDefault(); document.getElementById('checkin')?.scrollIntoView({ behavior: 'smooth' }); }}>Check-In</a>
-          <a href="#venue" onClick={(e) => { e.preventDefault(); document.getElementById('venue')?.scrollIntoView({ behavior: 'smooth' }); }}>Venue</a>
-          <a href="#schedule" onClick={(e) => { e.preventDefault(); document.getElementById('schedule')?.scrollIntoView({ behavior: 'smooth' }); }}>Schedule</a>
-          <a href="#help" onClick={(e) => { e.preventDefault(); document.getElementById('help')?.scrollIntoView({ behavior: 'smooth' }); }}>Need Help</a>
+          <div className="tii-nav-links">
+            {NAV_ITEMS.map(item => (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                className={activeSection === item.id ? 'active' : ''}
+                onClick={(e) => { e.preventDefault(); document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth' }); }}
+              >
+                {item.label}
+              </a>
+            ))}
+          </div>
           <div className="tii-nav-progress">
-            <div style={{ height:'100%', width:`${scrollProgress * 100}%`, background:'linear-gradient(90deg, var(--coral), var(--purple))', transition:'width .1s linear' }} />
+            <div style={{ height:'100%', width:`${scrollProgress * 100}%`, background:'linear-gradient(90deg, var(--coral), var(--purple))', transition:'width .15s linear' }} />
             <div className="tii-nav-plane" style={{ left:`${scrollProgress * 100}%` }}>✈️</div>
           </div>
         </nav>
+
+        {/* Mobile bottom bar */}
+        <div className="tii-mobile-bar" onClick={() => setMobileMenuOpen(true)}>
+          <span className="tii-mobile-bar-label">
+            {NAV_ITEMS.find(n => n.id === activeSection)?.label || 'This Is It 2026'}
+          </span>
+          <button className="tii-mobile-bar-btn" aria-label="Open section menu">
+            Sections <span style={{ fontSize:11, marginLeft:2 }}>▲</span>
+          </button>
+        </div>
+
+        {/* Mobile bottom sheet */}
+        {mobileMenuOpen && (
+          <>
+            <div className="tii-sheet-bg" onClick={() => setMobileMenuOpen(false)} />
+            <div className="tii-sheet" role="dialog" aria-modal="true" aria-label="Page sections">
+              <div className="tii-sheet-handle" />
+              {NAV_ITEMS.map(item => (
+                <button
+                  key={item.id}
+                  className={`tii-sheet-link${activeSection === item.id ? ' active' : ''}`}
+                  onClick={() => {
+                    document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth' });
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Hero */}
         <div style={{ padding:'28px 16px 6px', animation:'slideUp .6s ease' }}>
@@ -914,16 +1053,52 @@ export default function ThisIsItInfo() {
   );
 }
 
+const CONFETTI_DOTS = [
+  { tx: '0px',   ty: '-22px', c: '#EAC63D' },
+  { tx: '15px',  ty: '-16px', c: '#DD6F51' },
+  { tx: '22px',  ty: '0px',   c: '#7EDAC3' },
+  { tx: '15px',  ty: '16px',  c: '#6B12BC' },
+  { tx: '0px',   ty: '22px',  c: '#EAC63D' },
+  { tx: '-15px', ty: '16px',  c: '#DD6F51' },
+  { tx: '-22px', ty: '0px',   c: '#7EDAC3' },
+  { tx: '-15px', ty: '-16px', c: '#6B12BC' },
+];
+
+function CheckConfetti() {
+  return (
+    <>
+      {CONFETTI_DOTS.map((d, i) => (
+        <span
+          key={i}
+          className="tii-confetti-dot"
+          style={{ '--tx': d.tx, '--ty': d.ty, background: d.c, animationDelay: `${i * 22}ms` }}
+        />
+      ))}
+    </>
+  );
+}
+
 function CheckItem({ children }) {
   const [done, setDone] = useState(false);
+  const [burst, setBurst] = useState(false);
+
+  function toggle() {
+    if (!done) {
+      setBurst(true);
+      setTimeout(() => setBurst(false), 650);
+    }
+    setDone(d => !d);
+  }
+
   return (
-    <li className={done ? 'done' : ''} onClick={() => setDone(d => !d)}>
+    <li className={done ? 'done' : ''} onClick={toggle}>
       <span className="tii-box">
         <svg viewBox="0 0 24 24" fill="none">
           <path d="M4 12l5 5L20 6" stroke="black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       </span>
       <span className="tii-txt">{children}</span>
+      {burst && <CheckConfetti />}
     </li>
   );
 }
