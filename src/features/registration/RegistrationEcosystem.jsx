@@ -1197,8 +1197,9 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
   const confirmedCount = useMemo(() => merged.filter(r => r.fullyConfirmed).length, [merged]);
   const totalAbsent = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.absent || 0), 0), [bySubgroup]);
   const confirmingCount = totalRegs - totalAbsent;
-  const totalFlightsNeeded = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.flightsNeeded || 0), 0), [bySubgroup]);
+  const totalAwaitingFlight = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.flightsNeeded || 0), 0), [bySubgroup]);
   const totalFlightsBooked = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.flights || 0), 0), [bySubgroup]);
+  const totalFlightsNeeded = totalFlightsBooked + totalAwaitingFlight;
   const driveCount = useMemo(() => merged.filter(r => r.inStateConfirmed && r.transportMode !== 'bus').length, [merged]);
   const busCount   = useMemo(() => merged.filter(r => r.inStateConfirmed && r.transportMode === 'bus').length, [merged]);
   const crossCountryNote = useMemo(() => {
