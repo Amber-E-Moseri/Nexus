@@ -727,11 +727,7 @@ export default function ThisIsItInfo() {
             <img src="/this-is-it-logo.png" alt="This Is It 2.0" style={{ width:'200px', maxWidth:'70%', height:'auto', animation:'logoIn .5s ease .1s both' }} />
           </div>
           <div className="tii-ticket">
-            {/* AC-style red header */}
-            <div className="tii-ticket-header">
-              <span className="tii-ticket-airline">BLW Canada</span>
-              <span className="tii-ticket-bp-label">Boarding Pass</span>
-            </div>
+
             <div className="tii-ticket-top">
               {/* City codes row */}
               <div className="tii-tk-row">
