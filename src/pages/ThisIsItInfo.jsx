@@ -242,7 +242,7 @@ export default function ThisIsItInfo() {
     function launch() {
       setPlaneKey(k => k + 1);
       setPlaneVisible(true);
-      hideTimer = setTimeout(() => setPlaneVisible(false), 5500);
+      hideTimer = setTimeout(() => setPlaneVisible(false), 7400);
     }
     const first = setTimeout(launch, 2800);
     const loop  = setInterval(launch, 24000);
@@ -570,43 +570,37 @@ export default function ThisIsItInfo() {
         .tii-dept-arrival{background:#f9f7f2;border:1px solid var(--paper-line);border-radius:8px;padding:14px;margin-top:12px;}
         .tii-dept-arrival ul{margin:6px 0 0;padding-left:18px;font-size:14px;line-height:1.7;}
         .edit-mode-indicator{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--purple);color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;z-index:99;font-size:13px;}
-        /* ── flying plane (swirl loops) ─────────────────────────────────── */
-        /* Outer track: pure horizontal movement + fade at edges           */
-        @keyframes planeMoveX{
-          0%  {transform:translateX(-80px);opacity:0;}
+        /* ── flying plane (diagonal swirl loops) ────────────────────────── */
+        /* Outer track: diagonal BL → TR + fade at edges                  */
+        @keyframes planeDiag{
+          0%  {transform:translate(-90px,85vh);opacity:0;}
           4%  {opacity:1;}
-          94% {opacity:1;}
-          100%{transform:translateX(calc(100vw + 80px));opacity:0;}
+          93% {opacity:1;}
+          100%{transform:translate(calc(100vw + 90px),-8vh);opacity:0;}
         }
-        /* Inner swirl: full circular loop — up → back → down → forward   */
-        @keyframes planeLoop{
-          0%  {transform:translateY(0)    rotate(0deg);}
-          25% {transform:translateY(-68px) rotate(90deg);}
-          50% {transform:translateY(0)    rotate(180deg);}
-          75% {transform:translateY(68px)  rotate(270deg);}
-          100%{transform:translateY(0)    rotate(360deg);}
+        /* Inner circle: X+Y at 90° phase offset = true circular orbit    */
+        /* --r is the orbit radius; set per breakpoint via the element     */
+        @keyframes planeCircle{
+          0%  {transform:translate(0,calc(var(--r) * -1))   rotate(0deg);}
+          25% {transform:translate(var(--r),0)               rotate(90deg);}
+          50% {transform:translate(0,var(--r))               rotate(180deg);}
+          75% {transform:translate(calc(var(--r) * -1),0)   rotate(270deg);}
+          100%{transform:translate(0,calc(var(--r) * -1))   rotate(360deg);}
         }
         .tii-plane-track{
-          position:fixed;top:30%;left:0;z-index:65;pointer-events:none;
+          position:fixed;top:0;left:0;z-index:65;pointer-events:none;
           will-change:transform,opacity;
-          animation:planeMoveX 6.4s linear both;
+          animation:planeDiag 7s linear both;
         }
         .tii-plane-swirl{
           display:block;font-size:26px;line-height:1;
+          --r:52px;
           filter:drop-shadow(0 0 6px rgba(107,18,188,.5)) drop-shadow(0 0 18px rgba(234,198,61,.45));
-          animation:planeLoop 1.6s linear infinite;
+          animation:planeCircle 1.8s linear infinite;
           will-change:transform;
         }
         @media(max-width:640px){
-          .tii-plane-swirl{font-size:20px;}
-          .tii-plane-track{top:20%;}
-          @keyframes planeLoop{
-            0%  {transform:translateY(0)    rotate(0deg);}
-            25% {transform:translateY(-44px) rotate(90deg);}
-            50% {transform:translateY(0)    rotate(180deg);}
-            75% {transform:translateY(44px)  rotate(270deg);}
-            100%{transform:translateY(0)    rotate(360deg);}
-          }
+          .tii-plane-swirl{font-size:20px;--r:34px;}
         }
         @media(prefers-reduced-motion:reduce){
           *{animation-duration:.01ms !important;transition-duration:.01ms !important;}
