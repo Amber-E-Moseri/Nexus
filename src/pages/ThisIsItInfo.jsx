@@ -146,6 +146,7 @@ export default function ThisIsItInfo() {
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const [activeSection, setActiveSection] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [countdown, setCountdown] = useState({ days: 0, hours: 0, mins: 0, secs: 0 });
 
   const queryClient = useQueryClient();
 
@@ -222,6 +223,23 @@ export default function ThisIsItInfo() {
     ids.forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el); });
     return () => obs.disconnect();
   }, [isLoading]);
+
+  useEffect(() => {
+    const target = new Date('2026-08-28T09:00:00-04:00');
+    function tick() {
+      const diff = target - Date.now();
+      if (diff <= 0) { setCountdown({ days:0, hours:0, mins:0, secs:0 }); return; }
+      setCountdown({
+        days:  Math.floor(diff / 86400000),
+        hours: Math.floor((diff % 86400000) / 3600000),
+        mins:  Math.floor((diff % 3600000)  / 60000),
+        secs:  Math.floor((diff % 60000)    / 1000),
+      });
+    }
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -432,7 +450,13 @@ export default function ThisIsItInfo() {
         @keyframes sheetBgIn{from{opacity:0}to{opacity:1}}
 
         /* ── base ───────────────────────────────────────────────────────── */
-        .tii-body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px;}
+        @keyframes bgDrift{
+          0%,100%{background-color:#F9F6EF;}
+          50%{background-color:#FBF2E8;}
+        }
+        .tii-body{margin:0;color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px;
+          animation:bgDrift 12s ease-in-out infinite;
+        }
         @media(min-width:641px){.tii-body{padding-bottom:48px;}}
 
         /* ── desktop nav ────────────────────────────────────────────────── */
@@ -557,6 +581,41 @@ export default function ThisIsItInfo() {
         .tii-dept-arrival{background:#f9f7f2;border:1px solid var(--paper-line);border-radius:8px;padding:14px;margin-top:12px;}
         .tii-dept-arrival ul{margin:6px 0 0;padding-left:18px;font-size:14px;line-height:1.7;}
         .edit-mode-indicator{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--purple);color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;z-index:99;font-size:13px;}
+        /* ── pulse ring (fee card) ───────────────────────────────────────── */
+        @keyframes pulseRing{
+          0%  {box-shadow:0 0 0 0 rgba(107,18,188,.30);}
+          65% {box-shadow:0 0 0 14px rgba(107,18,188,0);}
+          100%{box-shadow:0 0 0 0 rgba(107,18,188,0);}
+        }
+        .tii-fee-pulse{animation:pulseRing 2.6s ease-out infinite;}
+
+        /* ── countdown ───────────────────────────────────────────────────── */
+        @keyframes cdFlip{
+          from{transform:translateY(-40%) scaleY(.4);opacity:0;}
+          to  {transform:translateY(0)    scaleY(1);opacity:1;}
+        }
+        .tii-countdown{display:flex;justify-content:center;gap:14px;padding:18px 16px 6px;}
+        .tii-cd-unit{display:flex;flex-direction:column;align-items:center;gap:5px;}
+        .tii-cd-card{
+          min-width:58px;padding:6px 10px;
+          background:var(--paper);border:1px solid var(--paper-line);border-radius:10px;
+          box-shadow:0 2px 8px rgba(22,23,23,.07);
+          display:flex;align-items:center;justify-content:center;overflow:hidden;
+        }
+        .tii-cd-num{
+          display:block;font-family:'Anton',sans-serif;font-size:32px;font-weight:400;
+          letter-spacing:.02em;color:var(--purple);line-height:1;
+          animation:cdFlip .28s cubic-bezier(.34,1.3,.64,1);
+        }
+        .tii-cd-label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#999;font-weight:600;}
+        .tii-cd-sep{font-family:'Anton',sans-serif;font-size:28px;color:var(--paper-line);align-self:flex-start;padding-top:8px;}
+        .tii-cd-event{text-align:center;font-size:12px;color:#999;letter-spacing:.05em;text-transform:uppercase;padding-bottom:4px;}
+        @media(max-width:640px){
+          .tii-cd-card{min-width:46px;padding:5px 8px;}
+          .tii-cd-num{font-size:26px;}
+          .tii-countdown{gap:8px;}
+        }
+
         @media(prefers-reduced-motion:reduce){
           *{animation-duration:.01ms !important;transition-duration:.01ms !important;}
         }
@@ -678,6 +737,22 @@ export default function ThisIsItInfo() {
           </p>
         </div>
 
+        {/* Countdown */}
+        {countdown.days >= 0 && (
+          <div>
+            <div className="tii-cd-event">Aug 28 · This Is It 2026</div>
+            <div className="tii-countdown">
+              <FlipDigit value={countdown.days}  label="Days"    />
+              <span className="tii-cd-sep">:</span>
+              <FlipDigit value={countdown.hours} label="Hours"   />
+              <span className="tii-cd-sep">:</span>
+              <FlipDigit value={countdown.mins}  label="Minutes" />
+              <span className="tii-cd-sep">:</span>
+              <FlipDigit value={countdown.secs}  label="Seconds" />
+            </div>
+          </div>
+        )}
+
         {/* What to Expect */}
         <section className="tii-section" id="expect" style={{ marginTop:'40px' }}>
           <div className="tii-stop-head stop-head">
@@ -729,7 +804,7 @@ export default function ThisIsItInfo() {
               <h2>Before You Fly</h2>
             </div>
           </div>
-          <div className="tii-card card" style={{ marginBottom:'10px', background:'rgba(234,198,61,0.07)', border:'1px solid rgba(234,198,61,0.45)' }}>
+          <div className="tii-card card tii-fee-pulse" style={{ marginBottom:'10px', background:'rgba(234,198,61,0.07)', border:'1px solid rgba(234,198,61,0.45)' }}>
             <h3>💳 Registration fee</h3>
             <p>
               {editMode
@@ -1053,6 +1128,19 @@ export default function ThisIsItInfo() {
         </footer>
       </div>
     </>
+  );
+}
+
+/* ── Countdown flip digit ──────────────────────────────────────────── */
+function FlipDigit({ value, label }) {
+  const str = String(value).padStart(2, '0');
+  return (
+    <div className="tii-cd-unit">
+      <div className="tii-cd-card">
+        <span key={str} className="tii-cd-num">{str}</span>
+      </div>
+      <div className="tii-cd-label">{label}</div>
+    </div>
   );
 }
 
