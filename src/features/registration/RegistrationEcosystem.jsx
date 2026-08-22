@@ -36,6 +36,25 @@ const FLIGHT_FIELD_TO_DB = {
 };
 
 
+// Parse any raw time value to minutes-since-midnight for chronological sort
+function timeToMinutes(raw) {
+  if (!raw) return Infinity;
+  const s = String(raw).trim();
+  const ampm = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (ampm) {
+    let h = parseInt(ampm[1], 10);
+    const m = parseInt(ampm[2], 10);
+    if (/pm/i.test(ampm[3]) && h !== 12) h += 12;
+    if (/am/i.test(ampm[3]) && h === 12) h = 0;
+    return h * 60 + m;
+  }
+  const iso = s.match(/T(\d{2}):(\d{2})/);
+  if (iso) return parseInt(iso[1], 10) * 60 + parseInt(iso[2], 10);
+  const h24 = s.match(/^(\d{1,2}):(\d{2})/);
+  if (h24) return parseInt(h24[1], 10) * 60 + parseInt(h24[2], 10);
+  return Infinity;
+}
+
 // Convert any raw time value to "h:mm AM/PM" for display
 function fmtTime(raw) {
   if (!raw) return '';
@@ -253,7 +272,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     event_name: 'This Is It 2.0', sprint_pattern: '%This Is It 2.0%',
     early_cutoff_at: '2026-08-06T00:00:00Z', early_fee: 250, standard_fee: 350,
     local_detection_regex: 'manitoba|winnipeg',
-    exempt_fellowships: ['BLW University of Manitoba', 'BLW University of Winnipeg'],
+    exempt_fellowships: ['BLW University of Manitoba', 'BLW University of Winnipeg', 'BLW University College of North'],
     public_token_key: 'tii2_public_token', tab_config: [],
   };
   const [tab, setTab] = useState('overview');
@@ -581,7 +600,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   );
 
   const absentEmailsForMerge = useMemo(
-    () => new Set(workingListDb.filter(p => p.absent).map(p => p.email)),
+    () => new Set(workingListDb.filter(p => p.absent).flatMap(p => [p.email, p.linked_registration_email].filter(Boolean))),
     [workingListDb],
   );
 
@@ -1032,6 +1051,38 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
           .reg-header   { padding: 10px 12px; }
           .reg-content  { padding: 8px; }
         }
+
+        /* ── By Subgroup table → cards on mobile ── */
+        @media (max-width: 640px) {
+          .sg-table thead { display: none; }
+          .sg-table, .sg-table tbody { display: block; }
+          .sg-table tr {
+            display: block;
+            background: ${C.paper};
+            border: 1px solid ${C.line};
+            border-radius: 10px;
+            margin-bottom: 10px;
+            padding: 12px 14px;
+          }
+          .sg-table td {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 4px 0; font-size: 13px; border: none;
+          }
+          .sg-table td:first-child {
+            font-size: 15px; font-weight: 700;
+            padding-bottom: 10px; margin-bottom: 4px;
+            border-bottom: 1px solid ${C.line};
+            justify-content: flex-start;
+          }
+          .sg-table td[data-label]::before {
+            content: attr(data-label);
+            color: ${C.mute}; font-size: 11px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.04em;
+            flex-shrink: 0;
+          }
+          .sg-table td:first-child::before { display: none; }
+          .sg-table .sg-name-popup { display: none !important; }
+        }
       `}</style>
 
       {/* header */}
@@ -1169,7 +1220,7 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
 
       <Card style={{ padding: 0, overflow: 'visible' }}>
         <div style={{ overflowX: 'auto', minWidth: 0, overflow: 'visible' }}>
-        <table>
+        <table className="sg-table">
           <thead>
             <tr>
               <th>Subgroup</th>
@@ -1191,19 +1242,18 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
                 <tr key={sg}>
                   <td style={{ fontWeight: 600 }}>{sg}</td>
                   {showTargetCol && (
-                    <td style={{ minWidth: 80 }}>
+                    <td data-label="Target" style={{ minWidth: 80 }}>
                       {canSetTargets
                         ? <input type="number" style={{ width: 60 }} value={t.reg ?? ''} placeholder="0"
                             onChange={e => setTarget(sg, 'reg', e.target.value)} />
                         : <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>{t.reg || '—'}</span>}
                     </td>
                   )}
-                  <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>
+                  <td data-label="Regs" style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>
                     {s.total}
                   </td>
-                  <td className="sg-hover-td" style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, position: 'relative' }}>
-                    <span style={{ color: C.green }}>{s.confirmed || 0}</span>
-                    <span style={{ color: C.mute }}> / {confirming}</span>
+                  <td data-label="Confirmed" className="sg-hover-td" style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, position: 'relative' }}>
+                    <span><span style={{ color: C.green }}>{s.confirmed || 0}</span><span style={{ color: C.mute }}> / {confirming}</span></span>
                     {(confirmedPeople[sg]?.length || confirmingPeople[sg]?.length) ? (
                       <div className="sg-name-popup" style={{
                         display: 'none', position: 'absolute', zIndex: 200, top: 'calc(100% + 2px)', left: 0,
@@ -1226,11 +1276,11 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
                       </div>
                     ) : null}
                   </td>
-                  <td className="sg-hover-td" style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: C.mute, position: 'relative' }}>
+                  <td data-label="Flights needed" className="sg-hover-td" style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5, color: C.mute, position: 'relative' }}>
                     {s.flightsNeeded || 0}
                     <HoverNameList people={flightNeededPeople[sg]} label="No flights" color={C.mute} />
                   </td>
-                  <td><Pill tone={tone}>{statusLabel(confirmedPct)}</Pill></td>
+                  <td data-label="Status"><Pill tone={tone}>{statusLabel(confirmedPct)}</Pill></td>
                 </tr>
               );
             })}
@@ -2577,7 +2627,7 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
       groups[key].push(r);
     });
     Object.values(groups).forEach(g =>
-      g.sort((a, b) => (a.arrivalTime || '').localeCompare(b.arrivalTime || '')),
+      g.sort((a, b) => timeToMinutes(a.arrivalTime) - timeToMinutes(b.arrivalTime)),
     );
     return Object.entries(groups).sort(([a], [b]) => {
       if (a === 'Unknown') return 1;
@@ -2595,7 +2645,7 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
       groups[key].push(r);
     });
     Object.values(groups).forEach(g =>
-      g.sort((a, b) => (a.departureTime || '').localeCompare(b.departureTime || '')),
+      g.sort((a, b) => timeToMinutes(a.departureTime) - timeToMinutes(b.departureTime)),
     );
     return Object.entries(groups).sort(([a], [b]) => {
       if (a === 'Unknown') return 1;
