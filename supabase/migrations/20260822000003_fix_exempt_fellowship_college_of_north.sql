@@ -1,18 +1,16 @@
--- Fix exempt fellowship name in the active event config.
+-- Fix exempt fellowship name in the active event config (text[] column).
 -- "BLW University College of North" (missing "the") was stored incorrectly.
--- Remove both the wrong and correct variants, then append the correct one
--- to avoid any duplicate regardless of prior state.
+-- Remove both variants then append the correct one to avoid duplicates.
 
 UPDATE event_configs
-SET exempt_fellowships = (
-  COALESCE(
-    (
-      SELECT jsonb_agg(elem)
-      FROM jsonb_array_elements(COALESCE(exempt_fellowships, '[]'::jsonb)) AS elem
-      WHERE elem <> '"BLW University College of North"'::jsonb
-        AND elem <> '"BLW University College of the North"'::jsonb
+SET exempt_fellowships = array_append(
+  array_remove(
+    array_remove(
+      COALESCE(exempt_fellowships, ARRAY[]::text[]),
+      'BLW University College of North'
     ),
-    '[]'::jsonb
-  ) || '["BLW University College of the North"]'::jsonb
+    'BLW University College of the North'
+  ),
+  'BLW University College of the North'
 )
 WHERE is_active = true;
