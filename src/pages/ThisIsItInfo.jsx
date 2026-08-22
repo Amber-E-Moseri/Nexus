@@ -775,8 +775,11 @@ export default function ThisIsItInfo() {
                 <span className="tii-stub-code">TII · 2026 · BLW CAN · WINNIPEG</span>
               </div>
               <div className="tii-barcode">
-                {[3,6,2,8,4,6,3,2,7,4,6,3,5,7,3,6,2,5,8,3,6,4,7,3].map((h,i) => (
-                  <div key={i} className="tii-barcode-bar" style={{ width: i % 3 === 0 ? '3px' : '1.5px', height: `${h * 4 + 10}px` }} />
+                {Array.from({length: 36}, (_, i) => (
+                  <div key={i} className="tii-barcode-bar" style={{
+                    width: i % 7 === 0 ? '3px' : i % 3 === 0 ? '2px' : '1.5px',
+                    height: `${8 + Math.round((i / 35) * 30)}px`
+                  }} />
                 ))}
               </div>
             </div>
