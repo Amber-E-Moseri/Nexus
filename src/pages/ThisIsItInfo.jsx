@@ -239,10 +239,10 @@ export default function ThisIsItInfo() {
   useEffect(() => {
     if (isLoading || !tiiRef.current) return;
     twemoji.parse(tiiRef.current, {
-      folder: '72x72',
-      ext: '.png',
+      folder: 'svg',
+      ext: '.svg',
       base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/',
-      attributes: () => ({ style: 'height:1.1em;width:1.1em;vertical-align:-0.15em;display:inline-block' }),
+      attributes: () => ({ style: 'height:1.25em;width:1.25em;vertical-align:-0.22em;display:inline-block' }),
     });
   }, [isLoading]);
 
