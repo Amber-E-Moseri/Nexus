@@ -1480,7 +1480,7 @@ function WorkingListRow({ p, useDb, canEdit, isLimited, registrations, onMarkAbs
         {canEdit && !isLimited && (
           <td>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              {!p.registered && !p.absent && (
+              {!p.absent && (
                 <button onClick={() => setShowAbsent(true)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.amber}`, background: 'transparent', color: C.amber, cursor: 'pointer', fontFamily: 'Inter' }}>Absent</button>
               )}
               {p.absent && (
