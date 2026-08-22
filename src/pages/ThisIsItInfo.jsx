@@ -524,8 +524,7 @@ export default function ThisIsItInfo() {
         .tii-stub::after{right:-12px;}
         .tii-stub-left{display:flex;flex-direction:column;gap:2px;}
         .tii-stub-code{font-size:10px;letter-spacing:.1em;color:#aaa;text-transform:uppercase;font-family:monospace;}
-        .tii-stub-btn{display:inline-block;background:var(--coral);color:#fff;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:7px 14px;border-radius:999px;white-space:nowrap;text-decoration:none;border:none;cursor:pointer;}
-        .tii-stub-btn:hover{opacity:.88;}
+        .tii-stub-btn{display:inline-block;background:var(--yellow);color:var(--ink);font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:7px 14px;border-radius:999px;white-space:nowrap;}
         /* barcode */
         .tii-barcode{display:flex;align-items:flex-end;gap:1px;height:38px;}
         .tii-barcode-bar{display:inline-block;background:#1a1a1a;border-radius:0;}
@@ -759,7 +758,7 @@ export default function ThisIsItInfo() {
             {/* Tear-off stub with barcode */}
             <div className="tii-stub">
               <div className="tii-stub-left">
-                <a href="/registration" className="tii-stub-btn">Bigger · Bolder · Best for God</a>
+                <span className="tii-stub-btn">Bigger · Bolder · Best for God</span>
                 <span className="tii-stub-code" style={{ marginTop:'6px' }}>TII 2.0 · 2026 · BLW CAN · WINNIPEG</span>
               </div>
               <div className="tii-barcode">
