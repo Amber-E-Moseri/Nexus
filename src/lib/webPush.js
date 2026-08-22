@@ -75,6 +75,21 @@ export async function requestPushPermission() {
       return false
     }
 
+    // Seed mobile=true for all core notification types (fire-and-forget — don't
+    // block the subscribe flow if this fails).
+    const coreTypes = [
+      'task_assigned', 'task_comment', 'task_due_soon', 'task_status_changed',
+      'mention', 'sprint_added', 'meeting_scheduled', 'meeting_reminder',
+      'subtask_completed', 'dependency_cleared', 'task_completed',
+    ]
+    supabase
+      .from('user_notification_prefs')
+      .upsert(
+        coreTypes.map((t) => ({ user_id: user.id, notification_type: t, mobile: true })),
+        { onConflict: 'user_id,notification_type', ignoreDuplicates: false },
+      )
+      .catch(() => {})
+
     localStorage.setItem('notification-permission-granted', 'true')
     console.log('Push subscription saved successfully')
     return true

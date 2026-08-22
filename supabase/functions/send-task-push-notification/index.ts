@@ -65,6 +65,21 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Check per-type mobile preference before anything else — avoids fetching
+    // subscription when the user hasn't opted in for this notification type.
+    const notifTypeForPref = body?.notificationType ?? type
+    if (notifTypeForPref) {
+      const { data: pref } = await supabase
+        .from('user_notification_prefs')
+        .select('mobile')
+        .eq('user_id', userId)
+        .eq('notification_type', notifTypeForPref)
+        .single()
+      if (!pref?.mobile) {
+        return jsonResponse(200, { sent: 0, reason: 'Mobile push not enabled for this notification type' })
+      }
+    }
+
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('push_subscription, push_enabled')

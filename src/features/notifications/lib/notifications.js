@@ -51,7 +51,8 @@ export async function createNotification(userId, type, payload) {
 
   if (error) throw error
 
-  dispatchPush(userId, data)
+  // Push is dispatched by the dispatch_push_on_notification_insert DB trigger —
+  // no client-side dispatchPush call needed here.
 
   return data
 }
