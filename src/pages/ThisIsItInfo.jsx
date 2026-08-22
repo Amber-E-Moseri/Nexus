@@ -759,18 +759,16 @@ export default function ThisIsItInfo() {
             {/* Tear-off stub with barcode */}
             <div className="tii-stub">
               <div className="tii-stub-left">
-                <span className="tii-stub-code">TII · 2026 · BLW CAN · WINNIPEG</span>
-              </div>
-              <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'8px' }}>
                 <a href="/registration" className="tii-stub-btn">Bigger · Bolder · Best for God</a>
-                <div className="tii-barcode">
-                  {Array.from({length: 36}, (_, i) => (
-                    <div key={i} className="tii-barcode-bar" style={{
-                      width: i % 7 === 0 ? '3px' : i % 3 === 0 ? '2px' : '1.5px',
-                      height: `${8 + Math.round((i / 35) * 30)}px`
-                    }} />
-                  ))}
-                </div>
+                <span className="tii-stub-code" style={{ marginTop:'6px' }}>TII · 2026 · BLW CAN · WINNIPEG</span>
+              </div>
+              <div className="tii-barcode">
+                {Array.from({length: 36}, (_, i) => (
+                  <div key={i} className="tii-barcode-bar" style={{
+                    width: i % 7 === 0 ? '3px' : i % 3 === 0 ? '2px' : '1.5px',
+                    height: `${8 + Math.round((i / 35) * 30)}px`
+                  }} />
+                ))}
               </div>
             </div>
           </div>
