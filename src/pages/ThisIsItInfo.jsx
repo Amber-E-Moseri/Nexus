@@ -147,7 +147,6 @@ export default function ThisIsItInfo() {
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const [activeSection, setActiveSection] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [countdown, setCountdown] = useState({ days: 0, hours: 0, mins: 0, secs: 0 });
   const tiiRef = useRef(null);
 
   const queryClient = useQueryClient();
@@ -229,29 +228,13 @@ export default function ThisIsItInfo() {
   useEffect(() => {
     if (isLoading || !tiiRef.current) return;
     twemoji.parse(tiiRef.current, {
-      folder: 'svg',
-      ext: '.svg',
+      folder: '72x72',
+      ext: '.png',
       base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/',
       attributes: () => ({ style: 'height:1.1em;width:1.1em;vertical-align:-0.15em;display:inline-block' }),
     });
   }, [isLoading]);
 
-  useEffect(() => {
-    const target = new Date('2026-08-28T09:00:00-04:00');
-    function tick() {
-      const diff = target - Date.now();
-      if (diff <= 0) { setCountdown({ days:0, hours:0, mins:0, secs:0 }); return; }
-      setCountdown({
-        days:  Math.floor(diff / 86400000),
-        hours: Math.floor((diff % 86400000) / 3600000),
-        mins:  Math.floor((diff % 3600000)  / 60000),
-        secs:  Math.floor((diff % 60000)    / 1000),
-      });
-    }
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -462,13 +445,16 @@ export default function ThisIsItInfo() {
         @keyframes sheetBgIn{from{opacity:0}to{opacity:1}}
 
         /* ── base ───────────────────────────────────────────────────────── */
-        @keyframes bgDrift{
-          0%,100%{background-color:#F9F6EF;}
-          50%{background-color:#FBF2E8;}
-        }
-        .tii-body{margin:0;color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px;
+        /* Gradient drift: composited opacity on a fixed overlay (no paint) */
+        @keyframes bgDrift{0%,100%{opacity:0;}50%{opacity:1;}}
+        .tii-body{margin:0;background:#F9F6EF;color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px;position:relative;}
+        .tii-body::before{
+          content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+          background:#FBF2E8;
           animation:bgDrift 12s ease-in-out infinite;
+          will-change:opacity;
         }
+        .tii-body > *{position:relative;z-index:1;}
         @media(min-width:641px){.tii-body{padding-bottom:48px;}}
 
         /* ── desktop nav ────────────────────────────────────────────────── */
@@ -593,13 +579,18 @@ export default function ThisIsItInfo() {
         .tii-dept-arrival{background:#f9f7f2;border:1px solid var(--paper-line);border-radius:8px;padding:14px;margin-top:12px;}
         .tii-dept-arrival ul{margin:6px 0 0;padding-left:18px;font-size:14px;line-height:1.7;}
         .edit-mode-indicator{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--purple);color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;z-index:99;font-size:13px;}
-        /* ── pulse ring (fee card) ───────────────────────────────────────── */
+        /* ── pulse ring (fee card) — composited transform+opacity ────────── */
         @keyframes pulseRing{
-          0%  {box-shadow:0 0 0 0 rgba(107,18,188,.30);}
-          65% {box-shadow:0 0 0 14px rgba(107,18,188,0);}
-          100%{box-shadow:0 0 0 0 rgba(107,18,188,0);}
+          0%  {transform:scale(1);   opacity:.55;}
+          100%{transform:scale(1.07);opacity:0;}
         }
-        .tii-fee-pulse{animation:pulseRing 2.6s ease-out infinite;}
+        .tii-fee-pulse{position:relative;}
+        .tii-fee-pulse::after{
+          content:'';position:absolute;inset:-1px;border-radius:10px;
+          border:2px solid rgba(107,18,188,.55);
+          animation:pulseRing 2.6s ease-out infinite;
+          will-change:transform,opacity;pointer-events:none;
+        }
 
         /* ── countdown ───────────────────────────────────────────────────── */
         @keyframes cdFlip{
@@ -749,21 +740,8 @@ export default function ThisIsItInfo() {
           </p>
         </div>
 
-        {/* Countdown */}
-        {countdown.days >= 0 && (
-          <div>
-            <div className="tii-cd-event">Aug 28 · This Is It 2026</div>
-            <div className="tii-countdown">
-              <FlipDigit value={countdown.days}  label="Days"    />
-              <span className="tii-cd-sep">:</span>
-              <FlipDigit value={countdown.hours} label="Hours"   />
-              <span className="tii-cd-sep">:</span>
-              <FlipDigit value={countdown.mins}  label="Minutes" />
-              <span className="tii-cd-sep">:</span>
-              <FlipDigit value={countdown.secs}  label="Seconds" />
-            </div>
-          </div>
-        )}
+        {/* Countdown — own component so 1-second ticks don't re-render the page */}
+        <Countdown />
 
         {/* What to Expect */}
         <section className="tii-section" id="expect" style={{ marginTop:'40px' }}>
@@ -1143,7 +1121,7 @@ export default function ThisIsItInfo() {
   );
 }
 
-/* ── Countdown flip digit ──────────────────────────────────────────── */
+/* ── Countdown (isolated component so tick never re-renders the page) ── */
 function FlipDigit({ value, label }) {
   const str = String(value).padStart(2, '0');
   return (
@@ -1152,6 +1130,39 @@ function FlipDigit({ value, label }) {
         <span key={str} className="tii-cd-num">{str}</span>
       </div>
       <div className="tii-cd-label">{label}</div>
+    </div>
+  );
+}
+function Countdown() {
+  const [cd, setCd] = useState({ days:0, hours:0, mins:0, secs:0 });
+  useEffect(() => {
+    const target = new Date('2026-08-28T09:00:00-04:00');
+    function tick() {
+      const diff = target - Date.now();
+      if (diff <= 0) { setCd({ days:0, hours:0, mins:0, secs:0 }); return; }
+      setCd({
+        days:  Math.floor(diff / 86400000),
+        hours: Math.floor((diff % 86400000) / 3600000),
+        mins:  Math.floor((diff % 3600000)  / 60000),
+        secs:  Math.floor((diff % 60000)    / 1000),
+      });
+    }
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div>
+      <div className="tii-cd-event">Aug 28 · This Is It 2026</div>
+      <div className="tii-countdown">
+        <FlipDigit value={cd.days}  label="Days"    />
+        <span className="tii-cd-sep">:</span>
+        <FlipDigit value={cd.hours} label="Hours"   />
+        <span className="tii-cd-sep">:</span>
+        <FlipDigit value={cd.mins}  label="Minutes" />
+        <span className="tii-cd-sep">:</span>
+        <FlipDigit value={cd.secs}  label="Seconds" />
+      </div>
     </div>
   );
 }
