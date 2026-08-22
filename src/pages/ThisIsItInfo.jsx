@@ -146,6 +146,8 @@ export default function ThisIsItInfo() {
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const [activeSection, setActiveSection] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [planeKey, setPlaneKey] = useState(0);
+  const [planeVisible, setPlaneVisible] = useState(false);
   const queryClient = useQueryClient();
 
   const canEdit = profile && (role === 'super_admin' || role === 'regional_secretary' || EXTRA_EDITOR_USER_IDS.includes(profile.id));
@@ -232,6 +234,19 @@ export default function ThisIsItInfo() {
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Plane flies across: once on load, then every 24 s
+  useEffect(() => {
+    let hideTimer;
+    function launch() {
+      setPlaneKey(k => k + 1);
+      setPlaneVisible(true);
+      hideTimer = setTimeout(() => setPlaneVisible(false), 5500);
+    }
+    const first = setTimeout(launch, 2800);
+    const loop  = setInterval(launch, 24000);
+    return () => { clearTimeout(first); clearInterval(loop); clearTimeout(hideTimer); };
   }, []);
 
   const handleSaveField = async (field, value) => {
@@ -555,6 +570,25 @@ export default function ThisIsItInfo() {
         .tii-dept-arrival{background:#f9f7f2;border:1px solid var(--paper-line);border-radius:8px;padding:14px;margin-top:12px;}
         .tii-dept-arrival ul{margin:6px 0 0;padding-left:18px;font-size:14px;line-height:1.7;}
         .edit-mode-indicator{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--purple);color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;z-index:99;font-size:13px;}
+        /* ── flying plane ───────────────────────────────────────────────── */
+        @keyframes planeFly{
+          0%  {transform:translateX(-80px)             translateY(0px)   rotate(6deg);opacity:0;}
+          3%  {opacity:1;}
+          20% {transform:translateX(20vw)              translateY(-22px) rotate(4deg);}
+          40% {transform:translateX(40vw)              translateY(-10px) rotate(2deg);}
+          60% {transform:translateX(60vw)              translateY(-28px) rotate(3deg);}
+          80% {transform:translateX(80vw)              translateY(-8px)  rotate(4deg);}
+          97% {opacity:1;}
+          100%{transform:translateX(calc(100vw + 80px)) translateY(-18px) rotate(3deg);opacity:0;}
+        }
+        .tii-plane{
+          position:fixed;top:22%;left:0;z-index:65;pointer-events:none;
+          font-size:28px;line-height:1;
+          filter:drop-shadow(0 2px 8px rgba(107,18,188,.35)) drop-shadow(0 0 16px rgba(234,198,61,.4));
+          animation:planeFly 5.2s cubic-bezier(.4,0,.2,1) both;
+          will-change:transform,opacity;
+        }
+        @media(max-width:640px){.tii-plane{font-size:22px;top:18%;}}
         @media(prefers-reduced-motion:reduce){
           *{animation-duration:.01ms !important;transition-duration:.01ms !important;}
         }
@@ -574,6 +608,11 @@ export default function ThisIsItInfo() {
           >
             {editMode ? '✕ Done' : '✏️ Edit'}
           </button>
+        )}
+
+        {/* Ambient plane flyover */}
+        {planeVisible && (
+          <div key={planeKey} className="tii-plane" aria-hidden="true">✈️</div>
         )}
 
         <nav className="tii-nav">
