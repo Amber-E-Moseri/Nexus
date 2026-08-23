@@ -230,8 +230,8 @@ function ProgressBar({ pct, tone }) {
   );
 }
 
-function statusTone(pct) { return pct >= 75 ? 'green' : pct >= 50 ? 'amber' : 'red'; }
-function statusLabel(pct) { return pct >= 75 ? 'On track' : pct >= 50 ? 'Behind' : 'At risk'; }
+function statusTone(pct) { return pct >= 75 ? 'green' : 'amber'; }
+function statusLabel(pct) { return pct >= 75 ? 'On track' : 'Behind'; }
 
 function Card({ children, style, ...rest }) {
   return <div {...rest} style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, ...style }}>{children}</div>;
@@ -1086,8 +1086,6 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
           </div>
         </div>
         <div className="reg-header-stats">
-          <span>roster: {rosterFiltered.length > 0 ? rosterFiltered.length : '—'}</span>
-          <span>reg: {registrationsFiltered.length > 0 ? registrationsFiltered.length : '—'}</span>
         </div>
       </div>
 
@@ -1295,8 +1293,7 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
         <span style={{ fontSize: 11.5, color: C.mute, fontFamily: 'JetBrains Mono', textTransform: 'uppercase', letterSpacing: 0.05 }}>Status:</span>
         {[
           { tone: 'green', label: 'On track', desc: '≥ 75% confirmed' },
-          { tone: 'amber', label: 'Behind',   desc: '50–74% confirmed' },
-          { tone: 'red',   label: 'At risk',  desc: '< 50% confirmed' },
+          { tone: 'amber', label: 'Behind',   desc: '< 75% confirmed' },
         ].map(({ tone, label, desc }) => (
           <div key={tone} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Pill tone={tone}>{label}</Pill>
