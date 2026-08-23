@@ -69,7 +69,10 @@ export function NotificationsProvider({ children }) {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          setNotifications((prev) => [payload.new, ...prev])
+          // Only prepend to the list if it's been loaded — otherwise the panel
+          // would open to a partial list (live arrivals only, missing history).
+          // The DB fetch on first open picks up everything correctly.
+          setNotifications((prev) => listLoaded ? [payload.new, ...prev] : prev)
           setUnreadCount((prev) => prev + 1)
           // Fire desktop alert if browser permission granted.
           // Use new Notification() directly — avoids the serviceWorker.ready hang

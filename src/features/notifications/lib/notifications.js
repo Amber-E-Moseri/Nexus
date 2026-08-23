@@ -120,6 +120,16 @@ export const NOTIFICATION_TYPES = {
   support_ticket_reply: { label: 'Reply on your support ticket', icon: '💬', description: 'When admin replies to your support request' },
   support_ticket_status_changed: { label: 'Support ticket resolved', icon: '✅', description: 'When your support request is marked resolved or closed' },
   task_completed: { label: 'Task completed', icon: '✅', description: 'When a task you are watching is marked complete' },
+  // comment_added is the actual type stored in the DB for task comments
+  comment_added: { label: 'Comment on my task', icon: '💬', description: 'When someone comments on your task' },
+  // Operational types — shown in inbox but not in settings matrix (hidden)
+  flock_followup_due: { label: 'Flock follow-up due', icon: '🐑', description: 'When a Flock CRM follow-up is due', hidden: true },
+  sprint_access_ended: { label: 'Sprint access ended', icon: '🔒', description: 'When your temporary sprint access has ended', hidden: true },
+  sprint_archived: { label: 'Sprint archived', icon: '📦', description: 'When a sprint you are in is archived', hidden: true },
+  account_reactivated: { label: 'Account reactivated', icon: '✅', description: 'When a temporary account is reactivated', hidden: true },
+  integration_requested: { label: 'Integration requested', icon: '🔌', description: 'When a team member requests a new integration', hidden: true },
+  automation: { label: 'Automation alert', icon: '⚡', description: 'When an automation fires an alert', hidden: true },
+  delegated_task_due_soon: { label: 'Delegated task due soon', icon: '⏰', description: 'When a task you delegated is due soon', hidden: true },
   weekly_digest: { label: 'Weekly Digest', icon: '📊', description: 'Monday summary of your open tasks, priorities, and sprint progress', emailOnly: true },
   dormant_nudge: { label: 'Dormant Nudge', icon: '👋', description: "Nudge email when you haven't visited in 3+ days (max once per month)", emailOnly: true },
   feature_announcement: { label: 'Feature Announcements', icon: '🚀', description: 'Email when a new feature launches on Nexus', emailOnly: true },
@@ -292,6 +302,22 @@ export function formatNotificationMessage(notification) {
       return `Your request "${payload.title ?? 'Untitled'}" has been marked ${payload.status ?? 'resolved'}`
     case 'task_completed':
       return `"${payload.task_title ?? 'A task'}" you were watching has been completed`
+    case 'comment_added':
+      return `${payload.author_name ?? 'Someone'} commented on "${payload.task_title ?? 'your task'}"`
+    case 'flock_followup_due':
+      return payload.message ?? 'A Flock CRM follow-up is due'
+    case 'sprint_access_ended':
+      return `Your access to "${payload.sprint_name ?? 'a sprint'}" has ended`
+    case 'sprint_archived':
+      return `Sprint "${payload.sprint_name ?? 'a sprint'}" has been archived`
+    case 'account_reactivated':
+      return payload.message ?? 'Your account has been reactivated'
+    case 'integration_requested':
+      return `${payload.requester_name ?? 'Someone'} requested the ${payload.integration_name ?? 'an'} integration`
+    case 'automation':
+      return payload.message ?? 'An automation alert was triggered'
+    case 'delegated_task_due_soon':
+      return `"${payload.task_title ?? 'A task'}" you delegated is due soon`
     case 'system':
       return payload.message ?? def.label
     default:

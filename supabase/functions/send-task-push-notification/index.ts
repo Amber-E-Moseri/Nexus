@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
         .select('mobile')
         .eq('user_id', userId)
         .eq('notification_type', notifTypeForPref)
-        .single()
+        .maybeSingle()
       if (!pref?.mobile) {
         return jsonResponse(200, { sent: 0, reason: 'Mobile push not enabled for this notification type' })
       }
