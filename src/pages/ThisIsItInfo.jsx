@@ -164,20 +164,24 @@ export default function ThisIsItInfo() {
 
   const canEdit = profile && (role === 'super_admin' || role === 'regional_secretary' || EXTRA_EDITOR_USER_IDS.includes(profile.id));
 
-  // Single query: fetch content first, then schedule + checklist in parallel.
-  // Previously three separate queries with schedule/checklist waterfalled behind
-  // content (enabled: !!content?.id) — that added one extra round-trip latency.
+  // Single round-trip: nested select fetches content + schedule + checklist in one query.
+  // Previously 2 serial hops (content first, then schedule+checklist in parallel);
+  // the nested select eliminates the waterfall entirely.
   const { data: pageData, isLoading } = useQuery({
     queryKey: ['this_is_it_page', 2026],
     queryFn: async () => {
-      const { data: content } = await supabase
-        .from('this_is_it_event_content').select('*').eq('event_year', 2026).single();
-      if (!content?.id) return { content, scheduleItems: [], checklistItems: [] };
-      const [{ data: scheduleItems }, { data: checklistItems }] = await Promise.all([
-        supabase.from('this_is_it_schedule_items').select('*').eq('event_content_id', content.id).order('order_num'),
-        supabase.from('this_is_it_checklist_items').select('*').eq('event_content_id', content.id).eq('section', 'packing').order('order_num'),
-      ]);
-      return { content, scheduleItems: scheduleItems || [], checklistItems: checklistItems || [] };
+      const { data, error } = await supabase
+        .from('this_is_it_event_content')
+        .select('*, this_is_it_schedule_items(*), this_is_it_checklist_items(*)')
+        .eq('event_year', 2026)
+        .single();
+      if (error || !data) return { content: data ?? null, scheduleItems: [], checklistItems: [] };
+      const { this_is_it_schedule_items: rawSchedule, this_is_it_checklist_items: rawChecklist, ...content } = data;
+      const scheduleItems = (rawSchedule || []).sort((a, b) => (a.order_num ?? 0) - (b.order_num ?? 0));
+      const checklistItems = (rawChecklist || [])
+        .filter(i => i.section === 'packing')
+        .sort((a, b) => (a.order_num ?? 0) - (b.order_num ?? 0));
+      return { content, scheduleItems, checklistItems };
     },
     staleTime: 60_000,
   });

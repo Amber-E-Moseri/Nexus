@@ -477,108 +477,101 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
 
   useEffect(() => {
     (async () => {
-      const [r, reg, conf, tg, li] = await Promise.all([
-        loadKey('roster', []), loadKey('registrations', []),
-        loadKey('confirmations', {}), loadKey('targets', {}),
-        loadKey('last-import', { roster: null, registrations: null }),
-      ]);
-
-      // Always fetch roster from Supabase (authoritative source)
-      let finalRoster = r;
+      // --- Batch all registration_config reads into a single query ---
+      let conf = {}, tg = {}, li = { roster: null, registrations: null };
+      let cachedReg = [], cachedRoster = [], roomConfig = null;
       try {
-        let rosterQ = supabase.from('roster').select('*').order('last_name', { ascending: true });
-        if (limitedToSubgroups?.length) rosterQ = rosterQ.in('subgroup', limitedToSubgroups);
-        const { data: dbRoster } = await rosterQ;
-        if (dbRoster?.length) {
-          finalRoster = dbRoster.map(m => ({
-            email: m.email,
-            fullName: m.full_name,
-            firstName: m.first_name,
-            lastName: m.last_name,
-            subgroup: m.subgroup,
-            leadership: m.leadership || '',
-          }));
-        }
+        const { data: configRows } = await supabase
+          .from('registration_config')
+          .select('key, value')
+          .in('key', ['roster', 'registrations', 'confirmations', 'targets', 'last-import', 'room-assignments']);
+        const byKey = Object.fromEntries((configRows || []).map(r => [r.key, r.value]));
+        cachedRoster = byKey['roster'] || [];
+        cachedReg = byKey['registrations'] || [];
+        conf = byKey['confirmations'] || {};
+        tg = byKey['targets'] || {};
+        li = byKey['last-import'] || { roster: null, registrations: null };
+        roomConfig = byKey['room-assignments'] || null;
       } catch (e) {
-        console.error('Failed to fetch roster from Supabase:', e);
+        console.error('Failed to load registration_config:', e);
       }
 
-      // Fetch registrations from Supabase; always re-fetch for scoped users to prevent stale cache leaking out-of-scope rows
-      let finalReg = reg;
-      if (!reg || reg.length === 0 || limitedToSubgroups?.length) {
-        try {
-          let regsQ = supabase.from('registrations').select('*').order('submitted_at', { ascending: false });
-          if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) regsQ = regsQ.in('subgroup', limitedToSubgroups);
-          const { data: dbRegs } = await regsQ;
-          // Rename snake_case columns to camelCase for compatibility
-          finalReg = (dbRegs || []).map(r => ({
-            id: r.id,
-            email: r.email,
-            fullName: r.full_name,
-            firstName: r.first_name,
-            lastName: r.last_name,
-            gender: r.gender,
-            subgroup: r.subgroup,
-            fellowship: r.fellowship,
-            phone: r.phone,
-            designation: r.designation,
-            shirtSize: r.shirt_size,
-            foundationStatus: r.foundation_status,
-            baptism: r.baptism,
-            allergies: r.allergies,
-            team: r.team,
-            leadership: r.leadership,
-            submittedAt: r.submitted_at,
-            arrivalDate: r.arrival_date,
-            arrivalTime: r.arrival_time,
-            arrivalFlight: r.arrival_flight,
-            departureDate: r.departure_date,
-            departureTime: r.departure_time,
-            departureFlight: r.departure_flight,
-            manuallyConfirmed: r.manually_confirmed ?? false,
-            inState: r.in_state ?? false,
-            transportMode: r.transport_mode || null,
-          }));
-        } catch (e) {
-          console.error('Failed to fetch registrations from Supabase:', e);
-        }
+      // --- Fire all data fetches in parallel ---
+      let rosterQ = supabase.from('roster').select('*').order('last_name', { ascending: true });
+      if (limitedToSubgroups?.length) rosterQ = rosterQ.in('subgroup', limitedToSubgroups);
+
+      let regsQ = supabase.from('registrations').select('*').order('submitted_at', { ascending: false });
+      if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) regsQ = regsQ.in('subgroup', limitedToSubgroups);
+
+      let wlQ = supabase.from('working_list').select('*').order('subgroup', { ascending: true });
+      if (limitedToSubgroups?.length) wlQ = wlQ.in('subgroup', limitedToSubgroups);
+
+      const paymentsQ = supabase.from('event_payments').select('*').order('subgroup', { ascending: true });
+
+      const [rosterRes, regsRes, wlRes, payRes] = await Promise.all([rosterQ, regsQ, wlQ, paymentsQ]);
+
+      // Roster — DB is authoritative; fall back to cached config value if empty
+      let finalRoster = cachedRoster;
+      if (rosterRes.error) {
+        console.error('Failed to fetch roster from Supabase:', rosterRes.error);
+      } else if (rosterRes.data?.length) {
+        finalRoster = rosterRes.data.map(m => ({
+          email: m.email,
+          fullName: m.full_name,
+          firstName: m.first_name,
+          lastName: m.last_name,
+          subgroup: m.subgroup,
+          leadership: m.leadership || '',
+        }));
       }
 
-      // Fetch working list from Supabase
-      try {
-        let wlQ = supabase.from('working_list').select('*').order('subgroup', { ascending: true });
-        if (limitedToSubgroups?.length) wlQ = wlQ.in('subgroup', limitedToSubgroups);
-        const { data: dbWl } = await wlQ;
-        if (dbWl?.length) setWorkingListDb(dbWl);
-      } catch (e) {
-        console.error('Failed to fetch working list from Supabase:', e);
+      // Registrations — always use DB result; fall back to cached config value on error
+      let finalReg = cachedReg;
+      if (regsRes.error) {
+        console.error('Failed to fetch registrations from Supabase:', regsRes.error);
+      } else if (regsRes.data) {
+        finalReg = regsRes.data.map(r => ({
+          id: r.id, email: r.email, fullName: r.full_name, firstName: r.first_name,
+          lastName: r.last_name, gender: r.gender, subgroup: r.subgroup, fellowship: r.fellowship,
+          phone: r.phone, designation: r.designation, shirtSize: r.shirt_size,
+          foundationStatus: r.foundation_status, baptism: r.baptism, allergies: r.allergies,
+          team: r.team, leadership: r.leadership, submittedAt: r.submitted_at,
+          arrivalDate: r.arrival_date, arrivalTime: r.arrival_time, arrivalFlight: r.arrival_flight,
+          departureDate: r.departure_date, departureTime: r.departure_time, departureFlight: r.departure_flight,
+          flightManualOverride: r.flight_manual_override ?? false,
+          manuallyConfirmed: r.manually_confirmed ?? false,
+          inState: r.in_state ?? false,
+          transportMode: r.transport_mode || null,
+        }));
       }
 
-      // Fetch payments (RLS enforces access — returns empty for non-finance users)
-      try {
-        const { data: dbPay } = await supabase
-          .from('event_payments')
-          .select('*')
-          .order('subgroup', { ascending: true });
-        if (dbPay?.length) setPayments(dbPay);
-      } catch (e) {
-        console.error('Failed to fetch payments from Supabase:', e);
+      // Working list
+      if (wlRes.error) {
+        console.error('Failed to fetch working list from Supabase:', wlRes.error);
+      } else if (wlRes.data?.length) {
+        setWorkingListDb(wlRes.data);
       }
 
-      setRoster(finalRoster); setRegistrations(finalReg); setConfirmations(conf); setTargets(tg); setLastImport(li);
+      // Payments (RLS enforces access — returns empty for non-finance users)
+      if (payRes.error) {
+        console.error('Failed to fetch payments from Supabase:', payRes.error);
+      } else if (payRes.data?.length) {
+        setPayments(payRes.data);
+      }
 
-      // Load room assignments
-      try {
-        const stored = await loadKey('room-assignments', null);
-        if (stored) {
-          setRooms(stored.rooms || []);
-          setNumRooms(stored.numRooms || 5);
-          setPeoplePerRoom(stored.peoplePerRoom || 2);
-          if (stored.roomsNote != null) setRoomsNote(stored.roomsNote);
-        } else {
-          initializeRooms(5, 2);
-        }
-      } catch (e) {
+      setRoster(finalRoster);
+      setRegistrations(finalReg);
+      setConfirmations(conf);
+      setTargets(tg);
+      setLastImport(li);
+
+      // Room assignments
+      if (roomConfig) {
+        setRooms(roomConfig.rooms || []);
+        setNumRooms(roomConfig.numRooms || 5);
+        setPeoplePerRoom(roomConfig.peoplePerRoom || 2);
+        if (roomConfig.roomsNote != null) setRoomsNote(roomConfig.roomsNote);
+      } else {
         initializeRooms(5, 2);
       }
 
