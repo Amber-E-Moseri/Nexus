@@ -508,13 +508,12 @@ export default function TaskDetailSidebar({
         const created = ctx ? await ctx.addTask(payload) : await createTask(payload)
 
         if (primaryAssigneeId && primaryAssigneeId !== profile?.id) {
-          const { data: notifData, error: notifyError } = await supabase.rpc('create_task_notification', {
+          const { error: notifyError } = await supabase.rpc('create_task_notification', {
             p_user_id: primaryAssigneeId,
             p_type: 'task_assigned',
             p_task_id: created.id,
           })
           if (notifyError) console.error(notifyError)
-          else if (notifData) dispatchPush(primaryAssigneeId, notifData)
         }
 
         onSaved?.(created)
@@ -522,13 +521,12 @@ export default function TaskDetailSidebar({
         const updated = ctx ? await ctx.editTask(task.id, payload) : await updateTask(task.id, payload)
 
         if (primaryAssigneeId && primaryAssigneeId !== previousAssigneeId && primaryAssigneeId !== profile?.id) {
-          const { data: notifData, error: notifyError } = await supabase.rpc('create_task_notification', {
+          const { error: notifyError } = await supabase.rpc('create_task_notification', {
             p_user_id: primaryAssigneeId,
             p_type: 'task_assigned',
             p_task_id: updated.id,
           })
           if (notifyError) console.error(notifyError)
-          else if (notifData) dispatchPush(primaryAssigneeId, notifData)
         }
 
         // Notify assignee on meaningful status transitions (completed only).

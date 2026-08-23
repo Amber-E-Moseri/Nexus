@@ -31,15 +31,29 @@ Deno.serve(async (req) => {
   )
 
   const body = await req.json().catch(() => null) as
-    | { user_id?: string; notification_type?: string; payload?: Record<string, unknown> }
+    | { notification_id?: string; user_id?: string; notification_type?: string; payload?: Record<string, unknown> }
     | null
 
+  const notificationId = body?.notification_id ?? null
   const userId = body?.user_id
   const notificationType = body?.notification_type
   const payload = body?.payload ?? {}
 
   if (!userId || !notificationType) {
     return jsonResponse(400, { error: 'user_id and notification_type are required' })
+  }
+
+  // Skip if already stamped by a previous send (prevents batch from double-emailing
+  // rows that the per-row trigger already handled).
+  if (notificationId) {
+    const { data: existing } = await supabase
+      .from('notifications')
+      .select('email_sent_at')
+      .eq('id', notificationId)
+      .single()
+    if (existing?.email_sent_at) {
+      return jsonResponse(200, { skipped: true, reason: 'already_sent' })
+    }
   }
 
   const { data: pref, error: prefError } = await supabase
@@ -221,6 +235,14 @@ Deno.serve(async (req) => {
       error: 'Failed to send email',
       details: emailResult,
     })
+  }
+
+  // Stamp the row so the batch digest skips it (idempotency guard).
+  if (notificationId) {
+    await supabase
+      .from('notifications')
+      .update({ email_sent_at: new Date().toISOString() })
+      .eq('id', notificationId)
   }
 
   return jsonResponse(200, { sent: true, email_id: emailResult.id })

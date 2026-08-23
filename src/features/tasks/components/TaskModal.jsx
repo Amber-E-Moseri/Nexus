@@ -572,13 +572,12 @@ export default function TaskModal({
 
         const assigneesToNotify = createdTasks.filter((created) => created.assignee_id && created.assignee_id !== profile?.id)
         await Promise.allSettled(assigneesToNotify.map(async (created) => {
-          const { data: notifData, error: notifyError } = await supabase.rpc('create_task_notification', {
+          const { error: notifyError } = await supabase.rpc('create_task_notification', {
             p_user_id: created.assignee_id,
             p_type: 'task_assigned',
             p_task_id: created.id,
           })
           if (notifyError) throw notifyError
-          if (notifData) dispatchPush(created.assignee_id, notifData)
         }))
 
         const watchersToAdd = [
@@ -603,13 +602,12 @@ export default function TaskModal({
           assigneeId && assigneeId !== profile?.id && !previousAssigneeIds.includes(assigneeId)
         ))
         await Promise.allSettled(assigneesToNotify.map(async (assigneeId) => {
-          const { data: notifData, error: notifyError } = await supabase.rpc('create_task_notification', {
+          const { error: notifyError } = await supabase.rpc('create_task_notification', {
             p_user_id: assigneeId,
             p_type: 'task_assigned',
             p_task_id: updated.id,
           })
           if (notifyError) throw notifyError
-          if (notifData) dispatchPush(assigneeId, notifData)
         }))
 
         if (shouldWatchAssignedSprintTask) {
