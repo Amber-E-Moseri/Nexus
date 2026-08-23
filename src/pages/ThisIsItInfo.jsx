@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import twemoji from 'twemoji';
 
 // Programs team members granted edit access on this page specifically,
 // without changing their app-wide role (which would affect permissions
@@ -151,14 +150,12 @@ export default function ThisIsItInfo() {
   const navigate = useNavigate();
   const [activeDay, setActiveDay] = useState('fri');
   const [editMode, setEditMode] = useState(false);
-  const [scrollProgress, setScrollProgress] = useState(0);
   const [newItem, setNewItem] = useState({ day: 'fri', time: '', title: '', description: '' });
   const [isSaving, setIsSaving] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const [activeSection, setActiveSection] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [passengerName, setPassengerName] = useState('');
-  const tiiRef = useRef(null);
 
   const queryClient = useQueryClient();
 
@@ -240,27 +237,14 @@ export default function ThisIsItInfo() {
     return () => obs.disconnect();
   }, [isLoading]);
 
+  // Inject Google Fonts link tag early to avoid render-blocking @import
   useEffect(() => {
-    if (isLoading || !tiiRef.current) return;
-    twemoji.parse(tiiRef.current, {
-      folder: 'svg',
-      ext: '.svg',
-      base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/',
-      attributes: () => ({ style: 'height:1.25em;width:1.25em;vertical-align:-0.22em;display:inline-block' }),
-    });
-  }, [isLoading]);
-
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const windowHeight = window.innerHeight;
-      const docHeight = document.documentElement.scrollHeight;
-      const scrollTop = window.scrollY;
-      const progress = Math.min(scrollTop / (docHeight - windowHeight), 1);
-      setScrollProgress(progress);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    if (document.getElementById('tii-gfonts')) return;
+    const link = document.createElement('link');
+    link.id = 'tii-gfonts';
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap';
+    document.head.appendChild(link);
   }, []);
 
 
@@ -430,7 +414,6 @@ export default function ThisIsItInfo() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap');
         :root{--yellow:#EAC63D;--coral:#DD6F51;--purple:#6B12BC;--teal:#7EDAC3;--ink:#161717;--paper:#FBF7EE;--paper-line:#E7DFCB;--bg:#F9F7F2;--max:720px;}
 
         /* ── keyframes ─────────────────────────────────────────────────── */
@@ -639,7 +622,7 @@ export default function ThisIsItInfo() {
         }
       `}</style>
 
-      <div className="tii-body" ref={tiiRef}>
+      <div className="tii-body">
         {editMode && (
           <div className="edit-mode-indicator">
             ✏️ Editing — Click any text to edit (ESC to cancel)
@@ -669,10 +652,7 @@ export default function ThisIsItInfo() {
               </a>
             ))}
           </div>
-          <div className="tii-nav-progress">
-            <div style={{ height:'100%', width:`${scrollProgress * 100}%`, background:'linear-gradient(90deg, var(--coral), var(--purple))', transition:'width .15s linear' }} />
-            <div className="tii-nav-plane" style={{ left:`${scrollProgress * 100}%` }}>✈</div>
-          </div>
+          <NavProgressBar />
         </nav>
 
         {/* Mobile bottom bar */}
@@ -1165,6 +1145,34 @@ export default function ThisIsItInfo() {
         </footer>
       </div>
     </>
+  );
+}
+
+/* ── NavProgressBar (isolated so scroll events don't re-render the page) ── */
+function NavProgressBar() {
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    let ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const scrollTop = window.scrollY;
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        setProgress(docHeight > 0 ? Math.min(scrollTop / docHeight, 1) : 0);
+        ticking = false;
+      });
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  const pct = `${progress * 100}%`;
+  return (
+    <div className="tii-nav-progress">
+      <div style={{ height:'100%', width: pct, background:'linear-gradient(90deg, var(--coral), var(--purple))', transition:'width .15s linear' }} />
+      <div className="tii-nav-plane" style={{ left: pct }}>✈</div>
+    </div>
   );
 }
 
