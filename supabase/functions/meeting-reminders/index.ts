@@ -2,13 +2,16 @@
 // This function runs hourly and notifies meeting attendees 1 hour before their meeting starts.
 //
 // Register cron job in Supabase SQL Editor:
-// select cron.schedule(
+// SELECT cron.schedule(
 //   'meeting-reminders-hourly',
 //   '0 * * * *',
 //   $$
-//   select net.http_post(
-//     url := '[SUPABASE_PROJECT_URL]/functions/v1/meeting-reminders',
-//     headers := '{"Authorization": "Bearer [SERVICE_ROLE_KEY]"}'::jsonb
+//   SELECT net.http_post(
+//     url     := (SELECT current_setting('app.supabase_url')) || '/functions/v1/meeting-reminders',
+//     headers := jsonb_build_object(
+//       'Content-Type',  'application/json',
+//       'Authorization', 'Bearer ' || current_setting('app.service_role_key')
+//     )
 //   );
 //   $$
 // );
