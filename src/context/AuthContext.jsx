@@ -249,11 +249,34 @@ export function AuthProvider({ children }) {
 
     initializeAuth()
 
-    // Re-check push subscription whenever the PWA comes back to the foreground.
-    // On iOS/Android the subscription can be dropped while the app is suspended;
-    // this silently re-registers it without prompting the user again.
+    // Re-check auth + push subscription whenever the PWA comes back to the
+    // foreground. On iOS/Android the OS can kill the process while suspended;
+    // when it relaunches, IndexedDB may be briefly inaccessible, causing the
+    // initial auth check to conclude "no session" and redirect to /login even
+    // though a valid session exists. Re-running getSession after IDB recovers
+    // restores the session without forcing a manual re-login.
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && profileRef.current?.push_enabled && Notification.permission === 'granted') {
+      if (document.visibilityState !== 'visible') return
+
+      // Session recovery: if auth init concluded "no session" (user is null)
+      // but the user might actually be logged in (PWA cold-start IDB race),
+      // re-check. getSession reads from the storage adapter which now falls
+      // back to localStorage, so this catches both IDB-recovery and the
+      // localStorage mirror. If a session is found, onAuthStateChange fires
+      // SIGNED_IN/TOKEN_REFRESHED and the normal profile-fetch path runs.
+      if (!profileRef.current) {
+        supabase.auth.getSession().then(({ data }) => {
+          if (data?.session?.user && !profileRef.current) {
+            // Trigger the auth state change so the existing listener picks it up
+            supabase.auth.setSession({
+              access_token: data.session.access_token,
+              refresh_token: data.session.refresh_token,
+            }).catch(() => {})
+          }
+        }).catch(() => {})
+      }
+
+      if (profileRef.current?.push_enabled && Notification.permission === 'granted') {
         restorePushSubscription().catch(() => {})
       }
     }
@@ -373,7 +396,10 @@ export function AuthProvider({ children }) {
           // token is still valid — auth-js emits TOKEN_REFRESHED shortly after.
           // Don't clear profile or release loading here: doing so causes a skeleton
           // flash (user is set, profile is null, app renders with no name/data).
-          // Give TOKEN_REFRESHED 4 s; if it doesn't arrive, conclude no session.
+          // Give TOKEN_REFRESHED 8 s; if it doesn't arrive, conclude no session.
+          // (Previously 4 s — too aggressive on slow mobile/3G connections where
+          // the token refresh round-trip can exceed 4 s, causing a false login
+          // redirect before TOKEN_REFRESHED arrives.)
           // TOKEN_REFRESHED cancels this timer (see below) so it can never fire
           // mid-profile-fetch — the source of the "workspace with no user info"
           // flash on mobile cold-start after backgrounding.
@@ -383,7 +409,7 @@ export function AuthProvider({ children }) {
               setProfile(null)
               setLoading(false)
             }
-          }, 4_000)
+          }, 8_000)
         } else {
           setProfile(null)
           setLoading(false)

@@ -69,12 +69,18 @@ const idbAuthStorage = {
         })
       })())
     } catch {
+      // IDB stuck (iOS/Android PWA resume) or stale handle — reset so the next
+      // op re-opens instead of retrying the dead connection.
+      _authDB = null
       return _ls.get(key)
     }
   },
 
   async setItem(key, value) {
-    if (typeof indexedDB === 'undefined') { _ls.set(key, value); return }
+    // Always mirror to localStorage so the getItem fallback has data when IDB
+    // is temporarily stuck on PWA cold-start (iOS Safari background suspension).
+    _ls.set(key, value)
+    if (typeof indexedDB === 'undefined') return
     try {
       await withIdbTimeout((async () => {
         const db = await getAuthDB()
@@ -86,12 +92,15 @@ const idbAuthStorage = {
         })
       })())
     } catch {
-      _ls.set(key, value)
+      _authDB = null
+      // localStorage write already succeeded above
     }
   },
 
   async removeItem(key) {
-    if (typeof indexedDB === 'undefined') { _ls.remove(key); return }
+    // Clear from both stores — sign-out must not leave a stale localStorage copy
+    _ls.remove(key)
+    if (typeof indexedDB === 'undefined') return
     try {
       await withIdbTimeout((async () => {
         const db = await getAuthDB()
@@ -103,7 +112,8 @@ const idbAuthStorage = {
         })
       })())
     } catch {
-      _ls.remove(key)
+      _authDB = null
+      // localStorage removal already succeeded above
     }
   },
 }
