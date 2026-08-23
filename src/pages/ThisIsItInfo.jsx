@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Programs team members granted edit access on this page specifically,
 // without changing their app-wide role (which would affect permissions
@@ -147,7 +149,6 @@ const NAV_ITEMS = [
 
 export default function ThisIsItInfo() {
   const { profile, role } = useAuth();
-  const navigate = useNavigate();
   const [activeDay, setActiveDay] = useState('fri');
   const [editMode, setEditMode] = useState(false);
   const [newItem, setNewItem] = useState({ day: 'fri', time: '', title: '', description: '' });
@@ -161,18 +162,18 @@ export default function ThisIsItInfo() {
 
   const canEdit = profile && (role === 'super_admin' || role === 'regional_secretary' || EXTRA_EDITOR_USER_IDS.includes(profile.id));
 
-  // Single round-trip: nested select fetches content + schedule + checklist in one query.
-  // Previously 2 serial hops (content first, then schedule+checklist in parallel);
-  // the nested select eliminates the waterfall entirely.
+  // Direct REST call bypasses the Supabase client's auth initialization lock.
+  // The client waits for token refresh (up to 30s) before executing any query;
+  // this table has RLS USING (true) so only the anon key is needed.
   const { data: pageData, isLoading } = useQuery({
     queryKey: ['this_is_it_page', 2026],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('this_is_it_event_content')
-        .select('*, this_is_it_schedule_items(*), this_is_it_checklist_items(*)')
-        .eq('event_year', 2026)
-        .single();
-      if (error || !data) return { content: data ?? null, scheduleItems: [], checklistItems: [] };
+      const url = `${SUPABASE_URL}/rest/v1/this_is_it_event_content?select=*,this_is_it_schedule_items(*),this_is_it_checklist_items(*)&event_year=eq.2026`;
+      const res = await fetch(url, {
+        headers: { apikey: SUPABASE_ANON_KEY, Accept: 'application/vnd.pgrst.object+json' },
+      });
+      if (!res.ok) return { content: null, scheduleItems: [], checklistItems: [] };
+      const data = await res.json();
       const { this_is_it_schedule_items: rawSchedule, this_is_it_checklist_items: rawChecklist, ...content } = data;
       const scheduleItems = (rawSchedule || []).sort((a, b) => (a.order_num ?? 0) - (b.order_num ?? 0));
       const checklistItems = (rawChecklist || [])
