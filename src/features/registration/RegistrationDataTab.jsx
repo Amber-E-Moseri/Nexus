@@ -223,13 +223,8 @@ export default function RegistrationDataTab({
 
   const showFees = hasFinanceAccess || role === 'pastor';
 
-  // bulk email sender
+  // email composer
   const [emailModalOpen, setEmailModalOpen] = useState(false);
-  const [selectedStatuses, setSelectedStatuses] = useState({ not_registered: false, registered_outstanding: false, confirmed: false });
-
-  function toggleStatus(status) {
-    setSelectedStatuses(prev => ({ ...prev, [status]: !prev[status] }));
-  }
 
   // Load existing share token on mount
   useEffect(() => {
@@ -451,8 +446,6 @@ export default function RegistrationDataTab({
   const not_registered = useMemo(() => statsSource.filter(r => r.registrationStatus === 'not_registered').length, [statsSource]);
   const registered_outstanding = useMemo(() => statsSource.filter(r => r.registrationStatus === 'registered_outstanding').length, [statsSource]);
   const confirmed = useMemo(() => statsSource.filter(r => r.registrationStatus === 'confirmed').length, [statsSource]);
-  const statusCounts = { not_registered, registered_outstanding, confirmed };
-  const totalToEmail = Object.entries(selectedStatuses).reduce((sum, [status, selected]) => sum + (selected ? statusCounts[status] : 0), 0);
 
   // ── filtered + sorted view ────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -602,12 +595,10 @@ export default function RegistrationDataTab({
       </div>
 
       {emailModalOpen && (
-        <BulkEmailSender
-          selectedStatuses={selectedStatuses}
-          statusCounts={statusCounts}
-          merged={allPeople}
+        <EmailComposer
+          allPeople={allPeople}
+          subgroups={subgroups}
           onClose={() => setEmailModalOpen(false)}
-          onToggleStatus={toggleStatus}
         />
       )}
 
@@ -1236,160 +1227,435 @@ function LinkRegistrationModal({ person, registrations, onLink, onClose }) {
   );
 }
 
-// ============ BULK EMAIL SENDER ============
-function BulkEmailSender({ selectedStatuses, statusCounts, merged, onClose, onToggleStatus }) {
+// ============ EMAIL COMPOSER ============
+const MERGE_TAGS = [
+  { tag: '{{name}}', label: 'Name' },
+  { tag: '{{subgroup}}', label: 'Subgroup' },
+  { tag: '{{fellowship}}', label: 'Fellowship' },
+  { tag: '{{email}}', label: 'Email' },
+];
+
+function personalize(text, vars) {
+  return (text || '')
+    .replace(/\{\{name\}\}/g, vars.name || '')
+    .replace(/\{\{subgroup\}\}/g, vars.subgroup || '')
+    .replace(/\{\{fellowship\}\}/g, vars.fellowship || '')
+    .replace(/\{\{email\}\}/g, vars.email || '');
+}
+
+function EmailComposer({ allPeople, subgroups, onClose }) {
+  const [step, setStep] = useState('compose'); // compose | preview | confirm
+  // Recipient filters
+  const [statusFilters, setStatusFilters] = useState({ not_registered: true, registered_outstanding: true, confirmed: false });
+  const [subgroupFilter, setSubgroupFilter] = useState('All');
+  const [recipientSearch, setRecipientSearch] = useState('');
+  const [excludeAbsent, setExcludeAbsent] = useState(true);
+  // Compose
+  const [mode, setMode] = useState('text'); // text | html
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
   const [templates, setTemplates] = useState([]);
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
+  // Send
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
+  const [sendResult, setSendResult] = useState(null);
+  const bodyRef = useRef(null);
 
   useEffect(() => {
-    loadTemplates();
+    supabase.from('absence_email_templates')
+      .select('id, name, subject, body')
+      .order('is_default', { ascending: false })
+      .order('updated_at', { ascending: false })
+      .then(({ data }) => { setTemplates(data || []); setLoadingTemplates(false); })
+      .catch(() => setLoadingTemplates(false));
   }, []);
 
-  async function loadTemplates() {
-    try {
-      const { data } = await supabase
-        .from('absence_email_templates')
-        .select('id, name, subject, body')
-        .order('is_default', { ascending: false })
-        .order('updated_at', { ascending: false });
-      setTemplates(data || []);
-      if (data?.length) setSelectedTemplate(data[0].id);
-    } catch (err) {
-      setError('Failed to load templates: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
+  function loadTemplate(id) {
+    const t = templates.find(t => t.id === id);
+    if (t) { setSubject(t.subject); setBody(t.body); }
   }
 
-  const recipientEmails = useMemo(() => {
-    return merged
-      .filter(r => {
-        if (!r.email) return false;
-        if (selectedStatuses.not_registered && r.registrationStatus === 'not_registered') return true;
-        if (selectedStatuses.registered_outstanding && r.registrationStatus === 'registered_outstanding') return true;
-        if (selectedStatuses.confirmed && r.registrationStatus === 'confirmed') return true;
-        return false;
-      })
-      .map(r => ({ email: r.email, name: r.fullName, id: r.id }));
-  }, [merged, selectedStatuses]);
+  function insertTag(tag) {
+    const ta = bodyRef.current;
+    if (!ta) { setBody(prev => prev + tag); return; }
+    const start = ta.selectionStart ?? body.length;
+    const end = ta.selectionEnd ?? body.length;
+    const next = body.substring(0, start) + tag + body.substring(end);
+    setBody(next);
+    setTimeout(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = start + tag.length; }, 0);
+  }
 
-  const template = templates.find(t => t.id === selectedTemplate);
+  const recipients = useMemo(() => {
+    return allPeople.filter(r => {
+      if (!r.email) return false;
+      if (excludeAbsent && r.absent) return false;
+      const matchesStatus =
+        (statusFilters.not_registered && r.registrationStatus === 'not_registered') ||
+        (statusFilters.registered_outstanding && r.registrationStatus === 'registered_outstanding') ||
+        (statusFilters.confirmed && r.registrationStatus === 'confirmed');
+      if (!matchesStatus) return false;
+      if (subgroupFilter !== 'All' && r.subgroup !== subgroupFilter) return false;
+      if (recipientSearch) {
+        const q = recipientSearch.toLowerCase();
+        if (!(r.full_name || '').toLowerCase().includes(q) && !(r.email || '').toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [allPeople, statusFilters, subgroupFilter, recipientSearch, excludeAbsent]);
+
+  const statusCounts = useMemo(() => {
+    const base = allPeople.filter(r => r.email && (!excludeAbsent || !r.absent));
+    return {
+      not_registered: base.filter(r => r.registrationStatus === 'not_registered').length,
+      registered_outstanding: base.filter(r => r.registrationStatus === 'registered_outstanding').length,
+      confirmed: base.filter(r => r.registrationStatus === 'confirmed').length,
+    };
+  }, [allPeople, excludeAbsent]);
+
+  const sampleRecipient = recipients[0] || { full_name: 'John Doe', fullName: 'John Doe', subgroup: 'Sample', fellowship: 'Sample Fellowship', email: 'john@example.com' };
+
+  function renderPreviewHtml() {
+    const personalizedBody = personalize(body, {
+      name: sampleRecipient.full_name || sampleRecipient.fullName || '',
+      subgroup: sampleRecipient.subgroup || '',
+      fellowship: sampleRecipient.fellowship || '',
+      email: sampleRecipient.email || '',
+    });
+
+    if (mode === 'html') {
+      return personalizedBody;
+    }
+    // Plain text → HTML conversion (matches edge function logic)
+    const escaped = personalizedBody
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;');
+    return `<p>${escaped.split('\n\n').join('</p><p>')}</p>`;
+  }
 
   async function handleSend() {
-    if (!template || recipientEmails.length === 0) return;
+    if (recipients.length === 0 || !subject.trim() || !body.trim()) return;
     setSending(true);
     setError(null);
 
     try {
-      const { data, error: invokeErr } = await supabase.functions.invoke('registration-bulk-email', {
-        body: {
-          recipients: recipientEmails,
-          templateId: template.id,
-          subject: template.subject,
-          body: template.body,
-        },
-      });
+      const recipientData = recipients.map(r => ({
+        email: r.email,
+        name: r.full_name || r.fullName || '',
+        id: r.id || null,
+      }));
 
+      // If HTML mode, send the body as-is (edge function will wrap it)
+      // If text mode, send plain text (edge function converts via bodyToHtml)
+      const payload = {
+        recipients: recipientData,
+        subject,
+        body: mode === 'html' ? body : body,
+      };
+
+      const { data, error: invokeErr } = await supabase.functions.invoke('registration-bulk-email', { body: payload });
       if (invokeErr) throw invokeErr;
       if (data?.error) throw new Error(data.error);
 
-      // Update email_status to confirming for sent recipients
-      const registrationIds = recipientEmails.map(r => r.id).filter(Boolean);
+      // Update email_status for sent recipients
+      const registrationIds = recipientData.map(r => r.id).filter(Boolean);
       if (registrationIds.length > 0) {
-        await supabase
-          .from('registrations')
-          .update({ email_status: 'confirming' })
-          .in('id', registrationIds);
+        await supabase.from('registrations').update({ email_status: 'confirming' }).in('id', registrationIds);
       }
 
-      alert(`✓ Email sent to ${recipientEmails.length} people`);
-      onClose();
+      setSendResult(data);
+      setStep('done');
     } catch (err) {
-      setError('Failed to send: ' + err.message);
+      setError('Failed to send: ' + (err.message || err));
     } finally {
       setSending(false);
     }
   }
 
+  const canSend = recipients.length > 0 && subject.trim() && body.trim();
+
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
-      <div style={{ background: C.paper, borderRadius: 14, width: '90%', maxWidth: 680, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
-        <div style={{ padding: '20px 24px', borderBottom: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0, fontWeight: 700 }}>Send bulk email</h2>
-          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 24, cursor: 'pointer', color: C.mute, padding: 0 }}>×</button>
-        </div>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+      <div style={{ background: C.paper, borderRadius: 16, width: '95%', maxWidth: 920, maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 60px rgba(0,0,0,0.25)', fontFamily: 'Inter, sans-serif' }} onClick={e => e.stopPropagation()}>
 
-        {/* Status filters */}
-        <div style={{ padding: '14px 24px', borderBottom: `1px solid ${C.line}`, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, textTransform: 'uppercase' }}>Send to:</div>
-          {[
-            { key: 'not_registered', label: 'Not Registered', count: statusCounts.not_registered, tone: 'red' },
-            { key: 'registered_outstanding', label: 'Confirming', count: statusCounts.registered_outstanding, tone: 'amber' },
-            { key: 'confirmed', label: 'Confirmed', count: statusCounts.confirmed, tone: 'green' },
-          ].map(({ key, label, count, tone }) => (
-            <label key={key} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
-              <input type="checkbox" checked={selectedStatuses[key]} onChange={() => onToggleStatus(key)} style={{ cursor: 'pointer', accentColor: C.purple }} />
-              <span style={{ fontWeight: 600 }}>{label}</span>
-              <span style={{ background: tone === 'red' ? '#FBE9E9' : tone === 'amber' ? '#FBF0DE' : '#E8F5EC', color: tone === 'red' ? '#C4383A' : tone === 'amber' ? '#B8710A' : '#1F8A4C', fontSize: 11, fontWeight: 600, padding: '2px 6px', borderRadius: 12 }}>{count}</span>
-            </label>
-          ))}
-        </div>
-
-        <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, textTransform: 'uppercase', marginBottom: 8 }}>Template</div>
-            {loading ? (
-              <div style={{ color: C.mute, fontSize: 13 }}>Loading templates...</div>
-            ) : templates.length === 0 ? (
-              <div style={{ color: C.red, fontSize: 13 }}>No email templates found. Create one in Communications → Email Templates first.</div>
-            ) : (
-              <select value={selectedTemplate || ''} onChange={e => setSelectedTemplate(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 13, marginBottom: 16 }}>
-                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            )}
-            {template && (
-              <div style={{ background: C.cream, borderRadius: 8, padding: 12, fontSize: 12 }}>
-                <div style={{ fontWeight: 600, color: C.ink, marginBottom: 4 }}>Preview:</div>
-                <div style={{ color: C.mute, fontSize: 11 }}>Subject: {template.subject}</div>
+        {/* Header */}
+        <div style={{ padding: '16px 24px', borderBottom: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 17, margin: 0, fontWeight: 700 }}>
+              {step === 'done' ? '✓ Email Sent' : 'Email Composer'}
+            </h2>
+            {step !== 'done' && (
+              <div style={{ display: 'flex', gap: 4 }}>
+                {['compose', 'preview', 'confirm'].map((s, i) => (
+                  <div key={s} style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: step === s ? C.purple : s === 'compose' || (s === 'preview' && (step === 'preview' || step === 'confirm')) || (s === 'confirm' && step === 'confirm') ? C.purple : C.line,
+                    opacity: step === s ? 1 : 0.4,
+                  }} />
+                ))}
               </div>
             )}
           </div>
-
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.mute, textTransform: 'uppercase', marginBottom: 8 }}>Recipients ({recipientEmails.length})</div>
-            <div style={{ background: C.cream, borderRadius: 8, padding: 12, maxHeight: 200, overflowY: 'auto' }}>
-              {recipientEmails.length === 0 ? (
-                <div style={{ color: C.mute, fontSize: 13 }}>No recipients selected</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {recipientEmails.map((r, i) => (
-                    <div key={i} style={{ fontSize: 12, color: C.ink }}>
-                      {r.name} <span style={{ color: C.mute, fontFamily: 'JetBrains Mono', fontSize: 11 }}>({r.email})</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', color: C.mute, display: 'flex', alignItems: 'center' }}>
+            <X size={18} />
+          </button>
         </div>
 
-        {error && (
-          <div style={{ padding: '12px 24px', background: '#FBE9E9', borderTop: `1px solid ${C.line}`, color: C.red, fontSize: 13 }}>
-            {error}
+        {/* ── COMPOSE STEP ─────────────────────────────────────── */}
+        {step === 'compose' && (
+          <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+            {/* Recipients bar */}
+            <div style={{ padding: '14px 24px', borderBottom: `1px solid ${C.line}`, background: '#FAFAF8' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: C.mute, textTransform: 'uppercase', letterSpacing: '0.05em' }}>To:</span>
+                {[
+                  { key: 'not_registered', label: 'Not Registered', color: C.red },
+                  { key: 'registered_outstanding', label: 'Confirming', color: C.amber },
+                  { key: 'confirmed', label: 'Confirmed', color: C.green },
+                ].map(({ key, label, color }) => (
+                  <button key={key} onClick={() => setStatusFilters(prev => ({ ...prev, [key]: !prev[key] }))}
+                    style={{
+                      padding: '4px 10px', borderRadius: 16, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      border: statusFilters[key] ? `1.5px solid ${color}` : `1.5px solid ${C.line}`,
+                      background: statusFilters[key] ? (color === C.red ? C.redBg : color === C.amber ? C.amberBg : C.greenBg) : '#fff',
+                      color: statusFilters[key] ? color : C.mute,
+                    }}>
+                    {label} ({statusCounts[key]})
+                  </button>
+                ))}
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: C.mute, marginLeft: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={excludeAbsent} onChange={e => setExcludeAbsent(e.target.checked)} style={{ accentColor: C.purple }} />
+                  Exclude absent
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select value={subgroupFilter} onChange={e => setSubgroupFilter(e.target.value)}
+                  style={{ padding: '6px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontSize: 12.5, fontFamily: 'Inter', color: subgroupFilter === 'All' ? C.mute : C.ink, background: subgroupFilter !== 'All' ? '#F1EEF6' : '#fff', cursor: 'pointer' }}>
+                  <option value="All">All subgroups</option>
+                  {subgroups.map(sg => <option key={sg} value={sg}>{sg}</option>)}
+                </select>
+                <input value={recipientSearch} onChange={e => setRecipientSearch(e.target.value)} placeholder="Search recipients…"
+                  style={{ flex: 1, padding: '6px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontSize: 12.5, fontFamily: 'Inter', outline: 'none' }} />
+                {recipientSearch && <button onClick={() => setRecipientSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, fontSize: 16 }}>×</button>}
+                <div style={{
+                  padding: '5px 12px', borderRadius: 16, fontSize: 12, fontWeight: 700,
+                  background: recipients.length > 0 ? '#EDE8F8' : C.redBg,
+                  color: recipients.length > 0 ? C.purple : C.red,
+                }}>
+                  {recipients.length} recipient{recipients.length !== 1 ? 's' : ''}
+                </div>
+              </div>
+            </div>
+
+            {/* Compose area */}
+            <div style={{ flex: 1, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Template + mode toggle */}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select onChange={e => { if (e.target.value) loadTemplate(e.target.value); e.target.value = ''; }}
+                  style={{ padding: '7px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontSize: 12.5, fontFamily: 'Inter', color: C.mute, cursor: 'pointer' }}>
+                  <option value="">Load template…</option>
+                  {loadingTemplates ? <option disabled>Loading…</option> : templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                <div style={{ marginLeft: 'auto', display: 'flex', background: '#F1EEF6', borderRadius: 7, padding: 2 }}>
+                  {['text', 'html'].map(m => (
+                    <button key={m} onClick={() => setMode(m)} style={{
+                      padding: '5px 14px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                      fontSize: 12, fontWeight: 600, fontFamily: 'Inter',
+                      background: mode === m ? '#fff' : 'transparent',
+                      color: mode === m ? C.purple : C.mute,
+                      boxShadow: mode === m ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                    }}>
+                      {m === 'text' ? 'Plain Text' : 'HTML'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Subject */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.mute, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Subject</div>
+                <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Email subject line…"
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 14, fontFamily: 'Inter', color: C.ink, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+
+              {/* Merge tags */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: C.mute, textTransform: 'uppercase' }}>Insert:</span>
+                {MERGE_TAGS.map(({ tag, label }) => (
+                  <button key={tag} onClick={() => insertTag(tag)}
+                    style={{ padding: '3px 9px', borderRadius: 5, border: `1px solid ${C.line}`, background: '#F9F7FF', color: C.purple, fontSize: 11.5, fontFamily: 'JetBrains Mono, monospace', fontWeight: 500, cursor: 'pointer' }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Body */}
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.mute, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>
+                  Body {mode === 'html' && <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(HTML tags supported)</span>}
+                </div>
+                <textarea
+                  ref={bodyRef}
+                  value={body}
+                  onChange={e => setBody(e.target.value)}
+                  placeholder={mode === 'html'
+                    ? '<p>Dear {{name}},</p>\n<p>We look forward to seeing you at the event!</p>'
+                    : 'Dear {{name}},\n\nWe look forward to seeing you at the event!'}
+                  style={{
+                    width: '100%', minHeight: 220, padding: '12px 14px', borderRadius: 8,
+                    border: `1px solid ${C.line}`, fontSize: 13,
+                    fontFamily: mode === 'html' ? 'JetBrains Mono, monospace' : 'Inter, sans-serif',
+                    color: C.ink, outline: 'none', resize: 'vertical', lineHeight: 1.6, boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 24px', borderTop: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button onClick={onClose} style={{ background: '#fff', color: C.mute, border: `1px solid ${C.line}`, borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => setStep('preview')} disabled={!canSend}
+                style={{ background: canSend ? C.purple : '#CCC', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: canSend ? 'pointer' : 'not-allowed' }}>
+                Preview →
+              </button>
+            </div>
           </div>
         )}
 
-        <div style={{ padding: '12px 24px', borderTop: `1px solid ${C.line}`, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button onClick={onClose} style={{ background: '#fff', color: C.purple, border: `1px solid ${C.line}`, borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-          <button onClick={handleSend} disabled={sending || !template || recipientEmails.length === 0} style={{ background: sending || !template || recipientEmails.length === 0 ? '#CCC' : C.purple, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: sending || !template || recipientEmails.length === 0 ? 'not-allowed' : 'pointer' }}>
-            {sending ? 'Sending…' : `Send to ${recipientEmails.length}`}
-          </button>
-        </div>
+        {/* ── PREVIEW STEP ─────────────────────────────────────── */}
+        {step === 'preview' && (
+          <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, padding: '20px 24px', overflow: 'auto' }}>
+              {/* Preview header */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.mute, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Preview as: {sampleRecipient.full_name || sampleRecipient.fullName}</div>
+                <div style={{ fontSize: 12.5, color: C.mute }}>
+                  This is how the email will appear. Merge tags are filled with the first recipient's data.
+                </div>
+              </div>
+
+              {/* Email preview card */}
+              <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
+                {/* Email header */}
+                <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.line}`, background: '#FAFAF8' }}>
+                  <div style={{ fontSize: 11, color: C.mute, marginBottom: 4 }}>
+                    From: <span style={{ color: C.ink }}>BLW CAN NEXUS &lt;noreply@blwcannexus.ca&gt;</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.mute, marginBottom: 4 }}>
+                    To: <span style={{ color: C.ink }}>{sampleRecipient.email}</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>
+                    {personalize(subject, {
+                      name: sampleRecipient.full_name || sampleRecipient.fullName || '',
+                      subgroup: sampleRecipient.subgroup || '',
+                      fellowship: sampleRecipient.fellowship || '',
+                      email: sampleRecipient.email || '',
+                    })}
+                  </div>
+                </div>
+                {/* Email body */}
+                <div style={{ padding: '20px 18px' }}>
+                  <div style={{
+                    fontFamily: 'Arial, sans-serif', maxWidth: 600, margin: '0 auto',
+                    color: '#2D2A22', lineHeight: 1.6, fontSize: 14,
+                  }}>
+                    <div style={{ padding: '16px 0', textAlign: 'center', borderBottom: '1px solid #EDE8DC', marginBottom: 16 }}>
+                      <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#F1EEF6', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>✉️</div>
+                    </div>
+                    <div dangerouslySetInnerHTML={{ __html: renderPreviewHtml() }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Recipients list */}
+              <div style={{ marginTop: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.mute, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                  Recipients ({recipients.length})
+                </div>
+                <div style={{ background: '#FAFAF8', borderRadius: 8, padding: 12, maxHeight: 160, overflowY: 'auto', border: `1px solid ${C.line}` }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {recipients.map((r, i) => (
+                      <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#fff', border: `1px solid ${C.line}`, borderRadius: 14, padding: '3px 10px', fontSize: 11.5 }}>
+                        {r.full_name || r.fullName}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 24px', borderTop: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button onClick={() => setStep('compose')} style={{ background: '#fff', color: C.purple, border: `1px solid ${C.line}`, borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>← Edit</button>
+              <button onClick={() => setStep('confirm')}
+                style={{ background: C.purple, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                Send to {recipients.length} →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── CONFIRM STEP ─────────────────────────────────────── */}
+        {step === 'confirm' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', textAlign: 'center' }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📧</div>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 20, fontWeight: 700, color: C.ink, marginBottom: 8 }}>
+              Send to {recipients.length} {recipients.length === 1 ? 'person' : 'people'}?
+            </div>
+            <div style={{ fontSize: 13, color: C.mute, marginBottom: 6, maxWidth: 400 }}>
+              Subject: <strong>{subject}</strong>
+            </div>
+            <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 28 }}>
+              This cannot be undone. Emails will be delivered via Resend.
+            </div>
+
+            {error && (
+              <div style={{ background: C.redBg, color: C.red, borderRadius: 8, padding: '10px 16px', fontSize: 13, marginBottom: 16, maxWidth: 400, width: '100%' }}>
+                {error}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setStep('preview')} disabled={sending}
+                style={{ background: '#fff', color: C.purple, border: `1px solid ${C.line}`, borderRadius: 8, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer' }}>
+                ← Back
+              </button>
+              <button onClick={handleSend} disabled={sending}
+                style={{ background: sending ? C.mute : C.green, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer', minWidth: 140 }}>
+                {sending ? 'Sending…' : `✓ Confirm & Send`}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── DONE STEP ────────────────────────────────────────── */}
+        {step === 'done' && sendResult && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', textAlign: 'center' }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 20, fontWeight: 700, color: C.green, marginBottom: 8 }}>
+              {sendResult.sent} email{sendResult.sent !== 1 ? 's' : ''} sent
+            </div>
+            {sendResult.failed > 0 && (
+              <div style={{ fontSize: 13, color: C.red, marginBottom: 8 }}>
+                {sendResult.failed} failed
+              </div>
+            )}
+            {sendResult.errors?.length > 0 && (
+              <div style={{ background: C.redBg, borderRadius: 8, padding: 12, fontSize: 12, color: C.red, maxWidth: 400, width: '100%', marginBottom: 16, textAlign: 'left', maxHeight: 120, overflowY: 'auto' }}>
+                {sendResult.errors.map((e, i) => (
+                  <div key={i}>{e.name} ({e.email}): {e.error}</div>
+                ))}
+              </div>
+            )}
+            <button onClick={onClose}
+              style={{ marginTop: 12, background: C.purple, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+              Done
+            </button>
+          </div>
+        )}
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
