@@ -90,10 +90,16 @@ export default function RegistrationPublicPage() {
 
   const stats = useMemo(() => {
     if (!data) return { total: 0, not_registered: 0, registered_outstanding: 0, confirmed: 0 };
+    const allowedKeys = lockedStatus ? new Set(lockedStatus.split(',')) : null;
     const s = { total: 0, not_registered: 0, registered_outstanding: 0, confirmed: 0 };
-    data.forEach(r => { s.total++; s[r.registration_status]++; });
+    data.forEach(r => {
+      if (!allowedKeys || allowedKeys.has(r.registration_status)) {
+        s.total++;
+        s[r.registration_status]++;
+      }
+    });
     return s;
-  }, [data]);
+  }, [data, lockedStatus]);
 
   const filtered = useMemo(() => {
     if (!data) return [];
