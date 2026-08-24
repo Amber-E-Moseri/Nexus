@@ -157,6 +157,9 @@ export default function ThisIsItInfo() {
   );
 
   const [activeDay, setActiveDay] = useState('fri');
+  const [countdownExpired, setCountdownExpired] = useState(
+    () => Date.now() >= new Date('2026-08-28T09:00:00-04:00').getTime()
+  );
   const [editMode, setEditMode] = useState(false);
   const [newItem, setNewItem] = useState({ day: 'fri', time: '', title: '', description: '' });
   const [isSaving, setIsSaving] = useState(false);
@@ -777,7 +780,7 @@ export default function ThisIsItInfo() {
         </div>
 
         {/* Countdown — own component so 1-second ticks don't re-render the page */}
-        <Countdown />
+        <Countdown onExpire={() => setCountdownExpired(true)} />
 
         {/* What to Expect */}
         <section className="tii-section" id="expect" style={{ marginTop:'40px' }}>
@@ -819,7 +822,7 @@ export default function ThisIsItInfo() {
               }
             </p>
           </div>
-          <div className="tii-card card" style={{ marginTop:'10px', background:'rgba(107,18,188,0.04)', border:'1px solid rgba(107,18,188,0.18)' }}>
+          {!countdownExpired && <div className="tii-card card" style={{ marginTop:'10px', background:'rgba(107,18,188,0.04)', border:'1px solid rgba(107,18,188,0.18)' }}>
             <h3>🙏 Prayer &amp; Fasting — Join Us</h3>
             <p>
               {editMode
@@ -831,7 +834,7 @@ export default function ThisIsItInfo() {
                 ? <EditableText value={c.prayer_p2 || 'Live corporate prayer every night at 8:00 PM CT. Come hungry — spiritually and expectantly.'} onSave={(v) => handleSaveField('prayer_p2', v)} multiline />
                 : renderWithLinks(c.prayer_p2 || 'Live corporate prayer every night at 8:00 PM CT. Come hungry — spiritually and expectantly.')}
             </p>
-          </div>
+          </div>}
         </section>
 
         {/* Before You Fly */}
@@ -1204,13 +1207,13 @@ function FlipDigit({ value, label }) {
     </div>
   );
 }
-function Countdown() {
+function Countdown({ onExpire }) {
   const [cd, setCd] = useState(null);
   useEffect(() => {
     const target = new Date('2026-08-28T09:00:00-04:00');
     function tick() {
       const diff = target - Date.now();
-      if (diff <= 0) { setCd(null); return; }
+      if (diff <= 0) { setCd(null); onExpire?.(); return; }
       setCd({
         days:  Math.floor(diff / 86400000),
         hours: Math.floor((diff % 86400000) / 3600000),
