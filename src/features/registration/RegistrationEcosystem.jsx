@@ -600,14 +600,16 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   const merged = useMemo(() => registrationsFiltered.map(r => {
     const pay = paymentByEmail[r.email];
     const hasPaid = pay ? (Number(pay.amount_paid) || 0) > 0 && (Number(pay.amount_paid) || 0) >= (Number(pay.amount_expected) || 0) : false;
+    const hasPartialPayment = pay ? (Number(pay.amount_paid) || 0) > 0 && (Number(pay.amount_paid) || 0) < (Number(pay.amount_expected) || 0) : false;
     const hasFlightInfo = !!(r.arrivalFlight || r.departureFlight || r.arrivalDate || r.departureDate);
     // isLocal = explicitly marked as driving/not flying — stored in DB so all users see the same value
     const isLocal = !!r.inState;
-    // fullyConfirmed = confirmed attending by any means: paid, has a flight, marked in-state, or manually confirmed
-    const fullyConfirmed = hasPaid || hasFlightInfo || isLocal || !!r.manuallyConfirmed;
+    // fullyConfirmed = confirmed attending by any means: paid (full or partial), has a flight, marked in-state, or manually confirmed
+    const fullyConfirmed = hasPaid || hasPartialPayment || hasFlightInfo || isLocal || !!r.manuallyConfirmed;
     return {
       ...r,
       hasPaid,
+      hasPartialPayment,
       hasFlightInfo,
       inStateConfirmed: isLocal,
       fullyConfirmed,
@@ -1850,14 +1852,6 @@ function FinanceTab({ registrations, payments, setPayments, userId, earlyCutoffA
       const { error } = await supabase.from('event_payments').upsert(payload, { onConflict: 'email' });
       if (!error) {
         setPayments(prev => [...prev.filter(p => p.email !== email), payload]);
-
-        // If partial payment is recorded, mark registration as manually confirmed
-        if (amountPaid > 0 && amountPaid < amountExpected) {
-          const { error: updateErr } = await supabase.from('registrations')
-            .update({ manually_confirmed: true })
-            .eq('email', email.toLowerCase());
-          if (updateErr) console.error('Failed to mark registration as confirmed:', updateErr.message);
-        }
       } else {
         alert('Save failed: ' + error.message);
       }
