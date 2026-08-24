@@ -2607,9 +2607,11 @@ function NotFlyingRow({ r, onSetTransportMode, onToggleCrossCountry }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <tr>
-      <td style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
-        {r.transportMode === 'bus' ? <Bus size={11} color={C.green} /> : <Car size={11} color={C.green} />}
-        {r.fullName}
+      <td style={{ fontWeight: 500 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {r.transportMode === 'bus' ? <Bus size={11} color={C.green} /> : <Car size={11} color={C.green} />}
+          {r.fullName}
+        </span>
       </td>
       <td style={{ color: C.mute }}>{r.subgroup}</td>
       <td style={{ color: C.mute }}>{r.fellowship}</td>

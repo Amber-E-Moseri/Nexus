@@ -809,7 +809,7 @@ export default function RegistrationDataTab({
                                   title="Click to un-confirm"
                                   style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.green}`, background: C.greenBg, color: C.green, cursor: 'pointer', fontFamily: 'Inter', fontWeight: 600, whiteSpace: 'nowrap' }}
                                 >
-                                  <CheckCircle2 size={12} /> {p.manuallyConfirmed ? 'Confirmed Manual' : 'Confirmed'}
+                                  <CheckCircle2 size={12} /> {p.manuallyConfirmed && !(p.hasPaid || p.hasPartialPayment || p.hasFlightInfo || p.inStateConfirmed) ? 'Confirmed Manual' : 'Confirmed'}
                                 </button>
                                 {!p.hasFlightInfo && !/manitoba|winnipeg/i.test(p.fellowship || '') && (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#FFF3CD', color: '#B8710A', border: '1px solid #F5C842', borderRadius: 12, fontSize: 11, fontWeight: 600, padding: '2px 8px', whiteSpace: 'nowrap' }}>
