@@ -1853,12 +1853,10 @@ function FinanceTab({ registrations, payments, setPayments, userId, earlyCutoffA
 
         // If partial payment is recorded, mark registration as manually confirmed
         if (amountPaid > 0 && amountPaid < amountExpected) {
-          await supabase.from('registrations')
+          const { error: updateErr } = await supabase.from('registrations')
             .update({ manually_confirmed: true })
-            .eq('email', email)
-            .then(({ error: updateErr }) => {
-              if (updateErr) console.error('Failed to mark registration as confirmed:', updateErr.message);
-            });
+            .eq('email', email.toLowerCase());
+          if (updateErr) console.error('Failed to mark registration as confirmed:', updateErr.message);
         }
       } else {
         alert('Save failed: ' + error.message);
