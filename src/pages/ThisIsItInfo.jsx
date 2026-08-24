@@ -1205,23 +1205,25 @@ function FlipDigit({ value, label }) {
   );
 }
 function Countdown() {
-  const [cd, setCd] = useState({ days:0, hours:0, mins:0, secs:0 });
+  const [cd, setCd] = useState(null);
   useEffect(() => {
     const target = new Date('2026-08-28T09:00:00-04:00');
     function tick() {
       const diff = target - Date.now();
-      if (diff <= 0) { setCd({ days:0, hours:0, mins:0, secs:0 }); return; }
+      if (diff <= 0) { setCd(null); return; }
       setCd({
         days:  Math.floor(diff / 86400000),
         hours: Math.floor((diff % 86400000) / 3600000),
         mins:  Math.floor((diff % 3600000)  / 60000),
         secs:  Math.floor((diff % 60000)    / 1000),
       });
+
     }
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
+  if (!cd) return null;
   return (
     <div>
       <div className="tii-cd-event">Aug 28 · This Is It 2026</div>
