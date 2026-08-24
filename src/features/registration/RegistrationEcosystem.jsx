@@ -1850,6 +1850,16 @@ function FinanceTab({ registrations, payments, setPayments, userId, earlyCutoffA
       const { error } = await supabase.from('event_payments').upsert(payload, { onConflict: 'email' });
       if (!error) {
         setPayments(prev => [...prev.filter(p => p.email !== email), payload]);
+
+        // If partial payment is recorded, mark registration as manually confirmed
+        if (amountPaid > 0 && amountPaid < amountExpected) {
+          await supabase.from('registrations')
+            .update({ manually_confirmed: true })
+            .eq('email', email)
+            .then(({ error: updateErr }) => {
+              if (updateErr) console.error('Failed to mark registration as confirmed:', updateErr.message);
+            });
+        }
       } else {
         alert('Save failed: ' + error.message);
       }
