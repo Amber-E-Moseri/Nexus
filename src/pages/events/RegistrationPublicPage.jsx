@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 
 // ─── brand tokens (no CSS vars — page renders outside Shell) ─────────────────
@@ -20,31 +20,36 @@ const C = {
 
 const STATUS = {
   not_registered:         { label: 'Not Registered', color: C.red,   bg: C.redBg },
-  registered_outstanding: { label: 'Outstanding',    color: C.amber, bg: C.amberBg },
+  registered_outstanding: { label: 'Confirming',     color: C.amber, bg: C.amberBg },
   confirmed:              { label: 'Confirmed',       color: C.green, bg: C.greenBg },
 };
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, manuallyConfirmed }) {
   const s = STATUS[status] || STATUS.not_registered;
   return (
     <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
       background: s.bg, color: s.color,
       fontSize: 11, fontWeight: 700,
       padding: '3px 9px', borderRadius: 20, whiteSpace: 'nowrap',
     }}>
       {s.label}
+      {manuallyConfirmed && <span style={{ fontSize: 9, opacity: 0.8 }}>✦</span>}
     </span>
   );
 }
 
 export default function RegistrationPublicPage() {
   const { token } = useParams();
+  const [searchParams] = useSearchParams();
   const [data,    setData]    = useState(null);   // null = loading, [] = loaded empty/invalid
   const [invalid, setInvalid] = useState(false);
   const [search,        setSearch]        = useState('');
-  const [subgroupFilter,setSubgroupFilter] = useState('All');
+  const lockedSubgroup = searchParams.get('subgroup') || null;
+  const lockedStatus   = searchParams.get('status')   || null;
+  const [subgroupFilter,setSubgroupFilter] = useState(lockedSubgroup || 'All');
   const [fellowshipFilter, setFellowshipFilter] = useState('All');
-  const [statusFilter,  setStatusFilter]  = useState('all');
+  const [statusFilter,  setStatusFilter]  = useState(lockedStatus || 'all');
   const [eventName, setEventName] = useState('This Is It 2.0');
 
   useEffect(() => {
@@ -93,7 +98,10 @@ export default function RegistrationPublicPage() {
   const filtered = useMemo(() => {
     if (!data) return [];
     let rows = data;
-    if (statusFilter !== 'all')  rows = rows.filter(r => r.registration_status === statusFilter);
+    if (statusFilter !== 'all') {
+      const active = statusFilter.includes(',') ? new Set(statusFilter.split(',')) : null;
+      rows = rows.filter(r => active ? active.has(r.registration_status) : r.registration_status === statusFilter);
+    }
     if (subgroupFilter !== 'All') rows = rows.filter(r => r.subgroup === subgroupFilter);
     if (fellowshipFilter !== 'All') rows = rows.filter(r => r.fellowship === fellowshipFilter);
     if (search.trim()) {
@@ -151,16 +159,22 @@ export default function RegistrationPublicPage() {
         }}>
           {[
             { key: 'not_registered',         color: C.red,   label: 'Not Reg.' },
-            { key: 'registered_outstanding',  color: C.amber, label: 'Outst.' },
+            { key: 'registered_outstanding',  color: C.amber, label: 'Confirming' },
             { key: 'confirmed',              color: C.green, label: 'Conf.' },
           ].map(({ key, color, label }) => (
             <div
               key={key}
-              onClick={() => setStatusFilter(f => f === key ? 'all' : key)}
-              style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px' }}
+              onClick={lockedStatus ? undefined : () => setStatusFilter(prev => {
+                if (prev === 'all') return key;
+                const parts = new Set(prev.split(','));
+                if (parts.has(key)) { parts.delete(key); return parts.size === 0 ? 'all' : [...parts].join(','); }
+                parts.add(key);
+                return [...parts].join(',');
+              })}
+              style={{ cursor: lockedStatus ? 'default' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px' }}
             >
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-              <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 700, fontSize: '18px', color: statusFilter === key ? color : C.ink, lineHeight: 1, textAlign: 'center' }}>
+              <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 700, fontSize: '18px', color: statusFilter.includes(key) ? color : C.ink, lineHeight: 1, textAlign: 'center' }}>
                 {stats[key]}
               </div>
               <div style={{ fontSize: '10px', color: C.mute, marginTop: 1, textAlign: 'center', lineHeight: 1.2 }}>{label}</div>
@@ -172,32 +186,53 @@ export default function RegistrationPublicPage() {
           </div>
         </div>
 
-        {/* ── Status filter pills ───────────────────────────────────────── */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, overflowX: 'auto', paddingBottom: 4 }}>
-          {[
-            { key: 'all',                   label: `All`,                              count: stats.total, color: C.purple },
-            { key: 'not_registered',        label: `Not Reg.`,         count: stats.not_registered, color: C.red },
-            { key: 'registered_outstanding',label: `Outst.`,    count: stats.registered_outstanding, color: C.amber },
-            { key: 'confirmed',             label: `Conf.`,                   count: stats.confirmed, color: C.green },
-          ].map(p => (
-            <button
-              key={p.key}
-              onClick={() => setStatusFilter(p.key)}
-              title={p.label}
-              style={{
-                padding: '6px 12px', borderRadius: 20, fontSize: '11px', fontWeight: 600,
-                fontFamily: 'Inter', cursor: 'pointer', border: 'none', whiteSpace: 'nowrap',
-                background: statusFilter === p.key ? p.color : '#F1EEF6',
-                color: statusFilter === p.key ? '#fff' : p.color,
-              }}
-            >
-              {p.label} ({p.count})
-            </button>
-          ))}
-        </div>
+        {/* ── Status filter pills ──────────────────────────────────────── */}
+        {(() => {
+          const allPills = [
+            { key: 'all',                   label: `All`,       count: stats.total, color: C.purple },
+            { key: 'not_registered',        label: `Not Reg.`,  count: stats.not_registered, color: C.red },
+            { key: 'registered_outstanding',label: `Confirming`,    count: stats.registered_outstanding, color: C.amber },
+            { key: 'confirmed',             label: `Conf.`,     count: stats.confirmed, color: C.green },
+          ];
+          const allowedKeys = lockedStatus ? new Set(lockedStatus.split(',')) : null;
+          const pills = allowedKeys
+            ? [{ ...allPills[0], count: allPills.filter(p => allowedKeys.has(p.key)).reduce((s, p) => s + p.count, 0) }, ...allPills.filter(p => allowedKeys.has(p.key))]
+            : allPills;
+          if (pills.length <= 2) return null;
+          return (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, overflowX: 'auto', paddingBottom: 4 }}>
+              {pills.map(p => (
+                <button
+                  key={p.key}
+                  onClick={() => {
+                    if (p.key === 'all') { setStatusFilter(lockedStatus || 'all'); return; }
+                    setStatusFilter(prev => {
+                      const allVal = lockedStatus || 'all';
+                      if (prev === allVal) return p.key;
+                      const parts = new Set(prev.split(','));
+                      if (parts.has(p.key)) { parts.delete(p.key); return parts.size === 0 ? allVal : [...parts].join(','); }
+                      parts.add(p.key);
+                      return [...parts].join(',');
+                    });
+                  }}
+                  title={p.label}
+                  style={{
+                    padding: '6px 12px', borderRadius: 20, fontSize: '11px', fontWeight: 600,
+                    fontFamily: 'Inter', cursor: 'pointer', border: 'none', whiteSpace: 'nowrap',
+                    background: (p.key === 'all' ? statusFilter === (lockedStatus || 'all') : statusFilter.includes(p.key)) ? p.color : '#F1EEF6',
+                    color: (p.key === 'all' ? statusFilter === (lockedStatus || 'all') : statusFilter.includes(p.key)) ? '#fff' : p.color,
+                  }}
+                >
+                  {p.label} ({p.count})
+                </button>
+              ))}
+            </div>
+          );
+        })()}
+        )}
 
-        {/* ── Subgroup pills ────────────────────────────────────────────── */}
-        {subgroups.length > 0 && (
+        {/* ── Subgroup pills (hidden when scoped via URL) ────────────────── */}
+        {!lockedSubgroup && subgroups.length > 0 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, overflowX: 'auto', paddingBottom: 4 }}>
             {['All', ...subgroups].map(sg => (
               <button
@@ -257,7 +292,7 @@ export default function RegistrationPublicPage() {
           <div style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, padding: '32px 16px', textAlign: 'center' }}>
             <div style={{ color: C.mute, fontSize: '14px' }}>
               {statusFilter !== 'all' || subgroupFilter !== 'All' || fellowshipFilter !== 'All' || search.trim()
-                ? <span>No people match the filters. <button onClick={() => { setStatusFilter('all'); setSubgroupFilter('All'); setFellowshipFilter('All'); setSearch(''); }} style={{ background: 'none', border: 'none', color: C.purple, fontWeight: 600, cursor: 'pointer', fontSize: '13px', fontFamily: 'Inter' }}>Clear all</button></span>
+                ? <span>No people match the filters. <button onClick={() => { if (!lockedStatus) setStatusFilter('all'); if (!lockedSubgroup) setSubgroupFilter('All'); setFellowshipFilter('All'); setSearch(''); }} style={{ background: 'none', border: 'none', color: C.purple, fontWeight: 600, cursor: 'pointer', fontSize: '13px', fontFamily: 'Inter' }}>Clear all</button></span>
                 : 'No data available yet.'}
             </div>
           </div>
@@ -299,7 +334,7 @@ export default function RegistrationPublicPage() {
                             {r.fellowship || '—'}
                           </td>
                           <td style={{ padding: '9px 10px', borderBottom: `1px solid ${C.line}` }}>
-                            <StatusBadge status={r.registration_status} />
+                            <StatusBadge status={r.registration_status} manuallyConfirmed={r.manually_confirmed} />
                           </td>
                         </tr>
                       );
@@ -324,7 +359,7 @@ export default function RegistrationPublicPage() {
                           #{r.row_num}
                         </div>
                       </div>
-                      <StatusBadge status={r.registration_status} />
+                      <StatusBadge status={r.registration_status} manuallyConfirmed={r.manually_confirmed} />
                     </div>
                     {r.subgroup && (
                       <div style={{ fontSize: '12px', color: C.mute, marginBottom: 4 }}>
@@ -344,6 +379,7 @@ export default function RegistrationPublicPage() {
         )}
 
         <div style={{ marginTop: 20, textAlign: 'center', fontSize: 11, color: C.mute }}>
+          <div style={{ marginBottom: 4 }}>✦ = manually confirmed</div>
           BLW Canada Nexus · {eventName} · Shared registration view
         </div>
       </div>

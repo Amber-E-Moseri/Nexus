@@ -40,9 +40,9 @@ const STATUS_META = {
 
 // ── Shared UI primitives ───────────────────────────────────────────────────────
 
-function Card({ children, style }) {
+function Card({ children, style, className }) {
   return (
-    <div style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, ...style }}>
+    <div className={className} style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, ...style }}>
       {children}
     </div>
   )
@@ -141,9 +141,9 @@ function Select({ value, onChange, children, style }) {
 
 function StatCard({ label, value, sub, subColor }) {
   return (
-    <Card style={{ padding: '18px 22px', flex: '1 1 160px' }}>
+    <Card className="gt-stat-card" style={{ padding: '18px 22px', flex: '1 1 140px' }}>
       <Label>{label}</Label>
-      <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: C.ink, marginTop: 6 }}>
+      <div className="gt-stat-value" style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: C.ink, marginTop: 6 }}>
         {value}
       </div>
       {sub && <div style={{ fontSize: 12, color: subColor ?? C.mute, marginTop: 3, fontFamily: 'Inter' }}>{sub}</div>}
@@ -381,7 +381,7 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
   return (
     <div>
       {/* Week navigator — drives stats, chips, and table */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+      <div className="gt-week-nav" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
         {navBtn(isOldest, () => onWeekChange(allWeeks[activeWeekIdx - 1]), <ChevronLeft size={16} />)}
         <select
           value={activeWeek}
@@ -413,10 +413,11 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
         )}
         {/* Download PDF — opens browser print dialog for save-as-PDF */}
         <button
+          className="gt-pdf-btn"
           onClick={() => downloadReport(activeWeek, activeRows, growthData)}
           title="Open print dialog to save as PDF"
           style={{
-            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5,
+            marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
             padding: '6px 12px', borderRadius: 8,
             border: `1px solid ${C.line}`, background: C.paper, color: C.mute,
             fontSize: 12, fontWeight: 600, fontFamily: 'Inter', cursor: 'pointer',
@@ -441,9 +442,9 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
         />
         <StatCard label="First-Timers" value={networkFT.toLocaleString()} sub="this week" />
         {/* Reporting card with progress bar */}
-        <Card style={{ padding: '18px 22px', flex: '1 1 160px', position: 'relative', overflow: 'hidden' }}>
+        <Card className="gt-stat-card" style={{ padding: '18px 22px', flex: '1 1 140px', position: 'relative', overflow: 'hidden' }}>
           <Label>Reporting</Label>
-          <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: C.ink, marginTop: 6 }}>
+          <div className="gt-stat-value" style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: C.ink, marginTop: 6 }}>
             {reportingCount}
             <span style={{ fontSize: 18, color: C.mute, fontWeight: 400 }}> / {activeRows.length}</span>
           </div>
@@ -494,8 +495,8 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
       </div>
 
       {/* Chart — reference line highlights the selected review week */}
-      <Card style={{ padding: 20, marginBottom: 24 }}>
-        <ResponsiveContainer width="100%" height={280}>
+      <Card style={{ padding: '12px 8px 12px 0', marginBottom: 24 }}>
+        <ResponsiveContainer width="100%" height={220}>
           <LineChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
             <XAxis dataKey="week" tick={{ fontSize: 11, fill: C.mute, fontFamily: 'Inter' }} />
@@ -523,7 +524,7 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
       </Card>
 
       {/* Per-center table for selected week */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 15, color: C.ink }}>
           Week of {formatWeekFull(activeWeek)}
         </div>
@@ -959,7 +960,7 @@ function MonthEnd({ growthData, schedule, onRefresh }) {
         <Select value={year} onChange={e => setYear(Number(e.target.value))} style={{ flex: '0 0 auto' }}>
           {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
         </Select>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           {markResult && !markResult.error && (
             <span style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>
               ✓ {markResult[0]?.created_count ?? 0} entries marked as Did Not Meet
@@ -1167,18 +1168,18 @@ export default function GrowthTrackingPage({ embedded = false }) {
     <div style={{ background: C.cream, minHeight: embedded ? undefined : '100vh', fontFamily: 'Inter' }}>
 
       {/* Page header */}
-      <div style={{ background: C.paper, borderBottom: `1px solid ${C.line}`, padding: '20px 32px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+      <div className="gt-header" style={{ background: C.paper, borderBottom: `1px solid ${C.line}`, padding: '20px 32px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
           {!embedded && <TrendingUp size={20} color={C.purple} />}
           {!embedded && (
-            <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 20, fontWeight: 700, margin: 0, color: C.ink, flex: 1 }}>
+            <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 20, fontWeight: 700, margin: 0, color: C.ink, flex: 1, minWidth: 120 }}>
               Growth Tracking
             </h1>
           )}
           {embedded && <div style={{ flex: 1 }} />}
 
           {/* Action buttons + status */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="gt-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {/* Feedback messages */}
             {sendResult && !sendResult.error && (
               <span style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>
@@ -1271,10 +1272,21 @@ export default function GrowthTrackingPage({ embedded = false }) {
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .growth-row:hover td { background: ${C.cream} !important; }
+        @media (max-width: 640px) {
+          .gt-header { padding: 16px 14px 0 !important; }
+          .gt-actions { width: 100%; justify-content: flex-end; }
+          .gt-actions button { font-size: 11px !important; padding: 6px 10px !important; }
+          .gt-body { padding: 16px 14px 48px !important; }
+          .gt-week-nav { flex-wrap: wrap; }
+          .gt-week-nav select { flex: 1 1 auto !important; min-width: 0 !important; font-size: 12px !important; }
+          .gt-week-nav .gt-pdf-btn { margin-left: 0 !important; order: 10; flex: 1 1 100%; }
+          .gt-stat-card { padding: 14px 16px !important; }
+          .gt-stat-card .gt-stat-value { font-size: 24px !important; }
+        }
       `}</style>
 
       {/* Tab content */}
-      <div style={{ padding: '28px 32px 64px', maxWidth: 1100, margin: '0 auto' }}>
+      <div className="gt-body" style={{ padding: '28px 32px 64px', maxWidth: 1100, margin: '0 auto' }}>
         {tab === 'dashboard' && <Dashboard growthData={growthData} loading={loading} selectedWeek={selectedWeek} onWeekChange={setSelectedWeek} />}
         {tab === 'month-end' && <MonthEnd growthData={growthData} schedule={schedule} onRefresh={load} />}
         {tab === 'settings' && (

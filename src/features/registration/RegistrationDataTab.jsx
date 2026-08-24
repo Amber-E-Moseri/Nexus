@@ -175,7 +175,7 @@ export default function RegistrationDataTab({
     !isLimited && (role === 'super_admin' || role === 'regional_secretary' || role === 'dept_lead' || role === 'pastor')
   );
 
-  const [statusFilter,    setStatusFilter]    = useState('all');
+  const [statusFilter,    setStatusFilter]    = useState(new Set(['all']));
   const [subgroupFilter,  setSubgroupFilter]  = useState('All');
   const [fellowshipFilter,setFellowshipFilter] = useState('All');
 
@@ -205,7 +205,7 @@ export default function RegistrationDataTab({
 
   useEffect(() => {
     if (!highlightEmail) return;
-    setStatusFilter('all');
+    setStatusFilter(new Set(['all']));
     setSubgroupFilter('All');
     setFellowshipFilter('All');
     setSearch('');
@@ -258,7 +258,15 @@ export default function RegistrationDataTab({
   const isLocalhost = /localhost|127\.0\.0\.1/.test(siteOrigin);
 
   function copyPublicUrl() {
-    const url = `${siteOrigin}/registration/public/${publicToken}`;
+    const params = new URLSearchParams();
+    const publicStatuses = ['not_registered', 'registered_outstanding', 'confirmed'];
+    if (!statusFilter.has('all')) {
+      const valid = [...statusFilter].filter(s => publicStatuses.includes(s));
+      if (valid.length > 0) params.set('status', valid.join(','));
+    }
+    if (subgroupFilter !== 'All') params.set('subgroup', subgroupFilter);
+    const qs = params.toString();
+    const url = `${siteOrigin}/registration/public/${publicToken}${qs ? '?' + qs : ''}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopyLabel('Copied!');
       setTimeout(() => setCopyLabel('Copy link'), 2500);
@@ -449,10 +457,12 @@ export default function RegistrationDataTab({
   // ── filtered + sorted view ────────────────────────────────────────────────
   const filtered = useMemo(() => {
     let rows = allPeople;
-    if (statusFilter === 'manual_no_flight')
-      rows = rows.filter(p => p.manuallyConfirmed && !p.hasFlightInfo && !p.absent && !noFlightExpected(p));
-    else if (statusFilter !== 'all')
-      rows = rows.filter(p => p.registrationStatus === statusFilter);
+    if (!statusFilter.has('all')) {
+      rows = rows.filter(p => {
+        if (statusFilter.has('manual_no_flight') && p.manuallyConfirmed && !p.hasFlightInfo && !p.absent && !noFlightExpected(p)) return true;
+        return statusFilter.has(p.registrationStatus);
+      });
+    }
     if (subgroupFilter !== 'All')
       rows = rows.filter(p => p.subgroup === subgroupFilter);
     if (fellowshipFilter !== 'All')
@@ -533,12 +543,18 @@ export default function RegistrationDataTab({
           ].map(({ key, color, label }) => (
             <div
               key={key}
-              onClick={() => setStatusFilter(statusFilter === key ? 'all' : key)}
+              onClick={() => setStatusFilter(prev => {
+                const next = new Set(prev);
+                if (next.has('all')) { next.delete('all'); next.add(key); }
+                else if (next.has(key)) { next.delete(key); if (next.size === 0) next.add('all'); }
+                else next.add(key);
+                return next;
+              })}
               style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}
             >
               <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
               <div>
-                <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 22, lineHeight: 1, color: statusFilter === key ? color : C.ink }}>
+                <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 22, lineHeight: 1, color: statusFilter.has(key) ? color : C.ink }}>
                   {stats[key]}
                 </div>
                 <div style={{ fontSize: 11, color: C.mute, marginTop: 2 }}>{label}</div>
@@ -553,11 +569,20 @@ export default function RegistrationDataTab({
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {statusPills.map(p => {
-            const active = statusFilter === p.key;
+            const active = statusFilter.has(p.key);
             return (
               <button
                 key={p.key}
-                onClick={() => setStatusFilter(p.key)}
+                onClick={() => {
+                  if (p.key === 'all') { setStatusFilter(new Set(['all'])); return; }
+                  setStatusFilter(prev => {
+                    const next = new Set(prev);
+                    if (next.has('all')) { next.delete('all'); next.add(p.key); }
+                    else if (next.has(p.key)) { next.delete(p.key); if (next.size === 0) next.add('all'); }
+                    else next.add(p.key);
+                    return next;
+                  });
+                }}
                 style={{
                   padding: '5px 13px', borderRadius: 20, fontSize: 12.5, fontWeight: 600,
                   fontFamily: 'Inter', cursor: 'pointer', border: 'none',
