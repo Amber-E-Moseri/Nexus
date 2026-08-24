@@ -211,15 +211,15 @@ export default function ThisIsItInfo() {
     document.title = 'This Is It 2.0 - Prep Guide';
   }, []);
 
-  // Re-runs once isLoading flips to false: the content query shows a
-  // "Loading..." placeholder on first mount (no .stop-head/.card elements
-  // exist yet), so an observer set up with an empty dep array would find
-  // nothing to watch and those sections would stay opacity:0 forever. This
-  // only surfaced on cold loads — a warm React Query cache skips the
-  // placeholder entirely, which is why it looked intermittent.
+  // Re-runs once isLoading flips to false OR once the intro is dismissed.
+  // Two reasons sections can miss the observer:
+  //   1. Cold load: query is still in-flight when effect first runs — fixed by [isLoading].
+  //   2. Intro dismissal: isLoading is already false when the user closes the intro,
+  //      so the effect never re-fires for the newly-mounted content — fixed by [showIntro].
   // Staggered reveal: cards within the same section animate in sequence
   useEffect(() => {
     if (isLoading) return;
+    if (showIntro) return; // content not in DOM yet — wait until intro is gone
     const obs = new IntersectionObserver((entries) => {
       entries.forEach(e => {
         if (e.isIntersecting) {
@@ -235,18 +235,19 @@ export default function ThisIsItInfo() {
     }, { threshold: 0.08 });
     document.querySelectorAll('.stop-head,.card').forEach(el => obs.observe(el));
     return () => obs.disconnect();
-  }, [isLoading]);
+  }, [isLoading, showIntro]);
 
   // Scroll-spy: highlight the nav link for whichever section is centred in the viewport
   useEffect(() => {
     if (isLoading) return;
+    if (showIntro) return;
     const ids = ['expect', 'pack', 'getting-there', 'checkin', 'venue', 'schedule', 'help'];
     const obs = new IntersectionObserver((entries) => {
       entries.forEach(e => { if (e.isIntersecting) setActiveSection(e.target.id); });
     }, { rootMargin: '-35% 0px -55% 0px', threshold: 0 });
     ids.forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el); });
     return () => obs.disconnect();
-  }, [isLoading]);
+  }, [isLoading, showIntro]);
 
   // Inject Google Fonts link tag early to avoid render-blocking @import
   useEffect(() => {
