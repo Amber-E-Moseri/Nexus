@@ -1,6 +1,8 @@
 -- Update public registration RPC to account for manually_confirmed flag.
 -- People with manually_confirmed = true show as 'confirmed' and carry a flag so the UI can label them.
 
+DROP FUNCTION IF EXISTS public.get_public_registration_data(text);
+
 create or replace function public.get_public_registration_data(p_token text)
 returns table (
   row_num              bigint,
