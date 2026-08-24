@@ -1826,6 +1826,11 @@ function FinanceTab({ registrations, payments, setPayments, userId, earlyCutoffA
   }).sort((a, b) => a.subgroup.localeCompare(b.subgroup) || a.fullName.localeCompare(b.fullName)),
   [registrations, payByEmail, defaultFee]);
 
+  const subgroups = useMemo(() => {
+    const s = new Set(rows.map(r => r.subgroup).filter(Boolean));
+    return [...s].sort();
+  }, [rows]);
+
   const totalExpected = rows.length * defaultFee;
   const totalPaid    = rows.reduce((s, r) => s + r.amount_paid, 0);
   const countPaid    = rows.filter(r => r.amount_paid >= r.amount_expected && r.amount_paid > 0).length;
@@ -1835,6 +1840,24 @@ function FinanceTab({ registrations, payments, setPayments, userId, earlyCutoffA
   const [saving, setSaving] = useState({});
   // partial editing: email -> draft amount string
   const [partialDraft, setPartialDraft] = useState({});
+  // filtering
+  const [subgroupFilter, setSubgroupFilter] = useState('All');
+  const [search, setSearch] = useState('');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState('all'); // all | paid | partial | unpaid
+
+  const filtered = useMemo(() => {
+    return rows.filter(r => {
+      if (subgroupFilter !== 'All' && r.subgroup !== subgroupFilter) return false;
+      if (search && !r.fullName.toLowerCase().includes(search.toLowerCase()) && !r.email.toLowerCase().includes(search.toLowerCase())) return false;
+      const isPaid = r.amount_paid >= r.amount_expected && r.amount_paid > 0;
+      const isPartial = r.amount_paid > 0 && r.amount_paid < r.amount_expected;
+      const isUnpaid = r.amount_paid === 0;
+      if (paymentStatusFilter === 'paid' && !isPaid) return false;
+      if (paymentStatusFilter === 'partial' && !isPartial) return false;
+      if (paymentStatusFilter === 'unpaid' && !isUnpaid) return false;
+      return true;
+    });
+  }, [rows, subgroupFilter, search, paymentStatusFilter]);
 
   async function upsertPayment(email, fullName, subgroup, amountExpected, amountPaid, paymentDate, notes) {
     setSaving(prev => ({ ...prev, [email]: true }));
@@ -1908,11 +1931,56 @@ function FinanceTab({ registrations, payments, setPayments, userId, earlyCutoffA
           <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 16, margin: 0 }}>Payment tracker</h2>
           <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>Check off each person as they pay. Use "partial" to record a lower amount.</div>
         </div>
-        <Btn tone="ghost" small onClick={() => downloadCSV('finance-payments.csv', rows, [
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search name or email…"
+          style={{
+            flex: 1, minWidth: 180, padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.line}`,
+            fontFamily: 'Inter', fontSize: 13, outline: 'none', color: C.ink,
+          }}
+        />
+        {search && (
+          <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, fontSize: 18, lineHeight: 1 }}>×</button>
+        )}
+        <select
+          value={subgroupFilter}
+          onChange={e => setSubgroupFilter(e.target.value)}
+          style={{
+            padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.line}`,
+            fontFamily: 'Inter', fontSize: 13, color: subgroupFilter === 'All' ? C.mute : C.ink,
+            background: subgroupFilter !== 'All' ? '#F1EEF6' : '#fff', cursor: 'pointer',
+          }}
+        >
+          <option value="All">All subgroups</option>
+          {subgroups.map(sg => <option key={sg} value={sg}>{sg}</option>)}
+        </select>
+        <select
+          value={paymentStatusFilter}
+          onChange={e => setPaymentStatusFilter(e.target.value)}
+          style={{
+            padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.line}`,
+            fontFamily: 'Inter', fontSize: 13, color: paymentStatusFilter === 'all' ? C.mute : C.ink,
+            background: paymentStatusFilter !== 'all' ? '#F1EEF6' : '#fff', cursor: 'pointer',
+          }}
+        >
+          <option value="all">All payments</option>
+          <option value="paid">Paid in full</option>
+          <option value="partial">Partial</option>
+          <option value="unpaid">Unpaid</option>
+        </select>
+        <div style={{ fontSize: 12, color: C.mute, whiteSpace: 'nowrap' }}>
+          {filtered.length} of {rows.length}
+        </div>
+        <Btn tone="ghost" small onClick={() => downloadCSV('finance-payments.csv', filtered, [
           { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' }, { key: 'email', label: 'Email' },
           { key: 'amount_expected', label: 'Expected ($)' }, { key: 'amount_paid', label: 'Paid ($)' },
           { key: 'payment_date', label: 'Payment Date' }, { key: 'payment_notes', label: 'Notes' },
-        ])}><Download size={13} /> Export</Btn>
+        ])}><Download size={13} /> Export ({filtered.length})</Btn>
       </div>
 
       <Card style={{ padding: 0, overflowX: 'auto' }}>
@@ -1928,7 +1996,7 @@ function FinanceTab({ registrations, payments, setPayments, userId, earlyCutoffA
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => {
+            {filtered.map(r => {
               const isPaid = r.amount_paid >= r.amount_expected && r.amount_paid > 0;
               const isPartial = r.amount_paid > 0 && r.amount_paid < r.amount_expected;
               const isSaving = saving[r.email];
@@ -1987,8 +2055,10 @@ function FinanceTab({ registrations, payments, setPayments, userId, earlyCutoffA
                 </tr>
               );
             })}
-            {rows.length === 0 && (
-              <tr><td colSpan={6} style={{ textAlign: 'center', color: C.mute, padding: 24 }}>No registrations yet.</td></tr>
+            {filtered.length === 0 && (
+              <tr><td colSpan={6} style={{ textAlign: 'center', color: C.mute, padding: 24 }}>
+                {rows.length === 0 ? 'No registrations yet.' : 'No payments match the current filters.'}
+              </td></tr>
             )}
           </tbody>
         </table>
