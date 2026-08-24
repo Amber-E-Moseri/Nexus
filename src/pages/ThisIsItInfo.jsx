@@ -28,10 +28,10 @@ const FALLBACK = {
   transport_contact_chat: '@davidakalue99',
   transport_contact_phone: '+1 (204) 396-6156',
   flight_form_url: 'https://leaders.lwcanada.org/f/rp3uahba3c3c',
-  friday_opening_time: '6:00 PM',
+  friday_opening_time: '3:00 PM',
   monday_checkout_time: 'Mon Morning',
   event_dates: '28–31 Aug 2026',
-  dress_code: 'Semiformal for most of the weekend.',
+  dress_code: 'Formal for most of the weekend.',
   all_white_for: 'Thanksgiving service',
   wifi_text: 'Free, hotel-wide',
   sessions_text: 'Conference Room',
@@ -406,9 +406,12 @@ export default function ThisIsItInfo() {
     }
   };
 
-  // First-load envelope intro — shown before anything else on first device visit
+  // First-load scroll intro — shown before anything else on first device visit.
+  // `c` is already computed above (falls back to FALLBACK while query is in-flight).
+  // When the query resolves, tiiData updates and the intro reflects live DB values
+  // instantly — check-in time, hotel name, contacts, etc. — without any extra fetch.
   if (showIntro) {
-    return <TiiEnvelopeIntro onComplete={() => setShowIntro(false)} />;
+    return <TiiEnvelopeIntro onComplete={() => setShowIntro(false)} tiiData={c} />;
   }
 
   if (isLoading) {

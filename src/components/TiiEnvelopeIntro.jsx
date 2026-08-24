@@ -1,435 +1,412 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const STORAGE_KEY = 'tii-intro-seen-2026';
 
-// Barcode bars — fixed so render is stable
-const BARS = [3,1.5,2,1.5,3,1.5,1.5,2,3,1.5,2,3,1.5,2,1.5,3,1.5,2,1.5,2,3,1.5,3,1.5,2,1.5,3,2,1.5,2,3,1.5,1.5,3,2,1.5];
+// Upward-trend barcode — deterministic
+const BARS = Array.from({ length: 28 }, (_, i) => {
+  const trend = i / 27;
+  const wobble = Math.sin(i * 2.5) * 0.12 + Math.sin(i * 7.1) * 0.06;
+  return {
+    h: Math.max(4, Math.round(5 + (trend + wobble) * 28)),
+    w: i % 5 === 0 ? 3 : i % 2 === 0 ? 2 : 1,
+  };
+});
+
+const SECTIONS = [
+  {
+    num: '01', head: 'Before You Fly',
+    body: (c) => `Submit your flight form — link in the full guide. Hotel shuttle meets you at YWG arrivals.`,
+  },
+  {
+    num: '02', head: 'Check-In & Venue',
+    body: (c) => `First session 12:00 PM · Room check-in ${c.friday_opening_time}. WiFi: ${c.wifi_text}`,
+  },
+  {
+    num: '03', head: 'Dress Code',
+    body: (c) => c.dress_code,
+  },
+];
 
 /**
- * TiiEnvelopeIntro — boarding-pass card that flips open on first device visit.
- * Front cover (coral) → flips away → reveals the boarding-pass body → page loads.
+ * TiiEnvelopeIntro — first-device scroll card, shown before the main guide.
+ *
+ * Props
+ * ─────
+ * onComplete()   called when user taps "Open full guide"
+ * tiiData        live row from this_is_it_event_content (passed from ThisIsItInfo
+ *                after its query resolves; falls back to FALLBACK while loading)
  */
-export default function TiiEnvelopeIntro({ onComplete }) {
-  const [phase, setPhase] = useState('enter');
-  // enter → idle → opening → revealed → out
+export default function TiiEnvelopeIntro({ onComplete, tiiData = {} }) {
+  const [phase, setPhase] = useState('enter'); // enter → loaded → out
+  const secRefs = useRef([]);
+
+  const c = {
+    friday_opening_time:     tiiData.friday_opening_time     ?? '3:00 PM',
+    monday_checkout_time:    tiiData.monday_checkout_time    ?? 'Mon Morning',
+    hotel_name:              tiiData.hotel_name              ?? 'Sandman Winnipeg Airport',
+    dress_code:              tiiData.dress_code              ?? 'Formal for most of the weekend.',
+    all_white_for:           tiiData.all_white_for           ?? 'Thanksgiving service',
+    wifi_text:               tiiData.wifi_text               ?? 'Free, hotel-wide',
+    sessions_text:           tiiData.sessions_text           ?? 'Conference Room',
+    transport_contact_name:  tiiData.transport_contact_name  ?? 'David Akalue',
+    transport_contact_phone: tiiData.transport_contact_phone ?? '+1 (204) 396-6156',
+  };
 
   useEffect(() => {
-    const t = setTimeout(() => setPhase('idle'), 480);
+    const t = setTimeout(() => setPhase('loaded'), 60);
     return () => clearTimeout(t);
   }, []);
 
+  useEffect(() => {
+    if (phase !== 'loaded') return;
+    secRefs.current.forEach((el, i) => {
+      if (!el) return;
+      setTimeout(() => el?.classList.add('tii-sec-in'), 480 + i * 130);
+    });
+  }, [phase]);
+
   function handleOpen() {
-    if (phase !== 'idle') return;
-    setPhase('opening');
-    // boarding pass content fades in just as cover crosses 90°
-    setTimeout(() => setPhase('revealed'), 820);
-    // overlay fades after a beat to let them see the pass
-    setTimeout(() => {
-      setPhase('out');
-      localStorage.setItem(STORAGE_KEY, '1');
-    }, 2000);
-    setTimeout(onComplete, 2460);
+    setPhase('out');
+    localStorage.setItem(STORAGE_KEY, '1');
+    setTimeout(onComplete, 420);
   }
 
-  const coverFlipped = ['opening', 'revealed', 'out'].includes(phase);
-  const passVisible  = ['revealed', 'out'].includes(phase);
-  const fading       = phase === 'out';
-  const ready        = phase === 'idle';
+  const isLoaded = phase === 'loaded';
+  const isOut    = phase === 'out';
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&display=swap');
 
-        .tii-intr {
+        /* ── Outer shell — fixed, handles scroll ─────────────────── */
+        .tii-intr-shell {
           position: fixed; inset: 0; z-index: 1000;
-          background: radial-gradient(ellipse at 50% 46%, #FBF7EE 0%, #E8DFCD 100%);
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          font-family: 'Inter', sans-serif; overflow: hidden;
+          background: #F9F6EF;
+          overflow-y: auto; overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior: contain;
+          transition: opacity .4s ease;
         }
 
-        /* Floating background blobs */
-        .tii-blob {
-          position: absolute; border-radius: 50%; pointer-events: none;
-          animation: blobDrift var(--dur) ease-in-out var(--del) infinite alternate;
-        }
-        @keyframes blobDrift {
-          from { transform: translate(0,0) scale(1); }
-          to   { transform: translate(var(--mx),var(--my)) scale(1.1); }
-        }
-
-        /* Eyebrow */
-        .tii-intr-eye {
-          font-size: 10px; letter-spacing: .15em; text-transform: uppercase;
-          color: #bbb; font-weight: 700; margin: 0 0 24px;
-          transition: opacity .65s ease .25s, transform .65s ease .25s;
-        }
-
-        /* ── Pass wrapper ─────────────────────────────────────────── */
-        .tii-pass-wrap {
-          position: relative; width: 340px;
-          perspective: 1100px;
-          transition: opacity .65s cubic-bezier(.22,.61,.36,1),
-                      transform .65s cubic-bezier(.22,.61,.36,1);
-          filter: drop-shadow(0 12px 36px rgba(22,23,23,.18));
-        }
-        @media (max-width: 370px) { .tii-pass-wrap { width: 308px; } }
-
-        /* idle float */
-        @keyframes passFloat {
-          0%,100% { filter: drop-shadow(0 12px 36px rgba(22,23,23,.18)); transform: translateY(0); }
-          45%     { filter: drop-shadow(0 20px 44px rgba(22,23,23,.12)); transform: translateY(-5px); }
-        }
-        .tii-pass-wrap.idle { animation: passFloat 4.2s ease-in-out infinite; }
-        .tii-pass-wrap.idle:hover { animation: none; filter: drop-shadow(0 18px 44px rgba(22,23,23,.22)); }
-
-        /* ── Cover card (coral, flips away) ──────────────────────── */
-        .tii-cover {
-          position: absolute; top: 0; left: 0; right: 0; height: 192px;
-          border-radius: 12px 12px 0 0;
-          background: linear-gradient(160deg, #E87A60 0%, #DD6F51 50%, #C06040 100%);
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          gap: 10px; z-index: 4;
-          transform-origin: bottom center;
-          transition: transform .88s cubic-bezier(.34,1.0,.64,1);
-          backface-visibility: hidden;
-          cursor: pointer;
-          overflow: hidden;
-        }
-        /* subtle paper texture lines on cover */
-        .tii-cover::before {
-          content: '';
-          position: absolute; inset: 0;
-          background: repeating-linear-gradient(
-            -45deg, transparent 0px, transparent 18px,
-            rgba(255,255,255,0.03) 18px, rgba(255,255,255,0.03) 19px
-          );
-        }
-        /* shine line sweeps across on idle → catches eye */
-        @keyframes coverShine {
-          0%   { left: -80%; opacity: 0; }
-          8%   { opacity: 1; }
-          55%  { left: 120%; opacity: .6; }
-          100% { left: 120%; opacity: 0; }
-        }
-        .tii-cover-shine {
-          position: absolute; top: 0; bottom: 0; width: 40%;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,.15), transparent);
-          animation: coverShine 3.6s ease-out 1.2s infinite;
-          pointer-events: none;
-        }
-        .tii-cover-logo { width: 86px; height: auto; position: relative; z-index: 1; }
-        .tii-cover-label {
-          font-family: 'Anton', sans-serif;
-          font-size: 14px; letter-spacing: .12em; color: rgba(255,255,255,.85);
-          text-transform: uppercase; position: relative; z-index: 1;
-        }
-        .tii-cover-dates {
-          font-size: 10px; letter-spacing: .1em; color: rgba(255,255,255,.55);
-          font-weight: 700; position: relative; z-index: 1;
-          text-transform: uppercase;
-        }
-        /* "tap to open" indicator */
-        .tii-cover-tap {
-          position: relative; z-index: 1;
-          margin-top: 4px;
-          display: flex; align-items: center; gap: 6px;
-          font-size: 11px; color: rgba(255,255,255,.65); font-weight: 600;
-        }
-        @keyframes tapArrow { 0%,100%{transform:translateX(0)} 50%{transform:translateX(4px)} }
-        .tii-cover-tap svg { animation: tapArrow 1.4s ease-in-out infinite; }
-
-        /* ── Boarding pass body (behind cover, revealed on flip) ─── */
-        .tii-pass-body {
-          height: 192px;
-          background: #fff;
-          border-radius: 12px 12px 0 0;
-          border: 1px solid #E2D8C5; border-bottom: none;
-          overflow: hidden;
-          transition: opacity .32s ease;
-        }
-        /* Coral header strip */
-        .tii-pass-header {
-          background: #DD6F51;
-          padding: 9px 18px;
-          display: flex; justify-content: space-between; align-items: center;
-        }
-        .tii-pass-airline {
-          font-family: 'Anton', sans-serif; font-size: 13px;
-          color: #fff; letter-spacing: .06em; text-transform: uppercase;
-        }
-        .tii-pass-bp {
-          font-size: 9px; letter-spacing: .18em; color: rgba(255,255,255,.7);
-          text-transform: uppercase; font-weight: 700;
-        }
-        /* Route row */
-        .tii-pass-route {
-          display: flex; justify-content: space-between; align-items: flex-end;
-          padding: 14px 18px 10px;
-        }
-        .tii-pass-city {
-          font-family: 'Anton', sans-serif;
-          font-size: clamp(34px, 10vw, 44px); line-height: 1; color: #1a1a1a;
-          letter-spacing: .02em;
-        }
-        .tii-pass-city-sub { font-size: 9px; color: #bbb; letter-spacing: .08em; text-transform: uppercase; margin-top: 3px; }
-        .tii-pass-mid {
-          flex: 1; display: flex; flex-direction: column;
-          align-items: center; gap: 5px; padding: 0 10px 6px;
-        }
-        .tii-pass-duration { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: #bbb; font-weight: 700; }
-        /* Fields grid */
-        .tii-pass-fields {
-          display: grid; grid-template-columns: 1fr 1fr;
-          gap: 8px 14px; padding: 8px 18px 0;
-          border-top: 1px solid #eee;
-        }
-        .tii-pass-field label {
-          display: block; font-size: 8px; letter-spacing: .14em;
-          text-transform: uppercase; color: #bbb; margin-bottom: 3px; font-weight: 700;
-        }
-        .tii-pass-field .val { font-weight: 700; font-size: 12px; color: #1a1a1a; line-height: 1.3; }
-
-        /* ── Perforation / tear-off line ─────────────────────────── */
-        .tii-perf {
+        /* ── Inner — centers card, contains blobs ─────────────────── */
+        .tii-intr-inner {
           position: relative;
-          border-top: 2px dashed #ddd;
-          background: #fff;
-        }
-        .tii-perf-notch {
-          position: absolute; top: -11px;
-          width: 22px; height: 22px; border-radius: 50%;
-          background: radial-gradient(ellipse at 50% 46%, #EAE0CC, #E0D4BE);
-          border: 1px solid #D8CDB8;
-          box-shadow: inset 0 1px 2px rgba(0,0,0,.06);
+          min-height: 100%;
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: flex-start;
+          padding: 24px 16px 56px;
+          font-family: 'Inter', sans-serif;
+          /* blobs must be absolute children — not fixed — so scroll works */
         }
 
-        /* ── Stub ────────────────────────────────────────────────── */
-        .tii-stub {
-          background: #fff;
-          border: 1px solid #E2D8C5; border-top: none;
-          border-radius: 0 0 12px 12px;
-          padding: 13px 18px;
-          display: flex; justify-content: space-between; align-items: center; gap: 12px;
+        /* Subtle warm blobs */
+        .tii-bg-blob {
+          position: absolute; border-radius: 50%; pointer-events: none; z-index: 0;
+          animation: tii-blobDrift var(--dur) ease-in-out var(--del) infinite alternate;
         }
-        .tii-stub-left { display: flex; flex-direction: column; gap: 4px; }
+        @keyframes tii-blobDrift {
+          from { transform: translate(0,0) scale(1); }
+          to   { transform: translate(var(--mx),var(--my)) scale(1.06); }
+        }
+
+        /* ── Card ─────────────────────────────────────────────────── */
+        @keyframes tii-cardDrop {
+          0%   { opacity:0; transform:translateY(-24px) scale(0.94) rotate(-.3deg); }
+          65%  { transform:translateY(4px) scale(1.008) rotate(.08deg); }
+          100% { opacity:1; transform:none; }
+        }
+        .tii-card {
+          position: relative; z-index: 1;
+          width: 100%; max-width: 380px;
+          background: #fff;
+          border-radius: 14px;
+          border: 1px solid #E7DFCB;
+          box-shadow: 0 8px 32px rgba(22,23,23,.15);
+          overflow: hidden;
+          opacity: 0;
+        }
+        .tii-card.tii-card-loaded {
+          animation: tii-cardDrop .8s cubic-bezier(.22,.61,.36,1) .1s both;
+        }
+
+        /* ── Coral header ─────────────────────────────────────────── */
+        .tii-ch {
+          background: #DD6F51;
+          padding: 10px 18px;
+          display: flex; justify-content: space-between; align-items: center;
+          position: relative; overflow: hidden;
+        }
+        @keyframes tii-hshine {
+          0%  { left:-60%; opacity:0; }
+          8%  { opacity:1; }
+          55% { left:130%; }
+          100%{ left:130%; opacity:0; }
+        }
+        .tii-ch::after {
+          content:''; position:absolute; top:0; bottom:0; width:40%;
+          background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);
+          animation:tii-hshine 3.8s ease-out 1.2s infinite;
+        }
+        .tii-ch-name {
+          font-family:'Anton',sans-serif; font-size:13px;
+          color:#fff; letter-spacing:.04em; text-transform:uppercase;
+        }
+        .tii-ch-type {
+          font-size:9px; letter-spacing:.18em; text-transform:uppercase;
+          font-weight:700; color:rgba(255,255,255,.75);
+        }
+
+        /* ── Logo ─────────────────────────────────────────────────── */
+        .tii-logo-wrap {
+          display:flex; justify-content:center;
+          padding: 14px 20px 4px;
+        }
+        .tii-logo-img { width:140px; max-width:58%; height:auto; display:block; }
+
+        /* ── Route row ────────────────────────────────────────────── */
+        .tii-route-row {
+          display:flex; justify-content:space-between;
+          align-items:flex-end; gap:6px;
+          padding: 12px 18px 10px;
+        }
+        .tii-city-code {
+          font-family:'Anton',sans-serif;
+          font-size: clamp(36px, 9.5vw, 52px);
+          line-height:1; letter-spacing:.02em; color:#1a1a1a;
+        }
+        .tii-city-sub { font-size:9px; color:#999; margin-top:3px; letter-spacing:.06em; text-transform:uppercase; }
+        .tii-route-mid {
+          flex:1; display:flex; flex-direction:column;
+          align-items:center; gap:5px; padding:0 6px 6px;
+        }
+        .tii-route-dates { font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:#bbb; font-weight:700; }
+
+        /* ── Fields ───────────────────────────────────────────────── */
+        .tii-fields {
+          display:grid; grid-template-columns:repeat(2,1fr);
+          gap:8px 14px; border-top:1px solid #eee;
+          padding: 9px 18px 12px;
+        }
+        .tii-field label {
+          display:block; font-size:8px; letter-spacing:.12em;
+          text-transform:uppercase; color:#aaa; margin-bottom:3px; font-weight:700;
+        }
+        .tii-field .val { font-weight:700; font-size:12.5px; color:#1a1a1a; line-height:1.3; }
+
+        /* ── Sections ─────────────────────────────────────────────── */
+        .tii-secs { border-top:1px solid #eee; padding: 10px 18px 0; }
+        .tii-sec {
+          display:flex; gap:11px; padding:9px 0;
+          border-bottom:1px solid #E7DFCB; align-items:flex-start;
+          opacity:0; transform:translateY(8px);
+        }
+        .tii-sec:last-child { border-bottom:none; }
+        .tii-sec.tii-sec-in {
+          transition:opacity .4s ease, transform .4s ease;
+          opacity:1; transform:none;
+        }
+
+        /* Yellow dot — exact .tii-dot from main page */
+        @keyframes tii-dotIn {
+          0%  { transform:scale(.5); opacity:0; }
+          70% { transform:scale(1.15); }
+          100%{ transform:scale(1); opacity:1; }
+        }
+        @keyframes tii-dotPulse {
+          0%,100%{ box-shadow:0 0 0 0 rgba(234,198,61,.4); }
+          50%    { box-shadow:0 0 0 5px rgba(234,198,61,0); }
+        }
+        .tii-dot {
+          flex-shrink:0; width:28px; height:28px; border-radius:50%;
+          background:#EAC63D; color:#161717;
+          display:flex; align-items:center; justify-content:center;
+          font-family:'Anton',sans-serif; font-size:12px;
+          border:1px solid rgba(234,198,61,.4); margin-top:1px;
+        }
+        .tii-sec.tii-sec-in .tii-dot {
+          animation:tii-dotIn .4s cubic-bezier(.34,1.56,.64,1) .08s both,
+                    tii-dotPulse 2.8s ease-in-out .55s infinite;
+        }
+        .tii-sec-head {
+          font-size:8.5px; letter-spacing:.12em; text-transform:uppercase;
+          color:#aaa; font-weight:700; margin-bottom:3px;
+        }
+        .tii-sec-body { font-size:12.5px; line-height:1.6; color:#161717; }
+        .tii-sec-body strong { font-weight:700; }
+
+        /* ── Stub ─────────────────────────────────────────────────── */
+        .tii-stub {
+          border-top:1px solid #eee;
+          padding: 11px 18px;
+          display:flex; justify-content:space-between; align-items:center; gap:10px;
+        }
         .tii-live-row {
-          display: flex; align-items: center; gap: 6px;
-          font-size: 11px; font-weight: 700; color: #2a8f7a; letter-spacing: .02em;
+          display:flex; align-items:center; gap:6px;
+          font-size:10px; letter-spacing:.07em; text-transform:uppercase;
+          font-weight:800; color:#3aa895;
+        }
+        @keyframes tii-livePing {
+          0%,100%{ box-shadow:0 0 0 0 rgba(58,168,149,.55); }
+          50%    { box-shadow:0 0 0 5px rgba(58,168,149,0); }
         }
         .tii-live-dot {
-          width: 7px; height: 7px; border-radius: 50%; background: #3aa895; flex-shrink: 0;
+          width:7px; height:7px; border-radius:50%;
+          background:#3aa895; flex-shrink:0;
+          animation:tii-livePing 2.1s ease-in-out infinite;
         }
-        @keyframes livePing {
-          0%,100% { box-shadow: 0 0 0 0 rgba(58,168,149,.5); }
-          50%      { box-shadow: 0 0 0 5px rgba(58,168,149,0); }
-        }
-        .tii-live-dot { animation: livePing 2.2s ease-in-out infinite; }
-        .tii-stub-code {
-          font-size: 9px; color: #ccc; letter-spacing: .1em;
-          text-transform: uppercase; font-family: monospace;
-        }
-        .tii-barcode { display: flex; align-items: flex-end; gap: 1.5px; height: 36px; }
-        .tii-bar { display: inline-block; background: #1a1a1a; }
+        .tii-barcode { display:flex; align-items:flex-end; gap:1px; height:32px; }
+        .tii-bar { display:inline-block; background:#1a1a1a; opacity:.8; }
 
-        /* ── CTA block ────────────────────────────────────────────── */
-        .tii-cta {
-          margin-top: 30px;
-          display: flex; flex-direction: column; align-items: center; gap: 13px;
-          transition: opacity .4s ease, transform .4s ease;
+        /* ── CTA ──────────────────────────────────────────────────── */
+        .tii-cta { padding: 10px 18px 18px; }
+        @keyframes tii-ctaPulse {
+          0%,100%{ box-shadow:0 5px 20px rgba(107,18,188,.35); }
+          50%    { box-shadow:0 7px 28px rgba(107,18,188,.55); }
         }
-        .tii-cta-btn {
-          background: linear-gradient(135deg, #7B1ED4, #6B12BC, #5a0fa8);
-          color: #fff; border: none; border-radius: 999px;
-          padding: 13px 34px;
-          font-family: 'Inter', sans-serif;
-          font-size: 14px; font-weight: 800; letter-spacing: .04em; cursor: pointer;
-          box-shadow: 0 6px 22px rgba(107,18,188,.32), 0 1px 0 rgba(255,255,255,.1) inset;
-          transition: transform .18s, box-shadow .18s;
+        .tii-open-btn {
+          display:block; width:100%; padding:13px;
+          background:#6B12BC; color:#fff; border:none; border-radius:9px;
+          font-family:'Inter',sans-serif; font-size:14px; font-weight:800;
+          letter-spacing:.03em; cursor:pointer; text-align:center;
+          animation:tii-ctaPulse 2.6s ease-in-out 2s infinite;
+          transition:background .2s, transform .15s;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
         }
-        .tii-cta-btn:hover  { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(107,18,188,.4), 0 1px 0 rgba(255,255,255,.1) inset; }
-        .tii-cta-btn:active { transform: translateY(0); }
-        .tii-cta-note {
-          display: flex; flex-direction: column; align-items: center; gap: 5px;
-          text-align: center;
-        }
-        .tii-cta-note-top {
-          display: flex; align-items: center; gap: 7px;
-          font-size: 12px; font-weight: 700; color: #3aa895;
-        }
-        .tii-cta-note-sub {
-          font-size: 11px; color: #bbb; font-weight: 500;
-          max-width: 264px; line-height: 1.55;
+        .tii-open-btn:hover  { background:#5a0fa8; transform:translateY(-1px); }
+        .tii-open-btn:active { transform:none; }
+
+        /* ── Safe-area bottom padding on iPhone ───────────────────── */
+        @supports (padding-bottom: env(safe-area-inset-bottom)) {
+          .tii-intr-inner { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .tii-blob,.tii-pass-wrap.idle,.tii-live-dot,.tii-cover-shine,.tii-cover-tap svg { animation: none !important; }
-          .tii-cover,.tii-pass-body,.tii-cta,.tii-intr-eye { transition-duration: .01ms !important; }
+          .tii-card { animation:none !important; opacity:1; }
+          .tii-bg-blob, .tii-live-dot, .tii-open-btn,
+          .tii-sec.tii-sec-in .tii-dot, .tii-ch::after { animation:none !important; }
+          .tii-sec.tii-sec-in { transition:none; }
         }
       `}</style>
 
+      {/* Outer scrollable shell */}
       <div
-        className="tii-intr"
-        style={{
-          opacity:       fading ? 0 : 1,
-          transition:    'opacity .48s ease',
-          pointerEvents: fading ? 'none' : 'auto',
-        }}
+        className="tii-intr-shell"
+        style={{ opacity: isOut ? 0 : 1, pointerEvents: isOut ? 'none' : 'auto' }}
+        aria-modal="true"
+        role="dialog"
+        aria-label="This Is It 2026 Prep Guide"
       >
-        {/* Background blobs */}
-        {[
-          { x:'9%',  y:'14%', s:140, c:'rgba(234,198,61,0.09)',  mx:'14px',  my:'-10px', dur:'8s',   del:'0s'   },
-          { x:'80%', y:'8%',  s:160, c:'rgba(107,18,188,0.07)',  mx:'-14px', my:'12px',  dur:'10s',  del:'1.2s' },
-          { x:'16%', y:'73%', s:110, c:'rgba(221,111,81,0.09)',  mx:'10px',  my:'-8px',  dur:'9s',   del:'2s'   },
-          { x:'73%', y:'68%', s:130, c:'rgba(126,218,195,0.09)', mx:'-12px', my:'-12px', dur:'11s',  del:'.5s'  },
-          { x:'88%', y:'42%', s:80,  c:'rgba(221,111,81,0.07)',  mx:'-8px',  my:'10px',  dur:'8.5s', del:'1.5s' },
-        ].map((b, i) => (
-          <div key={i} className="tii-blob" style={{
-            left: b.x, top: b.y, width: b.s, height: b.s,
-            background: `radial-gradient(circle, ${b.c} 0%, transparent 70%)`,
-            '--dur': b.dur, '--del': b.del, '--mx': b.mx, '--my': b.my,
-          }} />
-        ))}
+        <div className="tii-intr-inner">
 
-        {/* Eyebrow */}
-        <p className="tii-intr-eye" style={{
-          opacity:   phase === 'enter' ? 0 : 1,
-          transform: phase === 'enter' ? 'translateY(10px)' : 'none',
-        }}>
-          BLW Canada Sub-Region · 2026
-        </p>
+          {/* Background blobs — absolute so they scroll with content */}
+          {[
+            { x:'8%',  y:'2%',  s:130, c:'rgba(221,111,81,.07)',  mx:'12px',  my:'-8px',  dur:'8s',   del:'0s'   },
+            { x:'78%', y:'1%',  s:140, c:'rgba(107,18,188,.05)',  mx:'-12px', my:'10px',  dur:'10s',  del:'1.2s' },
+            { x:'12%', y:'62%', s:100, c:'rgba(221,111,81,.07)',  mx:'8px',   my:'-6px',  dur:'9s',   del:'2s'   },
+            { x:'72%', y:'60%', s:110, c:'rgba(126,218,195,.06)', mx:'-10px', my:'-10px', dur:'11s',  del:'.5s'  },
+          ].map((b, i) => (
+            <div key={i} className="tii-bg-blob" style={{
+              left:b.x, top:b.y, width:b.s, height:b.s,
+              background:`radial-gradient(circle, ${b.c} 0%, transparent 70%)`,
+              '--dur':b.dur, '--del':b.del, '--mx':b.mx, '--my':b.my,
+            }} />
+          ))}
 
-        {/* ── Boarding pass ──────────────────────────────────────── */}
-        <div
-          className={`tii-pass-wrap${ready ? ' idle' : ''}`}
-          style={{
-            opacity:   phase === 'enter' ? 0 : 1,
-            transform: phase === 'enter' ? 'translateY(-20px) scale(0.88)' : 'none',
-            ...(coverFlipped ? { animation: 'none', filter: 'none' } : {}),
-          }}
-        >
-          {/* Layer 1: Boarding pass body (revealed when cover flips) */}
-          <div className="tii-pass-body" style={{ opacity: passVisible ? 1 : 0 }}>
-            {/* Header */}
-            <div className="tii-pass-header">
-              <span className="tii-pass-airline">BLW Canada · This Is It</span>
-              <span className="tii-pass-bp">Prep Guide</span>
+          {/* Card */}
+          <div className={`tii-card${isLoaded ? ' tii-card-loaded' : ''}`}>
+
+            {/* Logo */}
+            <div className="tii-logo-wrap">
+              <img
+                className="tii-logo-img"
+                src="/this-is-it-logo.png"
+                alt="This Is It 2.0"
+                onError={e => { e.currentTarget.style.display = 'none'; }}
+              />
             </div>
 
-            {/* Route row */}
-            <div className="tii-pass-route">
+            {/* Route */}
+            <div className="tii-route-row">
               <div>
-                <div className="tii-pass-city">???</div>
-                <div className="tii-pass-city-sub">Your City</div>
+                <div className="tii-city-code">???</div>
+                <div className="tii-city-sub">Your City</div>
               </div>
-              <div className="tii-pass-mid">
+              <div className="tii-route-mid">
                 <svg viewBox="0 0 80 18" xmlns="http://www.w3.org/2000/svg"
-                  style={{ width: '100%', height: 18, color: '#DD6F51', overflow: 'visible' }}>
-                  <line x1="0" y1="9" x2="62" y2="9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeDasharray="4 3"/>
-                  <polyline points="53,2.5 70,9 53,15.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  style={{ width:'100%', height:16, color:'#DD6F51', overflow:'visible' }}>
+                  <line x1="0" y1="9" x2="62" y2="9" stroke="currentColor"
+                    strokeWidth="1.8" strokeLinecap="round" strokeDasharray="4 3"/>
+                  <polyline points="53,2.5 70,9 53,15.5" fill="none" stroke="currentColor"
+                    strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                <div className="tii-pass-duration">Aug 28 – 31</div>
+                <div className="tii-route-dates">Aug 28 – 31, 2026</div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div className="tii-pass-city">YWG</div>
-                <div className="tii-pass-city-sub">Winnipeg, MB</div>
+              <div style={{ textAlign:'right' }}>
+                <div className="tii-city-code">YWG</div>
+                <div className="tii-city-sub">Winnipeg, MB</div>
               </div>
             </div>
 
-            {/* Fields */}
-            <div className="tii-pass-fields">
-              <div className="tii-pass-field">
-                <label>Opens</label>
-                <div className="val">Fri 6:00 PM</div>
+            {/* Fields — live from DB via tiiData */}
+            <div className="tii-fields">
+              <div className="tii-field">
+                <label>1st Session</label>
+                <div className="val">Fri, Aug 28 · 12:00 PM</div>
               </div>
-              <div className="tii-pass-field">
+              <div className="tii-field">
+                <label>Checkout</label>
+                <div className="val">{c.monday_checkout_time}</div>
+              </div>
+              <div className="tii-field">
                 <label>Hotel</label>
-                <div className="val">Sandman Airport</div>
+                <div className="val">{c.hotel_name}</div>
+              </div>
+              <div className="tii-field">
+                <label>Dress</label>
+                <div className="val">Formal</div>
               </div>
             </div>
-          </div>
 
-          {/* Layer 2: Cover (coral, flips away on tap) */}
-          <div
-            className="tii-cover"
-            onClick={handleOpen}
-            role="button"
-            aria-label="Open your guide"
-            style={{ transform: coverFlipped ? 'rotateX(-176deg)' : 'rotateX(0deg)' }}
-          >
-            <div className="tii-cover-shine" aria-hidden />
-            <img
-              className="tii-cover-logo"
-              src="/this-is-it-logo.png"
-              alt="This Is It"
-              style={{ filter: 'brightness(0) invert(1) drop-shadow(0 2px 6px rgba(0,0,0,0.3))' }}
-              onError={e => {
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.nextSibling.style.display = 'block';
-              }}
-            />
-            <div style={{ display: 'none', fontFamily: 'Anton', fontSize: 22, color: '#fff', letterSpacing: '.04em' }}>
-              THIS IS IT
-            </div>
-            <div className="tii-cover-label">Your Prep Guide</div>
-            <div className="tii-cover-dates">Winnipeg · Aug 28 – 31, 2026</div>
-            {ready && (
-              <div className="tii-cover-tap" aria-hidden>
-                Tap to open
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M2 6h8M7 3l3 3-3 3" stroke="rgba(255,255,255,.65)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-            )}
-          </div>
-
-          {/* Perforation / fold line */}
-          <div className="tii-perf">
-            <div className="tii-perf-notch" style={{ left: -11 }} />
-            <div className="tii-perf-notch" style={{ right: -11 }} />
-          </div>
-
-          {/* Stub */}
-          <div className="tii-stub">
-            <div className="tii-stub-left">
-              <div className="tii-live-row">
-                <div className="tii-live-dot" />
-                Updated daily — details still confirming
-              </div>
-              <div className="tii-stub-code">TII 2.0 · 2026 · BLW CAN · YWG</div>
-            </div>
-            <div className="tii-barcode" aria-hidden>
-              {BARS.map((w, i) => (
-                <div key={i} className="tii-bar" style={{
-                  width: w, height: `${10 + Math.round((i / (BARS.length - 1)) * 26)}px`,
-                }} />
+            {/* Sections */}
+            <div className="tii-secs">
+              {SECTIONS.map((sec, i) => (
+                <div
+                  key={sec.num}
+                  className="tii-sec"
+                  ref={el => secRefs.current[i] = el}
+                >
+                  <div className="tii-dot">{sec.num}</div>
+                  <div>
+                    <div className="tii-sec-head">{sec.head}</div>
+                    <div className="tii-sec-body">{sec.body(c)}</div>
+                  </div>
+                </div>
               ))}
             </div>
-          </div>
-        </div>
 
-        {/* ── CTA ───────────────────────────────────────────────────── */}
-        <div className="tii-cta" style={{
-          opacity:       ready ? 1 : 0,
-          transform:     ready ? 'translateY(0)' : 'translateY(10px)',
-          pointerEvents: ready ? 'auto' : 'none',
-        }}>
-          <button
-            className="tii-cta-btn"
-            onClick={handleOpen}
-            aria-label="Open your guide"
-          >
-            Open your guide ✈
-          </button>
-          <div className="tii-cta-note">
-            <div className="tii-cta-note-top">
-              <div className="tii-live-dot" style={{ width: 7, height: 7 }} />
-              Live page · Details confirm daily
+            {/* Stub */}
+            <div className="tii-stub">
+              <div className="tii-live-row">
+                <div className="tii-live-dot" />
+                Live · Updates as details confirm
+              </div>
+              <div className="tii-barcode" aria-hidden>
+                {BARS.map((bar, i) => (
+                  <div key={i} className="tii-bar"
+                    style={{ width: bar.w, height: bar.h }} />
+                ))}
+              </div>
             </div>
-            <div className="tii-cta-note-sub">
-              Check back before you fly and throughout the weekend —
-              schedule, meals &amp; logistics keep updating as they're confirmed.
+
+            {/* CTA */}
+            <div className="tii-cta">
+              <button className="tii-open-btn" onClick={handleOpen}>
+                Open full guide →
+              </button>
             </div>
+
           </div>
         </div>
       </div>
