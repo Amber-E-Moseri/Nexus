@@ -25,6 +25,8 @@ interface Recipient {
   name: string
   email: string
   id?: string | null
+  subgroup?: string
+  fellowship?: string
 }
 
 interface RequestBody {
@@ -32,10 +34,35 @@ interface RequestBody {
   templateId?: string
   subject?: string
   body?: string
+  format?: 'text' | 'html'
 }
 
-function personalize(template: string, vars: { name: string }) {
-  return template.replace(/\{\{name\}\}/g, vars.name)
+interface PersonalizeVars {
+  name: string
+  subgroup?: string
+  fellowship?: string
+  email?: string
+}
+
+function personalize(template: string, vars: PersonalizeVars) {
+  return template
+    .replace(/\{\{name\}\}/g, vars.name ?? '')
+    .replace(/\{\{subgroup\}\}/g, vars.subgroup ?? '')
+    .replace(/\{\{fellowship\}\}/g, vars.fellowship ?? '')
+    .replace(/\{\{email\}\}/g, vars.email ?? '')
+}
+
+function wrapHtml(innerHtml: string): string {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #2D2A22; line-height: 1.6; font-size: 14px;">
+      <div style="padding: 16px; text-align: center; border-bottom: 1px solid #EDE8DC;">
+        <img src="https://nexus.lwcanada.org/blw-canada-logo.png" alt="BLW Canada" width="120" height="120" style="display:block;margin:0 auto;" />
+      </div>
+      <div style="padding: 20px;">
+        ${innerHtml}
+      </div>
+    </div>
+  `
 }
 
 function bodyToHtml(text: string): string {
@@ -45,17 +72,7 @@ function bodyToHtml(text: string): string {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
   const paragraphs = `<p>${escaped.split('\n\n').join('</p><p>')}</p>`
-
-  return `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #2D2A22; line-height: 1.6; font-size: 14px;">
-      <div style="padding: 16px; text-align: center; border-bottom: 1px solid #EDE8DC;">
-        <img src="https://nexus.lwcanada.org/blw-canada-logo.png" alt="BLW Canada" width="120" height="120" style="display:block;margin:0 auto;" />
-      </div>
-      <div style="padding: 20px;">
-        ${paragraphs}
-      </div>
-    </div>
-  `
+  return wrapHtml(paragraphs)
 }
 
 function sleep(ms: number) {
@@ -115,6 +132,7 @@ Deno.serve(async (request) => {
     recipients = [],
     subject = '',
     body: bodyTemplate = '',
+    format = 'text',
   } = body
 
   if (!Array.isArray(recipients) || recipients.length === 0) {
@@ -141,9 +159,23 @@ Deno.serve(async (request) => {
   for (let i = 0; i < recipients.length; i++) {
     const recipient = recipients[i]
 
-    const personalizedBody = personalize(bodyTemplate, {
+    const vars: PersonalizeVars = {
       name: recipient.name ?? '',
-    })
+      subgroup: recipient.subgroup ?? '',
+      fellowship: recipient.fellowship ?? '',
+      email: recipient.email ?? '',
+    }
+    const personalizedBody = personalize(bodyTemplate, vars)
+    const personalizedSubject = personalize(subject, vars)
+
+    // HTML mode: body is already HTML, wrap in email shell
+    // Text mode: escape and convert to HTML paragraphs
+    const htmlContent = format === 'html'
+      ? wrapHtml(personalizedBody)
+      : bodyToHtml(personalizedBody)
+
+    // Plain text fallback: strip HTML tags for text-only clients
+    const textContent = personalizedBody.replace(/<[^>]*>/g, '')
 
     let status: 'sent' | 'failed' = 'sent'
     let errorMessage: string | null = null
@@ -158,9 +190,9 @@ Deno.serve(async (request) => {
         body: JSON.stringify({
           from: fromEmail,
           to: [recipient.email],
-          subject,
-          html: bodyToHtml(personalizedBody),
-          text: personalizedBody,
+          subject: personalizedSubject,
+          html: htmlContent,
+          text: textContent,
         }),
       })
 

@@ -1344,14 +1344,15 @@ function EmailComposer({ allPeople, subgroups, onClose }) {
         email: r.email,
         name: r.full_name || r.fullName || '',
         id: r.id || null,
+        subgroup: r.subgroup || '',
+        fellowship: r.fellowship || '',
       }));
 
-      // If HTML mode, send the body as-is (edge function will wrap it)
-      // If text mode, send plain text (edge function converts via bodyToHtml)
       const payload = {
         recipients: recipientData,
         subject,
-        body: mode === 'html' ? body : body,
+        body,
+        format: mode, // 'text' or 'html'
       };
 
       const { data, error: invokeErr } = await supabase.functions.invoke('registration-bulk-email', { body: payload });
