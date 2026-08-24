@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import TiiEnvelopeIntro from '@/components/TiiEnvelopeIntro';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -149,6 +150,12 @@ const NAV_ITEMS = [
 
 export default function ThisIsItInfo() {
   const { profile, role } = useAuth();
+
+  // Show the envelope intro once per device (cleared by localStorage key)
+  const [showIntro, setShowIntro] = useState(
+    () => !localStorage.getItem('tii-intro-seen-2026')
+  );
+
   const [activeDay, setActiveDay] = useState('fri');
   const [editMode, setEditMode] = useState(false);
   const [newItem, setNewItem] = useState({ day: 'fri', time: '', title: '', description: '' });
@@ -398,6 +405,11 @@ export default function ThisIsItInfo() {
       alert('Error: ' + err.message);
     }
   };
+
+  // First-load envelope intro — shown before anything else on first device visit
+  if (showIntro) {
+    return <TiiEnvelopeIntro onComplete={() => setShowIntro(false)} />;
+  }
 
   if (isLoading) {
     return <div style={{ padding: '40px', textAlign: 'center' }}>Loading...</div>;
