@@ -19,7 +19,7 @@ const SECTIONS = [
   },
   {
     num: '02', head: 'Check-In & Venue',
-    body: (c) => `First session 12:00 PM · Room check-in ${c.friday_opening_time}. WiFi: ${c.wifi_text}`,
+    body: (c) => `First session 12:00 PM · Room check-in 3:00 PM. WiFi: ${c.wifi_text}`,
   },
   {
     num: '03', head: 'Dress Code',
