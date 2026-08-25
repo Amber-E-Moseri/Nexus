@@ -143,6 +143,7 @@ export async function createMeeting(meetingData) {
       drive_url,
       visibility,
       allowed_viewers,
+      status,
       created_by,
       created_at,
       creator:users!created_by(id, name)
@@ -358,6 +359,7 @@ export async function updateMeeting(meetingId, updates) {
       drive_url,
       visibility,
       allowed_viewers,
+      status,
       created_by,
       created_at,
       creator:users!created_by(id, name)

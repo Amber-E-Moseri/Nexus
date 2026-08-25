@@ -132,6 +132,20 @@ export default function MeetingModal({ departmentId, departments = [], onClose }
     if (!fetchError) setActionItems(data ?? [])
   }
 
+  // AI extraction being merged into real tasks is a strong signal the meeting actually
+  // happened — mark it completed the same way filling in Summary/Minutes does.
+  async function handleActionItemsExtracted(items) {
+    await fetchActionItems()
+    if (savedMeeting?.id) {
+      try {
+        const updated = await editMeeting(savedMeeting.id, { status: 'completed' })
+        setSavedMeeting((prev) => (prev ? { ...prev, ...updated } : prev))
+      } catch (err) {
+        console.error('Failed to mark meeting completed after extraction:', err)
+      }
+    }
+  }
+
   async function handleSave() {
     if (!title.trim()) {
       setError('Meeting title is required.')
@@ -151,6 +165,11 @@ export default function MeetingModal({ departmentId, departments = [], onClose }
     setSaving(true)
     setError(null)
 
+    // Once real discussion content (summary or minutes) has actually been recorded,
+    // treat the meeting as done — simpler and more accurate than defaulting every
+    // "Log meeting" row to completed regardless of whether anything was ever filled in.
+    const hasDiscussionContent = !!(summary.trim() || minutes.trim())
+
     try {
       if (savedMeeting?.id) {
         await editMeeting(savedMeeting.id, {
@@ -162,6 +181,7 @@ export default function MeetingModal({ departmentId, departments = [], onClose }
           minutes: minutes.trim() || null,
           zoom_join_url: zoomJoinUrl.trim() || null,
           drive_url: driveUrl.trim() || null,
+          ...(hasDiscussionContent ? { status: 'completed' } : {}),
         })
 
         const { error: attendanceError } = await supabase.rpc('set_meeting_attendance', {
@@ -189,6 +209,7 @@ export default function MeetingModal({ departmentId, departments = [], onClose }
           minutes: minutes.trim() || null,
           zoom_join_url: zoomJoinUrl.trim() || null,
           drive_url: driveUrl.trim() || null,
+          ...(hasDiscussionContent ? { status: 'completed' } : {}),
           created_by: profile?.id,
           attendanceUserIds: attendeeIds,
         })
@@ -456,7 +477,7 @@ export default function MeetingModal({ departmentId, departments = [], onClose }
                     departmentId={effectiveDeptId}
                     canRecord
                     onTranscriptionComplete={({ transcript }) => setSummary(transcript)}
-                    onActionItemsExtracted={fetchActionItems}
+                    onActionItemsExtracted={handleActionItemsExtracted}
                     onExpand={() => setWide(true)}
                     onCollapse={() => setWide(false)}
                   />
