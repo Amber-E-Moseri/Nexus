@@ -3,6 +3,7 @@
   "redirects": {
     "https://esm.sh/@supabase/node-fetch@^2.6.14?target=denonext": "https://esm.sh/@supabase/node-fetch@2.6.15?target=denonext",
     "https://esm.sh/@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.110.3",
+    "https://esm.sh/@supabase/supabase-js@2?target=deno": "https://esm.sh/@supabase/supabase-js@2.112.4?target=deno",
     "https://esm.sh/bufferutil@^4.0.1?target=denonext": "https://esm.sh/bufferutil@4.1.0?target=denonext",
     "https://esm.sh/node-gyp-build@^4.3.0?target=denonext": "https://esm.sh/node-gyp-build@4.8.4?target=denonext",
     "https://esm.sh/tr46@~0.0.3?target=denonext": "https://esm.sh/tr46@0.0.3?target=denonext",
@@ -31,6 +32,7 @@
     "https://esm.sh/@supabase/realtime-js@2.11.10/denonext/realtime-js.mjs": "42c599d4edc40fa95209d309bacc391910c0e242cd3fddbaac3aeeafc4b81b17",
     "https://esm.sh/@supabase/storage-js@2.7.1/denonext/storage-js.mjs": "73ac8cdc95cfcd794fe603dbd7ce06d539ab51538ae6467eabe0f9cc26c993aa",
     "https://esm.sh/@supabase/supabase-js@2.110.3": "3d98c7276d7a5937f1562973e97ce458f8daaa38e2b63a084820702e53c1a358",
+    "https://esm.sh/@supabase/supabase-js@2.112.4?target=deno": "606f8c21b01cc03ea41a3f28dc785041099fbf61f9b039b6427d5dce541cc65f",
     "https://esm.sh/@supabase/supabase-js@2.50.0": "08871b551234bdcaf766bf2f864b8c00b6d7f92a66d23045596624e4b6c5d762",
     "https://esm.sh/@supabase/supabase-js@2.50.0/denonext/supabase-js.mjs": "f123d5a83e021b6ddd0ab4b3795c5ba5d3d27117d2e5844298ce5f9ba216311c",
     "https://esm.sh/@supabase/supabase-js@2.50.0?target=deno": "d9e4f5525718644106172c2e7fb57818ef906d18c92ec4ec771a63f4e510bab3",

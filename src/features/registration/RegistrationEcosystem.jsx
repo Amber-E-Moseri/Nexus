@@ -416,11 +416,25 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     ));
 
     try {
-      const { error } = await supabase
+      // .select() is required here, not cosmetic — without it, Supabase returns
+      // { error: null } even when RLS silently filtered the row out of the UPDATE's
+      // USING clause and zero rows actually changed. That "successful" no-op is
+      // exactly what made these edits look saved and then quietly revert once the
+      // 10s dirty-window above expired and a real refetch pulled the untouched row.
+      const { data, error } = await supabase
         .from('registrations')
         .update({ [dbKey]: value || null, flight_manual_override: true })
-        .eq('email', regEmail.toLowerCase());
+        .eq('email', regEmail.toLowerCase())
+        .select('email');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        // RLS blocked it silently — retry via the service-role edge function, which
+        // checks the same permission surface explicitly before bypassing RLS.
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('update-flight', {
+          body: { email: regEmail, field: dbKey, value: value || null },
+        });
+        if (fnError || fnData?.error) throw new Error(fnData?.error || fnError.message);
+      }
     } catch (e) {
       console.error('Failed to update flight info:', e);
       alert(`Failed to save flight info: ${e.message}`);
