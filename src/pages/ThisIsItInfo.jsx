@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import TiiEnvelopeIntro from '@/components/TiiEnvelopeIntro';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -151,11 +150,6 @@ const NAV_ITEMS = [
 export default function ThisIsItInfo() {
   const { profile, role } = useAuth();
 
-  // Show the envelope intro once per device (cleared by localStorage key)
-  const [showIntro, setShowIntro] = useState(
-    () => !localStorage.getItem('tii-intro-seen-2026')
-  );
-
   const [activeDay, setActiveDay] = useState('fri');
   const [countdownExpired, setCountdownExpired] = useState(
     () => Date.now() >= new Date('2026-08-28T09:00:00-04:00').getTime()
@@ -211,15 +205,11 @@ export default function ThisIsItInfo() {
     document.title = 'This Is It 2.0 - Prep Guide';
   }, []);
 
-  // Re-runs once isLoading flips to false OR once the intro is dismissed.
-  // Two reasons sections can miss the observer:
-  //   1. Cold load: query is still in-flight when effect first runs — fixed by [isLoading].
-  //   2. Intro dismissal: isLoading is already false when the user closes the intro,
-  //      so the effect never re-fires for the newly-mounted content — fixed by [showIntro].
+  // Re-runs once isLoading flips to false.
+  // Cold load: query is still in-flight when effect first runs — fixed by [isLoading].
   // Staggered reveal: cards within the same section animate in sequence
   useEffect(() => {
     if (isLoading) return;
-    if (showIntro) return; // content not in DOM yet — wait until intro is gone
     const obs = new IntersectionObserver((entries) => {
       entries.forEach(e => {
         if (e.isIntersecting) {
@@ -235,19 +225,18 @@ export default function ThisIsItInfo() {
     }, { threshold: 0.08 });
     document.querySelectorAll('.stop-head,.card').forEach(el => obs.observe(el));
     return () => obs.disconnect();
-  }, [isLoading, showIntro]);
+  }, [isLoading]);
 
   // Scroll-spy: highlight the nav link for whichever section is centred in the viewport
   useEffect(() => {
     if (isLoading) return;
-    if (showIntro) return;
     const ids = ['expect', 'pack', 'getting-there', 'checkin', 'venue', 'schedule', 'help'];
     const obs = new IntersectionObserver((entries) => {
       entries.forEach(e => { if (e.isIntersecting) setActiveSection(e.target.id); });
     }, { rootMargin: '-35% 0px -55% 0px', threshold: 0 });
     ids.forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el); });
     return () => obs.disconnect();
-  }, [isLoading, showIntro]);
+  }, [isLoading]);
 
   // Inject Google Fonts link tag early to avoid render-blocking @import
   useEffect(() => {
@@ -412,11 +401,6 @@ export default function ThisIsItInfo() {
 
   // First-load scroll intro — shown before anything else on first device visit.
   // `c` is already computed above (falls back to FALLBACK while query is in-flight).
-  // When the query resolves, tiiData updates and the intro reflects live DB values
-  // instantly — check-in time, hotel name, contacts, etc. — without any extra fetch.
-  if (showIntro) {
-    return <TiiEnvelopeIntro onComplete={() => setShowIntro(false)} tiiData={c} />;
-  }
 
   if (isLoading) {
     return <div style={{ padding: '40px', textAlign: 'center' }}>Loading...</div>;
