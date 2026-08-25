@@ -859,6 +859,18 @@ export default function RegistrationDataTab({
                               ✓ Validate match
                             </button>
                           )}
+                          {/* Manual fallback for duplicates the fuzzy matcher misses (e.g. a middle
+                              name breaking the match) — links this roster row to an existing
+                              registration instead of deleting either record. */}
+                          {canEdit && !p.isRegistered && !p.linked_registration_email && !(p._fuzzyMatched && p._fuzzyMatchedEmail) && (
+                            <button
+                              onClick={() => setLinkingPerson(p)}
+                              title="Link this person to an existing registration"
+                              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.purple}`, background: 'transparent', color: C.purple, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
+                            >
+                              🔗 Link
+                            </button>
+                          )}
                           {canEdit && p.manually_added && (
                             <button
                               onClick={() => { if (confirm(`Remove ${p.full_name} from the working list?`)) onRemove?.(p.email); }}
