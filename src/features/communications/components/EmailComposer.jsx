@@ -86,6 +86,28 @@ function getSpamScore(subject) {
   return { score, level, triggers }
 }
 
+// Ported from the This Is It registration composer, where the same class of bug
+// ("pasted HTML gets sent/previewed as literal escaped text") was traced and fixed.
+// Detects a full HTML document or an HTML fragment (a <table>-based template, an HTML
+// comment, etc.) so the composer/preview can treat it as real markup instead of plain
+// text. Must stay conceptually in sync with send-communication-email's own detection.
+function isFullHtmlDocument(html) {
+  return /<!doctype html/i.test(html || '') || /<html[\s>]/i.test(html || '')
+}
+
+function looksLikeHtmlMarkup(text) {
+  if (!text) return false
+  if (isFullHtmlDocument(text)) return true
+  return /<!--/.test(text) || /<\/?(table|tr|td|thead|tbody|div|p|a|span|img|h[1-6]|ul|ol|li|strong|em|br)[\s/>]/i.test(text)
+}
+
+function escapeHtmlForPreview(text) {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+}
+
 function RichTextToolbar({ onAction }) {
   const buttons = [
     { label: 'B', action: 'bold', title: 'Bold (Ctrl+B)' },
@@ -222,16 +244,19 @@ function EmailPreviewPane({ body, subject, isMobile }) {
     )
   }
 
-  // Simple HTML rendering (real implementation would use DOMPurify + marked/rehype)
-  const processedBody = body
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean)
-    .map((line, i) => (
-      <p key={i} style={{ marginBottom: 12, lineHeight: 1.6, color: TEXT }}>
-        {line}
-      </p>
-    ))
+  // Real HTML (pasted table-based templates, a full document, etc.) needs to render as
+  // actual markup — wrapping each line in its own <p> instead just showed the raw tags
+  // as literal visible text. Mirrors send-communication-email's own detection so what
+  // you see here matches what actually gets sent.
+  const bodyIsHtml = looksLikeHtmlMarkup(body)
+  const previewMarkup = bodyIsHtml
+    ? body
+    : body
+        .split(/\n\n+/)
+        .map(p => p.trim())
+        .filter(Boolean)
+        .map(p => `<p style="margin:0 0 12px;line-height:1.6;">${escapeHtmlForPreview(p).replace(/\n/g, '<br>')}</p>`)
+        .join('')
 
   return (
     <div style={{
@@ -253,9 +278,7 @@ function EmailPreviewPane({ body, subject, isMobile }) {
           {subject}
         </div>
       )}
-      <div style={{ fontSize: 13, color: TEXT }}>
-        {processedBody}
-      </div>
+      <div style={{ fontSize: 13, color: TEXT }} dangerouslySetInnerHTML={{ __html: previewMarkup }} />
     </div>
   )
 }
@@ -817,7 +840,14 @@ export default function EmailComposer({
           <textarea
             ref={editorRef}
             value={value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value
+              onChange(next)
+              // Pasting real HTML (a table-based template, a full document, etc.) into
+              // Plain mode is what made pasted markup get sent as literal escaped text —
+              // auto-switch to Rich so it's treated as markup instead.
+              if (mode === 'plain' && looksLikeHtmlMarkup(next)) setMode('rich')
+            }}
             placeholder={`Write your email here...\n\nTip: Use {{name}}, {{email}}, {{subgroup}} etc. for personalization.`}
             style={{
               width: '100%',
