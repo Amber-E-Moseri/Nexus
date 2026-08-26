@@ -149,12 +149,51 @@ export function AuthProvider({ children }) {
       // logout even though a valid session existed.
       let session = null
       let getSessionTimedOut = false
+      // Not raced directly against the timeout below — withTimeout's loser keeps
+      // running in the background, and its result was previously just discarded
+      // when it arrived late. If the network/IndexedDB was merely slow rather than
+      // actually stuck, that valid session got silently dropped, and the user rode
+      // out every fallback below only to land on the 15s safety net with
+      // user/profile still null — a spinner that "resolves" into a false logout.
+      // Keeping the reference lets us recover it below if nothing else won first.
+      const getSessionPromise = supabase.auth.getSession()
       try {
-        const result = await withTimeout(supabase.auth.getSession(), 8_000)
+        const result = await withTimeout(getSessionPromise, 8_000)
         session = result?.data?.session ?? null
       } catch (e) {
         console.warn('[Auth] getSession failed or timed out:', e)
         getSessionTimedOut = true
+
+        // Recover a session that arrives after the timeout instead of dropping it.
+        // Guarded by profileRef so it only acts if nothing else — the IDB fallback
+        // below, or onAuthStateChange — already resolved a profile by then; it must
+        // never clobber a session that was already correctly established.
+        getSessionPromise.then((result) => {
+          if (!mounted || profileRef.current) return
+          const lateSession = result?.data?.session ?? null
+          if (!lateSession?.user) return
+          console.warn('[Auth] getSession resolved after the timeout — recovering the session instead of treating it as logged out')
+          setUser(lateSession.user)
+          setJwtRole(getJwtRole(lateSession))
+          fetchMinimalProfile(lateSession.user.id)
+            .then((nextProfile) => {
+              if (!mounted || profileRef.current) return
+              profileRef.current = nextProfile
+              setProfile(nextProfile)
+              setLoading(false)
+              touchLastActive().catch(() => {})
+              fetchSupplementaryProfile(lateSession.user.id, nextProfile.department_id)
+                .then((supplementary) => {
+                  if (mounted) {
+                    const merged = (prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary, _supplementaryLoaded: true } : prev
+                    profileRef.current = merged(profileRef.current)
+                    setProfile(merged)
+                  }
+                })
+                .catch(() => {})
+            })
+            .catch(() => {})
+        }).catch(() => {})
       }
 
       // Migration path: on first launch after switching to IDB storage the SDK's

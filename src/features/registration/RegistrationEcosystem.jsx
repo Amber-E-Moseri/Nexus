@@ -511,14 +511,18 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       }
 
       // --- Fire all data fetches in parallel ---
+      // limitedToRegistrationDataOnly means "scoped on the Registration Data tab, but see
+      // everyone on your own team's tab" (Accommodation/Hospitality/Transportation) — the
+      // registrations query already honored that; roster and working_list didn't, so those
+      // team members still only ever saw their own subgroup's rooms/roster data.
       let rosterQ = supabase.from('roster').select('*').order('last_name', { ascending: true });
-      if (limitedToSubgroups?.length) rosterQ = rosterQ.in('subgroup', limitedToSubgroups);
+      if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) rosterQ = rosterQ.in('subgroup', limitedToSubgroups);
 
       let regsQ = supabase.from('registrations').select('*').order('submitted_at', { ascending: false });
       if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) regsQ = regsQ.in('subgroup', limitedToSubgroups);
 
       let wlQ = supabase.from('working_list').select('*').order('subgroup', { ascending: true });
-      if (limitedToSubgroups?.length) wlQ = wlQ.in('subgroup', limitedToSubgroups);
+      if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) wlQ = wlQ.in('subgroup', limitedToSubgroups);
 
       const paymentsQ = supabase.from('event_payments').select('*').order('subgroup', { ascending: true });
 
