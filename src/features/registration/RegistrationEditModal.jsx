@@ -33,13 +33,26 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
     departureDate: registration.departureDate || '',
     departureTime: registration.departureTime || '',
     departureFlight: registration.departureFlight || '',
+    flightManualOverride: registration.flightManualOverride || false,
   });
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  const FLIGHT_FIELDS = ['arrivalDate', 'arrivalTime', 'arrivalFlight', 'departureDate', 'departureTime', 'departureFlight'];
+
   const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const next = { ...prev, [field]: value };
+      // Editing a flight field here used to leave flight_manual_override untouched, so the
+      // next "Sync flights" run (registration-api-sync, form=flights) — which only skips rows
+      // where that flag is already true — would silently overwrite the edit right back to
+      // whatever the registration platform has on file. The dedicated Transportation-tab
+      // editor already auto-locks on edit (handleUpdateFlight); mirror that here so an edit
+      // made through this modal is protected the same way.
+      if (FLIGHT_FIELDS.includes(field)) next.flightManualOverride = true;
+      return next;
+    });
   };
 
   const handleSave = async () => {
@@ -70,6 +83,7 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
         departure_date: formData.departureDate || null,
         departure_time: formData.departureTime || null,
         departure_flight: formData.departureFlight || null,
+        flight_manual_override: formData.flightManualOverride,
       };
 
       let updateError;
@@ -87,7 +101,7 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
 
       if (updateError) throw updateError;
 
-      onSave?.({ ...registration, ...formData, fullName });
+      onSave?.({ ...registration, ...formData, fullName, flightManualOverride: formData.flightManualOverride });
       onClose();
     } catch (err) {
       setError(err.message || 'Failed to save changes');
@@ -208,8 +222,21 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
               <FormField label="Allergies/Diet" value={formData.allergies} onChange={(v) => handleChange('allergies', v)} multiline />
             </div>
 
-            <div style={{ gridColumn: '1 / -1', borderTop: `1px solid ${C.line}`, paddingTop: 16, marginTop: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.ink, marginBottom: 12 }}>Flights</div>
+            <div style={{ gridColumn: '1 / -1', borderTop: `1px solid ${C.line}`, paddingTop: 16, marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.ink }}>Flights</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: formData.flightManualOverride ? C.purple : C.mute, cursor: 'pointer', fontWeight: formData.flightManualOverride ? 600 : 400 }}>
+                <input
+                  type="checkbox"
+                  checked={formData.flightManualOverride}
+                  onChange={(e) => setFormData(prev => ({ ...prev, flightManualOverride: e.target.checked }))}
+                />
+                🔒 Lock — don't let flight sync overwrite this
+              </label>
+            </div>
+            <div style={{ gridColumn: '1 / -1', fontSize: 11.5, color: C.mute, marginTop: -6, marginBottom: 4 }}>
+              {formData.flightManualOverride
+                ? 'Locked: "Sync flights" from the registration platform will skip this person and leave these fields alone.'
+                : 'Unlocked: the next "Sync flights" run may overwrite these fields with data from the registration platform. Editing any field below locks it automatically — check the box above to lock without changing anything.'}
             </div>
 
             <FormField label="Arrival Date" type="date" value={formData.arrivalDate} onChange={(v) => handleChange('arrivalDate', v)} />

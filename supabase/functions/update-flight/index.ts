@@ -34,10 +34,11 @@ const FLIGHT_FIELDS = new Set([
   'departure_date', 'departure_time', 'departure_flight',
 ])
 
-// manually_confirmed hits this same silent-RLS-no-op failure mode (see
-// handleToggleManualConfirm in RegistrationEcosystem.jsx) — reuse this fallback
-// rather than standing up a near-identical function for one boolean column.
-const ALLOWED_FIELDS = new Set([...FLIGHT_FIELDS, 'manually_confirmed'])
+// manually_confirmed and flight_manual_override (the sync-protection lock, toggled
+// directly via handleToggleFlightLock/RegistrationEditModal without editing a flight
+// field) hit this same silent-RLS-no-op failure mode — reuse this fallback rather than
+// standing up near-identical functions for two boolean columns.
+const ALLOWED_FIELDS = new Set([...FLIGHT_FIELDS, 'manually_confirmed', 'flight_manual_override'])
 
 const PRIVILEGED_ROLES = new Set(['super_admin', 'regional_secretary', 'dept_lead', 'pastor'])
 
