@@ -103,7 +103,12 @@ export async function getSprintDetail(sprintId) {
       .eq('id', sprintId)
       .single(),
     supabase.from('sprint_teams').select(SPRINT_TEAM_SELECT).eq('sprint_id', sprintId).order('created_at'),
-    supabase.from('sprint_members').select(`${SPRINT_MEMBER_WITH_TEMP_SELECT}, user:user_id(id, name, email, status, is_temporary, department_id)`).eq('sprint_id', sprintId).order('joined_at'),
+    // Secondary .order('user_id') is a stable tiebreaker, not a meaningful sort — bulk-added
+    // members (import, seed script) commonly share the exact same joined_at timestamp (a
+    // single multi-row INSERT evaluates now() once), and Postgres gives no guarantee about
+    // the order of ties with nothing else in the ORDER BY. Without it, the member chips
+    // visibly reshuffle position between page loads even though nothing actually changed.
+    supabase.from('sprint_members').select(`${SPRINT_MEMBER_WITH_TEMP_SELECT}, user:user_id(id, name, email, status, is_temporary, department_id)`).eq('sprint_id', sprintId).order('joined_at').order('user_id'),
     (async () => {
       try {
         return await supabase.from('sprint_reviews').select(SPRINT_REVIEW_SELECT).eq('sprint_id', sprintId).maybeSingle()
