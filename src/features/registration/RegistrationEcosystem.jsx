@@ -37,6 +37,30 @@ const FLIGHT_FIELD_TO_DB = {
 
 
 // Parse any raw time value to minutes-since-midnight for chronological sort
+// Cluster an already time-sorted list into "bands" — a chain where each person's time
+// is within `thresholdMinutes` of the PREVIOUS person in the same band. This is a
+// rolling window, not a fixed 15-minute bucket: three people 10 min apart each (0, 10,
+// 20) end up in one band spanning 20 min, which is what "arriving within 15 min of each
+// other" means for grouping a shared airport pickup — nobody in the group is more than
+// 15 min from the person immediately before/after them.
+function groupIntoBands(people, timeKey, thresholdMinutes = 15) {
+  const bands = [];
+  let current = [];
+  people.forEach(r => {
+    const mins = timeToMinutes(r[timeKey]);
+    if (current.length > 0) {
+      const prevMins = timeToMinutes(current[current.length - 1][timeKey]);
+      if (mins === Infinity || prevMins === Infinity || mins - prevMins > thresholdMinutes) {
+        bands.push(current);
+        current = [];
+      }
+    }
+    current.push(r);
+  });
+  if (current.length) bands.push(current);
+  return bands;
+}
+
 function timeToMinutes(raw) {
   if (!raw) return Infinity;
   const s = String(raw).trim();
@@ -2910,8 +2934,19 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
                 </tr>
               </thead>
               <tbody>
-                {people.map(r => (
-                  <tr key={r.email}>
+                {groupIntoBands(people, timeKey).map((band, bandIdx) => (
+                  <React.Fragment key={bandIdx}>
+                    {band.length > 1 && (
+                      <tr>
+                        <td colSpan={viewMode === 'full' ? 8 : 5} style={{ padding: '4px 10px', background: '#F5F0FF', borderTop: bandIdx > 0 ? `1px solid ${C.line}` : 'none' }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: C.purple, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                            <Car size={11} /> {band.length} arriving within 15 min of each other — possible shared pickup
+                          </span>
+                        </td>
+                      </tr>
+                    )}
+                    {band.map(r => (
+                  <tr key={r.email} style={band.length > 1 ? { background: '#FBF9FF' } : undefined}>
                     <td style={{ fontWeight: 500 }}>
                       {r.fullName}
                       {r.flightManualOverride && (
@@ -2958,6 +2993,8 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
                       </button>
                     </td>
                   </tr>
+                    ))}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -2982,6 +3019,7 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
             {' '}Click a time or flight code to edit — edited fields
             {' '}<Lock size={9.5} color={C.amber} style={{ verticalAlign: 'middle' }} /> won't be overwritten by the next sync.
             {' '}Click the <Unlock size={9.5} color={C.mute} style={{ verticalAlign: 'middle' }} /> next to an unlocked row to lock it without editing anything, or the lock icon on a name to unlock.
+            {' '}People arriving within 15 min of each other on the same day are grouped with a <Car size={9.5} color={C.purple} style={{ verticalAlign: 'middle' }} /> note for shared pickups.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
