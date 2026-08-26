@@ -3617,19 +3617,26 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
     setTimeout(() => win.print(), 400);
   }
 
-  // Compute only nights that at least one person actually needs
+  // Compute nights that a meaningful number of people actually need. A single
+  // outlier (an early flight, a one-off late departure, a data-entry slip) used to
+  // stretch every room card's badge row by a whole extra day for EVERYONE, not just
+  // that one person — a single Thursday arrival made every room show a "Thu" column.
+  // Requiring at least 2 people to need a night filters that noise out while staying
+  // data-driven (no hardcoded event dates) — the core block still shows up because
+  // that's where the actual crowd is.
   const eventNights = useMemo(() => {
-    const nightSet = new Set();
+    const nightCounts = new Map();
     merged.forEach(r => {
       if (!r.arrivalDate || !r.departureDate) return;
       const d = new Date(r.arrivalDate + 'T12:00:00');
       const end = new Date(r.departureDate + 'T12:00:00');
       while (d < end) {
-        nightSet.add(d.toISOString().slice(0, 10));
+        const key = d.toISOString().slice(0, 10);
+        nightCounts.set(key, (nightCounts.get(key) || 0) + 1);
         d.setDate(d.getDate() + 1);
       }
     });
-    return [...nightSet].sort();
+    return [...nightCounts.entries()].filter(([, count]) => count >= 2).map(([night]) => night).sort();
   }, [merged]);
 
   const assignedEmails = new Set(rooms.flatMap(r => r.people.map(p => p.email)));
@@ -3860,35 +3867,41 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                               key={person.email}
                               style={{ padding: '3px 0', borderBottom: `1px solid ${roomBorder}44`, fontSize: 11.5 }}
                             >
+                              {/* Name gets its own full-width line so it's never truncated —
+                                  the night badges used to share the line and eat the space. */}
                               <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                              {isHead && <Crown size={10} fill="#F5C842" color="#F5C842" style={{ flexShrink: 0 }} />}
-                              <span style={{ flex: 1, minWidth: 0, fontWeight: isHead ? 700 : 400, color: '#1A1220', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {person.fullName}
-                              </span>
-                              {eventNights.length > 0 && eventNights.map(night => {
-                                const arr = person.arrivalDate, dep = person.departureDate;
-                                const needed = (!arr && !dep) || (arr && dep && night >= arr && night < dep);
-                                const dayLabel = new Date(night + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
-                                return (
-                                  <span key={night} style={{ fontSize: 8.5, fontWeight: 700, padding: '1px 3px', borderRadius: 3, flexShrink: 0, background: needed ? '#4C2A92' : '#EDE9F6', color: needed ? '#fff' : '#C4B5FD', letterSpacing: 0.2 }}>
-                                    {dayLabel}
-                                  </span>
-                                );
-                              })}
-                              <button
-                                onClick={() => handleSetRoomHead(room.id, person.email)}
-                                title={isHead ? 'Remove as head' : 'Set as head'}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: isHead ? '#F5C842' : `${C.mute}88`, padding: '0 2px', flexShrink: 0, lineHeight: 1, transition: 'color .12s', display: 'flex', alignItems: 'center' }}
-                                onMouseEnter={e => { if (!isHead) e.currentTarget.style.color = '#F5C842'; }}
-                                onMouseLeave={e => { if (!isHead) e.currentTarget.style.color = `${C.mute}88`; }}
-                              ><Crown size={10} fill={isHead ? 'currentColor' : 'none'} /></button>
-                              <button
-                                onClick={() => handleRemovePersonFromRoom(person, room.id)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: `${C.mute}88`, padding: '0 2px', fontSize: 12, flexShrink: 0, lineHeight: 1, transition: 'color .12s' }}
-                                onMouseEnter={e => { e.currentTarget.style.color = C.red; }}
-                                onMouseLeave={e => { e.currentTarget.style.color = `${C.mute}88`; }}
-                                title="Remove"
-                              >✕</button>
+                                {isHead && <Crown size={10} fill="#F5C842" color="#F5C842" style={{ flexShrink: 0 }} />}
+                                <span style={{ fontWeight: isHead ? 700 : 400, color: '#1A1220', wordBreak: 'break-word' }}>
+                                  {person.fullName}
+                                </span>
+                              </div>
+                              {/* Badges + actions wrap onto as many lines as needed instead of
+                                  competing with the name for space. */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap', marginTop: 2 }}>
+                                {eventNights.length > 0 && eventNights.map(night => {
+                                  const arr = person.arrivalDate, dep = person.departureDate;
+                                  const needed = (!arr && !dep) || (arr && dep && night >= arr && night < dep);
+                                  const dayLabel = new Date(night + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+                                  return (
+                                    <span key={night} style={{ fontSize: 8.5, fontWeight: 700, padding: '1px 3px', borderRadius: 3, flexShrink: 0, background: needed ? '#4C2A92' : '#EDE9F6', color: needed ? '#fff' : '#C4B5FD', letterSpacing: 0.2 }}>
+                                      {dayLabel}
+                                    </span>
+                                  );
+                                })}
+                                <button
+                                  onClick={() => handleSetRoomHead(room.id, person.email)}
+                                  title={isHead ? 'Remove as head' : 'Set as head'}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: isHead ? '#F5C842' : `${C.mute}88`, padding: '0 2px', flexShrink: 0, lineHeight: 1, transition: 'color .12s', display: 'flex', alignItems: 'center', marginLeft: 'auto' }}
+                                  onMouseEnter={e => { if (!isHead) e.currentTarget.style.color = '#F5C842'; }}
+                                  onMouseLeave={e => { if (!isHead) e.currentTarget.style.color = `${C.mute}88`; }}
+                                ><Crown size={10} fill={isHead ? 'currentColor' : 'none'} /></button>
+                                <button
+                                  onClick={() => handleRemovePersonFromRoom(person, room.id)}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: `${C.mute}88`, padding: '0 2px', fontSize: 12, flexShrink: 0, lineHeight: 1, transition: 'color .12s' }}
+                                  onMouseEnter={e => { e.currentTarget.style.color = C.red; }}
+                                  onMouseLeave={e => { e.currentTarget.style.color = `${C.mute}88`; }}
+                                  title="Remove"
+                                >✕</button>
                               </div>
                             </div>
                           );
