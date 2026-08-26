@@ -912,14 +912,39 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   }
 
   function handleAssignPerson(person, roomId) {
+    const targetRoom = rooms.find(r => r.id === roomId);
+    if (!targetRoom) return;
+
+    const alreadyHere = targetRoom.people.some(p => p.email === person.email);
+    if (!alreadyHere && targetRoom.people.length >= targetRoom.capacity) {
+      // Previously this fell through to setRooms/saveRoomData unconditionally, which
+      // still removed the person from wherever they currently were — dropping someone
+      // onto a full room silently unassigned them with no room gained. Bail out first.
+      alert(`${targetRoom.name} is full (${targetRoom.capacity}/${targetRoom.capacity}).`);
+      return;
+    }
+
+    // Mixed-gender rooms are allowed (some room mates are married couples) but not
+    // silent — warn once so it's a deliberate choice, not an accidental drag.
+    const personGender = (person.gender || '').toLowerCase();
+    const hasOppositeGender = personGender && targetRoom.people.some(p => {
+      if (p.email === person.email) return false;
+      const g = (p.gender || '').toLowerCase();
+      return g && g !== personGender;
+    });
+    if (hasOppositeGender) {
+      const ok = window.confirm(
+        `${targetRoom.name} already has someone of a different gender. Some room mates are married couples, so this is allowed — assign ${person.fullName || 'this person'} anyway?`
+      );
+      if (!ok) return;
+    }
+
     const updated = rooms.map(r => ({
       ...r,
-      people: r.people.filter(p => p.email !== person.email),
+      people: r.id === roomId
+        ? [...r.people.filter(p => p.email !== person.email), person]
+        : r.people.filter(p => p.email !== person.email),
     }));
-    const targetRoom = updated.find(r => r.id === roomId);
-    if (targetRoom && targetRoom.people.length < targetRoom.capacity) {
-      targetRoom.people.push(person);
-    }
     setRooms(updated);
     saveRoomData(updated, numRooms, peoplePerRoom);
   }
@@ -3660,13 +3685,16 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                         e.preventDefault();
                         e.currentTarget.style.outline = 'none';
                         e.currentTarget.style.transform = 'scale(1)';
-                        if (draggedPerson && room.people.length < room.capacity) {
+                        // Capacity/gender checks (and the full-room alert or mixed-gender
+                        // confirm) now live centrally in handleAssignPerson so drag, click,
+                        // and any future entry point stay consistent.
+                        if (draggedPerson) {
                           handleAssignPerson(draggedPerson, room.id);
                           setDraggedPerson(null);
                         }
                       }}
                       onClick={() => {
-                        if (selectedPerson && room.people.length < room.capacity) {
+                        if (selectedPerson) {
                           handleAssignPerson(selectedPerson, room.id);
                           setSelectedPerson(null);
                         }
