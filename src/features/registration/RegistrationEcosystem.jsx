@@ -350,6 +350,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         arrivalDate: r.arrival_date, arrivalTime: r.arrival_time, arrivalFlight: r.arrival_flight,
         departureDate: r.departure_date, departureTime: r.departure_time, departureFlight: r.departure_flight,
         flightManualOverride: r.flight_manual_override,
+        registrationManualOverride: r.registration_manual_override ?? false,
         manuallyConfirmed: r.manually_confirmed ?? false,
         inState: r.in_state ?? false,
         transportMode: r.transport_mode || null,
@@ -590,6 +591,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
           arrivalDate: r.arrival_date, arrivalTime: r.arrival_time, arrivalFlight: r.arrival_flight,
           departureDate: r.departure_date, departureTime: r.departure_time, departureFlight: r.departure_flight,
           flightManualOverride: r.flight_manual_override ?? false,
+          registrationManualOverride: r.registration_manual_override ?? false,
           manuallyConfirmed: r.manually_confirmed ?? false,
           inState: r.in_state ?? false,
           transportMode: r.transport_mode || null,
@@ -3128,6 +3130,7 @@ function ApiSyncBlock({ onApplied }) {
   const [state, setState] = useState('idle'); // idle | loading | preview | applying | done | error
   const [preview, setPreview] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [doneMsg, setDoneMsg] = useState('');
 
   async function fetchPreview() {
     setState('loading');
@@ -3155,6 +3158,7 @@ function ApiSyncBlock({ onApplied }) {
       });
       if (error) throw new Error(await readFunctionError(error));
       if (data?.error) throw new Error(data.error + (data.details ? ` — ${data.details}` : ''));
+      setDoneMsg(data?.message || '');
       setState('done');
       onApplied?.();
     } catch (e) {
@@ -3179,7 +3183,7 @@ function ApiSyncBlock({ onApplied }) {
           <span style={{ fontSize: 12.5, color: C.mute }}>Fetching…</span>
         )}
         {state === 'done' && (
-          <span style={{ fontSize: 12.5, color: C.green, fontWeight: 600 }}>✓ Synced</span>
+          <span style={{ fontSize: 12.5, color: C.green, fontWeight: 600 }}>✓ {doneMsg || 'Synced'}</span>
         )}
       </div>
 
@@ -3196,6 +3200,9 @@ function ApiSyncBlock({ onApplied }) {
             <span style={{ fontSize: 12.5 }}><b>{preview.unique_emails}</b> unique emails (after dedup)</span>
             <span style={{ fontSize: 12.5, color: C.green }}><b>{preview.new_count}</b> new</span>
             <span style={{ fontSize: 12.5, color: C.amber }}><b>{preview.update_count}</b> updates</span>
+            {preview.locked_count > 0 && (
+              <span style={{ fontSize: 12.5, color: C.mute }}><b>{preview.locked_count}</b> locked — will be skipped</span>
+            )}
           </div>
 
           <div style={{ overflowX: 'auto', marginBottom: 12, maxHeight: 320, overflowY: 'auto', border: `1px solid ${C.line}`, borderRadius: 8 }}>
@@ -3212,9 +3219,11 @@ function ApiSyncBlock({ onApplied }) {
               </thead>
               <tbody>
                 {preview.rows.map((r, i) => (
-                  <tr key={i} style={{ borderTop: `1px solid ${C.line}`, background: r._status === 'new' ? '#F0FBF4' : 'white' }}>
+                  <tr key={i} style={{ borderTop: `1px solid ${C.line}`, background: r._status === 'new' ? '#F0FBF4' : r._status === 'locked' ? '#FAFAFA' : 'white', opacity: r._status === 'locked' ? 0.6 : 1 }}>
                     <td style={{ padding: '5px 10px' }}>
-                      <Pill tone={r._status === 'new' ? 'green' : 'amber'}>{r._status === 'new' ? 'New' : 'Update'}</Pill>
+                      <Pill tone={r._status === 'new' ? 'green' : r._status === 'locked' ? 'mute' : 'amber'}>
+                        {r._status === 'new' ? 'New' : r._status === 'locked' ? '🔒 Locked' : 'Update'}
+                      </Pill>
                     </td>
                     <td style={{ padding: '5px 10px', fontWeight: 500 }}>{r.full_name}</td>
                     <td style={{ padding: '5px 10px', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{r.email}</td>
