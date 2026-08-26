@@ -3617,13 +3617,14 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
     setTimeout(() => win.print(), 400);
   }
 
-  // Compute nights that a meaningful number of people actually need. A single
-  // outlier (an early flight, a one-off late departure, a data-entry slip) used to
-  // stretch every room card's badge row by a whole extra day for EVERYONE, not just
-  // that one person — a single Thursday arrival made every room show a "Thu" column.
-  // Requiring at least 2 people to need a night filters that noise out while staying
-  // data-driven (no hardcoded event dates) — the core block still shows up because
-  // that's where the actual crowd is.
+  // Room badges always show the core 3-night block (the event's real Fri/Sat/Sun),
+  // not a column per outlier. A fixed >=2-person threshold still broke: an early
+  // Thursday arrival started at 1 person, then grew to 4 as more got confirmed,
+  // crossing the threshold and re-adding a "Thu" column nobody wanted. Taking the
+  // top 3 nights by headcount is threshold-proof — Thu can have any number of
+  // people and still loses to the ~30-person core block, so it never earns a column.
+  // No hardcoded event dates: this adapts to whichever 3 consecutive nights the
+  // actual crowd falls on.
   const eventNights = useMemo(() => {
     const nightCounts = new Map();
     merged.forEach(r => {
@@ -3636,7 +3637,11 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
         d.setDate(d.getDate() + 1);
       }
     });
-    return [...nightCounts.entries()].filter(([, count]) => count >= 2).map(([night]) => night).sort();
+    return [...nightCounts.entries()]
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([night]) => night)
+      .sort();
   }, [merged]);
 
   const assignedEmails = new Set(rooms.flatMap(r => r.people.map(p => p.email)));
@@ -3880,7 +3885,14 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                               <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap', marginTop: 2 }}>
                                 {eventNights.length > 0 && eventNights.map(night => {
                                   const arr = person.arrivalDate, dep = person.departureDate;
-                                  const needed = (!arr && !dep) || (arr && dep && night >= arr && night < dep);
+                                  // Only trust the arrival/departure range when BOTH are set — an
+                                  // arrival with no departure (or vice versa) isn't a real range,
+                                  // it's missing data, and treating it as one wrongly showed that
+                                  // person needing zero nights. Incomplete or absent flight info
+                                  // both fall back to the same safe default: assume the full core
+                                  // block, same as someone who never entered any travel info.
+                                  const hasCompleteInfo = !!(arr && dep);
+                                  const needed = !hasCompleteInfo || (night >= arr && night < dep);
                                   const dayLabel = new Date(night + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
                                   return (
                                     <span key={night} style={{ fontSize: 8.5, fontWeight: 700, padding: '1px 3px', borderRadius: 3, flexShrink: 0, background: needed ? '#4C2A92' : '#EDE9F6', color: needed ? '#fff' : '#C4B5FD', letterSpacing: 0.2 }}>
