@@ -461,7 +461,9 @@ export default function SprintOverview() {
   async function reloadTeamsAndMembers() {
     try {
       const { data: teamsRes } = await supabase.from('sprint_teams').select('id, name, description, lead_user_id').eq('sprint_id', sprintId).order('created_at')
-      const { data: membersRes } = await supabase.from('sprint_members').select(`${SPRINT_MEMBER_WITH_TEMP_SELECT}, user:user_id(id, name, email, status, is_temporary)`).eq('sprint_id', sprintId).order('joined_at')
+      // .order('user_id') is a stable tiebreaker for members sharing an identical joined_at
+      // (bulk-added at once) — see the matching comment in getSprintDetail (sprints.js).
+      const { data: membersRes } = await supabase.from('sprint_members').select(`${SPRINT_MEMBER_WITH_TEMP_SELECT}, user:user_id(id, name, email, status, is_temporary)`).eq('sprint_id', sprintId).order('joined_at').order('user_id')
 
       if (teamsRes && membersRes) {
         const sprintTeamIds = teamsRes.map((t) => t.id)
