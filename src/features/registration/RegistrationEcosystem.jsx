@@ -231,8 +231,17 @@ async function saveKey(key, value) {
     const { error } = await supabase
       .from('registration_config')
       .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
-    if (error) console.error('saveKey failed:', key, error.message);
-  } catch (e) { console.error('saveKey error:', key, e.message); }
+    // A save that silently no-ops (e.g. an RLS write policy rejecting this user/key)
+    // is worse than one that errors loudly: the UI keeps showing the in-memory change,
+    // so nothing looks wrong until a refresh reverts it. Surface it instead.
+    if (error) {
+      console.error('saveKey failed:', key, error.message);
+      alert(`Couldn't save your change (${key}) — it may not survive a refresh. ${error.message}`);
+    }
+  } catch (e) {
+    console.error('saveKey error:', key, e.message);
+    alert(`Couldn't save your change (${key}) — it may not survive a refresh. ${e.message}`);
+  }
 }
 
 // ---------- UI atoms ----------
@@ -1322,7 +1331,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         )}
         {tab === 'summary' && <SummaryTab merged={merged} />}
         {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onEditReg: setEditingReg }} />}
-        {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
+        {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, role, viewDefaults: eventConfig.discipleship_view_defaults, onSaveViewDefaults: async (defaults) => { if (!config?.id) return; await supabase.from('event_configs').update({ discipleship_view_defaults: defaults }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, roomsNote, handleUpdateRoomsNote, peoplePerRoom, isLimited }} />}
         {tab === 'transport' && <TransportTab {...{ merged, isLimited, subgroups, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, onToggleFlightLock: handleToggleFlightLock, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving: bulkMarkDriving, onToggleCrossCountry: toggleConfirm, onSetTransportMode: setTransportMode, onUpdateCrossCountrySubgroups: async (list) => { if (!config?.id) return; await supabase.from('event_configs').update({ cross_country_subgroups: list }).eq('id', config.id); reloadConfig(); } }} />}
@@ -2417,12 +2426,31 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
 }
 
 // ============ FOUNDATION SCHOOL & BAPTISM ============
-function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }) {
+function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, role, viewDefaults, onSaveViewDefaults }) {
   const [needFoundation, setNeedFoundation] = useState(true);
   const [needBaptism, setNeedBaptism] = useState(true);
   const [mode, setMode] = useState('either'); // either | both
   const [dismissed, setDismissed] = useState(new Set());
   const [fellowshipFilter, setFellowshipFilter] = useState('All');
+  // Column visibility — some teams only care about one credential (e.g. a baptism
+  // follow-up team doesn't need Foundation School cluttering the view, and vice versa).
+  // Hiding a column also turns off filtering/flagging by it, since a hidden field
+  // shouldn't silently still be narrowing the list. Starts from the super_admin-set
+  // default (event_configs.discipleship_view_defaults) so the default is persistent for
+  // everyone, not just a per-session local toggle — individual viewers can still adjust
+  // their own view from there without changing the saved default.
+  const [showFoundation, setShowFoundation] = useState(viewDefaults?.showFoundation ?? true);
+  const [showBaptism, setShowBaptism] = useState(viewDefaults?.showBaptism ?? true);
+  const [savingDefault, setSavingDefault] = useState(false);
+  // Only re-seed from the saved default when it actually changes (e.g. another admin
+  // updated it) — not on every render, which would stomp a viewer's local toggle.
+  const viewDefaultsRef = React.useRef(viewDefaults);
+  useEffect(() => {
+    if (viewDefaultsRef.current === viewDefaults) return;
+    viewDefaultsRef.current = viewDefaults;
+    setShowFoundation(viewDefaults?.showFoundation ?? true);
+    setShowBaptism(viewDefaults?.showBaptism ?? true);
+  }, [viewDefaults]);
 
   const fellowships = useMemo(() => {
     const f = new Set(merged.map(r => r.fellowship).filter(Boolean));
@@ -2440,13 +2468,19 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups,
       if (subgroupFilter !== 'All' && r.subgroup !== subgroupFilter) return false;
     }
     if (dismissed.has(r.email || r.fullName)) return false;
+    // A hidden field is also not filtered on — otherwise the list would keep
+    // narrowing by a credential the viewer can no longer see, which looks broken.
+    const activeFoundation = showFoundation && needFoundation;
+    const activeBaptism = showBaptism && needBaptism;
     const fsGraduated = /grad/i.test(r.foundationStatus);
     const baptismFlag = /no|not sure/i.test(r.baptism);
-    const flagFoundation = needFoundation && !fsGraduated;
-    const flagBaptism = needBaptism && baptismFlag;
-    if (mode === 'both') return flagFoundation && flagBaptism;
-    return flagFoundation || flagBaptism;
-  }), [merged, isLimited, subgroupFilter, fellowshipFilter, needFoundation, needBaptism, mode, dismissed]);
+    const flagFoundation = activeFoundation && !fsGraduated;
+    const flagBaptism = activeBaptism && baptismFlag;
+    if (activeFoundation && activeBaptism) return mode === 'both' ? (flagFoundation && flagBaptism) : (flagFoundation || flagBaptism);
+    if (activeFoundation) return flagFoundation;
+    if (activeBaptism) return flagBaptism;
+    return false;
+  }), [merged, isLimited, subgroupFilter, fellowshipFilter, needFoundation, needBaptism, showFoundation, showBaptism, mode, dismissed]);
 
   function fsPill(status) {
     if (/grad/i.test(status)) return <Pill tone="green">{status || 'Graduated'}</Pill>;
@@ -2462,8 +2496,31 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups,
           <div style={{ fontSize: 12.5, color: C.mute, marginTop: 3 }}>{filtered.length} people flagged{dismissed.size > 0 ? ` · ${dismissed.size} verified & hidden` : ''}.</div>
         </div>
         <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', gap: 6, fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={needFoundation} onChange={e => setNeedFoundation(e.target.checked)} /> Needs Foundation School</label>
-          <label style={{ display: 'flex', gap: 6, fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={needBaptism} onChange={e => setNeedBaptism(e.target.checked)} /> Needs baptism</label>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '4px 10px', background: '#F5F0FF', borderRadius: 7 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.purple, textTransform: 'uppercase', letterSpacing: 0.3 }}>Columns</span>
+            <label style={{ display: 'flex', gap: 5, fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={showFoundation} onChange={e => setShowFoundation(e.target.checked)} /> Foundation School</label>
+            <label style={{ display: 'flex', gap: 5, fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={showBaptism} onChange={e => setShowBaptism(e.target.checked)} /> Baptism</label>
+            {role === 'super_admin' && (
+              <button
+                onClick={async () => {
+                  setSavingDefault(true);
+                  try { await onSaveViewDefaults?.({ showFoundation, showBaptism }); }
+                  finally { setSavingDefault(false); }
+                }}
+                disabled={savingDefault}
+                title="Save this column visibility as the default everyone sees when they open this tab"
+                style={{ fontSize: 11, fontWeight: 600, background: 'none', border: 'none', color: C.purple, cursor: savingDefault ? 'default' : 'pointer', textDecoration: 'underline', opacity: savingDefault ? 0.6 : 1 }}
+              >
+                {savingDefault ? 'Saving…' : 'Set as default'}
+              </button>
+            )}
+          </div>
+          <label style={{ display: 'flex', gap: 6, fontSize: 12.5, alignItems: 'center', opacity: showFoundation ? 1 : 0.4 }} title={showFoundation ? undefined : 'Foundation School column is hidden — show it to filter by it'}>
+            <input type="checkbox" checked={needFoundation} disabled={!showFoundation} onChange={e => setNeedFoundation(e.target.checked)} /> Needs Foundation School
+          </label>
+          <label style={{ display: 'flex', gap: 6, fontSize: 12.5, alignItems: 'center', opacity: showBaptism ? 1 : 0.4 }} title={showBaptism ? undefined : 'Baptism column is hidden — show it to filter by it'}>
+            <input type="checkbox" checked={needBaptism} disabled={!showBaptism} onChange={e => setNeedBaptism(e.target.checked)} /> Needs baptism
+          </label>
           <select value={mode} onChange={e => setMode(e.target.value)}>
             <option value="either">Match either</option>
             <option value="both">Match both</option>
@@ -2476,28 +2533,34 @@ function DiscipleshipTab({ merged, subgroupFilter, setSubgroupFilter, subgroups,
           )}
           <Btn tone="ghost" small onClick={() => downloadCSV('foundation-baptism.csv', filtered, [
             { key: 'fullName', label: 'Name' }, { key: 'subgroup', label: 'Subgroup' }, { key: 'email', label: 'Email' },
-            { key: 'foundationStatus', label: 'Foundation School' }, { key: 'baptism', label: 'Baptised' },
+            ...(showFoundation ? [{ key: 'foundationStatus', label: 'Foundation School' }] : []),
+            ...(showBaptism ? [{ key: 'baptism', label: 'Baptised' }] : []),
           ])}><Download size={13} /> Export</Btn>
         </div>
       </div>
 
       <Card style={{ padding: 0, overflowX: 'auto' }}>
         <table>
-          <thead><tr><th>Name</th><th>Subgroup</th><th>Email</th><th><Droplets size={11} style={{ verticalAlign: -2 }} /> Foundation School</th><th>Baptised</th><th style={{ width: 32 }}></th></tr></thead>
+          <thead><tr>
+            <th>Name</th><th>Subgroup</th><th>Email</th>
+            {showFoundation && <th><Droplets size={11} style={{ verticalAlign: -2 }} /> Foundation School</th>}
+            {showBaptism && <th>Baptised</th>}
+            <th style={{ width: 32 }}></th>
+          </tr></thead>
           <tbody>
             {filtered.map((r, i) => (
               <tr key={i}>
                 <td style={{ fontWeight: 600 }}>{r.fullName}</td><td>{r.subgroup}</td>
                 <td style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{r.email}</td>
-                <td>{fsPill(r.foundationStatus)}</td>
-                <td>{/yes/i.test(r.baptism) ? <Pill tone="green">Yes</Pill> : <Pill tone="amber">{r.baptism || 'No'}</Pill>}</td>
+                {showFoundation && <td>{fsPill(r.foundationStatus)}</td>}
+                {showBaptism && <td>{/yes/i.test(r.baptism) ? <Pill tone="green">Yes</Pill> : <Pill tone="amber">{r.baptism || 'No'}</Pill>}</td>}
                 <td>
                   <button onClick={() => dismiss(r.email || r.fullName)} title="Verified — hide from list"
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, fontSize: 16, lineHeight: 1, padding: '2px 4px' }}>×</button>
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && <tr><td colSpan={6} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>Nobody matches the current filters.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={4 + (showFoundation ? 1 : 0) + (showBaptism ? 1 : 0)} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>Nobody matches the current filters.</td></tr>}
           </tbody>
         </table>
       </Card>
