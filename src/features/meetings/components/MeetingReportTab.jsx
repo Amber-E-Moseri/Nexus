@@ -1673,6 +1673,7 @@ export default function MeetingReportTab() {
               unexpected_names: result.unexpected.map((person) => person.name),
               subgroup_filter: result.subgroupFilter,
               by_subgroup: result.bySubgroup || null,
+              attendance_source: inputMode === 'cmp' && cmpSelected ? { type: 'cmp', service: cmpSelected } : null,
               },
             },
           })

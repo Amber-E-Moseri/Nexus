@@ -116,6 +116,11 @@ export function AuthProvider({ children }) {
   // cancel it before it fires mid-profile-fetch (the "workspace with no user
   // info" mobile race: timer fires at 4 s, profile fetch finishes at 4.5 s).
   const initialSessionTimerRef = useRef(null)
+  // Deduplicates concurrent fetchMinimalProfile calls between initializeAuth
+  // and onAuthStateChange — both fire on page load and race to fetch the
+  // same profile, doubling the DB round-trips and causing a spinner flash
+  // when the slower path calls setLoading(true) mid-flight.
+  const profileFetchRef = useRef(null)
   useEffect(() => {
     profileRef.current = profile
   }, [profile])
@@ -137,6 +142,20 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true
+
+    function ensureProfileFetch(userId) {
+      if (profileFetchRef.current?.userId === userId) {
+        return profileFetchRef.current.promise
+      }
+      const promise = withTimeout(fetchMinimalProfile(userId), 8_000)
+      profileFetchRef.current = { userId, promise }
+      promise.catch(() => {}).finally(() => {
+        if (profileFetchRef.current?.promise === promise) {
+          profileFetchRef.current = null
+        }
+      })
+      return promise
+    }
 
     const initializeAuth = async () => {
       // Primary: Supabase SDK reads from its own IndexedDB store (nexus-auth/kv).
@@ -239,9 +258,9 @@ export function AuthProvider({ children }) {
 
       if (session?.user) {
         try {
-          const nextProfile = await withTimeout(fetchMinimalProfile(session.user.id), 8_000)
+          const nextProfile = await ensureProfileFetch(session.user.id)
           if (mounted) {
-            profileRef.current = nextProfile  // sync before INITIAL_SESSION can race
+            profileRef.current = nextProfile
             setProfile(nextProfile)
             fetchSupplementaryProfile(session.user.id, nextProfile.department_id)
               .then((supplementary) => {
@@ -254,19 +273,13 @@ export function AuthProvider({ children }) {
               .catch(() => {})
           }
 
-          // Restore push subscription if it was enabled (handles PWA cold-start)
           if (nextProfile?.push_enabled && Notification.permission === 'granted') {
             restorePushSubscription().catch(() => {})
           }
 
           touchLastActive().catch(() => {})
-          // Profile loaded — release spinner
           if (mounted) setLoading(false)
         } catch (e) {
-          // Profile fetch failed/timed out. Don't release the spinner here — the
-          // INITIAL_SESSION event from onAuthStateChange will retry the fetch.
-          // Releasing loading with profile=null causes a skeleton with no user info.
-          // The 15 s safety-net ensures we never hang indefinitely.
           console.warn('[Auth] fetchProfile failed or timed out:', e)
         }
       }
@@ -372,7 +385,7 @@ export function AuthProvider({ children }) {
           }
           setLoading(true)
           try {
-            const nextProfile = await withTimeout(fetchMinimalProfile(session.user.id), 8_000)
+            const nextProfile = await ensureProfileFetch(session.user.id)
             if (mounted) {
               setProfile(nextProfile)
               fetchSupplementaryProfile(session.user.id, nextProfile.department_id)

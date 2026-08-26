@@ -192,6 +192,7 @@ serve(async (req) => {
         unexpected_names: body.updates.unexpected_names,
         subgroup_filter: body.updates.subgroup_filter,
         by_subgroup: body.updates.by_subgroup,
+        attendance_source: body.updates.attendance_source,
       }
       const { data, error } = await admin
         .from('meeting_attendance_reports')
