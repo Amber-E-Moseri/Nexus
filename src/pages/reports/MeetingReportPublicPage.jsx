@@ -119,6 +119,7 @@ export default function MeetingReportPublicPage() {
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [activeSubgroup, setActiveSubgroup] = useState('')
   const isInitialMount = useRef(true)
   const isSharedLink = !!share_token
@@ -157,46 +158,70 @@ export default function MeetingReportPublicPage() {
     async function load() {
       setLoading(true)
       setNotFound(false)
+      setLoadFailed(false)
 
-      const { data, error } = await supabase
-        .from('meeting_attendance_reports')
-        .select(`
-          id, meeting_id, attended_count, absent_count, expected_count, unexpected_count,
-          report_date, label, share_token, subgroup_filter, reach_pct,
-          present_names, absent_names, unexpected_names, by_subgroup
-        `)
-        .eq('share_token', share_token)
-        .single()
-
-      // Fetch meeting details separately if meeting_id exists
-      let meetingData = null
-      if (data?.meeting_id) {
-        const { data: mData } = await supabase
-          .from('meetings')
-          .select('id, title, date')
-          .eq('id', data.meeting_id)
+      // Previously nothing here was wrapped in try/catch — a thrown exception (a
+      // rejected fetch, a network hiccup, anything short of a clean {data,error}
+      // response) skipped every setLoading(false) call below and left this public,
+      // unauthenticated page stuck on "Loading report..." forever with no way out
+      // and no error surfaced. finally guarantees loading always resolves.
+      try {
+        const { data, error } = await supabase
+          .from('meeting_attendance_reports')
+          .select(`
+            id, meeting_id, attended_count, absent_count, expected_count, unexpected_count,
+            report_date, label, share_token, subgroup_filter, reach_pct,
+            present_names, absent_names, unexpected_names, by_subgroup
+          `)
+          .eq('share_token', share_token)
           .single()
-        meetingData = mData
+
+        if (!active) return
+
+        if (error || !data) {
+          setReport(null)
+          setNotFound(true)
+          return
+        }
+
+        // Fetch meeting details separately if meeting_id exists. A failure here
+        // (deleted meeting, RLS gap) shouldn't take down the whole report — the
+        // report itself already loaded successfully.
+        let meetingData = null
+        if (data.meeting_id) {
+          try {
+            const { data: mData } = await supabase
+              .from('meetings')
+              .select('id, title, date')
+              .eq('id', data.meeting_id)
+              .single()
+            meetingData = mData
+          } catch (meetingErr) {
+            console.error('Failed to load linked meeting details for shared report:', meetingErr)
+          }
+        }
+
+        if (!active) return
+
+        // Combine report and meeting data, rename by_subgroup to bySubgroup for consistency
+        const reportWithMeeting = {
+          ...data,
+          meetings: meetingData || {},
+          bySubgroup: data.by_subgroup || null,
+        }
+
+        setReport(reportWithMeeting)
+      } catch (err) {
+        console.error('Failed to load shared report:', err)
+        if (active) {
+          setReport(null)
+          // Distinct from notFound: this is "something broke," not "this link is bad" —
+          // the report may well still exist, so don't tell the visitor to go get a new link.
+          setLoadFailed(true)
+        }
+      } finally {
+        if (active) setLoading(false)
       }
-
-      if (!active) return
-
-      if (error || !data) {
-        setReport(null)
-        setNotFound(true)
-        setLoading(false)
-        return
-      }
-
-      // Combine report and meeting data, rename by_subgroup to bySubgroup for consistency
-      const reportWithMeeting = {
-        ...data,
-        meetings: meetingData || {},
-        bySubgroup: data.by_subgroup || null,
-      }
-
-      setReport(reportWithMeeting)
-      setLoading(false)
     }
 
     load()
@@ -292,6 +317,26 @@ export default function MeetingReportPublicPage() {
     return (
       <div style={{ minHeight: '100vh', background: PAGE_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MUTED, fontSize: 14 }}>
         Loading report...
+      </div>
+    )
+  }
+
+  if (loadFailed) {
+    return (
+      <div style={{ minHeight: '100vh', background: HEADER_GRADIENT, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ textAlign: 'center', color: '#FFFFFF', maxWidth: 440 }}>
+          <div style={{ fontSize: 30, fontWeight: 800, marginBottom: 10 }}>Couldn't load this report</div>
+          <div style={{ fontSize: 14, color: '#D9D0F2', lineHeight: 1.6, marginBottom: 18 }}>
+            Something went wrong loading this page — the link itself is likely fine. Try again.
+          </div>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '10px 16px', borderRadius: 10, background: '#FFFFFF', color: '#2D1B69', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+          >
+            Retry
+          </button>
+        </div>
       </div>
     )
   }
