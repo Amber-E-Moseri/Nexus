@@ -144,257 +144,71 @@ function buildSystemPrompt({ transcriptChunk, chunkIndex, totalChunks, context, 
   meeting_date: string;
 }) {
   const chunkNote = totalChunks > 1
-    ? `\n\nNOTE: This is part ${chunkIndex + 1} of ${totalChunks} from one continuous meeting recording, split only because of length. Extract only what appears in THIS portion — do not assume content from other parts. The parts will be merged programmatically after extraction, so do not reference "part ${chunkIndex + 1}" in your output.`
+    ? `\n\nNOTE: Part ${chunkIndex + 1} of ${totalChunks}. Extract only this portion. Parts merged programmatically — do not reference part numbers in output.`
+    : "";
+  const isFinalChunk = totalChunks > 1 && chunkIndex === totalChunks - 1;
+  const finalSummaryNote = isFinalChunk
+    ? "\n\nFINAL CHUNK ONLY: Include a 'final_summary' field in your JSON: a 4-6 sentence synthesis combining all chunk summaries into one coherent meeting overview. For non-final chunks, omit this field."
     : "";
 
-  return `SYSTEM PROMPT — extract-meeting-data (v3.0, flexible entity detection)
+  return `SYSTEM PROMPT — extract-meeting-data (v3.1, performance optimized)
 
-You are processing a transcript. First validate participant data, then classify content,
-then extract accordingly.
+Classify content type, then extract meeting data accordingly.
 
-=== DATA VALIDATION (before processing) ===
-Validate participant data integrity:
-- Any participant with 2+ spaces MUST have a "primary" field defined
-- If a participant has 2+ spaces but primary is missing, null, or not in their
-  spaces array, flag it as a data integrity issue
+=== CONTENT CLASSIFICATION ===
+content_type: "meeting" | "raw_note" | "list_data" | "other"
+- "meeting" = dialogue or single speaker addressing attendees present
+- "raw_note" = single-voice personal dictation (still extract in full if substantive)
+- "list_data" = structured data read aloud (birthdays, rosters, inventory)
+- "other" = scripture, songs, random audio
 
-Add any validation failures to a "data_issues" array in your response.
+If content_type is "meeting" or "raw_note" AND confidence >= 0.6: extract all fields.
+Otherwise: return summary, content_type, confidence, decisions, action_items, open_items only.
 
-When you encounter a task assigned to a person with a missing/invalid primary_space
-during extraction:
-- Set suggested_space: null
-- Set space_confidence: "ambiguous"
-- Do NOT try to guess their primary space or default to their first space
-- Continue extraction normally — the downstream review process will handle manual
-  intervention
+=== EXTRACTION RULES ===
+- **summary**: 4-6 sentences contextual synthesis (why, main topics, outcomes, tone)
+- **detailed_notes**: markdown, chronological, topic-headed, near-verbatim (omit if low confidence)
+- **decisions**: list with context
+- **action_items**: title, owner (explicit/inferred/unassigned), suggested_space (from ${linkedSpacesJson}), due_date, priority
+- **open_items**: item_text, type (question/exploration/blocker/decision_point/future_consideration), confidence_score, transcript_excerpt
+- **scripture_references**: citation, verse_text (null if uncertain), confidence (confirmed/unconfirmed)
+- **key_topics**: deduplicated, no generic labels
+- **data_issues**: if participants have 2+ spaces without "primary" field defined
+- **detected_entities**: ONLY include if found (testimonies, pledges, teaching_sessions, announcements, attendance_metrics, recognition_segments, campaigns, strategic_initiatives, budget_discussions, q_and_a, other)
 
-=== STEP 1 — Classify Content Type ===
-Determine content_type: "meeting" | "raw_note" | "list_data" | "other"
-- "meeting" = multiple speakers in dialogue, OR a single speaker addressing/leading
-  a group of attendees who are present (updates, plans, assignments, decisions,
-  guidance, teaching, or direction given to the people in the room) — this includes
-  a leader speaking to staff/leaders during a real meeting even when only one voice
-  is transcribed. Direct address ("you", "some of you", "our leaders", answering a
-  question someone asked) is a strong signal this is a meeting, not a private note.
-- "raw_note" = single-voice PERSONAL dictation or journaling with no audience present
-  — the speaker is recording a note to themselves, not addressing people in a room.
-- "list_data" = structured data read aloud (e.g. birthday lists, roster reads,
-  inventory reads) — NOT a meeting even if names and dates appear together
-- "other" = anything else (scripture reading, song lyrics, random audio, stray
-  recordings, etc.)
-
-=== STEP 2 — Extract Based on Classification ===
-- If content_type is "meeting" OR "raw_note", with confidence >= 0.6:
-    → Populate all fields including summary, decisions, action_items, key_topics,
-      detailed_notes, open_items, and scripture_references. This platform's
-      "Meetings" module only ever records actual meetings and staff addresses —
-      recorded content classified as raw_note is still real, substantive meeting
-      content (a leader's guidance, teaching, or address to those present), not a
-      private journal — extract it in full, same as "meeting".
-- If content_type is "list_data" or "other", OR confidence < 0.6:
-    → Return cleaned_transcript, chapters, content_type, and a brief 2-3 sentence
-      summary describing what substantive content was found (e.g. "This appears to
-      be a staff meeting covering attendance targets and upcoming events.").
-    → NEVER describe the recording as "corrupted", "looped", "repeated", or
-      reference audio quality issues — that is a transcription artifact, not your
-      concern. Focus only on the content that IS present, however fragmented.
-    → If any action items, decisions, or scripture references are discernible even
-      partially, still extract them — do not leave them empty just because the
-      transcript is imperfect. A partial extraction is always better than none.
-    → Leave detailed_notes null for low-confidence content, but still populate
-      decisions, action_items, and scripture_references with anything recoverable.
-    → This gives context without forcing meeting structure onto non-meeting content.
-
-=== DETAILED NOTES RULES (only apply if content_type = meeting or raw_note, confidence >= 0.6) ===
-- "detailed_notes" is the full-detail record layer — NOT a second summary.
-  * "summary" is a contextual synthesis, not a one-line blurb — aim for 4-6
-    sentences in prose covering: why the meeting happened, the main topics
-    discussed, notable outcomes or shifts, and overall tone/takeaway. It should
-    give a reader who wasn't there a real sense of what happened, while still
-    being far shorter and less granular than detailed_notes.
-  * "detailed_notes" is a near-verbatim, cleaned-up account of the meeting in
-    markdown: chronological, organized under topic headings (## Heading).
-  * Remove filler, false starts, crosstalk, and repetition — but cut NOTHING
-    substantive. Preserve every decision, number, name, commitment, and nuance.
-  * Attribute statements to speakers where the transcript makes the speaker clear
-    (e.g. "**Amber:** proposed moving the launch to Friday").
-- Reference any scripture inline in the detailed_notes prose at the point it comes
-  up (e.g. "opened with **John 3:16**"), AND list it in scripture_references.
-
-=== SCRIPTURE RULES (only apply if content_type = meeting or raw_note, confidence >= 0.6) ===
-- Populate "verse_text" ONLY when you are certain of the exact wording. If there
-  is ANY doubt, set verse_text to null and confidence to "unconfirmed".
-- NEVER reconstruct or paraphrase scripture from memory to fill verse_text. An
-  unconfirmed citation with null verse_text is REQUIRED over a fluent but
-  possibly-wrong quote — this is treated as an official ministry record.
-- "citation" is always required (Book Chapter:Verse). "confidence" is "confirmed"
-  only when verse_text is exact; otherwise "unconfirmed".
-
-=== SPACE SUGGESTION RULES (only apply if content_type = meeting or raw_note) ===
-- Only suggest spaces from the meeting's linked_spaces: ${linkedSpacesJson}
-- Base suggested_space on TASK CONTENT ONLY:
-  * "coordinate media team" → Media
-  * "approve budget line" → Admin
-  * "prayer team ushering" → PFCC
-  → Do NOT default to the owner's known primary space just because it's convenient.
-- Set space_confidence based on clarity of task content:
-  * "high" = task content clearly and specifically points to one space
-  * "low" = task is generic/could fit multiple spaces but one is plausible
-  * "ambiguous" = genuinely unclear which space owns this, don't force a guess
-- Participants and their space memberships (provided for context only):
-  ${participantsJson}
-
-=== RETURN SCHEMA ===
-Return ONLY valid JSON (no markdown, no extra text):
-
-{
-  "content_type": "meeting" | "raw_note" | "list_data" | "other",
-  "confidence": 0.0 to 1.0,
-  "data_issues": [
-    {
-      "type": "missing_primary_space" | "invalid_primary_space" | "other",
-      "participant_name": "string",
-      "spaces": ["array of space names"],
-      "action": "string — brief explanation"
-    }
-  ],
-  "cleaned_transcript": "string with filler removed, or null if content_type is list_data/other or confidence < 0.6",
-  "chapters": [{ "title": "string", "start_marker": "string" }],
-  "summary": "string (4-6 sentence contextual synthesis) or null",
-  "detailed_notes": "markdown string (chronological, topic-headed, near-verbatim) or null if content_type is list_data/other or confidence < 0.6",
-  "scripture_references": [
-    {
-      "verse_text": "string or null — full verse text ONLY when certain of exact wording",
-      "citation": "string — Book Chapter:Verse",
-      "confidence": "confirmed" | "unconfirmed"
-    }
-  ],
-  "decisions": [{ "decision": "string", "context": "string" }],
-  "action_items": [
-    {
-      "title": "string",
-      "owner": "string or null",
-      "owner_confidence": "explicit" | "inferred" | "unassigned",
-      "suggested_space": "string or null",
-      "space_confidence": "high" | "low" | "ambiguous",
-      "due_date": "string or null",
-      "priority": "high" | "medium" | "low"
-    }
-  ],
-  "open_items": [
-    {
-      "item_text": "string — clear, concise description of the open item",
-      "item_type": "question" | "exploration" | "blocker" | "decision_point" | "future_consideration",
-      "confidence_score": 0.0 to 1.0,
-      "transcript_excerpt": "string — exact quote from transcript where item was mentioned",
-      "notes": "string or null — optional context"
-    }
-  ],
-  "key_topics": ["string"],
-  "detected_entities": {
-    "<entity_type>": {
-      "detected": true,
-      "count": number,
-      "confidence": 0.0 to 1.0,
-      "items": [array of entity-specific objects],
-      "ambiguities": ["string descriptions of uncertain items"]
-    }
-  }
-}
-
-=== FLEXIBLE ENTITY DETECTION (only apply if content_type = meeting or raw_note, confidence >= 0.6) ===
-In addition to the standard fields above, scan the transcript for these entity types.
-For each type, ONLY include it in "detected_entities" if you find actual instances.
-Do NOT include a type with detected:false — omit absent types entirely.
-If no additional entities beyond the standard fields are found, return detected_entities: {}.
-
-Entity types to scan for:
-- "testimonies": Personal testimonies or faith stories shared during the meeting.
-  Each item: { "person": string, "campus": string|null, "theme": string,
-               "impact_pillars": [string], "key_decision": string|null,
-               "transcript_excerpt": string }
-- "pledges": Financial or service commitments made by individuals.
-  Each item: { "person": string, "region": string|null,
-               "commitment_type": "day"|"week"|"month"|"one_time"|string,
-               "amount": string|null, "target_date": string|null,
-               "transcript_excerpt": string }
-- "teaching_sessions": Teaching, Bible study, or training segments.
-  Each item: { "title": string, "facilitator": string|null,
-               "estimated_duration": string|null, "core_topics": [string],
-               "scripture": [string], "reusability": "high"|"medium"|"low",
-               "transcript_excerpt": string }
-- "announcements": Organizational announcements shared with attendees.
-  Each item: { "content": string, "announced_by": string|null,
-               "effective_date": string|null, "transcript_excerpt": string }
-- "attendance_metrics": Attendance numbers or growth metrics mentioned.
-  Each item: { "metric": string, "value": string|number,
-               "comparison": string|null, "transcript_excerpt": string }
-- "recognition_segments": Awards, shout-outs, top-performer recognitions.
-  Each item: { "award_type": string, "period": string|null,
-               "recipients": [string], "transcript_excerpt": string }
-- "campaigns": Ministry campaigns, fundraising drives, or organizational initiatives discussed.
-  Each item: { "campaign_name": string, "goal": string|null,
-               "target": string|null, "tiers": [string]|null,
-               "transcript_excerpt": string }
-- "strategic_initiatives": Long-term strategic items discussed.
-  Each item: { "initiative": string, "owner": string|null,
-               "timeline": string|null, "transcript_excerpt": string }
-- "budget_discussions": Budget or financial discussions.
-  Each item: { "topic": string, "amount": string|null,
-               "decision": string|null, "transcript_excerpt": string }
-- "q_and_a": Question and answer segments.
-  Each item: { "question": string, "asked_by": string|null,
-               "answer_summary": string|null, "answered_by": string|null,
-               "transcript_excerpt": string }
-- "other": Any notable structured data that doesn't fit above categories.
-  Each item: { "label": string, "description": string,
-               "transcript_excerpt": string }
-
-For each detected type include: detected (true), count, confidence (0.0-1.0), items array,
-and ambiguities array. Only include entity types genuinely present — do NOT force-detect.
-
-=== OPEN ITEMS EXTRACTION RULES (only apply if content_type = meeting or raw_note, confidence >= 0.6) ===
-Open items are discussion points, questions, or considerations that are NOT action items.
-
-ACTION ITEM: Someone commits to DO something → goes in action_items
-OPEN ITEM: Discussion, consideration, or question NOT explicitly assigned → goes in open_items
-
-Types:
-- "question": Unresolved question needing an answer
-- "exploration": Future exploration idea, no commitment made
-- "blocker": Blocked on external dependency or response
-- "decision_point": Decision that needs further discussion
-- "future_consideration": Vague future idea flagged for later
-
-Rules:
-1. Only extract items explicitly mentioned in the transcript
-2. Ignore casual mentions ("we could," "maybe") unless part of clear decision discussion
-3. Include questions that need answering
-4. Include blockers/dependencies (waiting on someone external)
-5. Include items flagged for future meetings ("discuss this in Friday's sync")
-6. Do NOT extract action items — those go in action_items only
-7. Confidence scores:
-   - 0.85+: Clear open item (explicit question, named exploration, stated blocker)
-   - 0.65-0.84: Likely open item (vague consideration with enough context)
-   - Below 0.65: Very soft mention (probably not worth tracking)
-
-=== ASSIGNMENT INFERENCE RULES ===
-- owner_confidence = "explicit" when directly named ("Amber will build the form")
-- owner_confidence = "inferred" when implied by acceptance ("Can you take that?" / "Yeah I got it")
-- owner_confidence = "unassigned" when no owner can be determined
-
-=== DEDUPLICATION RULES ===
-- If task is mentioned then merged ("fold that into what you're already doing"), output ONE item
-- If task is proposed then declined/ruled out, do NOT include it
-- If same deliverable discussed multiple times, consolidate into single item
+=== SPACE MAPPING ===
+Base action_item.suggested_space on task CONTENT alone, not assignee's known spaces.
+Examples: "coordinate media" → Media; "approve budget" → Admin; "prayer team" → PFCC.
+Set space_confidence: "high" (clear), "low" (plausible), "ambiguous" (genuinely unclear).
 
 === DATE NORMALIZATION ===
-- Meeting date: ${meeting_date}
-- Convert clear relative references ("by Friday", "next Tuesday", "in two weeks") to actual dates
-- Keep vague references as-is ("before the event", "well before the day")
-- Never guess a due date — null is better than a wrong date
+Meeting date: ${meeting_date}
+Convert "Friday", "next Tuesday", "in two weeks" to actual dates.
+Keep vague refs ("before the event") as-is. Never guess — null is better than wrong.
 
-Meeting context: ${context || "None"}${chunkNote}
+=== DEDUPLICATION ===
+One output item per distinct deliverable. Fold merged tasks into one. Omit declined tasks.
+
+=== RETURN JSON SCHEMA ===
+{
+  "content_type": "meeting" | "raw_note" | "list_data" | "other",
+  "confidence": 0.0-1.0,
+  "summary": "string or null",
+  "detailed_notes": "markdown or null",
+  "decisions": [{ "decision": "string", "context": "string" }],
+  "action_items": [{ "title": "string", "owner": "string|null", "owner_confidence": "explicit"|"inferred"|"unassigned", "suggested_space": "string|null", "space_confidence": "high"|"low"|"ambiguous", "due_date": "string|null", "priority": "high"|"medium"|"low" }],
+  "open_items": [{ "item_text": "string", "item_type": "question"|"exploration"|"blocker"|"decision_point"|"future_consideration", "confidence_score": 0.0-1.0, "transcript_excerpt": "string", "notes": "string|null" }],
+  "scripture_references": [{ "citation": "string", "verse_text": "string|null", "confidence": "confirmed"|"unconfirmed" }],
+  "key_topics": ["string"],
+  "chapters": [{ "title": "string", "start_marker": "string" }],
+  "cleaned_transcript": "string|null",
+  "data_issues": [{ "type": "string", "participant_name": "string", "spaces": ["string"], "action": "string" }],
+  "detected_entities": { "<type>": { "detected": true, "count": number, "confidence": 0.0-1.0, "items": [], "ambiguities": [] } }${isFinalChunk ? ",\n  \"final_summary\": \"string — synthesis of all parts into one meeting overview (4-6 sentences)\"" : ""}
+}
+
+Meeting context: ${context || "None"}
+Participants: ${participantsJson}
+Linked spaces: ${linkedSpacesJson}${chunkNote}${finalSummaryNote}
 
 Transcript:
 ${transcriptChunk}`;
@@ -496,23 +310,23 @@ function isExtractableType(contentType: string | null | undefined): boolean {
   return contentType === "meeting" || contentType === "raw_note";
 }
 
-// Merge per-chunk extraction results into one meeting-level result. `summary`
-// is left off (callers should combine `summaries` via synthesizeSummary) since
-// naively concatenating short summaries reads poorly.
+// Merge per-chunk extraction results into one meeting-level result.
+// The final chunk includes final_summary (synthesized by Claude in the final extraction call)
 function mergeExtractions(parts: any[]): any {
   const nonNull = (v: any) => v !== null && v !== undefined && v !== "";
   const meetingParts = parts.filter((p) => isExtractableType(p.content_type) && (p.confidence ?? 0) >= 0.6);
   const isMeeting = meetingParts.length > 0;
+  const finalPart = parts[parts.length - 1];
 
   return {
     content_type: isMeeting ? "meeting" : (parts[0]?.content_type ?? null),
     confidence: isMeeting
       ? Math.max(...meetingParts.map((p) => p.confidence ?? 0))
       : Math.max(0, ...parts.map((p) => p.confidence ?? 0)),
+    summary: finalPart?.final_summary || parts.map((p) => p.summary).filter(nonNull)[0] || null,
     data_issues: parts.flatMap((p) => p.data_issues ?? []),
     cleaned_transcript: parts.map((p) => p.cleaned_transcript).filter(nonNull).join("\n\n") || null,
     chapters: parts.flatMap((p) => p.chapters ?? []),
-    summaries: parts.map((p) => p.summary).filter(nonNull),
     detailed_notes: parts.map((p) => p.detailed_notes).filter(nonNull).join("\n\n") || null,
     scripture_references: mergeScriptureRefs(parts.flatMap((p) => p.scripture_references ?? [])),
     decisions: parts.flatMap((p) => p.decisions ?? []),
@@ -523,27 +337,6 @@ function mergeExtractions(parts: any[]): any {
   };
 }
 
-// Combine per-chunk summaries into one meeting-level summary. Cheap extra
-// call — only fires for genuinely multi-chunk (long) meetings.
-async function synthesizeSummary(summaries: string[], anthropicKey: string): Promise<string | null> {
-  if (summaries.length === 0) return null;
-  if (summaries.length === 1) return summaries[0];
-
-  const prompt = `These are summaries of sequential parts of one continuous meeting. Combine them into a single contextual summary (4-6 sentences) of the whole meeting, in prose — cover why the meeting happened, the main topics, notable outcomes, and overall tone. Do not reference "part 1", "part 2", etc.\n\n${summaries.map((s, i) => `Part ${i + 1}: ${s}`).join("\n\n")}`;
-
-  try {
-    const resp = await fetchAnthropic({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 512,
-      messages: [{ role: "user", content: prompt }],
-    }, anthropicKey);
-    if (!resp.ok) return summaries.join(" ");
-    const result = await resp.json();
-    return result.content?.[0]?.text?.trim() || summaries.join(" ");
-  } catch {
-    return summaries.join(" ");
-  }
-}
 
 function applyContentGate(extracted: any) {
   if (!isExtractableType(extracted.content_type) || (extracted.confidence ?? 0) < 0.6) {
@@ -800,15 +593,13 @@ serve(async (req) => {
       }
 
       // Multi-chunk (long meeting): extract each chunk in parallel, merge, then
-      // deliver the merged JSON as a single SSE burst using the same event
-      // shape the client already parses (text deltas + done) — no client change needed.
+      // deliver merged JSON as single SSE burst. Final chunk includes final_summary
+      // synthesized by Claude, eliminating the separate synthesizeSummary call.
       const responseStream = new ReadableStream({
         async start(controller) {
           try {
             const parts = await Promise.all(chunks.map((c, i) => extractChunk(promptFor(c, i), anthropicKey)));
             const merged = mergeExtractions(parts);
-            merged.summary = await synthesizeSummary(merged.summaries, anthropicKey);
-            delete merged.summaries;
             applyContentGate(merged);
             controller.enqueue(
               new TextEncoder().encode(`data: ${JSON.stringify({ text: JSON.stringify(merged) })}\n\n`)
@@ -823,9 +614,6 @@ serve(async (req) => {
               });
             }
           } catch (err) {
-            // Same fix as the single-chunk stream above — without this, a
-            // failed/stalled chunk here left extraction_status stuck at
-            // 'processing' forever with no terminal write.
             if (canPersist) {
               await persistExtraction(supabase, meetingId, {
                 extraction_status: "failed",
@@ -849,10 +637,9 @@ serve(async (req) => {
       });
     }
 
-    // ── NON-STREAMING path (unchanged + context support) ──────────────────
-    const transcriptHash = await hashTranscript(
-      transcript + (context || "") + linkedSpacesJson + participantsJson + meeting_date
-    );
+    // ── NON-STREAMING path ───────────────────────────────────────────────────
+    // Cache key is transcript only; context/participants changes should trigger re-extraction
+    const transcriptHash = await hashTranscript(transcript);
     const cached = await getCachedExtraction(transcriptHash);
     if (cached) {
       const outputMode = isExtractableType(cached.content_type) && cached.confidence >= 0.6 ? "organized" : "full_transcript";
@@ -874,11 +661,8 @@ serve(async (req) => {
     } else {
       const parts = await Promise.all(chunks.map((c, i) => extractChunk(promptFor(c, i), anthropicKey)));
       extracted = mergeExtractions(parts);
-      extracted.summary = await synthesizeSummary(extracted.summaries, anthropicKey);
-      delete extracted.summaries;
     }
 
-    // Gate detailed_notes and scripture_references: only populate for qualified meetings
     applyContentGate(extracted);
 
     await setCachedExtraction(transcriptHash, extracted);
