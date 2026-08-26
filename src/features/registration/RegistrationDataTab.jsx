@@ -859,16 +859,26 @@ export default function RegistrationDataTab({
                               ✓ Validate match
                             </button>
                           )}
-                          {/* Manual fallback for duplicates the fuzzy matcher misses (e.g. a middle
-                              name breaking the match) — links this roster row to an existing
-                              registration instead of deleting either record. */}
-                          {canEdit && !p.isRegistered && !p.linked_registration_email && !(p._fuzzyMatched && p._fuzzyMatchedEmail) && (
+                          {/* Manual fallback for duplicates the fuzzy/email matcher misses or gets
+                              wrong (e.g. a re-registration under a new email auto-matches to the
+                              person's OLD, unconfirmed registration) — links this roster row to
+                              the correct registration instead of deleting either record. Shown on
+                              every working-list row, not just unmatched ones: a row can already
+                              be (wrongly) matched, which is exactly why relying on auto-match
+                              alone let cases like this go unfixed through the UI. */}
+                          {canEdit && p.on_working_list && (
                             <button
                               onClick={() => setLinkingPerson(p)}
-                              title="Link this person to an existing registration"
+                              title={
+                                p.linked_registration_email
+                                  ? `Currently linked to ${p.linked_registration_email} — click to change`
+                                  : p.isRegistered
+                                    ? `Currently auto-matched to ${p.registrationEmail || p.email} — click to point at a different registration`
+                                    : 'Link this person to an existing registration'
+                              }
                               style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.purple}`, background: 'transparent', color: C.purple, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
                             >
-                              🔗 Link
+                              🔗 {p.isRegistered || p.linked_registration_email ? 'Re-link' : 'Link'}
                             </button>
                           )}
                           {canEdit && p.manually_added && (
@@ -1024,6 +1034,7 @@ export default function RegistrationDataTab({
         <LinkRegistrationModal
           person={linkingPerson}
           registrations={merged}
+          workingListDb={workingListDb}
           onLink={regEmail => { onEditPerson?.(linkingPerson.email, { linked_registration_email: regEmail }); setLinkingPerson(null); }}
           onClose={() => setLinkingPerson(null)}
         />,
@@ -1199,8 +1210,21 @@ function AddPersonModal({ subgroups, onSave, onClose }) {
 }
 
 // ─── Link registration modal ──────────────────────────────────────────────────
-function LinkRegistrationModal({ person, registrations, onLink, onClose }) {
+function LinkRegistrationModal({ person, registrations, workingListDb, onLink, onClose }) {
   const [search, setSearch] = useState('');
+
+  // Registrations already claimed by a DIFFERENT working-list row's link, so we can warn
+  // before creating a second person pointing at the same registration.
+  const claimedByOther = useMemo(() => {
+    const map = {};
+    (workingListDb || []).forEach(p => {
+      if (p.linked_registration_email && p.email !== person.email) {
+        map[p.linked_registration_email.toLowerCase()] = p.full_name || p.email;
+      }
+    });
+    return map;
+  }, [workingListDb, person.email]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     if (!q) return registrations.slice(0, 50);
@@ -1211,26 +1235,52 @@ function LinkRegistrationModal({ person, registrations, onLink, onClose }) {
     ).slice(0, 50);
   }, [registrations, search]);
 
+  const currentMatchEmail = person.linked_registration_email || (person.isRegistered ? person.registrationEmail : null);
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: '#fff', borderRadius: 14, padding: 24, width: 480, maxWidth: '95vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,.18)', fontFamily: 'Inter, sans-serif' }}>
         <h3 style={{ fontFamily: 'Space Grotesk', margin: '0 0 4px', fontSize: 16, color: C.ink }}>Link to registration</h3>
-        <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 14 }}>Linking <strong>{person.full_name}</strong> — select their matching registration below.</div>
+        <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 8 }}>Linking <strong>{person.full_name}</strong> — select their matching registration below.</div>
+        {currentMatchEmail && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, background: '#F5F0FF', border: `1px solid ${C.line}`, borderRadius: 7, padding: '6px 10px', marginBottom: 10 }}>
+            <span style={{ color: C.mute }}>
+              {person.linked_registration_email ? 'Currently linked to' : 'Currently auto-matched to'} <strong style={{ color: C.ink }}>{currentMatchEmail}</strong>
+              {person.isConfirmed ? <span style={{ color: C.green, fontWeight: 600 }}> · Confirmed</span> : null}
+            </span>
+            {person.linked_registration_email && (
+              <button
+                onClick={() => onLink(null)}
+                title="Clear the manual link and fall back to automatic matching"
+                style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, background: 'none', border: 'none', color: C.purple, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                Unlink
+              </button>
+            )}
+          </div>
+        )}
         <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, email or subgroup…" style={{ padding: '8px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 13, marginBottom: 10 }} />
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {filtered.length === 0 && <div style={{ color: C.mute, padding: 16, textAlign: 'center' }}>No matches</div>}
-          {filtered.map((r, i) => (
-            <div key={i} onClick={() => onLink(r.email)}
-              style={{ padding: '10px 12px', borderRadius: 8, cursor: 'pointer', marginBottom: 4, border: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#F5F0FF'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{r.fullName}</div>
-                <div style={{ fontSize: 12, color: C.mute }}>{r.subgroup} · {r.email}</div>
+          {filtered.map((r, i) => {
+            const isCurrent = currentMatchEmail && r.email === currentMatchEmail;
+            const claimant = claimedByOther[(r.email || '').toLowerCase()];
+            return (
+              <div key={i} onClick={() => onLink(r.email)}
+                style={{ padding: '10px 12px', borderRadius: 8, cursor: 'pointer', marginBottom: 4, border: `1px solid ${isCurrent ? C.purple : C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#F5F0FF'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{r.fullName}</div>
+                  <div style={{ fontSize: 12, color: C.mute }}>{r.subgroup} · {r.email}</div>
+                  {claimant && (
+                    <div style={{ fontSize: 11, color: C.amber, marginTop: 2 }}>⚠ Already linked to {claimant} — selecting will also link this person to the same registration</div>
+                  )}
+                </div>
+                <Pill tone={isCurrent ? 'blue' : 'green'}>{isCurrent ? 'Current' : 'Select'}</Pill>
               </div>
-              <Pill tone="green">Select</Pill>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div style={{ marginTop: 12, textAlign: 'right' }}>
           <Btn tone="ghost" small onClick={onClose}>Cancel</Btn>
