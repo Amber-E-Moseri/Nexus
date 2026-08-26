@@ -31,6 +31,18 @@ const STATUS = {
   absent:                { label: 'Absent',          color: C.mute,  bg: '#F5F4F7', tone: 'mute' },
 };
 
+// "Manually marked as confirming" alone didn't say who or when — a disputed or wrong
+// manual confirmation had no trail to check. confirmedByName/confirmedAt come from
+// registrations.confirmed_by/confirmed_at (set in handleToggleManualConfirm).
+function formatConfirmedBy(p) {
+  if (!p.confirmedByName && !p.confirmedAt) return 'Manually marked as confirming';
+  const who = p.confirmedByName || 'someone';
+  const when = p.confirmedAt
+    ? new Date(p.confirmedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+    : null;
+  return when ? `Manually confirmed by ${who} on ${when}` : `Manually confirmed by ${who}`;
+}
+
 // ─── UI atoms ────────────────────────────────────────────────────────────────
 function Pill({ tone = 'mute', children }) {
   const map = {
@@ -787,7 +799,7 @@ export default function RegistrationDataTab({
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <Pill tone={st.tone}>{st.label}</Pill>
                         {p.manuallyConfirmed && (
-                          <span title="Manually marked as confirming" style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, background: C.blueBg, color: C.blue, padding: '2px 6px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                          <span title={formatConfirmedBy(p)} style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, background: C.blueBg, color: C.blue, padding: '2px 6px', borderRadius: 10, whiteSpace: 'nowrap' }}>
                             Manual
                           </span>
                         )}
@@ -807,7 +819,7 @@ export default function RegistrationDataTab({
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <button
                                   onClick={() => onConfirm(p.registrationEmail || p.email)}
-                                  title="Click to un-confirm"
+                                  title={p.manuallyConfirmed ? `${formatConfirmedBy(p)} — click to un-confirm` : 'Click to un-confirm'}
                                   style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.green}`, background: C.greenBg, color: C.green, cursor: 'pointer', fontFamily: 'Inter', fontWeight: 600, whiteSpace: 'nowrap' }}
                                 >
                                   <CheckCircle2 size={12} /> {p.manuallyConfirmed && !(p.hasPaid || p.hasPartialPayment || p.hasFlightInfo || p.inStateConfirmed) ? 'Confirmed Manual' : 'Confirmed'}

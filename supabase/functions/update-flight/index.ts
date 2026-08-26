@@ -113,9 +113,18 @@ Deno.serve(async (req) => {
   }
 
   const isFlightField = FLIGHT_FIELDS.has(body.field)
-  const updatePayload = isFlightField
-    ? { [body.field]: body.value || null, flight_manual_override: true }
-    : { [body.field]: !!body.value }
+  let updatePayload: Record<string, unknown>
+  if (isFlightField) {
+    updatePayload = { [body.field]: body.value || null, flight_manual_override: true }
+  } else if (body.field === 'manually_confirmed') {
+    // Stamp the audit trail (confirmed_by/confirmed_at) from the authenticated caller,
+    // same as the client-side path in handleToggleManualConfirm — this route only runs
+    // when that direct write was blocked by RLS, so it must record the same fields.
+    const confirmed = !!body.value
+    updatePayload = { manually_confirmed: confirmed, confirmed_by: confirmed ? user.id : null, confirmed_at: confirmed ? new Date().toISOString() : null }
+  } else {
+    updatePayload = { [body.field]: !!body.value }
+  }
 
   const { data, error } = await serviceClient
     .from('registrations')

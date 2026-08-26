@@ -233,6 +233,15 @@ function ProgressBar({ pct, tone }) {
 function statusTone(pct) { return pct >= 75 ? 'green' : 'amber'; }
 function statusLabel(pct) { return pct >= 75 ? 'On track' : 'Behind'; }
 
+// Short "who/when" for hover tooltips on manually-confirmed names — mirrors
+// formatConfirmedBy in RegistrationDataTab.jsx but as a one-liner for a title attr.
+function formatConfirmedByShort(r) {
+  if (!r.confirmedByName && !r.confirmedAt) return 'Manually confirmed';
+  const who = r.confirmedByName || 'someone';
+  const when = r.confirmedAt ? new Date(r.confirmedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null;
+  return when ? `Confirmed by ${who} · ${when}` : `Confirmed by ${who}`;
+}
+
 function Card({ children, style, ...rest }) {
   return <div {...rest} style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, ...style }}>{children}</div>;
 }
@@ -300,6 +309,15 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   const [hasRoomsAccess, setHasRoomsAccess] = useState(false);
   const [payments, setPayments] = useState([]); // from event_payments table
   const [editingReg, setEditingReg] = useState(null);
+  const [usersById, setUsersById] = useState({}); // id -> { name, email } — resolves confirmed_by for display
+
+  // Fetched once: only needed to resolve "confirmed by" to a human-readable name.
+  useEffect(() => {
+    supabase.from('users').select('id, name, email').then(({ data, error }) => {
+      if (error) { console.error('Failed to fetch users for confirmed-by lookup:', error); return; }
+      setUsersById(Object.fromEntries((data || []).map(u => [u.id, u])));
+    });
+  }, []);
   // Track emails edited locally so refetches don't stomp on in-flight or recent saves
   const dirtyEmails = React.useRef(new Set());
 
@@ -352,6 +370,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         flightManualOverride: r.flight_manual_override,
         registrationManualOverride: r.registration_manual_override ?? false,
         manuallyConfirmed: r.manually_confirmed ?? false,
+        confirmedBy: r.confirmed_by || null,
+        confirmedAt: r.confirmed_at || null,
         inState: r.in_state ?? false,
         transportMode: r.transport_mode || null,
       }));
@@ -593,6 +613,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
           flightManualOverride: r.flight_manual_override ?? false,
           registrationManualOverride: r.registration_manual_override ?? false,
           manuallyConfirmed: r.manually_confirmed ?? false,
+          confirmedBy: r.confirmed_by || null,
+          confirmedAt: r.confirmed_at || null,
           inState: r.in_state ?? false,
           transportMode: r.transport_mode || null,
         }));
@@ -685,8 +707,11 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       inStateConfirmed: isLocal,
       fullyConfirmed,
       absent: absentEmailsForMerge.has(r.email),
+      confirmedByName: r.manuallyConfirmed && r.confirmedBy
+        ? (usersById[r.confirmedBy]?.name || usersById[r.confirmedBy]?.email || null)
+        : null,
     };
-  }), [registrationsFiltered, confirmations, paymentByEmail, absentEmailsForMerge, supersededRegEmails]);
+  }), [registrationsFiltered, confirmations, paymentByEmail, absentEmailsForMerge, supersededRegEmails, usersById]);
 
   const rosterFiltered = useMemo(() => {
     if (!isLimited) return roster;
@@ -1037,9 +1062,16 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     const reg = registrations.find(r => r.email === email);
     if (!reg) return;
     const next = !reg.manuallyConfirmed;
+    // Audit trail: who confirmed this person and when. Cleared on un-confirm so a stale
+    // name/timestamp doesn't linger and look like an active confirmation.
+    const confirmedBy = next ? (profile?.id || null) : null;
+    const confirmedAt = next ? new Date().toISOString() : null;
+    const confirmedByName = next ? (profile?.name || profile?.email || 'You') : null;
     dirtyEmails.current.add(email);
     setTimeout(() => dirtyEmails.current.delete(email), 10_000);
-    setRegistrations(prev => prev.map(r => r.email === email ? { ...r, manuallyConfirmed: next } : r));
+    setRegistrations(prev => prev.map(r => r.email === email
+      ? { ...r, manuallyConfirmed: next, confirmedBy, confirmedAt, confirmedByName }
+      : r));
     try {
       // .select() is required here, not cosmetic — without it, Supabase returns
       // { error: null } even when RLS silently filtered the row out of the UPDATE's
@@ -1049,20 +1081,23 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       // refetch pulled the untouched row — same root cause as the flight-edit bug.
       const { data, error } = await supabase
         .from('registrations')
-        .update({ manually_confirmed: next })
+        .update({ manually_confirmed: next, confirmed_by: confirmedBy, confirmed_at: confirmedAt })
         .eq('email', email)
         .select('email');
       if (error) throw error;
       if (!data || data.length === 0) {
         // RLS blocked it silently — retry via the service-role edge function, which
-        // checks the same permission surface explicitly before bypassing RLS.
+        // checks the same permission surface explicitly before bypassing RLS and
+        // stamps confirmed_by/confirmed_at itself from the authenticated caller.
         const { data: fnData, error: fnError } = await supabase.functions.invoke('update-flight', {
           body: { email, field: 'manually_confirmed', value: next },
         });
         if (fnError || fnData?.error) throw new Error(fnData?.error || fnError.message);
       }
     } catch (e) {
-      setRegistrations(prev => prev.map(r => r.email === email ? { ...r, manuallyConfirmed: !next } : r));
+      setRegistrations(prev => prev.map(r => r.email === email
+        ? { ...r, manuallyConfirmed: !next, confirmedBy: reg.confirmedBy, confirmedAt: reg.confirmedAt, confirmedByName: reg.confirmedByName }
+        : r));
       alert('Failed to update confirmation: ' + e.message);
     }
   }
@@ -1353,7 +1388,7 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
                         boxShadow: '0 4px 16px rgba(0,0,0,.10)', minWidth: 170, maxHeight: 300, overflowY: 'auto', padding: '4px 0',
                       }}>
                         {confirmedPeople[sg]?.map(r => (
-                          <div key={r.email} style={{ padding: '5px 12px', fontSize: 12.5, fontFamily: 'Inter', color: '#1A1523', display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <div key={r.email} title={r.manuallyConfirmed ? formatConfirmedByShort(r) : undefined} style={{ padding: '5px 12px', fontSize: 12.5, fontFamily: 'Inter', color: '#1A1523', display: 'flex', alignItems: 'center', gap: 7 }}>
                             <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, flexShrink: 0 }} />{r.fullName}
                           </div>
                         ))}
