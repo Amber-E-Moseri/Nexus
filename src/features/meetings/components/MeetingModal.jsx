@@ -26,7 +26,7 @@ function toLocalDateTime(value) {
   return local.toISOString().slice(0, 16)
 }
 
-export default function MeetingModal({ departmentId, onClose }) {
+export default function MeetingModal({ departmentId, departments = [], onClose }) {
   const { profile } = useAuth()
   const { addMeeting, editMeeting } = useMeetings()
   const isMobile = useMediaQuery('(max-width: 640px)')
@@ -85,10 +85,22 @@ export default function MeetingModal({ departmentId, onClose }) {
     )
   }
 
-  const effectiveDeptId = isOrgWide ? null : departmentId
+  // The "All departments" filter tab passes the literal sentinel string 'all' as
+  // departmentId (it's a UI filter value, not a real department row) — inserting
+  // that straight into meetings.department_id throws `invalid input syntax for
+  // type uuid: "all"`. When that sentinel shows up, the meeting needs an explicit
+  // department chosen (or Org-Wide) before it can be saved.
+  const isAllSentinel = departmentId === 'all'
+  const [pickedDeptId, setPickedDeptId] = useState('')
+  const needsDeptPick = isAllSentinel && !isOrgWide
+  const effectiveDeptId = isOrgWide ? null : (isAllSentinel ? (pickedDeptId || null) : departmentId)
 
   async function ensureDraftMeeting() {
     if (savedMeeting || creatingDraft || !title.trim()) return
+    if (needsDeptPick && !pickedDeptId) {
+      setError('Pick a department for this meeting (or turn on Org-Wide) before continuing.')
+      return
+    }
 
     setCreatingDraft(true)
     setError(null)
@@ -120,6 +132,20 @@ export default function MeetingModal({ departmentId, onClose }) {
     if (!fetchError) setActionItems(data ?? [])
   }
 
+  // AI extraction being merged into real tasks is a strong signal the meeting actually
+  // happened — mark it completed the same way filling in Summary/Minutes does.
+  async function handleActionItemsExtracted(items) {
+    await fetchActionItems()
+    if (savedMeeting?.id) {
+      try {
+        const updated = await editMeeting(savedMeeting.id, { status: 'completed' })
+        setSavedMeeting((prev) => (prev ? { ...prev, ...updated } : prev))
+      } catch (err) {
+        console.error('Failed to mark meeting completed after extraction:', err)
+      }
+    }
+  }
+
   async function handleSave() {
     if (!title.trim()) {
       setError('Meeting title is required.')
@@ -131,8 +157,18 @@ export default function MeetingModal({ departmentId, onClose }) {
       return
     }
 
+    if (needsDeptPick && !pickedDeptId) {
+      setError('Pick a department for this meeting (or turn on Org-Wide) before saving.')
+      return
+    }
+
     setSaving(true)
     setError(null)
+
+    // Once real discussion content (summary or minutes) has actually been recorded,
+    // treat the meeting as done — simpler and more accurate than defaulting every
+    // "Log meeting" row to completed regardless of whether anything was ever filled in.
+    const hasDiscussionContent = !!(summary.trim() || minutes.trim())
 
     try {
       if (savedMeeting?.id) {
@@ -145,6 +181,7 @@ export default function MeetingModal({ departmentId, onClose }) {
           minutes: minutes.trim() || null,
           zoom_join_url: zoomJoinUrl.trim() || null,
           drive_url: driveUrl.trim() || null,
+          ...(hasDiscussionContent ? { status: 'completed' } : {}),
         })
 
         const { error: attendanceError } = await supabase.rpc('set_meeting_attendance', {
@@ -172,6 +209,7 @@ export default function MeetingModal({ departmentId, onClose }) {
           minutes: minutes.trim() || null,
           zoom_join_url: zoomJoinUrl.trim() || null,
           drive_url: driveUrl.trim() || null,
+          ...(hasDiscussionContent ? { status: 'completed' } : {}),
           created_by: profile?.id,
           attendanceUserIds: attendeeIds,
         })
@@ -383,6 +421,21 @@ export default function MeetingModal({ departmentId, onClose }) {
               </div>
             )}
 
+            {needsDeptPick && (
+              <div style={{ marginTop: 10 }}>
+                <label style={labelStyle}>Department *</label>
+                <select value={pickedDeptId} onChange={(event) => setPickedDeptId(event.target.value)} style={inputStyle}>
+                  <option value="">Select a department…</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                  You're viewing "All departments" — pick which one this meeting belongs to, or turn on Org-Wide above.
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr', marginTop: 14 }}>
               <div>
                 <label style={labelStyle}>Drive URL</label>
@@ -421,10 +474,10 @@ export default function MeetingModal({ departmentId, onClose }) {
                 <>
                   <AudioTranscriptionPanel
                     meetingId={savedMeeting.id}
-                    departmentId={departmentId}
+                    departmentId={effectiveDeptId}
                     canRecord
                     onTranscriptionComplete={({ transcript }) => setSummary(transcript)}
-                    onActionItemsExtracted={fetchActionItems}
+                    onActionItemsExtracted={handleActionItemsExtracted}
                     onExpand={() => setWide(true)}
                     onCollapse={() => setWide(false)}
                   />

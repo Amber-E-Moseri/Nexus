@@ -99,6 +99,32 @@ function stripHtmlToText(html = ''): string {
     .trim()
 }
 
+// Ported from the This Is It registration composer's edge function, where the same
+// class of bug ("plain text sent as literal HTML collapses into one unbroken run,
+// since bare \n means nothing to an HTML renderer") was traced and fixed. Must stay
+// conceptually in sync with EmailComposer.jsx's own looksLikeHtmlMarkup().
+function isFullHtmlDocument(text = ''): boolean {
+  return /<!doctype html/i.test(text) || /<html[\s>]/i.test(text)
+}
+
+function looksLikeHtmlMarkup(text = ''): boolean {
+  if (!text) return false
+  if (isFullHtmlDocument(text)) return true
+  return /<!--/.test(text) || /<\/?(table|tr|td|thead|tbody|div|p|a|span|img|h[1-6]|ul|ol|li|strong|em|br)[\s/>]/i.test(text)
+}
+
+// Plain text typed into the composer (no real markup) needs paragraph breaks inserted
+// before it's treated as HTML — otherwise every blank-line-separated paragraph the
+// sender typed collapses into a single run since HTML ignores bare whitespace/newlines.
+function plainTextToHtmlParagraphs(text = ''): string {
+  return text
+    .split(/\n\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+    .join('')
+}
+
 function sanitizeEmailHtml(html = ''): string {
   let safe = html
   safe = safe.replace(/<\s*(script|style|iframe|object|embed|form|input|button|textarea|select|meta|link)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
@@ -547,7 +573,15 @@ Deno.serve(async (request) => {
     if (subjectError) return respond(400, { error: subjectError })
   }
 
-  const safeHtmlTemplate = sanitizeEmailHtml(bodyHtml || body || '')
+  // CampaignEditor's composer only ever sends a single ambiguous `body` field (no
+  // body_html) — if it doesn't already look like real markup, it's plain text typed by
+  // the sender and needs paragraph breaks inserted before being treated as HTML, or
+  // every blank-line-separated paragraph collapses into one unbroken run in the sent
+  // email. An explicit body_html from a real HTML-producing caller passes through as-is.
+  const rawHtmlSource = bodyHtml || body || ''
+  const safeHtmlTemplate = looksLikeHtmlMarkup(rawHtmlSource)
+    ? sanitizeEmailHtml(rawHtmlSource)
+    : plainTextToHtmlParagraphs(rawHtmlSource)
   const plainTextTemplate = bodyText || body || stripHtmlToText(safeHtmlTemplate)
 
   const emailList = to.map((recipient) => normalizeEmail(recipient.email))
@@ -668,7 +702,14 @@ Deno.serve(async (request) => {
         personalizedHtmlTemplate = rewriteLinksForTracking(personalizedHtmlTemplate, campaignId, recipient.email, frontendUrl)
       }
 
-      const renderedHtml = renderHtmlShell(personalizedHtmlTemplate, previewText, unsubscribeToken)
+      // A full HTML document (its own <html>/<head>/<body>, pasted from an external
+      // template) must go out as-is — wrapping it in the shell below nests a second
+      // <html> document inside a <div>, which most email clients render broken or
+      // blank. Only wrap fragments/plain-text-derived paragraphs, which the shell was
+      // actually designed for.
+      const renderedHtml = isFullHtmlDocument(rawHtmlSource)
+        ? personalizedHtmlTemplate
+        : renderHtmlShell(personalizedHtmlTemplate, previewText, unsubscribeToken)
 
       // Tokens are not opt-outs. They live separately from the suppression table.
       const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()

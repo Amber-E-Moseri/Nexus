@@ -366,6 +366,30 @@ export default function ThisIsItInfo() {
     }
   };
 
+  // Swaps order_num with the neighbouring item so the list re-sorts on next
+  // fetch — checklistItems is already sorted by order_num, so the item at
+  // index±1 is always the correct swap partner.
+  const handleMoveChecklistItem = async (itemId, direction) => {
+    const index = checklistItems.findIndex((i) => i.id === itemId);
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index === -1 || targetIndex < 0 || targetIndex >= checklistItems.length) return;
+
+    const current = checklistItems[index];
+    const target = checklistItems[targetIndex];
+    try {
+      const [{ error: err1 }, { error: err2 }] = await Promise.all([
+        supabase.from('this_is_it_checklist_items').update({ order_num: target.order_num }).eq('id', current.id),
+        supabase.from('this_is_it_checklist_items').update({ order_num: current.order_num }).eq('id', target.id),
+      ]);
+      if (err1) throw err1;
+      if (err2) throw err2;
+      await queryClient.invalidateQueries({ queryKey: ['this_is_it_page'] });
+    } catch (err) {
+      console.error('Reorder error:', err);
+      alert('Error: ' + err.message);
+    }
+  };
+
   const handleDeleteScheduleItem = async (itemId) => {
     if (pendingDeleteId !== itemId) {
       setPendingDeleteId(itemId);
@@ -851,10 +875,28 @@ export default function ThisIsItInfo() {
             <h3>🧳 What to pack</h3>
             <p>{editMode ? <EditableText value={c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.'} onSave={(v) => handleSaveField('packing_text', v)} multiline /> : (c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.')}</p>
             <ul className="tii-checklist" id="packlist">
-              {checklistItems.map((item) => (
+              {checklistItems.map((item, index) => (
                 editMode ? (
                   <li key={item.id} style={{ position: 'relative', listStyle: 'none' }}>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                        <button
+                          onClick={() => handleMoveChecklistItem(item.id, 'up')}
+                          disabled={index === 0}
+                          title="Move up"
+                          style={{ padding: '1px 6px', background: 'none', border: '1px solid var(--paper-line)', borderRadius: '3px', cursor: index === 0 ? 'default' : 'pointer', fontSize: '10px', lineHeight: 1.4, color: index === 0 ? '#ccc' : '#555' }}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          onClick={() => handleMoveChecklistItem(item.id, 'down')}
+                          disabled={index === checklistItems.length - 1}
+                          title="Move down"
+                          style={{ padding: '1px 6px', background: 'none', border: '1px solid var(--paper-line)', borderRadius: '3px', cursor: index === checklistItems.length - 1 ? 'default' : 'pointer', fontSize: '10px', lineHeight: 1.4, color: index === checklistItems.length - 1 ? '#ccc' : '#555' }}
+                        >
+                          ▼
+                        </button>
+                      </div>
                       <EditableText
                         value={item.item}
                         onSave={(v) => handleUpdateChecklistItem(item.id, v)}

@@ -416,11 +416,25 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     ));
 
     try {
-      const { error } = await supabase
+      // .select() is required here, not cosmetic — without it, Supabase returns
+      // { error: null } even when RLS silently filtered the row out of the UPDATE's
+      // USING clause and zero rows actually changed. That "successful" no-op is
+      // exactly what made these edits look saved and then quietly revert once the
+      // 10s dirty-window above expired and a real refetch pulled the untouched row.
+      const { data, error } = await supabase
         .from('registrations')
         .update({ [dbKey]: value || null, flight_manual_override: true })
-        .eq('email', regEmail.toLowerCase());
+        .eq('email', regEmail.toLowerCase())
+        .select('email');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        // RLS blocked it silently — retry via the service-role edge function, which
+        // checks the same permission surface explicitly before bypassing RLS.
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('update-flight', {
+          body: { email: regEmail, field: dbKey, value: value || null },
+        });
+        if (fnError || fnData?.error) throw new Error(fnData?.error || fnError.message);
+      }
     } catch (e) {
       console.error('Failed to update flight info:', e);
       alert(`Failed to save flight info: ${e.message}`);
@@ -497,14 +511,18 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       }
 
       // --- Fire all data fetches in parallel ---
+      // limitedToRegistrationDataOnly means "scoped on the Registration Data tab, but see
+      // everyone on your own team's tab" (Accommodation/Hospitality/Transportation) — the
+      // registrations query already honored that; roster and working_list didn't, so those
+      // team members still only ever saw their own subgroup's rooms/roster data.
       let rosterQ = supabase.from('roster').select('*').order('last_name', { ascending: true });
-      if (limitedToSubgroups?.length) rosterQ = rosterQ.in('subgroup', limitedToSubgroups);
+      if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) rosterQ = rosterQ.in('subgroup', limitedToSubgroups);
 
       let regsQ = supabase.from('registrations').select('*').order('submitted_at', { ascending: false });
       if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) regsQ = regsQ.in('subgroup', limitedToSubgroups);
 
       let wlQ = supabase.from('working_list').select('*').order('subgroup', { ascending: true });
-      if (limitedToSubgroups?.length) wlQ = wlQ.in('subgroup', limitedToSubgroups);
+      if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) wlQ = wlQ.in('subgroup', limitedToSubgroups);
 
       const paymentsQ = supabase.from('event_payments').select('*').order('subgroup', { ascending: true });
 
@@ -597,7 +615,25 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     [workingListDb],
   );
 
-  const merged = useMemo(() => registrationsFiltered.map(r => {
+  // A working-list row's linked_registration_email pointing at a DIFFERENT email means
+  // the person re-registered under a new address and got manually re-linked — the old
+  // registration row (still sitting under the working-list row's own email) is a stale
+  // duplicate of the same person, not a second registrant. RegistrationDataTab's
+  // allPeople already resolves this by preferring the linked email; without the same
+  // exclusion here, Overview/stat counts iterate the raw registrations table and count
+  // both rows — the person shows up "confirmed" once (their real, linked registration)
+  // and "confirming" a second time (the orphaned duplicate), inflating totals and
+  // making already-confirmed people appear to still be confirming.
+  const supersededRegEmails = useMemo(
+    () => new Set(
+      workingListDb
+        .filter(p => p.linked_registration_email && p.linked_registration_email !== p.email)
+        .map(p => p.email)
+    ),
+    [workingListDb],
+  );
+
+  const merged = useMemo(() => registrationsFiltered.filter(r => !supersededRegEmails.has(r.email)).map(r => {
     const pay = paymentByEmail[r.email];
     const hasPaid = pay ? (Number(pay.amount_paid) || 0) > 0 && (Number(pay.amount_paid) || 0) >= (Number(pay.amount_expected) || 0) : false;
     const hasPartialPayment = pay ? (Number(pay.amount_paid) || 0) > 0 && (Number(pay.amount_paid) || 0) < (Number(pay.amount_expected) || 0) : false;
@@ -615,7 +651,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       fullyConfirmed,
       absent: absentEmailsForMerge.has(r.email),
     };
-  }), [registrationsFiltered, confirmations, paymentByEmail, absentEmailsForMerge]);
+  }), [registrationsFiltered, confirmations, paymentByEmail, absentEmailsForMerge, supersededRegEmails]);
 
   const rosterFiltered = useMemo(() => {
     if (!isLimited) return roster;
@@ -662,7 +698,9 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     return { bySubgroup: out, flightNeededPeople: flightPeople, confirmedPeople: confPeople, confirmingPeople: confirmingP };
   }, [merged, subgroups, exemptFellowships, workingListDb]);
 
-  const totalRegs = registrationsFiltered.length;
+  // Use merged (not registrationsFiltered) so stale duplicate registration rows
+  // excluded above via supersededRegEmails don't inflate the headline count either.
+  const totalRegs = merged.length;
   const totalRegTarget = Object.values(targets).reduce((s, t) => s + (Number(t.reg) || 0), 0);
 
   const workingList = useMemo(() => {
@@ -968,8 +1006,26 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     setTimeout(() => dirtyEmails.current.delete(email), 10_000);
     setRegistrations(prev => prev.map(r => r.email === email ? { ...r, manuallyConfirmed: next } : r));
     try {
-      const { error } = await supabase.from('registrations').update({ manually_confirmed: next }).eq('email', email);
+      // .select() is required here, not cosmetic — without it, Supabase returns
+      // { error: null } even when RLS silently filtered the row out of the UPDATE's
+      // USING clause and zero rows actually changed. That "successful" no-op is what
+      // made manual confirmations look saved and then quietly revert (back to
+      // "confirming" in Overview) once the 10s dirty-window above expired and a real
+      // refetch pulled the untouched row — same root cause as the flight-edit bug.
+      const { data, error } = await supabase
+        .from('registrations')
+        .update({ manually_confirmed: next })
+        .eq('email', email)
+        .select('email');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        // RLS blocked it silently — retry via the service-role edge function, which
+        // checks the same permission surface explicitly before bypassing RLS.
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('update-flight', {
+          body: { email, field: 'manually_confirmed', value: next },
+        });
+        if (fnError || fnData?.error) throw new Error(fnData?.error || fnError.message);
+      }
     } catch (e) {
       setRegistrations(prev => prev.map(r => r.email === email ? { ...r, manuallyConfirmed: !next } : r));
       alert('Failed to update confirmation: ' + e.message);

@@ -1,24 +1,17 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
+// `?target=deno` pins esm.sh's Deno-targeted build. Without it, esm.sh's default build pulls in
+// @supabase/realtime-js's `ws` dependency, which reaches for Node-only shims (node:url,
+// bufferutil, utf-8-validate) that don't exist in the edge runtime and crash on boot with
+// "Cannot destructure property 'URL' of 'p(...)' as it is null." — this function never uses
+// realtime, so the deno build (which resolves cleanly) is all it needs.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0?target=deno'
+import { corsOptionsResponse, jsonResponse as sharedJsonResponse } from '../_shared/cors.ts'
 
-const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN')
-
-const corsHeaders: Record<string, string> = ALLOWED_ORIGIN
-  ? {
-      'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-      'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      Vary: 'Origin',
-    }
-  : {}
-
-function jsonResponse(status: number, body: Record<string, unknown>) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'application/json',
-    },
-  })
+// Local dev (localhost:5173/5174, the .claude/launch.json fallback ports, etc.) is allowed by
+// _shared/cors.ts regardless of ALLOWED_ORIGIN — this function previously rolled its own
+// single-origin CORS check, which silently blocked every test send from a local dev server
+// because the browser's Origin header never matched the production ALLOWED_ORIGIN value.
+function jsonResponse(status: number, body: Record<string, unknown>, req?: Request) {
+  return sharedJsonResponse(status, body, undefined, req)
 }
 
 interface Recipient {
@@ -35,6 +28,7 @@ interface RequestBody {
   subject?: string
   body?: string
   format?: 'text' | 'html'
+  wrapHeader?: boolean
 }
 
 interface PersonalizeVars {
@@ -45,8 +39,10 @@ interface PersonalizeVars {
 }
 
 function personalize(template: string, vars: PersonalizeVars) {
+  const firstName = (vars.name ?? '').trim().split(/\s+/)[0] ?? ''
   return template
     .replace(/\{\{name\}\}/g, vars.name ?? '')
+    .replace(/\{\{first_name\}\}/g, firstName)
     .replace(/\{\{subgroup\}\}/g, vars.subgroup ?? '')
     .replace(/\{\{fellowship\}\}/g, vars.fellowship ?? '')
     .replace(/\{\{email\}\}/g, vars.email ?? '')
@@ -65,6 +61,14 @@ function wrapHtml(innerHtml: string): string {
   `
 }
 
+// A full HTML document (<!DOCTYPE html>, <html>...) must be sent as-is. Wrapping it in the
+// logo-header shell below (meant for HTML snippets) nests a second <html>/<head>/<body> inside a
+// <div>, which most email clients render broken or blank — this must stay in sync with the
+// frontend's isFullHtmlDocument() in RegistrationDataTab.jsx.
+function isFullHtmlDocument(html: string): boolean {
+  return /<!doctype html/i.test(html) || /<html[\s>]/i.test(html)
+}
+
 function bodyToHtml(text: string): string {
   const escaped = text
     .replaceAll('&', '&amp;')
@@ -81,18 +85,11 @@ function sleep(ms: number) {
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') {
-    if (!ALLOWED_ORIGIN) {
-      return new Response('CORS not configured', { status: 500 })
-    }
-    return new Response('ok', { headers: corsHeaders })
-  }
-
-  if (!ALLOWED_ORIGIN) {
-    return jsonResponse(500, { error: 'Missing ALLOWED_ORIGIN environment variable' })
+    return corsOptionsResponse(request)
   }
 
   if (request.method !== 'POST') {
-    return jsonResponse(405, { error: 'Method not allowed' })
+    return jsonResponse(405, { error: 'Method not allowed' }, request)
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
@@ -101,12 +98,12 @@ Deno.serve(async (request) => {
   const fromEmail = Deno.env.get('FROM_EMAIL') ?? 'BLW CAN NEXUS <noreply@blwcannexus.ca>'
 
   if (!supabaseUrl || !serviceRoleKey || !resendApiKey) {
-    return jsonResponse(500, { error: 'Missing required environment variables' })
+    return jsonResponse(500, { error: 'Missing required environment variables' }, request)
   }
 
   const authHeader = request.headers.get('Authorization')
   if (!authHeader) {
-    return jsonResponse(401, { error: 'Missing authorization header' })
+    return jsonResponse(401, { error: 'Missing authorization header' }, request)
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -119,13 +116,13 @@ Deno.serve(async (request) => {
   } = await supabase.auth.getUser()
 
   if (userError || !user) {
-    return jsonResponse(401, { error: 'Unable to validate caller' })
+    return jsonResponse(401, { error: 'Unable to validate caller' }, request)
   }
 
   const body = (await request.json().catch(() => null)) as RequestBody | null
 
   if (!body) {
-    return jsonResponse(400, { error: 'Invalid JSON body' })
+    return jsonResponse(400, { error: 'Invalid JSON body' }, request)
   }
 
   const {
@@ -133,22 +130,23 @@ Deno.serve(async (request) => {
     subject = '',
     body: bodyTemplate = '',
     format = 'text',
+    wrapHeader = true,
   } = body
 
   if (!Array.isArray(recipients) || recipients.length === 0) {
-    return jsonResponse(400, { error: 'recipients must be a non-empty array' })
+    return jsonResponse(400, { error: 'recipients must be a non-empty array' }, request)
   }
 
   if (recipients.some((r) => !r || typeof r.email !== 'string' || r.email.trim() === '')) {
-    return jsonResponse(400, { error: 'every recipient must have a non-empty email' })
+    return jsonResponse(400, { error: 'every recipient must have a non-empty email' }, request)
   }
 
   if (!subject || typeof subject !== 'string' || subject.trim() === '') {
-    return jsonResponse(400, { error: 'subject must be non-empty' })
+    return jsonResponse(400, { error: 'subject must be non-empty' }, request)
   }
 
   if (!bodyTemplate || typeof bodyTemplate !== 'string') {
-    return jsonResponse(400, { error: 'body must be non-empty' })
+    return jsonResponse(400, { error: 'body must be non-empty' }, request)
   }
 
   let sent = 0
@@ -168,10 +166,12 @@ Deno.serve(async (request) => {
     const personalizedBody = personalize(bodyTemplate, vars)
     const personalizedSubject = personalize(subject, vars)
 
-    // HTML mode: body is already HTML, wrap in email shell
-    // Text mode: escape and convert to HTML paragraphs
+    // HTML mode: body is already HTML — wrap it in the logo-header shell, unless it's already a
+    // full document (wrapping would nest it inside a <div> and break rendering) or the caller
+    // opted out via wrapHeader:false (e.g. a template that already has its own designed header).
+    // Text mode: escape and convert to HTML paragraphs.
     const htmlContent = format === 'html'
-      ? wrapHtml(personalizedBody)
+      ? (isFullHtmlDocument(personalizedBody) || !wrapHeader ? personalizedBody : wrapHtml(personalizedBody))
       : bodyToHtml(personalizedBody)
 
     // Plain text fallback: strip HTML tags for text-only clients
@@ -229,5 +229,5 @@ Deno.serve(async (request) => {
     }
   }
 
-  return jsonResponse(200, { sent, failed, errors })
+  return jsonResponse(200, { sent, failed, errors }, request)
 })

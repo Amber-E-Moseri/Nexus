@@ -200,11 +200,18 @@ function CampaignForm({ initial, onSaved, onCancel }) {
   }
 
   async function handleSendTest(testEmail) {
-    const { error } = await supabase.functions.invoke('send-communication-email', {
-      body: { to: [{ name: 'Test Recipient', email: testEmail }], subject: `[TEST] ${subject}`, body },
+    // send-communication-email requires `test_email` specifically (it forces `to` itself
+    // and checks the address matches the caller's own signed-in email) — passing `to`
+    // directly here, with neither `campaign_id` nor `test_email` set, always hit the
+    // function's "campaign_id is required for a campaign send" 400, so every test send
+    // from this composer failed silently (the button just did nothing visible).
+    const { data, error } = await supabase.functions.invoke('send-communication-email', {
+      body: { test_email: testEmail, subject: `[TEST] ${subject}`, body },
     })
-    if (error) {
-      console.error('Test email error:', error)
+    if (error || data?.error) {
+      const message = await getFunctionErrorMessage(error, data?.error || 'Failed to send test email.')
+      console.error('Test email error:', error || data?.error)
+      throw new Error(message)
     }
   }
 

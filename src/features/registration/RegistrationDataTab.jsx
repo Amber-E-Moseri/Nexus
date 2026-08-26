@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { CheckCircle2, XCircle, Circle, AlertCircle, Pencil, Download, ChevronUp, ChevronDown, Link2, Copy, RefreshCw, Trash2, X, Plus, UserX, GitMerge } from 'lucide-react';
 import RegistrationEditModal from './RegistrationEditModal';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
 
 // ─── brand tokens (mirrors RegistrationEcosystem) ───────────────────────────
 const C = {
@@ -858,6 +859,28 @@ export default function RegistrationDataTab({
                               ✓ Validate match
                             </button>
                           )}
+                          {/* Manual fallback for duplicates the fuzzy/email matcher misses or gets
+                              wrong (e.g. a re-registration under a new email auto-matches to the
+                              person's OLD, unconfirmed registration) — links this roster row to
+                              the correct registration instead of deleting either record. Shown on
+                              every working-list row, not just unmatched ones: a row can already
+                              be (wrongly) matched, which is exactly why relying on auto-match
+                              alone let cases like this go unfixed through the UI. */}
+                          {canEdit && p.on_working_list && (
+                            <button
+                              onClick={() => setLinkingPerson(p)}
+                              title={
+                                p.linked_registration_email
+                                  ? `Currently linked to ${p.linked_registration_email} — click to change`
+                                  : p.isRegistered
+                                    ? `Currently auto-matched to ${p.registrationEmail || p.email} — click to point at a different registration`
+                                    : 'Link this person to an existing registration'
+                              }
+                              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.purple}`, background: 'transparent', color: C.purple, cursor: 'pointer', fontFamily: 'Inter', whiteSpace: 'nowrap' }}
+                            >
+                              🔗 {p.isRegistered || p.linked_registration_email ? 'Re-link' : 'Link'}
+                            </button>
+                          )}
                           {canEdit && p.manually_added && (
                             <button
                               onClick={() => { if (confirm(`Remove ${p.full_name} from the working list?`)) onRemove?.(p.email); }}
@@ -1011,6 +1034,7 @@ export default function RegistrationDataTab({
         <LinkRegistrationModal
           person={linkingPerson}
           registrations={merged}
+          workingListDb={workingListDb}
           onLink={regEmail => { onEditPerson?.(linkingPerson.email, { linked_registration_email: regEmail }); setLinkingPerson(null); }}
           onClose={() => setLinkingPerson(null)}
         />,
@@ -1186,8 +1210,21 @@ function AddPersonModal({ subgroups, onSave, onClose }) {
 }
 
 // ─── Link registration modal ──────────────────────────────────────────────────
-function LinkRegistrationModal({ person, registrations, onLink, onClose }) {
+function LinkRegistrationModal({ person, registrations, workingListDb, onLink, onClose }) {
   const [search, setSearch] = useState('');
+
+  // Registrations already claimed by a DIFFERENT working-list row's link, so we can warn
+  // before creating a second person pointing at the same registration.
+  const claimedByOther = useMemo(() => {
+    const map = {};
+    (workingListDb || []).forEach(p => {
+      if (p.linked_registration_email && p.email !== person.email) {
+        map[p.linked_registration_email.toLowerCase()] = p.full_name || p.email;
+      }
+    });
+    return map;
+  }, [workingListDb, person.email]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     if (!q) return registrations.slice(0, 50);
@@ -1198,26 +1235,52 @@ function LinkRegistrationModal({ person, registrations, onLink, onClose }) {
     ).slice(0, 50);
   }, [registrations, search]);
 
+  const currentMatchEmail = person.linked_registration_email || (person.isRegistered ? person.registrationEmail : null);
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: '#fff', borderRadius: 14, padding: 24, width: 480, maxWidth: '95vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,.18)', fontFamily: 'Inter, sans-serif' }}>
         <h3 style={{ fontFamily: 'Space Grotesk', margin: '0 0 4px', fontSize: 16, color: C.ink }}>Link to registration</h3>
-        <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 14 }}>Linking <strong>{person.full_name}</strong> — select their matching registration below.</div>
+        <div style={{ fontSize: 12.5, color: C.mute, marginBottom: 8 }}>Linking <strong>{person.full_name}</strong> — select their matching registration below.</div>
+        {currentMatchEmail && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, background: '#F5F0FF', border: `1px solid ${C.line}`, borderRadius: 7, padding: '6px 10px', marginBottom: 10 }}>
+            <span style={{ color: C.mute }}>
+              {person.linked_registration_email ? 'Currently linked to' : 'Currently auto-matched to'} <strong style={{ color: C.ink }}>{currentMatchEmail}</strong>
+              {person.isConfirmed ? <span style={{ color: C.green, fontWeight: 600 }}> · Confirmed</span> : null}
+            </span>
+            {person.linked_registration_email && (
+              <button
+                onClick={() => onLink(null)}
+                title="Clear the manual link and fall back to automatic matching"
+                style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, background: 'none', border: 'none', color: C.purple, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                Unlink
+              </button>
+            )}
+          </div>
+        )}
         <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, email or subgroup…" style={{ padding: '8px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontFamily: 'Inter', fontSize: 13, marginBottom: 10 }} />
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {filtered.length === 0 && <div style={{ color: C.mute, padding: 16, textAlign: 'center' }}>No matches</div>}
-          {filtered.map((r, i) => (
-            <div key={i} onClick={() => onLink(r.email)}
-              style={{ padding: '10px 12px', borderRadius: 8, cursor: 'pointer', marginBottom: 4, border: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#F5F0FF'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{r.fullName}</div>
-                <div style={{ fontSize: 12, color: C.mute }}>{r.subgroup} · {r.email}</div>
+          {filtered.map((r, i) => {
+            const isCurrent = currentMatchEmail && r.email === currentMatchEmail;
+            const claimant = claimedByOther[(r.email || '').toLowerCase()];
+            return (
+              <div key={i} onClick={() => onLink(r.email)}
+                style={{ padding: '10px 12px', borderRadius: 8, cursor: 'pointer', marginBottom: 4, border: `1px solid ${isCurrent ? C.purple : C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#F5F0FF'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{r.fullName}</div>
+                  <div style={{ fontSize: 12, color: C.mute }}>{r.subgroup} · {r.email}</div>
+                  {claimant && (
+                    <div style={{ fontSize: 11, color: C.amber, marginTop: 2 }}>⚠ Already linked to {claimant} — selecting will also link this person to the same registration</div>
+                  )}
+                </div>
+                <Pill tone={isCurrent ? 'blue' : 'green'}>{isCurrent ? 'Current' : 'Select'}</Pill>
               </div>
-              <Pill tone="green">Select</Pill>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div style={{ marginTop: 12, textAlign: 'right' }}>
           <Btn tone="ghost" small onClick={onClose}>Cancel</Btn>
@@ -1230,17 +1293,112 @@ function LinkRegistrationModal({ person, registrations, onLink, onClose }) {
 // ============ EMAIL COMPOSER ============
 const MERGE_TAGS = [
   { tag: '{{name}}', label: 'Name' },
+  { tag: '{{first_name}}', label: 'First name' },
   { tag: '{{subgroup}}', label: 'Subgroup' },
   { tag: '{{fellowship}}', label: 'Fellowship' },
   { tag: '{{email}}', label: 'Email' },
 ];
 
 function personalize(text, vars) {
+  const firstName = vars.first_name || (vars.name || '').trim().split(/\s+/)[0] || '';
   return (text || '')
     .replace(/\{\{name\}\}/g, vars.name || '')
+    .replace(/\{\{first_name\}\}/g, firstName)
     .replace(/\{\{subgroup\}\}/g, vars.subgroup || '')
     .replace(/\{\{fellowship\}\}/g, vars.fellowship || '')
     .replace(/\{\{email\}\}/g, vars.email || '');
+}
+
+// A full HTML document (pasted from an external template — <!DOCTYPE>, <html>, <head>, etc.)
+// must be sent to the recipient as-is. Wrapping it in the standard logo-header shell (meant for
+// HTML snippets) nests a second <html>/<head>/<body> inside a <div> and breaks rendering in most
+// email clients — this is what "HTML isn't working" looks like in practice.
+function isFullHtmlDocument(html) {
+  return /<!doctype html/i.test(html || '') || /<html[\s>]/i.test(html || '');
+}
+
+// Broader than isFullHtmlDocument — catches HTML *fragments* too (a <table>-based template with
+// no <html>/<body> wrapper, an HTML comment, etc.) so pasting one auto-switches Plain Text → HTML
+// mode instead of silently getting escaped and sent as literal tag text.
+function looksLikeHtmlMarkup(text) {
+  if (!text) return false;
+  if (isFullHtmlDocument(text)) return true;
+  return /<!--/.test(text) || /<\/?(table|tr|td|thead|tbody|div|p|a|span|img|h[1-6]|ul|ol|li|strong|em|br)[\s\/>]/i.test(text);
+}
+
+// Shared "send a test copy to myself" control, used in both the compose and preview steps so a
+// draft can be sanity-checked in an inbox without needing to match any real recipient filter.
+function TestSendControl({ subject, body, mode, wrapHeader = true }) {
+  const { profile } = useAuth();
+  const [testEmail, setTestEmail] = useState(profile?.email || '');
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState(null); // null | 'sent' | 'error'
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Comma-separated list — "me@x.com, teammate@x.com" sends a test to everyone in one click.
+  const testEmails = Array.from(new Set(
+    testEmail.split(',').map(e => e.trim()).filter(e => e && e.includes('@'))
+  ));
+  const canSendTest = testEmails.length > 0 && subject.trim() && body.trim();
+
+  async function handleSend() {
+    if (!canSendTest) return;
+    setSending(true);
+    setResult(null);
+    setErrorMsg('');
+    try {
+      // Deliberately not personalized with a real recipient's data — a test send should show
+      // merge tags as obvious placeholders, not risk being mistaken for someone's actual name.
+      const name = '[Name]';
+      const subgroup = '[Subgroup]';
+      const fellowship = '[Fellowship]';
+      const payload = {
+        recipients: testEmails.map(email => ({ email, name, subgroup, fellowship })),
+        subject: `[TEST] ${subject}`,
+        body,
+        format: mode,
+        wrapHeader,
+      };
+      const { data, error: invokeErr } = await supabase.functions.invoke('registration-bulk-email', { body: payload });
+      if (invokeErr) throw invokeErr;
+      if (data?.error) throw new Error(data.error);
+      if (data?.failed > 0) throw new Error(data.errors?.[0]?.error || 'Send failed');
+      setResult('sent');
+      setTimeout(() => setResult(null), 3000);
+    } catch (err) {
+      setResult('error');
+      setErrorMsg(err.message || String(err));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: C.mute, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Test send:</span>
+      <input
+        type="text"
+        value={testEmail}
+        onChange={e => setTestEmail(e.target.value)}
+        placeholder="you@email.com (comma-separate for multiple)"
+        style={{ padding: '7px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontSize: 12.5, fontFamily: 'Inter', width: 260, outline: 'none' }}
+      />
+      <button
+        onClick={handleSend}
+        disabled={sending || !canSendTest}
+        style={{
+          padding: '7px 14px', borderRadius: 7, border: `1px solid ${C.purple}`,
+          background: result === 'sent' ? C.green : '#fff',
+          borderColor: result === 'sent' ? C.green : C.purple,
+          color: result === 'sent' ? '#fff' : C.purple,
+          fontSize: 12.5, fontWeight: 600, cursor: sending || !canSendTest ? 'not-allowed' : 'pointer', opacity: !canSendTest ? 0.5 : 1,
+        }}
+      >
+        {sending ? 'Sending…' : result === 'sent' ? `✓ Sent${testEmails.length > 1 ? ` (${testEmails.length})` : ''}` : testEmails.length > 1 ? `Send test email (${testEmails.length})` : 'Send test email'}
+      </button>
+      {result === 'error' && <span style={{ fontSize: 11.5, color: C.red }}>{errorMsg}</span>}
+    </div>
+  );
 }
 
 function EmailComposer({ allPeople, subgroups, onClose }) {
@@ -1252,6 +1410,7 @@ function EmailComposer({ allPeople, subgroups, onClose }) {
   const [excludeAbsent, setExcludeAbsent] = useState(true);
   // Compose
   const [mode, setMode] = useState('text'); // text | html
+  const [includeHeader, setIncludeHeader] = useState(true); // prepend the BLW logo header (HTML mode, fragments only)
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [templates, setTemplates] = useState([]);
@@ -1286,7 +1445,8 @@ function EmailComposer({ allPeople, subgroups, onClose }) {
     setTimeout(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = start + tag.length; }, 0);
   }
 
-  const recipients = useMemo(() => {
+  // Everyone matching the filters above, before any one-off exclusions.
+  const matchedRecipients = useMemo(() => {
     return allPeople.filter(r => {
       if (!r.email) return false;
       if (excludeAbsent && r.absent) return false;
@@ -1297,12 +1457,36 @@ function EmailComposer({ allPeople, subgroups, onClose }) {
       if (!matchesStatus) return false;
       if (subgroupFilter !== 'All' && r.subgroup !== subgroupFilter) return false;
       if (recipientSearch) {
-        const q = recipientSearch.toLowerCase();
-        if (!(r.full_name || '').toLowerCase().includes(q) && !(r.email || '').toLowerCase().includes(q)) return false;
+        // Comma-separated terms match with OR — "amara, john@x.com" matches either.
+        const terms = recipientSearch.toLowerCase().split(',').map(t => t.trim()).filter(Boolean);
+        if (terms.length > 0) {
+          const name = (r.full_name || '').toLowerCase();
+          const email = (r.email || '').toLowerCase();
+          if (!terms.some(t => name.includes(t) || email.includes(t))) return false;
+        }
       }
       return true;
     });
   }, [allPeople, statusFilters, subgroupFilter, recipientSearch, excludeAbsent]);
+
+  // Lets an individual be unchecked out of an otherwise-matching filter set without having to
+  // narrow the filters themselves. Keyed by id (falls back to email for rows with no id).
+  const [excludedIds, setExcludedIds] = useState(() => new Set());
+  const recipientKey = r => r.id || r.email;
+  function toggleRecipient(r) {
+    const key = recipientKey(r);
+    setExcludedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
+  // The actual send list: everyone matched, minus anyone unchecked.
+  const recipients = useMemo(
+    () => matchedRecipients.filter(r => !excludedIds.has(recipientKey(r))),
+    [matchedRecipients, excludedIds]
+  );
 
   const statusCounts = useMemo(() => {
     const base = allPeople.filter(r => r.email && (!excludeAbsent || !r.absent));
@@ -1314,6 +1498,7 @@ function EmailComposer({ allPeople, subgroups, onClose }) {
   }, [allPeople, excludeAbsent]);
 
   const sampleRecipient = recipients[0] || { full_name: 'John Doe', fullName: 'John Doe', subgroup: 'Sample', fellowship: 'Sample Fellowship', email: 'john@example.com' };
+  const isFullDoc = mode === 'html' && isFullHtmlDocument(body);
 
   function renderPreviewHtml() {
     const personalizedBody = personalize(body, {
@@ -1353,6 +1538,7 @@ function EmailComposer({ allPeople, subgroups, onClose }) {
         subject,
         body,
         format: mode, // 'text' or 'html'
+        wrapHeader: includeHeader,
       };
 
       const { data, error: invokeErr } = await supabase.functions.invoke('registration-bulk-email', { body: payload });
@@ -1436,7 +1622,7 @@ function EmailComposer({ allPeople, subgroups, onClose }) {
                   <option value="All">All subgroups</option>
                   {subgroups.map(sg => <option key={sg} value={sg}>{sg}</option>)}
                 </select>
-                <input value={recipientSearch} onChange={e => setRecipientSearch(e.target.value)} placeholder="Search recipients…"
+                <input value={recipientSearch} onChange={e => setRecipientSearch(e.target.value)} placeholder="Search recipients… (comma-separate for multiple)"
                   style={{ flex: 1, padding: '6px 10px', borderRadius: 7, border: `1px solid ${C.line}`, fontSize: 12.5, fontFamily: 'Inter', outline: 'none' }} />
                 {recipientSearch && <button onClick={() => setRecipientSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, fontSize: 16 }}>×</button>}
                 <div style={{
@@ -1458,7 +1644,13 @@ function EmailComposer({ allPeople, subgroups, onClose }) {
                   <option value="">Load template…</option>
                   {loadingTemplates ? <option disabled>Loading…</option> : templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
-                <div style={{ marginLeft: 'auto', display: 'flex', background: '#F1EEF6', borderRadius: 7, padding: 2 }}>
+                {mode === 'html' && !isFullDoc && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: C.mute, cursor: 'pointer', marginLeft: 'auto' }}>
+                    <input type="checkbox" checked={includeHeader} onChange={e => setIncludeHeader(e.target.checked)} style={{ accentColor: C.purple }} />
+                    Add BLW logo header
+                  </label>
+                )}
+                <div style={{ marginLeft: mode === 'html' && !isFullDoc ? 0 : 'auto', display: 'flex', background: '#F1EEF6', borderRadius: 7, padding: 2 }}>
                   {['text', 'html'].map(m => (
                     <button key={m} onClick={() => setMode(m)} style={{
                       padding: '5px 14px', borderRadius: 5, border: 'none', cursor: 'pointer',
@@ -1499,7 +1691,14 @@ function EmailComposer({ allPeople, subgroups, onClose }) {
                 <textarea
                   ref={bodyRef}
                   value={body}
-                  onChange={e => setBody(e.target.value)}
+                  onChange={e => {
+                    const next = e.target.value;
+                    setBody(next);
+                    // Pasting HTML — a full document or a <table>/<div>-based fragment — only
+                    // renders correctly in HTML mode; auto-switch so it isn't sent as escaped
+                    // plain text (the raw tags showing up literally in the recipient's inbox).
+                    if (mode === 'text' && looksLikeHtmlMarkup(next)) setMode('html');
+                  }}
                   placeholder={mode === 'html'
                     ? '<p>Dear {{name}},</p>\n<p>We look forward to seeing you at the event!</p>'
                     : 'Dear {{name}},\n\nWe look forward to seeing you at the event!'}
@@ -1510,6 +1709,16 @@ function EmailComposer({ allPeople, subgroups, onClose }) {
                     color: C.ink, outline: 'none', resize: 'vertical', lineHeight: 1.6, boxSizing: 'border-box',
                   }}
                 />
+                {isFullDoc && (
+                  <div style={{ marginTop: 6, fontSize: 11.5, color: C.mute }}>
+                    Full HTML document detected — it will be sent as-is, without the default logo wrapper.
+                  </div>
+                )}
+              </div>
+
+              {/* Test send */}
+              <div style={{ paddingTop: 14, borderTop: `1px solid ${C.line}` }}>
+                <TestSendControl subject={subject} body={body} mode={mode} wrapHeader={includeHeader} />
               </div>
             </div>
 
@@ -1529,11 +1738,14 @@ function EmailComposer({ allPeople, subgroups, onClose }) {
           <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
             <div style={{ flex: 1, padding: '20px 24px', overflow: 'auto' }}>
               {/* Preview header */}
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.mute, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Preview as: {sampleRecipient.full_name || sampleRecipient.fullName}</div>
-                <div style={{ fontSize: 12.5, color: C.mute }}>
-                  This is how the email will appear. Merge tags are filled with the first recipient's data.
+              <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.mute, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Preview as: {sampleRecipient.full_name || sampleRecipient.fullName}</div>
+                  <div style={{ fontSize: 12.5, color: C.mute }}>
+                    This is how the email will appear. Merge tags are filled with the first recipient's data.
+                  </div>
                 </div>
+                <TestSendControl subject={subject} body={body} mode={mode} wrapHeader={includeHeader} />
               </div>
 
               {/* Email preview card */}
@@ -1556,31 +1768,65 @@ function EmailComposer({ allPeople, subgroups, onClose }) {
                   </div>
                 </div>
                 {/* Email body */}
-                <div style={{ padding: '20px 18px' }}>
-                  <div style={{
-                    fontFamily: 'Arial, sans-serif', maxWidth: 600, margin: '0 auto',
-                    color: '#2D2A22', lineHeight: 1.6, fontSize: 14,
-                  }}>
-                    <div style={{ padding: '16px 0', textAlign: 'center', borderBottom: '1px solid #EDE8DC', marginBottom: 16 }}>
-                      <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#F1EEF6', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>✉️</div>
+                {isFullDoc ? (
+                  // Full HTML documents get their own document context (head/style/meta included)
+                  // instead of being flattened into a <div> — an iframe is the only accurate preview.
+                  <iframe
+                    title="Email preview"
+                    srcDoc={renderPreviewHtml()}
+                    style={{ width: '100%', height: 500, border: 'none', display: 'block' }}
+                  />
+                ) : (
+                  <div style={{ padding: '20px 18px' }}>
+                    <div style={{
+                      fontFamily: 'Arial, sans-serif', maxWidth: 600, margin: '0 auto',
+                      color: '#2D2A22', lineHeight: 1.6, fontSize: 14,
+                    }}>
+                      {mode === 'html' && !includeHeader ? null : (
+                        <div style={{ padding: '16px 0', textAlign: 'center', borderBottom: '1px solid #EDE8DC', marginBottom: 16 }}>
+                          <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#F1EEF6', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>✉️</div>
+                        </div>
+                      )}
+                      <div dangerouslySetInnerHTML={{ __html: renderPreviewHtml() }} />
                     </div>
-                    <div dangerouslySetInnerHTML={{ __html: renderPreviewHtml() }} />
                   </div>
-                </div>
+                )}
               </div>
 
-              {/* Recipients list */}
+              {/* Recipients list — click a chip to uncheck/recheck that person for this send */}
               <div style={{ marginTop: 20 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.mute, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
-                  Recipients ({recipients.length})
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.mute, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Recipients ({recipients.length} of {matchedRecipients.length} selected)
+                  </div>
+                  {excludedIds.size > 0 && (
+                    <button onClick={() => setExcludedIds(new Set())} style={{ background: 'none', border: 'none', color: C.purple, fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+                      Select all
+                    </button>
+                  )}
                 </div>
                 <div style={{ background: '#FAFAF8', borderRadius: 8, padding: 12, maxHeight: 160, overflowY: 'auto', border: `1px solid ${C.line}` }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {recipients.map((r, i) => (
-                      <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#fff', border: `1px solid ${C.line}`, borderRadius: 14, padding: '3px 10px', fontSize: 11.5 }}>
-                        {r.full_name || r.fullName}
-                      </span>
-                    ))}
+                    {matchedRecipients.map((r, i) => {
+                      const excluded = excludedIds.has(recipientKey(r));
+                      return (
+                        <button
+                          key={r.id || r.email || i}
+                          onClick={() => toggleRecipient(r)}
+                          title={excluded ? 'Excluded — click to include' : 'Click to exclude from this send'}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 14, padding: '3px 10px 3px 8px', fontSize: 11.5, cursor: 'pointer',
+                            background: excluded ? '#F5F4F7' : '#fff',
+                            border: `1px solid ${excluded ? C.line : C.purple}`,
+                            color: excluded ? C.mute : C.ink,
+                            textDecoration: excluded ? 'line-through' : 'none',
+                          }}
+                        >
+                          <span style={{ fontSize: 12 }}>{excluded ? '☐' : '☑'}</span>
+                          {r.full_name || r.fullName}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

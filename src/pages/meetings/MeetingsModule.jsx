@@ -84,7 +84,7 @@ function MeetingsList() {
     return (
       <MeetingsProvider key={selectedDepartmentId} departmentId={selectedDepartmentId}>
         <LiveMinutesMode meeting={liveSession} onClose={() => setLiveSession(null)} />
-        {showModal ? <MeetingModal departmentId={selectedDepartmentId} onClose={() => setShowModal(false)} /> : null}
+        {showModal ? <MeetingModal departmentId={selectedDepartmentId} departments={departments} onClose={() => setShowModal(false)} /> : null}
       </MeetingsProvider>
     )
   }
@@ -122,7 +122,7 @@ function MeetingsList() {
           canManage={canManage}
           onStartLive={(meeting) => setLiveSession(meeting)}
         />
-        {showModal ? <MeetingModal departmentId={selectedDepartmentId} onClose={() => setShowModal(false)} /> : null}
+        {showModal ? <MeetingModal departmentId={selectedDepartmentId} departments={departments} onClose={() => setShowModal(false)} /> : null}
       </div>
     </MeetingsProvider>
   )
