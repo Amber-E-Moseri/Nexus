@@ -34,12 +34,17 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
     departureTime: registration.departureTime || '',
     departureFlight: registration.departureFlight || '',
     flightManualOverride: registration.flightManualOverride || false,
+    registrationManualOverride: registration.registrationManualOverride || false,
   });
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   const FLIGHT_FIELDS = ['arrivalDate', 'arrivalTime', 'arrivalFlight', 'departureDate', 'departureTime', 'departureFlight'];
+  // Everything "Sync Registrations" (registration-api-sync, form=registrations) can
+  // overwrite on every run — same silent-clobber risk as flights, just on a different
+  // set of columns (see registration_manual_override migration).
+  const GENERAL_FIELDS = ['firstName', 'lastName', 'phone', 'gender', 'subgroup', 'fellowship', 'team', 'designation', 'shirtSize', 'foundationStatus', 'baptism', 'allergies', 'leadership'];
 
   const handleChange = (field, value) => {
     setFormData(prev => {
@@ -51,6 +56,10 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
       // editor already auto-locks on edit (handleUpdateFlight); mirror that here so an edit
       // made through this modal is protected the same way.
       if (FLIGHT_FIELDS.includes(field)) next.flightManualOverride = true;
+      // Same failure mode, different sync path: "Sync Registrations" unconditionally
+      // upserts these columns on every run with no lock check at all today, so an edit
+      // here needs its own flag to survive the next sync.
+      if (GENERAL_FIELDS.includes(field)) next.registrationManualOverride = true;
       return next;
     });
   };
@@ -84,6 +93,7 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
         departure_time: formData.departureTime || null,
         departure_flight: formData.departureFlight || null,
         flight_manual_override: formData.flightManualOverride,
+        registration_manual_override: formData.registrationManualOverride,
       };
 
       let updateError;
@@ -101,7 +111,7 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
 
       if (updateError) throw updateError;
 
-      onSave?.({ ...registration, ...formData, fullName, flightManualOverride: formData.flightManualOverride });
+      onSave?.({ ...registration, ...formData, fullName, flightManualOverride: formData.flightManualOverride, registrationManualOverride: formData.registrationManualOverride });
       onClose();
     } catch (err) {
       setError(err.message || 'Failed to save changes');
@@ -204,8 +214,21 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
             </div>
           </div>
 
-          <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 20, marginBottom: 4 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.ink, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Registration Info</div>
+          <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 20, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.ink, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Registration Info</div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: formData.registrationManualOverride ? C.purple : C.mute, cursor: 'pointer', fontWeight: formData.registrationManualOverride ? 600 : 400, textTransform: 'none', letterSpacing: 0 }}>
+              <input
+                type="checkbox"
+                checked={formData.registrationManualOverride}
+                onChange={(e) => setFormData(prev => ({ ...prev, registrationManualOverride: e.target.checked }))}
+              />
+              🔒 Lock — don't let sync overwrite these fields
+            </label>
+          </div>
+          <div style={{ fontSize: 11.5, color: C.mute, marginBottom: 16 }}>
+            {formData.registrationManualOverride
+              ? 'Locked: "Sync Registrations" from the registration platform will skip this person entirely and leave name/subgroup/fellowship/etc. alone.'
+              : 'Unlocked: the next "Sync Registrations" run may overwrite name, subgroup, fellowship, phone, and the fields below with data from the registration platform. Editing any of them locks automatically — check the box above to lock without changing anything.'}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

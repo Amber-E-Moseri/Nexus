@@ -294,27 +294,53 @@ Deno.serve(async (req) => {
   }
   const rows = [...byEmail.values()].map(({ row }) => row)
 
+  // Rows hand-edited via the Edit Registration modal (name, subgroup, fellowship, phone,
+  // designation, shirt size, foundation status, baptism, allergies, leadership) — sync
+  // must not overwrite them. Same protection as flight_manual_override for flight fields;
+  // this upsert previously had no lock check at all, so any manual correction here (e.g.
+  // fixing a mis-typed name) was silently reverted by the next "Sync Registrations" run.
+  const { data: existingRows } = await serviceClient
+    .from('registrations')
+    .select('email, registration_manual_override')
+  const existingEmails = new Set(
+    (existingRows || []).map((r: { email: string }) => r.email.toLowerCase()),
+  )
+  const lockedEmails = new Set<string>(
+    (existingRows || [])
+      .filter((r: { email: string; registration_manual_override: boolean }) => r.registration_manual_override)
+      .map((r: { email: string }) => r.email),
+  )
+
   if (action === 'preview') {
-    const { data: existing } = await serviceClient.from('registrations').select('email')
-    const existingEmails = new Set(
-      (existing || []).map((r: { email: string }) => r.email.toLowerCase()),
-    )
-    const preview = rows.map((r) => ({ ...r, _status: existingEmails.has(r.email) ? 'update' : 'new' }))
+    const preview = rows.map((r) => ({
+      ...r,
+      _status: lockedEmails.has(r.email) ? 'locked' : existingEmails.has(r.email) ? 'update' : 'new',
+    }))
     return json(200, {
       total_submissions: submissions.length,
       unique_emails: rows.length,
       new_count: preview.filter((r) => r._status === 'new').length,
       update_count: preview.filter((r) => r._status === 'update').length,
+      locked_count: preview.filter((r) => r._status === 'locked').length,
       rows: preview,
     })
   }
 
   if (action === 'apply') {
+    const toUpsert = rows.filter((r) => !lockedEmails.has(r.email))
+    const lockedSkipped = rows.length - toUpsert.length
+    if (toUpsert.length === 0) {
+      return json(200, { upserted: 0, locked_skipped: lockedSkipped, message: 'No registrations to update' })
+    }
     const { error } = await serviceClient
       .from('registrations')
-      .upsert(rows, { onConflict: 'email' })
+      .upsert(toUpsert, { onConflict: 'email' })
     if (error) return json(500, { error: 'Database error', details: error.message })
-    return json(200, { upserted: rows.length, message: `${rows.length} registrations synced from platform API` })
+    return json(200, {
+      upserted: toUpsert.length,
+      locked_skipped: lockedSkipped,
+      message: `${toUpsert.length} registrations synced from platform API${lockedSkipped ? ` (${lockedSkipped} skipped — manually edited)` : ''}`,
+    })
   }
 
   return json(400, { error: 'Invalid action — use "preview" or "apply"' })
