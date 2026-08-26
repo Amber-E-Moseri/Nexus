@@ -1,5 +1,6 @@
 // Fallback for saving a single flight field (arrival/departure date, time, or flight
-// number) when the direct client-side update is silently blocked by RLS.
+// number), or the manually_confirmed flag, when the direct client-side update is
+// silently blocked by RLS.
 //
 // Why this exists: registrations' UPDATE policies (super_admin_update_flights,
 // registration_event_team_update) look correct on paper, but a stale/missing JWT role
@@ -28,10 +29,15 @@ function json(status: number, body: Record<string, unknown>) {
 }
 
 // Must match FLIGHT_FIELD_TO_DB's values in RegistrationEcosystem.jsx
-const ALLOWED_FIELDS = new Set([
+const FLIGHT_FIELDS = new Set([
   'arrival_date', 'arrival_time', 'arrival_flight',
   'departure_date', 'departure_time', 'departure_flight',
 ])
+
+// manually_confirmed hits this same silent-RLS-no-op failure mode (see
+// handleToggleManualConfirm in RegistrationEcosystem.jsx) — reuse this fallback
+// rather than standing up a near-identical function for one boolean column.
+const ALLOWED_FIELDS = new Set([...FLIGHT_FIELDS, 'manually_confirmed'])
 
 const PRIVILEGED_ROLES = new Set(['super_admin', 'regional_secretary', 'dept_lead', 'pastor'])
 
@@ -98,16 +104,21 @@ Deno.serve(async (req) => {
     }
   }
 
-  if (!allowed) return json(403, { error: 'Not permitted to edit flight data' })
+  if (!allowed) return json(403, { error: 'Not permitted to edit this registration' })
 
-  const body = (await req.json().catch(() => null)) as { email?: string; field?: string; value?: string | null } | null
+  const body = (await req.json().catch(() => null)) as { email?: string; field?: string; value?: string | boolean | null } | null
   if (!body?.email || !body.field || !ALLOWED_FIELDS.has(body.field)) {
     return json(400, { error: 'email and a valid field are required' })
   }
 
+  const isFlightField = FLIGHT_FIELDS.has(body.field)
+  const updatePayload = isFlightField
+    ? { [body.field]: body.value || null, flight_manual_override: true }
+    : { [body.field]: !!body.value }
+
   const { data, error } = await serviceClient
     .from('registrations')
-    .update({ [body.field]: body.value || null, flight_manual_override: true })
+    .update(updatePayload)
     .eq('email', body.email.toLowerCase())
     .select('email')
 
