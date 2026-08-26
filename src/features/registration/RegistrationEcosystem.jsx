@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Car, Bus, X, LayoutList } from 'lucide-react';
+import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Unlock, Car, Bus, X, LayoutList } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import RegistrationEditModal from './RegistrationEditModal';
@@ -441,6 +441,39 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       await refetchRegistrations();
     }
   }, [refetchRegistrations]);
+
+  // Explicit lock/unlock, independent of editing a field — lets an admin protect
+  // already-correct flight info from the next "Sync flights" run without having to
+  // retype a value (which is the only way editing a cell used to trigger the lock).
+  const handleToggleFlightLock = useCallback(async (regEmail, next) => {
+    dirtyEmails.current.add(regEmail);
+    setTimeout(() => dirtyEmails.current.delete(regEmail), 10_000);
+
+    setRegistrations(prev => prev.map(r =>
+      r.email === regEmail ? { ...r, flightManualOverride: next } : r
+    ));
+
+    try {
+      const { data, error } = await supabase
+        .from('registrations')
+        .update({ flight_manual_override: next })
+        .eq('email', regEmail.toLowerCase())
+        .select('email');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('update-flight', {
+          body: { email: regEmail, field: 'flight_manual_override', value: next },
+        });
+        if (fnError || fnData?.error) throw new Error(fnData?.error || fnError.message);
+      }
+    } catch (e) {
+      console.error('Failed to toggle flight lock:', e);
+      alert(`Failed to ${next ? 'lock' : 'unlock'} flight info: ${e.message}`);
+      setRegistrations(prev => prev.map(r =>
+        r.email === regEmail ? { ...r, flightManualOverride: !next } : r
+      ));
+    }
+  }, []);
 
   // Finance access: sprint Finance team, regional_secretary, or explicit grant
   useEffect(() => {
@@ -1206,7 +1239,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, roomsNote, handleUpdateRoomsNote, peoplePerRoom, isLimited }} />}
-        {tab === 'transport' && <TransportTab {...{ merged, isLimited, subgroups, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving: bulkMarkDriving, onToggleCrossCountry: toggleConfirm, onSetTransportMode: setTransportMode, onUpdateCrossCountrySubgroups: async (list) => { if (!config?.id) return; await supabase.from('event_configs').update({ cross_country_subgroups: list }).eq('id', config.id); reloadConfig(); } }} />}
+        {tab === 'transport' && <TransportTab {...{ merged, isLimited, subgroups, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, onToggleFlightLock: handleToggleFlightLock, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving: bulkMarkDriving, onToggleCrossCountry: toggleConfirm, onSetTransportMode: setTransportMode, onUpdateCrossCountrySubgroups: async (list) => { if (!config?.id) return; await supabase.from('event_configs').update({ cross_country_subgroups: list }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'finance' && (hasFinanceAccess
           ? <FinanceTab {...{ registrations: registrationsFiltered.filter(r => !absentEmailsForMerge.has(r.email)), payments, setPayments, userId: profile?.id, earlyCutoffAt: eventConfig.early_cutoff_at, earlyFee: eventConfig.early_fee, standardFee: eventConfig.standard_fee }} />
           : <div style={{ padding: 48, textAlign: 'center' }}>
@@ -2694,7 +2727,7 @@ function NotFlyingRow({ r, onSetTransportMode, onToggleCrossCountry }) {
   );
 }
 
-function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, onClearFlight, onUpdateFlight, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving, onToggleCrossCountry, onSetTransportMode, onUpdateCrossCountrySubgroups }) {
+function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, onClearFlight, onUpdateFlight, onToggleFlightLock, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving, onToggleCrossCountry, onSetTransportMode, onUpdateCrossCountrySubgroups }) {
   const [subgroupFilter, setSubgroupFilter] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
   const [clearingEmail, setClearingEmail] = useState(null);
@@ -2820,7 +2853,13 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
                     <td style={{ fontWeight: 500 }}>
                       {r.fullName}
                       {r.flightManualOverride && (
-                        <Lock size={10} color={C.amber} style={{ marginLeft: 6, verticalAlign: 'middle' }} />
+                        <button
+                          onClick={() => onToggleFlightLock?.(r.email, false)}
+                          title="Locked — sync won't overwrite these fields. Click to unlock."
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 6, verticalAlign: 'middle', lineHeight: 1 }}
+                        >
+                          <Lock size={10} color={C.amber} />
+                        </button>
                       )}
                     </td>
                     <td style={{ color: C.mute }}>{r.subgroup}</td>
@@ -2833,7 +2872,18 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
                         <EditableFlightCell value={r.departureFlight} onCommit={v => onUpdateFlight?.(r.email, 'departureFlight', v)} />
                       </>
                     )}
-                    <td>
+                    <td style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                      {!r.flightManualOverride && (
+                        <button
+                          onClick={() => onToggleFlightLock?.(r.email, true)}
+                          title="Lock — protect this person's flight info from being overwritten by the next sync, without editing anything"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: `${C.mute}88`, padding: '2px 4px', lineHeight: 1, transition: 'color .12s' }}
+                          onMouseEnter={e => e.currentTarget.style.color = C.amber}
+                          onMouseLeave={e => e.currentTarget.style.color = `${C.mute}88`}
+                        >
+                          <Unlock size={13} />
+                        </button>
+                      )}
                       <button
                         onClick={() => clearFlight(r)}
                         disabled={clearingEmail === r.email}
@@ -2869,6 +2919,7 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
             {' '}{withFlight.length} with flights · {missingFlight.length} awaiting flight info.
             {' '}Click a time or flight code to edit — edited fields
             {' '}<Lock size={9.5} color={C.amber} style={{ verticalAlign: 'middle' }} /> won't be overwritten by the next sync.
+            {' '}Click the <Unlock size={9.5} color={C.mute} style={{ verticalAlign: 'middle' }} /> next to an unlocked row to lock it without editing anything, or the lock icon on a name to unlock.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
