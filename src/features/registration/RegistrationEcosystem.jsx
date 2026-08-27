@@ -4193,29 +4193,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
     }
   }
 
-  function handleExportRoomsMD() {
-    const lines = ['# Room Assignments — This Is It 2.0', ''];
-    rooms.forEach(room => {
-      const people = room.people || [];
-      lines.push(`## ${room.name} (${people.length}/${room.capacity})`);
-      if (people.length === 0) {
-        lines.push('_No one assigned_');
-      } else {
-        people.forEach(p => {
-          const head = p.email === room.roomHead ? ' ⭐' : '';
-          lines.push(`- ${p.fullName || p.email}${p.fellowship ? ` (${p.fellowship})` : ''}${head}`);
-        });
-      }
-      lines.push('');
-    });
-    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'room-assignments.md';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+
   const [draggedPerson, setDraggedPerson] = useState(null);
   const [selectedPerson, setSelectedPerson] = useState(null); // mobile tap-to-assign
   const [editingRoomId, setEditingRoomId] = useState(null);
@@ -4477,7 +4455,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
             ]);
           }}><Download size={13} /> CSV</Btn>
           <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0}><Download size={13} /> PDF</Btn>
-          <Btn tone="ghost" small onClick={handleExportRoomsMD} disabled={rooms.length === 0}><Download size={13} /> MD</Btn>
+
           <Btn tone="ghost" small onClick={openRoomEmailModal} disabled={rooms.length === 0 || sendingRoomEmails}><Mail size={13} /> {sendingRoomEmails ? 'Sending…' : 'Email rooms'}</Btn>
         </div>
       </div>
