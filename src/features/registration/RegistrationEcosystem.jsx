@@ -1796,6 +1796,7 @@ function HoverNameList({ people = [], color }) {
 function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onCheckIn, rooms = [], onToggleKeyGiven }) {
   const [saving, setSaving] = useState(new Set());
   const [view, setView] = useState('person'); // 'person' | 'room'
+  const [search, setSearch] = useState('');
 
   const checkedInByEmail = useMemo(() => {
     const m = {};
@@ -1803,10 +1804,14 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
     return m;
   }, [merged]);
 
+  const q = search.trim().toLowerCase();
+
   const filtered = useMemo(() => {
-    if (subgroupFilter === 'All') return merged;
-    return merged.filter(r => r.subgroup === subgroupFilter);
-  }, [merged, subgroupFilter]);
+    let base = merged;
+    if (subgroupFilter !== 'All') base = base.filter(r => r.subgroup === subgroupFilter);
+    if (q) base = base.filter(r => (r.fullName || '').toLowerCase().includes(q) || (r.fellowship || '').toLowerCase().includes(q));
+    return base;
+  }, [merged, subgroupFilter, q]);
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
     if (!!a.checkedInAt !== !!b.checkedInAt) return a.checkedInAt ? 1 : -1;
@@ -1844,8 +1849,8 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
         )}
       </div>
 
-      {/* View toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+      {/* View toggle + search */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         {[{ k: 'person', label: 'By person' }, { k: 'room', label: 'By room' }].map(({ k, label }) => (
           <button key={k} onClick={() => setView(k)} style={{
             padding: '5px 16px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
@@ -1853,6 +1858,12 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
             color: view === k ? '#fff' : '#4C2A92',
           }}>{label}</button>
         ))}
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search name or fellowship…"
+          style={{ flex: 1, minWidth: 180, padding: '6px 12px', borderRadius: 20, border: `1px solid ${C.line}`, fontSize: 13, outline: 'none' }}
+        />
       </div>
 
       {view === 'person' && (
@@ -1915,7 +1926,11 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
           {roomsWithPeople.length === 0 && (
             <div style={{ color: C.mute, textAlign: 'center', padding: 32 }}>No rooms with assigned people yet.</div>
           )}
-          {roomsWithPeople.map(room => {
+          {roomsWithPeople.filter(room => {
+            if (!q) return true;
+            return room.name.toLowerCase().includes(q) ||
+              (room.people || []).some(p => (p.fullName || '').toLowerCase().includes(q) || (p.fellowship || '').toLowerCase().includes(q));
+          }).map(room => {
             const people = room.people || [];
             const arrivedCount = people.filter(p => checkedInByEmail[p.email?.toLowerCase()]?.checkedInAt).length;
             const allArrived = arrivedCount === people.length && people.length > 0;
