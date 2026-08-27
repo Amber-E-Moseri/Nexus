@@ -121,6 +121,10 @@ export function AuthProvider({ children }) {
   // same profile, doubling the DB round-trips and causing a spinner flash
   // when the slower path calls setLoading(true) mid-flight.
   const profileFetchRef = useRef(null)
+  // Tracks supplementary profile fetch to avoid redundant updates on page navigations.
+  // Defers fetch via requestIdleCallback so it doesn't interrupt page renders.
+  const supplementaryFetchRef = useRef(null)
+  const supplementaryTimeoutRef = useRef(null)
   useEffect(() => {
     profileRef.current = profile
   }, [profile])
@@ -155,6 +159,54 @@ export function AuthProvider({ children }) {
         }
       })
       return promise
+    }
+
+    function deferredFetchSupplementary(userId, departmentId) {
+      // Skip if already fetched for this user
+      if (supplementaryFetchRef.current?.userId === userId && profileRef.current?._supplementaryLoaded) {
+        return
+      }
+
+      // Cancel any pending defer
+      if (supplementaryTimeoutRef.current) {
+        clearTimeout(supplementaryTimeoutRef.current)
+      }
+
+      // Defer fetch to requestIdleCallback (run when browser is idle, not blocking page renders)
+      const callback = () => {
+        if (!mounted || profileRef.current?.id !== userId) return
+        supplementaryFetchRef.current = { userId, loading: true }
+
+        fetchSupplementaryProfile(userId, departmentId)
+          .then((supplementary) => {
+            if (!mounted || profileRef.current?.id !== userId) return
+            // Memoize: only update if essential data (space_roles, grants) changed
+            const prev = profileRef.current || {}
+            const spaceRolesChanged = JSON.stringify(prev.space_roles) !== JSON.stringify(supplementary.space_roles)
+            const grantsChanged = JSON.stringify(prev.grants) !== JSON.stringify(supplementary.grants)
+            const isProgramsChanged = prev.is_programs_member !== supplementary.is_programs_member
+
+            if (spaceRolesChanged || grantsChanged || isProgramsChanged) {
+              setProfile((p) => p?.id === userId ? { ...p, ...supplementary, _supplementaryLoaded: true } : p)
+            } else {
+              // Data unchanged, still mark as loaded to avoid refetching
+              profileRef.current._supplementaryLoaded = true
+            }
+            supplementaryFetchRef.current = { userId, loading: false }
+          })
+          .catch((err) => {
+            console.warn('[Auth] Supplementary profile fetch failed:', err)
+            supplementaryFetchRef.current = { userId, loading: false }
+          })
+      }
+
+      // Use requestIdleCallback if available (modern browsers), fallback to setTimeout
+      if (typeof requestIdleCallback !== 'undefined') {
+        supplementaryTimeoutRef.current = requestIdleCallback(callback, { timeout: 3000 })
+      } else {
+        // Defer by 500ms to let current page render complete
+        supplementaryTimeoutRef.current = setTimeout(callback, 500)
+      }
     }
 
     const initializeAuth = async () => {
@@ -262,15 +314,8 @@ export function AuthProvider({ children }) {
           if (mounted) {
             profileRef.current = nextProfile
             setProfile(nextProfile)
-            fetchSupplementaryProfile(session.user.id, nextProfile.department_id)
-              .then((supplementary) => {
-                if (mounted) {
-                  const merged = (prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary, _supplementaryLoaded: true } : prev
-                  profileRef.current = merged(profileRef.current)
-                  setProfile(merged)
-                }
-              })
-              .catch(() => {})
+            // Defer supplementary fetch to avoid interrupting page renders on navigation
+            deferredFetchSupplementary(session.user.id, nextProfile.department_id)
           }
 
           if (nextProfile?.push_enabled && Notification.permission === 'granted') {
@@ -388,11 +433,7 @@ export function AuthProvider({ children }) {
             const nextProfile = await ensureProfileFetch(session.user.id)
             if (mounted) {
               setProfile(nextProfile)
-              fetchSupplementaryProfile(session.user.id, nextProfile.department_id)
-                .then((supplementary) => {
-                  if (mounted) setProfile((prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary } : prev)
-                })
-                .catch(() => {})
+              deferredFetchSupplementary(session.user.id, nextProfile.department_id)
             }
             touchLastActive().catch(() => {})
           } catch {
@@ -471,6 +512,9 @@ export function AuthProvider({ children }) {
 
     return () => {
       mounted = false
+      if (supplementaryTimeoutRef.current) {
+        clearTimeout(supplementaryTimeoutRef.current)
+      }
       subscription.unsubscribe()
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       if (initialSessionTimerRef.current) {
