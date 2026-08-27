@@ -3252,7 +3252,10 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
 
       {/* Not Flying (driving / bus) */}
       {(() => {
-        const notFlying = merged.filter(r => r.inStateConfirmed && (subgroupFilter === 'All' || r.subgroup === subgroupFilter));
+        const notFlying = merged.filter(r =>
+          (r.inStateConfirmed || r.transportMode === 'driving' || r.transportMode === 'bus' || crossCountrySubgroups.has(r.subgroup)) &&
+          (subgroupFilter === 'All' || r.subgroup === subgroupFilter)
+        );
         if (notFlying.length === 0) return null;
         const byBus = notFlying.filter(r => r.transportMode === 'bus');
         const byDriving = notFlying.filter(r => r.transportMode !== 'bus');
