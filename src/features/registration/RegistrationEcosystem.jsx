@@ -783,7 +783,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       if (r.fullyConfirmed) { out[r.subgroup].confirmed++; confPeople[r.subgroup].push(r); }
       else if (!isAbsent) { confirmingP[r.subgroup].push(r); }
       if (r.arrivalFlight || r.departureFlight) out[r.subgroup].flights++;
-      if (!r.inStateConfirmed && !exemptFellowships.has(r.fellowship) && !isAbsent && !r.arrivalFlight && !r.departureFlight) {
+      if (!r.inStateConfirmed && !exemptFellowships.has(r.fellowship) && !isAbsent && !r.arrivalFlight && !r.departureFlight && r.transportMode !== 'bus') {
         out[r.subgroup].flightsNeeded++;
         flightPeople[r.subgroup].push(r);
       }
@@ -2367,7 +2367,8 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
           <tbody>
             {filtered.map((r, i) => {
               const isLocal = /manitoba|winnipeg/i.test(r.fellowship || '');
-              const noFlightFlag = !r.hasFlightInfo && !isLocal;
+              const isBus = r.transportMode === 'bus';
+              const noFlightFlag = !r.hasFlightInfo && !isLocal && !isBus;
               return (
                 <tr key={i}>
                   <td style={{ color: C.mute, fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}>{i + 1}</td>
