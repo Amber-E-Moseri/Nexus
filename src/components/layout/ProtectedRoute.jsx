@@ -7,7 +7,7 @@ export default function ProtectedRoute({ children, roles, allowFeatureRoles, all
   const { loading, user, profile, effectiveRole, isRecoveryMode } = useAuth()
   const location = useLocation()
 
-  if (loading) {
+  if (loading || (user && !profile)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)]">
         <LoadingSpinner label="Loading your workspace" />
