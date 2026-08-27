@@ -842,7 +842,7 @@ export default function RegistrationDataTab({
                                         title="Mark as driving (suppress No flights warning)"
                                         style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: 'transparent', color: C.mute, border: `1px solid ${C.line}`, borderRadius: 12, fontSize: 10, fontWeight: 600, padding: '2px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}
                                       >
-                                        🚗 Driving
+                                        🚗 Mark driving
                                       </button>
                                     )}
                                   </>
