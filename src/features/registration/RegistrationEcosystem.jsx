@@ -2024,7 +2024,8 @@ function OverviewIssues({ merged }) {
     );
     const noGender = merged.filter(r => !r.absent && !(r.gender || '').trim());
     const missingFlight = merged.filter(r =>
-      !r.absent && !r.inStateConfirmed && !LOCAL_FELLOWSHIP_PATTERN.test(r.fellowship || '') &&
+      !r.absent && !r.inStateConfirmed && !r.transportMode &&
+      !LOCAL_FELLOWSHIP_PATTERN.test(r.fellowship || '') &&
       (r.arrivalDate || r.departureDate) && !r.arrivalFlight && !r.departureFlight
     );
     return [
