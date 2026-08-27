@@ -116,6 +116,15 @@ export function AuthProvider({ children }) {
   // cancel it before it fires mid-profile-fetch (the "workspace with no user
   // info" mobile race: timer fires at 4 s, profile fetch finishes at 4.5 s).
   const initialSessionTimerRef = useRef(null)
+  // Deduplicates concurrent fetchMinimalProfile calls between initializeAuth
+  // and onAuthStateChange — both fire on page load and race to fetch the
+  // same profile, doubling the DB round-trips and causing a spinner flash
+  // when the slower path calls setLoading(true) mid-flight.
+  const profileFetchRef = useRef(null)
+  // Tracks supplementary profile fetch to avoid redundant updates on page navigations.
+  // Defers fetch via requestIdleCallback so it doesn't interrupt page renders.
+  const supplementaryFetchRef = useRef(null)
+  const supplementaryTimeoutRef = useRef(null)
   useEffect(() => {
     profileRef.current = profile
   }, [profile])
@@ -137,6 +146,68 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true
+
+    function ensureProfileFetch(userId) {
+      if (profileFetchRef.current?.userId === userId) {
+        return profileFetchRef.current.promise
+      }
+      const promise = withTimeout(fetchMinimalProfile(userId), 8_000)
+      profileFetchRef.current = { userId, promise }
+      promise.catch(() => {}).finally(() => {
+        if (profileFetchRef.current?.promise === promise) {
+          profileFetchRef.current = null
+        }
+      })
+      return promise
+    }
+
+    function deferredFetchSupplementary(userId, departmentId) {
+      // Skip if already fetched for this user
+      if (supplementaryFetchRef.current?.userId === userId && profileRef.current?._supplementaryLoaded) {
+        return
+      }
+
+      // Cancel any pending defer
+      if (supplementaryTimeoutRef.current) {
+        clearTimeout(supplementaryTimeoutRef.current)
+      }
+
+      // Defer fetch to requestIdleCallback (run when browser is idle, not blocking page renders)
+      const callback = () => {
+        if (!mounted || profileRef.current?.id !== userId) return
+        supplementaryFetchRef.current = { userId, loading: true }
+
+        fetchSupplementaryProfile(userId, departmentId)
+          .then((supplementary) => {
+            if (!mounted || profileRef.current?.id !== userId) return
+            // Memoize: only update if essential data (space_roles, grants) changed
+            const prev = profileRef.current || {}
+            const spaceRolesChanged = JSON.stringify(prev.space_roles) !== JSON.stringify(supplementary.space_roles)
+            const grantsChanged = JSON.stringify(prev.grants) !== JSON.stringify(supplementary.grants)
+            const isProgramsChanged = prev.is_programs_member !== supplementary.is_programs_member
+
+            if (spaceRolesChanged || grantsChanged || isProgramsChanged) {
+              setProfile((p) => p?.id === userId ? { ...p, ...supplementary, _supplementaryLoaded: true } : p)
+            } else {
+              // Data unchanged, still mark as loaded to avoid refetching
+              profileRef.current._supplementaryLoaded = true
+            }
+            supplementaryFetchRef.current = { userId, loading: false }
+          })
+          .catch((err) => {
+            console.warn('[Auth] Supplementary profile fetch failed:', err)
+            supplementaryFetchRef.current = { userId, loading: false }
+          })
+      }
+
+      // Use requestIdleCallback if available (modern browsers), fallback to setTimeout
+      if (typeof requestIdleCallback !== 'undefined') {
+        supplementaryTimeoutRef.current = requestIdleCallback(callback, { timeout: 3000 })
+      } else {
+        // Defer by 500ms to let current page render complete
+        supplementaryTimeoutRef.current = setTimeout(callback, 500)
+      }
+    }
 
     const initializeAuth = async () => {
       // Primary: Supabase SDK reads from its own IndexedDB store (nexus-auth/kv).
@@ -182,15 +253,7 @@ export function AuthProvider({ children }) {
               setProfile(nextProfile)
               setLoading(false)
               touchLastActive().catch(() => {})
-              fetchSupplementaryProfile(lateSession.user.id, nextProfile.department_id)
-                .then((supplementary) => {
-                  if (mounted) {
-                    const merged = (prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary, _supplementaryLoaded: true } : prev
-                    profileRef.current = merged(profileRef.current)
-                    setProfile(merged)
-                  }
-                })
-                .catch(() => {})
+              deferredFetchSupplementary(lateSession.user.id, nextProfile.department_id)
             })
             .catch(() => {})
         }).catch(() => {})
@@ -239,34 +302,21 @@ export function AuthProvider({ children }) {
 
       if (session?.user) {
         try {
-          const nextProfile = await withTimeout(fetchMinimalProfile(session.user.id), 8_000)
+          const nextProfile = await ensureProfileFetch(session.user.id)
           if (mounted) {
-            profileRef.current = nextProfile  // sync before INITIAL_SESSION can race
+            profileRef.current = nextProfile
             setProfile(nextProfile)
-            fetchSupplementaryProfile(session.user.id, nextProfile.department_id)
-              .then((supplementary) => {
-                if (mounted) {
-                  const merged = (prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary, _supplementaryLoaded: true } : prev
-                  profileRef.current = merged(profileRef.current)
-                  setProfile(merged)
-                }
-              })
-              .catch(() => {})
+            // Defer supplementary fetch to avoid interrupting page renders on navigation
+            deferredFetchSupplementary(session.user.id, nextProfile.department_id)
           }
 
-          // Restore push subscription if it was enabled (handles PWA cold-start)
           if (nextProfile?.push_enabled && Notification.permission === 'granted') {
             restorePushSubscription().catch(() => {})
           }
 
           touchLastActive().catch(() => {})
-          // Profile loaded — release spinner
           if (mounted) setLoading(false)
         } catch (e) {
-          // Profile fetch failed/timed out. Don't release the spinner here — the
-          // INITIAL_SESSION event from onAuthStateChange will retry the fetch.
-          // Releasing loading with profile=null causes a skeleton with no user info.
-          // The 15 s safety-net ensures we never hang indefinitely.
           console.warn('[Auth] fetchProfile failed or timed out:', e)
         }
       }
@@ -277,40 +327,55 @@ export function AuthProvider({ children }) {
 
     // Safety-net covers the FULL auth lifecycle — both initializeAuth AND the
     // onAuthStateChange INITIAL_SESSION profile fetch (which can fire after
-    // initializeAuth returns and has no timeout of its own). The timer is never
-    // cleared early; setLoading(false) when loading is already false is a no-op.
-    setTimeout(() => {
+    // initializeAuth returns and has no timeout of its own). 6s is the mobile
+    // UX threshold for spinner patience. The timer is never cleared early;
+    // setLoading(false) when loading is already false is a no-op.
+    const safetyNetTimeout = setTimeout(() => {
       if (mounted) {
-        console.warn('[Auth] Initialization timed out after 15 s — clearing loading state')
+        console.warn('[Auth] Initialization timed out after 6 s — clearing loading state')
         setLoading(false)
       }
-    }, 15_000)
+    }, 6_000)
 
     initializeAuth()
 
     // Re-check auth + push subscription whenever the PWA comes back to the
     // foreground. On iOS/Android the OS can kill the process while suspended;
-    // when it relaunches, IndexedDB may be briefly inaccessible, causing the
-    // initial auth check to conclude "no session" and redirect to /login even
-    // though a valid session exists. Re-running getSession after IDB recovers
-    // restores the session without forcing a manual re-login.
+    // IndexedDB becomes inaccessible briefly, causing init to conclude "no session"
+    // even though a valid session exists. Re-running getSession after IDB recovers
+    // restores the session without forcing re-login.
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return
 
-      // Session recovery: if auth init concluded "no session" (user is null)
-      // but the user might actually be logged in (PWA cold-start IDB race),
-      // re-check. getSession reads from the storage adapter which now falls
-      // back to localStorage, so this catches both IDB-recovery and the
-      // localStorage mirror. If a session is found, onAuthStateChange fires
-      // SIGNED_IN/TOKEN_REFRESHED and the normal profile-fetch path runs.
-      if (!profileRef.current) {
+      // Session recovery: if currently showing spinner (loading) or logged out (user is null),
+      // re-check for a valid session in storage. This catches both:
+      // - IDB cold-start race (init thought no session, but IDB recovers after suspend)
+      // - PWA process kill (storage layer was never initialized)
+      if (loading || !profileRef.current) {
         supabase.auth.getSession().then(({ data }) => {
-          if (data?.session?.user && !profileRef.current) {
-            // Trigger the auth state change so the existing listener picks it up
-            supabase.auth.setSession({
-              access_token: data.session.access_token,
-              refresh_token: data.session.refresh_token,
-            }).catch(() => {})
+          if (!mounted) return
+          const resumeSession = data?.session
+          if (!resumeSession?.user) return
+
+          // Restore the session if we're still in loading state or logged out
+          if (loading || !profileRef.current) {
+            console.log('[Auth] Resuming session from visibility change')
+            setUser(resumeSession.user)
+            setJwtRole(getJwtRole(resumeSession))
+            // Fetch profile synchronously (don't defer) — user is waiting to resume
+            fetchMinimalProfile(resumeSession.user.id)
+              .then((nextProfile) => {
+                if (mounted && !profileRef.current) {
+                  profileRef.current = nextProfile
+                  setProfile(nextProfile)
+                  setLoading(false)
+                  deferredFetchSupplementary(resumeSession.user.id, nextProfile.department_id)
+                }
+              })
+              .catch((err) => {
+                console.warn('[Auth] Visibility resume failed:', err)
+                if (mounted && loading) setLoading(false)
+              })
           }
         }).catch(() => {})
       }
@@ -372,14 +437,10 @@ export function AuthProvider({ children }) {
           }
           setLoading(true)
           try {
-            const nextProfile = await withTimeout(fetchMinimalProfile(session.user.id), 8_000)
+            const nextProfile = await ensureProfileFetch(session.user.id)
             if (mounted) {
               setProfile(nextProfile)
-              fetchSupplementaryProfile(session.user.id, nextProfile.department_id)
-                .then((supplementary) => {
-                  if (mounted) setProfile((prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary } : prev)
-                })
-                .catch(() => {})
+              deferredFetchSupplementary(session.user.id, nextProfile.department_id)
             }
             touchLastActive().catch(() => {})
           } catch {
@@ -458,6 +519,10 @@ export function AuthProvider({ children }) {
 
     return () => {
       mounted = false
+      if (supplementaryTimeoutRef.current) {
+        clearTimeout(supplementaryTimeoutRef.current)
+      }
+      clearTimeout(safetyNetTimeout)
       subscription.unsubscribe()
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       if (initialSessionTimerRef.current) {

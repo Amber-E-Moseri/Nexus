@@ -177,6 +177,7 @@ export default function RegistrationDataTab({
   onEditPerson,
   onRemove,
   onConfirm,
+  onSetTransportMode,
   highlightEmail,
   onClearHighlight,
   crossCountrySubgroups,
@@ -824,10 +825,27 @@ export default function RegistrationDataTab({
                                 >
                                   <CheckCircle2 size={12} /> {p.manuallyConfirmed && !(p.hasPaid || p.hasPartialPayment || p.hasFlightInfo || p.inStateConfirmed) ? 'Confirmed Manual' : 'Confirmed'}
                                 </button>
-                                {!p.hasFlightInfo && !/manitoba|winnipeg/i.test(p.fellowship || '') && (
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#FFF3CD', color: '#B8710A', border: '1px solid #F5C842', borderRadius: 12, fontSize: 11, fontWeight: 600, padding: '2px 8px', whiteSpace: 'nowrap' }}>
-                                    <AlertCircle size={11} /> No flights
+                                {/* driving badge — out-of-province but driving */}
+                                {p.transportMode === 'driving' && !p.inStateConfirmed && (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7', borderRadius: 12, fontSize: 11, fontWeight: 600, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                                    🚗 Driving
                                   </span>
+                                )}
+                                {!p.hasFlightInfo && !/manitoba|winnipeg/i.test(p.fellowship || '') && p.transportMode !== 'bus' && p.transportMode !== 'driving' && !crossCountrySubgroups?.has(p.subgroup) && (
+                                  <>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#FFF3CD', color: '#B8710A', border: '1px solid #F5C842', borderRadius: 12, fontSize: 11, fontWeight: 600, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                                      <AlertCircle size={11} /> No flights
+                                    </span>
+                                    {onSetTransportMode && canEdit && (
+                                      <button
+                                        onClick={() => onSetTransportMode(p.registrationEmail || p.email, 'driving')}
+                                        title="Mark as driving (suppress No flights warning)"
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: 'transparent', color: C.mute, border: `1px solid ${C.line}`, borderRadius: 12, fontSize: 10, fontWeight: 600, padding: '2px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                      >
+                                        🚗 Driving
+                                      </button>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             ) : (

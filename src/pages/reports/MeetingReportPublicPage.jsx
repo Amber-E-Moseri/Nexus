@@ -166,7 +166,7 @@ export default function MeetingReportPublicPage() {
       // unauthenticated page stuck on "Loading report..." forever with no way out
       // and no error surfaced. finally guarantees loading always resolves.
       try {
-        const { data, error } = await supabase
+        const reportPromise = supabase
           .from('meeting_attendance_reports')
           .select(`
             id, meeting_id, attended_count, absent_count, expected_count, unexpected_count,
@@ -176,37 +176,32 @@ export default function MeetingReportPublicPage() {
           .eq('share_token', share_token)
           .single()
 
+        // Fetch both report and meeting in parallel; meeting failure shouldn't block report
+        const [reportResult, meetingResult] = await Promise.all([
+          reportPromise,
+          // Defer meeting fetch until report resolves (so we have meeting_id)
+          reportPromise.then((r) => {
+            if (!r.data?.meeting_id) return Promise.resolve({ data: null })
+            return supabase.from('meetings').select('id, title, date').eq('id', r.data.meeting_id).single()
+              .catch(() => ({ data: null }))
+          }),
+        ])
+
         if (!active) return
 
+        const { data, error } = reportResult
         if (error || !data) {
           setReport(null)
           setNotFound(true)
           return
         }
 
-        // Fetch meeting details separately if meeting_id exists. A failure here
-        // (deleted meeting, RLS gap) shouldn't take down the whole report — the
-        // report itself already loaded successfully.
-        let meetingData = null
-        if (data.meeting_id) {
-          try {
-            const { data: mData } = await supabase
-              .from('meetings')
-              .select('id, title, date')
-              .eq('id', data.meeting_id)
-              .single()
-            meetingData = mData
-          } catch (meetingErr) {
-            console.error('Failed to load linked meeting details for shared report:', meetingErr)
-          }
-        }
-
         if (!active) return
 
-        // Combine report and meeting data, rename by_subgroup to bySubgroup for consistency
+        // Combine report and meeting data (meeting failure is non-fatal)
         const reportWithMeeting = {
           ...data,
-          meetings: meetingData || {},
+          meetings: meetingResult?.data || {},
           bySubgroup: data.by_subgroup || null,
         }
 
