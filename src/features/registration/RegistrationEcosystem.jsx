@@ -3582,11 +3582,10 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   function printRooms() {
     const win = window.open('', '_blank');
     const totalAssigned = rooms.reduce((s, r) => s + r.people.length, 0);
-    const totalCapacity = rooms.reduce((s, r) => s + (r.capacity || 0), 0);
+    const confirmedCount = merged.length;
     const printDate = new Date().toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-    // Night labels from eventNights (top-3 by headcount, already sorted)
-    const nightLabels = eventNights.map(n => new Date(n + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }));
+    const nightLabels = eventNights.map(n => new Date(n + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }));
+    const nightShort  = eventNights.map(n => new Date(n + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }));
 
     const rows = rooms.map(room => {
       const head = room.people.find(p => p.email === room.roomHead);
@@ -3594,104 +3593,159 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
         const g = (p.gender || '').toLowerCase();
         return (g.includes('female') || g === 'f') ? 'female' : 'male';
       }));
-      const isMixed = genders.size > 1 && room.people.length > 0;
+      const isMixed    = genders.size > 1 && room.people.length > 0;
       const isAllFemale = !isMixed && genders.has('female') && room.people.length > 0;
-      const isAllMale = !isMixed && genders.has('male') && room.people.length > 0;
-      const headerBg = isAllFemale ? '#C0507A' : isAllMale ? '#2A5FA5' : isMixed ? '#B8710A' : '#4C2A92';
-      const cardBg = isAllFemale ? '#FFF0F6' : isAllMale ? '#F0F5FF' : isMixed ? '#FFF8EE' : '#F8F5FF';
-      const genderLabel = isAllFemale ? '♀ Women' : isAllMale ? '♂ Men' : isMixed ? '⚥ Mixed' : '';
+      const isAllMale   = !isMixed && genders.has('male')   && room.people.length > 0;
+      const accent  = isAllFemale ? '#A03060' : isAllMale ? '#1E4D8C' : isMixed ? '#8C5A00' : '#3D1A78';
+      const accentL = isAllFemale ? '#F8E6EF' : isAllMale ? '#E8F0FB' : isMixed ? '#FDF3E3' : '#F2EEF9';
+      const genderLabel = isAllFemale ? 'Women' : isAllMale ? 'Men' : isMixed ? 'Mixed' : '';
       const fillPct = room.capacity ? Math.round((room.people.length / room.capacity) * 100) : 0;
 
       const people = room.people.map((p, idx) => {
         const isHead = p.email === room.roomHead;
-        // Night badges
+        const initials = (p.fullName || '?').split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
         const nightBadges = eventNights.length > 0 ? eventNights.map((night, ni) => {
           const arr = p.arrivalDate, dep = p.departureDate;
-          const hasComplete = !!(arr && dep);
-          const needed = !hasComplete || (night >= arr && night < dep);
-          return `<span style="display:inline-block;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;background:${needed ? '#4C2A92' : '#EDE9F6'};color:${needed ? '#fff' : '#C4B5FD'};letter-spacing:0.3px;margin-right:2px">${nightLabels[ni]}</span>`;
+          const needed = !(arr && dep) || (night >= arr && night < dep);
+          return `<span class="nbadge" style="background:${needed ? accent : accentL};color:${needed ? '#fff' : accent}88;">${nightShort[ni]}</span>`;
         }).join('') : '';
 
-        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;${idx < room.people.length - 1 ? 'border-bottom:1px solid rgba(0,0,0,0.06)' : ''}">
-          <div style="width:28px;height:28px;border-radius:50%;background:${headerBg};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">${(p.fullName || '?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12.5px;font-weight:${isHead ? 700 : 500};color:#1A1220;display:flex;align-items:center;gap:5px">
-              ${isHead ? '<span style="color:#E6A817;font-size:11px">★</span>' : ''}
-              ${p.fullName || '?'}
-              ${isHead ? '<span style="font-size:9px;font-weight:700;color:' + headerBg + ';background:' + headerBg + '18;padding:1px 5px;border-radius:3px;letter-spacing:0.4px">HEAD</span>' : ''}
+        return `<div class="person-row${idx < room.people.length - 1 ? ' divider' : ''}">
+          <div class="avatar" style="background:${isHead ? accent : accent + '22'};color:${isHead ? '#fff' : accent};">${initials}</div>
+          <div class="person-info">
+            <div class="person-name">
+              ${isHead ? `<span class="crown">★</span>` : ''}
+              <span style="font-weight:${isHead ? 700 : 500}">${p.fullName || '?'}</span>
+              ${isHead ? `<span class="head-tag" style="color:${accent};border-color:${accent}40;background:${accentL}">Room Head</span>` : ''}
             </div>
-            ${p.designation ? `<div style="font-size:10px;color:#888;margin-top:1px">${p.designation}</div>` : ''}
-            ${nightBadges ? `<div style="margin-top:3px">${nightBadges}</div>` : ''}
+            ${p.fellowship ? `<div class="person-sub">${p.fellowship}</div>` : ''}
+            ${nightBadges ? `<div class="nights">${nightBadges}</div>` : ''}
           </div>
         </div>`;
       }).join('');
 
-      return `<div style="break-inside:avoid;border:1px solid ${headerBg}44;border-radius:12px;overflow:hidden;background:${cardBg};margin-bottom:14px">
-        <div style="background:${headerBg};padding:11px 14px;display:flex;align-items:center;justify-content:space-between">
+      return `<div class="card" style="border-left:4px solid ${accent};">
+        <div class="card-header" style="background:${accentL};border-bottom:1px solid ${accent}22;">
           <div>
-            <div style="font-weight:700;font-size:14px;color:#fff">${room.name}</div>
-            <div style="font-size:10.5px;color:rgba(255,255,255,0.75);margin-top:2px">${room.people.length} of ${room.capacity}${genderLabel ? ' · ' + genderLabel : ''}${head ? ' · Head: ' + head.fullName : ''}</div>
+            <div class="room-name">${room.name}</div>
+            <div class="room-meta" style="color:${accent}99;">
+              ${room.people.length}/${room.capacity} occupied${genderLabel ? ' · ' + genderLabel : ''}
+            </div>
           </div>
-          <div style="text-align:right">
-            <div style="font-size:18px;font-weight:800;color:#fff">${fillPct}%</div>
-            <div style="width:48px;height:3px;background:rgba(255,255,255,0.25);border-radius:2px;margin-top:3px"><div style="width:${fillPct}%;height:100%;background:#fff;border-radius:2px"></div></div>
+          <div class="fill-ring">
+            <svg width="42" height="42" viewBox="0 0 42 42">
+              <circle cx="21" cy="21" r="17" fill="none" stroke="${accent}18" stroke-width="4"/>
+              <circle cx="21" cy="21" r="17" fill="none" stroke="${accent}" stroke-width="4"
+                stroke-dasharray="${Math.round(fillPct * 1.068)} 107"
+                stroke-linecap="round" transform="rotate(-90 21 21)"/>
+            </svg>
+            <span class="fill-pct" style="color:${accent}">${fillPct}%</span>
           </div>
         </div>
-        <div style="padding:8px 14px 10px">
-          ${room.people.length === 0 ? '<div style="color:#aaa;font-size:12px;padding:8px 0;text-align:center;font-style:italic">Empty</div>' : people}
+        <div class="card-body">
+          ${room.people.length === 0
+            ? '<div class="empty">No one assigned</div>'
+            : people}
         </div>
       </div>`;
     }).join('');
 
-    win.document.write(`<!doctype html><html><head><title>Room Assignments — This Is It 2.0</title>
+    win.document.write(`<!doctype html><html><head>
+<meta charset="utf-8">
+<title>Room Assignments — This Is It 2.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F4F1EA;min-height:100vh}
-  .page{max-width:900px;margin:0 auto;padding:28px 24px}
-  .header{background:linear-gradient(135deg,#2D1B69 0%,#4C2A92 50%,#6B3FAF 100%);border-radius:14px;padding:24px 28px;margin-bottom:24px;color:#fff}
-  .header h1{font-size:26px;font-weight:800;margin-bottom:4px}
-  .header .meta{font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:16px}
-  .stats{display:flex;gap:16px;flex-wrap:wrap}
-  .stat{background:rgba(255,255,255,0.12);border-radius:8px;padding:10px 16px;text-align:center;min-width:80px}
-  .stat-val{font-size:22px;font-weight:800;line-height:1}
-  .stat-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;opacity:0.7;margin-top:3px}
-  .legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;font-size:11.5px;color:#666;align-items:center}
-  .legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .note{background:#F5F0FF;border:1px solid #C4B5FD;border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:12.5px;color:#4C2A92;white-space:pre-wrap;line-height:1.6}
-  .note strong{display:block;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;opacity:0.7}
+  body{font-family:'Inter',system-ui,sans-serif;background:#F7F5F2;color:#1A1220;min-height:100vh;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .page{max-width:940px;margin:0 auto;padding:32px 28px}
+
+  /* ── Cover header ── */
+  .cover{background:#12082A;border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 80% 0%,#4C2A92 0%,transparent 60%),radial-gradient(ellipse at 20% 100%,#2A1260 0%,transparent 55%);pointer-events:none}
+  .cover-inner{position:relative;z-index:1}
+  .event-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:8px}
+  .cover h1{font-family:'Playfair Display',Georgia,serif;font-size:34px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:4px}
+  .cover-date{font-size:12.5px;color:rgba(255,255,255,.5);margin-bottom:24px}
+  .stats-row{display:flex;gap:12px;flex-wrap:wrap}
+  .stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 18px;text-align:center;min-width:88px;backdrop-filter:blur(8px)}
+  .stat-val{font-family:'Playfair Display',Georgia,serif;font-size:26px;font-weight:700;color:#fff;line-height:1}
+  .stat-lbl{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.4);margin-top:4px}
+
+  /* ── Night legend ── */
+  .legend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:11.5px;color:#777;margin-bottom:22px;padding:10px 14px;background:#fff;border-radius:8px;border:1px solid #E8E4F0}
+  .legend-title{font-weight:600;color:#444;margin-right:4px}
+  .legend-night{display:inline-flex;align-items:center;gap:5px}
+  .nbadge{display:inline-block;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.3px;margin-right:2px}
+
+  /* ── General note ── */
+  .note{background:#F0EBF8;border-left:4px solid #7C3AED;border-radius:0 8px 8px 0;padding:14px 16px;margin-bottom:24px;font-size:12px;color:#4A2080;white-space:pre-wrap;line-height:1.7}
+  .note-label{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#7C3AED;margin-bottom:5px}
+
+  /* ── Room grid ── */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+
+  /* ── Room card ── */
+  .card{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.07),0 4px 16px rgba(0,0,0,.04);break-inside:avoid}
+  .card-header{display:flex;align-items:center;justify-content:space-between;padding:12px 15px 11px}
+  .room-name{font-family:'Playfair Display',Georgia,serif;font-size:15px;font-weight:700;color:#1A1220;line-height:1.2}
+  .room-meta{font-size:10.5px;margin-top:2px}
+  .fill-ring{position:relative;width:42px;height:42px;flex-shrink:0}
+  .fill-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700}
+  .card-body{padding:4px 15px 12px}
+  .empty{font-size:11.5px;color:#bbb;font-style:italic;text-align:center;padding:10px 0}
+
+  /* ── Person rows ── */
+  .person-row{display:flex;align-items:flex-start;gap:9px;padding:8px 0}
+  .person-row.divider{border-bottom:1px solid #F0EDF5}
+  .avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;flex-shrink:0;margin-top:1px}
+  .person-info{flex:1;min-width:0}
+  .person-name{font-size:12.5px;color:#1A1220;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+  .crown{font-size:10px;color:#D4A017}
+  .head-tag{font-size:8.5px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:3px;border:1px solid;line-height:1.6}
+  .person-sub{font-size:10px;color:#999;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nights{margin-top:4px}
+
+  /* ── Print ── */
   @media print{
     body{background:#fff}
     .page{padding:0}
-    .header{border-radius:0;margin:0 0 20px;padding:20px}
-    .grid{grid-template-columns:1fr 1fr}
+    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px}
     @page{margin:1.2cm;size:A4}
   }
 </style>
 </head><body>
 <div class="page">
-  <div class="header">
-    <h1>Room Assignments</h1>
-    <div class="meta">${printDate}</div>
-    <div class="stats">
-      <div class="stat"><div class="stat-val">${rooms.length}</div><div class="stat-lbl">Rooms</div></div>
-      <div class="stat"><div class="stat-val">${totalAssigned}</div><div class="stat-lbl">Assigned</div></div>
-      <div class="stat"><div class="stat-val">${totalCapacity - totalAssigned}</div><div class="stat-lbl">Spaces left</div></div>
-      <div class="stat"><div class="stat-val">${totalCapacity > 0 ? Math.round(totalAssigned/totalCapacity*100) : 0}%</div><div class="stat-lbl">Fill rate</div></div>
+
+  <div class="cover">
+    <div class="cover-inner">
+      <div class="event-label">This Is It 2.0 · BLW Canada Sub-Region</div>
+      <h1>Room Assignments</h1>
+      <div class="cover-date">${printDate}</div>
+      <div class="stats-row">
+        <div class="stat"><div class="stat-val">${rooms.length}</div><div class="stat-lbl">Rooms</div></div>
+        <div class="stat"><div class="stat-val">${totalAssigned}</div><div class="stat-lbl">Assigned</div></div>
+        <div class="stat"><div class="stat-val">${confirmedCount - totalAssigned}</div><div class="stat-lbl">Unassigned</div></div>
+        <div class="stat"><div class="stat-val">${confirmedCount > 0 ? Math.round(totalAssigned/confirmedCount*100) : 0}%</div><div class="stat-lbl">Placed</div></div>
+      </div>
     </div>
   </div>
+
   ${nightLabels.length > 0 ? `<div class="legend">
-    <span><span class="legend-dot" style="background:#4C2A92"></span>Night needed</span>
-    <span><span class="legend-dot" style="background:#EDE9F6"></span>Not staying</span>
-    <span style="margin-left:8px">Nights: ${nightLabels.join(' · ')}</span>
+    <span class="legend-title">Stay nights:</span>
+    ${nightLabels.map((lbl, i) => `<span class="legend-night"><span class="nbadge" style="background:#3D1A78;color:#fff;">${nightShort[i]}</span>${lbl}</span>`).join('')}
+    <span style="margin-left:auto;font-size:11px;color:#bbb">★ = Room head</span>
   </div>` : ''}
-  ${roomsNote ? `<div class="note"><strong>Special requests / notes</strong>${roomsNote}</div>` : ''}
+
+  ${roomsNote ? `<div class="note"><div class="note-label">Special Requests &amp; Notes</div>${roomsNote}</div>` : ''}
+
   <div class="grid">${rows}</div>
+
 </div>
 </body></html>`);
     win.document.close();
     win.focus();
-    setTimeout(() => win.print(), 400);
+    setTimeout(() => win.print(), 600);
   }
 
   // Room badges always show the core 3-night block (the event's real Fri/Sat/Sun),
