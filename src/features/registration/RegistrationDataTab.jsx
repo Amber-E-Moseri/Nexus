@@ -825,11 +825,15 @@ export default function RegistrationDataTab({
                                 >
                                   <CheckCircle2 size={12} /> {p.manuallyConfirmed && !(p.hasPaid || p.hasPartialPayment || p.hasFlightInfo || p.inStateConfirmed) ? 'Confirmed Manual' : 'Confirmed'}
                                 </button>
-                                {/* driving badge — out-of-province but driving */}
+                                {/* driving badge — out-of-province but driving; click to unmark */}
                                 {p.transportMode === 'driving' && !p.inStateConfirmed && (
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7', borderRadius: 12, fontSize: 11, fontWeight: 600, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                                  <button
+                                    onClick={() => onSetTransportMode && canEdit && onSetTransportMode(p.registrationEmail || p.email, null)}
+                                    title={canEdit ? 'Click to unmark driving' : 'Driving'}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7', borderRadius: 12, fontSize: 11, fontWeight: 600, padding: '2px 8px', whiteSpace: 'nowrap', cursor: canEdit ? 'pointer' : 'default' }}
+                                  >
                                     🚗 Driving
-                                  </span>
+                                  </button>
                                 )}
                                 {!p.hasFlightInfo && !p.inStateConfirmed && !/manitoba|winnipeg/i.test(p.fellowship || '') && p.transportMode !== 'bus' && p.transportMode !== 'driving' && !crossCountrySubgroups?.has(p.subgroup) && (
                                   <>
