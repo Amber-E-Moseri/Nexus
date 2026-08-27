@@ -23,12 +23,15 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
 interface RoomPerson { email: string; fullName: string; fellowship?: string }
 interface Room { name: string; people: RoomPerson[]; roomHead?: string }
 
-function renderRoomEmail(recipientName: string, room: Room, eventName: string): string {
+function renderRoomEmail(recipientName: string, room: Room, eventName: string, customNote?: string): string {
   const head = room.people.find(p => p.email === room.roomHead)
   const roommates = room.people.filter(p => p.email !== (head?.email ?? null))
   const headLine = head ? `<p><strong>Room head:</strong> ${head.fullName}</p>` : ''
   const roommateLines = roommates.length
     ? `<p><strong>Your roommates:</strong></p><ul>${roommates.map(p => `<li>${p.fullName}${p.fellowship ? ` <span style="color:#9E9488;font-size:13px">(${p.fellowship})</span>` : ''}</li>`).join('')}</ul>`
+    : ''
+  const noteBlock = customNote
+    ? `<p style="margin-bottom:16px;white-space:pre-wrap">${customNote.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`
     : ''
 
   return `<!DOCTYPE html>
@@ -55,6 +58,7 @@ function renderRoomEmail(recipientName: string, room: Room, eventName: string): 
       <div class="header"><div class="logo">BLW CAN Nexus</div></div>
       <div class="body">
         <p>Hi ${recipientName},</p>
+        ${noteBlock}
         <p>Your room assignment for <strong>${eventName}</strong> is ready!</p>
         <div class="room-badge">🏠 ${room.name}</div>
         ${headLine}
@@ -89,16 +93,17 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed' })
 
   try {
-    const { rooms, eventName = 'This Is It 2.0' } = await req.json()
+    const { rooms, eventName = 'This Is It 2.0', subject, customNote } = await req.json()
     if (!Array.isArray(rooms)) return jsonResponse(400, { error: 'rooms array is required' })
 
+    const emailSubject = subject || `Your room assignment — ${eventName}`
     const results: { email: string; ok: boolean; error?: string }[] = []
 
     for (const room of rooms as Room[]) {
-      for (const person of room.people) {
+      for (const person of (room.people || [])) {
         if (!person.email || person.email.startsWith('UNMATCHED:')) continue
-        const html = renderRoomEmail(person.fullName || person.email, room, eventName)
-        const result = await sendOne(person.email, `Your room assignment — ${eventName}`, html)
+        const html = renderRoomEmail(person.fullName || person.email, room, eventName, customNote)
+        const result = await sendOne(person.email, emailSubject, html)
         results.push({ email: person.email, ...result })
       }
     }

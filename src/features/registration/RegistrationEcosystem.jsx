@@ -1332,7 +1332,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   function handleUpdatePersonNote(roomId, email, note) {
     const updated = rooms.map(r =>
       r.id === roomId
-        ? { ...r, people: r.people.map(p => p.email === email ? { ...p, specialRequest: note } : p) }
+        ? { ...r, people: (r.people || []).map(p => p.email === email ? { ...p, specialRequest: note } : p) }
         : r
     );
     setRooms(updated);
@@ -1369,8 +1369,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     const targetRoom = rooms.find(r => r.id === roomId);
     if (!targetRoom) return;
 
-    const alreadyHere = targetRoom.people.some(p => p.email === person.email);
-    if (!alreadyHere && targetRoom.people.length >= targetRoom.capacity) {
+    const alreadyHere = (targetRoom.people || []).some(p => p.email === person.email);
+    if (!alreadyHere && (targetRoom.people || []).length >= targetRoom.capacity) {
       // Previously this fell through to setRooms/saveRoomData unconditionally, which
       // still removed the person from wherever they currently were — dropping someone
       // onto a full room silently unassigned them with no room gained. Bail out first.
@@ -1381,7 +1381,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     // Mixed-gender rooms are allowed (some room mates are married couples) but not
     // silent — warn once so it's a deliberate choice, not an accidental drag.
     const personGender = (person.gender || '').toLowerCase();
-    const hasOppositeGender = personGender && targetRoom.people.some(p => {
+    const hasOppositeGender = personGender && (targetRoom.people || []).some(p => {
       if (p.email === person.email) return false;
       const g = (p.gender || '').toLowerCase();
       return g && g !== personGender;
@@ -1396,8 +1396,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     const updated = rooms.map(r => ({
       ...r,
       people: r.id === roomId
-        ? [...r.people.filter(p => p.email !== person.email), person]
-        : r.people.filter(p => p.email !== person.email),
+        ? [...(r.people || []).filter(p => p.email !== person.email), person]
+        : (r.people || []).filter(p => p.email !== person.email),
     }));
     setRooms(updated);
     saveRoomData(updated, numRooms, peoplePerRoom);
@@ -1406,7 +1406,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   function handleRemovePersonFromRoom(person, roomId) {
     const updated = rooms.map(r =>
       r.id === roomId
-        ? { ...r, people: r.people.filter(p => p.email !== person.email) }
+        ? { ...r, people: (r.people || []).filter(p => p.email !== person.email) }
         : r
     );
     setRooms(updated);
@@ -4151,18 +4151,24 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   const [bulkCapacity, setBulkCapacity] = useState(2);
   const [sendingRoomEmails, setSendingRoomEmails] = useState(false);
   const [roomEmailResult, setRoomEmailResult] = useState(null);
+  const [showRoomEmailModal, setShowRoomEmailModal] = useState(false);
+  const [roomEmailSubject, setRoomEmailSubject] = useState('Your room assignment — This Is It 2.0');
+  const [roomEmailNote, setRoomEmailNote] = useState('');
 
-  async function handleSendRoomEmails() {
+  async function doSendRoomEmails() {
     if (sendingRoomEmails) return;
     const assignedRooms = rooms.filter(r => r.people && r.people.length > 0);
-    const total = assignedRooms.reduce((s, r) => s + r.people.filter(p => p.email && !p.email.startsWith('UNMATCHED:')).length, 0);
-    if (total === 0) { alert('No assigned registrants with valid email addresses.'); return; }
-    if (!window.confirm(`Send room assignment emails to ${total} registrant${total !== 1 ? 's' : ''}?`)) return;
     setSendingRoomEmails(true);
     setRoomEmailResult(null);
+    setShowRoomEmailModal(false);
     try {
       const { data, error } = await supabase.functions.invoke('send-room-assignments', {
-        body: { rooms: assignedRooms, eventName: 'This Is It 2.0' },
+        body: {
+          rooms: assignedRooms,
+          eventName: 'This Is It 2.0',
+          subject: roomEmailSubject.trim() || undefined,
+          customNote: roomEmailNote.trim() || undefined,
+        },
       });
       if (error) throw error;
       setRoomEmailResult(data);
@@ -4172,6 +4178,30 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
     } finally {
       setSendingRoomEmails(false);
     }
+  }
+
+  function handleExportRoomsMD() {
+    const lines = ['# Room Assignments — This Is It 2.0', ''];
+    rooms.forEach(room => {
+      const people = room.people || [];
+      lines.push(`## ${room.name} (${people.length}/${room.capacity})`);
+      if (people.length === 0) {
+        lines.push('_No one assigned_');
+      } else {
+        people.forEach(p => {
+          const head = p.email === room.roomHead ? ' ⭐' : '';
+          lines.push(`- ${p.fullName || p.email}${p.fellowship ? ` (${p.fellowship})` : ''}${head}`);
+        });
+      }
+      lines.push('');
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'room-assignments.md';
+    a.click();
+    URL.revokeObjectURL(url);
   }
   const [draggedPerson, setDraggedPerson] = useState(null);
   const [selectedPerson, setSelectedPerson] = useState(null); // mobile tap-to-assign
@@ -4387,7 +4417,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
       .sort();
   }, [merged]);
 
-  const assignedEmails = new Set(rooms.flatMap(r => r.people.map(p => p.email)));
+  const assignedEmails = new Set(rooms.flatMap(r => (r.people || []).map(p => p.email)));
   const unassigned = merged.filter(m => !assignedEmails.has(m.email));
   const byGender = { male: [], female: [] };
   unassigned.forEach(p => {
@@ -4434,7 +4464,13 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
             ]);
           }}><Download size={13} /> CSV</Btn>
           <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0}><Download size={13} /> PDF</Btn>
-          <Btn tone="ghost" small onClick={handleSendRoomEmails} disabled={rooms.length === 0 || sendingRoomEmails}><Mail size={13} /> {sendingRoomEmails ? 'Sending…' : 'Email rooms'}</Btn>
+          <Btn tone="ghost" small onClick={handleExportRoomsMD} disabled={rooms.length === 0}><Download size={13} /> MD</Btn>
+          <Btn tone="ghost" small onClick={() => {
+            const assignedRooms = rooms.filter(r => r.people && r.people.length > 0);
+            const total = assignedRooms.reduce((s, r) => s + (r.people || []).filter(p => p.email && !p.email.startsWith('UNMATCHED:')).length, 0);
+            if (total === 0) { alert('No assigned registrants with valid email addresses.'); return; }
+            setShowRoomEmailModal(true);
+          }} disabled={rooms.length === 0 || sendingRoomEmails}><Mail size={13} /> {sendingRoomEmails ? 'Sending…' : 'Email rooms'}</Btn>
         </div>
       </div>
 
@@ -4445,6 +4481,44 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
           <button onClick={() => setRoomEmailResult(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#9E9488', fontSize: 15, lineHeight: 1 }}>×</button>
         </div>
       )}
+
+      {showRoomEmailModal && (() => {
+        const assignedRooms = rooms.filter(r => r.people && r.people.length > 0);
+        const recipients = assignedRooms.flatMap(r => (r.people || []).filter(p => p.email && !p.email.startsWith('UNMATCHED:')));
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={e => { if (e.target === e.currentTarget) setShowRoomEmailModal(false); }}>
+            <div style={{ background: '#fff', borderRadius: 14, padding: 28, width: '100%', maxWidth: 500, boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>Email room assignments</div>
+                <button onClick={() => setShowRoomEmailModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9E9488', lineHeight: 1 }}>×</button>
+              </div>
+              <div style={{ fontSize: 13, color: '#6B5C8F', marginBottom: 16 }}>
+                Sending to <strong>{recipients.length}</strong> registrant{recipients.length !== 1 ? 's' : ''} across {assignedRooms.length} room{assignedRooms.length !== 1 ? 's' : ''}
+              </div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#4A4641', marginBottom: 4 }}>Subject</label>
+              <input
+                value={roomEmailSubject}
+                onChange={e => setRoomEmailSubject(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '1px solid #DDD', borderRadius: 7, fontSize: 13, marginBottom: 14 }}
+              />
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#4A4641', marginBottom: 4 }}>Personal note <span style={{ fontWeight: 400, color: '#9E9488' }}>(optional — appears above the room card)</span></label>
+              <textarea
+                value={roomEmailNote}
+                onChange={e => setRoomEmailNote(e.target.value)}
+                placeholder="e.g. We're excited to welcome you! Please reach out if you have any questions about your accommodation."
+                rows={4}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '1px solid #DDD', borderRadius: 7, fontSize: 13, resize: 'vertical', marginBottom: 18 }}
+              />
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <Btn tone="ghost" small onClick={() => setShowRoomEmailModal(false)}>Cancel</Btn>
+                <Btn tone="primary" small onClick={doSendRoomEmails} disabled={sendingRoomEmails}>
+                  <Mail size={13} /> Send to {recipients.length}
+                </Btn>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* night highlight feature banner */}
       {!nightBannerDismissed && (
