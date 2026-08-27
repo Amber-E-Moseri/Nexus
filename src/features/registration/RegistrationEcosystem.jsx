@@ -4154,17 +4154,30 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   const [showRoomEmailModal, setShowRoomEmailModal] = useState(false);
   const [roomEmailSubject, setRoomEmailSubject] = useState('Your room assignment — This Is It 2.0');
   const [roomEmailNote, setRoomEmailNote] = useState('');
+  const [roomEmailSelected, setRoomEmailSelected] = useState(new Set()); // emails checked in modal
+
+  function openRoomEmailModal() {
+    const assignedRooms = rooms.filter(r => r.people && r.people.length > 0);
+    const all = assignedRooms.flatMap(r => r.people.filter(p => p.email && !p.email.startsWith('UNMATCHED:')).map(p => p.email));
+    if (all.length === 0) { alert('No assigned registrants with valid email addresses.'); return; }
+    setRoomEmailSelected(new Set(all));
+    setShowRoomEmailModal(true);
+  }
 
   async function doSendRoomEmails() {
     if (sendingRoomEmails) return;
-    const assignedRooms = rooms.filter(r => r.people && r.people.length > 0);
+    // Build rooms filtered to only the selected emails
+    const filteredRooms = rooms
+      .map(r => ({ ...r, people: r.people.filter(p => roomEmailSelected.has(p.email)) }))
+      .filter(r => r.people.length > 0);
+    if (filteredRooms.length === 0) { alert('No recipients selected.'); return; }
     setSendingRoomEmails(true);
     setRoomEmailResult(null);
     setShowRoomEmailModal(false);
     try {
       const { data, error } = await supabase.functions.invoke('send-room-assignments', {
         body: {
-          rooms: assignedRooms,
+          rooms: filteredRooms,
           eventName: 'This Is It 2.0',
           subject: roomEmailSubject.trim() || undefined,
           customNote: roomEmailNote.trim() || undefined,
@@ -4465,12 +4478,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
           }}><Download size={13} /> CSV</Btn>
           <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0}><Download size={13} /> PDF</Btn>
           <Btn tone="ghost" small onClick={handleExportRoomsMD} disabled={rooms.length === 0}><Download size={13} /> MD</Btn>
-          <Btn tone="ghost" small onClick={() => {
-            const assignedRooms = rooms.filter(r => r.people && r.people.length > 0);
-            const total = assignedRooms.reduce((s, r) => s + (r.people || []).filter(p => p.email && !p.email.startsWith('UNMATCHED:')).length, 0);
-            if (total === 0) { alert('No assigned registrants with valid email addresses.'); return; }
-            setShowRoomEmailModal(true);
-          }} disabled={rooms.length === 0 || sendingRoomEmails}><Mail size={13} /> {sendingRoomEmails ? 'Sending…' : 'Email rooms'}</Btn>
+          <Btn tone="ghost" small onClick={openRoomEmailModal} disabled={rooms.length === 0 || sendingRoomEmails}><Mail size={13} /> {sendingRoomEmails ? 'Sending…' : 'Email rooms'}</Btn>
         </div>
       </div>
 
@@ -4484,36 +4492,91 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
 
       {showRoomEmailModal && (() => {
         const assignedRooms = rooms.filter(r => r.people && r.people.length > 0);
-        const recipients = assignedRooms.flatMap(r => (r.people || []).filter(p => p.email && !p.email.startsWith('UNMATCHED:')));
+        const allRecipients = assignedRooms.flatMap(r => r.people.filter(p => p.email && !p.email.startsWith('UNMATCHED:')));
+        const allEmails = allRecipients.map(p => p.email);
+        const allChecked = allEmails.every(e => roomEmailSelected.has(e));
+        const noneChecked = allEmails.every(e => !roomEmailSelected.has(e));
+        const selectedCount = allEmails.filter(e => roomEmailSelected.has(e)).length;
+
+        function toggleAll() {
+          if (allChecked) setRoomEmailSelected(new Set());
+          else setRoomEmailSelected(new Set(allEmails));
+        }
+        function toggleEmail(email) {
+          setRoomEmailSelected(prev => {
+            const next = new Set(prev);
+            if (next.has(email)) next.delete(email); else next.add(email);
+            return next;
+          });
+        }
+
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={e => { if (e.target === e.currentTarget) setShowRoomEmailModal(false); }}>
-            <div style={{ background: '#fff', borderRadius: 14, padding: 28, width: '100%', maxWidth: 500, boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+            <div style={{ background: '#fff', borderRadius: 14, padding: 28, width: '100%', maxWidth: 520, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexShrink: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 16 }}>Email room assignments</div>
                 <button onClick={() => setShowRoomEmailModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9E9488', lineHeight: 1 }}>×</button>
               </div>
-              <div style={{ fontSize: 13, color: '#6B5C8F', marginBottom: 16 }}>
-                Sending to <strong>{recipients.length}</strong> registrant{recipients.length !== 1 ? 's' : ''} across {assignedRooms.length} room{assignedRooms.length !== 1 ? 's' : ''}
-              </div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#4A4641', marginBottom: 4 }}>Subject</label>
+
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#4A4641', marginBottom: 4, flexShrink: 0 }}>Subject</label>
               <input
                 value={roomEmailSubject}
                 onChange={e => setRoomEmailSubject(e.target.value)}
-                style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '1px solid #DDD', borderRadius: 7, fontSize: 13, marginBottom: 14 }}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '1px solid #DDD', borderRadius: 7, fontSize: 13, marginBottom: 12, flexShrink: 0 }}
               />
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#4A4641', marginBottom: 4 }}>Personal note <span style={{ fontWeight: 400, color: '#9E9488' }}>(optional — appears above the room card)</span></label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#4A4641', marginBottom: 4, flexShrink: 0 }}>Personal note <span style={{ fontWeight: 400, color: '#9E9488' }}>(optional)</span></label>
               <textarea
                 value={roomEmailNote}
                 onChange={e => setRoomEmailNote(e.target.value)}
-                placeholder="e.g. We're excited to welcome you! Please reach out if you have any questions about your accommodation."
-                rows={4}
-                style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '1px solid #DDD', borderRadius: 7, fontSize: 13, resize: 'vertical', marginBottom: 18 }}
+                placeholder="Appears above the room card in every email."
+                rows={3}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '1px solid #DDD', borderRadius: 7, fontSize: 13, resize: 'vertical', marginBottom: 14, flexShrink: 0 }}
               />
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <Btn tone="ghost" small onClick={() => setShowRoomEmailModal(false)}>Cancel</Btn>
-                <Btn tone="primary" small onClick={doSendRoomEmails} disabled={sendingRoomEmails}>
-                  <Mail size={13} /> Send to {recipients.length}
-                </Btn>
+
+              {/* Recipient checklist */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexShrink: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#4A4641' }}>Recipients</div>
+                <button onClick={toggleAll} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#4C2A92', padding: 0 }}>
+                  {allChecked ? 'Deselect all' : 'Select all'}
+                </button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #EDE9E3', borderRadius: 8, minHeight: 0 }}>
+                {assignedRooms.map(room => {
+                  const validPeople = room.people.filter(p => p.email && !p.email.startsWith('UNMATCHED:'));
+                  if (validPeople.length === 0) return null;
+                  return (
+                    <div key={room.id}>
+                      <div style={{ padding: '6px 12px', background: '#F8F6F3', fontSize: 11, fontWeight: 700, color: '#9E9488', borderBottom: '1px solid #EDE9E3', position: 'sticky', top: 0 }}>
+                        {room.name}
+                      </div>
+                      {validPeople.map(p => (
+                        <label key={p.email} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px', cursor: 'pointer', borderBottom: '1px solid #F5F3F0', fontSize: 13 }}>
+                          <input
+                            type="checkbox"
+                            checked={roomEmailSelected.has(p.email)}
+                            onChange={() => toggleEmail(p.email)}
+                            style={{ width: 14, height: 14, accentColor: '#4C2A92', flexShrink: 0 }}
+                          />
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ fontWeight: 500 }}>{p.fullName || p.email}</span>
+                            {p.fellowship && <span style={{ color: '#9E9488', marginLeft: 6, fontSize: 12 }}>{p.fellowship}</span>}
+                          </span>
+                          <span style={{ fontSize: 11, color: '#C4B5FD' }}>{p.email}</span>
+                        </label>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginTop: 14, flexShrink: 0 }}>
+                <div style={{ fontSize: 12, color: '#9E9488' }}>{selectedCount} of {allRecipients.length} selected</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Btn tone="ghost" small onClick={() => setShowRoomEmailModal(false)}>Cancel</Btn>
+                  <Btn tone="primary" small onClick={doSendRoomEmails} disabled={sendingRoomEmails || selectedCount === 0}>
+                    <Mail size={13} /> Send to {selectedCount}
+                  </Btn>
+                </div>
               </div>
             </div>
           </div>
