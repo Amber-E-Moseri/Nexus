@@ -1082,7 +1082,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       // leave local state as-is (5 empty rooms default) without writing to
       // DB, so a transient error never overwrites saved assignments.
       if (roomConfig) {
-        setRooms(roomConfig.rooms || []);
+        setRooms((roomConfig.rooms || []).map(r => ({ ...r, people: r.people || [] })));
         setNumRooms(roomConfig.numRooms || 5);
         setPeoplePerRoom(roomConfig.peoplePerRoom || 2);
         if (roomConfig.roomsNote != null) setRoomsNote(roomConfig.roomsNote);
