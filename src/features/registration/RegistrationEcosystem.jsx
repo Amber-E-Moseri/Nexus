@@ -2927,7 +2927,8 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
   const missingFlight = useMemo(() =>
     filtered.filter(r =>
       !r.arrivalFlight && !r.departureFlight && !r.arrivalDate && !r.departureDate &&
-      !crossCountrySubgroups?.has(r.subgroup)
+      !crossCountrySubgroups?.has(r.subgroup) &&
+      r.transportMode !== 'driving' && r.transportMode !== 'bus'
     ),
     [filtered, crossCountrySubgroups]);
 
