@@ -3740,7 +3740,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
         <div>
           <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 18, margin: '0 0 3px', fontWeight: 700 }}>Room Assignments</h2>
           <div style={{ fontSize: 12, color: C.mute }}>
-            {unassigned.length} unassigned · {rooms.length} rooms · {totalAssigned}/{totalCapacity} filled
+            {unassigned.length} unassigned · {rooms.length} rooms · {totalAssigned}/{merged.length} assigned
             {isMobile ? ' · tap name then tap room' : ' · drag names into rooms'}
           </div>
         </div>
