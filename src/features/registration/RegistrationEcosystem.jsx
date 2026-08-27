@@ -1752,7 +1752,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
           />
         )}
         {tab === 'summary' && <SummaryTab merged={merged} />}
-        {tab === 'checkin' && <CheckInTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onCheckIn: handleCheckIn }} />}
+        {tab === 'checkin' && <CheckInTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onCheckIn: handleCheckIn, rooms, onToggleKeyGiven: (roomId) => { const updated = rooms.map(r => r.id === roomId ? { ...r, keyGiven: !r.keyGiven } : r); setRooms(updated); saveRoomData(updated, numRooms, peoplePerRoom); } }} />}
         {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onEditReg: setEditingReg }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, role, viewDefaults: eventConfig.discipleship_view_defaults, onSaveViewDefaults: async (defaults) => { if (!config?.id) return; await supabase.from('event_configs').update({ discipleship_view_defaults: defaults }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
@@ -1793,14 +1793,20 @@ function HoverNameList({ people = [], color }) {
 }
 
 // ============ CHECK-IN ============
-function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onCheckIn }) {
+function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onCheckIn, rooms = [], onToggleKeyGiven }) {
   const [saving, setSaving] = useState(new Set());
+  const [view, setView] = useState('person'); // 'person' | 'room'
+
+  const checkedInByEmail = useMemo(() => {
+    const m = {};
+    merged.forEach(r => { if (r.email) m[r.email.toLowerCase()] = r; });
+    return m;
+  }, [merged]);
 
   const filtered = useMemo(() => {
-    const base = isLimited ? merged : merged;
-    if (subgroupFilter === 'All') return base;
-    return base.filter(r => r.subgroup === subgroupFilter);
-  }, [merged, subgroupFilter, isLimited]);
+    if (subgroupFilter === 'All') return merged;
+    return merged.filter(r => r.subgroup === subgroupFilter);
+  }, [merged, subgroupFilter]);
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
     if (!!a.checkedInAt !== !!b.checkedInAt) return a.checkedInAt ? 1 : -1;
@@ -1817,65 +1823,166 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
     setSaving(s => { const n = new Set(s); n.delete(reg.id); return n; });
   }
 
+  async function toggleCheckInByEmail(email) {
+    const reg = checkedInByEmail[email?.toLowerCase()];
+    if (!reg) return;
+    await toggleCheckIn(reg);
+  }
+
+  const roomsWithPeople = rooms.filter(r => r.people && r.people.length > 0);
+  const keysGiven = roomsWithPeople.filter(r => r.keyGiven).length;
+
   return (
     <div>
-      <div className="reg-grid-3" style={{ marginBottom: 20 }}>
+      <div className="reg-grid-3" style={{ marginBottom: 16 }}>
         <SummaryCard label="Checked in" current={checkedInCount} target={total}
           pct={total ? Math.round((checkedInCount / total) * 100) : 0} />
         <SummaryCard label="Still expected" current={total - checkedInCount} target={total} noBar />
+        {roomsWithPeople.length > 0 && (
+          <SummaryCard label="Keys given" current={keysGiven} target={roomsWithPeople.length}
+            pct={roomsWithPeople.length ? Math.round((keysGiven / roomsWithPeople.length) * 100) : 0} />
+        )}
       </div>
 
-      {!isLimited && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-          {['All', ...subgroups].map(sg => (
-            <button key={sg} onClick={() => setSubgroupFilter(sg)} style={{
-              padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
-              background: subgroupFilter === sg ? '#4C2A92' : '#F2EEF9',
-              color: subgroupFilter === sg ? '#fff' : '#4C2A92',
-            }}>{sg}</button>
-          ))}
-        </div>
+      {/* View toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        {[{ k: 'person', label: 'By person' }, { k: 'room', label: 'By room' }].map(({ k, label }) => (
+          <button key={k} onClick={() => setView(k)} style={{
+            padding: '5px 16px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
+            background: view === k ? '#4C2A92' : '#F2EEF9',
+            color: view === k ? '#fff' : '#4C2A92',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {view === 'person' && (
+        <>
+          {!isLimited && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+              {['All', ...subgroups].map(sg => (
+                <button key={sg} onClick={() => setSubgroupFilter(sg)} style={{
+                  padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
+                  background: subgroupFilter === sg ? '#4C2A92' : '#F2EEF9',
+                  color: subgroupFilter === sg ? '#fff' : '#4C2A92',
+                }}>{sg}</button>
+              ))}
+            </div>
+          )}
+          <Card style={{ padding: 0 }}>
+            <table className="sg-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Subgroup</th>
+                  <th>Fellowship</th>
+                  <th style={{ textAlign: 'center' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map(r => (
+                  <tr key={r.id || r.email} style={{ opacity: saving.has(r.id) ? 0.6 : 1, transition: 'opacity .15s' }}>
+                    <td style={{ fontWeight: 600 }}>{r.fullName}</td>
+                    <td style={{ color: C.mute, fontSize: 12 }}>{r.subgroup}</td>
+                    <td style={{ color: C.mute, fontSize: 12 }}>{r.fellowship}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {r.checkedInAt ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                          <Pill tone="green">✓ {new Date(r.checkedInAt).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' })}</Pill>
+                          <button onClick={() => toggleCheckIn(r)} disabled={saving.has(r.id)}
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: C.mute, fontSize: 11, padding: '2px 4px' }}
+                            title="Undo">Undo</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => toggleCheckIn(r)} disabled={saving.has(r.id)}
+                          style={{ padding: '5px 14px', borderRadius: 6, border: `1px solid ${C.line}`, background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: C.ink }}>
+                          Check in
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {sorted.length === 0 && (
+                  <tr><td colSpan={4} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>No registrants to show.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </Card>
+        </>
       )}
 
-      <Card style={{ padding: 0 }}>
-        <table className="sg-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Subgroup</th>
-              <th>Fellowship</th>
-              <th style={{ textAlign: 'center' }}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(r => (
-              <tr key={r.id || r.email} style={{ opacity: saving.has(r.id) ? 0.6 : 1, transition: 'opacity .15s' }}>
-                <td style={{ fontWeight: 600 }}>{r.fullName}</td>
-                <td style={{ color: C.mute, fontSize: 12 }}>{r.subgroup}</td>
-                <td style={{ color: C.mute, fontSize: 12 }}>{r.fellowship}</td>
-                <td style={{ textAlign: 'center' }}>
-                  {r.checkedInAt ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                      <Pill tone="green">✓ {new Date(r.checkedInAt).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' })}</Pill>
-                      <button onClick={() => toggleCheckIn(r)} disabled={saving.has(r.id)}
-                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: C.mute, fontSize: 11, padding: '2px 4px' }}
-                        title="Undo">Undo</button>
+      {view === 'room' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {roomsWithPeople.length === 0 && (
+            <div style={{ color: C.mute, textAlign: 'center', padding: 32 }}>No rooms with assigned people yet.</div>
+          )}
+          {roomsWithPeople.map(room => {
+            const people = room.people || [];
+            const arrivedCount = people.filter(p => checkedInByEmail[p.email?.toLowerCase()]?.checkedInAt).length;
+            const allArrived = arrivedCount === people.length && people.length > 0;
+            const statusColor = allArrived && room.keyGiven ? '#16A34A' : arrivedCount > 0 ? '#D97706' : '#9E9488';
+            const statusBg   = allArrived && room.keyGiven ? '#F0FFF4' : arrivedCount > 0 ? '#FFFBEB' : '#F8F6F3';
+            return (
+              <div key={room.id} style={{ border: `1.5px solid ${statusColor}44`, borderRadius: 10, overflow: 'hidden', background: statusBg }}>
+                {/* Room header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: C.ink }}>{room.name}</div>
+                    <div style={{ fontSize: 12, color: statusColor, fontWeight: 600, marginTop: 2 }}>
+                      {arrivedCount}/{people.length} arrived
                     </div>
-                  ) : (
-                    <button onClick={() => toggleCheckIn(r)} disabled={saving.has(r.id)}
-                      style={{ padding: '5px 14px', borderRadius: 6, border: `1px solid ${C.line}`, background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: C.ink }}>
-                      Check in
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {sorted.length === 0 && (
-              <tr><td colSpan={4} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>No registrants to show.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
+                  </div>
+                  {/* Key given toggle */}
+                  <button
+                    onClick={() => onToggleKeyGiven(room.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '6px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      border: `1.5px solid ${room.keyGiven ? '#16A34A' : C.line}`,
+                      background: room.keyGiven ? '#DCFCE7' : '#fff',
+                      color: room.keyGiven ? '#16A34A' : C.mute,
+                      transition: 'all .15s',
+                    }}
+                  >
+                    🔑 {room.keyGiven ? 'Key given' : 'Key pending'}
+                  </button>
+                </div>
+                {/* People list */}
+                <div style={{ borderTop: `1px solid ${statusColor}33`, background: '#fff' }}>
+                  {people.map((p, i) => {
+                    const reg = checkedInByEmail[p.email?.toLowerCase()];
+                    const isIn = !!reg?.checkedInAt;
+                    const isSaving = reg && saving.has(reg.id);
+                    return (
+                      <div key={p.email || i} style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px',
+                        borderBottom: i < people.length - 1 ? `1px solid ${C.line}` : 'none',
+                        opacity: isSaving ? 0.6 : 1, transition: 'opacity .15s',
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13 }}>{p.fullName || p.email}</div>
+                          {p.fellowship && <div style={{ fontSize: 11, color: C.mute }}>{p.fellowship}</div>}
+                        </div>
+                        {isIn ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Pill tone="green">✓ {new Date(reg.checkedInAt).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' })}</Pill>
+                            {reg && <button onClick={() => toggleCheckIn(reg)} disabled={isSaving}
+                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: C.mute, fontSize: 11 }}>Undo</button>}
+                          </div>
+                        ) : (
+                          <button onClick={() => reg && toggleCheckIn(reg)} disabled={isSaving || !reg}
+                            style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${C.line}`, background: '#fff', cursor: reg ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, color: reg ? C.ink : C.mute }}>
+                            {reg ? 'Check in' : 'No record'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
