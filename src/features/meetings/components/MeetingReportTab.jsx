@@ -1656,6 +1656,27 @@ export default function MeetingReportTab() {
         }
 
         if (rerunTarget?.id) {
+          // Reconstruct extraction_result from CMP attendance data so public report page
+          // has consistent data (counts match names; old AI extraction doesn't linger)
+          const reconstructedExtraction = {
+            content_type: 'meeting',
+            confidence: 1.0,
+            summary: result.summary || 'CMP attendance report',
+            decisions: [],
+            action_items: [],
+            open_items: [],
+            scripture_references: [],
+            key_topics: [],
+            detected_entities: {},
+            data_issues: [],
+            cleaned_transcript: null,
+            chapters: [],
+            present_names: result.present.map((person) => person.name),
+            absent_names: result.absent.map((person) => person.name),
+            unexpected_names: result.unexpected.map((person) => person.name),
+            detailed_notes: null,
+          }
+
           const { data, error } = await supabase.functions.invoke('service-attendees', {
             body: {
               action: 'update_report',
@@ -1674,6 +1695,7 @@ export default function MeetingReportTab() {
               subgroup_filter: result.subgroupFilter,
               by_subgroup: result.bySubgroup || null,
               attendance_source: inputMode === 'cmp' && cmpSelected ? { type: 'cmp', service: cmpSelected } : null,
+              extraction_result: reconstructedExtraction,
               },
             },
           })
