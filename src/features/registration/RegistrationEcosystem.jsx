@@ -2019,12 +2019,12 @@ function OverviewIssues({ merged }) {
 
   const issues = useMemo(() => {
     const noTransport = merged.filter(r =>
-      !r.inStateConfirmed && !r.transportMode && !r.arrivalFlight &&
+      !r.absent && !r.inStateConfirmed && !r.transportMode && !r.arrivalFlight &&
       !LOCAL_FELLOWSHIP_PATTERN.test(r.fellowship || '')
     );
-    const noGender = merged.filter(r => !(r.gender || '').trim());
+    const noGender = merged.filter(r => !r.absent && !(r.gender || '').trim());
     const missingFlight = merged.filter(r =>
-      !r.inStateConfirmed && !LOCAL_FELLOWSHIP_PATTERN.test(r.fellowship || '') &&
+      !r.absent && !r.inStateConfirmed && !LOCAL_FELLOWSHIP_PATTERN.test(r.fellowship || '') &&
       (r.arrivalDate || r.departureDate) && !r.arrivalFlight && !r.departureFlight
     );
     return [
