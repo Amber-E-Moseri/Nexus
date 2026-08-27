@@ -4017,9 +4017,11 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
       const head = room.people.find(p => p.email === room.roomHead);
       const genders = new Set(room.people.map(p => {
         const g = (p.gender || '').toLowerCase();
-        return (g.includes('female') || g === 'f') ? 'female' : 'male';
+        if (g.includes('female') || g === 'f') return 'female';
+        if (g.includes('male') || g === 'm') return 'male';
+        return 'unknown';
       }));
-      const isMixed    = genders.size > 1 && room.people.length > 0;
+      const isMixed    = genders.has('female') && genders.has('male');
       const isAllFemale = !isMixed && genders.has('female') && room.people.length > 0;
       const isAllMale   = !isMixed && genders.has('male')   && room.people.length > 0;
       const accent  = isAllFemale ? '#A03060' : isAllMale ? '#1E4D8C' : isMixed ? '#8C5A00' : '#3D1A78';
@@ -4356,10 +4358,12 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                 {rooms.map(room => {
                   const genderSet = new Set(room.people.map(p => {
                     const g = (p.gender || '').toLowerCase();
-                    return (g.includes('female') || g === 'f') ? 'female' : 'male';
+                    if (g.includes('female') || g === 'f') return 'female';
+                    if (g.includes('male') || g === 'm') return 'male';
+                    return 'unknown';
                   }));
                   const isFull     = room.people.length >= room.capacity;
-                  const isMixed    = genderSet.size > 1;
+                  const isMixed    = genderSet.has('female') && genderSet.has('male');
                   const isAllFemale = !isMixed && genderSet.has('female') && room.people.length > 0;
                   const isAllMale   = !isMixed && genderSet.has('male')   && room.people.length > 0;
                   const roomBg     = isFull ? C.redBg   : isAllFemale ? '#FFF0F6' : isAllMale ? '#EEF3FF' : '#FAFAF8';
