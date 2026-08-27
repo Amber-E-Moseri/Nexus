@@ -3963,8 +3963,8 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
               value={roomsNote}
               onChange={e => handleUpdateRoomsNote(e.target.value)}
               placeholder="Add any special requests or general notes for room assignments…"
-              rows={3}
-              style={{ width: '100%', fontSize: 13, fontFamily: 'Inter, sans-serif', border: `1px solid ${C.line}`, borderRadius: 7, padding: '8px 10px', resize: 'vertical', color: '#1A1220', background: '#FAFAFA', boxSizing: 'border-box', outline: 'none' }}
+              rows={2}
+              style={{ width: '100%', fontSize: 13, fontFamily: 'Inter, sans-serif', border: `1px solid ${C.line}`, borderRadius: 7, padding: '8px 10px', resize: 'none', color: '#1A1220', background: '#FAFAFA', boxSizing: 'border-box', outline: 'none' }}
             />
           </div>
         </div>
