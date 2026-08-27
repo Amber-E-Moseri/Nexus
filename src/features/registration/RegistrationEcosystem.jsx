@@ -1752,7 +1752,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
           />
         )}
         {tab === 'summary' && <SummaryTab merged={merged} />}
-        {tab === 'checkin' && <CheckInTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onCheckIn: handleCheckIn, rooms, onToggleKeyGiven: (roomId) => { const updated = rooms.map(r => r.id === roomId ? { ...r, keyGiven: !r.keyGiven } : r); setRooms(updated); saveRoomData(updated, numRooms, peoplePerRoom); } }} />}
+        {tab === 'checkin' && <CheckInTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onCheckIn: handleCheckIn, rooms, onUpdateRoom: (roomId, patch) => { const updated = rooms.map(r => r.id === roomId ? { ...r, ...patch } : r); setRooms(updated); saveRoomData(updated, numRooms, peoplePerRoom); } }} />}
         {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onEditReg: setEditingReg }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, role, viewDefaults: eventConfig.discipleship_view_defaults, onSaveViewDefaults: async (defaults) => { if (!config?.id) return; await supabase.from('event_configs').update({ discipleship_view_defaults: defaults }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
@@ -1793,7 +1793,7 @@ function HoverNameList({ people = [], color }) {
 }
 
 // ============ CHECK-IN ============
-function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onCheckIn, rooms = [], onToggleKeyGiven }) {
+function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onCheckIn, rooms = [], onUpdateRoom }) {
   const [saving, setSaving] = useState(new Set());
   const [view, setView] = useState('person'); // 'person' | 'room'
   const [search, setSearch] = useState('');
@@ -1818,8 +1818,9 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
     return (a.fullName || '').localeCompare(b.fullName || '');
   }), [filtered]);
 
+  const confirmed = useMemo(() => merged.filter(r => r.fullyConfirmed && !r.absent), [merged]);
   const checkedInCount = merged.filter(r => r.checkedInAt).length;
-  const total = merged.length;
+  const total = confirmed.length; // expected = confirmed non-absent
 
   async function toggleCheckIn(reg) {
     const newVal = reg.checkedInAt ? null : new Date().toISOString();
@@ -1835,7 +1836,8 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
   }
 
   const roomsWithPeople = rooms.filter(r => r.people && r.people.length > 0);
-  const keysGiven = roomsWithPeople.filter(r => r.keyGiven).length;
+  const totalKeysGiven = roomsWithPeople.reduce((s, r) => s + (r.keysGiven || 0), 0);
+  const totalKeysTotal = roomsWithPeople.reduce((s, r) => s + (r.keyTotal ?? 2), 0);
 
   return (
     <div>
@@ -1844,8 +1846,8 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
           pct={total ? Math.round((checkedInCount / total) * 100) : 0} />
         <SummaryCard label="Still expected" current={total - checkedInCount} target={total} noBar />
         {roomsWithPeople.length > 0 && (
-          <SummaryCard label="Keys given" current={keysGiven} target={roomsWithPeople.length}
-            pct={roomsWithPeople.length ? Math.round((keysGiven / roomsWithPeople.length) * 100) : 0} />
+          <SummaryCard label="Keys given" current={totalKeysGiven} target={totalKeysTotal}
+            pct={totalKeysTotal ? Math.round((totalKeysGiven / totalKeysTotal) * 100) : 0} />
         )}
       </div>
 
@@ -1934,8 +1936,11 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
             const people = room.people || [];
             const arrivedCount = people.filter(p => checkedInByEmail[p.email?.toLowerCase()]?.checkedInAt).length;
             const allArrived = arrivedCount === people.length && people.length > 0;
-            const statusColor = allArrived && room.keyGiven ? '#16A34A' : arrivedCount > 0 ? '#D97706' : '#9E9488';
-            const statusBg   = allArrived && room.keyGiven ? '#F0FFF4' : arrivedCount > 0 ? '#FFFBEB' : '#F8F6F3';
+            const keysGiven = room.keysGiven || 0;
+            const keyTotal = room.keyTotal ?? 2;
+            const allKeysOut = keysGiven >= keyTotal && keyTotal > 0;
+            const statusColor = allArrived && allKeysOut ? '#16A34A' : arrivedCount > 0 ? '#D97706' : '#9E9488';
+            const statusBg   = allArrived && allKeysOut ? '#F0FFF4' : arrivedCount > 0 ? '#FFFBEB' : '#F8F6F3';
             return (
               <div key={room.id} style={{ border: `1.5px solid ${statusColor}44`, borderRadius: 10, overflow: 'hidden', background: statusBg }}>
                 {/* Room header */}
@@ -1946,20 +1951,25 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
                       {arrivedCount}/{people.length} arrived
                     </div>
                   </div>
-                  {/* Key given toggle */}
-                  <button
-                    onClick={() => onToggleKeyGiven(room.id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '6px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      border: `1.5px solid ${room.keyGiven ? '#16A34A' : C.line}`,
-                      background: room.keyGiven ? '#DCFCE7' : '#fff',
-                      color: room.keyGiven ? '#16A34A' : C.mute,
-                      transition: 'all .15s',
-                    }}
-                  >
-                    🔑 {room.keyGiven ? 'Key given' : 'Key pending'}
-                  </button>
+                  {/* Key stepper */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: `1.5px solid ${allKeysOut ? '#16A34A' : C.line}`, borderRadius: 8, background: allKeysOut ? '#DCFCE7' : '#fff', padding: '3px 6px' }}>
+                    <span style={{ fontSize: 13, marginRight: 2 }}>🔑</span>
+                    <button onClick={() => onUpdateRoom(room.id, { keysGiven: Math.max(0, keysGiven - 1) })}
+                      style={{ width: 22, height: 22, border: 'none', background: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, color: C.mute, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+                    <span style={{ fontSize: 13, fontWeight: 700, minWidth: 28, textAlign: 'center', color: allKeysOut ? '#16A34A' : C.ink }}>
+                      {keysGiven}/{keyTotal}
+                    </span>
+                    <button onClick={() => onUpdateRoom(room.id, { keysGiven: Math.min(keyTotal, keysGiven + 1) })}
+                      style={{ width: 22, height: 22, border: 'none', background: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, color: C.mute, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                    <span style={{ fontSize: 10, color: C.mute, marginLeft: 2 }}>keys</span>
+                    {/* Edit total */}
+                    <input type="number" min={1} max={10} value={keyTotal}
+                      onChange={e => onUpdateRoom(room.id, { keyTotal: Math.max(1, parseInt(e.target.value) || 1) })}
+                      style={{ width: 28, fontSize: 11, border: `1px solid ${C.line}`, borderRadius: 4, padding: '1px 3px', marginLeft: 4, color: C.mute, textAlign: 'center' }}
+                      title="Total keys for this room"
+                    />
+                    <span style={{ fontSize: 10, color: C.mute }}>total</span>
+                  </div>
                 </div>
                 {/* People list */}
                 <div style={{ borderTop: `1px solid ${statusColor}33`, background: '#fff' }}>
