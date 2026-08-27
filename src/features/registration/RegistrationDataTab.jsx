@@ -831,7 +831,7 @@ export default function RegistrationDataTab({
                                     🚗 Driving
                                   </span>
                                 )}
-                                {!p.hasFlightInfo && !/manitoba|winnipeg/i.test(p.fellowship || '') && p.transportMode !== 'bus' && p.transportMode !== 'driving' && !crossCountrySubgroups?.has(p.subgroup) && (
+                                {!p.hasFlightInfo && !p.inStateConfirmed && !/manitoba|winnipeg/i.test(p.fellowship || '') && p.transportMode !== 'bus' && p.transportMode !== 'driving' && !crossCountrySubgroups?.has(p.subgroup) && (
                                   <>
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#FFF3CD', color: '#B8710A', border: '1px solid #F5C842', borderRadius: 12, fontSize: 11, fontWeight: 600, padding: '2px 8px', whiteSpace: 'nowrap' }}>
                                       <AlertCircle size={11} /> No flights
