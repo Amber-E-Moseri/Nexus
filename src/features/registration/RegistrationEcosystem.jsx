@@ -3254,6 +3254,7 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
       {(() => {
         const notFlying = merged.filter(r =>
           (r.inStateConfirmed || r.transportMode === 'driving' || r.transportMode === 'bus' || crossCountrySubgroups.has(r.subgroup)) &&
+          !r.absent &&
           (subgroupFilter === 'All' || r.subgroup === subgroupFilter)
         );
         if (notFlying.length === 0) return null;
