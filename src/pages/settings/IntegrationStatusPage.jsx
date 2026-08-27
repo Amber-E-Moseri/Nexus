@@ -264,21 +264,17 @@ export default function IntegrationStatusPage() {
 
       if (intError) throw intError
 
-      // Check which have secrets
-      const enriched = await Promise.all(
-        (integrationRows || []).map(async (row) => {
-          const { data: secrets } = await supabase
-            .from('space_integration_secrets')
-            .select('id')
-            .eq('integration_id', row.id)
-            .limit(1)
+      // Single batch query instead of N per-integration secret checks
+      const ids = (integrationRows || []).map((r) => r.id)
+      const { data: secretRows } = ids.length
+        ? await supabase.from('space_integration_secrets').select('integration_id').in('integration_id', ids)
+        : { data: [] }
+      const hasSecretsSet = new Set((secretRows || []).map((s) => s.integration_id))
 
-          return {
-            ...row,
-            hasSecrets: Boolean(secrets?.length),
-          }
-        })
-      )
+      const enriched = (integrationRows || []).map((row) => ({
+        ...row,
+        hasSecrets: hasSecretsSet.has(row.id),
+      }))
 
       setIntegrations(enriched)
     } finally {

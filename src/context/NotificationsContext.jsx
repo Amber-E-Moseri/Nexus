@@ -97,12 +97,22 @@ export function NotificationsProvider({ children }) {
           table: 'notifications',
           filter: `user_id=eq.${user.id}`,
         },
-        () => {
-          // Re-fetch the authoritative count any time a notification is updated
-          // (e.g. marked read/unread from the Inbox page directly).
-          getUnreadCount(user.id)
-            .then((count) => setUnreadCount(count))
-            .catch(() => {})
+        (payload) => {
+          // Patch state locally from the payload rather than re-querying DB.
+          // handleMarkAsRead already decrements optimistically; this handles
+          // external changes (Inbox page in another tab, server-side mark-read).
+          const updated = payload.new
+          setNotifications((prev) =>
+            prev.map((n) => (n.id === updated.id ? { ...n, ...updated } : n))
+          )
+          // Recalculate unread from local state (no DB round-trip)
+          setUnreadCount((prev) => {
+            const wasUnread = !payload.old?.read
+            const isNowRead = updated.read
+            if (wasUnread && isNowRead) return Math.max(0, prev - 1)
+            if (!wasUnread && !isNowRead) return prev + 1
+            return prev
+          })
         },
       )
       .on(
@@ -113,10 +123,11 @@ export function NotificationsProvider({ children }) {
           table: 'notifications',
           filter: `user_id=eq.${user.id}`,
         },
-        () => {
-          getUnreadCount(user.id)
-            .then((count) => setUnreadCount(count))
-            .catch(() => {})
+        (payload) => {
+          // Remove locally and adjust count without DB query
+          const deleted = payload.old
+          setNotifications((prev) => prev.filter((n) => n.id !== deleted.id))
+          if (!deleted.read) setUnreadCount((prev) => Math.max(0, prev - 1))
         },
       )
       .subscribe()

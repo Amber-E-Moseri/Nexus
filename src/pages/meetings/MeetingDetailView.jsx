@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { lazy, Suspense, useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { Check, CheckCircle2, ClipboardList, Download, FileText, FolderOpen, ListChecks, Lock, Mic, RotateCw, Sparkles, Square, Users, Eye } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -9,7 +9,7 @@ import { hasSpaceRole } from '../../lib/permissions.js'
 import { canViewMeetingLog } from '../../features/meetings/lib/meetingPermissions'
 import { MeetingsProvider } from '../../features/meetings/MeetingsContext'
 import ActionItemBridge from '../../features/meetings/components/ActionItemBridge'
-import AudioTranscriptionPanel from '../../features/meetings/components/AudioTranscriptionPanel'
+const AudioTranscriptionPanel = lazy(() => import('../../features/meetings/components/AudioTranscriptionPanel'))
 import MeetingDocsTab from '../../features/meetings/components/MeetingDocsTab'
 import MeetingSummaryEditor from '../../features/meetings/components/MeetingSummaryEditor'
 import GenerateMeetingDocButton from '../../features/meetings/components/GenerateMeetingDocButton'
@@ -2001,6 +2001,7 @@ function MeetingDetailViewInner() {
                 {/* Unified panel — mode selector lets user choose Record / Upload / Paste.
                     One instance avoids the previous problem where three separate panels each
                     independently fetched and displayed the same segments list. */}
+                <Suspense fallback={null}>
                 <AudioTranscriptionPanel
                   key={`unified-${meetingId}`}
                   meetingId={meetingId}
@@ -2018,6 +2019,7 @@ function MeetingDetailViewInner() {
                   }}
                   onActionItemsExtracted={() => { fetchActionItems(); setActiveTab('actions') }}
                 />
+                </Suspense>
 
                 {/* AI notes privacy toggle */}
                 {minutesRecord && (

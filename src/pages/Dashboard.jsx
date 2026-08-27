@@ -945,7 +945,12 @@ export default function Dashboard() {
     async function loadPrefs() {
       setLoadingPrefs(true)
       try {
-        const userPrefs = await getUserDashboardPreferences(profile.id)
+        // Fetch user prefs and role presets in parallel — prefs covers returning
+        // users (>99%), preset is the fallback for first-visit users.
+        const [userPrefs, rolePreset] = await Promise.all([
+          getUserDashboardPreferences(profile.id),
+          getDashboardPresets(role),
+        ])
 
         if (!active) return
 
@@ -954,13 +959,7 @@ export default function Dashboard() {
           return
         }
 
-        // Load role-based presets
-        const rolePreset = await getDashboardPresets(role)
-        const defaultWidgets = rolePreset.widgets || []
-
-        if (!active) return
-
-        // Convert preset widget IDs to preference objects
+        const defaultWidgets = rolePreset?.widgets || []
         const defaultPrefs = defaultWidgets.map((key, i) => ({
           widget_key: key,
           visible: true,

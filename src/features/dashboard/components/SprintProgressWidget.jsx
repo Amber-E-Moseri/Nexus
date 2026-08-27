@@ -84,20 +84,28 @@ export default function SprintProgressWidget({ role, userId, departmentId, data 
         const { data: rawSprints } = await query
 
         const filteredSprints = (rawSprints ?? []).slice(0, 3)
+        const sprintIds = filteredSprints.map(s => s.id)
 
-        const withProgress = await Promise.all(
-          filteredSprints.map(async (sprint) => {
-            const { data: tasks } = await supabase
-              .from('tasks')
-              .select('id, status_definition:task_status_definitions!status_id(category)')
-              .eq('sprint_id', sprint.id)
-              .eq('is_personal', false)
+        // Batch fetch all tasks for these sprints in ONE query (not N queries)
+        const { data: allTasks } = await supabase
+          .from('tasks')
+          .select('id, sprint_id, status_definition:task_status_definitions!status_id(category)')
+          .in('sprint_id', sprintIds)
+          .eq('is_personal', false)
 
-            const total = tasks?.length ?? 0
-            const completed = tasks?.filter(t => t.status_definition?.category === 'completed').length ?? 0
-            return { ...sprint, total, completed }
-          }),
-        )
+        // Group tasks by sprint_id and calculate progress
+        const tasksBySprint = (allTasks ?? []).reduce((acc, task) => {
+          if (!acc[task.sprint_id]) acc[task.sprint_id] = []
+          acc[task.sprint_id].push(task)
+          return acc
+        }, {})
+
+        const withProgress = filteredSprints.map(sprint => {
+          const tasks = tasksBySprint[sprint.id] ?? []
+          const total = tasks.length
+          const completed = tasks.filter(t => t.status_definition?.category === 'completed').length
+          return { ...sprint, total, completed }
+        })
 
         if (active) setSprints(withProgress)
       } finally {

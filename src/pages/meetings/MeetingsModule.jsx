@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { FileText } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
@@ -9,7 +9,7 @@ import MeetingModal from '../../features/meetings/components/MeetingModal'
 import UnifiedMeetingsView from '../../features/meetings/components/UnifiedMeetingsView'
 import LiveMinutesMode from '../../features/meetings/components/LiveMinutesMode'
 import { MeetingsProvider } from '../../features/meetings/MeetingsContext'
-import MeetingReportTab from '../../features/meetings/components/MeetingReportTab'
+const MeetingReportTab = lazy(() => import('../../features/meetings/components/MeetingReportTab'))
 import ExpectedAttendeesPage from './ExpectedAttendeesPage'
 
 // ORS identity is a space_roles grant (Phase 3) — the old department-name
@@ -220,7 +220,9 @@ export default function MeetingsModule() {
 
       {activeTab === 'report' ? (
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '1.5rem', background: '#FBF8F2' }}>
-          <MeetingReportTab />
+          <Suspense fallback={null}>
+            <MeetingReportTab />
+          </Suspense>
         </div>
       ) : activeTab === 'roster' ? (
         <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', background: '#FBF8F2' }}>
