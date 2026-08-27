@@ -334,9 +334,11 @@ export function AuthProvider({ children }) {
       if (mounted) {
         console.warn('[Auth] Initialization timed out after 6 s — clearing loading state')
         setLoading(false)
-        // If user is set but profile never arrived, clear user so ProtectedRoute
-        // redirects to login instead of spinning indefinitely.
-        if (!profileRef.current) setUser(null)
+        // Do NOT clear user here — if INITIAL_SESSION already fired and a profile
+        // fetch is in progress (which has its own 8s timeout), clearing user would
+        // boot a legitimate login 2 seconds before the fetch has a chance to land.
+        // The ProtectedRoute `user && !profile` guard holds the spinner until profile
+        // arrives; the ensureProfileFetch catch block clears user if it truly fails.
       }
     }, 6_000)
 
@@ -378,7 +380,6 @@ export function AuthProvider({ children }) {
               .catch((err) => {
                 console.warn('[Auth] Visibility resume failed:', err)
                 if (mounted) {
-                  setUser(null)
                   if (loading) setLoading(false)
                 }
               })
