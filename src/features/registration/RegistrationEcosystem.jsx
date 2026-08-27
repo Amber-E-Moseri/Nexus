@@ -783,7 +783,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       if (r.fullyConfirmed) { out[r.subgroup].confirmed++; confPeople[r.subgroup].push(r); }
       else if (!isAbsent) { confirmingP[r.subgroup].push(r); }
       if (r.arrivalFlight || r.departureFlight) out[r.subgroup].flights++;
-      if (!r.inStateConfirmed && !exemptFellowships.has(r.fellowship) && !isAbsent && !r.arrivalFlight && !r.departureFlight && r.transportMode !== 'bus') {
+      const isDriving = r.transportMode === 'driving' || r.transportMode === 'bus' || crossCountrySubgroups.has(r.subgroup);
+      if (!r.inStateConfirmed && !exemptFellowships.has(r.fellowship) && !isAbsent && !r.arrivalFlight && !r.departureFlight && !isDriving) {
         out[r.subgroup].flightsNeeded++;
         flightPeople[r.subgroup].push(r);
       }
@@ -1323,6 +1324,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
             onEditPerson={handleEditWorkingListPerson}
             onRemove={handleRemoveFromWorkingList}
             onConfirm={handleToggleManualConfirm}
+            onSetTransportMode={setTransportMode}
             crossCountrySubgroups={crossCountrySubgroups}
             highlightEmail={highlightEmail}
             onClearHighlight={() => setHighlightEmail(null)}
@@ -2367,8 +2369,8 @@ function ConfirmTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
           <tbody>
             {filtered.map((r, i) => {
               const isLocal = /manitoba|winnipeg/i.test(r.fellowship || '');
-              const isBus = r.transportMode === 'bus';
-              const noFlightFlag = !r.hasFlightInfo && !isLocal && !isBus;
+              const isGroundTransport = r.transportMode === 'bus' || r.transportMode === 'driving' || crossCountrySubgroups.has(r.subgroup);
+              const noFlightFlag = !r.hasFlightInfo && !isLocal && !isGroundTransport;
               return (
                 <tr key={i}>
                   <td style={{ color: C.mute, fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}>{i + 1}</td>
