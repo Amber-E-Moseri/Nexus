@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Unlock, Car, Bus, X, LayoutList } from 'lucide-react';
+import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Unlock, Car, Bus, X, LayoutList, ScanLine, Mail, TriangleAlert } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import RegistrationEditModal from './RegistrationEditModal';
@@ -697,6 +697,7 @@ const DEFAULT_TABS = [
   { key: 'overview', label: 'Overview', icon: Home },
   { key: 'summary',  label: 'Summary', icon: LayoutList },
   { key: 'central',  label: 'Registration Data', icon: Users },
+  { key: 'checkin',  label: 'Check-in', icon: ScanLine },
   { key: 'confirm', label: 'Delegates', icon: CheckCircle2, hidden: true },
   { key: 'discipleship', label: 'Foundation & Baptism', icon: Church },
   { key: 'compliance', label: 'Hospitality', icon: AlertCircle },
@@ -806,6 +807,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         confirmedAt: r.confirmed_at || null,
         inState: r.in_state ?? false,
         transportMode: r.transport_mode || null,
+        checkedInAt: r.checked_in_at || null,
       }));
       // Merge: keep local version for any record edited in the last 10 s
       setRegistrations(prev => {
@@ -1051,6 +1053,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
           confirmedAt: r.confirmed_at || null,
           inState: r.in_state ?? false,
           transportMode: r.transport_mode || null,
+          checkedInAt: r.checked_in_at || null,
         }));
       }
 
@@ -1289,6 +1292,16 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     setRoomsNote(note);
     saveKey('room-assignments', { rooms, numRooms, peoplePerRoom, roomsNote: note });
   }
+
+  const handleCheckIn = useCallback(async (registrationId, checkedInAt) => {
+    setRegistrations(prev => prev.map(r => r.id === registrationId ? { ...r, checkedInAt } : r));
+    try {
+      await supabase.from('registrations').update({ checked_in_at: checkedInAt }).eq('id', registrationId);
+    } catch (e) {
+      console.error('Check-in update failed:', e);
+      refetchRegistrations();
+    }
+  }, [refetchRegistrations]);
 
   function handleAddRoom(newRoomName, capacity) {
     const newRoom = {
@@ -1739,6 +1752,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
           />
         )}
         {tab === 'summary' && <SummaryTab merged={merged} />}
+        {tab === 'checkin' && <CheckInTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onCheckIn: handleCheckIn }} />}
         {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onEditReg: setEditingReg }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, role, viewDefaults: eventConfig.discipleship_view_defaults, onSaveViewDefaults: async (defaults) => { if (!config?.id) return; await supabase.from('event_configs').update({ discipleship_view_defaults: defaults }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
@@ -1774,6 +1788,94 @@ function HoverNameList({ people = [], color }) {
           {r.fullName}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ============ CHECK-IN ============
+function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onCheckIn }) {
+  const [saving, setSaving] = useState(new Set());
+
+  const filtered = useMemo(() => {
+    const base = isLimited ? merged : merged;
+    if (subgroupFilter === 'All') return base;
+    return base.filter(r => r.subgroup === subgroupFilter);
+  }, [merged, subgroupFilter, isLimited]);
+
+  const sorted = useMemo(() => [...filtered].sort((a, b) => {
+    if (!!a.checkedInAt !== !!b.checkedInAt) return a.checkedInAt ? 1 : -1;
+    return (a.fullName || '').localeCompare(b.fullName || '');
+  }), [filtered]);
+
+  const checkedInCount = merged.filter(r => r.checkedInAt).length;
+  const total = merged.length;
+
+  async function toggleCheckIn(reg) {
+    const newVal = reg.checkedInAt ? null : new Date().toISOString();
+    setSaving(s => new Set([...s, reg.id]));
+    await onCheckIn(reg.id, newVal);
+    setSaving(s => { const n = new Set(s); n.delete(reg.id); return n; });
+  }
+
+  return (
+    <div>
+      <div className="reg-grid-3" style={{ marginBottom: 20 }}>
+        <SummaryCard label="Checked in" current={checkedInCount} target={total}
+          pct={total ? Math.round((checkedInCount / total) * 100) : 0} />
+        <SummaryCard label="Still expected" current={total - checkedInCount} target={total} noBar />
+      </div>
+
+      {!isLimited && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+          {['All', ...subgroups].map(sg => (
+            <button key={sg} onClick={() => setSubgroupFilter(sg)} style={{
+              padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
+              background: subgroupFilter === sg ? '#4C2A92' : '#F2EEF9',
+              color: subgroupFilter === sg ? '#fff' : '#4C2A92',
+            }}>{sg}</button>
+          ))}
+        </div>
+      )}
+
+      <Card style={{ padding: 0 }}>
+        <table className="sg-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Subgroup</th>
+              <th>Fellowship</th>
+              <th style={{ textAlign: 'center' }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map(r => (
+              <tr key={r.id || r.email} style={{ opacity: saving.has(r.id) ? 0.6 : 1, transition: 'opacity .15s' }}>
+                <td style={{ fontWeight: 600 }}>{r.fullName}</td>
+                <td style={{ color: C.mute, fontSize: 12 }}>{r.subgroup}</td>
+                <td style={{ color: C.mute, fontSize: 12 }}>{r.fellowship}</td>
+                <td style={{ textAlign: 'center' }}>
+                  {r.checkedInAt ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <Pill tone="green">✓ {new Date(r.checkedInAt).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' })}</Pill>
+                      <button onClick={() => toggleCheckIn(r)} disabled={saving.has(r.id)}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: C.mute, fontSize: 11, padding: '2px 4px' }}
+                        title="Undo">Undo</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => toggleCheckIn(r)} disabled={saving.has(r.id)}
+                      style={{ padding: '5px 14px', borderRadius: 6, border: `1px solid ${C.line}`, background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: C.ink }}>
+                      Check in
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {sorted.length === 0 && (
+              <tr><td colSpan={4} style={{ color: C.mute, textAlign: 'center', padding: 24 }}>No registrants to show.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </Card>
     </div>
   );
 }
@@ -1897,12 +1999,72 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
         ))}
       </div>
 
+      <OverviewIssues merged={merged} />
+
       <div style={{ marginTop: 8, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <Btn tone="ghost" small onClick={() => downloadCSV('subgroup-overview.csv', subgroups.map(sg => ({
           subgroup: sg, regTarget: targets[sg]?.reg || 0, regs: bySubgroup[sg]?.total || 0,
         })), [
           { key: 'subgroup', label: 'Subgroup' }, { key: 'regTarget', label: 'Reg Target' }, { key: 'regs', label: 'Registrations' },
         ])}><Download size={13} /> Export overview</Btn>
+      </div>
+    </div>
+  );
+}
+
+const LOCAL_FELLOWSHIP_PATTERN = /manitoba|winnipeg|mennonite university|college of the north/i;
+
+function OverviewIssues({ merged }) {
+  const [expanded, setExpanded] = useState(null);
+
+  const issues = useMemo(() => {
+    const noTransport = merged.filter(r =>
+      !r.inStateConfirmed && !r.transportMode && !r.arrivalFlight &&
+      !LOCAL_FELLOWSHIP_PATTERN.test(r.fellowship || '')
+    );
+    const noGender = merged.filter(r => !(r.gender || '').trim());
+    const missingFlight = merged.filter(r =>
+      !r.inStateConfirmed && !LOCAL_FELLOWSHIP_PATTERN.test(r.fellowship || '') &&
+      (r.arrivalDate || r.departureDate) && !r.arrivalFlight && !r.departureFlight
+    );
+    return [
+      { key: 'noTransport',   label: 'No transport confirmed', people: noTransport, color: '#B45309', bg: '#FEF3C7', icon: '🚫' },
+      { key: 'missingFlight', label: 'Has dates but no flight #', people: missingFlight, color: '#7C3AED', bg: '#EDE9FE', icon: '✈️' },
+      { key: 'noGender',      label: 'Gender not set', people: noGender, color: '#9D174D', bg: '#FCE7F3', icon: '👤' },
+    ].filter(i => i.people.length > 0);
+  }, [merged]);
+
+  if (issues.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <TriangleAlert size={14} style={{ color: '#B45309' }} />
+        <span style={{ fontFamily: 'Space Grotesk', fontSize: 14, fontWeight: 700 }}>Action items</span>
+        <Pill tone="amber">{issues.reduce((s, i) => s + i.people.length, 0)} issues</Pill>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {issues.map(issue => (
+          <div key={issue.key} style={{ border: `1px solid ${issue.color}33`, borderRadius: 10, overflow: 'hidden' }}>
+            <button onClick={() => setExpanded(v => v === issue.key ? null : issue.key)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                background: issue.bg, border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+              <span>{issue.icon}</span>
+              <span style={{ flex: 1, fontWeight: 600, fontSize: 13, color: issue.color }}>{issue.label}</span>
+              <span style={{ fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 700, color: issue.color }}>{issue.people.length}</span>
+              <ChevronDown size={14} style={{ color: issue.color, transform: expanded === issue.key ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+            </button>
+            {expanded === issue.key && (
+              <div style={{ padding: '8px 14px 12px', background: '#fff', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {issue.people.map(p => (
+                  <span key={p.email} style={{ fontSize: 12, background: issue.bg, color: issue.color, padding: '2px 8px', borderRadius: 12, fontWeight: 500 }}>
+                    {p.fullName} <span style={{ opacity: 0.65 }}>({p.subgroup})</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -3987,6 +4149,30 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   const [bulkPrefix, setBulkPrefix] = useState('Room');
   const [bulkCount, setBulkCount] = useState(5);
   const [bulkCapacity, setBulkCapacity] = useState(2);
+  const [sendingRoomEmails, setSendingRoomEmails] = useState(false);
+  const [roomEmailResult, setRoomEmailResult] = useState(null);
+
+  async function handleSendRoomEmails() {
+    if (sendingRoomEmails) return;
+    const assignedRooms = rooms.filter(r => r.people && r.people.length > 0);
+    const total = assignedRooms.reduce((s, r) => s + r.people.filter(p => p.email && !p.email.startsWith('UNMATCHED:')).length, 0);
+    if (total === 0) { alert('No assigned registrants with valid email addresses.'); return; }
+    if (!window.confirm(`Send room assignment emails to ${total} registrant${total !== 1 ? 's' : ''}?`)) return;
+    setSendingRoomEmails(true);
+    setRoomEmailResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-room-assignments', {
+        body: { rooms: assignedRooms, eventName: 'This Is It 2.0' },
+      });
+      if (error) throw error;
+      setRoomEmailResult(data);
+    } catch (e) {
+      console.error('Room email send failed:', e);
+      alert('Failed to send emails: ' + (e.message || 'Unknown error'));
+    } finally {
+      setSendingRoomEmails(false);
+    }
+  }
   const [draggedPerson, setDraggedPerson] = useState(null);
   const [selectedPerson, setSelectedPerson] = useState(null); // mobile tap-to-assign
   const [editingRoomId, setEditingRoomId] = useState(null);
@@ -4248,8 +4434,17 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
             ]);
           }}><Download size={13} /> CSV</Btn>
           <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0}><Download size={13} /> PDF</Btn>
+          <Btn tone="ghost" small onClick={handleSendRoomEmails} disabled={rooms.length === 0 || sendingRoomEmails}><Mail size={13} /> {sendingRoomEmails ? 'Sending…' : 'Email rooms'}</Btn>
         </div>
       </div>
+
+      {roomEmailResult && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: roomEmailResult.failed > 0 ? '#FFF5E0' : '#F0FFF4', border: `1px solid ${roomEmailResult.failed > 0 ? '#F59E0B' : '#34D399'}`, borderRadius: 8, padding: '8px 14px', marginBottom: 10, fontSize: 13 }}>
+          <span>{roomEmailResult.failed > 0 ? '⚠️' : '✓'}</span>
+          <span>{roomEmailResult.sent} sent{roomEmailResult.failed > 0 ? `, ${roomEmailResult.failed} failed` : ''}</span>
+          <button onClick={() => setRoomEmailResult(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#9E9488', fontSize: 15, lineHeight: 1 }}>×</button>
+        </div>
+      )}
 
       {/* night highlight feature banner */}
       {!nightBannerDismissed && (

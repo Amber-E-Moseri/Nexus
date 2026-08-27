@@ -1,6 +1,6 @@
-// Bulk email sender for registration recipients.
-// Accepts a template (subject + body with {{name}} placeholders) and
-// an array of recipients, and sends each one a personalised copy.
+// Sends personalised room-assignment emails to every person assigned to a room.
+// Called from the Room Assignments tab once rooms are finalised.
+// Each email includes: room name, room head, roommates list, and event nights.
 
 const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN')
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') ?? 'BLW CAN NEXUS <noreply@lwcanada.org>'
@@ -20,8 +20,17 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   })
 }
 
-function renderEmail(name: string, body: string): string {
-  const personalised = body.replace(/\{\{name\}\}/gi, name)
+interface RoomPerson { email: string; fullName: string; fellowship?: string }
+interface Room { name: string; people: RoomPerson[]; roomHead?: string }
+
+function renderRoomEmail(recipientName: string, room: Room, eventName: string): string {
+  const head = room.people.find(p => p.email === room.roomHead)
+  const roommates = room.people.filter(p => p.email !== (head?.email ?? null))
+  const headLine = head ? `<p><strong>Room head:</strong> ${head.fullName}</p>` : ''
+  const roommateLines = roommates.length
+    ? `<p><strong>Your roommates:</strong></p><ul>${roommates.map(p => `<li>${p.fullName}${p.fellowship ? ` <span style="color:#9E9488;font-size:13px">(${p.fellowship})</span>` : ''}</li>`).join('')}</ul>`
+    : ''
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -32,8 +41,11 @@ function renderEmail(name: string, body: string): string {
     .container{max-width:600px;margin:0 auto;padding:20px}
     .card{background:#fff;border-radius:12px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
     .header{margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid #EDE9E3}
-    .logo{font-family:Georgia,serif;font-size:18px;font-weight:700;color:#4C2A92;letter-spacing:.02em}
-    .body{line-height:1.7;color:#4A4641;white-space:pre-wrap}
+    .logo{font-family:Georgia,serif;font-size:18px;font-weight:700;color:#4C2A92}
+    .room-badge{display:inline-block;background:#F0EBFF;color:#4C2A92;border-radius:8px;padding:10px 20px;font-size:22px;font-weight:700;margin:16px 0}
+    .body{line-height:1.7;color:#4A4641}
+    ul{margin:8px 0;padding-left:20px}
+    li{margin:4px 0}
     .footer{margin-top:32px;padding-top:18px;border-top:1px solid #EDE9E3;font-size:12px;color:#9E9488;text-align:center}
   </style>
 </head>
@@ -41,20 +53,29 @@ function renderEmail(name: string, body: string): string {
   <div class="container">
     <div class="card">
       <div class="header"><div class="logo">BLW CAN Nexus</div></div>
-      <div class="body">${personalised}</div>
-      <div class="footer">BLW Canada Sub-Region · This Is It 2.0</div>
+      <div class="body">
+        <p>Hi ${recipientName},</p>
+        <p>Your room assignment for <strong>${eventName}</strong> is ready!</p>
+        <div class="room-badge">🏠 ${room.name}</div>
+        ${headLine}
+        ${roommateLines}
+        <p style="margin-top:24px;font-size:13px;color:#9E9488">
+          If you have any questions about your room assignment, please reach out to the Accommodation team.
+        </p>
+      </div>
+      <div class="footer">BLW Canada Sub-Region · ${eventName}</div>
     </div>
   </div>
 </body>
 </html>`
 }
 
-async function sendOne(to: string, name: string, subject: string, body: string): Promise<{ ok: boolean; error?: string }> {
+async function sendOne(to: string, subject: string, html: string): Promise<{ ok: boolean; error?: string }> {
   if (!RESEND_API_KEY) return { ok: false, error: 'RESEND_API_KEY not configured' }
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM_EMAIL, to, subject, html: renderEmail(name, body) }),
+    body: JSON.stringify({ from: FROM_EMAIL, to, subject, html }),
   })
   if (!res.ok) {
     const text = await res.text()
@@ -68,15 +89,18 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed' })
 
   try {
-    const { recipients, subject, body } = await req.json()
-    if (!Array.isArray(recipients) || !subject || !body) {
-      return jsonResponse(400, { error: 'recipients (array), subject, and body are required' })
-    }
+    const { rooms, eventName = 'This Is It 2.0' } = await req.json()
+    if (!Array.isArray(rooms)) return jsonResponse(400, { error: 'rooms array is required' })
 
     const results: { email: string; ok: boolean; error?: string }[] = []
-    for (const r of recipients) {
-      const result = await sendOne(r.email, r.name || r.email, subject, body)
-      results.push({ email: r.email, ...result })
+
+    for (const room of rooms as Room[]) {
+      for (const person of room.people) {
+        if (!person.email || person.email.startsWith('UNMATCHED:')) continue
+        const html = renderRoomEmail(person.fullName || person.email, room, eventName)
+        const result = await sendOne(person.email, `Your room assignment — ${eventName}`, html)
+        results.push({ email: person.email, ...result })
+      }
     }
 
     const failed = results.filter(r => !r.ok)
