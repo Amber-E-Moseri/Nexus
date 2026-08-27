@@ -3252,9 +3252,10 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
 
       {/* Not Flying (driving / bus) */}
       {(() => {
+        const isLocalFellowship = r => /manitoba|winnipeg|mennonite university|college of the north/i.test(r.fellowship || '');
         const notFlying = merged.filter(r =>
-          !r.inStateConfirmed &&
-          (r.transportMode === 'driving' || r.transportMode === 'bus' || crossCountrySubgroups.has(r.subgroup)) &&
+          !isLocalFellowship(r) &&
+          (r.inStateConfirmed || r.transportMode === 'driving' || r.transportMode === 'bus' || crossCountrySubgroups.has(r.subgroup)) &&
           !r.absent &&
           (subgroupFilter === 'All' || r.subgroup === subgroupFilter)
         );
