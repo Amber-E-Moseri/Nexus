@@ -298,8 +298,8 @@ function printTransportManifest(notFlying, byDriving, byInState, byBus, crossCou
   .page{max-width:900px;margin:0 auto;padding:32px 28px}
 
   /* ── Cover ── */
-  .cover{background:linear-gradient(135deg,#200A44 0%,#2E1462 60%,#160832 100%);border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
-  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 75% 0%,#6332AA 0%,transparent 55%),radial-gradient(ellipse at 15% 100%,#421880 0%,transparent 50%);pointer-events:none;opacity:.7}
+  .cover{background:linear-gradient(135deg,#2D0A5A 0%,#3D1A78 60%,#1E0A3C 100%);border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 75% 0%,#7B3FC4 0%,transparent 55%),radial-gradient(ellipse at 15% 100%,#5A1FA0 0%,transparent 50%);pointer-events:none;opacity:.7}
   .cover-inner{position:relative;z-index:1}
   .event-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:8px}
   .cover h1{font-family:'Playfair Display',Georgia,serif;font-size:34px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:4px;text-shadow:0 2px 8px rgba(0,0,0,.2)}
@@ -335,7 +335,7 @@ function printTransportManifest(notFlying, byDriving, byInState, byBus, crossCou
   @media print{
     body{background:#fff}
     .page{padding:0}
-    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px;background:#291260}
+    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px;background:#3D1A78}
     @page{margin:1.2cm;size:A4}
   }
 </style>
@@ -436,8 +436,8 @@ function printFlightManifest(withFlight, byArrivalDate, byDepartureDate) {
   .page{max-width:960px;margin:0 auto;padding:32px 28px}
 
   /* ── Cover ── */
-  .cover{background:linear-gradient(135deg,#200A44 0%,#2E1462 60%,#160832 100%);border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
-  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 75% 0%,#6332AA 0%,transparent 55%),radial-gradient(ellipse at 15% 100%,#421880 0%,transparent 50%);pointer-events:none;opacity:.7}
+  .cover{background:linear-gradient(135deg,#2D0A5A 0%,#3D1A78 60%,#1E0A3C 100%);border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 75% 0%,#7B3FC4 0%,transparent 55%),radial-gradient(ellipse at 15% 100%,#5A1FA0 0%,transparent 50%);pointer-events:none;opacity:.7}
   .cover-inner{position:relative;z-index:1}
   .event-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:8px}
   .cover h1{font-family:'Playfair Display',Georgia,serif;font-size:34px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:4px;text-shadow:0 2px 8px rgba(0,0,0,.2)}
@@ -467,7 +467,7 @@ function printFlightManifest(withFlight, byArrivalDate, byDepartureDate) {
   @media print{
     body{background:#fff}
     .page{padding:0}
-    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px;background:#291260}
+    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px;background:#3D1A78}
     @page{margin:1.2cm;size:A4 landscape}
   }
 </style>
@@ -564,8 +564,8 @@ function printDepartureManifest(withFlight, byDepartureDate) {
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Inter',system-ui,sans-serif;background:#F7F5FA;color:#1A1220;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .page{max-width:960px;margin:0 auto;padding:32px 28px}
-  .cover{background:linear-gradient(135deg,#200A44 0%,#2E1462 60%,#160832 100%);border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
-  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 75% 0%,#6332AA 0%,transparent 55%),radial-gradient(ellipse at 15% 100%,#421880 0%,transparent 50%);pointer-events:none;opacity:.7}
+  .cover{background:linear-gradient(135deg,#2D0A5A 0%,#3D1A78 60%,#1E0A3C 100%);border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 75% 0%,#7B3FC4 0%,transparent 55%),radial-gradient(ellipse at 15% 100%,#5A1FA0 0%,transparent 50%);pointer-events:none;opacity:.7}
   .cover-inner{position:relative;z-index:1}
   .event-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:8px}
   .cover h1{font-family:'Playfair Display',Georgia,serif;font-size:34px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:4px;text-shadow:0 2px 8px rgba(0,0,0,.2)}
@@ -588,7 +588,7 @@ function printDepartureManifest(withFlight, byDepartureDate) {
   @media print{
     body{background:#fff}
     .page{padding:0}
-    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px;background:#291260}
+    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px;background:#3D1A78}
     @page{margin:1.2cm;size:A4 landscape}
   }
 </style>
@@ -4089,8 +4089,8 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   .page{max-width:940px;margin:0 auto;padding:32px 28px}
 
   /* ── Cover header ── */
-  .cover{background:linear-gradient(135deg,#200A44 0%,#2E1462 60%,#160832 100%);border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
-  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 75% 0%,#6332AA 0%,transparent 55%),radial-gradient(ellipse at 15% 100%,#421880 0%,transparent 50%);pointer-events:none;opacity:.7}
+  .cover{background:linear-gradient(135deg,#2D0A5A 0%,#3D1A78 60%,#1E0A3C 100%);border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 75% 0%,#7B3FC4 0%,transparent 55%),radial-gradient(ellipse at 15% 100%,#5A1FA0 0%,transparent 50%);pointer-events:none;opacity:.7}
   .cover-inner{position:relative;z-index:1}
   .event-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:8px}
   .cover h1{font-family:'Playfair Display',Georgia,serif;font-size:34px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:4px}
@@ -4138,7 +4138,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   @media print{
     body{background:#fff}
     .page{padding:0}
-    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px;background:#291260}
+    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px;background:#3D1A78}
     @page{margin:1.2cm;size:A4}
   }
 </style>
