@@ -334,6 +334,9 @@ export function AuthProvider({ children }) {
       if (mounted) {
         console.warn('[Auth] Initialization timed out after 6 s — clearing loading state')
         setLoading(false)
+        // If user is set but profile never arrived, clear user so ProtectedRoute
+        // redirects to login instead of spinning indefinitely.
+        if (!profileRef.current) setUser(null)
       }
     }, 6_000)
 
@@ -374,7 +377,10 @@ export function AuthProvider({ children }) {
               })
               .catch((err) => {
                 console.warn('[Auth] Visibility resume failed:', err)
-                if (mounted && loading) setLoading(false)
+                if (mounted) {
+                  setUser(null)
+                  if (loading) setLoading(false)
+                }
               })
           }
         }).catch(() => {})
@@ -446,6 +452,9 @@ export function AuthProvider({ children }) {
           } catch {
             if (mounted) {
               setProfile(null)
+              // Clear user so ProtectedRoute redirects to login instead of
+              // spinning forever (user set, profile null, loading false).
+              setUser(null)
             }
           } finally {
             if (mounted) {
