@@ -215,34 +215,73 @@ function downloadCSV(filename, rows, columns) {
   URL.revokeObjectURL(url);
 }
 
-function printTransportManifest(notFlying, byDriving, byBus, crossCountrySubgroups) {
+function printTransportManifest(notFlying, byDriving, byInState, byBus, crossCountrySubgroups) {
   const win = window.open('', '_blank');
   const printDate = new Date().toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  const typeOf = r => r.transportMode === 'bus' ? 'Bus' : r.transportMode === 'driving' ? 'Driving' : crossCountrySubgroups?.has(r.subgroup) ? 'Cross-country' : 'Not flying';
-  const typeColor = r => r.transportMode === 'bus' ? { bg: '#E3F2FD', fg: '#1565C0', border: '#90CAF9' } : r.transportMode === 'driving' ? { bg: '#E8F5E9', fg: '#2E7D32', border: '#A5D6A7' } : { bg: '#F3E8FF', fg: '#6B21A8', border: '#C4B5FD' };
+  const typeOf = r => r.transportMode === 'bus' ? 'Bus' : r.transportMode === 'driving' ? 'Driving' : crossCountrySubgroups?.has(r.subgroup) ? 'Cross-country' : 'Local';
+  const typeColor = r => r.transportMode === 'bus'
+    ? { bg: '#E3F2FD', fg: '#1565C0', border: '#90CAF9' }
+    : r.transportMode === 'driving'
+      ? { bg: '#E8F5E9', fg: '#2E7D32', border: '#A5D6A7' }
+      : crossCountrySubgroups?.has(r.subgroup)
+        ? { bg: '#F3E8FF', fg: '#6B21A8', border: '#C4B5FD' }
+        : { bg: '#EDE9F6', fg: '#4C2A92', border: '#C4B5FD' };
+
+  const crossCountryCount = notFlying.filter(r => !r.transportMode && crossCountrySubgroups?.has(r.subgroup)).length;
 
   // Group by subgroup
   const bySubgroup = {};
   notFlying.forEach(r => {
-    if (!bySubgroup[r.subgroup]) bySubgroup[r.subgroup] = [];
-    bySubgroup[r.subgroup].push(r);
+    const sg = r.subgroup || 'Unassigned';
+    if (!bySubgroup[sg]) bySubgroup[sg] = [];
+    bySubgroup[sg].push(r);
   });
 
-  const sections = Object.entries(bySubgroup).sort(([a], [b]) => a.localeCompare(b)).map(([sg, people]) => {
+  const sections = Object.entries(bySubgroup).sort(([a], [b]) => a.localeCompare(b)).map(([sg, people], sgIdx) => {
+    const dCount = people.filter(r => r.transportMode === 'driving').length;
+    const cCount = people.filter(r => !r.transportMode && crossCountrySubgroups?.has(r.subgroup)).length;
+    const lCount = people.filter(r => !r.transportMode && !crossCountrySubgroups?.has(r.subgroup)).length;
+    const bCount = people.filter(r => r.transportMode === 'bus').length;
+
+    // Color-code the section based on predominant transport mode
+    let sectionColor = '#4C2A92'; let sectionBg = '#F5F0FF'; let sectionBgDarker = '#EDE9F6';
+    if (dCount >= bCount && dCount >= cCount && dCount > 0) { sectionColor = '#2E7D32'; sectionBg = '#E8F5E9'; sectionBgDarker = '#D4EDDA'; }
+    else if (bCount >= dCount && bCount >= cCount && bCount > 0) { sectionColor = '#1565C0'; sectionBg = '#E3F2FD'; sectionBgDarker = '#BBDEFB'; }
+    else if ((cCount + lCount) >= dCount && (cCount + lCount) >= bCount && (cCount + lCount) > 0) { sectionColor = '#6B21A8'; sectionBg = '#F3E8FF'; sectionBgDarker = '#E9D5FF'; }
+
     const rows = people.map((r, i) => {
       const { bg, fg, border } = typeColor(r);
+      const initials = (r.fullName || '?').split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
       return `<tr class="${i % 2 === 0 ? 'even' : ''}">
-        <td class="name-cell">${r.fullName || '—'}</td>
-        <td>${r.fellowship || '—'}</td>
-        <td>${r.email || '—'}</td>
+        <td class="name-cell">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="avatar" style="background:${sectionBgDarker};color:${sectionColor}">${initials}</div>
+            <div>
+              <div style="font-weight:600;color:#1A1220;line-height:1.2">${r.fullName || '—'}</div>
+              <div style="font-size:10.5px;color:#8A7F99;margin-top:1px">${r.fellowship || ''}</div>
+            </div>
+          </div>
+        </td>
+        <td style="color:#6B5B8A;font-size:11.5px">${r.email || '—'}</td>
         <td><span class="type-tag" style="background:${bg};color:${fg};border-color:${border}">${typeOf(r)}</span></td>
       </tr>`;
     }).join('');
-    return `<div class="section">
-      <div class="section-header">${sg} <span class="section-count">${people.length}</span></div>
-      <table>
-        <thead><tr><th>Name</th><th>Fellowship</th><th>Email</th><th>Transport</th></tr></thead>
+
+    const meta = [dCount && `${dCount} driving`, bCount && `${bCount} bus`, cCount && `${cCount} cross-country`].filter(Boolean).join(' · ');
+    return `<div class="section" style="border-left:4px solid ${sectionColor};background:${sectionBg}20;padding:12px;border-radius:8px;margin-bottom:24px">
+      <div class="section-header" style="border-bottom:2px solid ${sectionColor};padding-bottom:8px;margin-bottom:12px">
+        <div>
+          <div style="font-family:'Playfair Display',Georgia,serif;font-size:16px;font-weight:700;color:${sectionColor}">📍 ${sg}</div>
+          <div style="font-size:10.5px;color:#8A7F99;margin-top:3px;font-weight:500">${meta}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:13px;font-weight:700;color:${sectionColor}">${people.length}</div>
+          <div style="font-size:9px;color:#8A7F99;font-weight:600">delegates</div>
+        </div>
+      </div>
+      <table style="margin-top:0">
+        <thead><tr style="background:${sectionBg}"><th>Name &amp; Fellowship</th><th>Email</th><th>Transport</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -250,46 +289,53 @@ function printTransportManifest(notFlying, byDriving, byBus, crossCountrySubgrou
 
   win.document.write(`<!doctype html><html><head>
 <meta charset="utf-8">
-<title>Transport Manifest — This Is It 2.0</title>
+<title>Ground Transport Manifest — This Is It 2.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Inter',system-ui,sans-serif;background:#F7F5F2;color:#1A1220;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{font-family:'Inter',system-ui,sans-serif;background:#F7F5FA;color:#1A1220;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .page{max-width:900px;margin:0 auto;padding:32px 28px}
 
-  .cover{background:#0D2B1A;border-radius:16px;padding:30px 36px 26px;margin-bottom:28px;position:relative;overflow:hidden}
-  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 85% 10%,#1A5C30 0%,transparent 55%),radial-gradient(ellipse at 15% 90%,#0A1F12 0%,transparent 50%);pointer-events:none}
+  /* ── Cover ── */
+  .cover{background:linear-gradient(135deg,#2D0A5A 0%,#3D1A78 60%,#1E0A3C 100%);border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 75% 0%,#7B3FC4 0%,transparent 55%),radial-gradient(ellipse at 15% 100%,#5A1FA0 0%,transparent 50%);pointer-events:none;opacity:.7}
   .cover-inner{position:relative;z-index:1}
-  .event-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:8px}
-  .cover h1{font-family:'Playfair Display',Georgia,serif;font-size:32px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:4px}
-  .cover-date{font-size:12px;color:rgba(255,255,255,.45);margin-bottom:22px}
+  .event-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:8px}
+  .cover h1{font-family:'Playfair Display',Georgia,serif;font-size:34px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:4px;text-shadow:0 2px 8px rgba(0,0,0,.2)}
+  .cover-subtitle{font-size:12px;color:rgba(255,255,255,.42);margin-bottom:2px;font-weight:500}
+  .cover-date{font-size:11.5px;color:rgba(255,255,255,.38);margin-bottom:24px}
   .stats-row{display:flex;gap:12px;flex-wrap:wrap}
-  .stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 18px;text-align:center;min-width:80px}
-  .stat-val{font-family:'Playfair Display',Georgia,serif;font-size:24px;font-weight:700;color:#fff;line-height:1}
-  .stat-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:rgba(255,255,255,.38);margin-top:4px}
+  .stat{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:12px 18px;text-align:center;min-width:88px;backdrop-filter:blur(12px)}
+  .stat-val{font-family:'Playfair Display',Georgia,serif;font-size:26px;font-weight:700;color:#fff;line-height:1}
+  .stat-lbl{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.42);margin-top:4px}
 
-  .legend{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:#666;margin-bottom:22px;padding:10px 14px;background:#fff;border-radius:8px;border:1px solid #E4E0EC}
-  .legend-item{display:flex;align-items:center;gap:6px}
-  .leg-dot{width:10px;height:10px;border-radius:50%}
+  /* ── Legend ── */
+  .legend{display:flex;gap:18px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:#555;margin-bottom:24px;padding:12px 16px;background:#fff;border-radius:8px;border:1px solid #DDD0E8;box-shadow:0 1px 3px rgba(76,42,146,.06)}
+  .legend-item{display:flex;align-items:center;gap:6px;font-weight:500}
+  .leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 
-  .section{margin-bottom:22px;break-inside:avoid}
-  .section-header{font-family:'Playfair Display',Georgia,serif;font-size:15px;font-weight:700;color:#1A1220;padding:8px 0 6px;border-bottom:2px solid #1A1220;margin-bottom:0;display:flex;align-items:center;gap:8px}
-  .section-count{font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:#888;font-style:normal}
+  /* ── Sections ── */
+  .section{margin-bottom:24px;break-inside:avoid;border-radius:8px}
+  .section-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 8px}
+  .section-count{font-family:'Inter',sans-serif;font-size:10.5px;font-weight:500;color:#8A7F99}
 
-  table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-  thead tr{background:#F7F5FA}
-  th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#888;padding:8px 12px;text-align:left;border-bottom:1px solid #EDE9F6}
+  /* ── Table ── */
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:0 0 6px 6px;overflow:hidden}
+  thead tr{background:#F5F0FF}
+  th{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#7C5ABF;padding:8px 12px;text-align:left;border-bottom:1px solid #EDE9F6}
   td{font-size:12px;padding:9px 12px;vertical-align:middle;border-bottom:1px solid #F4F1F9;color:#2A1F3D}
   tr.even td{background:#FDFCFF}
   tr:last-child td{border-bottom:none}
-  .name-cell{font-weight:600;color:#1A1220}
-  .type-tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;border:1px solid;letter-spacing:.03em}
+  .name-cell{min-width:160px}
+  .avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
+  .type-tag{display:inline-block;font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;border:1px solid;letter-spacing:.03em;white-space:nowrap}
 
+  /* ── Print ── */
   @media print{
     body{background:#fff}
     .page{padding:0}
-    .cover{border-radius:0;margin:0 0 22px;padding:22px 28px}
+    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px;background:#3D1A78}
     @page{margin:1.2cm;size:A4}
   }
 </style>
@@ -298,25 +344,269 @@ function printTransportManifest(notFlying, byDriving, byBus, crossCountrySubgrou
   <div class="cover">
     <div class="cover-inner">
       <div class="event-label">This Is It 2.0 · BLW Canada Sub-Region</div>
-      <h1>Transport Manifest</h1>
+      <h1>Ground Transport Manifest</h1>
+      <div class="cover-subtitle">Driving · Bus · Cross-country delegates — organized by subgroup</div>
       <div class="cover-date">${printDate}</div>
       <div class="stats-row">
         <div class="stat"><div class="stat-val">${notFlying.length}</div><div class="stat-lbl">Total</div></div>
         <div class="stat"><div class="stat-val">${byDriving.length}</div><div class="stat-lbl">Driving</div></div>
+        <div class="stat"><div class="stat-val">${byInState.length}</div><div class="stat-lbl">Local</div></div>
         <div class="stat"><div class="stat-val">${byBus.length}</div><div class="stat-lbl">By Bus</div></div>
-        <div class="stat"><div class="stat-val">${Object.keys(bySubgroup || {}).length}</div><div class="stat-lbl">Subgroups</div></div>
+        <div class="stat"><div class="stat-val">${Object.keys(bySubgroup).length}</div><div class="stat-lbl">Groups</div></div>
       </div>
     </div>
   </div>
 
   <div class="legend">
-    <span style="font-weight:600;color:#444;font-size:11.5px">Transport type:</span>
+    <span style="font-weight:700;color:#4C2A92;font-size:11.5px">✓ Transport mode:</span>
     <span class="legend-item"><span class="leg-dot" style="background:#2E7D32"></span>Driving</span>
-    <span class="legend-item"><span class="leg-dot" style="background:#1565C0"></span>Bus</span>
+    <span class="legend-item"><span class="leg-dot" style="background:#1565C0"></span>By bus</span>
     <span class="legend-item"><span class="leg-dot" style="background:#6B21A8"></span>Cross-country</span>
+    <span class="legend-item"><span class="leg-dot" style="background:#7C5ABF"></span>Not yet assigned</span>
   </div>
 
   ${sections}
+</div>
+</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 600);
+}
+
+function printFlightManifest(withFlight, byArrivalDate, byDepartureDate) {
+  const win = window.open('', '_blank');
+  const printDate = new Date().toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  function fmtDateHeader(d) {
+    if (!d || d === 'Unknown') return 'Date unknown';
+    try { return new Date(d + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); }
+    catch { return d; }
+  }
+
+  const arrivalSections = byArrivalDate.map(([date, people], dateIdx) => {
+    const bands = groupIntoBands(people, 'arrivalTime');
+    const rows = bands.map((band, bandIdx) => {
+      const bandHeader = band.length > 1
+        ? `<tr><td colspan="7" style="padding:4px 10px;background:#F5F0FF;border-top:${bandIdx > 0 ? '1px solid #EDE9F6' : 'none'}"><span style="font-size:10.5px;font-weight:600;color:#4C2A92">🚗 ${band.length} arriving within 15 min of each other — possible shared pickup</span></td></tr>`
+        : '';
+      const personRows = band.map((r, i) => {
+        const initials = (r.fullName || '?').split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+        return `<tr class="${(bandIdx + i) % 2 === 0 ? 'even' : ''}" style="${band.length > 1 ? 'background:#FBF9FF' : ''}">
+        <td class="name-cell">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="avatar">${initials}</div>
+            <div>
+              <div style="font-weight:600;color:#1A1220;line-height:1.2">${r.fullName || '—'}</div>
+              <div style="font-size:10.5px;color:#8A7F99;margin-top:1px">${r.fellowship || ''}</div>
+            </div>
+          </div>
+        </td>
+        <td style="color:#6B5B8A;font-weight:500">${r.subgroup || '—'}</td>
+        <td style="font-weight:600;font-family:'JetBrains Mono',monospace;color:#4C2A92">${fmtTime(r.arrivalTime) || '—'}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:#2E7D32">${r.arrivalFlight || '—'}</td>
+        <td style="color:#8A7F99;font-size:11px">${r.departureDate || '—'}</td>
+        <td style="font-family:'JetBrains Mono',monospace;color:#4C2A92">${fmtTime(r.departureTime) || '—'}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-weight:600;color:#8B5CF6">${r.departureFlight || '—'}</td>
+      </tr>`;
+      }).join('');
+      return bandHeader + personRows;
+    }).join('');
+    return `<div class="section" style="background:#F5F0FF20;border-left:4px solid #4C2A92;padding:12px;border-radius:6px;margin-bottom:24px">
+      <div class="section-header" style="border-bottom:2px solid #7C5ABF;padding-bottom:8px;margin-bottom:10px">
+        <div style="flex:1">
+          <div style="font-family:'Playfair Display',Georgia,serif;font-size:15px;font-weight:700;color:#4C2A92">✈ ${fmtDateHeader(date)}</div>
+        </div>
+        <div style="text-align:right;font-size:10.5px;color:#8A7F99;font-weight:600">${people.length} arrival${people.length !== 1 ? 's' : ''}</div>
+      </div>
+      <table style="margin-top:0">
+        <thead><tr style="background:#F5F0FF"><th>Name &amp; Fellowship</th><th>Subgroup</th><th>Time</th><th>Flight</th><th>Dep. Date</th><th>Dep. Time</th><th>Dep. Flight</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+
+  win.document.write(`<!doctype html><html><head>
+<meta charset="utf-8">
+<title>Flight Manifest — This Is It 2.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;background:#F7F5FA;color:#1A1220;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .page{max-width:960px;margin:0 auto;padding:32px 28px}
+
+  /* ── Cover ── */
+  .cover{background:linear-gradient(135deg,#2D0A5A 0%,#3D1A78 60%,#1E0A3C 100%);border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 75% 0%,#7B3FC4 0%,transparent 55%),radial-gradient(ellipse at 15% 100%,#5A1FA0 0%,transparent 50%);pointer-events:none;opacity:.7}
+  .cover-inner{position:relative;z-index:1}
+  .event-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:8px}
+  .cover h1{font-family:'Playfair Display',Georgia,serif;font-size:34px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:4px;text-shadow:0 2px 8px rgba(0,0,0,.2)}
+  .cover-subtitle{font-size:12px;color:rgba(255,255,255,.42);margin-bottom:2px;font-weight:500}
+  .cover-date{font-size:11.5px;color:rgba(255,255,255,.38);margin-bottom:24px}
+  .stats-row{display:flex;gap:12px;flex-wrap:wrap}
+  .stat{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:12px 18px;text-align:center;min-width:88px;backdrop-filter:blur(12px)}
+  .stat-val{font-family:'Playfair Display',Georgia,serif;font-size:26px;font-weight:700;color:#fff;line-height:1}
+  .stat-lbl{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.42);margin-top:4px}
+
+  /* ── Sections ── */
+  .section{margin-bottom:24px;break-inside:avoid;border-radius:6px}
+  .section-header{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
+  .section-count{font-family:'Inter',sans-serif;font-size:10.5px;font-weight:500;color:#8A7F99}
+
+  /* ── Table ── */
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:0 0 6px 6px;overflow:hidden}
+  thead tr{background:#F5F0FF}
+  th{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#7C5ABF;padding:8px 10px;text-align:left;border-bottom:1px solid #EDE9F6}
+  td{font-size:11.5px;padding:8px 10px;vertical-align:middle;border-bottom:1px solid #F4F1F9;color:#2A1F3D}
+  tr.even td{background:#FDFCFF}
+  tr:last-child td{border-bottom:none}
+  .name-cell{min-width:160px}
+  .avatar{width:28px;height:28px;border-radius:50%;background:#EDE9F6;color:#4C2A92;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
+
+  /* ── Print ── */
+  @media print{
+    body{background:#fff}
+    .page{padding:0}
+    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px;background:#3D1A78}
+    @page{margin:1.2cm;size:A4 landscape}
+  }
+</style>
+</head><body>
+<div class="page">
+  <div class="cover">
+    <div class="cover-inner">
+      <div class="event-label">This Is It 2.0 · BLW Canada Sub-Region</div>
+      <h1>Flight Manifest</h1>
+      <div class="cover-subtitle">Arrivals organized by date — out-of-province delegates</div>
+      <div class="cover-date">${printDate}</div>
+      <div class="stats-row">
+        <div class="stat"><div class="stat-val">${withFlight.length}</div><div class="stat-lbl">Total flights</div></div>
+        <div class="stat"><div class="stat-val">${byArrivalDate.length}</div><div class="stat-lbl">Arrival days</div></div>
+        <div class="stat"><div class="stat-val">${byDepartureDate.length}</div><div class="stat-lbl">Departure days</div></div>
+      </div>
+    </div>
+  </div>
+
+  ${arrivalSections || '<p style="color:#8A7F99;font-size:13px;padding:20px 0;text-align:center">No flight data to display.</p>'}
+</div>
+</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 600);
+}
+
+function printDepartureManifest(withFlight, byDepartureDate) {
+  const win = window.open('', '_blank');
+  const printDate = new Date().toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  function fmtDateHeader(d) {
+    if (!d || d === 'Unknown') return 'Date unknown';
+    try { return new Date(d + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); }
+    catch { return d; }
+  }
+
+  function fmtDateShort(d) {
+    if (!d) return '—';
+    try { return new Date(d + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); }
+    catch { return d; }
+  }
+
+  const departureSections = byDepartureDate.map(([date, people], dateIdx) => {
+    const bands = groupIntoBands(people, 'departureTime');
+    const rows = bands.map((band, bandIdx) => {
+      const bandHeader = band.length > 1
+        ? `<tr><td colspan="5" style="padding:4px 10px;background:#F5F0FF;border-top:${bandIdx > 0 ? '1px solid #EDE9F6' : 'none'}"><span style="font-size:10.5px;font-weight:600;color:#4C2A92">🚗 ${band.length} departing within 15 min of each other — possible shared dropoff</span></td></tr>`
+        : '';
+      const personRows = band.map((r, i) => {
+        const initials = (r.fullName || '?').split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+        const rowClass = (bandIdx + i) % 2 === 0 ? 'even' : '';
+        return `<tr class="${rowClass}" style="${band.length > 1 ? 'background:#FBF9FF' : ''}">
+          <td class="name-cell">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="avatar">${initials}</div>
+              <div>
+                <div style="font-weight:600;color:#1A1220;line-height:1.2">${r.fullName || '—'}</div>
+                <div style="font-size:10.5px;color:#8A7F99;margin-top:1px">${r.fellowship || ''}</div>
+              </div>
+            </div>
+          </td>
+          <td style="color:#6B5B8A;font-weight:500">${r.subgroup || '—'}</td>
+          <td style="font-weight:600;font-family:'JetBrains Mono',monospace;color:#4C2A92">${fmtTime(r.departureTime) || '—'}</td>
+          <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:#8B5CF6">${r.departureFlight || '—'}</td>
+          <td style="color:#8A7F99;font-size:11px">${fmtDateShort(r.arrivalDate) || '—'} ${fmtTime(r.arrivalTime) ? `· ${fmtTime(r.arrivalTime)}` : ''}</td>
+        </tr>`;
+      }).join('');
+      return bandHeader + personRows;
+    }).join('');
+
+    return `<div class="section" style="background:#F5F0FF20;border-left:4px solid #7C5ABF;padding:12px;border-radius:6px;margin-bottom:24px">
+      <div class="section-header" style="border-bottom:2px solid #7C5ABF;padding-bottom:8px;margin-bottom:10px">
+        <div style="flex:1">
+          <div style="font-family:'Playfair Display',Georgia,serif;font-size:15px;font-weight:700;color:#4C2A92">✈ ${fmtDateHeader(date)}</div>
+        </div>
+        <div style="text-align:right;font-size:10.5px;color:#8A7F99;font-weight:600">${people.length} departure${people.length !== 1 ? 's' : ''}</div>
+      </div>
+      <table style="margin-top:0">
+        <thead><tr style="background:#F5F0FF"><th>Name &amp; Fellowship</th><th>Subgroup</th><th>Dep. Time</th><th>Dep. Flight</th><th>Arrived</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+
+  const totalDepartures = byDepartureDate.reduce((s, [, p]) => s + p.length, 0);
+
+  win.document.write(`<!doctype html><html><head>
+<meta charset="utf-8">
+<title>Departure Manifest — This Is It 2.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;background:#F7F5FA;color:#1A1220;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .page{max-width:960px;margin:0 auto;padding:32px 28px}
+  .cover{background:linear-gradient(135deg,#2D0A5A 0%,#3D1A78 60%,#1E0A3C 100%);border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 75% 0%,#7B3FC4 0%,transparent 55%),radial-gradient(ellipse at 15% 100%,#5A1FA0 0%,transparent 50%);pointer-events:none;opacity:.7}
+  .cover-inner{position:relative;z-index:1}
+  .event-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:8px}
+  .cover h1{font-family:'Playfair Display',Georgia,serif;font-size:34px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:4px;text-shadow:0 2px 8px rgba(0,0,0,.2)}
+  .cover-subtitle{font-size:12px;color:rgba(255,255,255,.42);margin-bottom:2px;font-weight:500}
+  .cover-date{font-size:11.5px;color:rgba(255,255,255,.38);margin-bottom:24px}
+  .stats-row{display:flex;gap:12px;flex-wrap:wrap}
+  .stat{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:12px 18px;text-align:center;min-width:88px;backdrop-filter:blur(12px)}
+  .stat-val{font-family:'Playfair Display',Georgia,serif;font-size:26px;font-weight:700;color:#fff;line-height:1}
+  .stat-lbl{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.42);margin-top:4px}
+  .section{margin-bottom:24px;break-inside:avoid;border-radius:6px}
+  .section-header{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:0 0 6px 6px;overflow:hidden}
+  thead tr{background:#F5F0FF}
+  th{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#7C5ABF;padding:8px 10px;text-align:left;border-bottom:1px solid #EDE9F6}
+  td{font-size:11.5px;padding:8px 10px;vertical-align:middle;border-bottom:1px solid #F4F1F9;color:#2A1F3D}
+  tr.even td{background:#FDFCFF}
+  tr:last-child td{border-bottom:none}
+  .name-cell{min-width:160px}
+  .avatar{width:28px;height:28px;border-radius:50%;background:#EDE9F6;color:#4C2A92;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
+  @media print{
+    body{background:#fff}
+    .page{padding:0}
+    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px;background:#3D1A78}
+    @page{margin:1.2cm;size:A4 landscape}
+  }
+</style>
+</head><body>
+<div class="page">
+  <div class="cover">
+    <div class="cover-inner">
+      <div class="event-label">This Is It 2.0 · BLW Canada Sub-Region</div>
+      <h1>Departure Manifest</h1>
+      <div class="cover-subtitle">Departures organized by date · 15-minute window batching</div>
+      <div class="cover-date">${printDate}</div>
+      <div class="stats-row">
+        <div class="stat"><div class="stat-val">${totalDepartures}</div><div class="stat-lbl">Total departures</div></div>
+        <div class="stat"><div class="stat-val">${byDepartureDate.length}</div><div class="stat-lbl">Departure days</div></div>
+      </div>
+    </div>
+  </div>
+  ${departureSections || '<p style="color:#8A7F99;font-size:13px;padding:20px 0;text-align:center">No departure data to display.</p>'}
 </div>
 </body></html>`);
   win.document.close();
@@ -690,6 +980,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       // --- Batch all registration_config reads into a single query ---
       let conf = {}, tg = {}, li = { roster: null, registrations: null };
       let cachedReg = [], cachedRoster = [], roomConfig = null;
+      let configQuerySucceeded = false;
       try {
         const { data: configRows } = await supabase
           .from('registration_config')
@@ -702,6 +993,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         tg = byKey['targets'] || {};
         li = byKey['last-import'] || { roster: null, registrations: null };
         roomConfig = byKey['room-assignments'] || null;
+        configQuerySucceeded = true;
       } catch (e) {
         console.error('Failed to load registration_config:', e);
       }
@@ -782,14 +1074,20 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       setTargets(tg);
       setLastImport(li);
 
-      // Room assignments
+      // Room assignments — only write fresh empty rooms when the DB query
+      // succeeded AND confirmed no saved data exists. If the query failed,
+      // leave local state as-is (5 empty rooms default) without writing to
+      // DB, so a transient error never overwrites saved assignments.
       if (roomConfig) {
         setRooms(roomConfig.rooms || []);
         setNumRooms(roomConfig.numRooms || 5);
         setPeoplePerRoom(roomConfig.peoplePerRoom || 2);
         if (roomConfig.roomsNote != null) setRoomsNote(roomConfig.roomsNote);
-      } else {
+      } else if (configQuerySucceeded) {
         initializeRooms(5, 2);
+      } else {
+        // Query failed — set local default only, do NOT write to DB
+        setRooms(Array.from({ length: 5 }, (_, i) => ({ id: `room-init-${i}`, name: `Room ${i + 1}`, capacity: 2, people: [] })));
       }
 
       setLoaded(true);
@@ -1488,8 +1786,8 @@ function OverviewTab({ totalRegs, totalRegTarget, subgroups, bySubgroup, flightN
   const totalAwaitingFlight = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.flightsNeeded || 0), 0), [bySubgroup]);
   const totalFlightsBooked = useMemo(() => Object.values(bySubgroup).reduce((s, v) => s + (v.flights || 0), 0), [bySubgroup]);
   const totalFlightsNeeded = totalFlightsBooked + totalAwaitingFlight;
-  const driveCount = useMemo(() => merged.filter(r => r.inStateConfirmed && r.transportMode !== 'bus').length, [merged]);
-  const busCount   = useMemo(() => merged.filter(r => r.inStateConfirmed && r.transportMode === 'bus').length, [merged]);
+  const driveCount = useMemo(() => merged.filter(r => r.inStateConfirmed && r.transportMode !== 'bus' && !/manitoba|winnipeg|mennonite university|college of the north/i.test(r.fellowship || '')).length, [merged]);
+  const busCount   = useMemo(() => merged.filter(r => r.inStateConfirmed && r.transportMode === 'bus'   && !/manitoba|winnipeg|mennonite university|college of the north/i.test(r.fellowship || '')).length, [merged]);
   const crossCountryNote = useMemo(() => {
     const parts = [];
     if (driveCount) parts.push(`${driveCount} driving`);
@@ -3215,7 +3513,14 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
             {refreshing ? 'Refreshing…' : 'Refresh'}
           </Btn>
           <Btn tone="ghost" small onClick={() => downloadCSV('flight-manifest.csv', withFlight, flightCols)}>
-            <Download size={13} /> Export manifest
+            <Download size={13} /> CSV
+          </Btn>
+          <Btn tone="ghost" small onClick={() =>
+            viewMode === 'departures'
+              ? printDepartureManifest(withFlight, byDepartureDate)
+              : printFlightManifest(withFlight, byArrivalDate, byDepartureDate)
+          }>
+            <Download size={13} /> PDF
           </Btn>
         </div>
       </div>
@@ -3369,14 +3674,16 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
           (subgroupFilter === 'All' || r.subgroup === subgroupFilter)
         );
         if (notFlying.length === 0) return null;
-        const byBus = notFlying.filter(r => r.transportMode === 'bus');
         const byDriving = notFlying.filter(r => r.transportMode !== 'bus');
+        const byInState = [];
+        const byBus = notFlying.filter(r => r.transportMode === 'bus');
         return (
           <div style={{ marginTop: 24 }}>
             <div style={{ fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 13.5, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Car size={14} color={C.green} />
               Not Flying
               {byDriving.length > 0 && <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11.5, fontWeight: 400, color: C.mute }}>{byDriving.length} driving</span>}
+              {byInState.length > 0 && <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11.5, fontWeight: 400, color: C.mute }}>{byInState.length} local</span>}
               {byBus.length > 0 && <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11.5, fontWeight: 400, color: C.mute }}>{byBus.length} by bus</span>}
             </div>
             <Card style={{ padding: 0 }}>
@@ -3404,9 +3711,9 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
                 { key: 'subgroup', label: 'Subgroup' },
                 { key: 'fellowship', label: 'Fellowship' },
                 { key: 'email', label: 'Email' },
-                { get: r => r.transportMode === 'bus' ? 'Bus' : r.transportMode === 'driving' ? 'Driving' : crossCountrySubgroups.has(r.subgroup) ? 'Cross-country' : 'Not flying', label: 'Transport' },
+                { get: r => r.transportMode === 'bus' ? 'Bus' : r.transportMode === 'driving' ? 'Driving' : crossCountrySubgroups.has(r.subgroup) ? 'Cross-country' : 'Local', label: 'Transport' },
               ])}><Download size={13} /> CSV</Btn>
-              <Btn tone="ghost" small onClick={() => printTransportManifest(notFlying, byDriving, byBus, crossCountrySubgroups)}><Download size={13} /> PDF</Btn>
+              <Btn tone="ghost" small onClick={() => printTransportManifest(notFlying, byDriving, byInState, byBus, crossCountrySubgroups)}><Download size={13} /> PDF</Btn>
             </div>
           </div>
         );
@@ -3780,8 +4087,8 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   .page{max-width:940px;margin:0 auto;padding:32px 28px}
 
   /* ── Cover header ── */
-  .cover{background:#12082A;border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
-  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 80% 0%,#4C2A92 0%,transparent 60%),radial-gradient(ellipse at 20% 100%,#2A1260 0%,transparent 55%);pointer-events:none}
+  .cover{background:linear-gradient(135deg,#2D0A5A 0%,#3D1A78 60%,#1E0A3C 100%);border-radius:16px;padding:32px 36px 28px;margin-bottom:28px;position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 75% 0%,#7B3FC4 0%,transparent 55%),radial-gradient(ellipse at 15% 100%,#5A1FA0 0%,transparent 50%);pointer-events:none;opacity:.7}
   .cover-inner{position:relative;z-index:1}
   .event-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:8px}
   .cover h1{font-family:'Playfair Display',Georgia,serif;font-size:34px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:4px}
@@ -3829,7 +4136,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   @media print{
     body{background:#fff}
     .page{padding:0}
-    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px}
+    .cover{border-radius:0;margin:0 0 24px;padding:24px 28px;background:#3D1A78}
     @page{margin:1.2cm;size:A4}
   }
 </style>
@@ -3852,11 +4159,9 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
 
   ${nightLabels.length > 0 ? `<div class="legend">
     <span class="legend-title">Stay nights:</span>
-    ${nightLabels.map((lbl, i) => `<span class="legend-night"><span class="nbadge" style="background:#3D1A78;color:#fff;">${nightShort[i]}</span>${lbl}</span>`).join('')}
+    ${nightLabels.map((lbl, i) => `<span class="legend-night"><span class="nbadge" style="background:#4C2A92;color:#fff;">${nightShort[i]}</span>${lbl}</span>`).join('')}
     <span style="margin-left:auto;font-size:11px;color:#bbb">★ = Room head</span>
   </div>` : ''}
-
-  ${roomsNote ? `<div class="note"><div class="note-label">Special Requests &amp; Notes</div>${roomsNote}</div>` : ''}
 
   <div class="grid">${rows}</div>
 
@@ -3917,7 +4222,31 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
             {isMobile ? ' · tap name then tap room' : ' · drag names into rooms'}
           </div>
         </div>
-        <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0}><Download size={13} /> Print</Btn>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <Btn tone="ghost" small disabled={rooms.length === 0} onClick={() => {
+            const roomRows = rooms.flatMap(room =>
+              room.people.length === 0
+                ? [{ room: room.name, capacity: room.capacity, name: '(empty)', fellowship: '', email: '', roomHead: '' }]
+                : room.people.map(p => ({
+                    room: room.name,
+                    capacity: room.capacity,
+                    name: p.fullName || '',
+                    fellowship: p.fellowship || '',
+                    email: p.email || '',
+                    roomHead: p.email === room.roomHead ? 'Yes' : '',
+                  }))
+            );
+            downloadCSV('room-assignments.csv', roomRows, [
+              { key: 'room', label: 'Room' },
+              { key: 'capacity', label: 'Capacity' },
+              { key: 'name', label: 'Name' },
+              { key: 'fellowship', label: 'Fellowship' },
+              { key: 'email', label: 'Email' },
+              { key: 'roomHead', label: 'Room Head' },
+            ]);
+          }}><Download size={13} /> CSV</Btn>
+          <Btn tone="ghost" small onClick={printRooms} disabled={rooms.length === 0}><Download size={13} /> PDF</Btn>
+        </div>
       </div>
 
       {/* night highlight feature banner */}
@@ -4145,7 +4474,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
                                   const needed = !hasCompleteInfo || (night >= arr && night < dep);
                                   const dayLabel = new Date(night + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
                                   return (
-                                    <span key={night} style={{ fontSize: 8.5, fontWeight: 700, padding: '1px 3px', borderRadius: 3, flexShrink: 0, background: needed ? '#4C2A92' : '#EDE9F6', color: needed ? '#fff' : '#C4B5FD', letterSpacing: 0.2 }}>
+                                    <span key={night} style={{ fontSize: 10, fontWeight: 700, padding: '2px 5px', borderRadius: 4, flexShrink: 0, background: needed ? '#5B35A8' : '#EDE9F6', color: needed ? '#fff' : '#C4B5FD', letterSpacing: 0.3 }}>
                                       {dayLabel}
                                     </span>
                                   );
