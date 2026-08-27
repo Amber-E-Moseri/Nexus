@@ -215,6 +215,115 @@ function downloadCSV(filename, rows, columns) {
   URL.revokeObjectURL(url);
 }
 
+function printTransportManifest(notFlying, byDriving, byBus, crossCountrySubgroups) {
+  const win = window.open('', '_blank');
+  const printDate = new Date().toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  const typeOf = r => r.transportMode === 'bus' ? 'Bus' : r.transportMode === 'driving' ? 'Driving' : crossCountrySubgroups?.has(r.subgroup) ? 'Cross-country' : 'Not flying';
+  const typeColor = r => r.transportMode === 'bus' ? { bg: '#E3F2FD', fg: '#1565C0', border: '#90CAF9' } : r.transportMode === 'driving' ? { bg: '#E8F5E9', fg: '#2E7D32', border: '#A5D6A7' } : { bg: '#F3E8FF', fg: '#6B21A8', border: '#C4B5FD' };
+
+  // Group by subgroup
+  const bySubgroup = {};
+  notFlying.forEach(r => {
+    if (!bySubgroup[r.subgroup]) bySubgroup[r.subgroup] = [];
+    bySubgroup[r.subgroup].push(r);
+  });
+
+  const sections = Object.entries(bySubgroup).sort(([a], [b]) => a.localeCompare(b)).map(([sg, people]) => {
+    const rows = people.map((r, i) => {
+      const { bg, fg, border } = typeColor(r);
+      return `<tr class="${i % 2 === 0 ? 'even' : ''}">
+        <td class="name-cell">${r.fullName || '—'}</td>
+        <td>${r.fellowship || '—'}</td>
+        <td>${r.email || '—'}</td>
+        <td><span class="type-tag" style="background:${bg};color:${fg};border-color:${border}">${typeOf(r)}</span></td>
+      </tr>`;
+    }).join('');
+    return `<div class="section">
+      <div class="section-header">${sg} <span class="section-count">${people.length}</span></div>
+      <table>
+        <thead><tr><th>Name</th><th>Fellowship</th><th>Email</th><th>Transport</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+
+  win.document.write(`<!doctype html><html><head>
+<meta charset="utf-8">
+<title>Transport Manifest — This Is It 2.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;background:#F7F5F2;color:#1A1220;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .page{max-width:900px;margin:0 auto;padding:32px 28px}
+
+  .cover{background:#0D2B1A;border-radius:16px;padding:30px 36px 26px;margin-bottom:28px;position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 85% 10%,#1A5C30 0%,transparent 55%),radial-gradient(ellipse at 15% 90%,#0A1F12 0%,transparent 50%);pointer-events:none}
+  .cover-inner{position:relative;z-index:1}
+  .event-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:8px}
+  .cover h1{font-family:'Playfair Display',Georgia,serif;font-size:32px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:4px}
+  .cover-date{font-size:12px;color:rgba(255,255,255,.45);margin-bottom:22px}
+  .stats-row{display:flex;gap:12px;flex-wrap:wrap}
+  .stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 18px;text-align:center;min-width:80px}
+  .stat-val{font-family:'Playfair Display',Georgia,serif;font-size:24px;font-weight:700;color:#fff;line-height:1}
+  .stat-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:rgba(255,255,255,.38);margin-top:4px}
+
+  .legend{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:#666;margin-bottom:22px;padding:10px 14px;background:#fff;border-radius:8px;border:1px solid #E4E0EC}
+  .legend-item{display:flex;align-items:center;gap:6px}
+  .leg-dot{width:10px;height:10px;border-radius:50%}
+
+  .section{margin-bottom:22px;break-inside:avoid}
+  .section-header{font-family:'Playfair Display',Georgia,serif;font-size:15px;font-weight:700;color:#1A1220;padding:8px 0 6px;border-bottom:2px solid #1A1220;margin-bottom:0;display:flex;align-items:center;gap:8px}
+  .section-count{font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:#888;font-style:normal}
+
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  thead tr{background:#F7F5FA}
+  th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#888;padding:8px 12px;text-align:left;border-bottom:1px solid #EDE9F6}
+  td{font-size:12px;padding:9px 12px;vertical-align:middle;border-bottom:1px solid #F4F1F9;color:#2A1F3D}
+  tr.even td{background:#FDFCFF}
+  tr:last-child td{border-bottom:none}
+  .name-cell{font-weight:600;color:#1A1220}
+  .type-tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;border:1px solid;letter-spacing:.03em}
+
+  @media print{
+    body{background:#fff}
+    .page{padding:0}
+    .cover{border-radius:0;margin:0 0 22px;padding:22px 28px}
+    @page{margin:1.2cm;size:A4}
+  }
+</style>
+</head><body>
+<div class="page">
+  <div class="cover">
+    <div class="cover-inner">
+      <div class="event-label">This Is It 2.0 · BLW Canada Sub-Region</div>
+      <h1>Transport Manifest</h1>
+      <div class="cover-date">${printDate}</div>
+      <div class="stats-row">
+        <div class="stat"><div class="stat-val">${notFlying.length}</div><div class="stat-lbl">Total</div></div>
+        <div class="stat"><div class="stat-val">${byDriving.length}</div><div class="stat-lbl">Driving</div></div>
+        <div class="stat"><div class="stat-val">${byBus.length}</div><div class="stat-lbl">By Bus</div></div>
+        <div class="stat"><div class="stat-val">${Object.keys(bySubgroup || {}).length}</div><div class="stat-lbl">Subgroups</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span style="font-weight:600;color:#444;font-size:11.5px">Transport type:</span>
+    <span class="legend-item"><span class="leg-dot" style="background:#2E7D32"></span>Driving</span>
+    <span class="legend-item"><span class="leg-dot" style="background:#1565C0"></span>Bus</span>
+    <span class="legend-item"><span class="leg-dot" style="background:#6B21A8"></span>Cross-country</span>
+  </div>
+
+  ${sections}
+</div>
+</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 600);
+}
+
 // ---------- storage helpers (Supabase-backed) ----------
 async function loadKey(key, fallback) {
   try {
@@ -3289,6 +3398,16 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
                 </table>
               </div>
             </Card>
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <Btn tone="ghost" small onClick={() => downloadCSV('transport-manifest.csv', notFlying, [
+                { key: 'fullName', label: 'Name' },
+                { key: 'subgroup', label: 'Subgroup' },
+                { key: 'fellowship', label: 'Fellowship' },
+                { key: 'email', label: 'Email' },
+                { get: r => r.transportMode === 'bus' ? 'Bus' : r.transportMode === 'driving' ? 'Driving' : crossCountrySubgroups.has(r.subgroup) ? 'Cross-country' : 'Not flying', label: 'Transport' },
+              ])}><Download size={13} /> CSV</Btn>
+              <Btn tone="ghost" small onClick={() => printTransportManifest(notFlying, byDriving, byBus, crossCountrySubgroups)}><Download size={13} /> PDF</Btn>
+            </div>
           </div>
         );
       })()}
