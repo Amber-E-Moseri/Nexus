@@ -253,15 +253,7 @@ export function AuthProvider({ children }) {
               setProfile(nextProfile)
               setLoading(false)
               touchLastActive().catch(() => {})
-              fetchSupplementaryProfile(lateSession.user.id, nextProfile.department_id)
-                .then((supplementary) => {
-                  if (mounted) {
-                    const merged = (prev) => prev?.id === nextProfile.id ? { ...prev, ...supplementary, _supplementaryLoaded: true } : prev
-                    profileRef.current = merged(profileRef.current)
-                    setProfile(merged)
-                  }
-                })
-                .catch(() => {})
+              deferredFetchSupplementary(lateSession.user.id, nextProfile.department_id)
             })
             .catch(() => {})
         }).catch(() => {})
@@ -335,40 +327,55 @@ export function AuthProvider({ children }) {
 
     // Safety-net covers the FULL auth lifecycle — both initializeAuth AND the
     // onAuthStateChange INITIAL_SESSION profile fetch (which can fire after
-    // initializeAuth returns and has no timeout of its own). The timer is never
-    // cleared early; setLoading(false) when loading is already false is a no-op.
-    setTimeout(() => {
+    // initializeAuth returns and has no timeout of its own). 6s is the mobile
+    // UX threshold for spinner patience. The timer is never cleared early;
+    // setLoading(false) when loading is already false is a no-op.
+    const safetyNetTimeout = setTimeout(() => {
       if (mounted) {
-        console.warn('[Auth] Initialization timed out after 15 s — clearing loading state')
+        console.warn('[Auth] Initialization timed out after 6 s — clearing loading state')
         setLoading(false)
       }
-    }, 15_000)
+    }, 6_000)
 
     initializeAuth()
 
     // Re-check auth + push subscription whenever the PWA comes back to the
     // foreground. On iOS/Android the OS can kill the process while suspended;
-    // when it relaunches, IndexedDB may be briefly inaccessible, causing the
-    // initial auth check to conclude "no session" and redirect to /login even
-    // though a valid session exists. Re-running getSession after IDB recovers
-    // restores the session without forcing a manual re-login.
+    // IndexedDB becomes inaccessible briefly, causing init to conclude "no session"
+    // even though a valid session exists. Re-running getSession after IDB recovers
+    // restores the session without forcing re-login.
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return
 
-      // Session recovery: if auth init concluded "no session" (user is null)
-      // but the user might actually be logged in (PWA cold-start IDB race),
-      // re-check. getSession reads from the storage adapter which now falls
-      // back to localStorage, so this catches both IDB-recovery and the
-      // localStorage mirror. If a session is found, onAuthStateChange fires
-      // SIGNED_IN/TOKEN_REFRESHED and the normal profile-fetch path runs.
-      if (!profileRef.current) {
+      // Session recovery: if currently showing spinner (loading) or logged out (user is null),
+      // re-check for a valid session in storage. This catches both:
+      // - IDB cold-start race (init thought no session, but IDB recovers after suspend)
+      // - PWA process kill (storage layer was never initialized)
+      if (loading || !profileRef.current) {
         supabase.auth.getSession().then(({ data }) => {
-          if (data?.session?.user && !profileRef.current) {
-            // Trigger the auth state change so the existing listener picks it up
-            supabase.auth.setSession({
-              access_token: data.session.access_token,
-              refresh_token: data.session.refresh_token,
-            }).catch(() => {})
+          if (!mounted) return
+          const resumeSession = data?.session
+          if (!resumeSession?.user) return
+
+          // Restore the session if we're still in loading state or logged out
+          if (loading || !profileRef.current) {
+            console.log('[Auth] Resuming session from visibility change')
+            setUser(resumeSession.user)
+            setJwtRole(getJwtRole(resumeSession))
+            // Fetch profile synchronously (don't defer) — user is waiting to resume
+            fetchMinimalProfile(resumeSession.user.id)
+              .then((nextProfile) => {
+                if (mounted && !profileRef.current) {
+                  profileRef.current = nextProfile
+                  setProfile(nextProfile)
+                  setLoading(false)
+                  deferredFetchSupplementary(resumeSession.user.id, nextProfile.department_id)
+                }
+              })
+              .catch((err) => {
+                console.warn('[Auth] Visibility resume failed:', err)
+                if (mounted && loading) setLoading(false)
+              })
           }
         }).catch(() => {})
       }
@@ -515,6 +522,7 @@ export function AuthProvider({ children }) {
       if (supplementaryTimeoutRef.current) {
         clearTimeout(supplementaryTimeoutRef.current)
       }
+      clearTimeout(safetyNetTimeout)
       subscription.unsubscribe()
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       if (initialSessionTimerRef.current) {
