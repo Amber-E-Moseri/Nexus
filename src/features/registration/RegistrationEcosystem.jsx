@@ -3571,47 +3571,114 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
 
   function printRooms() {
     const win = window.open('', '_blank');
+    const totalAssigned = rooms.reduce((s, r) => s + r.people.length, 0);
+    const totalCapacity = rooms.reduce((s, r) => s + (r.capacity || 0), 0);
+    const printDate = new Date().toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    // Night labels from eventNights (top-3 by headcount, already sorted)
+    const nightLabels = eventNights.map(n => new Date(n + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }));
+
     const rows = rooms.map(room => {
       const head = room.people.find(p => p.email === room.roomHead);
       const genders = new Set(room.people.map(p => {
         const g = (p.gender || '').toLowerCase();
         return (g.includes('female') || g === 'f') ? 'female' : 'male';
       }));
-      const isMixed = genders.size > 1;
+      const isMixed = genders.size > 1 && room.people.length > 0;
       const isAllFemale = !isMixed && genders.has('female') && room.people.length > 0;
       const isAllMale = !isMixed && genders.has('male') && room.people.length > 0;
-      const bg = isAllFemale ? '#FFE8F4' : isAllMale ? '#E8F0FF' : isMixed ? '#FBF0DE' : '#F8F8F8';
-      const accent = isAllFemale ? '#C0507A' : isAllMale ? '#2A5FA5' : isMixed ? '#B8710A' : '#6B5C8F';
-      const people = room.people.map(p =>
-        `<li style="padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.07);font-size:13px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start">
-            <div>
-              <span style="font-weight:${p.email === room.roomHead ? 700 : 400}">${p.fullName}</span>
-              ${p.designation ? `<div style="font-size:10px;color:#888;margin-top:2px">${p.designation}</div>` : ''}
+      const headerBg = isAllFemale ? '#C0507A' : isAllMale ? '#2A5FA5' : isMixed ? '#B8710A' : '#4C2A92';
+      const cardBg = isAllFemale ? '#FFF0F6' : isAllMale ? '#F0F5FF' : isMixed ? '#FFF8EE' : '#F8F5FF';
+      const genderLabel = isAllFemale ? '♀ Women' : isAllMale ? '♂ Men' : isMixed ? '⚥ Mixed' : '';
+      const fillPct = room.capacity ? Math.round((room.people.length / room.capacity) * 100) : 0;
+
+      const people = room.people.map((p, idx) => {
+        const isHead = p.email === room.roomHead;
+        // Night badges
+        const nightBadges = eventNights.length > 0 ? eventNights.map((night, ni) => {
+          const arr = p.arrivalDate, dep = p.departureDate;
+          const hasComplete = !!(arr && dep);
+          const needed = !hasComplete || (night >= arr && night < dep);
+          return `<span style="display:inline-block;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;background:${needed ? '#4C2A92' : '#EDE9F6'};color:${needed ? '#fff' : '#C4B5FD'};letter-spacing:0.3px;margin-right:2px">${nightLabels[ni]}</span>`;
+        }).join('') : '';
+
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;${idx < room.people.length - 1 ? 'border-bottom:1px solid rgba(0,0,0,0.06)' : ''}">
+          <div style="width:28px;height:28px;border-radius:50%;background:${headerBg};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">${(p.fullName || '?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12.5px;font-weight:${isHead ? 700 : 500};color:#1A1220;display:flex;align-items:center;gap:5px">
+              ${isHead ? '<span style="color:#E6A817;font-size:11px">★</span>' : ''}
+              ${p.fullName || '?'}
+              ${isHead ? '<span style="font-size:9px;font-weight:700;color:' + headerBg + ';background:' + headerBg + '18;padding:1px 5px;border-radius:3px;letter-spacing:0.4px">HEAD</span>' : ''}
             </div>
-            ${p.email === room.roomHead ? '<span style="font-weight:700;color:' + accent + ';font-size:11px">HEAD</span>' : ''}
+            ${p.designation ? `<div style="font-size:10px;color:#888;margin-top:1px">${p.designation}</div>` : ''}
+            ${nightBadges ? `<div style="margin-top:3px">${nightBadges}</div>` : ''}
           </div>
-          ${p.specialRequest ? `<div style="font-size:10.5px;color:#7C3AED;margin-top:3px;font-style:italic">⚑ ${p.specialRequest}</div>` : ''}
-        </li>`
-      ).join('');
-      return `
-        <div style="break-inside:avoid;border:2px solid ${accent};border-radius:10px;background:${bg};padding:16px;margin-bottom:16px">
-          <div style="border-bottom:1px solid ${accent}33;padding-bottom:10px;margin-bottom:10px">
-            <div style="font-weight:700;font-size:16px;color:${accent};margin-bottom:4px">${room.name}</div>
-            <div style="font-size:12px;color:#888">${room.people.length} / ${room.capacity} ${room.people.length === 1 ? 'person' : 'people'}${head ? ` · Head: ${head.fullName}` : ''}${isMixed ? ' · Mixed gender' : ''}</div>
-          </div>
-          <ol style="margin:0;padding-left:18px">${people || '<li style="color:#aaa;font-size:12px">Empty</li>'}</ol>
         </div>`;
+      }).join('');
+
+      return `<div style="break-inside:avoid;border:1px solid ${headerBg}44;border-radius:12px;overflow:hidden;background:${cardBg};margin-bottom:14px">
+        <div style="background:${headerBg};padding:11px 14px;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-weight:700;font-size:14px;color:#fff">${room.name}</div>
+            <div style="font-size:10.5px;color:rgba(255,255,255,0.75);margin-top:2px">${room.people.length} of ${room.capacity}${genderLabel ? ' · ' + genderLabel : ''}${head ? ' · Head: ' + head.fullName : ''}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:18px;font-weight:800;color:#fff">${fillPct}%</div>
+            <div style="width:48px;height:3px;background:rgba(255,255,255,0.25);border-radius:2px;margin-top:3px"><div style="width:${fillPct}%;height:100%;background:#fff;border-radius:2px"></div></div>
+          </div>
+        </div>
+        <div style="padding:8px 14px 10px">
+          ${room.people.length === 0 ? '<div style="color:#aaa;font-size:12px;padding:8px 0;text-align:center;font-style:italic">Empty</div>' : people}
+        </div>
+      </div>`;
     }).join('');
-    win.document.write(`<!doctype html><html><head><title>Room Assignments</title>
-      <style>body{font-family:sans-serif;padding:24px;max-width:860px;margin:0 auto}
-      h1{font-size:22px;margin-bottom:4px;color:#1A1220}p{color:#888;font-size:13px;margin-bottom:20px}
-      .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-      @media print{@page{margin:1.5cm}.grid{grid-template-columns:1fr 1fr}}</style></head>
-      <body><h1>Room Assignments</h1>
-      <p>Printed ${new Date().toLocaleDateString('en-CA', { weekday:'long', year:'numeric', month:'long', day:'numeric' })} · ${rooms.length} rooms · ${rooms.reduce((s,r)=>s+r.people.length,0)} assigned</p>
-      ${roomsNote ? `<div style="background:#F5F0FF;border:1px solid #C4B5FD;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#4C2A92;white-space:pre-wrap"><strong>Special requests / notes:</strong><br>${roomsNote}</div>` : ''}
-      <div class="grid">${rows}</div></body></html>`);
+
+    win.document.write(`<!doctype html><html><head><title>Room Assignments — This Is It 2.0</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F4F1EA;min-height:100vh}
+  .page{max-width:900px;margin:0 auto;padding:28px 24px}
+  .header{background:linear-gradient(135deg,#2D1B69 0%,#4C2A92 50%,#6B3FAF 100%);border-radius:14px;padding:24px 28px;margin-bottom:24px;color:#fff}
+  .header h1{font-size:26px;font-weight:800;margin-bottom:4px}
+  .header .meta{font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:16px}
+  .stats{display:flex;gap:16px;flex-wrap:wrap}
+  .stat{background:rgba(255,255,255,0.12);border-radius:8px;padding:10px 16px;text-align:center;min-width:80px}
+  .stat-val{font-size:22px;font-weight:800;line-height:1}
+  .stat-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;opacity:0.7;margin-top:3px}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;font-size:11.5px;color:#666;align-items:center}
+  .legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .note{background:#F5F0FF;border:1px solid #C4B5FD;border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:12.5px;color:#4C2A92;white-space:pre-wrap;line-height:1.6}
+  .note strong{display:block;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;opacity:0.7}
+  @media print{
+    body{background:#fff}
+    .page{padding:0}
+    .header{border-radius:0;margin:0 0 20px;padding:20px}
+    .grid{grid-template-columns:1fr 1fr}
+    @page{margin:1.2cm;size:A4}
+  }
+</style>
+</head><body>
+<div class="page">
+  <div class="header">
+    <h1>Room Assignments</h1>
+    <div class="meta">${printDate}</div>
+    <div class="stats">
+      <div class="stat"><div class="stat-val">${rooms.length}</div><div class="stat-lbl">Rooms</div></div>
+      <div class="stat"><div class="stat-val">${totalAssigned}</div><div class="stat-lbl">Assigned</div></div>
+      <div class="stat"><div class="stat-val">${totalCapacity - totalAssigned}</div><div class="stat-lbl">Spaces left</div></div>
+      <div class="stat"><div class="stat-val">${totalCapacity > 0 ? Math.round(totalAssigned/totalCapacity*100) : 0}%</div><div class="stat-lbl">Fill rate</div></div>
+    </div>
+  </div>
+  ${nightLabels.length > 0 ? `<div class="legend">
+    <span><span class="legend-dot" style="background:#4C2A92"></span>Night needed</span>
+    <span><span class="legend-dot" style="background:#EDE9F6"></span>Not staying</span>
+    <span style="margin-left:8px">Nights: ${nightLabels.join(' · ')}</span>
+  </div>` : ''}
+  ${roomsNote ? `<div class="note"><strong>Special requests / notes</strong>${roomsNote}</div>` : ''}
+  <div class="grid">${rows}</div>
+</div>
+</body></html>`);
     win.document.close();
     win.focus();
     setTimeout(() => win.print(), 400);
@@ -3964,7 +4031,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
               onChange={e => handleUpdateRoomsNote(e.target.value)}
               placeholder="Add any special requests or general notes for room assignments…"
               rows={2}
-              style={{ width: '100%', fontSize: 13, fontFamily: 'Inter, sans-serif', border: `1px solid ${C.line}`, borderRadius: 7, padding: '8px 10px', resize: 'none', color: '#1A1220', background: '#FAFAFA', boxSizing: 'border-box', outline: 'none' }}
+              style={{ width: '100%', fontSize: 13, fontFamily: 'Inter, sans-serif', border: `1px solid ${C.line}`, borderRadius: 7, padding: '8px 10px', resize: 'none', color: '#1A1220', background: '#FAFAFA', boxSizing: 'border-box', outline: 'none', overscrollBehavior: 'contain' }}
             />
           </div>
         </div>
