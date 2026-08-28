@@ -189,8 +189,23 @@ export default function ThisIsItInfo() {
     enabled: !!canEdit,
     staleTime: 60_000,
   });
-  const todayViews = viewStats?.find(r => r.view_date === new Date().toISOString().slice(0, 10))?.view_count ?? 0;
+  const { data: uniqueStats } = useQuery({
+    queryKey: ['tii_unique_visitors'],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const { data } = await supabase.from('tii_page_visitor_log').select('view_date').gte('view_date', since);
+      const byDate = {};
+      (data || []).forEach(r => { byDate[r.view_date] = (byDate[r.view_date] || 0) + 1; });
+      return byDate;
+    },
+    enabled: !!canEdit,
+    staleTime: 60_000,
+  });
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayViews = viewStats?.find(r => r.view_date === todayKey)?.view_count ?? 0;
   const weekViews = viewStats?.reduce((s, r) => s + r.view_count, 0) ?? 0;
+  const todayUnique = uniqueStats?.[todayKey] ?? 0;
+  const weekUnique = Object.values(uniqueStats || {}).reduce((s, v) => s + v, 0);
 
   // Dynamic step numbers — recalculated when sections expire
   const visibleSteps = [!preEventItemsHidden, !gettingThereHidden, true, !gettingThereHidden, true];
@@ -693,7 +708,7 @@ export default function ThisIsItInfo() {
           <div style={{ position:'fixed', top:12, right:12, zIndex:100, display:'flex', alignItems:'center', gap:8 }}>
             {!editMode && viewStats && (
               <div style={{ background:'rgba(22,23,23,0.72)', backdropFilter:'blur(6px)', color:'#fff', borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:500, lineHeight:1.4 }}>
-                👁 {todayViews} today · {weekViews} this week
+                👁 {todayViews} views · {todayUnique} unique today · {weekViews} views · {weekUnique} unique this week
               </div>
             )}
             <button
