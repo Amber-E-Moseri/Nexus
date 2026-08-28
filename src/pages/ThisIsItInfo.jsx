@@ -149,7 +149,7 @@ function UpdatesEditor({ value, onSave }) {
   const handleSave = async () => {
     if (!changed) return;
     setSaving(true);
-    try { await onSave(text); } finally { setSaving(false); }
+    try { await onSave(text.trim() || null); } finally { setSaving(false); }
   };
   return (
     <div>
