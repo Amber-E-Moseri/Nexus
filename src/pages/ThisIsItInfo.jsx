@@ -143,6 +143,44 @@ function EditableText({ value, onSave, multiline = false, className = '', placeh
   </span>;
 }
 
+function AnnouncementEditor({ text: initText, active: initActive, onSaveText, onSaveActive }) {
+  const [text, setText] = useState(initText);
+  const [active, setActive] = useState(initActive);
+  const [saving, setSaving] = useState(false);
+  const textChanged = text !== initText;
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      if (textChanged) await onSaveText(text);
+    } finally { setSaving(false); }
+  };
+  const handleToggle = async (e) => {
+    const val = e.target.checked;
+    setActive(val);
+    await onSaveActive(val);
+  };
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:8, width:'100%' }}>
+      <input
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Type banner message…"
+        style={{ width:'100%', padding:'8px 12px', border:'2px solid rgba(107,18,188,0.35)', borderRadius:7, fontFamily:'inherit', fontSize:14, boxSizing:'border-box' }}
+      />
+      <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+        <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:13, fontWeight:600 }}>
+          <input type="checkbox" checked={active} onChange={handleToggle} style={{ width:15, height:15 }} />
+          Show banner to everyone
+        </label>
+        <button onClick={handleSave} disabled={!textChanged || saving} style={{ padding:'5px 14px', background: textChanged ? 'var(--purple)' : '#ccc', color:'#fff', border:'none', borderRadius:6, fontWeight:700, cursor: textChanged ? 'pointer' : 'default', fontSize:12 }}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function UpdatesEditor({ value, onSave }) {
   const [text, setText] = useState(value);
   const [saving, setSaving] = useState(false);
@@ -740,24 +778,12 @@ export default function ThisIsItInfo() {
             borderBottom: c.announcement_active ? 'none' : '2px dashed rgba(107,18,188,0.3)',
           }}>
             {editMode ? (
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:12, flexWrap:'wrap' }}>
-                <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:13 }}>
-                  <input
-                    type="checkbox"
-                    checked={!!c.announcement_active}
-                    onChange={(e) => handleSaveField('announcement_active', e.target.checked)}
-                    style={{ width:16, height:16, cursor:'pointer' }}
-                  />
-                  Show banner
-                </label>
-                <div style={{ flex:1, minWidth:200 }}>
-                  <EditableText
-                    value={c.announcement_text || ''}
-                    onSave={(v) => handleSaveField('announcement_text', v)}
-                    multiline={false}
-                  />
-                </div>
-              </div>
+              <AnnouncementEditor
+                text={c.announcement_text || ''}
+                active={!!c.announcement_active}
+                onSaveText={(v) => handleSaveField('announcement_text', v)}
+                onSaveActive={(v) => handleSaveField('announcement_active', v)}
+              />
             ) : (
               <span>📢 {c.announcement_text}</span>
             )}
