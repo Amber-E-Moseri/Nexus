@@ -968,6 +968,7 @@ export default function ThisIsItInfo() {
           <div className="tii-card card" style={{ marginTop:'10px' }}>
             <h3>🧳 What to pack</h3>
             <p>{editMode ? <EditableText value={c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.'} onSave={(v) => handleSaveField('packing_text', v)} multiline /> : (c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.')}</p>
+            <p style={{ fontSize:'13.5px', color:'#666', marginBottom:'10px' }}><b>Note:</b> This Is It shirts will not be provided.</p>
             <ul className="tii-checklist" id="packlist">
               {checklistItems.map((item, index) => (
                 editMode ? (
