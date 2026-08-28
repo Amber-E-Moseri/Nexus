@@ -26,6 +26,10 @@ const FALLBACK = {
   transport_contact_name: 'David Akalue',
   transport_contact_chat: '@davidakalue99',
   transport_contact_phone: '+1 (204) 396-6156',
+  hospitality_contact_1_name: 'Pastor Chloe',
+  hospitality_contact_1_phone: '+1 (613) 227-4884',
+  hospitality_contact_2_name: 'Sis Praise Ejiogu',
+  hospitality_contact_2_phone: '+1 (250) 572-2984',
   flight_form_url: 'https://leaders.lwcanada.org/f/rp3uahba3c3c',
   friday_opening_time: '3:00 PM',
   monday_checkout_time: 'Mon Morning',
@@ -1172,12 +1176,12 @@ export default function ThisIsItInfo() {
             <p>For room assignments, hotel check-in help, or accommodation questions:</p>
             <div className="tii-help-grid">
               <div className="tii-mini">
-                <div className="lbl">Pastor Chloe</div>
-                <div className="big"><a href="tel:+16132274884" style={{ color:'var(--purple)' }}>+1 (613) 227-4884</a></div>
+                <div className="lbl">{editMode ? <EditableText value={c.hospitality_contact_1_name} onSave={(v) => handleSaveField('hospitality_contact_1_name', v)} /> : c.hospitality_contact_1_name}</div>
+                <div className="big">{editMode ? <EditableText value={c.hospitality_contact_1_phone} onSave={(v) => handleSaveField('hospitality_contact_1_phone', v)} /> : <a href={`tel:${c.hospitality_contact_1_phone?.replace(/\s|\(|\)|-/g, '')}`} style={{ color:'var(--purple)' }}>{c.hospitality_contact_1_phone}</a>}</div>
               </div>
               <div className="tii-mini">
-                <div className="lbl">Sis Praise Ejiogu</div>
-                <div className="big"><a href="tel:+12505722984" style={{ color:'var(--purple)' }}>+1 (250) 572-2984</a></div>
+                <div className="lbl">{editMode ? <EditableText value={c.hospitality_contact_2_name} onSave={(v) => handleSaveField('hospitality_contact_2_name', v)} /> : c.hospitality_contact_2_name}</div>
+                <div className="big">{editMode ? <EditableText value={c.hospitality_contact_2_phone} onSave={(v) => handleSaveField('hospitality_contact_2_phone', v)} /> : <a href={`tel:${c.hospitality_contact_2_phone?.replace(/\s|\(|\)|-/g, '')}`} style={{ color:'var(--purple)' }}>{c.hospitality_contact_2_phone}</a>}</div>
               </div>
             </div>
           </div>
