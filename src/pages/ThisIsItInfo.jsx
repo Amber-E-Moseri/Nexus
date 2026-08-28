@@ -885,6 +885,22 @@ export default function ThisIsItInfo() {
         {/* Countdown — own component so 1-second ticks don't re-render the page */}
         <Countdown onExpire={() => setCountdownExpired(true)} />
 
+        {/* Updates / Announcements */}
+        {(c.updates_text || editMode) && (
+          <div style={{ marginTop:'32px', background:'#6B12BC', borderRadius:'16px', padding:'20px 24px', color:'#fff' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:'12px' }}>
+              <span style={{ fontSize:20 }}>📢</span>
+              <span style={{ fontWeight:800, fontSize:16, letterSpacing:'.02em', textTransform:'uppercase' }}>Updates</span>
+            </div>
+            {editMode
+              ? <div style={{ background:'rgba(255,255,255,0.12)', borderRadius:8, padding:'10px 12px' }}>
+                  <EditableText value={c.updates_text || ''} onSave={(v) => handleSaveField('updates_text', v)} multiline />
+                </div>
+              : <div style={{ whiteSpace:'pre-wrap', lineHeight:1.8, fontSize:15 }}>{c.updates_text}</div>
+            }
+          </div>
+        )}
+
         {/* What to Expect */}
         <section className="tii-section" id="expect" style={{ marginTop:'40px' }}>
           <div className="tii-stop-head stop-head">
