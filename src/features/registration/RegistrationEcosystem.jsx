@@ -1798,29 +1798,30 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
   const [view, setView] = useState('person'); // 'person' | 'room'
   const [search, setSearch] = useState('');
 
+  const confirmed = useMemo(() => merged.filter(r => r.fullyConfirmed && !r.absent), [merged]);
+
   const checkedInByEmail = useMemo(() => {
     const m = {};
-    merged.forEach(r => { if (r.email) m[r.email.toLowerCase()] = r; });
+    confirmed.forEach(r => { if (r.email) m[r.email.toLowerCase()] = r; });
     return m;
-  }, [merged]);
+  }, [confirmed]);
 
   const q = search.trim().toLowerCase();
 
   const filtered = useMemo(() => {
-    let base = merged;
+    let base = confirmed;
     if (subgroupFilter !== 'All') base = base.filter(r => r.subgroup === subgroupFilter);
     if (q) base = base.filter(r => (r.fullName || '').toLowerCase().includes(q) || (r.fellowship || '').toLowerCase().includes(q));
     return base;
-  }, [merged, subgroupFilter, q]);
+  }, [confirmed, subgroupFilter, q]);
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
     if (!!a.checkedInAt !== !!b.checkedInAt) return a.checkedInAt ? 1 : -1;
     return (a.fullName || '').localeCompare(b.fullName || '');
   }), [filtered]);
 
-  const confirmed = useMemo(() => merged.filter(r => r.fullyConfirmed && !r.absent), [merged]);
-  const checkedInCount = merged.filter(r => r.checkedInAt).length;
-  const total = confirmed.length; // expected = confirmed non-absent
+  const checkedInCount = confirmed.filter(r => r.checkedInAt).length;
+  const total = confirmed.length;
 
   async function toggleCheckIn(reg) {
     const newVal = reg.checkedInAt ? null : new Date().toISOString();
