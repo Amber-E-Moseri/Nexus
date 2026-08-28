@@ -1165,12 +1165,20 @@ export default function ThisIsItInfo() {
                 <div className="lbl">Phone / WhatsApp</div>
                 <div className="big"><a href={`tel:${c.transport_contact_phone}`} style={{ color:'var(--purple)' }}>{c.transport_contact_phone}</a></div>
               </div>
-              {c.transport_contact_chat && (
-                <div className="tii-mini">
-                  <div className="lbl">Chat</div>
-                  <div className="big">{c.transport_contact_chat}</div>
-                </div>
-              )}
+            </div>
+          </div>
+          <div className="tii-card card">
+            <h3>🏨 Hospitality</h3>
+            <p>For room assignments, hotel check-in help, or accommodation questions:</p>
+            <div className="tii-help-grid">
+              <div className="tii-mini">
+                <div className="lbl">Pastor Chloe</div>
+                <div className="big"><a href="tel:+16132274884" style={{ color:'var(--purple)' }}>+1 (613) 227-4884</a></div>
+              </div>
+              <div className="tii-mini">
+                <div className="lbl">Sis Praise Ejiogu</div>
+                <div className="big"><a href="tel:+12505722984" style={{ color:'var(--purple)' }}>+1 (250) 572-2984</a></div>
+              </div>
             </div>
           </div>
           <div className="tii-card card">
