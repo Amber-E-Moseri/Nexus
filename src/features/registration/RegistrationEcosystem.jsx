@@ -1837,7 +1837,7 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
   }
 
   const roomsWithPeople = rooms.filter(r => r.people && r.people.length > 0);
-  const totalKeysGiven = roomsWithPeople.reduce((s, r) => s + (r.keysGiven || 0), 0);
+  const totalKeysGiven = roomsWithPeople.reduce((s, r) => s + (r.people || []).filter(p => p.keyGiven).length, 0);
   const totalKeysTotal = roomsWithPeople.reduce((s, r) => s + (r.keyTotal ?? 2), 0);
 
   return (
@@ -1937,11 +1937,18 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
             const people = room.people || [];
             const arrivedCount = people.filter(p => checkedInByEmail[p.email?.toLowerCase()]?.checkedInAt).length;
             const allArrived = arrivedCount === people.length && people.length > 0;
-            const keysGiven = room.keysGiven || 0;
+            const keysGiven = people.filter(p => p.keyGiven).length;
             const keyTotal = room.keyTotal ?? 2;
-            const allKeysOut = keyTotal != null && keysGiven >= keyTotal && keyTotal > 0;
+            const allKeysOut = keysGiven >= keyTotal && keyTotal > 0;
             const statusColor = allArrived && allKeysOut ? '#16A34A' : arrivedCount > 0 ? '#D97706' : '#9E9488';
             const statusBg   = allArrived && allKeysOut ? '#F0FFF4' : arrivedCount > 0 ? '#FFFBEB' : '#F8F6F3';
+
+            function togglePersonKey(person) {
+              onUpdateRoom(room.id, {
+                people: people.map(p => p.email === person.email ? { ...p, keyGiven: !p.keyGiven } : p)
+              });
+            }
+
             return (
               <div key={room.id} style={{ border: `1.5px solid ${statusColor}44`, borderRadius: 10, overflow: 'hidden', background: statusBg }}>
                 {/* Room header */}
@@ -1949,28 +1956,16 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 14, color: C.ink }}>{room.name}</div>
                     <div style={{ fontSize: 12, color: statusColor, fontWeight: 600, marginTop: 2 }}>
-                      {arrivedCount}/{people.length} arrived
+                      {arrivedCount}/{people.length} arrived · 🔑 {keysGiven}/{keyTotal} keys
                     </div>
                   </div>
-                  {/* Key inputs */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1.5px solid ${allKeysOut ? '#16A34A' : C.line}`, borderRadius: 8, background: allKeysOut ? '#DCFCE7' : '#fff', padding: '5px 10px' }}>
-                    <span style={{ fontSize: 14 }}>🔑</span>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                      <input type="number" min={0} max={keyTotal ?? 99} value={keysGiven}
-                        onChange={e => onUpdateRoom(room.id, { keysGiven: Math.max(0, parseInt(e.target.value) || 0) })}
-                        style={{ width: 36, fontSize: 14, fontWeight: 700, border: `1px solid ${C.line}`, borderRadius: 5, padding: '2px 4px', textAlign: 'center', color: allKeysOut ? '#16A34A' : C.ink }}
-                      />
-                      <span style={{ fontSize: 9, color: C.mute, lineHeight: 1 }}>given</span>
-                    </div>
-                    <span style={{ fontSize: 13, color: C.mute }}>/</span>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                      <input type="number" min={1} max={20}
-                        value={keyTotal}
-                        onChange={e => onUpdateRoom(room.id, { keyTotal: Math.max(1, parseInt(e.target.value) || 1) })}
-                        style={{ width: 36, fontSize: 14, fontWeight: 700, border: `1px solid ${C.line}`, borderRadius: 5, padding: '2px 4px', textAlign: 'center', color: C.mute }}
-                      />
-                      <span style={{ fontSize: 9, color: C.mute, lineHeight: 1 }}>total</span>
-                    </div>
+                  {/* Key total (editable) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                    <input type="number" min={1} max={20} value={keyTotal}
+                      onChange={e => onUpdateRoom(room.id, { keyTotal: Math.max(1, parseInt(e.target.value) || 1) })}
+                      style={{ width: 40, fontSize: 13, fontWeight: 700, border: `1px solid ${C.line}`, borderRadius: 6, padding: '3px 5px', textAlign: 'center', color: C.mute }}
+                    />
+                    <span style={{ fontSize: 9, color: C.mute, lineHeight: 1 }}>key total</span>
                   </div>
                 </div>
                 {/* People list */}
@@ -1981,7 +1976,7 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
                     const isSaving = reg && saving.has(reg.id);
                     return (
                       <div key={p.email || i} style={{
-                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px',
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px',
                         borderBottom: i < people.length - 1 ? `1px solid ${C.line}` : 'none',
                         opacity: isSaving ? 0.6 : 1, transition: 'opacity .15s',
                       }}>
@@ -1989,6 +1984,26 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
                           <div style={{ fontWeight: 600, fontSize: 13 }}>{p.fullName || p.email}</div>
                           {p.fellowship && <div style={{ fontSize: 11, color: C.mute }}>{p.fellowship}</div>}
                         </div>
+                        {/* Key toggle — disabled when all keys already given out to others */}
+                        {(() => {
+                          const canGive = p.keyGiven || keysGiven < keyTotal;
+                          return (
+                            <button onClick={() => canGive && togglePersonKey(p)}
+                              title={p.keyGiven ? 'Key given — click to undo' : canGive ? 'Mark key given' : `All ${keyTotal} keys already given out`}
+                              style={{
+                                padding: '3px 8px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                                cursor: canGive ? 'pointer' : 'not-allowed',
+                                border: `1px solid ${p.keyGiven ? '#16A34A' : C.line}`,
+                                background: p.keyGiven ? '#DCFCE7' : '#fff',
+                                color: p.keyGiven ? '#16A34A' : canGive ? C.mute : '#DDD',
+                                opacity: canGive ? 1 : 0.5,
+                                transition: 'all .15s',
+                              }}>
+                              🔑
+                            </button>
+                          );
+                        })()}
+                        {/* Check-in */}
                         {isIn ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <Pill tone="green">✓ {new Date(reg.checkedInAt).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' })}</Pill>
