@@ -679,7 +679,7 @@ export default function ThisIsItInfo() {
         @media(max-width:640px){.tii-section{padding:0 12px;}.tii-card h3{font-size:14px;}.tii-card p{font-size:14px;}.tii-card{padding:14px;}}
         .tii-dept-arrival{background:#f9f7f2;border:1px solid var(--paper-line);border-radius:8px;padding:14px;margin-top:12px;}
         .tii-dept-arrival ul{margin:6px 0 0;padding-left:18px;font-size:14px;line-height:1.7;}
-        .edit-mode-indicator{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--purple);color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;z-index:99;font-size:13px;}
+        .edit-mode-indicator{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--purple);color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;z-index:99;font-size:13px;white-space:nowrap;}
         /* ── pulse ring (fee card) — composited transform+opacity ────────── */
         @keyframes pulseRing{
           0%  {transform:scale(1);   opacity:.55;}
