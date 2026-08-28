@@ -20,8 +20,6 @@ const FALLBACK = {
   airport_code: 'YWG',
   airport_name: 'Winnipeg James Armstrong Richardson International Airport',
   airport_distance_km: 10,
-  announcement_text: '',
-  announcement_active: false,
   hotel_name: 'Sandman Hotel & Suites Winnipeg Airport',
   hotel_address: '1750 Sargent Avenue, Winnipeg, MB R3H 0C7',
   hotel_phone: '(204) 775-7263',
@@ -143,45 +141,6 @@ function EditableText({ value, onSave, multiline = false, className = '', placeh
   </span>;
 }
 
-function AnnouncementEditor({ text: initText, active: initActive, onSaveText, onSaveActive }) {
-  const [text, setText] = useState(initText);
-  const [active, setActive] = useState(initActive);
-  const [saving, setSaving] = useState(false);
-  const textChanged = text !== initText;
-  const handleSave = async () => {
-    if (!textChanged) return;
-    setSaving(true);
-    try { await onSaveText(text); } finally { setSaving(false); }
-  };
-  const handleToggle = async (e) => {
-    const val = e.target.checked;
-    setActive(val);
-    await onSaveActive(val);
-  };
-  return (
-    <div style={{ width:'100%' }}>
-      <input
-        type="text"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
-        placeholder="Type a message for all delegates…"
-        style={{ width:'100%', background:'transparent', border:'none', outline:'none', fontFamily:'inherit', fontSize:14, fontWeight:600, color:'#1C1610', textAlign:'center', padding:0, boxSizing:'border-box' }}
-      />
-      <div style={{ display:'flex', justifyContent:'center', alignItems:'center', gap:14, marginTop:10, opacity:0.85 }}>
-        <label style={{ display:'flex', alignItems:'center', gap:5, cursor:'pointer', fontSize:12 }}>
-          <input type="checkbox" checked={active} onChange={handleToggle} />
-          Live
-        </label>
-        {textChanged && (
-          <button onClick={handleSave} disabled={saving} style={{ padding:'3px 12px', background:'rgba(0,0,0,0.12)', color:'#1C1610', border:'1px solid rgba(0,0,0,0.2)', borderRadius:20, fontWeight:700, cursor:'pointer', fontSize:12 }}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function UpdatesEditor({ value, onSave }) {
   const [text, setText] = useState(value);
@@ -766,30 +725,6 @@ export default function ThisIsItInfo() {
       `}</style>
 
       <div className="tii-body">
-        {/* Announcement banner — shown to all when active; editor controls always visible */}
-        {(c.announcement_active || editMode) && (
-          <div style={{
-            background: c.announcement_active ? '#EAC63D' : 'rgba(234,198,61,0.08)',
-            color: '#1C1610',
-            padding: '11px 20px',
-            textAlign: 'center',
-            fontSize: 14,
-            fontWeight: 600,
-            lineHeight: 1.5,
-            borderBottom: c.announcement_active ? '1px solid rgba(180,150,0,0.25)' : '2px dashed rgba(234,198,61,0.5)',
-          }}>
-            {editMode ? (
-              <AnnouncementEditor
-                text={c.announcement_text || ''}
-                active={!!c.announcement_active}
-                onSaveText={(v) => handleSaveField('announcement_text', v)}
-                onSaveActive={(v) => handleSaveField('announcement_active', v)}
-              />
-            ) : (
-              <span>📢 {c.announcement_text}</span>
-            )}
-          </div>
-        )}
 
         {editMode && (
           <div className="edit-mode-indicator">
