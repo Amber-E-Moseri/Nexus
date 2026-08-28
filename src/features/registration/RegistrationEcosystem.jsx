@@ -1795,7 +1795,7 @@ function HoverNameList({ people = [], color }) {
 // ============ CHECK-IN ============
 function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onCheckIn, rooms = [], onUpdateRoom }) {
   const [saving, setSaving] = useState(new Set());
-  const [view, setView] = useState('person'); // 'person' | 'room'
+  const [view, setView] = useState('room'); // 'person' | 'room'
   const [search, setSearch] = useState('');
 
   const confirmed = useMemo(() => merged.filter(r => r.fullyConfirmed && !r.absent), [merged]);
