@@ -166,7 +166,7 @@ function AnnouncementEditor({ text: initText, active: initActive, onSaveText, on
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
         placeholder="Type a message for all delegates…"
-        style={{ width:'100%', background:'transparent', border:'none', outline:'none', fontFamily:'inherit', fontSize:14, fontWeight:600, color:'inherit', textAlign:'center', padding:0, boxSizing:'border-box' }}
+        style={{ width:'100%', background:'transparent', border:'none', outline:'none', fontFamily:'inherit', fontSize:14, fontWeight:600, color:'#1C1610', textAlign:'center', padding:0, boxSizing:'border-box' }}
       />
       <div style={{ display:'flex', justifyContent:'center', alignItems:'center', gap:14, marginTop:10, opacity:0.85 }}>
         <label style={{ display:'flex', alignItems:'center', gap:5, cursor:'pointer', fontSize:12 }}>
@@ -174,7 +174,7 @@ function AnnouncementEditor({ text: initText, active: initActive, onSaveText, on
           Live
         </label>
         {textChanged && (
-          <button onClick={handleSave} disabled={saving} style={{ padding:'3px 12px', background:'rgba(255,255,255,0.25)', color:'inherit', border:'1px solid rgba(255,255,255,0.5)', borderRadius:20, fontWeight:700, cursor:'pointer', fontSize:12 }}>
+          <button onClick={handleSave} disabled={saving} style={{ padding:'3px 12px', background:'rgba(0,0,0,0.12)', color:'#1C1610', border:'1px solid rgba(0,0,0,0.2)', borderRadius:20, fontWeight:700, cursor:'pointer', fontSize:12 }}>
             {saving ? 'Saving…' : 'Save'}
           </button>
         )}
@@ -198,10 +198,10 @@ function UpdatesEditor({ value, onSave }) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="Type your update here…"
-        style={{ width:'100%', minHeight:80, padding:'10px 12px', background:'rgba(255,255,255,0.15)', border:'2px solid rgba(255,255,255,0.4)', borderRadius:8, color:'#fff', fontSize:15, fontFamily:'inherit', lineHeight:1.7, resize:'vertical', boxSizing:'border-box' }}
+        style={{ width:'100%', minHeight:80, padding:'10px 12px', background:'rgba(255,255,255,0.6)', border:'1px solid rgba(180,150,0,0.3)', borderRadius:8, color:'var(--ink)', fontSize:15, fontFamily:'inherit', lineHeight:1.7, resize:'vertical', boxSizing:'border-box' }}
       />
       <div style={{ display:'flex', gap:8, marginTop:8 }}>
-        <button onClick={handleSave} disabled={!changed || saving} style={{ padding:'6px 16px', background: changed ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)', color:'#6B12BC', border:'none', borderRadius:6, fontWeight:700, cursor: changed ? 'pointer' : 'default', fontSize:13 }}>
+        <button onClick={handleSave} disabled={!changed || saving} style={{ padding:'6px 16px', background: changed ? 'var(--purple)' : '#ccc', color:'#fff', border:'none', borderRadius:6, fontWeight:700, cursor: changed ? 'pointer' : 'default', fontSize:13 }}>
           {saving ? 'Saving…' : 'Save'}
         </button>
       </div>
@@ -769,15 +769,14 @@ export default function ThisIsItInfo() {
         {/* Announcement banner — shown to all when active; editor controls always visible */}
         {(c.announcement_active || editMode) && (
           <div style={{
-            background: c.announcement_active ? '#6B12BC' : 'rgba(107,18,188,0.12)',
-            color: c.announcement_active ? '#fff' : '#6B12BC',
-            padding: '12px 20px',
+            background: c.announcement_active ? '#EAC63D' : 'rgba(234,198,61,0.08)',
+            color: '#1C1610',
+            padding: '11px 20px',
             textAlign: 'center',
             fontSize: 14,
             fontWeight: 600,
             lineHeight: 1.5,
-            position: 'relative',
-            borderBottom: c.announcement_active ? 'none' : '2px dashed rgba(107,18,188,0.3)',
+            borderBottom: c.announcement_active ? '1px solid rgba(180,150,0,0.25)' : '2px dashed rgba(234,198,61,0.5)',
           }}>
             {editMode ? (
               <AnnouncementEditor
@@ -941,14 +940,13 @@ export default function ThisIsItInfo() {
 
         {/* Updates / Announcements */}
         {(c.updates_text || editMode) && (
-          <div style={{ marginTop:'32px', background:'#6B12BC', borderRadius:'16px', padding:'20px 24px', color:'#fff' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:'12px' }}>
-              <span style={{ fontSize:20 }}>📢</span>
-              <span style={{ fontWeight:800, fontSize:16, letterSpacing:'.02em', textTransform:'uppercase' }}>Updates</span>
+          <div className="tii-card card" style={{ marginTop:'32px', borderLeft:'4px solid var(--yellow)', background:'rgba(234,198,61,0.06)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:'10px' }}>
+              <span style={{ fontWeight:800, fontSize:11, letterSpacing:'.1em', textTransform:'uppercase', color:'#8a6f00' }}>Updates</span>
             </div>
             {editMode
               ? <UpdatesEditor value={c.updates_text || ''} onSave={(v) => handleSaveField('updates_text', v)} />
-              : <div style={{ whiteSpace:'pre-wrap', lineHeight:1.8, fontSize:15 }}>{c.updates_text}</div>
+              : <div style={{ whiteSpace:'pre-wrap', lineHeight:1.8, fontSize:15, color:'var(--ink)' }}>{c.updates_text}</div>
             }
           </div>
         )}
