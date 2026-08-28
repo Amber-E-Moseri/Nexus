@@ -55,7 +55,7 @@ function renderWithLinks(text) {
   );
 }
 
-function EditableText({ value, onSave, multiline = false, className = '' }) {
+function EditableText({ value, onSave, multiline = false, className = '', placeholder = '' }) {
   const [isEditing, setIsEditing] = useState(false);
   const [tmpValue, setTmpValue] = useState(value);
   const [isSaving, setIsSaving] = useState(false);
@@ -138,8 +138,8 @@ function EditableText({ value, onSave, multiline = false, className = '' }) {
     );
   }
 
-  return <span className={className} onClick={() => setIsEditing(true)} style={{ cursor: 'pointer', position: 'relative' }}>
-    {value}
+  return <span className={className} onClick={() => setIsEditing(true)} style={{ cursor: 'pointer', position: 'relative', display: 'block', minHeight: value ? undefined : '36px' }}>
+    {value || (placeholder ? <span style={{ opacity: 0.5, fontStyle: 'italic' }}>{placeholder}</span> : <span style={{ display: 'inline-block', minWidth: 40 }}>&nbsp;</span>)}
   </span>;
 }
 
@@ -894,7 +894,7 @@ export default function ThisIsItInfo() {
             </div>
             {editMode
               ? <div style={{ background:'rgba(255,255,255,0.12)', borderRadius:8, padding:'10px 12px' }}>
-                  <EditableText value={c.updates_text || ''} onSave={(v) => handleSaveField('updates_text', v)} multiline />
+                  <EditableText value={c.updates_text || ''} onSave={(v) => handleSaveField('updates_text', v)} multiline placeholder="Click to type your update…" />
                 </div>
               : <div style={{ whiteSpace:'pre-wrap', lineHeight:1.8, fontSize:15 }}>{c.updates_text}</div>
             }
