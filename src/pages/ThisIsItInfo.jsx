@@ -149,10 +149,9 @@ function AnnouncementEditor({ text: initText, active: initActive, onSaveText, on
   const [saving, setSaving] = useState(false);
   const textChanged = text !== initText;
   const handleSave = async () => {
+    if (!textChanged) return;
     setSaving(true);
-    try {
-      if (textChanged) await onSaveText(text);
-    } finally { setSaving(false); }
+    try { await onSaveText(text); } finally { setSaving(false); }
   };
   const handleToggle = async (e) => {
     const val = e.target.checked;
@@ -160,22 +159,25 @@ function AnnouncementEditor({ text: initText, active: initActive, onSaveText, on
     await onSaveActive(val);
   };
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:8, width:'100%' }}>
+    <div style={{ width:'100%' }}>
       <input
         type="text"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Type banner message…"
-        style={{ width:'100%', padding:'8px 12px', border:'2px solid rgba(107,18,188,0.35)', borderRadius:7, fontFamily:'inherit', fontSize:14, boxSizing:'border-box' }}
+        onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+        placeholder="Type a message for all delegates…"
+        style={{ width:'100%', background:'transparent', border:'none', outline:'none', fontFamily:'inherit', fontSize:14, fontWeight:600, color:'inherit', textAlign:'center', padding:0, boxSizing:'border-box' }}
       />
-      <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-        <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:13, fontWeight:600 }}>
-          <input type="checkbox" checked={active} onChange={handleToggle} style={{ width:15, height:15 }} />
-          Show banner to everyone
+      <div style={{ display:'flex', justifyContent:'center', alignItems:'center', gap:14, marginTop:10, opacity:0.85 }}>
+        <label style={{ display:'flex', alignItems:'center', gap:5, cursor:'pointer', fontSize:12 }}>
+          <input type="checkbox" checked={active} onChange={handleToggle} />
+          Live
         </label>
-        <button onClick={handleSave} disabled={!textChanged || saving} style={{ padding:'5px 14px', background: textChanged ? 'var(--purple)' : '#ccc', color:'#fff', border:'none', borderRadius:6, fontWeight:700, cursor: textChanged ? 'pointer' : 'default', fontSize:12 }}>
-          {saving ? 'Saving…' : 'Save'}
-        </button>
+        {textChanged && (
+          <button onClick={handleSave} disabled={saving} style={{ padding:'3px 12px', background:'rgba(255,255,255,0.25)', color:'inherit', border:'1px solid rgba(255,255,255,0.5)', borderRadius:20, fontWeight:700, cursor:'pointer', fontSize:12 }}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        )}
       </div>
     </div>
   );
