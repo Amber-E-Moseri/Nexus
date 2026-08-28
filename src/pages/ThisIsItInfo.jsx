@@ -158,6 +158,10 @@ export default function ThisIsItInfo() {
   const [countdownExpired, setCountdownExpired] = useState(
     () => Date.now() >= new Date('2026-08-28T09:00:00-04:00').getTime()
   );
+  // Before You Fly section + prayer card hide at noon CDT Aug 28 (event day)
+  const preEventItemsHidden = Date.now() >= new Date('2026-08-28T12:00:00-05:00').getTime();
+  // Getting There section hides at 9pm CDT Aug 28 (everyone should be settled by then)
+  const gettingThereHidden = Date.now() >= new Date('2026-08-28T21:00:00-05:00').getTime();
   const [editMode, setEditMode] = useState(false);
   const [newItem, setNewItem] = useState({ day: 'fri', time: '', title: '', description: '' });
   const [isSaving, setIsSaving] = useState(false);
@@ -673,7 +677,7 @@ export default function ThisIsItInfo() {
 
         <nav className="tii-nav">
           <div className="tii-nav-links">
-            {NAV_ITEMS.map(item => (
+            {NAV_ITEMS.filter(item => !(preEventItemsHidden && item.id === 'pack') && !(gettingThereHidden && (item.id === 'getting-there' || item.id === 'venue'))).map(item => (
               <a
                 key={item.id}
                 href={`#${item.id}`}
@@ -703,7 +707,7 @@ export default function ThisIsItInfo() {
             <div className="tii-sheet-bg" onClick={() => setMobileMenuOpen(false)} />
             <div className="tii-sheet" role="dialog" aria-modal="true" aria-label="Page sections">
               <div className="tii-sheet-handle" />
-              {NAV_ITEMS.map(item => (
+              {NAV_ITEMS.filter(item => !(preEventItemsHidden && item.id === 'pack') && !(gettingThereHidden && (item.id === 'getting-there' || item.id === 'venue'))).map(item => (
                 <button
                   key={item.id}
                   className={`tii-sheet-link${activeSection === item.id ? ' active' : ''}`}
@@ -835,7 +839,7 @@ export default function ThisIsItInfo() {
               }
             </p>
           </div>
-          {!countdownExpired && <div className="tii-card card" style={{ marginTop:'10px', background:'rgba(107,18,188,0.04)', border:'1px solid rgba(107,18,188,0.18)' }}>
+          {!preEventItemsHidden && <div className="tii-card card" style={{ marginTop:'10px', background:'rgba(107,18,188,0.04)', border:'1px solid rgba(107,18,188,0.18)' }}>
             <h3>🙏 Prayer &amp; Fasting — Join Us</h3>
             <p>
               {editMode
@@ -850,8 +854,8 @@ export default function ThisIsItInfo() {
           </div>}
         </section>
 
-        {/* Before You Fly */}
-        <section className="tii-section" id="pack" style={{ marginTop:'40px' }}>
+        {/* Before You Fly — hidden from noon CDT Aug 28 */}
+        {!preEventItemsHidden && <section className="tii-section" id="pack" style={{ marginTop:'40px' }}>
           <div className="tii-stop-head stop-head">
             <div className="tii-dot">1</div>
             <div>
@@ -949,10 +953,10 @@ export default function ThisIsItInfo() {
             <h3>👔 Dress code</h3>
             <p>{editMode ? <EditableText value={c.dress_code} onSave={(v) => handleSaveField('dress_code', v)} multiline /> : c.dress_code}</p>
           </div>
-        </section>
+        </section>}
 
-        {/* Getting There */}
-        <section className="tii-section" id="getting-there">
+        {/* Getting There — hidden from 9pm CDT Aug 28 */}
+        {!gettingThereHidden && <section className="tii-section" id="getting-there">
           <div className="tii-stop-head stop-head">
             <div className="tii-dot">2</div>
             <div>
@@ -973,7 +977,7 @@ export default function ThisIsItInfo() {
             <h3>⏰ When to arrive</h3>
             <p>{editMode ? <EditableText value={c.arrival_text || 'Your arrival time depends on your department. Check with your department lead. If you haven\'t heard otherwise, aim to arrive by 4:30 PM so you\'re settled before the opening session.'} onSave={(v) => handleSaveField('arrival_text', v)} multiline /> : (c.arrival_text || 'Your arrival time depends on your department. Check with your department lead. If you haven\'t heard otherwise, aim to arrive by 4:30 PM so you\'re settled before the opening session.')}</p>
           </div>
-        </section>
+        </section>}
 
         {/* Hotel Check-In */}
         <section className="tii-section" id="checkin">
@@ -1005,8 +1009,8 @@ export default function ThisIsItInfo() {
           </div>
         </section>
 
-        {/* Venue */}
-        <section className="tii-section" id="venue">
+        {/* Venue — hidden from 9pm CDT Aug 28 */}
+        {!gettingThereHidden && <section className="tii-section" id="venue">
           <div className="tii-stop-head stop-head">
             <div className="tii-dot">4</div>
             <div>
@@ -1038,7 +1042,7 @@ export default function ThisIsItInfo() {
               </div>
             </div>
           </div>
-        </section>
+        </section>}
 
         {/* Schedule */}
         <section className="tii-section" id="schedule">
