@@ -1054,7 +1054,6 @@ export default function ThisIsItInfo() {
           <div className="tii-card card">
             <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginBottom:'6px' }}>
               <h3 style={{ margin:0 }}>✈ Airport &amp; Shuttle</h3>
-              <span className="tii-tag ready">Shuttle included</span>
               <span className="tii-tag" style={{ background:'#EAC63D22', color:'#7a6200', borderColor:'rgba(234,198,61,0.5)', fontSize:11 }}>Out-of-province delegates</span>
             </div>
             <p><b>{editMode ? <EditableText value={c.airport_name} onSave={(v) => handleSaveField('airport_name', v)} /> : c.airport_name} ({editMode ? <EditableText value={c.airport_code} onSave={(v) => handleSaveField('airport_code', v)} /> : c.airport_code})</b>. Only about {editMode ? <EditableText value={c.airport_distance_km?.toString()} onSave={(v) => handleSaveField('airport_distance_km', parseInt(v))} /> : c.airport_distance_km} minutes from the hotel.</p>
