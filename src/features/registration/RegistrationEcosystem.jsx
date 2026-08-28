@@ -1951,24 +1951,24 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
                       {arrivedCount}/{people.length} arrived
                     </div>
                   </div>
-                  {/* Key stepper */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, border: `1.5px solid ${allKeysOut ? '#16A34A' : C.line}`, borderRadius: 8, background: allKeysOut ? '#DCFCE7' : '#fff', padding: '3px 6px' }}>
-                    <span style={{ fontSize: 13, marginRight: 2 }}>🔑</span>
-                    <button onClick={() => onUpdateRoom(room.id, { keysGiven: Math.max(0, keysGiven - 1) })}
-                      style={{ width: 22, height: 22, border: 'none', background: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, color: C.mute, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-                    <span style={{ fontSize: 13, fontWeight: 700, minWidth: 28, textAlign: 'center', color: allKeysOut ? '#16A34A' : C.ink }}>
-                      {keysGiven}/{keyTotal}
-                    </span>
-                    <button onClick={() => onUpdateRoom(room.id, { keysGiven: Math.min(keyTotal, keysGiven + 1) })}
-                      style={{ width: 22, height: 22, border: 'none', background: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, color: C.mute, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-                    <span style={{ fontSize: 10, color: C.mute, marginLeft: 2 }}>keys</span>
-                    {/* Edit total */}
-                    <input type="number" min={1} max={10} value={keyTotal}
-                      onChange={e => onUpdateRoom(room.id, { keyTotal: Math.max(1, parseInt(e.target.value) || 1) })}
-                      style={{ width: 28, fontSize: 11, border: `1px solid ${C.line}`, borderRadius: 4, padding: '1px 3px', marginLeft: 4, color: C.mute, textAlign: 'center' }}
-                      title="Total keys for this room"
-                    />
-                    <span style={{ fontSize: 10, color: C.mute }}>total</span>
+                  {/* Key inputs */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1.5px solid ${allKeysOut ? '#16A34A' : C.line}`, borderRadius: 8, background: allKeysOut ? '#DCFCE7' : '#fff', padding: '5px 10px' }}>
+                    <span style={{ fontSize: 14 }}>🔑</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                      <input type="number" min={0} max={keyTotal} value={keysGiven}
+                        onChange={e => onUpdateRoom(room.id, { keysGiven: Math.min(keyTotal, Math.max(0, parseInt(e.target.value) || 0)) })}
+                        style={{ width: 36, fontSize: 14, fontWeight: 700, border: `1px solid ${C.line}`, borderRadius: 5, padding: '2px 4px', textAlign: 'center', color: allKeysOut ? '#16A34A' : C.ink }}
+                      />
+                      <span style={{ fontSize: 9, color: C.mute, lineHeight: 1 }}>given</span>
+                    </div>
+                    <span style={{ fontSize: 13, color: C.mute }}>/</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                      <input type="number" min={1} max={20} value={keyTotal}
+                        onChange={e => onUpdateRoom(room.id, { keyTotal: Math.max(1, parseInt(e.target.value) || 1) })}
+                        style={{ width: 36, fontSize: 14, fontWeight: 700, border: `1px solid ${C.line}`, borderRadius: 5, padding: '2px 4px', textAlign: 'center', color: C.mute }}
+                      />
+                      <span style={{ fontSize: 9, color: C.mute, lineHeight: 1 }}>total</span>
+                    </div>
                   </div>
                 </div>
                 {/* People list */}
