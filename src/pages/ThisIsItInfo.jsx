@@ -873,18 +873,23 @@ export default function ThisIsItInfo() {
         {/* Countdown — own component so 1-second ticks don't re-render the page */}
         <Countdown onExpire={() => setCountdownExpired(true)} />
 
-        {/* Updates / Announcements */}
-        {(c.updates_text || editMode) && (
+        {/* Updates — hidden when empty; editors get an add button */}
+        {c.updates_text ? (
           <div className="tii-card card" style={{ marginTop:'32px', borderLeft:'4px solid var(--yellow)', background:'rgba(234,198,61,0.06)' }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:'10px' }}>
               <span style={{ fontWeight:800, fontSize:11, letterSpacing:'.1em', textTransform:'uppercase', color:'#8a6f00' }}>Updates</span>
             </div>
             {editMode
-              ? <UpdatesEditor value={c.updates_text || ''} onSave={(v) => handleSaveField('updates_text', v)} />
+              ? <UpdatesEditor value={c.updates_text} onSave={(v) => handleSaveField('updates_text', v)} />
               : <div style={{ whiteSpace:'pre-wrap', lineHeight:1.8, fontSize:15, color:'var(--ink)' }}>{c.updates_text}</div>
             }
           </div>
-        )}
+        ) : editMode ? (
+          <button
+            onClick={() => handleSaveField('updates_text', ' ').then(() => {})}
+            style={{ display:'block', margin:'28px auto 0', padding:'7px 18px', background:'none', border:'1px dashed rgba(180,150,0,0.5)', borderRadius:8, color:'#8a6f00', fontWeight:600, fontSize:13, cursor:'pointer' }}
+          >+ Add update</button>
+        ) : null}
 
         {/* What to Expect */}
         <section className="tii-section" id="expect" style={{ marginTop:'40px' }}>
