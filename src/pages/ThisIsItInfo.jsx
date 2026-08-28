@@ -156,7 +156,7 @@ export default function ThisIsItInfo() {
 
   const [activeDay, setActiveDay] = useState('fri');
   const [countdownExpired, setCountdownExpired] = useState(
-    () => Date.now() >= new Date('2026-08-28T09:00:00-04:00').getTime()
+    () => Date.now() >= new Date('2026-08-28T13:00:00-05:00').getTime()
   );
   // Before You Fly section + prayer card hide at noon CDT Aug 28 (event day)
   const preEventItemsHidden = Date.now() >= new Date('2026-08-28T12:00:00-05:00').getTime();
@@ -1181,11 +1181,11 @@ export default function ThisIsItInfo() {
             <div className="tii-help-grid">
               <div className="tii-mini">
                 <div className="lbl">{editMode ? <EditableText value={c.hospitality_contact_1_name} onSave={(v) => handleSaveField('hospitality_contact_1_name', v)} /> : c.hospitality_contact_1_name}</div>
-                <div className="big">{editMode ? <EditableText value={c.hospitality_contact_1_phone} onSave={(v) => handleSaveField('hospitality_contact_1_phone', v)} /> : <a href={`tel:${c.hospitality_contact_1_phone?.replace(/\s|\(|\)|-/g, '')}`} style={{ color:'var(--purple)' }}>{c.hospitality_contact_1_phone}</a>}</div>
+                <div className="big">{editMode ? <EditableText value={c.hospitality_contact_1_phone} onSave={(v) => handleSaveField('hospitality_contact_1_phone', v)} /> : <a href={`tel:${c.hospitality_contact_1_phone?.replace(/[\s\(\)\-]/g, '')}`} style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--purple)', color:'#fff', fontWeight:700, padding:'6px 14px', borderRadius:8, textDecoration:'none', fontSize:15 }}>📞 {c.hospitality_contact_1_phone}</a>}</div>
               </div>
               <div className="tii-mini">
                 <div className="lbl">{editMode ? <EditableText value={c.hospitality_contact_2_name} onSave={(v) => handleSaveField('hospitality_contact_2_name', v)} /> : c.hospitality_contact_2_name}</div>
-                <div className="big">{editMode ? <EditableText value={c.hospitality_contact_2_phone} onSave={(v) => handleSaveField('hospitality_contact_2_phone', v)} /> : <a href={`tel:${c.hospitality_contact_2_phone?.replace(/\s|\(|\)|-/g, '')}`} style={{ color:'var(--purple)' }}>{c.hospitality_contact_2_phone}</a>}</div>
+                <div className="big">{editMode ? <EditableText value={c.hospitality_contact_2_phone} onSave={(v) => handleSaveField('hospitality_contact_2_phone', v)} /> : <a href={`tel:${c.hospitality_contact_2_phone?.replace(/[\s\(\)\-]/g, '')}`} style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--purple)', color:'#fff', fontWeight:700, padding:'6px 14px', borderRadius:8, textDecoration:'none', fontSize:15 }}>📞 {c.hospitality_contact_2_phone}</a>}</div>
               </div>
             </div>
           </div>
@@ -1253,7 +1253,7 @@ function FlipDigit({ value, label }) {
 function Countdown({ onExpire }) {
   const [cd, setCd] = useState(null);
   useEffect(() => {
-    const target = new Date('2026-08-28T09:00:00-04:00');
+    const target = new Date('2026-08-28T13:00:00-05:00');
     function tick() {
       const diff = target - Date.now();
       if (diff <= 0) { setCd(null); onExpire?.(); return; }
