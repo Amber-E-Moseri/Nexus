@@ -138,9 +138,35 @@ function EditableText({ value, onSave, multiline = false, className = '', placeh
     );
   }
 
-  return <span className={className} onClick={() => setIsEditing(true)} style={{ cursor: 'pointer', position: 'relative', display: 'block', minHeight: value ? undefined : '36px' }}>
-    {value || (placeholder ? <span style={{ opacity: 0.5, fontStyle: 'italic' }}>{placeholder}</span> : <span style={{ display: 'inline-block', minWidth: 40 }}>&nbsp;</span>)}
+  return <span className={className} onClick={() => setIsEditing(true)} style={{ cursor: 'pointer', position: 'relative' }}>
+    {value || (placeholder ? <span style={{ opacity: 0.5, fontStyle: 'italic' }}>{placeholder}</span> : null)}
   </span>;
+}
+
+function UpdatesEditor({ value, onSave }) {
+  const [text, setText] = useState(value);
+  const [saving, setSaving] = useState(false);
+  const changed = text !== value;
+  const handleSave = async () => {
+    if (!changed) return;
+    setSaving(true);
+    try { await onSave(text); } finally { setSaving(false); }
+  };
+  return (
+    <div>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Type your update here…"
+        style={{ width:'100%', minHeight:80, padding:'10px 12px', background:'rgba(255,255,255,0.15)', border:'2px solid rgba(255,255,255,0.4)', borderRadius:8, color:'#fff', fontSize:15, fontFamily:'inherit', lineHeight:1.7, resize:'vertical', boxSizing:'border-box' }}
+      />
+      <div style={{ display:'flex', gap:8, marginTop:8 }}>
+        <button onClick={handleSave} disabled={!changed || saving} style={{ padding:'6px 16px', background: changed ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)', color:'#6B12BC', border:'none', borderRadius:6, fontWeight:700, cursor: changed ? 'pointer' : 'default', fontSize:13 }}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 const NAV_ITEMS = [
@@ -893,9 +919,7 @@ export default function ThisIsItInfo() {
               <span style={{ fontWeight:800, fontSize:16, letterSpacing:'.02em', textTransform:'uppercase' }}>Updates</span>
             </div>
             {editMode
-              ? <div style={{ background:'rgba(255,255,255,0.12)', borderRadius:8, padding:'10px 12px' }}>
-                  <EditableText value={c.updates_text || ''} onSave={(v) => handleSaveField('updates_text', v)} multiline placeholder="Click to type your update…" />
-                </div>
+              ? <UpdatesEditor value={c.updates_text || ''} onSave={(v) => handleSaveField('updates_text', v)} />
               : <div style={{ whiteSpace:'pre-wrap', lineHeight:1.8, fontSize:15 }}>{c.updates_text}</div>
             }
           </div>
