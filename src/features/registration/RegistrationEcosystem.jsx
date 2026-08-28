@@ -1947,6 +1947,9 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
               onUpdateRoom(room.id, {
                 people: people.map(p => p.email === person.email ? { ...p, keyGiven: !p.keyGiven } : p)
               });
+              // Auto check-in when giving a key
+              const reg = checkedInByEmail[person.email?.toLowerCase()];
+              if (reg && !reg.checkedInAt && !person.keyGiven) toggleCheckIn(reg);
             }
 
             return (
@@ -1970,6 +1973,17 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
                 </div>
                 {/* People list */}
                 <div style={{ borderTop: `1px solid ${statusColor}33`, background: '#fff' }}>
+                  {/* Room note */}
+                  <div style={{ padding: '6px 14px', borderBottom: `1px solid ${C.line}` }}>
+                    <textarea
+                      value={room.checkInNote || ''}
+                      onChange={e => onUpdateRoom(room.id, { checkInNote: e.target.value })}
+                      placeholder="Room note…"
+                      rows={1}
+                      style={{ width: '100%', boxSizing: 'border-box', resize: 'none', border: 'none', outline: 'none', fontSize: 12, color: C.ink, background: 'transparent', fontFamily: 'inherit', lineHeight: 1.5 }}
+                      onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+                    />
+                  </div>
                   {people.map((p, i) => {
                     const reg = checkedInByEmail[p.email?.toLowerCase()];
                     const isIn = !!reg?.checkedInAt;
