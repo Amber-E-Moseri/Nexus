@@ -968,9 +968,6 @@ export default function ThisIsItInfo() {
           <div className="tii-card card" style={{ marginTop:'10px' }}>
             <h3>🧳 What to pack</h3>
             <p>{editMode ? <EditableText value={c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.'} onSave={(v) => handleSaveField('packing_text', v)} multiline /> : (c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.')}</p>
-            <div style={{ background:'rgba(234,198,61,0.10)', border:'1px solid rgba(234,198,61,0.5)', borderRadius:'8px', padding:'10px 14px', fontSize:'13.5px', color:'#7a6200', marginBottom:'12px', fontWeight:500 }}>
-              👕 <strong>This Is It shirts will not be provided</strong> — plan your outfits accordingly.
-            </div>
             <ul className="tii-checklist" id="packlist">
               {checklistItems.map((item, index) => (
                 editMode ? (
@@ -1056,6 +1053,7 @@ export default function ThisIsItInfo() {
           <div className="tii-card card">
             <h3>✈ Airport</h3>
             <p><b>{editMode ? <EditableText value={c.airport_name} onSave={(v) => handleSaveField('airport_name', v)} /> : c.airport_name} ({editMode ? <EditableText value={c.airport_code} onSave={(v) => handleSaveField('airport_code', v)} /> : c.airport_code})</b>. This is the airport to fly into — it's only about {editMode ? <EditableText value={c.airport_distance_km?.toString()} onSave={(v) => handleSaveField('airport_distance_km', parseInt(v))} /> : c.airport_distance_km} minutes from the hotel.</p>
+            <p style={{ marginTop:'8px', fontStyle:'italic', fontSize:'13.5px', color:'#666' }}><b>Out-of-province delegates:</b> {editMode ? <EditableText value={c.airport_oop_note || 'Fly directly into YWG — the hotel shuttle will pick you up at arrivals.'} onSave={(v) => handleSaveField('airport_oop_note', v)} multiline /> : (c.airport_oop_note || 'Fly directly into YWG — the hotel shuttle will pick you up at arrivals.')}</p>
           </div>
           <div className="tii-card card">
             <h3>🚌 Hotel shuttle</h3>
