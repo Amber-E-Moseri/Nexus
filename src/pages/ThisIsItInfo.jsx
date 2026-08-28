@@ -1181,11 +1181,11 @@ export default function ThisIsItInfo() {
             <div className="tii-help-grid">
               <div className="tii-mini">
                 <div className="lbl">{editMode ? <EditableText value={c.hospitality_contact_1_name} onSave={(v) => handleSaveField('hospitality_contact_1_name', v)} /> : c.hospitality_contact_1_name}</div>
-                <div className="big">{editMode ? <EditableText value={c.hospitality_contact_1_phone} onSave={(v) => handleSaveField('hospitality_contact_1_phone', v)} /> : <a href={`tel:${c.hospitality_contact_1_phone?.replace(/[\s\(\)\-]/g, '')}`} style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--purple)', color:'#fff', fontWeight:700, padding:'6px 14px', borderRadius:8, textDecoration:'none', fontSize:15 }}>📞 {c.hospitality_contact_1_phone}</a>}</div>
+                <div className="big">{editMode ? <EditableText value={c.hospitality_contact_1_phone} onSave={(v) => handleSaveField('hospitality_contact_1_phone', v)} /> : <a href={`tel:${c.hospitality_contact_1_phone?.replace(/[\s\(\)\-]/g, '')}`} style={{ color:'var(--purple)' }}>{c.hospitality_contact_1_phone}</a>}</div>
               </div>
               <div className="tii-mini">
                 <div className="lbl">{editMode ? <EditableText value={c.hospitality_contact_2_name} onSave={(v) => handleSaveField('hospitality_contact_2_name', v)} /> : c.hospitality_contact_2_name}</div>
-                <div className="big">{editMode ? <EditableText value={c.hospitality_contact_2_phone} onSave={(v) => handleSaveField('hospitality_contact_2_phone', v)} /> : <a href={`tel:${c.hospitality_contact_2_phone?.replace(/[\s\(\)\-]/g, '')}`} style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--purple)', color:'#fff', fontWeight:700, padding:'6px 14px', borderRadius:8, textDecoration:'none', fontSize:15 }}>📞 {c.hospitality_contact_2_phone}</a>}</div>
+                <div className="big">{editMode ? <EditableText value={c.hospitality_contact_2_phone} onSave={(v) => handleSaveField('hospitality_contact_2_phone', v)} /> : <a href={`tel:${c.hospitality_contact_2_phone?.replace(/[\s\(\)\-]/g, '')}`} style={{ color:'var(--purple)' }}>{c.hospitality_contact_2_phone}</a>}</div>
               </div>
             </div>
           </div>
