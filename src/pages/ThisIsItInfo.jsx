@@ -20,6 +20,8 @@ const FALLBACK = {
   airport_code: 'YWG',
   airport_name: 'Winnipeg James Armstrong Richardson International Airport',
   airport_distance_km: 10,
+  announcement_text: '',
+  announcement_active: false,
   hotel_name: 'Sandman Hotel & Suites Winnipeg Airport',
   hotel_address: '1750 Sargent Avenue, Winnipeg, MB R3H 0C7',
   hotel_phone: '(204) 775-7263',
@@ -698,6 +700,44 @@ export default function ThisIsItInfo() {
       `}</style>
 
       <div className="tii-body">
+        {/* Announcement banner — shown to all when active; editor controls always visible */}
+        {(c.announcement_active || editMode) && (
+          <div style={{
+            background: c.announcement_active ? '#6B12BC' : 'rgba(107,18,188,0.12)',
+            color: c.announcement_active ? '#fff' : '#6B12BC',
+            padding: '12px 20px',
+            textAlign: 'center',
+            fontSize: 14,
+            fontWeight: 600,
+            lineHeight: 1.5,
+            position: 'relative',
+            borderBottom: c.announcement_active ? 'none' : '2px dashed rgba(107,18,188,0.3)',
+          }}>
+            {editMode ? (
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:12, flexWrap:'wrap' }}>
+                <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:13 }}>
+                  <input
+                    type="checkbox"
+                    checked={!!c.announcement_active}
+                    onChange={(e) => handleSaveField('announcement_active', e.target.checked)}
+                    style={{ width:16, height:16, cursor:'pointer' }}
+                  />
+                  Show banner
+                </label>
+                <div style={{ flex:1, minWidth:200 }}>
+                  <EditableText
+                    value={c.announcement_text || ''}
+                    onSave={(v) => handleSaveField('announcement_text', v)}
+                    multiline={false}
+                  />
+                </div>
+              </div>
+            ) : (
+              <span>📢 {c.announcement_text}</span>
+            )}
+          </div>
+        )}
+
         {editMode && (
           <div className="edit-mode-indicator">
             ✏️ Editing — Click any text to edit (ESC to cancel)
@@ -928,6 +968,9 @@ export default function ThisIsItInfo() {
           <div className="tii-card card" style={{ marginTop:'10px' }}>
             <h3>🧳 What to pack</h3>
             <p>{editMode ? <EditableText value={c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.'} onSave={(v) => handleSaveField('packing_text', v)} multiline /> : (c.packing_text || 'Late August in Winnipeg usually means warm, sunny days and noticeably cooler evenings — pack in layers.')}</p>
+            <div style={{ background:'rgba(234,198,61,0.10)', border:'1px solid rgba(234,198,61,0.5)', borderRadius:'8px', padding:'10px 14px', fontSize:'13.5px', color:'#7a6200', marginBottom:'12px', fontWeight:500 }}>
+              👕 <strong>This Is It shirts will not be provided</strong> — plan your outfits accordingly.
+            </div>
             <ul className="tii-checklist" id="packlist">
               {checklistItems.map((item, index) => (
                 editMode ? (
