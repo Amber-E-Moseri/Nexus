@@ -1171,7 +1171,7 @@ export default function ThisIsItInfo() {
               </div>
               <div className="tii-mini">
                 <div className="lbl">Phone / WhatsApp</div>
-                <div className="big"><a href={`tel:${c.transport_contact_phone}`} style={{ color:'var(--purple)' }}>{c.transport_contact_phone}</a></div>
+                <div className="big"><a href={`tel:${c.transport_contact_phone?.replace(/[\s\(\)\-]/g, '')}`} style={{ color:'var(--purple)' }}>{c.transport_contact_phone}</a></div>
               </div>
             </div>
           </div>
