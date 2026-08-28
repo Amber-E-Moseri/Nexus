@@ -1051,13 +1051,9 @@ export default function ThisIsItInfo() {
             </div>
           </div>
           <div className="tii-card card">
-            <h3>✈ Airport</h3>
-            <p><b>{editMode ? <EditableText value={c.airport_name} onSave={(v) => handleSaveField('airport_name', v)} /> : c.airport_name} ({editMode ? <EditableText value={c.airport_code} onSave={(v) => handleSaveField('airport_code', v)} /> : c.airport_code})</b>. This is the airport to fly into — it's only about {editMode ? <EditableText value={c.airport_distance_km?.toString()} onSave={(v) => handleSaveField('airport_distance_km', parseInt(v))} /> : c.airport_distance_km} minutes from the hotel.</p>
-            <p style={{ marginTop:'8px', fontStyle:'italic', fontSize:'13.5px', color:'#666' }}><b>Out-of-province delegates:</b> {editMode ? <EditableText value={c.airport_oop_note || 'Fly directly into YWG — the hotel shuttle will pick you up at arrivals.'} onSave={(v) => handleSaveField('airport_oop_note', v)} multiline /> : (c.airport_oop_note || 'Fly directly into YWG — the hotel shuttle will pick you up at arrivals.')}</p>
-          </div>
-          <div className="tii-card card">
-            <h3>🚌 Hotel shuttle</h3>
-            <span className="tii-tag ready">Included</span>
+            <h3>✈ Airport &amp; Shuttle</h3>
+            <span className="tii-tag ready">Shuttle included</span>
+            <p><b>{editMode ? <EditableText value={c.airport_name} onSave={(v) => handleSaveField('airport_name', v)} /> : c.airport_name} ({editMode ? <EditableText value={c.airport_code} onSave={(v) => handleSaveField('airport_code', v)} /> : c.airport_code})</b>. Only about {editMode ? <EditableText value={c.airport_distance_km?.toString()} onSave={(v) => handleSaveField('airport_distance_km', parseInt(v))} /> : c.airport_distance_km} minutes from the hotel.</p>
             <p>{editMode ? <EditableText value={c.shuttle_text || 'A driver from the hotel shuttle will come get you at arrivals. They\'ll already have your name on their pickup list — nothing to book or call ahead. Just head to arrivals and look for the Sandman shuttle.'} onSave={(v) => handleSaveField('shuttle_text', v)} multiline /> : (c.shuttle_text || 'A driver from the hotel shuttle will come get you at arrivals. They\'ll already have your name on their pickup list — nothing to book or call ahead. Just head to arrivals and look for the Sandman shuttle.')}</p>
             <p style={{ marginTop:'8px', fontStyle:'italic', fontSize:'13.5px', color:'#666' }}><b>Out-of-province delegates:</b> {editMode ? <EditableText value={c.airport_oop_note || 'Fly directly into YWG — the hotel shuttle will pick you up at arrivals.'} onSave={(v) => handleSaveField('airport_oop_note', v)} multiline /> : (c.airport_oop_note || 'Fly directly into YWG — the hotel shuttle will pick you up at arrivals.')}</p>
           </div>
