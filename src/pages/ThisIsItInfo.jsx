@@ -1059,6 +1059,7 @@ export default function ThisIsItInfo() {
             <h3>🚌 Hotel shuttle</h3>
             <span className="tii-tag ready">Included</span>
             <p>{editMode ? <EditableText value={c.shuttle_text || 'A driver from the hotel shuttle will come get you at arrivals. They\'ll already have your name on their pickup list — nothing to book or call ahead. Just head to arrivals and look for the Sandman shuttle.'} onSave={(v) => handleSaveField('shuttle_text', v)} multiline /> : (c.shuttle_text || 'A driver from the hotel shuttle will come get you at arrivals. They\'ll already have your name on their pickup list — nothing to book or call ahead. Just head to arrivals and look for the Sandman shuttle.')}</p>
+            <p style={{ marginTop:'8px', fontStyle:'italic', fontSize:'13.5px', color:'#666' }}><b>Out-of-province delegates:</b> {editMode ? <EditableText value={c.airport_oop_note || 'Fly directly into YWG — the hotel shuttle will pick you up at arrivals.'} onSave={(v) => handleSaveField('airport_oop_note', v)} multiline /> : (c.airport_oop_note || 'Fly directly into YWG — the hotel shuttle will pick you up at arrivals.')}</p>
           </div>
           <div className="tii-card card">
             <h3>⏰ When to arrive</h3>
