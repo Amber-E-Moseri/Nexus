@@ -4587,7 +4587,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   const totalCapacity = rooms.reduce((s, r) => s + r.capacity, 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 200px)', minHeight: isMobile ? 0 : 520 }}>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexShrink: 0, flexWrap: 'wrap', gap: 8 }}>
         <div>
@@ -4757,12 +4757,12 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
       )}
 
       {/* body — side-by-side on desktop, stacked on mobile */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 14, overflow: isMobile ? 'visible' : 'hidden' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 14, alignItems: 'flex-start' }}>
 
         {/* ── unassigned pool ── */}
         <div style={isMobile
           ? { flexShrink: 0 }
-          : { width: 230, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+          : { width: 230, flexShrink: 0, display: 'flex', flexDirection: 'column', position: 'sticky', top: 12, alignSelf: 'flex-start' }
         }>
           {['male', 'female'].map(gender => {
             const genderColor = gender === 'male' ? '#2A5FA5' : '#C0507A';
@@ -4770,43 +4770,30 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
             const label      = gender === 'male' ? 'Men' : 'Women';
             const count      = byGender[gender].length;
             return (
-              <div key={gender} style={isMobile
-                ? { marginBottom: gender === 'male' ? 10 : 0 }
-                : { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', marginBottom: gender === 'male' ? 10 : 0 }
-              }>
+              <div key={gender} style={{ marginBottom: gender === 'male' ? 10 : 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexShrink: 0 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: genderColor, background: `${genderColor}18`, padding: '2px 7px', borderRadius: 99 }}>{label}</span>
                   <span style={{ fontSize: 11.5, color: C.mute }}>{count} left</span>
                 </div>
-                <div style={isMobile
-                  ? { display: 'flex', flexWrap: 'wrap', gap: 6, background: genderBg, borderRadius: 8, border: `1px solid ${genderColor}25`, padding: 8 }
-                  : { flex: 1, overflowY: 'auto', background: genderBg, borderRadius: 8, border: `1px solid ${genderColor}25`, padding: 6 }
-                }>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5, background: genderBg, borderRadius: 8, border: `1px solid ${genderColor}25`, padding: 6 }}>
                   {count === 0 ? (
                     <div style={{ fontSize: 11.5, color: C.mute, fontStyle: 'italic', textAlign: 'center', padding: '12px 8px', width: '100%' }}>All assigned!</div>
                   ) : (
                     byGender[gender].map(person => {
                       const isSelected = selectedPerson?.email === person.email;
-                      return isMobile ? (
-                        <button
-                          key={person.email}
-                          onClick={() => setSelectedPerson(isSelected ? null : person)}
-                          style={{ padding: '6px 10px', background: isSelected ? genderColor : '#fff', color: isSelected ? '#fff' : '#1A1220', border: `1.5px solid ${isSelected ? genderColor : genderColor + '44'}`, borderRadius: 20, fontSize: 12, cursor: 'pointer', fontWeight: isSelected ? 700 : 400, transition: 'all .12s', lineHeight: 1.3 }}
-                        >
-                          {person.fullName}
-                        </button>
-                      ) : (
+                      return (
                         <div
                           key={person.email}
                           draggable
                           onDragStart={e => { setDraggedPerson(person); e.dataTransfer.effectAllowed = 'move'; }}
-                          style={{ padding: '6px 8px', background: '#fff', border: `1px solid ${genderColor}33`, borderRadius: 5, fontSize: 12, cursor: 'grab', userSelect: 'none', marginBottom: 4, transition: 'box-shadow .12s' }}
-                          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.12)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}
+                          onClick={() => setSelectedPerson(isSelected ? null : person)}
+                          style={{ padding: '8px 10px', background: isSelected ? `${genderColor}12` : '#fff', border: `1px solid ${isSelected ? genderColor : genderColor + '22'}`, borderRadius: 8, fontSize: 12.5, cursor: 'grab', userSelect: 'none', transition: 'box-shadow .12s, border-color .12s, background .12s' }}
+                          onMouseEnter={e => { e.currentTarget.style.boxShadow = `0 2px 8px ${genderColor}25`; if (!isSelected) e.currentTarget.style.borderColor = `${genderColor}55`; }}
+                          onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; if (!isSelected) e.currentTarget.style.borderColor = `${genderColor}22`; }}
                         >
-                          <div style={{ fontWeight: 500, color: '#1A1220', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{person.fullName}</div>
+                          <div style={{ fontWeight: 600, color: isSelected ? genderColor : '#1A1220' }}>{person.fullName}</div>
                           {(person.subgroup || person.designation) && (
-                            <div style={{ fontSize: 10.5, color: C.mute, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <div style={{ fontSize: 11, color: C.mute, marginTop: 2 }}>
                               {person.subgroup}{person.designation ? ` · ${person.designation}` : ''}
                             </div>
                           )}
@@ -4821,9 +4808,9 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
         </div>
 
         {/* ── rooms grid + add controls ── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: isMobile ? 'visible' : 'hidden', minWidth: 0 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {/* rooms grid */}
-          <div style={{ flex: isMobile ? 'none' : 1, overflowY: isMobile ? 'visible' : 'auto', paddingRight: 2 }}>
+          <div>
             {rooms.length === 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', color: C.mute, fontSize: 13 }}>
                 <div style={{ fontSize: 28, marginBottom: 8 }}>🏠</div>
@@ -4986,7 +4973,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
           </div>
 
           {/* add room controls */}
-          <div style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, marginTop: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, marginTop: 10 }}>
             {/* single room */}
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               <input
@@ -5022,8 +5009,8 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
               value={roomsNote}
               onChange={e => handleUpdateRoomsNote(e.target.value)}
               placeholder="Add any special requests or general notes for room assignments…"
-              rows={2}
-              style={{ width: '100%', fontSize: 13, fontFamily: 'Inter, sans-serif', border: `1px solid ${C.line}`, borderRadius: 7, padding: '8px 10px', resize: 'none', color: '#1A1220', background: '#FAFAFA', boxSizing: 'border-box', outline: 'none', overscrollBehavior: 'contain' }}
+              rows={4}
+              style={{ width: '100%', fontSize: 13, fontFamily: 'Inter, sans-serif', border: `1px solid ${C.line}`, borderRadius: 7, padding: '8px 10px', resize: 'vertical', color: '#1A1220', background: '#FAFAFA', boxSizing: 'border-box', outline: 'none' }}
             />
           </div>
         </div>
