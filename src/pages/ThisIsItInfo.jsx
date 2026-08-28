@@ -174,6 +174,30 @@ export default function ThisIsItInfo() {
 
   const canEdit = profile && (role === 'super_admin' || role === 'regional_secretary' || EXTRA_EDITOR_USER_IDS.includes(profile.id));
 
+  // Track page view on mount
+  useEffect(() => {
+    supabase.rpc('increment_tii_page_view');
+  }, []);
+
+  // Fetch last 7 days of views for editors
+  const { data: viewStats } = useQuery({
+    queryKey: ['tii_page_views'],
+    queryFn: async () => {
+      const { data } = await supabase.from('tii_page_views').select('view_date, view_count').order('view_date', { ascending: false }).limit(7);
+      return data || [];
+    },
+    enabled: !!canEdit,
+    staleTime: 60_000,
+  });
+  const todayViews = viewStats?.find(r => r.view_date === new Date().toISOString().slice(0, 10))?.view_count ?? 0;
+  const weekViews = viewStats?.reduce((s, r) => s + r.view_count, 0) ?? 0;
+
+  // Dynamic step numbers — recalculated when sections expire
+  const visibleSteps = [!preEventItemsHidden, !gettingThereHidden, true, !gettingThereHidden, true];
+  let _stepCounter = 0;
+  const stepNums = visibleSteps.map(v => v ? ++_stepCounter : null);
+  // stepNums[0]=Before You Fly, [1]=Getting There, [2]=Hotel Check-In, [3]=Venue, [4]=Schedule
+
   // Direct REST call bypasses the Supabase client's auth initialization lock.
   // The client waits for token refresh (up to 30s) before executing any query;
   // this table has RLS USING (true) so only the anon key is needed.
@@ -666,12 +690,19 @@ export default function ThisIsItInfo() {
         )}
 
         {canEdit && (
-          <button
-            onClick={() => setEditMode(!editMode)}
-            style={{ position:'fixed',top:'16px',right:'16px',zIndex:100,padding:'8px 14px',background:editMode ? '#DD6F51' : '#6B12BC',color:'#fff',border:'none',borderRadius:'8px',fontWeight:700,cursor:'pointer',fontSize:'13px' }}
-          >
-            {editMode ? '✕ Done' : '✏️ Edit'}
-          </button>
+          <div style={{ position:'fixed', top:12, right:12, zIndex:100, display:'flex', alignItems:'center', gap:8 }}>
+            {!editMode && viewStats && (
+              <div style={{ background:'rgba(22,23,23,0.72)', backdropFilter:'blur(6px)', color:'#fff', borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:500, lineHeight:1.4 }}>
+                👁 {todayViews} today · {weekViews} this week
+              </div>
+            )}
+            <button
+              onClick={() => setEditMode(!editMode)}
+              style={{ padding:'8px 14px', background:editMode ? '#DD6F51' : '#6B12BC', color:'#fff', border:'none', borderRadius:'8px', fontWeight:700, cursor:'pointer', fontSize:'13px' }}
+            >
+              {editMode ? '✕ Done' : '✏️ Edit'}
+            </button>
+          </div>
         )}
 
 
@@ -857,9 +888,9 @@ export default function ThisIsItInfo() {
         {/* Before You Fly — hidden from noon CDT Aug 28 */}
         {!preEventItemsHidden && <section className="tii-section" id="pack" style={{ marginTop:'40px' }}>
           <div className="tii-stop-head stop-head">
-            <div className="tii-dot">1</div>
+            <div className="tii-dot">{stepNums[0]}</div>
             <div>
-              <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Step 01</span>
+              <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Step {String(stepNums[0]).padStart(2, '0')}</span>
               <h2>Before You Fly</h2>
             </div>
           </div>
@@ -958,9 +989,9 @@ export default function ThisIsItInfo() {
         {/* Getting There — hidden from 9pm CDT Aug 28 */}
         {!gettingThereHidden && <section className="tii-section" id="getting-there">
           <div className="tii-stop-head stop-head">
-            <div className="tii-dot">2</div>
+            <div className="tii-dot">{stepNums[1]}</div>
             <div>
-              <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Step 02</span>
+              <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Step {String(stepNums[1]).padStart(2, '0')}</span>
               <h2>Getting There</h2>
             </div>
           </div>
@@ -982,9 +1013,9 @@ export default function ThisIsItInfo() {
         {/* Hotel Check-In */}
         <section className="tii-section" id="checkin">
           <div className="tii-stop-head stop-head">
-            <div className="tii-dot">3</div>
+            <div className="tii-dot">{stepNums[2]}</div>
             <div>
-              <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Step 03</span>
+              <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Step {String(stepNums[2]).padStart(2, '0')}</span>
               <h2>Hotel Check-In</h2>
             </div>
           </div>
@@ -1012,9 +1043,9 @@ export default function ThisIsItInfo() {
         {/* Venue — hidden from 9pm CDT Aug 28 */}
         {!gettingThereHidden && <section className="tii-section" id="venue">
           <div className="tii-stop-head stop-head">
-            <div className="tii-dot">4</div>
+            <div className="tii-dot">{stepNums[3]}</div>
             <div>
-              <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Step 04</span>
+              <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Step {String(stepNums[3]).padStart(2, '0')}</span>
               <h2>Venue</h2>
             </div>
           </div>
@@ -1047,9 +1078,9 @@ export default function ThisIsItInfo() {
         {/* Schedule */}
         <section className="tii-section" id="schedule">
           <div className="tii-stop-head stop-head">
-            <div className="tii-dot">5</div>
+            <div className="tii-dot">{stepNums[4]}</div>
             <div>
-              <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Step 05</span>
+              <span style={{ display:'block', fontSize:'10px', letterSpacing:'.08em', textTransform:'uppercase', color:'#999', fontWeight:600, marginBottom:'2px' }}>Step {String(stepNums[4]).padStart(2, '0')}</span>
               <h2>Schedule</h2>
             </div>
           </div>
