@@ -1837,7 +1837,8 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
 
   const roomsWithPeople = rooms.filter(r => r.people && r.people.length > 0);
   const totalKeysGiven = roomsWithPeople.reduce((s, r) => s + (r.keysGiven || 0), 0);
-  const totalKeysTotal = roomsWithPeople.reduce((s, r) => s + (r.keyTotal ?? 2), 0);
+  const roomsWithTotal = roomsWithPeople.filter(r => r.keyTotal != null);
+  const totalKeysTotal = roomsWithTotal.reduce((s, r) => s + r.keyTotal, 0);
 
   return (
     <div>
@@ -1846,8 +1847,8 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
           pct={total ? Math.round((checkedInCount / total) * 100) : 0} />
         <SummaryCard label="Still expected" current={total - checkedInCount} target={total} noBar />
         {roomsWithPeople.length > 0 && (
-          <SummaryCard label="Keys given" current={totalKeysGiven} target={totalKeysTotal}
-            pct={totalKeysTotal ? Math.round((totalKeysGiven / totalKeysTotal) * 100) : 0} />
+          <SummaryCard label="Keys given" current={totalKeysGiven} target={totalKeysTotal || totalKeysGiven}
+            pct={totalKeysTotal ? Math.round((totalKeysGiven / totalKeysTotal) * 100) : 0} noBar={!totalKeysTotal} />
         )}
       </div>
 
@@ -1937,8 +1938,8 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
             const arrivedCount = people.filter(p => checkedInByEmail[p.email?.toLowerCase()]?.checkedInAt).length;
             const allArrived = arrivedCount === people.length && people.length > 0;
             const keysGiven = room.keysGiven || 0;
-            const keyTotal = room.keyTotal ?? 2;
-            const allKeysOut = keysGiven >= keyTotal && keyTotal > 0;
+            const keyTotal = room.keyTotal ?? null; // null = not set yet
+            const allKeysOut = keyTotal != null && keysGiven >= keyTotal && keyTotal > 0;
             const statusColor = allArrived && allKeysOut ? '#16A34A' : arrivedCount > 0 ? '#D97706' : '#9E9488';
             const statusBg   = allArrived && allKeysOut ? '#F0FFF4' : arrivedCount > 0 ? '#FFFBEB' : '#F8F6F3';
             return (
@@ -1955,17 +1956,22 @@ function CheckInTab({ merged, subgroupFilter, setSubgroupFilter, subgroups, isLi
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1.5px solid ${allKeysOut ? '#16A34A' : C.line}`, borderRadius: 8, background: allKeysOut ? '#DCFCE7' : '#fff', padding: '5px 10px' }}>
                     <span style={{ fontSize: 14 }}>🔑</span>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                      <input type="number" min={0} max={keyTotal} value={keysGiven}
-                        onChange={e => onUpdateRoom(room.id, { keysGiven: Math.min(keyTotal, Math.max(0, parseInt(e.target.value) || 0)) })}
+                      <input type="number" min={0} max={keyTotal ?? 99} value={keysGiven}
+                        onChange={e => onUpdateRoom(room.id, { keysGiven: Math.max(0, parseInt(e.target.value) || 0) })}
                         style={{ width: 36, fontSize: 14, fontWeight: 700, border: `1px solid ${C.line}`, borderRadius: 5, padding: '2px 4px', textAlign: 'center', color: allKeysOut ? '#16A34A' : C.ink }}
                       />
                       <span style={{ fontSize: 9, color: C.mute, lineHeight: 1 }}>given</span>
                     </div>
                     <span style={{ fontSize: 13, color: C.mute }}>/</span>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                      <input type="number" min={1} max={20} value={keyTotal}
-                        onChange={e => onUpdateRoom(room.id, { keyTotal: Math.max(1, parseInt(e.target.value) || 1) })}
-                        style={{ width: 36, fontSize: 14, fontWeight: 700, border: `1px solid ${C.line}`, borderRadius: 5, padding: '2px 4px', textAlign: 'center', color: C.mute }}
+                      <input type="number" min={1} max={20}
+                        value={keyTotal ?? ''}
+                        placeholder="?"
+                        onChange={e => {
+                          const v = parseInt(e.target.value);
+                          onUpdateRoom(room.id, { keyTotal: isNaN(v) ? null : Math.max(1, v) });
+                        }}
+                        style={{ width: 36, fontSize: 14, fontWeight: 700, border: `1px solid ${C.line}`, borderRadius: 5, padding: '2px 4px', textAlign: 'center', color: keyTotal != null ? C.mute : '#F59E0B' }}
                       />
                       <span style={{ fontSize: 9, color: C.mute, lineHeight: 1 }}>total</span>
                     </div>
