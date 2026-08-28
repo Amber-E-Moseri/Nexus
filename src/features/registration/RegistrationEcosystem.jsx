@@ -1133,7 +1133,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     [workingListDb],
   );
 
-  const merged = useMemo(() => registrationsFiltered.filter(r => !supersededRegEmails.has(r.email)).map(r => {
+  const merged = useMemo(() => registrationsFiltered.filter(r => !supersededRegEmails.has(r.email) && !absentEmailsForMerge.has(r.email)).map(r => {
     const pay = paymentByEmail[r.email];
     const hasPaid = pay ? (Number(pay.amount_paid) || 0) > 0 && (Number(pay.amount_paid) || 0) >= (Number(pay.amount_expected) || 0) : false;
     const hasPartialPayment = pay ? (Number(pay.amount_paid) || 0) > 0 && (Number(pay.amount_paid) || 0) < (Number(pay.amount_expected) || 0) : false;
