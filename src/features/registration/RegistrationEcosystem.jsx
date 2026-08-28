@@ -1219,6 +1219,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     const allowed = tabs.filter(t => {
       if (t.hidden) return false;
       if (t.key === 'settings') return role === 'super_admin';
+      // Check-in is always visible to anyone with registration access
+      if (t.key === 'checkin') return true;
       if (t.team_whitelist?.length) {
         return privileged || t.team_whitelist.some((allowedTeam) => userTeamNames.some((team) => team.toLowerCase().includes(allowedTeam.toLowerCase())));
       }
