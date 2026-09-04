@@ -6,7 +6,7 @@ import { useAuth } from '../../hooks/useAuth';
 import RegistrationEditModal from './RegistrationEditModal';
 import RegistrationDataTab from './RegistrationDataTab';
 import SettingsTab from './SettingsTab';
-import TiiReportTab from './TiiReportTab';
+import TiiReportTab from './components/TiiReportTab';
 import { useEventConfig } from './EventConfigContext';
 
 // ---------- brand tokens ----------
