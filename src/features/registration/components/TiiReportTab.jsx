@@ -22,7 +22,6 @@ export default function TiiReportTab({
   registrations = [],
   eventId,
   eventConfig = {},
-  sessions = [],
 }) {
   const {
     fetchEventAttendance,
