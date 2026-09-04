@@ -1,7 +1,41 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { AlertCircle, Copy, Eye, EyeOff, Filter, RefreshCw, Share2, Printer, Download } from 'lucide-react';
+import { AlertCircle, Copy, Eye, EyeOff, Filter, RefreshCw, Share2, Printer, Download, FileText } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useTiiReport } from '../hooks/useTiiReport';
+
+// Export report to CSV
+function exportReportToCSV(report, reportLabel) {
+  if (!report) return;
+
+  const rows = [
+    [reportLabel, ''],
+    ['', ''],
+    ['Report Summary', ''],
+    ['Expected', report.expected_count],
+    ['Present', report.attended_count],
+    ['Absent', report.absent_count],
+    ['Unexpected (Walk-ins)', report.unexpected_count],
+    ['Reach %', `${report.reach_pct}%`],
+    ['', ''],
+    ['Present Names', ''],
+    ...report.present_names.map(name => [name, '']),
+    ['', ''],
+    ['Absent Names', ''],
+    ...report.absent_names.map(name => [name, '']),
+    ['', ''],
+    ['Unexpected Names', ''],
+    ...report.unexpected_names.map(name => [name, '']),
+  ];
+
+  const csv = rows.map(row => row.map(cell => `"${cell || ''}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${reportLabel.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
 
 const C = {
   ink: '#1A1220',
@@ -258,6 +292,23 @@ export default function TiiReportTab({
                 }}
               >
                 Back
+              </button>
+              <button
+                onClick={() => exportReportToCSV(report, reportLabel)}
+                style={{
+                  padding: '8px 16px',
+                  background: C.paper,
+                  border: `1px solid ${C.line}`,
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Download size={16} />
+                Export CSV
               </button>
               <button
                 onClick={handleSaveReport}
