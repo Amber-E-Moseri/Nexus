@@ -93,11 +93,15 @@ export default function TiiReportTab({
   const handleGenerateReport = useCallback(async () => {
     setIsLoading(true);
     try {
-      const reportData = await buildReport({
-        eventId,
-        expectedPoolFilter,
-        subgroupFilter: subgroupFilter.length > 0 ? subgroupFilter : undefined,
-      });
+      const reportData = await buildReport(
+        {
+          eventId,
+          expectedPoolFilter,
+          subgroupFilter: subgroupFilter.length > 0 ? subgroupFilter : undefined,
+        },
+        registrations,
+        attendance
+      );
       setReport(reportData);
       setView('summary');
     } catch (error) {
@@ -106,7 +110,7 @@ export default function TiiReportTab({
     } finally {
       setIsLoading(false);
     }
-  }, [eventId, expectedPoolFilter, subgroupFilter, buildReport]);
+  }, [eventId, expectedPoolFilter, subgroupFilter, registrations, attendance, buildReport]);
 
   // Save report
   const handleSaveReport = useCallback(async () => {

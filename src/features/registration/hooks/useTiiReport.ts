@@ -207,51 +207,78 @@ export function useTiiReport() {
 
   /**
    * Build aggregated report from attendance data
-   * Uses Supabase RPC function for heavy lifting
+   * Client-side aggregation with registrations data
    */
   const buildReport = useCallback(
-    async (params: TiiReportInput): Promise<Partial<TiiAttendanceReport>> => {
+    async (params: TiiReportInput, registrations: any[], attendance: TiiAttendanceRecord[]): Promise<Partial<TiiAttendanceReport>> => {
       try {
-        // Call RPC function to build report
-        const { data, error } = await supabase.rpc('build_tii_report', {
-          event_id_param: params.eventId,
-          expected_pool_filter_param: params.expectedPoolFilter || 'confirmed_registered',
-          subgroup_filter_param: params.subgroupFilter || null,
-        });
+        // Filter registrations by expected pool
+        let expectedPool: any[] = [];
 
-        if (error) throw error;
-
-        if (!data || data.length === 0) {
-          return {
-            expected_count: 0,
-            attended_count: 0,
-            absent_count: 0,
-            excused_count: 0,
-            unexpected_count: 0,
-            reach_pct: 0,
-            present_names: [],
-            absent_names: [],
-            excused_names: [],
-            unexpected_names: [],
-            by_session: {},
-            by_subgroup: {},
-          };
+        if (params.expectedPoolFilter === 'confirmed_only') {
+          expectedPool = registrations.filter(r => r.manually_confirmed && r.confirmed_at);
+        } else if (params.expectedPoolFilter === 'confirmed_registered') {
+          expectedPool = registrations.filter(r => r.submitted_at);
+        } else {
+          expectedPool = registrations.filter(r => r.submitted_at);
         }
 
-        const report = data[0];
+        // Apply subgroup filter if provided
+        if (params.subgroupFilter && params.subgroupFilter.length > 0) {
+          expectedPool = expectedPool.filter(r => params.subgroupFilter.includes(r.subgroup));
+        }
+
+        // Get unique expected names/emails
+        const expectedSet = new Set(
+          expectedPool.map(r => (r.email || r.full_name).toLowerCase())
+        );
+
+        // Get attended names
+        const attendedNames = new Set(
+          attendance.map(a => (a.email || a.full_name).toLowerCase())
+        );
+
+        // Classify attendance
+        const presentNames: string[] = [];
+        const absentNames: string[] = [];
+        const unexpectedNames: string[] = [];
+
+        expectedPool.forEach(reg => {
+          const key = (reg.email || reg.full_name).toLowerCase();
+          if (attendedNames.has(key)) {
+            presentNames.push(reg.full_name || reg.email);
+          } else {
+            absentNames.push(reg.full_name || reg.email);
+          }
+        });
+
+        // Find walk-ins (attended but not expected)
+        attendance.forEach(att => {
+          const key = (att.email || att.full_name).toLowerCase();
+          if (!expectedSet.has(key)) {
+            unexpectedNames.push(att.full_name);
+          }
+        });
+
+        const expectedCount = expectedPool.length;
+        const presentCount = presentNames.length;
+        const absentCount = absentNames.length;
+        const unexpectedCount = unexpectedNames.length;
+        const reachPct = expectedCount > 0 ? (presentCount / expectedCount * 100) : 0;
+
         return {
-          expected_count: report.expected_count,
-          attended_count: report.attended_count,
-          absent_count: report.absent_count,
-          excused_count: report.excused_count,
-          unexpected_count: report.unexpected_count,
-          reach_pct: report.reach_pct,
-          present_names: report.present_names || [],
-          absent_names: report.absent_names || [],
-          excused_names: report.excused_names || [],
-          unexpected_names: report.unexpected_names || [],
-          by_session: report.by_session || {},
-          by_subgroup: report.by_subgroup || {},
+          expected_count: expectedCount,
+          attended_count: presentCount + unexpectedCount,
+          absent_count: absentCount,
+          excused_count: 0,
+          unexpected_count: unexpectedCount,
+          reach_pct: Math.round(reachPct * 100) / 100,
+          present_names: presentNames,
+          absent_names: absentNames,
+          excused_names: [],
+          unexpected_names: unexpectedNames,
+          by_session: {},
+          by_subgroup: {},
         };
       } catch (error) {
         console.error('Error building TII report:', error);
