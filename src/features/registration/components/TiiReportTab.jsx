@@ -75,6 +75,10 @@ export default function TiiReportTab({
   const [attendance, setAttendance] = useState([]);
   const [showShareToken, setShowShareToken] = useState(false);
   const [reportLabel, setReportLabel] = useState(`TII ${new Date().getFullYear()}`);
+  const [showCmpImport, setShowCmpImport] = useState(false);
+  const [cmpServices, setCmpServices] = useState([]);
+  const [selectedService, setSelectedService] = useState(null);
+  const [cmpLoading, setCmpLoading] = useState(false);
 
   // Fetch sessions and attendance on mount
   useEffect(() => {
@@ -88,6 +92,64 @@ export default function TiiReportTab({
     };
     load();
   }, [eventId, fetchTiiSessions, fetchEventAttendance]);
+
+  // Fetch CMP services for import
+  const handleFetchCmpServices = useCallback(async () => {
+    setCmpLoading(true);
+    try {
+      // Call service-attendees edge function to list services
+      const { data, error } = await supabase.functions.invoke('service-attendees', {
+        body: { action: 'list' },
+      });
+
+      if (error) throw error;
+      setCmpServices(data?.services || []);
+    } catch (error) {
+      console.error('Error fetching CMP services:', error);
+      alert('Error loading CMP services. Make sure the edge function is deployed.');
+    } finally {
+      setCmpLoading(false);
+    }
+  }, []);
+
+  // Import attendance from selected CMP service
+  const handleImportFromCmp = useCallback(async () => {
+    if (!selectedService) {
+      alert('Please select a service');
+      return;
+    }
+
+    setCmpLoading(true);
+    try {
+      // Fetch attendees from selected service
+      const { data, error } = await supabase.functions.invoke('service-attendees', {
+        body: {
+          action: 'attendees',
+          cmpServiceId: selectedService.id,
+        },
+      });
+
+      if (error) throw error;
+
+      // Add attendees to current attendance
+      const newAttendees = (data?.attendees || []).map(name => ({
+        full_name: name,
+        email: null,
+        status: 'present',
+        created_at: new Date().toISOString(),
+      }));
+
+      setAttendance(prev => [...prev, ...newAttendees]);
+      alert(`Imported ${newAttendees.length} attendees from ${selectedService.name}`);
+      setShowCmpImport(false);
+      setSelectedService(null);
+    } catch (error) {
+      console.error('Error importing from CMP:', error);
+      alert('Error importing attendance from CMP');
+    } finally {
+      setCmpLoading(false);
+    }
+  }, [selectedService]);
 
   // Generate report
   const handleGenerateReport = useCallback(async () => {
@@ -236,6 +298,90 @@ export default function TiiReportTab({
             </div>
           )}
 
+          {/* Import from CMP */}
+          <div style={{ marginBottom: '20px', padding: '16px', background: C.blueBg, borderRadius: '8px', border: `1px solid ${C.blue}` }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '600', color: C.blue, marginTop: 0, marginBottom: '12px' }}>
+              📊 Import Attendance from CMP
+            </h3>
+            {!showCmpImport ? (
+              <button
+                onClick={() => { setShowCmpImport(true); handleFetchCmpServices(); }}
+                disabled={cmpLoading}
+                style={{
+                  padding: '8px 16px',
+                  background: C.blue,
+                  color: C.paper,
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: cmpLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  opacity: cmpLoading ? 0.6 : 1,
+                }}
+              >
+                {cmpLoading ? 'Loading...' : 'Load CMP Services'}
+              </button>
+            ) : (
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '8px', color: C.ink }}>
+                  Select a service/meeting
+                </label>
+                <select
+                  value={selectedService?.id || ''}
+                  onChange={(e) => {
+                    const service = cmpServices.find(s => s.id === e.target.value);
+                    setSelectedService(service);
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    border: `1px solid ${C.line}`,
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    width: '100%',
+                    marginBottom: '8px',
+                  }}
+                >
+                  <option value="">-- Select a service --</option>
+                  {cmpServices.map(service => (
+                    <option key={service.id} value={service.id}>
+                      {service.name} ({service.date})
+                    </option>
+                  ))}
+                </select>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={handleImportFromCmp}
+                    disabled={cmpLoading || !selectedService}
+                    style={{
+                      padding: '8px 16px',
+                      background: C.green,
+                      color: C.paper,
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: cmpLoading || !selectedService ? 'not-allowed' : 'pointer',
+                      fontSize: '14px',
+                      opacity: cmpLoading || !selectedService ? 0.6 : 1,
+                    }}
+                  >
+                    {cmpLoading ? 'Importing...' : 'Import Attendance'}
+                  </button>
+                  <button
+                    onClick={() => setShowCmpImport(false)}
+                    style={{
+                      padding: '8px 16px',
+                      background: C.paper,
+                      border: `1px solid ${C.line}`,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Report Label */}
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px', color: C.ink }}>
@@ -254,6 +400,13 @@ export default function TiiReportTab({
               }}
             />
           </div>
+
+          {/* Attendance Summary */}
+          {attendance.length > 0 && (
+            <div style={{ marginBottom: '20px', padding: '12px', background: C.greenBg, borderRadius: '6px', fontSize: '13px', color: C.green }}>
+              <strong>{attendance.length}</strong> attendees loaded from CMP
+            </div>
+          )}
 
           {/* Generate Button */}
           <button
