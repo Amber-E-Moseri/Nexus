@@ -147,12 +147,15 @@ export function useTiiReport() {
       attendees: Array<{ full_name: string; email?: string; status?: string }>
     ) => {
       try {
+        const user = await supabase.auth.getUser();
+        const userId = user?.data?.user?.id;
+
         const records = attendees.map((a) => ({
           session_id: sessionId,
           full_name: a.full_name.trim(),
           email: a.email ? a.email.toLowerCase() : null,
           status: a.status || 'present',
-          created_by: (await supabase.auth.getUser())?.data?.user?.id,
+          created_by: userId,
         }));
 
         const { error } = await supabase.from('tii_attendance').insert(records);
