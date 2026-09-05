@@ -29,7 +29,13 @@ const WALKIN_DEFAULT_SG = 'Central East Subgroup A';
 function nameKey(str) {
   // JS \s covers U+00A0 and other Unicode spaces - collapse all whitespace variants.
   // Prevents CMP "David Amafuela " vs registration "David Amafuela" lookup misses.
-  return (str || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  // Also removes special characters (hyphens, accents) to match "Enow-Tiku" with "Enow Tiku"
+  return (str || '')
+    .toLowerCase()
+    .replace(/[\s\-_]+/g, ' ') // normalize all whitespace & hyphens to space
+    .replace(/[^\w\s]/g, '') // remove accents and special chars
+    .trim()
+    .replace(/\s+/g, ' '); // collapse multiple spaces
 }
 
 // Levenshtein edit distance
@@ -395,6 +401,25 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
     setLoadedSessions([]);
   }
 
+  // Helper: check if a CMP name matches any registration (exact or fuzzy)
+  function findRegistrationMatch(cmpName, expectedPool_) {
+    const nameNorm = nameKey(cmpName);
+    // Exact match first
+    for (const reg of expectedPool_) {
+      const rn = reg.fullName || reg.full_name || '';
+      const re = reg.email || '';
+      if (nameKey(rn) === nameNorm || nameKey(re) === nameNorm) return reg;
+    }
+    // Fuzzy fallback: ≥ 0.75 (high confidence)
+    let best = null, bestScore = 0;
+    for (const reg of expectedPool_) {
+      const rn = reg.fullName || reg.full_name || '';
+      const score = fuzzyScore(cmpName, rn);
+      if (score > bestScore) { bestScore = score; best = reg; }
+    }
+    return bestScore >= 0.75 ? best : null;
+  }
+
   // ── generate report ────────────────────────────────────────────────────────
   async function handleGenerate() {
     setIsGenerating(true);
@@ -410,7 +435,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
         expectedPool_ = expectedPool_.filter(r => subgroupFilter.includes(r.subgroup));
       }
 
-      // Build roster lookup: nameKey → registration
+      // Build roster lookup: nameKey → registration (for exact matching)
       const rosterByKey = {};
       expectedPool_.forEach(r => {
         const nk = nameKey(r.fullName || r.full_name);
@@ -435,20 +460,44 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
       });
       const attendedKeys = new Set(Object.keys(personSessions));
 
-      // Classify expected pool
+      // Classify expected pool — exact match first, then fuzzy fallback
       const presentNames = [], absentNames = [];
+      // Build a reverse map: CMP attendedKey → cmpName (for fuzzy lookup)
+      const attendedKeyToName = {};
+      attendedKeys.forEach(k => { attendedKeyToName[k] = personSessions[k].displayName; });
+
       expectedPool_.forEach(r => {
-        const nk = nameKey(r.fullName || r.full_name);
+        const rName = r.fullName || r.full_name;
+        const nk = nameKey(rName);
         const ek = nameKey(r.email);
-        const attended = attendedKeys.has(nk) || (ek && attendedKeys.has(ek));
-        if (attended) presentNames.push(r.fullName || r.full_name);
-        else absentNames.push(r.fullName || r.full_name);
+        // Exact match
+        if (attendedKeys.has(nk) || (ek && attendedKeys.has(ek))) {
+          presentNames.push(rName);
+          return;
+        }
+        // Fuzzy fallback: check all CMP attendees for a high-confidence match
+        let fuzzyMatched = false;
+        for (const cmpKey of attendedKeys) {
+          const cmpName = personSessions[cmpKey].displayName;
+          if (fuzzyScore(rName, cmpName) >= 0.75) {
+            presentNames.push(rName);
+            fuzzyMatched = true;
+            break;
+          }
+        }
+        if (!fuzzyMatched) absentNames.push(rName);
       });
 
-      // Walk-ins: attended but NOT in expected pool
+      // Walk-ins: attended but NOT in expected pool (exact match)
+      // If fuzzy match ≥ 0.75 found, they're registered, not a walk-in
       const unexpectedNames = [];
       attendedKeys.forEach(k => {
-        if (!rosterKeys.has(k)) unexpectedNames.push(personSessions[k].displayName);
+        if (!rosterKeys.has(k)) {
+          const cmpName = personSessions[k].displayName;
+          // Try fuzzy match as fallback — if found, they're registered
+          const fuzzyReg = findRegistrationMatch(cmpName, expectedPool_);
+          if (!fuzzyReg) unexpectedNames.push(cmpName); // Only walk-in if no registration match
+        }
       });
 
       // Use let so auto-apply can recalculate after committed mappings are applied
@@ -459,19 +508,27 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
       let reach_pct = expected_count > 0 ? Math.round(presentNames.length / expected_count * 1000) / 10 : 0;
 
       // ── by_subgroup ──────────────────────────────────────────────────────────
-      // For expected pool: group by their registered subgroup
+      // For expected pool: group by their registered subgroup (exact + fuzzy match)
       const subgroups = {};
       expectedPool_.forEach(r => {
+        const rName = r.fullName || r.full_name;
         const sg = r.subgroup || 'Unknown';
         if (!subgroups[sg]) subgroups[sg] = { expected: [], present: [], absent: [], walkIns: [] };
-        subgroups[sg].expected.push(r.fullName || r.full_name);
-        const nk = nameKey(r.fullName || r.full_name);
+        subgroups[sg].expected.push(rName);
+        const nk = nameKey(rName);
         const ek = nameKey(r.email);
-        if (attendedKeys.has(nk) || (ek && attendedKeys.has(ek))) {
-          subgroups[sg].present.push(r.fullName || r.full_name);
-        } else {
-          subgroups[sg].absent.push(r.fullName || r.full_name);
+        let attended = attendedKeys.has(nk) || (ek && attendedKeys.has(ek));
+        if (!attended) {
+          // Fuzzy fallback
+          for (const cmpKey of attendedKeys) {
+            if (fuzzyScore(rName, personSessions[cmpKey].displayName) >= 0.75) {
+              attended = true;
+              break;
+            }
+          }
         }
+        if (attended) subgroups[sg].present.push(rName);
+        else subgroups[sg].absent.push(rName);
       });
 
       // Walk-ins: try to match to any registration (even if not in expected pool) for subgroup.
@@ -487,12 +544,31 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
 
       // ── session_attendance ────────────────────────────────────────────────────
       const session_attendance = {};
-      // Confirmed people
+      // Track which CMP keys have been matched (to avoid double-counting)
+      const matchedCmpKeys = new Set();
+      // Confirmed people — exact + fuzzy match to CMP sessions
       expectedPool_.forEach(r => {
         const displayName = r.fullName || r.full_name;
         const nk = nameKey(displayName);
         const ek = nameKey(r.email);
-        const ps = personSessions[nk] || (ek && personSessions[ek]);
+        // Exact match first
+        let ps = personSessions[nk] || (ek && personSessions[ek]);
+        if (ps) {
+          matchedCmpKeys.add(nk);
+          if (ek) matchedCmpKeys.add(ek);
+        } else {
+          // Fuzzy fallback
+          let bestScore = 0, bestKey = null;
+          for (const [cmpKey, cmpSession] of Object.entries(personSessions)) {
+            if (matchedCmpKeys.has(cmpKey)) continue;
+            const score = fuzzyScore(displayName, cmpSession.displayName);
+            if (score > bestScore) { bestScore = score; bestKey = cmpKey; }
+          }
+          if (bestScore >= 0.75 && bestKey) {
+            ps = personSessions[bestKey];
+            matchedCmpKeys.add(bestKey);
+          }
+        }
         session_attendance[displayName] = {
           count: ps?.count ?? 0,
           sessions: ps?.sessions ?? {},
