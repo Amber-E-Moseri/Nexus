@@ -586,13 +586,31 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
       // Walk-ins: try to match to any registration (even if not in expected pool) for subgroup.
       // Default to Central East Subgroup A if no match found.
       const DEFAULT_WALKIN_SG = uniqueSubgroups.includes('Central East Subgroup A') ? 'Central East Subgroup A' : (uniqueSubgroups[0] || 'Unknown');
+      // Only Central East subgroups track walk-ins separately; all others count as regular present.
+      const isCentralEastSg = sg => (sg || '').toLowerCase().includes('central east');
       unexpectedNames.forEach(name => {
         const k = nameKey(name);
         const reg = regLookup[k];
         const sg = reg?.subgroup || DEFAULT_WALKIN_SG;
         if (!subgroups[sg]) subgroups[sg] = { expected: [], present: [], absent: [], walkIns: [] };
-        subgroups[sg].walkIns.push(name);
+        if (isCentralEastSg(sg)) {
+          subgroups[sg].walkIns.push(name);
+        } else {
+          subgroups[sg].present.push(name);
+        }
       });
+
+      // Recalculate top-level KPIs from by_subgroup so non-CE walk-ins count as present
+      {
+        let expC = 0, presC = 0, absC = 0, wiC = 0;
+        Object.values(subgroups).forEach(d => {
+          expC += d.expected?.length ?? 0; presC += d.present?.length ?? 0;
+          absC += d.absent?.length ?? 0; wiC += d.walkIns?.length ?? 0;
+        });
+        expected_count = expC; attended_count = presC + wiC;
+        absent_count = absC; unexpected_count = wiC;
+        reach_pct = expC > 0 ? Math.round((presC + wiC) / expC * 1000) / 10 : 0;
+      }
 
       // ── session_attendance ────────────────────────────────────────────────────
       const session_attendance = {};
@@ -627,16 +645,20 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
           subgroup: r.subgroup || '',
         };
       });
-      // Walk-ins
+      // Walk-ins — Central East only gets ★ tag; others appear as regular attendees
       unexpectedNames.forEach(name => {
         const k = nameKey(name);
         const ps = personSessions[k];
         const reg = regLookup[k];
-        session_attendance[`${name} ★`] = {
-          count: ps?.count ?? 0,
-          sessions: ps?.sessions ?? {},
-          subgroup: reg?.subgroup || DEFAULT_WALKIN_SG,
-        };
+        const sg = reg?.subgroup || DEFAULT_WALKIN_SG;
+        const saKey = isCentralEastSg(sg) ? `${name} ★` : name;
+        if (!session_attendance[saKey]) {
+          session_attendance[saKey] = {
+            count: ps?.count ?? 0,
+            sessions: ps?.sessions ?? {},
+            subgroup: sg,
+          };
+        }
       });
 
       // ── Auto-apply committed mappings from previous generate ──────────────────
