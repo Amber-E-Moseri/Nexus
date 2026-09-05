@@ -1,7 +1,8 @@
 ﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Users, Database, X, Download, Share2, AlertCircle } from 'lucide-react';
+import { Users, Database, X, Download, Share2, AlertCircle, BookOpen } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useTiiReport } from '../hooks/useTiiReport';
+import SavedReportsTab from './SavedReportsTab';
 
 function getReachColor(pct) {
   if (pct >= 80) return '#2D8653';
@@ -267,6 +268,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
   const { saveReport, fetchTiiSessions, fetchEventAttendance } = useTiiReport();
 
   // ── state ──────────────────────────────────────────────────────────────────
+  const [mainTab, setMainTab] = useState('generate'); // 'generate' | 'saved'
   const [view, setView] = useState('generate');
   const [summaryTab, setSummaryTab] = useState('subgroups');
   const [inputMode, setInputMode] = useState('cmp');
@@ -690,7 +692,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
         reach_pct = expC > 0 ? Math.round((presC + wiC) / expC * 1000) / 10 : 0;
       }
 
-      setReport({
+      const reportObj = {
         label: reportLabel,
         expected_count, attended_count, absent_count, unexpected_count, reach_pct,
         present_names: presentNames,
@@ -699,8 +701,15 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
         by_subgroup: subgroups,
         session_labels: sessionLabels,
         session_attendance,
-      });
+      };
+      setReport(reportObj);
       setView('summary');
+      // Auto-save to DB so it appears in Saved Reports
+      if (eventId) {
+        saveReport(eventId, reportLabel, reportObj, expectedPool, subgroupFilter).then(saved => {
+          if (saved?.share_token) setShareToken(saved.share_token);
+        }).catch(() => {});
+      }
     } catch (e) {
       console.error('Report generation error:', e);
     } finally {
@@ -1039,10 +1048,35 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
     });
   }
 
+  // ── TAB BAR (always visible when not in report summary) ───────────────────
+  const TabBar = () => (
+    <div style={{ display: 'flex', borderBottom: '2px solid #E7E2EE', marginBottom: 20 }}>
+      {[
+        { key: 'generate', label: 'Generate Report' },
+        { key: 'saved', label: 'Saved Reports', icon: <BookOpen size={13} style={{ marginRight: 5 }} /> },
+      ].map(t => (
+        <button key={t.key} onClick={() => { setMainTab(t.key); if (t.key === 'generate') setView('generate'); }}
+          style={{ display: 'flex', alignItems: 'center', padding: '9px 18px', fontSize: 13, fontWeight: mainTab === t.key ? 700 : 500, border: 'none', background: 'transparent', cursor: 'pointer', color: mainTab === t.key ? '#4C2A92' : '#8A7F99', borderBottom: mainTab === t.key ? '3px solid #4C2A92' : '3px solid transparent', marginBottom: -2 }}>
+          {t.icon}{t.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (mainTab === 'saved') {
+    return (
+      <div style={{ padding: '20px 0' }}>
+        <TabBar />
+        <SavedReportsTab eventId={eventId} />
+      </div>
+    );
+  }
+
   // ── GENERATE VIEW ─────────────────────────────────────────────────────────
   if (view === 'generate') {
     return (
       <div style={{ padding: '24px 0', maxWidth: 720 }}>
+        <TabBar />
         {/* Report Label */}
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: '#1A1220' }}>Report Label</label>
@@ -1246,6 +1280,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
 
   return (
     <div style={{ padding: '24px 0' }}>
+      <TabBar />
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
         <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1A1220', flex: 1 }}>{reportLabel}</h2>

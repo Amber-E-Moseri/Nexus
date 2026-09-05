@@ -350,6 +350,62 @@ export function useTiiReport() {
   );
 
   /**
+   * Fetch all saved reports for an event, newest first
+   */
+  const fetchReports = useCallback(async (eventId: string): Promise<TiiAttendanceReport[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('tii_attendance_reports')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching TII reports:', error);
+      return [];
+    }
+  }, []);
+
+  /**
+   * Update a saved report — supports partial updates to any field including JSONB
+   */
+  const updateReport = useCallback(
+    async (reportId: string, updates: Partial<TiiAttendanceReport>): Promise<TiiAttendanceReport | null> => {
+      try {
+        const { data, error } = await supabase
+          .from('tii_attendance_reports')
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq('id', reportId)
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
+      } catch (error) {
+        console.error('Error updating TII report:', error);
+        throw error;
+      }
+    },
+    []
+  );
+
+  /**
+   * Delete a saved report
+   */
+  const deleteReport = useCallback(async (reportId: string): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from('tii_attendance_reports')
+        .delete()
+        .eq('id', reportId);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting TII report:', error);
+      throw error;
+    }
+  }, []);
+
+  /**
    * Fetch a saved report by ID
    */
   const fetchReport = useCallback(async (reportId: string): Promise<TiiAttendanceReport | null> => {
@@ -454,8 +510,11 @@ export function useTiiReport() {
     syncFromCmp,
     buildReport,
     saveReport,
+    fetchReports,
     fetchReport,
     fetchReportByToken,
+    updateReport,
+    deleteReport,
     getReachColor,
     findChronicAbsentees,
   };
