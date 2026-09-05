@@ -97,6 +97,7 @@ const ApiDocumentationPage = lazy(() => import('./pages/ApiDocumentationPage'))
 const ActivityLogPage = lazy(() => import('./pages/ActivityLogPage'))
 const FilesPage = lazy(() => import('./pages/FilesPage'))
 const MeetingReportPublicPage = lazy(() => import('./pages/reports/MeetingReportPublicPage'))
+const TiiReportPublicPage = lazy(() => import('./features/registration/components/TiiReportPublicPage'))
 const PersonalIntegrationsPage = lazy(() => import('./pages/settings/PersonalIntegrationsPage'))
 const CampusEditsPage = lazy(() => import('./pages/admin/CampusEditsPage'))
 const CampusPhotosSettings = lazy(() => import('./pages/settings/CampusPhotosSettings'))
@@ -159,6 +160,7 @@ export default function App() {
       <Route path="/auth/outlook_calendar-callback" element={<OutlookCalendarCallback />} />
       <Route path="/auth/teams-callback" element={<TeamsCallback />} />
       <Route path="/reports/:share_token" element={<MeetingReportPublicPage />} />
+      <Route path="/tii-report/:shareToken" element={<TiiReportPublicPage />} />
       <Route path="/registration/public/:token" element={<RegistrationPublicPage />} />
       <Route path="/rsvp" element={<RSVPPage />} />
       <Route path="/subscribe" element={<SubscribePage />} />

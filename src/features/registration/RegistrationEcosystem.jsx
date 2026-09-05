@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Unlock, Car, Bus, X, LayoutList, ScanLine, Mail, TriangleAlert } from 'lucide-react';
+import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Unlock, Car, Bus, X, LayoutList, ScanLine, Mail, TriangleAlert, BarChart3 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import RegistrationEditModal from './RegistrationEditModal';
 import RegistrationDataTab from './RegistrationDataTab';
 import SettingsTab from './SettingsTab';
+import TiiReportTab from './components/TiiReportTab';
 import { useEventConfig } from './EventConfigContext';
 
 // ---------- brand tokens ----------
@@ -696,6 +697,7 @@ function Btn({ children, onClick, tone = 'primary', small, disabled }) {
 const DEFAULT_TABS = [
   { key: 'overview', label: 'Overview', icon: Home },
   { key: 'summary',  label: 'Summary', icon: LayoutList },
+  { key: 'tii-report', label: 'TII Report', icon: BarChart3 },
   { key: 'central',  label: 'Registration Data', icon: Users },
   { key: 'checkin',  label: 'Check-in', icon: ScanLine },
   { key: 'confirm', label: 'Delegates', icon: CheckCircle2, hidden: true },
@@ -1757,6 +1759,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         {tab === 'checkin' && <CheckInTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onCheckIn: handleCheckIn, rooms, onUpdateRoom: (roomId, patch) => { const updated = rooms.map(r => r.id === roomId ? { ...r, ...patch } : r); setRooms(updated); saveRoomData(updated, numRooms, peoplePerRoom); } }} />}
         {tab === 'confirm' && <ConfirmTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, onEditReg: setEditingReg }} />}
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, role, viewDefaults: eventConfig.discipleship_view_defaults, onSaveViewDefaults: async (defaults) => { if (!config?.id) return; await supabase.from('event_configs').update({ discipleship_view_defaults: defaults }).eq('id', config.id); reloadConfig(); } }} />}
+        {tab === 'tii-report' && <TiiReportTab {...{ registrations: registrationsFiltered, eventId: config?.id, eventConfig }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
         {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, roomsNote, handleUpdateRoomsNote, peoplePerRoom, isLimited }} />}
         {tab === 'transport' && <TransportTab {...{ merged, isLimited, subgroups, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, onToggleFlightLock: handleToggleFlightLock, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving: bulkMarkDriving, onToggleCrossCountry: toggleConfirm, onSetTransportMode: setTransportMode, onUpdateCrossCountrySubgroups: async (list) => { if (!config?.id) return; await supabase.from('event_configs').update({ cross_country_subgroups: list }).eq('id', config.id); reloadConfig(); } }} />}
