@@ -1315,10 +1315,10 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
                       const suggestion = walkInSuggestions[cmpName];
                       const isAutoSuggested = mapping?.autoSuggested === true;
 
-                      // Encode current select value: "reg::<fullName>" or "sg::<subgroup>" or ""
+                      // Encode current select value: "reg::<id>" or "sg::<subgroup>" or ""
                       let selectVal = '';
                       if (mapping?.type === 'registration' && mapping.value) {
-                        selectVal = `reg::${mapping.value.fullName || mapping.value.full_name || ''}`;
+                        selectVal = `reg::${mapping.value.id || mapping.value.fullName || mapping.value.full_name || ''}`;
                       } else if (mapping?.type === 'subgroup' && mapping.value) {
                         selectVal = `sg::${mapping.value}`;
                       }
@@ -1328,8 +1328,10 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
                         if (!v) {
                           setWalkInMappings(prev => { const n = { ...prev }; delete n[cmpName]; return n; });
                         } else if (v.startsWith('reg::')) {
-                          const regName = v.slice(5);
-                          const reg = registrations.find(r => (r.fullName || r.full_name) === regName);
+                          const regId = v.slice(5);
+                          // Find by id first (reliable), fall back to name match
+                          const reg = registrations.find(r => r.id === regId)
+                            || registrations.find(r => nameKey(r.fullName || r.full_name) === nameKey(regId));
                           if (reg) setWalkInMappings(prev => ({ ...prev, [cmpName]: { type: 'registration', value: reg, autoSuggested: false } }));
                         } else if (v.startsWith('sg::')) {
                           setWalkInMappings(prev => ({ ...prev, [cmpName]: { type: 'subgroup', value: v.slice(4) } }));
@@ -1361,7 +1363,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
                                 if (!rn) return null;
                                 const score = fuzzyScore(cmpName, rn);
                                 const hint = score >= 0.6 ? ` (${Math.round(score * 100)}%)` : '';
-                                return <option key={r.id || rn} value={`reg::${rn}`}>{rn}{hint}</option>;
+                                return <option key={r.id || rn} value={`reg::${r.id || rn}`}>{rn}{hint}</option>;
                               })}
                             </optgroup>
                             <optgroup label="Move to Subgroup (stays walk-in)">
