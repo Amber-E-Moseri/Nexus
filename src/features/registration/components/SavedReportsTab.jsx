@@ -179,7 +179,7 @@ function SavedReportDetail({ report: initial, onBack, onSaved }) {
     setDirty(true);
   }
 
-  // Toggle a specific session cell for a person in session_attendance
+  // Toggle a specific session cell for a person in session_attendance — auto-saves
   function toggleSession(name, sessionLabel) {
     setReport(prev => {
       const newSess = JSON.parse(JSON.stringify(prev.by_session || {}));
@@ -194,9 +194,11 @@ function SavedReportDetail({ report: initial, onBack, onSaved }) {
       }
       sa[name].count = Object.keys(sa[name].sessions).length;
       newSess.session_attendance = sa;
-      return { ...prev, by_session: newSess };
+      const next = { ...prev, by_session: newSess };
+      // Auto-save immediately with the new data
+      updateReport(prev.id, { by_session: newSess }).catch(console.error);
+      return next;
     });
-    setDirty(true);
   }
 
   return (
