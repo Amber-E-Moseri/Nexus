@@ -211,11 +211,9 @@ function SavedReportDetail({ report: initial, onBack, onSaved }) {
           onChange={e => { setReport(p => ({ ...p, label: e.target.value })); setDirty(true); }}
           style={{ flex: 1, fontSize: 16, fontWeight: 700, color: '#1A1220', border: '1.5px solid #E7E2EE', borderRadius: 7, padding: '6px 10px' }}
         />
-        {dirty && (
-          <button onClick={handleSave} disabled={saving} style={{ padding: '7px 16px', background: '#4C2A92', color: '#fff', border: 'none', borderRadius: 7, cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 700, opacity: saving ? 0.7 : 1 }}>
-            {saving ? 'Saving…' : 'Save Changes'}
-          </button>
-        )}
+        <button onClick={handleSave} disabled={saving} style={{ padding: '7px 16px', background: dirty ? '#4C2A92' : '#E7E2EE', color: dirty ? '#fff' : '#8A7F99', border: 'none', borderRadius: 7, cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 700, opacity: saving ? 0.7 : 1 }}>
+          {saving ? 'Saving…' : 'Save Changes'}
+        </button>
       </div>
 
       <div style={{ fontSize: 11, color: '#8A7F99', marginBottom: 18 }}>Saved {formatDate(report.created_at)}</div>
