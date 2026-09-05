@@ -208,7 +208,7 @@ function SessionAttendanceGrid({ report }) {
 }
 
 // ─── SUBGROUP SECTION (summary view) ──────────────────────────────────────────
-function SubgroupSection({ subgroup, data }) {
+function SubgroupSection({ subgroup, data, onRemoveWalkIn }) {
   const exp = data.expected?.length ?? 0;
   const pres = data.present?.length ?? 0;
   const abs = data.absent?.length ?? 0;
@@ -238,9 +238,16 @@ function SubgroupSection({ subgroup, data }) {
             </div>
           ))}
           {(data.walkIns ?? []).map((n, i) => (
-            <div key={`wi-${i}`} style={{ padding: '7px 14px', fontSize: 12.5, color: '#B8710A', borderBottom: '1px solid #F7F5FB', display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div key={`wi-${i}`} style={{ padding: '7px 14px 7px 14px', fontSize: 12.5, color: '#B8710A', borderBottom: '1px solid #F7F5FB', display: 'flex', alignItems: 'center', gap: 7 }}>
               <span style={{ width: 5, height: 5, borderRadius: 999, background: '#B8710A', flexShrink: 0 }} />
-              {n} <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.7 }}>(walk-in)</span>
+              <span style={{ flex: 1 }}>{n} <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.7 }}>(walk-in)</span></span>
+              {onRemoveWalkIn && (
+                <button onClick={() => onRemoveWalkIn(subgroup, n)}
+                  title="Remove from report"
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#C94830', fontSize: 15, lineHeight: 1, padding: '0 2px', flexShrink: 0, opacity: 0.6 }}>
+                  ×
+                </button>
+              )}
             </div>
           ))}
           {!data.present?.length && !data.walkIns?.length && <div style={{ padding: '12px 14px', fontSize: 12, color: '#8A7F99', fontStyle: 'italic' }}>—</div>}
@@ -1269,6 +1276,34 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
     );
   }
 
+  // ── REMOVE WALK-IN ────────────────────────────────────────────────────────
+  function removeWalkIn(sg, name) {
+    setReport(prev => {
+      const newSg = JSON.parse(JSON.stringify(prev.by_subgroup));
+      if (!newSg[sg]) return prev;
+      newSg[sg].walkIns = (newSg[sg].walkIns || []).filter(n => n !== name);
+      // Remove from session_attendance too (stored with ★ suffix)
+      const newSA = { ...prev.session_attendance };
+      delete newSA[`${name} ★`];
+      // Recalculate KPIs
+      let expT = 0, presT = 0, absT = 0, wiT = 0;
+      Object.values(newSg).forEach(d => {
+        expT += d.expected?.length ?? 0; presT += d.present?.length ?? 0;
+        absT += d.absent?.length ?? 0; wiT += d.walkIns?.length ?? 0;
+      });
+      return {
+        ...prev,
+        by_subgroup: newSg,
+        session_attendance: newSA,
+        unexpected_count: wiT,
+        attended_count: presT + wiT,
+        expected_count: expT,
+        absent_count: absT,
+        reach_pct: expT > 0 ? Math.round((presT + wiT) / expT * 1000) / 10 : 0,
+      };
+    });
+  }
+
   // ── SUMMARY VIEW ──────────────────────────────────────────────────────────
   const pct = report?.reach_pct ?? 0;
   const subgroups = report?.by_subgroup ?? {};
@@ -1507,7 +1542,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
             </div>
           )}
           {subgroupKeys.map(sg => (
-            <SubgroupSection key={sg} subgroup={sg} data={subgroups[sg]} />
+            <SubgroupSection key={sg} subgroup={sg} data={subgroups[sg]} onRemoveWalkIn={removeWalkIn} />
           ))}
         </>
       )}
