@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Users, Database, X, Download, Share2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useTiiReport } from '../hooks/useTiiReport';
@@ -27,7 +27,9 @@ const WALKIN_DEFAULT_SG = 'Central East Subgroup A';
 
 // Normalize a name or email key for matching
 function nameKey(str) {
-  return (str || '').toLowerCase().trim();
+  // JS \s covers U+00A0 and other Unicode spaces - collapse all whitespace variants.
+  // Prevents CMP "David Amafuela " vs registration "David Amafuela" lookup misses.
+  return (str || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 // Levenshtein edit distance
@@ -787,18 +789,32 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
 
     toApply.forEach(([cmpName, { registration: reg }]) => {
       const regName = reg.fullName || reg.full_name || cmpName;
-      const sg = reg.subgroup || WALKIN_DEFAULT_SG;
-      if (!newBySubgroup[sg]) newBySubgroup[sg] = { expected: [], present: [], absent: [], walkIns: [] };
-      const absentIdx = (newBySubgroup[sg].absent ?? []).indexOf(regName);
       const sd = newSessionAttendance[`${cmpName} ★`];
-      if (absentIdx > -1) {
-        newBySubgroup[sg].absent.splice(absentIdx, 1);
-        newBySubgroup[sg].present.push(regName);
-        if (sd) { delete newSessionAttendance[`${cmpName} ★`]; newSessionAttendance[regName] = { count: sd.count, sessions: sd.sessions, subgroup: sg }; }
+
+      // Find which subgroup actually has this person in their absent list
+      // (can't assume reg.subgroup matches what was used during generation)
+      let absentSg = null;
+      let absentIdx = -1;
+      for (const [sg, data] of Object.entries(newBySubgroup)) {
+        const idx = (data.absent ?? []).indexOf(regName);
+        if (idx > -1) { absentSg = sg; absentIdx = idx; break; }
+      }
+
+      if (absentSg !== null) {
+        // Person was expected but listed absent due to name mismatch — move to present
+        newBySubgroup[absentSg].absent.splice(absentIdx, 1);
+        newBySubgroup[absentSg].present.push(regName);
+        if (sd) {
+          delete newSessionAttendance[`${cmpName} ★`];
+          newSessionAttendance[regName] = { count: sd.count, sessions: sd.sessions, subgroup: absentSg };
+        }
       } else {
-        if (!newBySubgroup[sg].walkIns) newBySubgroup[sg].walkIns = [];
-        newBySubgroup[sg].walkIns.push(cmpName);
-        if (sd) newSessionAttendance[`${cmpName} ★`] = { ...sd, subgroup: sg };
+        // Not in expected pool — keep as walk-in but move to the correct subgroup
+        const targetSg = reg.subgroup || WALKIN_DEFAULT_SG;
+        if (!newBySubgroup[targetSg]) newBySubgroup[targetSg] = { expected: [], present: [], absent: [], walkIns: [] };
+        if (!newBySubgroup[targetSg].walkIns) newBySubgroup[targetSg].walkIns = [];
+        newBySubgroup[targetSg].walkIns.push(cmpName);
+        if (sd) newSessionAttendance[`${cmpName} ★`] = { ...sd, subgroup: targetSg };
       }
     });
 
