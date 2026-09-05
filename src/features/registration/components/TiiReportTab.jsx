@@ -272,6 +272,8 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
   const [inputMode, setInputMode] = useState('cmp');
   const [expectedPool, setExpectedPool] = useState('confirmed_registered');
   const [subgroupFilter, setSubgroupFilter] = useState([]);
+  const [excludedNames, setExcludedNames] = useState([]); // names excluded from expected pool
+  const [excludeSearch, setExcludeSearch] = useState('');
   const [reportLabel, setReportLabel] = useState(`TII ${new Date().getFullYear()}`);
 
   // CMP state
@@ -433,6 +435,10 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
       }
       if (subgroupFilter.length) {
         expectedPool_ = expectedPool_.filter(r => subgroupFilter.includes(r.subgroup));
+      }
+      if (excludedNames.length) {
+        const excludedKeys = new Set(excludedNames.map(n => nameKey(n)));
+        expectedPool_ = expectedPool_.filter(r => !excludedKeys.has(nameKey(r.fullName || r.full_name)));
       }
 
       // Build roster lookup: nameKey → registration (for exact matching)
@@ -1041,6 +1047,53 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
             </div>
           </div>
         )}
+
+        {/* Exclude People */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: '#1A1220' }}>
+            Exclude from Report <span style={{ fontWeight: 400, color: '#8A7F99' }}>(optional)</span>
+          </label>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+            <input
+              value={excludeSearch}
+              onChange={e => setExcludeSearch(e.target.value)}
+              placeholder="Search name to exclude…"
+              style={{ flex: 1, padding: '7px 10px', border: '1px solid #E7E2EE', borderRadius: 7, fontSize: 13 }}
+            />
+          </div>
+          {excludeSearch.trim().length > 1 && (() => {
+            const q = nameKey(excludeSearch);
+            const matches = registrations
+              .filter(r => {
+                const rn = nameKey(r.fullName || r.full_name);
+                return rn.includes(q) && !excludedNames.includes(r.fullName || r.full_name);
+              })
+              .slice(0, 5);
+            return matches.length > 0 ? (
+              <div style={{ border: '1px solid #E7E2EE', borderRadius: 7, overflow: 'hidden', marginBottom: 6 }}>
+                {matches.map(r => {
+                  const rn = r.fullName || r.full_name;
+                  return (
+                    <button key={r.id || rn} onClick={() => { setExcludedNames(p => [...p, rn]); setExcludeSearch(''); }}
+                      style={{ width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', borderBottom: '1px solid #F0EDF6', background: '#fff', cursor: 'pointer', fontSize: 13, color: '#1A1220' }}>
+                      {rn} <span style={{ fontSize: 11, color: '#8A7F99' }}>{r.subgroup}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null;
+          })()}
+          {excludedNames.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {excludedNames.map(n => (
+                <span key={n} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', background: '#FEF0ED', border: '1px solid #F5C4B8', borderRadius: 999, fontSize: 12, color: '#7A1C24' }}>
+                  {n}
+                  <button onClick={() => setExcludedNames(p => p.filter(x => x !== n))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, color: '#7A1C24', lineHeight: 1, fontSize: 14 }}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Mark Attendance */}
         <div style={{ marginBottom: 14 }}>
