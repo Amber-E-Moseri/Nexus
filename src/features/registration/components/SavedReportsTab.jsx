@@ -124,7 +124,12 @@ function SavedReportDetail({ report: initial, onBack, onSaved }) {
   const [dirty, setDirty] = useState(false);
 
   // Extract session_labels + session_attendance from by_session (stored there by saveReport)
-  const sessionLabels = report.by_session?.session_labels || [];
+  // Sort by day number then session number: Day 1 S1, Day 2 S1, Day 2 S2, Day 3 S1, ...
+  const sessionLabels = [...(report.by_session?.session_labels || [])].sort((a, b) => {
+    const parse = s => { const m = s.match(/day\s*(\d+).*?s(?:ession\s*)?(\d+)/i); return m ? [+m[1], +m[2]] : [99, 99]; };
+    const [ad, as2] = parse(a), [bd, bs2] = parse(b);
+    return ad !== bd ? ad - bd : as2 - bs2;
+  });
   const sessionAttendance = report.by_session?.session_attendance || {};
   const bySubgroup = report.by_subgroup || {};
   const subgroupKeys = Object.keys(bySubgroup).sort((a, b) => a === 'Unknown' ? 1 : b === 'Unknown' ? -1 : a.localeCompare(b));
@@ -272,41 +277,72 @@ function SavedReportDetail({ report: initial, onBack, onSaved }) {
       })}
 
       {/* Session grid (read-only) */}
-      {sessionLabels.length > 0 && Object.keys(sessionAttendance).length > 0 && (
-        <>
-          <div style={{ fontSize: 11, color: '#8A7F99', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', margin: '20px 0 10px' }}>Session Attendance</div>
-          <div style={{ overflowX: 'auto', border: '1px solid #E7E2EE', borderRadius: 10, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: '#F7F5FB' }}>
-                  <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#1A1220', borderBottom: '2px solid #E7E2EE' }}>Name</th>
-                  {sessionLabels.map(lbl => (
-                    <th key={lbl} style={{ padding: '10px 10px', textAlign: 'center', fontWeight: 600, color: '#8A7F99', fontSize: 10, borderBottom: '2px solid #E7E2EE', whiteSpace: 'nowrap' }}>{lbl}</th>
-                  ))}
-                  <th style={{ padding: '10px 10px', textAlign: 'center', fontWeight: 700, color: '#4C2A92', fontSize: 12, borderBottom: '2px solid #E7E2EE' }}>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(sessionAttendance).map(([name, data], i) => (
-                  <tr key={name} style={{ background: i % 2 === 0 ? '#fff' : '#FAFAF8' }}>
-                    <td style={{ padding: '8px 14px', fontWeight: 600, color: '#1A1220', borderBottom: '1px solid #F0EDF6' }}>{name}</td>
+      {sessionLabels.length > 0 && Object.keys(sessionAttendance).length > 0 && (() => {
+        const shortLabel = lbl => lbl
+          .replace(/TII\s*\d*\.?\d*\s*/i, '')
+          .replace(/\s*\([^)]+\)\s*$/, '')
+          .replace(/Session\s+/i, 'S')
+          .trim();
+
+        // Group by subgroup, preserving sort order within each group
+        const grouped = {};
+        Object.entries(sessionAttendance)
+          .sort(([, a], [, b]) => (a.subgroup || '').localeCompare(b.subgroup || ''))
+          .forEach(([name, data]) => {
+            const sg = data.subgroup || 'Unassigned';
+            if (!grouped[sg]) grouped[sg] = [];
+            grouped[sg].push([name, data]);
+          });
+
+        return (
+          <>
+            <div style={{ fontSize: 11, color: '#8A7F99', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', margin: '20px 0 10px' }}>Session Attendance</div>
+            <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid #E7E2EE' }}>
+              <table style={{ minWidth: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#F7F5FB' }}>
+                    <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#1A1220', borderBottom: '2px solid #E7E2EE', whiteSpace: 'nowrap' }}>Name</th>
                     {sessionLabels.map(lbl => (
-                      <td key={lbl} style={{ padding: '8px 10px', textAlign: 'center', borderBottom: '1px solid #F0EDF6' }}>
-                        {data.sessions?.[lbl]
-                          ? <span style={{ color: '#2D8653', fontWeight: 700 }}>✓</span>
-                          : <span style={{ color: '#E0D8EE' }}>—</span>}
-                      </td>
+                      <th key={lbl} title={lbl} style={{ padding: '10px 10px', textAlign: 'center', fontWeight: 600, color: '#8A7F99', fontSize: 10, borderBottom: '2px solid #E7E2EE', whiteSpace: 'nowrap' }}>{shortLabel(lbl)}</th>
                     ))}
-                    <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 800, borderBottom: '1px solid #F0EDF6', color: data.count === sessionLabels.length ? '#2D8653' : '#4C2A92' }}>
-                      {data.count}/{sessionLabels.length}
-                    </td>
+                    <th style={{ padding: '10px 10px', textAlign: 'center', fontWeight: 700, color: '#4C2A92', fontSize: 12, borderBottom: '2px solid #E7E2EE', whiteSpace: 'nowrap' }}>Total</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+                </thead>
+                <tbody>
+                  {Object.entries(grouped).map(([sg, members]) => (
+                    <React.Fragment key={sg}>
+                      <tr>
+                        <td colSpan={sessionLabels.length + 2} style={{ padding: '7px 14px', fontWeight: 700, fontSize: 10, color: '#fff', background: '#4C2A92', letterSpacing: '.06em', textTransform: 'uppercase' }}>{sg}</td>
+                      </tr>
+                      {members.map(([name, data], i) => {
+                        const isWalkIn = name.endsWith(' ★');
+                        const displayName = isWalkIn ? name.slice(0, -2) : name;
+                        return (
+                          <tr key={name} style={{ background: i % 2 === 0 ? '#fff' : '#FAFAF8' }}>
+                            <td style={{ padding: '8px 14px', fontWeight: 600, color: isWalkIn ? '#B8710A' : '#1A1220', borderBottom: '1px solid #F0EDF6', whiteSpace: 'nowrap' }}>
+                              {displayName}{isWalkIn && <span style={{ fontSize: 9, marginLeft: 5, opacity: 0.7 }}>(walk-in)</span>}
+                            </td>
+                            {sessionLabels.map(lbl => (
+                              <td key={lbl} style={{ padding: '8px 10px', textAlign: 'center', borderBottom: '1px solid #F0EDF6' }}>
+                                {data.sessions?.[lbl]
+                                  ? <span style={{ color: '#2D8653', fontWeight: 700 }}>✓</span>
+                                  : <span style={{ color: '#E0D8EE' }}>—</span>}
+                              </td>
+                            ))}
+                            <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 800, borderBottom: '1px solid #F0EDF6', color: data.count === sessionLabels.length ? '#2D8653' : '#4C2A92' }}>
+                              {data.count}/{sessionLabels.length}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
