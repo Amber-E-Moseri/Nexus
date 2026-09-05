@@ -282,12 +282,14 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
   const [shareToken, setShareToken] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  // Walk-in mapper
-  // walkInMappings[name] = { type: 'subgroup', value: 'SubgroupName' }
-  //                      | { type: 'registration', value: registrationObject }
+  // Walk-in mapper UI state (cleared after apply/cancel)
   const [walkInMappings, setWalkInMappings] = useState({});
   const [showMapper, setShowMapper] = useState(false);
   const [mapperSearch, setMapperSearch] = useState({}); // { [name]: searchStr } for reg filter
+
+  // Committed mappings — persist across regenerations so re-generate auto-applies them
+  // committedMappings[cmpName] = { type: 'subgroup'|'registration', value }
+  const [committedMappings, setCommittedMappings] = useState({});
 
   // ── derived ──────────────────────────────────────────────────────────────
   const uniqueSubgroups = useMemo(() => {
@@ -446,11 +448,12 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
         if (!rosterKeys.has(k)) unexpectedNames.push(personSessions[k].displayName);
       });
 
-      const expected_count = expectedPool_.length;
-      const attended_count = presentNames.length + unexpectedNames.length;
-      const absent_count = absentNames.length;
-      const unexpected_count = unexpectedNames.length;
-      const reach_pct = expected_count > 0 ? Math.round(presentNames.length / expected_count * 1000) / 10 : 0;
+      // Use let so auto-apply can recalculate after committed mappings are applied
+      let expected_count = expectedPool_.length;
+      let attended_count = presentNames.length + unexpectedNames.length;
+      let absent_count = absentNames.length;
+      let unexpected_count = unexpectedNames.length;
+      let reach_pct = expected_count > 0 ? Math.round(presentNames.length / expected_count * 1000) / 10 : 0;
 
       // ── by_subgroup ──────────────────────────────────────────────────────────
       // For expected pool: group by their registered subgroup
@@ -504,6 +507,66 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
           subgroup: reg?.subgroup || DEFAULT_WALKIN_SG,
         };
       });
+
+      // ── Auto-apply committed mappings from previous generate ──────────────────
+      if (Object.keys(committedMappings).length > 0) {
+        // Pull all walk-ins out of their buckets, track source
+        const walkInSrc = {}; // cmpName → sourceSg
+        Object.entries(subgroups).forEach(([sg, d]) => {
+          (d.walkIns ?? []).forEach(n => { walkInSrc[n] = sg; });
+          d.walkIns = [];
+        });
+
+        Object.entries(walkInSrc).forEach(([cmpName, sourceSg]) => {
+          const mapping = committedMappings[cmpName];
+          if (!mapping?.value) {
+            subgroups[sourceSg].walkIns.push(cmpName); // no committed mapping — restore
+            return;
+          }
+          const sessionKey = `${cmpName} ★`;
+          const sd = session_attendance[sessionKey];
+
+          if (mapping.type === 'registration') {
+            const reg = mapping.value;
+            const regName = reg.fullName || reg.full_name || cmpName;
+            // Search all subgroups for this person in their absent list
+            let absentSg = null, absentIdx = -1;
+            for (const [sg, d] of Object.entries(subgroups)) {
+              const idx = (d.absent ?? []).indexOf(regName);
+              if (idx > -1) { absentSg = sg; absentIdx = idx; break; }
+            }
+            if (absentSg !== null) {
+              subgroups[absentSg].absent.splice(absentIdx, 1);
+              subgroups[absentSg].present.push(regName);
+              if (sd) { delete session_attendance[sessionKey]; session_attendance[regName] = { count: sd.count, sessions: sd.sessions, subgroup: absentSg }; }
+            } else {
+              const tSg = reg.subgroup || DEFAULT_WALKIN_SG;
+              if (!subgroups[tSg]) subgroups[tSg] = { expected: [], present: [], absent: [], walkIns: [] };
+              subgroups[tSg].walkIns.push(cmpName);
+              if (sd) session_attendance[sessionKey] = { ...sd, subgroup: tSg };
+            }
+          } else if (mapping.type === 'subgroup') {
+            const tSg = mapping.value;
+            if (!subgroups[tSg]) subgroups[tSg] = { expected: [], present: [], absent: [], walkIns: [] };
+            subgroups[tSg].walkIns.push(cmpName);
+            if (sd) session_attendance[sessionKey] = { ...sd, subgroup: tSg };
+          } else {
+            subgroups[sourceSg].walkIns.push(cmpName); // unknown type — restore
+          }
+        });
+
+        // Recalculate top-level counts after auto-apply
+        presentNames.length = 0; absentNames.length = 0;
+        let expC = 0, presC = 0, absC = 0, wiC = 0;
+        Object.values(subgroups).forEach(d => {
+          expC += d.expected?.length ?? 0; presC += d.present?.length ?? 0;
+          absC += d.absent?.length ?? 0; wiC += d.walkIns?.length ?? 0;
+          presentNames.push(...(d.present ?? [])); absentNames.push(...(d.absent ?? []));
+        });
+        expected_count = expC; attended_count = presC + wiC;
+        absent_count = absC; unexpected_count = wiC;
+        reach_pct = expC > 0 ? Math.round(presC / expC * 1000) / 10 : 0;
+      }
 
       setReport({
         label: reportLabel,
@@ -648,6 +711,15 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
       unexpected_count: wiTotal,
       reach_pct,
     }));
+    // Persist applied mappings so regeneration re-applies them automatically
+    setCommittedMappings(prev => {
+      const merged = { ...prev };
+      Object.entries(walkInMappings).forEach(([name, mapping]) => {
+        if (mapping?.value) merged[name] = mapping;
+        else delete merged[name]; // "Keep in current subgroup" removes it
+      });
+      return merged;
+    });
     setWalkInMappings({});
     setMapperSearch({});
     setShowMapper(false);
@@ -834,6 +906,15 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
     const reach_pct = expTotal > 0 ? Math.round(presTotal / expTotal * 1000) / 10 : 0;
 
     setReport(prev => ({ ...prev, by_subgroup: newBySubgroup, session_attendance: newSessionAttendance, present_names: presentNames, absent_names: absentNames, expected_count: expTotal, attended_count: presTotal + wiTotal, absent_count: absTotal, unexpected_count: wiTotal, reach_pct }));
+
+    // Persist quick-matched registrations so regeneration re-applies them
+    setCommittedMappings(prev => {
+      const merged = { ...prev };
+      toApply.forEach(([cmpName, { registration: reg }]) => {
+        merged[cmpName] = { type: 'registration', value: reg };
+      });
+      return merged;
+    });
   }
 
   // ── GENERATE VIEW ─────────────────────────────────────────────────────────
