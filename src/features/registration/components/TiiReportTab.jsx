@@ -212,7 +212,7 @@ function SubgroupSection({ subgroup, data }) {
   const pres = data.present?.length ?? 0;
   const abs = data.absent?.length ?? 0;
   const walkIns = data.walkIns?.length ?? 0;
-  const pct = exp > 0 ? Math.round(pres / exp * 100) : 0;
+  const pct = exp > 0 ? Math.round((pres + walkIns) / exp * 100) : 0;
 
   return (
     <div style={{ border: '1px solid #E7E2EE', borderRadius: 10, overflow: 'hidden', marginBottom: 12 }}>
@@ -505,7 +505,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
       let attended_count = presentNames.length + unexpectedNames.length;
       let absent_count = absentNames.length;
       let unexpected_count = unexpectedNames.length;
-      let reach_pct = expected_count > 0 ? Math.round(presentNames.length / expected_count * 1000) / 10 : 0;
+      let reach_pct = expected_count > 0 ? Math.round((presentNames.length + unexpectedNames.length) / expected_count * 1000) / 10 : 0;
 
       // ── by_subgroup ──────────────────────────────────────────────────────────
       // For expected pool: group by their registered subgroup (exact + fuzzy match)
@@ -644,7 +644,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
         });
         expected_count = expC; attended_count = presC + wiC;
         absent_count = absC; unexpected_count = wiC;
-        reach_pct = expC > 0 ? Math.round(presC / expC * 1000) / 10 : 0;
+        reach_pct = expC > 0 ? Math.round((presC + wiC) / expC * 1000) / 10 : 0;
       }
 
       setReport({
@@ -776,7 +776,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
       presentNames.push(...(d.present ?? []));
       absentNames.push(...(d.absent ?? []));
     });
-    const reach_pct = expTotal > 0 ? Math.round(presTotal / expTotal * 1000) / 10 : 0;
+    const reach_pct = expTotal > 0 ? Math.round((presTotal + wiTotal) / expTotal * 1000) / 10 : 0;
 
     setReport(prev => ({
       ...prev,
@@ -836,7 +836,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
     const sgCardsHtml = sgKeys.map(sg => {
       const d = bySubgroup[sg];
       const exp = d.expected?.length ?? 0, pres = d.present?.length ?? 0, abs = d.absent?.length ?? 0, wi = d.walkIns?.length ?? 0;
-      const p = exp > 0 ? Math.round(pres / exp * 100) : 0;
+      const p = exp > 0 ? Math.round((pres + wi) / exp * 100) : 0;
       const presentHtml = [...(d.present ?? []).map(n => nameRowHtml(n, '#2D8653')), ...(d.walkIns ?? []).map(n => nameRowHtml(n + ' ★', '#B8710A'))].join('') || `<div style="padding:14px;font-size:12px;color:#7B776F;font-style:italic;">—</div>`;
       const absentHtml = (d.absent ?? []).map(n => nameRowHtml(n, '#C94830')).join('') || `<div style="padding:14px;font-size:12px;color:#7B776F;font-style:italic;">No absences</div>`;
       return `<div style="background:#fff;border:1px solid #DDD7C8;border-radius:12px;overflow:hidden;margin-bottom:16px;">
@@ -982,7 +982,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
       absTotal += d.absent?.length ?? 0; wiTotal += d.walkIns?.length ?? 0;
       presentNames.push(...(d.present ?? [])); absentNames.push(...(d.absent ?? []));
     });
-    const reach_pct = expTotal > 0 ? Math.round(presTotal / expTotal * 1000) / 10 : 0;
+    const reach_pct = expTotal > 0 ? Math.round((presTotal + wiTotal) / expTotal * 1000) / 10 : 0;
 
     setReport(prev => ({ ...prev, by_subgroup: newBySubgroup, session_attendance: newSessionAttendance, present_names: presentNames, absent_names: absentNames, expected_count: expTotal, attended_count: presTotal + wiTotal, absent_count: absTotal, unexpected_count: wiTotal, reach_pct }));
 
@@ -1361,7 +1361,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
                   {subgroupKeys.map((sg, i) => {
                     const d = subgroups[sg];
                     const exp = d.expected?.length ?? 0, pres = d.present?.length ?? 0, abs = d.absent?.length ?? 0, wi = d.walkIns?.length ?? 0;
-                    const p = exp > 0 ? Math.round(pres / exp * 100) : 0;
+                    const p = exp > 0 ? Math.round((pres + wi) / exp * 100) : 0;
                     return (
                       <tr key={sg} style={{ background: i % 2 === 0 ? '#fff' : '#FAFAF7' }}>
                         <td style={{ padding: '10px 14px', fontWeight: 700, fontSize: 13, color: '#1A1220', borderBottom: '.5px solid #E7E2EE' }}>{sg}</td>
