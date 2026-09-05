@@ -239,7 +239,7 @@ export default function TaskModal({
       ? task.assignees.map((a) => a.user_id ?? a.id ?? a)
       : task?.assignee_id ? [task.assignee_id] : profile?.id ? [profile.id] : []
   )
-  const [dueDate, setDueDate] = useState(task?.due_date ?? defaultDueDate ?? '')
+  const [dueDate, setDueDate] = useState((task?.due_date ?? defaultDueDate)?.slice(0, 10) ?? '')
   const [dueTime, setDueTime] = useState(task?.due_time ?? '')
 
   const [personal, setPersonal] = useState(task?.is_personal ?? isPersonal)

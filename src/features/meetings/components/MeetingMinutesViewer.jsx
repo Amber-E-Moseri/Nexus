@@ -130,13 +130,14 @@ export default function MeetingMinutesViewer({ meetingId, initialMeeting, search
         .single(),
       supabase
         .from('agendas')
-        .select('agenda_items(title, mins, sort_order)')
+        .select('agenda_items(segment, duration_minutes, sort_order)')
         .eq('meeting_id', meetingId)
         .maybeSingle(),
     ]).then(([mtgRes, agendaRes]) => {
       if (cancelled) return
       if (mtgRes.data) setMeeting(mtgRes.data)
-      const items = agendaRes.data?.agenda_items ?? []
+      const items = (agendaRes.data?.agenda_items ?? [])
+        .map(i => ({ title: i.segment, mins: i.duration_minutes, sort_order: i.sort_order }))
       setAgenda(items.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)))
       setLoading(false)
     })

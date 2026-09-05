@@ -1705,8 +1705,8 @@ function SpaceSettingsTab({ space, canManage, onSaved, onArchive }) {
     description: space.description ?? '',
     color: space.color ?? '534AB7',
     visibility: space.visibility ?? 'org',
-    start_date: space.start_date ?? '',
-    end_date: space.end_date ?? '',
+    start_date: space.start_date?.slice(0, 10) ?? '',
+    end_date: space.end_date?.slice(0, 10) ?? '',
     task_field_settings: normalizeTaskFieldSettings(space.task_field_settings),
   })
   const [saving, setSaving] = useState(false)
@@ -1717,8 +1717,8 @@ function SpaceSettingsTab({ space, canManage, onSaved, onArchive }) {
       description: space.description ?? '',
       color: space.color ?? '534AB7',
       visibility: space.visibility ?? 'org',
-      start_date: space.start_date ?? '',
-      end_date: space.end_date ?? '',
+      start_date: space.start_date?.slice(0, 10) ?? '',
+      end_date: space.end_date?.slice(0, 10) ?? '',
       task_field_settings: normalizeTaskFieldSettings(space.task_field_settings),
     })
   }, [space])
