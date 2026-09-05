@@ -115,17 +115,30 @@ function KpiTile({ label, value, color }) {
 function SessionAttendanceGrid({ report }) {
   const sessionLabels = report?.session_labels || [];
   const sessionAttendance = report?.session_attendance || {};
-  const entries = Object.entries(sessionAttendance).sort((a, b) => (b[1]?.count ?? 0) - (a[1]?.count ?? 0));
-  if (!entries.length || !sessionLabels.length) return (
+
+  if (!Object.keys(sessionAttendance).length || !sessionLabels.length) return (
     <div style={{ color: '#8A7F99', fontSize: 13, textAlign: 'center', padding: '28px 0' }}>No multi-session data available.</div>
   );
+
+  // Group entries by subgroup; Unknown last
+  const grouped = {};
+  Object.entries(sessionAttendance).forEach(([name, data]) => {
+    const sg = data.subgroup || 'Unknown';
+    if (!grouped[sg]) grouped[sg] = [];
+    grouped[sg].push([name, data]);
+  });
+  // Sort each group by session count desc
+  Object.values(grouped).forEach(arr => arr.sort((a, b) => (b[1]?.count ?? 0) - (a[1]?.count ?? 0)));
+  const sgOrder = Object.keys(grouped).sort((a, b) => a === 'Unknown' ? 1 : b === 'Unknown' ? -1 : a.localeCompare(b));
+
+  let rowIdx = 0;
+
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 500 }}>
         <thead>
           <tr style={{ background: '#F7F5FB' }}>
             <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#1A1220', borderBottom: '2px solid #E7E2EE', whiteSpace: 'nowrap' }}>Name</th>
-            <th style={{ padding: '10px 10px', textAlign: 'left', fontWeight: 600, color: '#8A7F99', fontSize: 11, borderBottom: '2px solid #E7E2EE', whiteSpace: 'nowrap' }}>Subgroup</th>
             {sessionLabels.map(lbl => (
               <th key={lbl} style={{ padding: '10px 10px', textAlign: 'center', fontWeight: 600, color: '#8A7F99', fontSize: 10, borderBottom: '2px solid #E7E2EE', maxWidth: 80, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {lbl}
@@ -135,22 +148,47 @@ function SessionAttendanceGrid({ report }) {
           </tr>
         </thead>
         <tbody>
-          {entries.map(([name, data], i) => (
-            <tr key={name} style={{ background: i % 2 === 0 ? '#fff' : '#FAFAF8' }}>
-              <td style={{ padding: '9px 14px', fontWeight: 600, color: '#1A1220', borderBottom: '1px solid #F0EDF6', whiteSpace: 'nowrap' }}>{name}</td>
-              <td style={{ padding: '9px 10px', fontSize: 11.5, color: '#8A7F99', borderBottom: '1px solid #F0EDF6', whiteSpace: 'nowrap' }}>{data.subgroup || '—'}</td>
-              {sessionLabels.map(lbl => (
-                <td key={lbl} style={{ padding: '9px 10px', textAlign: 'center', borderBottom: '1px solid #F0EDF6' }}>
-                  {data.sessions?.[lbl]
-                    ? <span style={{ color: '#2D8653', fontWeight: 700, fontSize: 15 }}>✓</span>
-                    : <span style={{ color: '#E0D8EE', fontSize: 15 }}>—</span>}
-                </td>
-              ))}
-              <td style={{ padding: '9px 10px', textAlign: 'center', fontWeight: 800, borderBottom: '1px solid #F0EDF6', color: data.count === sessionLabels.length ? '#2D8653' : '#4C2A92' }}>
-                {data.count}/{sessionLabels.length}
-              </td>
-            </tr>
-          ))}
+          {sgOrder.map(sg => {
+            const entries = grouped[sg];
+            const sgPresent = entries.filter(([, d]) => d.count > 0).length;
+            const colSpan = sessionLabels.length + 2;
+            return (
+              <React.Fragment key={sg}>
+                {/* Subgroup header row */}
+                <tr>
+                  <td colSpan={colSpan} style={{ padding: '8px 14px', background: '#3D1A78', color: '#fff', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #2A1258' }}>
+                    {sg}
+                    <span style={{ marginLeft: 10, fontWeight: 400, fontSize: 11, opacity: 0.75 }}>
+                      {sgPresent} attending · {entries.length} total
+                    </span>
+                  </td>
+                </tr>
+                {/* People rows */}
+                {entries.map(([name, data]) => {
+                  const isWalkIn = name.endsWith(' ★');
+                  const bg = rowIdx++ % 2 === 0 ? '#fff' : '#FAFAF8';
+                  return (
+                    <tr key={name} style={{ background: bg }}>
+                      <td style={{ padding: '9px 14px', fontWeight: 600, color: isWalkIn ? '#B8710A' : '#1A1220', borderBottom: '1px solid #F0EDF6', whiteSpace: 'nowrap' }}>
+                        {name}
+                        {isWalkIn && <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 400, color: '#B8710A' }}>(walk-in)</span>}
+                      </td>
+                      {sessionLabels.map(lbl => (
+                        <td key={lbl} style={{ padding: '9px 10px', textAlign: 'center', borderBottom: '1px solid #F0EDF6' }}>
+                          {data.sessions?.[lbl]
+                            ? <span style={{ color: '#2D8653', fontWeight: 700, fontSize: 15 }}>✓</span>
+                            : <span style={{ color: '#E0D8EE', fontSize: 15 }}>—</span>}
+                        </td>
+                      ))}
+                      <td style={{ padding: '9px 10px', textAlign: 'center', fontWeight: 800, borderBottom: '1px solid #F0EDF6', color: data.count === sessionLabels.length ? '#2D8653' : '#4C2A92' }}>
+                        {data.count}/{sessionLabels.length}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </React.Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -986,122 +1024,99 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
 
               {showMapper && (
                 <div style={{ background: '#fff', borderTop: '1px solid #F0C040', padding: '14px 16px' }}>
-                  <p style={{ margin: '0 0 12px', fontSize: 12, color: '#8A7F99' }}>
-                    For each person: match them to an existing registration (fixes name mismatch) or assign to a subgroup. Unset rows stay in Unknown.
+                  <p style={{ margin: '0 0 10px', fontSize: 12, color: '#8A7F99' }}>
+                    Select an action for each person. Matched registrations fix name mismatches; subgroup assigns keep them as walk-ins in the right group.
                   </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 400, overflowY: 'auto', marginBottom: 14 }}>
-                    {(subgroups['Unknown'].walkIns ?? []).map(cmpName => {
+
+                  {/* Column headers */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 8, padding: '6px 10px', background: '#F7F5FB', borderRadius: 6, marginBottom: 4, fontSize: 11, fontWeight: 700, color: '#8A7F99', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                    <span>Attendee</span>
+                    <span>Action</span>
+                  </div>
+
+                  <div style={{ maxHeight: 380, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 14 }}>
+                    {(subgroups['Unknown']?.walkIns ?? []).map((cmpName, rowIdx) => {
                       const mapping = walkInMappings[cmpName];
-                      const mode = mapping?.type ?? null;
-                      const isAutoSuggested = mapping?.autoSuggested === true;
                       const suggestion = walkInSuggestions[cmpName];
-                      const searchStr = mapperSearch[cmpName] || '';
-                      const filteredRegs = registrations.filter(r => {
-                        const n = (r.fullName || r.full_name || '').toLowerCase();
-                        return !searchStr || n.includes(searchStr.toLowerCase());
-                      });
-                      const rowBg = isAutoSuggested ? '#F8F5FF' : '#FAFAF7';
-                      const rowBorder = isAutoSuggested ? '1px solid #C8B8F0' : '1px solid #E7E2EE';
+                      const isAutoSuggested = mapping?.autoSuggested === true;
+
+                      // Encode current select value: "reg::<fullName>" or "sg::<subgroup>" or ""
+                      let selectVal = '';
+                      if (mapping?.type === 'registration' && mapping.value) {
+                        selectVal = `reg::${mapping.value.fullName || mapping.value.full_name || ''}`;
+                      } else if (mapping?.type === 'subgroup' && mapping.value) {
+                        selectVal = `sg::${mapping.value}`;
+                      }
+
+                      function handleSelectChange(e) {
+                        const v = e.target.value;
+                        if (!v) {
+                          setWalkInMappings(prev => { const n = { ...prev }; delete n[cmpName]; return n; });
+                        } else if (v.startsWith('reg::')) {
+                          const regName = v.slice(5);
+                          const reg = registrations.find(r => (r.fullName || r.full_name) === regName);
+                          if (reg) setWalkInMappings(prev => ({ ...prev, [cmpName]: { type: 'registration', value: reg, autoSuggested: false } }));
+                        } else if (v.startsWith('sg::')) {
+                          setWalkInMappings(prev => ({ ...prev, [cmpName]: { type: 'subgroup', value: v.slice(4) } }));
+                        }
+                      }
+
+                      const rowBg = rowIdx % 2 === 0 ? '#fff' : '#FAFAF7';
+                      const highlight = isAutoSuggested || !!mapping?.value;
+
                       return (
-                        <div key={cmpName} style={{ border: rowBorder, borderRadius: 8, overflow: 'hidden' }}>
-                          {/* Name row */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: rowBg, borderBottom: mode ? '1px solid #E7E2EE' : 'none' }}>
-                            <span style={{ flex: 1, fontSize: 13, color: '#1A1220', fontWeight: 600 }}>
-                              {cmpName} <span style={{ color: '#B8710A', fontSize: 11, fontWeight: 400 }}>★ walk-in</span>
-                              {isAutoSuggested && (
-                                <span style={{ marginLeft: 6, fontSize: 10, background: '#4C2A92', color: '#fff', borderRadius: 4, padding: '1px 6px', fontWeight: 600, verticalAlign: 'middle' }}>
-                                  Auto-matched · {Math.round((suggestion?.score ?? 0) * 100)}%
-                                </span>
-                              )}
-                            </span>
-                            {/* Mode toggle buttons */}
-                            <button
-                              onClick={() => setWalkInMappings(prev => {
-                                if (mode === 'registration') { const n = { ...prev }; delete n[cmpName]; return n; }
-                                return { ...prev, [cmpName]: { type: 'registration', value: null } };
-                              })}
-                              style={{ padding: '4px 11px', borderRadius: 6, border: mode === 'registration' ? '2px solid #4C2A92' : '1px solid #C8C2D8', background: mode === 'registration' ? '#F0EBFC' : '#fff', color: mode === 'registration' ? '#4C2A92' : '#5A5270', cursor: 'pointer', fontSize: 11.5, fontWeight: mode === 'registration' ? 700 : 400 }}>
-                              Match person
-                            </button>
-                            <button
-                              onClick={() => setWalkInMappings(prev => {
-                                if (mode === 'subgroup') { const n = { ...prev }; delete n[cmpName]; return n; }
-                                return { ...prev, [cmpName]: { type: 'subgroup', value: '' } };
-                              })}
-                              style={{ padding: '4px 11px', borderRadius: 6, border: mode === 'subgroup' ? '2px solid #4C2A92' : '1px solid #C8C2D8', background: mode === 'subgroup' ? '#F0EBFC' : '#fff', color: mode === 'subgroup' ? '#4C2A92' : '#5A5270', cursor: 'pointer', fontSize: 11.5, fontWeight: mode === 'subgroup' ? 700 : 400 }}>
-                              Assign subgroup
-                            </button>
+                        <div key={cmpName} style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 8, alignItems: 'center', padding: '7px 10px', background: highlight ? '#F8F5FF' : rowBg, borderRadius: 6, border: highlight ? '1px solid #DDD0F4' : '1px solid transparent' }}>
+                          {/* Name + label */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1220', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cmpName}</span>
+                            <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: '#B8710A', background: '#FBF0DE', borderRadius: 4, padding: '2px 6px', border: '1px solid #F0D09A' }}>★ unregistered</span>
+                            {suggestion && !mapping && (
+                              <span style={{ flexShrink: 0, fontSize: 10, color: '#7A5200', fontStyle: 'italic' }}>≈ {suggestion.registration.fullName || suggestion.registration.full_name}</span>
+                            )}
                           </div>
-
-                          {/* Registration match panel */}
-                          {mode === 'registration' && (
-                            <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
-                              <input
-                                placeholder="Search registrations by name…"
-                                value={searchStr}
-                                onChange={e => setMapperSearch(prev => ({ ...prev, [cmpName]: e.target.value }))}
-                                style={{ padding: '6px 10px', border: '1px solid #C8C2D8', borderRadius: 6, fontSize: 12.5, width: '100%', boxSizing: 'border-box' }}
-                              />
-                              <div style={{ maxHeight: 160, overflowY: 'auto', border: '1px solid #E7E2EE', borderRadius: 6 }}>
-                                {filteredRegs.length === 0 && (
-                                  <div style={{ padding: '10px 12px', fontSize: 12, color: '#8A7F99' }}>No registrations match.</div>
-                                )}
-                                {filteredRegs.slice(0, 50).map(reg => {
-                                  const rn = reg.fullName || reg.full_name;
-                                  const isSelected = mapping?.value?.fullName === rn || mapping?.value?.full_name === rn;
-                                  return (
-                                    <button
-                                      key={reg.id || rn}
-                                      onClick={() => setWalkInMappings(prev => ({ ...prev, [cmpName]: { type: 'registration', value: reg, autoSuggested: false } }))}
-                                      style={{ width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', borderBottom: '1px solid #F0EDF6', background: isSelected ? '#F0EBFC' : '#fff', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                      <span style={{ fontSize: 13, color: isSelected ? '#4C2A92' : '#1A1220', fontWeight: isSelected ? 700 : 400 }}>{rn}</span>
-                                      <span style={{ fontSize: 11, color: '#8A7F99', marginLeft: 8 }}>{reg.subgroup || '—'}</span>
-                                    </button>
-                                  );
-                                })}
-                                {filteredRegs.length > 50 && (
-                                  <div style={{ padding: '7px 12px', fontSize: 11, color: '#8A7F99', fontStyle: 'italic' }}>
-                                    Showing first 50 of {filteredRegs.length} — type to narrow
-                                  </div>
-                                )}
-                              </div>
-                              {mapping?.value && (
-                                <div style={{ fontSize: 12, color: '#4C2A92', fontWeight: 600 }}>
-                                  ✓ Matched to: {mapping.value.fullName || mapping.value.full_name} ({mapping.value.subgroup || 'no subgroup'})
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Subgroup assign panel */}
-                          {mode === 'subgroup' && (
-                            <div style={{ padding: '10px 12px' }}>
-                              <select
-                                value={mapping?.value || ''}
-                                onChange={e => setWalkInMappings(prev => ({ ...prev, [cmpName]: { type: 'subgroup', value: e.target.value } }))}
-                                style={{ padding: '6px 10px', border: '1px solid #C8C2D8', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box' }}>
-                                <option value="">— Select subgroup —</option>
-                                {uniqueSubgroups.map(sg => <option key={sg} value={sg}>{sg}</option>)}
-                              </select>
-                            </div>
-                          )}
+                          {/* Action selector */}
+                          <select
+                            value={selectVal}
+                            onChange={handleSelectChange}
+                            style={{ width: '100%', padding: '5px 8px', border: selectVal ? '1.5px solid #4C2A92' : '1px solid #C8C2D8', borderRadius: 6, fontSize: 12.5, color: '#1A1220', background: '#fff', cursor: 'pointer' }}>
+                            <option value="">— Keep as Unknown —</option>
+                            <optgroup label="Match to Registration">
+                              {registrations.map(r => {
+                                const rn = r.fullName || r.full_name || '';
+                                if (!rn) return null;
+                                const score = fuzzyScore(cmpName, rn);
+                                const hint = score >= 0.6 ? ` (${Math.round(score * 100)}%)` : '';
+                                return <option key={r.id || rn} value={`reg::${rn}`}>{rn}{hint}</option>;
+                              })}
+                            </optgroup>
+                            <optgroup label="Assign to Subgroup (stays walk-in)">
+                              {uniqueSubgroups.map(sg => (
+                                <option key={sg} value={`sg::${sg}`}>{sg}</option>
+                              ))}
+                            </optgroup>
+                          </select>
                         </div>
                       );
                     })}
                   </div>
 
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                    <button
-                      onClick={() => { setWalkInMappings({}); setMapperSearch({}); setShowMapper(false); }}
-                      style={{ padding: '7px 16px', borderRadius: 7, border: '1px solid #E7E2EE', background: '#fff', color: '#1A1220', cursor: 'pointer', fontSize: 13 }}>
-                      Cancel
-                    </button>
-                    <button
-                      onClick={applyWalkInMappings}
-                      disabled={!Object.values(walkInMappings).some(m => m?.value)}
-                      style={{ padding: '7px 18px', borderRadius: 7, border: 'none', background: Object.values(walkInMappings).some(m => m?.value) ? '#4C2A92' : '#C8C2D8', color: '#fff', cursor: Object.values(walkInMappings).some(m => m?.value) ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 700 }}>
-                      Apply Assignments
-                    </button>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: '#8A7F99' }}>
+                      {Object.values(walkInMappings).filter(m => m?.value).length} of {subgroups['Unknown']?.walkIns?.length ?? 0} assigned
+                    </span>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => { setWalkInMappings({}); setMapperSearch({}); setShowMapper(false); }}
+                        style={{ padding: '7px 16px', borderRadius: 7, border: '1px solid #E7E2EE', background: '#fff', color: '#1A1220', cursor: 'pointer', fontSize: 13 }}>
+                        Cancel
+                      </button>
+                      <button
+                        onClick={applyWalkInMappings}
+                        disabled={!Object.values(walkInMappings).some(m => m?.value)}
+                        style={{ padding: '7px 18px', borderRadius: 7, border: 'none', background: Object.values(walkInMappings).some(m => m?.value) ? '#4C2A92' : '#C8C2D8', color: '#fff', cursor: Object.values(walkInMappings).some(m => m?.value) ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 700 }}>
+                        Apply Assignments
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

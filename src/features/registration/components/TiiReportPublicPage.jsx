@@ -102,8 +102,19 @@ function SubgroupCard({ subgroup, data }) {
 function SessionAttendanceTable({ report }) {
   const sessionLabels = report?.session_labels || [];
   const sessionAttendance = report?.session_attendance || {};
-  const entries = Object.entries(sessionAttendance).sort((a, b) => (b[1]?.count ?? 0) - (a[1]?.count ?? 0));
-  if (!entries.length || !sessionLabels.length) return null;
+  if (!Object.keys(sessionAttendance).length || !sessionLabels.length) return null;
+
+  // Group by subgroup; Unknown last
+  const grouped = {};
+  Object.entries(sessionAttendance).forEach(([name, data]) => {
+    const sg = data.subgroup || 'Unknown';
+    if (!grouped[sg]) grouped[sg] = [];
+    grouped[sg].push([name, data]);
+  });
+  Object.values(grouped).forEach(arr => arr.sort((a, b) => (b[1]?.count ?? 0) - (a[1]?.count ?? 0)));
+  const sgOrder = Object.keys(grouped).sort((a, b) => a === 'Unknown' ? 1 : b === 'Unknown' ? -1 : a.localeCompare(b));
+  let rowIdx = 0;
+
   return (
     <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
       <div style={{ background: '#3D1A78', color: '#fff', padding: '12px 18px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em' }}>Session Attendance</div>
@@ -119,21 +130,43 @@ function SessionAttendanceTable({ report }) {
             </tr>
           </thead>
           <tbody>
-            {entries.map(([name, data], i) => (
-              <tr key={name} style={{ background: i % 2 === 0 ? '#fff' : '#FAFAF7' }}>
-                <td style={{ padding: '9px 16px', fontWeight: 600, color: TEXT, borderBottom: `0.5px solid ${PANEL_BORDER}` }}>{name}</td>
-                {sessionLabels.map(lbl => (
-                  <td key={lbl} style={{ padding: '9px 10px', textAlign: 'center', borderBottom: `0.5px solid ${PANEL_BORDER}` }}>
-                    {data.sessions?.[lbl]
-                      ? <span style={{ color: '#2D8653', fontWeight: 700 }}>✓</span>
-                      : <span style={{ color: '#D8D0E8' }}>—</span>}
-                  </td>
-                ))}
-                <td style={{ padding: '9px 10px', textAlign: 'center', fontWeight: 800, color: data.count === sessionLabels.length ? '#1B5E3C' : '#3D1A78', borderBottom: `0.5px solid ${PANEL_BORDER}` }}>
-                  {data.count}/{sessionLabels.length}
-                </td>
-              </tr>
-            ))}
+            {sgOrder.map(sg => {
+              const entries = grouped[sg];
+              const colSpan = sessionLabels.length + 2;
+              return (
+                <React.Fragment key={sg}>
+                  <tr>
+                    <td colSpan={colSpan} style={{ padding: '8px 16px', background: '#3D1A78', color: '#fff', fontWeight: 700, fontSize: 11, borderBottom: `1px solid #2A1258` }}>
+                      {sg}
+                      <span style={{ marginLeft: 10, fontWeight: 400, opacity: 0.7 }}>
+                        {entries.filter(([, d]) => d.count > 0).length} attending · {entries.length} total
+                      </span>
+                    </td>
+                  </tr>
+                  {entries.map(([name, data]) => {
+                    const isWalkIn = name.endsWith(' ★');
+                    const bg = rowIdx++ % 2 === 0 ? '#fff' : '#FAFAF7';
+                    return (
+                      <tr key={name} style={{ background: bg }}>
+                        <td style={{ padding: '9px 16px', fontWeight: 600, color: isWalkIn ? '#B8710A' : TEXT, borderBottom: `0.5px solid ${PANEL_BORDER}` }}>
+                          {name}{isWalkIn && <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 400 }}>(walk-in)</span>}
+                        </td>
+                        {sessionLabels.map(lbl => (
+                          <td key={lbl} style={{ padding: '9px 10px', textAlign: 'center', borderBottom: `0.5px solid ${PANEL_BORDER}` }}>
+                            {data.sessions?.[lbl]
+                              ? <span style={{ color: '#2D8653', fontWeight: 700 }}>✓</span>
+                              : <span style={{ color: '#D8D0E8' }}>—</span>}
+                          </td>
+                        ))}
+                        <td style={{ padding: '9px 10px', textAlign: 'center', fontWeight: 800, color: data.count === sessionLabels.length ? '#1B5E3C' : '#3D1A78', borderBottom: `0.5px solid ${PANEL_BORDER}` }}>
+                          {data.count}/{sessionLabels.length}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
