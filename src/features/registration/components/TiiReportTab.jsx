@@ -295,9 +295,46 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
   const [showMapper, setShowMapper] = useState(false);
   const [mapperSearch, setMapperSearch] = useState({}); // { [name]: searchStr } for reg filter
 
-  // Committed mappings — persist across regenerations so re-generate auto-applies them
+  // Committed mappings — persisted to localStorage so they survive navigation & refresh
   // committedMappings[cmpName] = { type: 'subgroup'|'registration', value }
-  const [committedMappings, setCommittedMappings] = useState({});
+  const MAPPINGS_KEY = eventId ? `tii_mappings_${eventId}` : 'tii_mappings';
+  const [committedMappings, setCommittedMappings] = useState(() => {
+    try {
+      const stored = localStorage.getItem(MAPPINGS_KEY);
+      if (!stored) return {};
+      const parsed = JSON.parse(stored);
+      // Re-hydrate registration references from current registrations list
+      const hydrated = {};
+      Object.entries(parsed).forEach(([cmpName, mapping]) => {
+        if (mapping.type === 'subgroup') {
+          hydrated[cmpName] = mapping;
+        } else if (mapping.type === 'registration' && mapping.value?.id) {
+          const reg = registrations.find(r => r.id === mapping.value.id);
+          if (reg) hydrated[cmpName] = { ...mapping, value: reg };
+        }
+      });
+      return hydrated;
+    } catch { return {}; }
+  });
+
+  // Persist committed mappings to localStorage on every change
+  useEffect(() => {
+    try {
+      // Store only serializable data (strip full reg object down to id + name)
+      const serializable = {};
+      Object.entries(committedMappings).forEach(([cmpName, mapping]) => {
+        if (mapping.type === 'subgroup') {
+          serializable[cmpName] = mapping;
+        } else if (mapping.type === 'registration' && mapping.value) {
+          serializable[cmpName] = {
+            type: 'registration',
+            value: { id: mapping.value.id, fullName: mapping.value.fullName, full_name: mapping.value.full_name, subgroup: mapping.value.subgroup },
+          };
+        }
+      });
+      localStorage.setItem(MAPPINGS_KEY, JSON.stringify(serializable));
+    } catch {}
+  }, [committedMappings, MAPPINGS_KEY]);
 
   // ── derived ──────────────────────────────────────────────────────────────
   const uniqueSubgroups = useMemo(() => {
